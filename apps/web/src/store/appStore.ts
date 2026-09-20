@@ -77,6 +77,7 @@ import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
 	selectActiveWorkspaceProjectId,
+	selectAttentionCenterTab,
 	selectLayoutResourcePlacement,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -1116,6 +1117,20 @@ function withWorkspaceSelected(history: string[], workspaceId: string): string[]
 		: [workspaceId, ...history.filter((id) => id !== workspaceId)];
 }
 
+function workspaceActivationPatch(
+	state: Pick<AppState, "removedWorkspaceIds" | "workspaceSelectionHistory">,
+	workspace: Pick<Workspace, "id" | "projectId">,
+):
+	| Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "workspaceSelectionHistory">
+	| Record<string, never> {
+	if (state.removedWorkspaceIds[workspace.id]) return {};
+	return {
+		selectedProjectId: workspace.projectId,
+		activeWorkspaceId: workspace.id,
+		workspaceSelectionHistory: withWorkspaceSelected(state.workspaceSelectionHistory, workspace.id),
+	};
+}
+
 function recentWorkspaceFallback(
 	state: Pick<
 		AppState,
@@ -1927,7 +1942,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId);
 		if (wasActive) {
-			if (fallbackWorkspace) s.activateWorkspace(fallbackWorkspace);
+			if (fallbackWorkspace) set((state) => workspaceActivationPatch(state, fallbackWorkspace));
 			else s.selectProject(projectId);
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
@@ -1957,19 +1972,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		})),
 	selectMain: () =>
 		set({ selectedProjectId: null, activeWorkspaceId: null, routeChatTarget: null }),
-	activateWorkspace: (workspace) =>
-		set((state) =>
-			state.removedWorkspaceIds[workspace.id]
-				? {}
-				: {
-						selectedProjectId: workspace.projectId,
-						activeWorkspaceId: workspace.id,
-						workspaceSelectionHistory: withWorkspaceSelected(
-							state.workspaceSelectionHistory,
-							workspace.id,
-						),
-					},
-		),
+	activateWorkspace: (workspace) => {
+		if (get().removedWorkspaceIds[workspace.id]) return;
+		set((state) => workspaceActivationPatch(state, workspace));
+		const state = get();
+		const active = selectAttentionCenterTab(state, workspace.id);
+		if (active?.kind === "chat") state.noteDirectChatActivation(active.sessionId);
+	},
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
 			if (state.removedWorkspaceIds[workspace.id]) return {};
