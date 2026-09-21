@@ -91,6 +91,7 @@ import { trackLoginOutcome } from "./loginAnalytics";
 import {
 	additionalAnalyticsEnabled,
 	additionalCapture,
+	captureReviewCommentResolved,
 	observeCurrentSetup,
 	setupObservation,
 } from "./productAnalytics";
@@ -510,9 +511,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}),
 		);
 	});
-	setReviewCommentHandler((sessionId, commentId, note) => ({
-		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
-	}));
+	setReviewCommentHandler((sessionId, commentId, note) => {
+		const resolved = resolveCommentFromAgent(sessionId, commentId, note);
+		captureReviewCommentResolved("agent", "resolved");
+		return { resolvedBody: resolved.body };
+	});
 	installTodoReviewSeams();
 	reconcilePendingReviewsOnBoot();
 

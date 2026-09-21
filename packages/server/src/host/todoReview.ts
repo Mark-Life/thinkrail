@@ -41,7 +41,7 @@ import {
 } from "../todos";
 import { getWorkspace, listWorkspaceRecords } from "../workspaces";
 import { ackSend } from "./ackSend";
-import { additionalCapture, captureAdditional } from "./productAnalytics";
+import { additionalCapture, captureAdditional, captureReviewCommentAdded } from "./productAnalytics";
 import {
 	clearReviewerSessionWorkspaceMapping,
 	maybeCleanupStuckReviewSession,
@@ -381,6 +381,7 @@ export function installTodoReviewSeams(): void {
 					selectors: [{ kind: "lineRange", startLine: params.startLine, endLine }],
 				},
 			});
+			captureReviewCommentAdded(comment);
 			return { commentId: comment.id };
 		});
 	});

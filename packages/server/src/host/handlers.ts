@@ -180,6 +180,9 @@ import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import {
 	additionalCapture,
 	captureAdditional,
+	captureReviewCommentAdded,
+	captureReviewCommentResolved,
+	captureReviewCommentsSent,
 	centralConnectOutcome,
 	observePrAction,
 	observeSetupAction,
@@ -953,7 +956,11 @@ const handlers: Record<string, Handler> = {
 			body: string;
 			scope?: GitDiffScope;
 		};
-		return withReviewLock(p.workspaceId, async () => addComment(p));
+		return withReviewLock(p.workspaceId, async () => {
+			const comment = await addComment(p);
+			captureReviewCommentAdded(comment);
+			return comment;
+		});
 	},
 	"review.commentUpdate": (params) => {
 		const p = params as {
@@ -962,7 +969,12 @@ const handlers: Record<string, Handler> = {
 			body?: string;
 			status?: ReviewCommentStatus;
 		};
-		return withReviewLock(p.workspaceId, async () => updateComment(p));
+		return withReviewLock(p.workspaceId, async () => {
+			const comment = await updateComment(p);
+			if (p.status === "resolved" || p.status === "dismissed")
+				captureReviewCommentResolved("user", p.status);
+			return comment;
+		});
 	},
 	"review.commentDelete": (params) => {
 		const p = params as { workspaceId: string; id: string };
@@ -993,9 +1005,12 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
 		};
-		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p),
-		);
+		return withReviewLock(p.workspaceId, async () => {
+			const comments = await sendableComments(p.workspaceId, [p.id]);
+			const result = await sendToFileChat(p.workspaceId, comments, p);
+			captureReviewCommentsSent("single", comments);
+			return result;
+		});
 	},
 	"review.sendBatch": (params) => {
 		const p = params as {
@@ -1017,6 +1032,7 @@ const handlers: Record<string, Handler> = {
 				sessions.push(await sendToFileChat(p.workspaceId, group, p));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
+			captureReviewCommentsSent("batch", comments);
 			return { sessions };
 		});
 	},

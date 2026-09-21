@@ -3,6 +3,7 @@ import type {
 	JbcentralConnectResult,
 	OpenPrResult,
 	ProviderStatusReport,
+	ReviewComment,
 } from "@thinkrail/contracts";
 import { isJbcentralConnected } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
@@ -10,8 +11,12 @@ import { settledAvailableModels, usePiRuntime } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
+	bucketCount,
 	getAdditionalAnalyticsCapture,
 	type PlanActionSource,
+	type ReviewCommentActor,
+	type ReviewResolveOutcome,
+	type ReviewSendTrigger,
 } from "../analytics";
 import { listProjects } from "../projects";
 
@@ -40,6 +45,44 @@ export function captureAdditional(
 	try {
 		capture?.(event);
 	} catch {}
+}
+
+export function captureReviewCommentAdded(comment: ReviewComment): void {
+	captureAdditional(additionalCapture(), {
+		name: "review_comment_added",
+		params: {
+			author: comment.author === "agent" ? "agent" : "user",
+			kind: comment.kind,
+			side: comment.anchor ? comment.anchor.side : "none",
+		},
+	});
+}
+
+export function captureReviewCommentsSent(
+	trigger: ReviewSendTrigger,
+	comments: readonly ReviewComment[],
+): void {
+	if (comments.length === 0) return;
+	captureAdditional(additionalCapture(), {
+		name: "review_comment_sent",
+		params: {
+			trigger,
+			count_bucket: bucketCount(comments.length),
+			outdated_bucket: bucketCount(
+				comments.filter((comment) => comment.anchorState === "outdated").length,
+			),
+		},
+	});
+}
+
+export function captureReviewCommentResolved(
+	actor: ReviewCommentActor,
+	outcome: ReviewResolveOutcome,
+): void {
+	captureAdditional(additionalCapture(), {
+		name: "review_comment_resolved",
+		params: { actor, outcome },
+	});
 }
 
 export function failureReason(error: unknown): FailureReason {
