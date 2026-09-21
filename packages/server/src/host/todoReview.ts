@@ -1,5 +1,6 @@
 import type { PiEvent, ReviewComment, ReviewSnapshot, TodoItem } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
+import type { PlanActionSource } from "../analytics";
 import {
 	type AddReviewCommentParams,
 	createSession,
@@ -55,6 +56,7 @@ import {
 	onReviewStartFailed,
 	onReviewVerdict,
 	reviewQueueActive,
+	reviewQueueSource,
 	type StartOne,
 	seedReviewQueue,
 } from "./reviewQueue";
@@ -66,7 +68,10 @@ interface ItemRef {
 	id: string;
 }
 
-const currentReview = new Map<string, { todoId: string; reviewedSha: string; sessionId: string }>();
+const currentReview = new Map<
+	string,
+	{ todoId: string; reviewedSha: string; sessionId: string; source: PlanActionSource }
+>();
 const activeFixItems = new Set<string>();
 const activeFixKey = (sessionId: string, todoId: string): string =>
 	[sessionId, todoId].join("\u0000");
@@ -121,7 +126,7 @@ export type SendReviewPackage = (sessionId: string, pkg: string) => Promise<void
 export async function startTodoReviewFlow(
 	p: ItemRef,
 	sendReviewPackage: SendReviewPackage = followUpSession,
-	opts: { fromQueue?: boolean } = {},
+	opts: { fromQueue?: boolean; source?: PlanActionSource } = {},
 ): Promise<{ ok: true; reviewerSessionId: string }> {
 	const key = workerKey(p.workspaceId, p.sessionId);
 	// A manual start must not slip in during Review All's claim→listTodos gap (see host/SPEC.md) —
@@ -159,7 +164,12 @@ export async function startTodoReviewFlow(
 			pinReviewerSession(p, created.sessionId);
 			reviewerSessionId = created.sessionId;
 		}
-		currentReview.set(reviewerSessionId, { todoId: p.id, reviewedSha, sessionId: p.sessionId });
+		currentReview.set(reviewerSessionId, {
+			todoId: p.id,
+			reviewedSha,
+			sessionId: p.sessionId,
+			source: opts.source ?? "other",
+		});
 		setReviewerSessionWorkspaceMapping(reviewerSessionId, p.workspaceId, p.sessionId);
 		fireReviewerPrompt(p, reviewerSessionId, pkg, sendReviewPackage);
 		return { ok: true, reviewerSessionId };
@@ -218,20 +228,23 @@ function isReviewSettled(item: TodoItem): boolean {
 }
 
 const startOneReview =
-	(workspaceId: string, sessionId: string): StartOne =>
+	(workspaceId: string, sessionId: string, source: PlanActionSource): StartOne =>
 	(id: string) =>
-		startTodoReviewFlow({ workspaceId, sessionId, id }, undefined, { fromQueue: true });
+		startTodoReviewFlow({ workspaceId, sessionId, id }, undefined, { fromQueue: true, source });
 
-export async function startReviewAllFlow(p: {
-	workspaceId: string;
-	sessionId: string;
-}): Promise<{ ok: true; total: number; alreadyRunning?: true }> {
+export async function startReviewAllFlow(
+	p: {
+		workspaceId: string;
+		sessionId: string;
+	},
+	source: PlanActionSource = "other",
+): Promise<{ ok: true; total: number; alreadyRunning?: true }> {
 	// Claimed BEFORE the first await, same as claimReviewQueue below — a manual start that already
 	// holds this latch must report alreadyRunning too, not race claimReviewQueue and lose every
 	// queued item to the same conflict (see host/SPEC.md).
 	if (inFlightReview.has(workerKey(p.workspaceId, p.sessionId)))
 		return { ok: true, total: 0, alreadyRunning: true };
-	if (!claimReviewQueue(p.workspaceId, p.sessionId))
+	if (!claimReviewQueue(p.workspaceId, p.sessionId, source))
 		return { ok: true, total: 0, alreadyRunning: true };
 	try {
 		const plan = await listTodos(p);
@@ -248,7 +261,7 @@ export async function startReviewAllFlow(p: {
 		await advanceReviewQueue(
 			p.workspaceId,
 			p.sessionId,
-			startOneReview(p.workspaceId, p.sessionId),
+			startOneReview(p.workspaceId, p.sessionId, source),
 		);
 		return { ok: true, total: pending.length };
 	} catch (err) {
@@ -281,7 +294,7 @@ function fireReviewerPrompt(
 				p.workspaceId,
 				p.sessionId,
 				p.id,
-				startOneReview(p.workspaceId, p.sessionId),
+				startOneReview(p.workspaceId, p.sessionId, reviewQueueSource(p.workspaceId, p.sessionId)),
 			);
 		})
 		.catch((err) => {
@@ -312,7 +325,11 @@ export function handleReviewerSettled(sessionId: string, event: PiEvent): void {
 				cleared.workspaceId,
 				cleared.sessionId,
 				id,
-				startOneReview(cleared.workspaceId, cleared.sessionId),
+				startOneReview(
+					cleared.workspaceId,
+					cleared.sessionId,
+					reviewQueueSource(cleared.workspaceId, cleared.sessionId),
+				),
 			);
 		}
 	}
@@ -328,7 +345,11 @@ export function handleReviewerSettled(sessionId: string, event: PiEvent): void {
 	onReviewerSettled(
 		mapping.workspaceId,
 		mapping.sessionId,
-		startOneReview(mapping.workspaceId, mapping.sessionId),
+		startOneReview(
+			mapping.workspaceId,
+			mapping.sessionId,
+			reviewQueueSource(mapping.workspaceId, mapping.sessionId),
+		),
 	);
 	// !cleared: a crash settle must never restart the automation — see host/SPEC.md.
 	if (!cleared && !inFlightReview.has(key))
@@ -387,6 +408,7 @@ export function installTodoReviewSeams(): void {
 					params: {
 						actor: "agent",
 						verdict: params.verdict === "approve" ? "approved" : "changes_requested",
+						source: current.source,
 					},
 				});
 				onReviewVerdict(ctx.workspaceId, current.sessionId, current.todoId);

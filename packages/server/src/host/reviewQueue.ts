@@ -1,8 +1,12 @@
+import type { PlanActionSource } from "../analytics";
+
 export type StartOne = (id: string) => Promise<unknown>;
 
 interface ReviewQueueState {
 	pending: string[];
 	current: string | null;
+	/** Trigger surface of the Review All run — stamped on each item's `review_decided`. */
+	source: PlanActionSource;
 }
 
 const queues = new Map<string, ReviewQueueState>();
@@ -18,7 +22,7 @@ export function seedReviewQueue(workspaceId: string, sessionId: string, ids: str
 		queues.delete(key);
 		return;
 	}
-	queues.set(key, { pending: [...ids], current: null });
+	queues.set(key, { pending: [...ids], current: null, source: queues.get(key)?.source ?? "other" });
 }
 
 export async function advanceReviewQueue(
@@ -77,11 +81,19 @@ export function reviewQueueActive(workspaceId: string, sessionId: string): boole
 	return queues.has(keyFor(workspaceId, sessionId));
 }
 
-export function claimReviewQueue(workspaceId: string, sessionId: string): boolean {
+export function claimReviewQueue(
+	workspaceId: string,
+	sessionId: string,
+	source: PlanActionSource = "other",
+): boolean {
 	const key = keyFor(workspaceId, sessionId);
 	if (queues.has(key)) return false;
-	queues.set(key, { pending: [], current: CLAIMING });
+	queues.set(key, { pending: [], current: CLAIMING, source });
 	return true;
+}
+
+export function reviewQueueSource(workspaceId: string, sessionId: string): PlanActionSource {
+	return queues.get(keyFor(workspaceId, sessionId))?.source ?? "other";
 }
 
 export function reviewQueuesEmpty(): boolean {

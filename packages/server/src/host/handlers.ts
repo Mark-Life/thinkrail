@@ -301,7 +301,7 @@ function fireTodoFixPrompt(
 			() => {
 				captureAdditional(capture, {
 					name: "review_decided",
-					params: { actor: "user", verdict: "changes_requested" },
+					params: { actor: "user", verdict: "changes_requested", source: "other" },
 				});
 			},
 			(err) => {
@@ -457,19 +457,18 @@ const handlers: Record<string, Handler> = {
 	"github.refresh": () => githubRefresh(),
 	"pr.preview": (params) =>
 		previewPr(params as { workspaceId: string; sessionId: string; title?: string }),
-	"pr.open": (params) =>
-		observePrAction(() =>
-			openPr(
-				params as {
-					workspaceId: string;
-					sessionId: string;
-					title?: string;
-					titleEdited?: boolean;
-					body?: string;
-					draft?: boolean;
-				},
-			),
-		),
+	"pr.open": (params) => {
+		const p = params as {
+			workspaceId: string;
+			sessionId: string;
+			title?: string;
+			titleEdited?: boolean;
+			body?: string;
+			draft?: boolean;
+			source?: "plan_page";
+		};
+		return observePrAction(() => openPr(p), p.source ?? "other");
+	},
 	"dialog.selectDirectory": () => selectDirectory(),
 	"fs.readDir": (params) => {
 		const p = params as { workspaceId: string; path: string };
@@ -486,9 +485,30 @@ const handlers: Record<string, Handler> = {
 		void ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
 	},
-	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
-	"todo.add": (params) =>
-		addTodo(params as { workspaceId: string; sessionId: string; title: string; note?: string }),
+	"todo.list": (params) => {
+		const p = params as { workspaceId: string; sessionId: string; opened?: "page" | "popup" };
+		if (p.opened)
+			captureAdditional(additionalCapture(), {
+				name: "plan_opened",
+				params: { surface: p.opened },
+			});
+		return listTodos(p);
+	},
+	"todo.add": (params) => {
+		const p = params as {
+			workspaceId: string;
+			sessionId: string;
+			title: string;
+			note?: string;
+			surface?: "chat" | "page";
+		};
+		const result = addTodo(p);
+		captureAdditional(additionalCapture(), {
+			name: "plan_item_added",
+			params: { surface: p.surface ?? "chat" },
+		});
+		return result;
+	},
 	"todo.update": async (params) => {
 		const p = params as {
 			workspaceId: string;
@@ -514,14 +534,23 @@ const handlers: Record<string, Handler> = {
 		);
 		captureAdditional(capture, {
 			name: "review_decided",
-			params: { actor: "user", verdict: "approved" },
+			params: { actor: "user", verdict: "approved", source: "other" },
 		});
 		return result;
 	},
-	"todo.startReview": (params) =>
-		startTodoReviewFlow(params as { workspaceId: string; sessionId: string; id: string }),
-	"todo.reviewAll": (params) =>
-		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
+	"todo.startReview": (params) => {
+		const p = params as {
+			workspaceId: string;
+			sessionId: string;
+			id: string;
+			source?: "plan_page";
+		};
+		return startTodoReviewFlow(p, undefined, { source: p.source ?? "other" });
+	},
+	"todo.reviewAll": (params) => {
+		const p = params as { workspaceId: string; sessionId: string; source?: "plan_page" };
+		return startReviewAllFlow(p, p.source ?? "other");
+	},
 	"todo.requestFix": async (params) => {
 		const capture = additionalCapture();
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };

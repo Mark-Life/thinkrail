@@ -11,6 +11,7 @@ import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
 	getAdditionalAnalyticsCapture,
+	type PlanActionSource,
 } from "../analytics";
 import { listProjects } from "../projects";
 
@@ -188,6 +189,7 @@ export function centralConnectOutcome(
 
 export async function observePrAction(
 	operation: () => Promise<OpenPrResult>,
+	source: PlanActionSource = "other",
 ): Promise<OpenPrResult> {
 	const capture = additionalCapture();
 	let result: OpenPrResult;
@@ -196,7 +198,7 @@ export async function observePrAction(
 	} catch (error) {
 		captureAdditional(capture, {
 			name: "pr_action_finished",
-			params: { action: "unknown", outcome: "failed", reason: failureReason(error) },
+			params: { action: "unknown", outcome: "failed", reason: failureReason(error), source },
 		});
 		throw error;
 	}
@@ -215,6 +217,7 @@ export async function observePrAction(
 								? "unsupported"
 								: "auth"
 							: "none",
+					source,
 				},
 			});
 		} catch {}
