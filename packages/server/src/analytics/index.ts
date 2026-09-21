@@ -16,6 +16,11 @@ export type {
 	PlanAddSurface,
 	PlanOpenSurface,
 	ProviderAnalyticsProperties,
+	ReviewCommentActor,
+	ReviewCommentKindProp,
+	ReviewCommentSide,
+	ReviewResolveOutcome,
+	ReviewSendTrigger,
 	SendMode,
 	SetupAction,
 } from "./events";
