@@ -45,8 +45,18 @@ all properties are fixed enums or bounded buckets, never resource identities or 
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
 | `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
-| `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup. |
-| `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs. |
+| `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`popup`); a deliberate open action, not every plan refetch. |
+| `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`); the user curating the plan, not agent re-plans. |
+| `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup; `source` = `plan_page` when driven from the plan page's Review stage, else `other`. |
+| `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
+
+The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
+`plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
+not the automatic refetches), `plan_item_added` off `todo.add`, and stamps the `source` discriminator on
+`review_decided`/`pr_action_finished` from the `todo.startReview`/`todo.reviewAll`/`pr.open` caller. The
+Review All run carries its trigger source through the review queue so an agent verdict settling later is
+attributed to the surface that started the pass. `surface`/`source` are closed enums; absence defaults to
+`chat`/`other`, so an omitted param never fabricates plan-page attribution.
 
 Correlation is transient and scoped to one consent grant. No history replay or reconstruction of work
 started before consent; asynchronous results from a revoked grant remain discarded after re-enabling.
