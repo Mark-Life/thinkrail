@@ -639,6 +639,7 @@ export default function PlanPane({
 					...(titleEdited ? { titleEdited: true } : {}),
 					...(prBody !== undefined ? { body: prBody } : {}),
 					...(draft ? { draft: true } : {}),
+					source: "plan_page",
 				},
 				{ timeoutMs: 180_000 },
 			);
@@ -704,7 +705,7 @@ export default function PlanPane({
 		useAppStore.getState().addTerminal(workspaceId, command);
 	};
 	const startReview = async (id: string): Promise<void> =>
-		plan.startReview(id).then(
+		plan.startReview(id, "plan_page").then(
 			() => {
 				pushToast({
 					variant: "success",
@@ -721,7 +722,7 @@ export default function PlanPane({
 			},
 		);
 	const reviewAll = async (): Promise<void> =>
-		plan.reviewAll().then(
+		plan.reviewAll("plan_page").then(
 			({ total, alreadyRunning }) => {
 				pushToast(
 					alreadyRunning

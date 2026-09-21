@@ -17,9 +17,11 @@ export interface ChatTodos {
 	add: (title: string) => Promise<void>;
 	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
+	/** Records plan_opened for the in-chat popup (openPlan already records the page). */
+	notifyOpened: (surface: "popup") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
-	startReview: (id: string) => Promise<void>;
-	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
+	startReview: (id: string, source?: "plan_page") => Promise<void>;
+	reviewAll: (source?: "plan_page") => Promise<{ total: number; alreadyRunning?: boolean }>;
 }
 
 export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos {
@@ -107,7 +109,12 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const title = rawTitle.trim();
 		if (!title) return;
 		const requestIdentity = identity;
-		const todo = await getTransport().request("todo.add", { workspaceId, sessionId, title });
+		const todo = await getTransport().request("todo.add", {
+			workspaceId,
+			sessionId,
+			title,
+			surface: "chat",
+		});
 		if (!live(requestIdentity)) return;
 		readGeneration.current += 1;
 		setData((prev) =>
@@ -170,9 +177,16 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		}
 	};
 
+	const notifyOpened = (surface: "page" | "popup") => {
+		void getTransport()
+			.request("todo.list", { workspaceId, sessionId, opened: surface })
+			.catch(() => {});
+	};
+
 	const openPlan = () => {
 		const state = useAppStore.getState();
 		const title = selectChatTitle(state, workspaceId, sessionId);
+		notifyOpened("page");
 		state.openDoc({
 			kind: "plan",
 			id: `${workspaceId}:plan:${sessionId}`,
@@ -193,15 +207,21 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		store.requestChangesView(workspaceId, target.path);
 	};
 
-	const startReview = async (id: string) => {
-		await getTransport().request("todo.startReview", { workspaceId, sessionId, id });
+	const startReview = async (id: string, source?: "plan_page") => {
+		await getTransport().request("todo.startReview", {
+			workspaceId,
+			sessionId,
+			id,
+			...(source ? { source } : {}),
+		});
 		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
 	};
 
-	const reviewAll = async () => {
+	const reviewAll = async (source?: "plan_page") => {
 		const { total, alreadyRunning } = await getTransport().request("todo.reviewAll", {
 			workspaceId,
 			sessionId,
+			...(source ? { source } : {}),
 		});
 		await reloadPlan(); // the first item's `reviewing` mark is host-derived — re-read to show it
 		return { total, ...(alreadyRunning ? { alreadyRunning } : {}) };
@@ -213,6 +233,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		add,
 		remove,
 		openPlan,
+		notifyOpened: (surface: "popup") => notifyOpened(surface),
 		openChanges,
 		startReview,
 		reviewAll,
