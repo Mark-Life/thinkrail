@@ -48,7 +48,18 @@ all properties are fixed enums or bounded buckets, never resource identities or 
 | `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`popup`); a deliberate open action, not every plan refetch. |
 | `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`); the user curating the plan, not agent re-plans. |
 | `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup; `source` = `plan_page` when driven from the plan page's Review stage, else `other`. |
+| `review_comment_added` | A review comment created on a file/diff/doc, by `author` (`user`/`agent`), `kind` and anchor `side` (`base`/`worktree`/`none`); the human draft flow and the reviewer agent's findings, distinguished — not draft edits. |
+| `review_comment_sent` | Draft comments delivered to the agent (the value moment), by `trigger` (`single`/`batch`) with count and outdated-anchor buckets; the anchor-drift bucket is the re-anchoring quality signal. |
+| `review_comment_resolved` | A comment's terminal outcome, by `actor` (`user`/`agent`) and `outcome` (`resolved`/`dismissed`); the human update and the agent `resolve_comment` tool, not draft deletes or Clear. |
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
+
+The review-comment funnel is likewise host-observed off existing wire/tool actions: `review_comment_added`
+off the `review.commentAdd` handler (human, `author:user`) and the reviewer agent's `add_review_comment`
+seam (`author:agent`); `review_comment_sent` off `review.sendComment` (`single`) and `review.sendBatch`
+(`batch`), counting the already-re-anchored send set so `outdated_bucket` reports true anchor drift at send
+time; `review_comment_resolved` off `review.commentUpdate` (user resolved/dismissed) and the agent
+`resolve_comment` seam (`agent`/`resolved`). No comment body, path, anchor text or line numbers are ever
+copied — only the closed `author`/`kind`/`side`/`trigger`/`actor`/`outcome` enums and bounded count buckets.
 
 The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
 `plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
