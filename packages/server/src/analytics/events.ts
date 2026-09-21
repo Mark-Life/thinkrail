@@ -18,6 +18,13 @@ export interface ProviderAnalyticsProperties {
 
 export type SendMode = "prompt" | "steer" | "follow_up";
 
+/** Where the plan surfaced for the user: the full center page or the in-chat popup. */
+export type PlanOpenSurface = "page" | "popup";
+/** Where a user-added item entered the plan: the in-chat plan or the plan page. */
+export type PlanAddSurface = "chat" | "page";
+/** Whether a ship-stage action was driven from the plan page or anywhere else. */
+export type PlanActionSource = "plan_page" | "other";
+
 export type BasicAnalyticsEvent =
 	| { name: "app_started" }
 	| { name: "chat_started"; params: ProviderAnalyticsProperties & { model: string } }
@@ -90,9 +97,15 @@ export type AdditionalAnalyticsEvent =
 				verification_recorded: "yes" | "no";
 			};
 	  }
+	| { name: "plan_opened"; params: { surface: PlanOpenSurface } }
+	| { name: "plan_item_added"; params: { surface: PlanAddSurface } }
 	| {
 			name: "review_decided";
-			params: { actor: "user" | "agent"; verdict: "approved" | "changes_requested" };
+			params: {
+				actor: "user" | "agent";
+				verdict: "approved" | "changes_requested";
+				source: PlanActionSource;
+			};
 	  }
 	| {
 			name: "pr_action_finished";
@@ -100,6 +113,7 @@ export type AdditionalAnalyticsEvent =
 				action: "created" | "updated" | "pushed" | "compare" | "unknown";
 				outcome: "succeeded" | "failed";
 				reason: AnalyticsFailureReason;
+				source: PlanActionSource;
 			};
 	  };
 
