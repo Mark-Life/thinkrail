@@ -742,7 +742,9 @@ test("only actual agent verdicts emit review decisions, never aborted or missing
 				artifacts: [{ kind: "commit", sha: "private-sha" }],
 			});
 			const ref = { workspaceId: WS, sessionId: SESSION, id: todo.id };
-			const { reviewerSessionId } = await startTodoReviewFlow(ref, async () => {});
+			const { reviewerSessionId } = await startTodoReviewFlow(ref, async () => {}, {
+				source: verdict === "approve" ? "plan_page" : "other",
+			});
 			if (verdict) {
 				await createReviewVerdictTool().execute(
 					"private-call",
@@ -761,10 +763,14 @@ test("only actual agent verdicts emit review decisions, never aborted or missing
 		expect(
 			events
 				.filter((event) => event.event === "review_decided")
-				.map((event) => [event.properties.actor, event.properties.verdict]),
+				.map((event) => [
+					event.properties.actor,
+					event.properties.verdict,
+					event.properties.source,
+				]),
 		).toEqual([
-			["agent", "approved"],
-			["agent", "changes_requested"],
+			["agent", "approved", "plan_page"],
+			["agent", "changes_requested", "other"],
 		]);
 		expect(JSON.stringify(events)).not.toContain("private");
 	} finally {

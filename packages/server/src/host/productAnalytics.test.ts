@@ -266,7 +266,10 @@ test("PR created, updated, push and compare are distinct; an unrefreshed update 
 			ghProblem: "unauthenticated",
 		},
 	];
-	for (const result of results) expect(await observePrAction(async () => result)).toBe(result);
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i] as OpenPrResult;
+		expect(await observePrAction(async () => result, i === 0 ? "plan_page" : "other")).toBe(result);
+	}
 	await expect(
 		observePrAction(async () => {
 			throw new CodedError("PUSH_AUTH_FAILED", "private credentials");
@@ -278,14 +281,15 @@ test("PR created, updated, push and compare are distinct; an unrefreshed update 
 			event.properties.action,
 			event.properties.outcome,
 			event.properties.reason,
+			event.properties.source,
 		]),
 	).toEqual([
-		["created", "succeeded", "none"],
-		["updated", "succeeded", "none"],
-		["updated", "failed", "unknown"],
-		["pushed", "succeeded", "none"],
-		["compare", "succeeded", "auth"],
-		["unknown", "failed", "auth"],
+		["created", "succeeded", "none", "plan_page"],
+		["updated", "succeeded", "none", "other"],
+		["updated", "failed", "unknown", "other"],
+		["pushed", "succeeded", "none", "other"],
+		["compare", "succeeded", "auth", "other"],
+		["unknown", "failed", "auth", "other"],
 	]);
 	expect(JSON.stringify(sent)).not.toContain("private");
 	expect(events.every((event) => !("dirtyFiles" in event.properties))).toBe(true);
@@ -297,7 +301,7 @@ test("observational sink and projection failures cannot change a successful feat
 			() => {
 				throw new Error("sink");
 			},
-			{ name: "review_decided", params: { actor: "user", verdict: "approved" } },
+			{ name: "review_decided", params: { actor: "user", verdict: "approved", source: "other" } },
 		),
 	).not.toThrow();
 	expect(
@@ -389,6 +393,24 @@ test("host handlers exclude Default provisioning and hydration; observing a muta
 			.map((event) => [event.properties.actor, event.properties.verdict]),
 	).toEqual([["user", "approved"]]);
 	expect(JSON.stringify(sent)).not.toContain("private");
+});
+
+test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.add; refetches stay silent", async () => {
+	const { ref, ctx } = await taskFixture();
+	await handleRequest("todo.list", ref, ctx); // a plain refetch — no plan_opened
+	await handleRequest("todo.list", { ...ref, opened: "page" }, ctx);
+	await handleRequest("todo.list", { ...ref, opened: "popup" }, ctx);
+	await handleRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);
+	await handleRequest("todo.add", { ...ref, title: "defaulted step" }, ctx);
+	await shutdownAnalytics();
+	expect(
+		sent.filter((event) => event.event === "plan_opened").map((event) => event.properties.surface),
+	).toEqual(["page", "popup"]);
+	expect(
+		sent
+			.filter((event) => event.event === "plan_item_added")
+			.map((event) => event.properties.surface),
+	).toEqual(["chat", "chat"]);
 });
 
 test("canonical TODO mutation observation waits for the real artifact reconciliation", async () => {

@@ -1,6 +1,5 @@
 import type { PiEvent, ReviewComment, ReviewSnapshot, TodoItem } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
-import type { PlanActionSource } from "../analytics";
 import {
 	type AddReviewCommentParams,
 	createSession,
@@ -14,6 +13,7 @@ import {
 	setReflectFindingHandler,
 	setReviewVerdictHandler,
 } from "../agent";
+import type { PlanActionSource } from "../analytics";
 import { getProjects } from "../projects";
 import {
 	addComment,

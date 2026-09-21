@@ -125,10 +125,15 @@ const ADDITIONAL_EVENTS = {
 		name: "task_completed",
 		params: { change_evidence: "commit", verification_recorded: "yes" },
 	},
-	review_decided: { name: "review_decided", params: { actor: "agent", verdict: "approved" } },
+	plan_opened: { name: "plan_opened", params: { surface: "page" } },
+	plan_item_added: { name: "plan_item_added", params: { surface: "chat" } },
+	review_decided: {
+		name: "review_decided",
+		params: { actor: "agent", verdict: "approved", source: "plan_page" },
+	},
 	pr_action_finished: {
 		name: "pr_action_finished",
-		params: { action: "created", outcome: "succeeded", reason: "none" },
+		params: { action: "created", outcome: "succeeded", reason: "none", source: "plan_page" },
 	},
 } as const satisfies {
 	[K in AdditionalAnalyticsEvent["name"]]: Extract<AdditionalAnalyticsEvent, { name: K }>;
@@ -153,8 +158,10 @@ const EXPECTED_KEYS: Record<AnalyticsEvent["name"], string[]> = {
 		"compaction_bucket",
 	],
 	task_completed: [...ENV_KEYS, "change_evidence", "verification_recorded"],
-	review_decided: [...ENV_KEYS, "actor", "verdict"],
-	pr_action_finished: [...ENV_KEYS, "action", "outcome", "reason"],
+	plan_opened: [...ENV_KEYS, "surface"],
+	plan_item_added: [...ENV_KEYS, "surface"],
+	review_decided: [...ENV_KEYS, "actor", "verdict", "source"],
+	pr_action_finished: [...ENV_KEYS, "action", "outcome", "reason", "source"],
 };
 
 test("every event has exactly its closed properties plus personless transport framing", async () => {
