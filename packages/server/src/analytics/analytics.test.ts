@@ -127,6 +127,15 @@ const ADDITIONAL_EVENTS = {
 	},
 	plan_opened: { name: "plan_opened", params: { surface: "page" } },
 	plan_item_added: { name: "plan_item_added", params: { surface: "chat" } },
+	review_comment_added: {
+		name: "review_comment_added",
+		params: { author: "user", kind: "inline" },
+	},
+	review_comment_sent: { name: "review_comment_sent", params: { outdated: "no" } },
+	review_comment_resolved: {
+		name: "review_comment_resolved",
+		params: { actor: "agent", outcome: "resolved" },
+	},
 	review_decided: {
 		name: "review_decided",
 		params: { actor: "agent", verdict: "approved", source: "plan_page" },
@@ -160,6 +169,9 @@ const EXPECTED_KEYS: Record<AnalyticsEvent["name"], string[]> = {
 	task_completed: [...ENV_KEYS, "change_evidence", "verification_recorded"],
 	plan_opened: [...ENV_KEYS, "surface"],
 	plan_item_added: [...ENV_KEYS, "surface"],
+	review_comment_added: [...ENV_KEYS, "author", "kind"],
+	review_comment_sent: [...ENV_KEYS, "outdated"],
+	review_comment_resolved: [...ENV_KEYS, "actor", "outcome"],
 	review_decided: [...ENV_KEYS, "actor", "verdict", "source"],
 	pr_action_finished: [...ENV_KEYS, "action", "outcome", "reason", "source"],
 };

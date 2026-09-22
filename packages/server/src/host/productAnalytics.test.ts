@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { OpenPrResult, ProviderStatusReport, Workspace } from "@thinkrail/contracts";
+import type {
+	OpenPrResult,
+	ProviderStatusReport,
+	ReviewComment,
+	Workspace,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { TodoStore } from "pi-todos/core";
 import {
@@ -21,6 +26,9 @@ import { dropLogin, recordLoginStart, trackLoginOutcome } from "./loginAnalytics
 import {
 	additionalAnalyticsEnabled,
 	captureAdditional,
+	captureReviewCommentAdded,
+	captureReviewCommentResolved,
+	captureReviewCommentsSent,
 	centralConnectOutcome,
 	failureReason,
 	observeCurrentSetup,
@@ -392,6 +400,51 @@ test("host handlers exclude Default provisioning and hydration; observing a muta
 			.filter((event) => event.event === "review_decided")
 			.map((event) => [event.properties.actor, event.properties.verdict]),
 	).toEqual([["user", "approved"]]);
+	expect(JSON.stringify(sent)).not.toContain("private");
+});
+
+test("review-comment analytics distinguish author/actor and stay per-comment with no content", async () => {
+	const { workspace, ctx } = await taskFixture();
+	const workspaceId = workspace.id;
+	const review = (await handleRequest(
+		"review.commentAdd",
+		{ workspaceId, kind: "review", anchor: null, body: "private remark" },
+		ctx,
+	)) as ReviewComment;
+	await handleRequest(
+		"review.commentUpdate",
+		{ workspaceId, id: review.id, status: "dismissed" },
+		ctx,
+	);
+	// Agent-authored find + agent resolve + the per-comment send fan-out go through the host helpers.
+	captureReviewCommentAdded({ author: "agent", kind: "inline" } as ReviewComment);
+	captureReviewCommentResolved("agent", "resolved");
+	captureReviewCommentsSent([
+		{ anchorState: "anchored" } as ReviewComment,
+		{ anchorState: "outdated" } as ReviewComment,
+	]);
+	await shutdownAnalytics();
+	expect(
+		sent
+			.filter((event) => event.event === "review_comment_added")
+			.map((event) => [event.properties.author, event.properties.kind]),
+	).toEqual([
+		["user", "review"],
+		["agent", "inline"],
+	]);
+	expect(
+		sent
+			.filter((event) => event.event === "review_comment_resolved")
+			.map((event) => [event.properties.actor, event.properties.outcome]),
+	).toEqual([
+		["user", "dismissed"],
+		["agent", "resolved"],
+	]);
+	expect(
+		sent
+			.filter((event) => event.event === "review_comment_sent")
+			.map((event) => event.properties.outdated),
+	).toEqual(["no", "yes"]);
 	expect(JSON.stringify(sent)).not.toContain("private");
 });
 

@@ -18,9 +18,7 @@ export type {
 	ProviderAnalyticsProperties,
 	ReviewCommentActor,
 	ReviewCommentKindProp,
-	ReviewCommentSide,
 	ReviewResolveOutcome,
-	ReviewSendTrigger,
 	SendMode,
 	SetupAction,
 } from "./events";

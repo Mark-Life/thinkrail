@@ -29,10 +29,6 @@ export type PlanActionSource = "plan_page" | "other";
 export type ReviewCommentActor = "user" | "agent";
 /** The comment's anchor kind. */
 export type ReviewCommentKindProp = "inline" | "diff" | "file" | "review";
-/** Which diff side the comment is anchored to, or `none` for anchorless file/review remarks. */
-export type ReviewCommentSide = "base" | "worktree" | "none";
-/** Whether comments reached the agent one at a time or as a grouped batch. */
-export type ReviewSendTrigger = "single" | "batch";
 /** The terminal manual/agent outcome of a comment. */
 export type ReviewResolveOutcome = "resolved" | "dismissed";
 
@@ -112,20 +108,9 @@ export type AdditionalAnalyticsEvent =
 	| { name: "plan_item_added"; params: { surface: PlanAddSurface } }
 	| {
 			name: "review_comment_added";
-			params: {
-				author: ReviewCommentActor;
-				kind: ReviewCommentKindProp;
-				side: ReviewCommentSide;
-			};
+			params: { author: ReviewCommentActor; kind: ReviewCommentKindProp };
 	  }
-	| {
-			name: "review_comment_sent";
-			params: {
-				trigger: ReviewSendTrigger;
-				count_bucket: AnalyticsCountBucket;
-				outdated_bucket: AnalyticsCountBucket;
-			};
-	  }
+	| { name: "review_comment_sent"; params: { outdated: "yes" | "no" } }
 	| {
 			name: "review_comment_resolved";
 			params: { actor: ReviewCommentActor; outcome: ReviewResolveOutcome };

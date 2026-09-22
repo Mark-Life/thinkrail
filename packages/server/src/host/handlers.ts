@@ -270,20 +270,25 @@ function resolveTemplateReadDirs(params: TemplateReadLocation) {
 
 function fireReviewPrompt(
 	workspaceId: string,
-	ids: string[],
+	comments: readonly ReviewComment[],
 	sessionId: string,
 	pkg: string,
 	send: (sessionId: string, text: string) => Promise<void> = promptSession,
 ): void {
+	const ids = comments.map((c) => c.id);
 	void ackSend(runObservation.send(sessionId, "internal", () => send(sessionId, pkg)))
-		.then(undefined, (err) => {
-			rollbackSend(workspaceId, ids, sessionId);
-			notifyExtUi(
-				sessionId,
-				`Review send failed: ${err instanceof Error ? err.message : String(err)}`,
-				"error",
-			);
-		})
+		.then(
+			// capture on acceptance, not before: a pre-turn rejection rolls these back to draft.
+			() => captureReviewCommentsSent(comments),
+			(err) => {
+				rollbackSend(workspaceId, ids, sessionId);
+				notifyExtUi(
+					sessionId,
+					`Review send failed: ${err instanceof Error ? err.message : String(err)}`,
+					"error",
+				);
+			},
+		)
 		.catch(() => {
 			log.warn("review send rollback failed");
 		});
@@ -336,7 +341,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		await markCommentsSent(workspaceId, ids, existing);
-		fireReviewPrompt(workspaceId, ids, existing, pkg, followUpSession);
+		fireReviewPrompt(workspaceId, comments, existing, pkg, followUpSession);
 		return {
 			sessionId: existing,
 			model: null,
@@ -358,7 +363,7 @@ async function sendToFileChat(
 	});
 	trackChatStarted(created);
 	await markCommentsSent(workspaceId, ids, created.sessionId);
-	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
+	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg);
 	return { ...created, reused: false };
 }
 
@@ -1007,9 +1012,7 @@ const handlers: Record<string, Handler> = {
 		};
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, [p.id]);
-			const result = await sendToFileChat(p.workspaceId, comments, p);
-			captureReviewCommentsSent("single", comments);
-			return result;
+			return sendToFileChat(p.workspaceId, comments, p);
 		});
 	},
 	"review.sendBatch": (params) => {
@@ -1032,7 +1035,6 @@ const handlers: Record<string, Handler> = {
 				sessions.push(await sendToFileChat(p.workspaceId, group, p));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
-			captureReviewCommentsSent("batch", comments);
 			return { sessions };
 		});
 	},

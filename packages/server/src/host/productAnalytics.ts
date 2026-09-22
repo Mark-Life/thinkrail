@@ -11,12 +11,10 @@ import { settledAvailableModels, usePiRuntime } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
-	bucketCount,
 	getAdditionalAnalyticsCapture,
 	type PlanActionSource,
 	type ReviewCommentActor,
 	type ReviewResolveOutcome,
-	type ReviewSendTrigger,
 } from "../analytics";
 import { listProjects } from "../projects";
 
@@ -53,26 +51,19 @@ export function captureReviewCommentAdded(comment: ReviewComment): void {
 		params: {
 			author: comment.author === "agent" ? "agent" : "user",
 			kind: comment.kind,
-			side: comment.anchor ? comment.anchor.side : "none",
 		},
 	});
 }
 
-export function captureReviewCommentsSent(
-	trigger: ReviewSendTrigger,
-	comments: readonly ReviewComment[],
-): void {
-	if (comments.length === 0) return;
-	captureAdditional(additionalCapture(), {
-		name: "review_comment_sent",
-		params: {
-			trigger,
-			count_bucket: bucketCount(comments.length),
-			outdated_bucket: bucketCount(
-				comments.filter((comment) => comment.anchorState === "outdated").length,
-			),
-		},
-	});
+/** One event per comment (not per send action), so added→sent→resolved is a countable funnel. */
+export function captureReviewCommentsSent(comments: readonly ReviewComment[]): void {
+	const capture = additionalCapture();
+	for (const comment of comments) {
+		captureAdditional(capture, {
+			name: "review_comment_sent",
+			params: { outdated: comment.anchorState === "outdated" ? "yes" : "no" },
+		});
+	}
 }
 
 export function captureReviewCommentResolved(
