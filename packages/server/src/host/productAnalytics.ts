@@ -45,8 +45,14 @@ export function captureAdditional(
 	} catch {}
 }
 
-export function captureReviewCommentAdded(comment: ReviewComment): void {
-	captureAdditional(additionalCapture(), {
+// The grant is captured at the operation's synchronous entry and passed in (never re-read here): a
+// pre-consent action finishing after enablement must not emit through the new grant. The grant
+// closure self-guards, so a stale token is inert after revoke/re-enable (see analytics/SPEC.md).
+export function captureReviewCommentAdded(
+	capture: AdditionalAnalyticsCapture | null,
+	comment: ReviewComment,
+): void {
+	captureAdditional(capture, {
 		name: "review_comment_added",
 		params: {
 			author: comment.author === "agent" ? "agent" : "user",
@@ -56,8 +62,10 @@ export function captureReviewCommentAdded(comment: ReviewComment): void {
 }
 
 /** One event per comment (not per send action), so added→sent→resolved is a countable funnel. */
-export function captureReviewCommentsSent(comments: readonly ReviewComment[]): void {
-	const capture = additionalCapture();
+export function captureReviewCommentsSent(
+	capture: AdditionalAnalyticsCapture | null,
+	comments: readonly ReviewComment[],
+): void {
 	for (const comment of comments) {
 		captureAdditional(capture, {
 			name: "review_comment_sent",
@@ -67,10 +75,11 @@ export function captureReviewCommentsSent(comments: readonly ReviewComment[]): v
 }
 
 export function captureReviewCommentResolved(
+	capture: AdditionalAnalyticsCapture | null,
 	actor: ReviewCommentActor,
 	outcome: ReviewResolveOutcome,
 ): void {
-	captureAdditional(additionalCapture(), {
+	captureAdditional(capture, {
 		name: "review_comment_resolved",
 		params: { actor, outcome },
 	});

@@ -13,6 +13,7 @@ import { TodoStore } from "pi-todos/core";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
+	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	resetAnalyticsForTests,
 	setAdditionalAnalyticsEnabled,
@@ -416,10 +417,12 @@ test("review-comment analytics distinguish author/actor and stay per-comment wit
 		{ workspaceId, id: review.id, status: "dismissed" },
 		ctx,
 	);
-	// Agent-authored find + agent resolve + the per-comment send fan-out go through the host helpers.
-	captureReviewCommentAdded({ author: "agent", kind: "inline" } as ReviewComment);
-	captureReviewCommentResolved("agent", "resolved");
-	captureReviewCommentsSent([
+	// Agent-authored find + agent resolve + the per-comment send fan-out go through the host helpers,
+	// each carrying the grant captured at its operation's synchronous entry.
+	const grant = getAdditionalAnalyticsCapture();
+	captureReviewCommentAdded(grant, { author: "agent", kind: "inline" } as ReviewComment);
+	captureReviewCommentResolved(grant, "agent", "resolved");
+	captureReviewCommentsSent(grant, [
 		{ anchorState: "anchored" } as ReviewComment,
 		{ anchorState: "outdated" } as ReviewComment,
 	]);

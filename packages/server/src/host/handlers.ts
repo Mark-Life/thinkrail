@@ -273,13 +273,14 @@ function fireReviewPrompt(
 	comments: readonly ReviewComment[],
 	sessionId: string,
 	pkg: string,
+	capture: AdditionalAnalyticsCapture | null,
 	send: (sessionId: string, text: string) => Promise<void> = promptSession,
 ): void {
 	const ids = comments.map((c) => c.id);
 	void ackSend(runObservation.send(sessionId, "internal", () => send(sessionId, pkg)))
 		.then(
 			// capture on acceptance, not before: a pre-turn rejection rolls these back to draft.
-			() => captureReviewCommentsSent(comments),
+			() => captureReviewCommentsSent(capture, comments),
 			(err) => {
 				rollbackSend(workspaceId, ids, sessionId);
 				notifyExtUi(
@@ -332,6 +333,7 @@ async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
+	capture: AdditionalAnalyticsCapture | null,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
@@ -341,7 +343,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		await markCommentsSent(workspaceId, ids, existing);
-		fireReviewPrompt(workspaceId, comments, existing, pkg, followUpSession);
+		fireReviewPrompt(workspaceId, comments, existing, pkg, capture, followUpSession);
 		return {
 			sessionId: existing,
 			model: null,
@@ -363,7 +365,7 @@ async function sendToFileChat(
 	});
 	trackChatStarted(created);
 	await markCommentsSent(workspaceId, ids, created.sessionId);
-	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg);
+	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg, capture);
 	return { ...created, reused: false };
 }
 
@@ -961,9 +963,10 @@ const handlers: Record<string, Handler> = {
 			body: string;
 			scope?: GitDiffScope;
 		};
+		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comment = await addComment(p);
-			captureReviewCommentAdded(comment);
+			captureReviewCommentAdded(capture, comment);
 			return comment;
 		});
 	},
@@ -974,10 +977,11 @@ const handlers: Record<string, Handler> = {
 			body?: string;
 			status?: ReviewCommentStatus;
 		};
+		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comment = await updateComment(p);
 			if (p.status === "resolved" || p.status === "dismissed")
-				captureReviewCommentResolved("user", p.status);
+				captureReviewCommentResolved(capture, "user", p.status);
 			return comment;
 		});
 	},
@@ -1010,9 +1014,10 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
 		};
+		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, [p.id]);
-			return sendToFileChat(p.workspaceId, comments, p);
+			return sendToFileChat(p.workspaceId, comments, p, capture);
 		});
 	},
 	"review.sendBatch": (params) => {
@@ -1023,6 +1028,7 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
 		};
+		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const groups = new Map<string, typeof comments>();
@@ -1032,7 +1038,7 @@ const handlers: Record<string, Handler> = {
 			}
 			const sessions: ReviewSendResult[] = [];
 			for (const group of groups.values()) {
-				sessions.push(await sendToFileChat(p.workspaceId, group, p));
+				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
 			return { sessions };

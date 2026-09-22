@@ -363,6 +363,7 @@ export function handleReviewerSettled(sessionId: string, event: PiEvent): void {
 export function installTodoReviewSeams(): void {
 	setAddReviewCommentHandler((reviewerSessionId, params: AddReviewCommentParams) => {
 		const { workspaceId } = reviewerContext(reviewerSessionId);
+		const capture = additionalCapture();
 		return withReviewLock(workspaceId, async () => {
 			const problem = anchorProblem(workspaceId, params.path, params.startLine);
 			if (problem) throw new Error(problem);
@@ -385,7 +386,7 @@ export function installTodoReviewSeams(): void {
 					selectors: [{ kind: "lineRange", startLine: params.startLine, endLine }],
 				},
 			});
-			captureReviewCommentAdded(comment);
+			captureReviewCommentAdded(capture, comment);
 			return { commentId: comment.id };
 		});
 	});

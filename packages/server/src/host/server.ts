@@ -512,8 +512,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 	setReviewCommentHandler((sessionId, commentId, note) => {
+		const capture = additionalCapture();
 		const resolved = resolveCommentFromAgent(sessionId, commentId, note);
-		captureReviewCommentResolved("agent", "resolved");
+		captureReviewCommentResolved(capture, "agent", "resolved");
 		return { resolvedBody: resolved.body };
 	});
 	installTodoReviewSeams();
