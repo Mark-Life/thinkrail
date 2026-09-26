@@ -184,14 +184,6 @@ export function useLayoutIntentProcessing(
 	);
 	const maxSideGroups = useAppStore((state) => state.localLayoutPreferences.maxSideGroups);
 	const maxBottomGroups = useAppStore((state) => state.localLayoutPreferences.maxBottomGroups);
-	const terminalReservationPending = useAppStore((state) => {
-		if (layoutIntent?.kind !== "place-terminal") return false;
-		return (
-			state.terminalsByWorkspace[workspaceId]?.some(
-				(tab) => tab.tabKey === layoutIntent.tabKey && tab.reservationPending,
-			) ?? false
-		);
-	});
 
 	useEffect(() => {
 		if (!layoutIntent || !document || !attention) return;
@@ -202,7 +194,6 @@ export function useLayoutIntentProcessing(
 		) {
 			return;
 		}
-		if (layoutIntent.kind === "place-terminal" && terminalReservationPending) return;
 		if (
 			layoutIntent.kind === "select" &&
 			layoutIntent.historyRequestId !== undefined &&
@@ -504,7 +495,6 @@ export function useLayoutIntentProcessing(
 		maxBottomGroups,
 		maxSideGroups,
 		requestFocus,
-		terminalReservationPending,
 		workspaceId,
 	]);
 }

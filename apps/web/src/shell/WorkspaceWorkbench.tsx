@@ -30,7 +30,12 @@ import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
-import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
+import {
+	TerminalWorkbenchBody,
+	useTerminalClose,
+	useTerminalInstanceWarmup,
+	warmTerminalInstance,
+} from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
 import {
@@ -322,6 +327,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
+	useTerminalInstanceWarmup(status === "connected");
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
@@ -709,6 +715,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								type="button"
 								data-testid="new-terminal"
 								aria-label="New terminal in this group"
+								onPointerEnter={warmTerminalInstance}
+								onPointerDown={warmTerminalInstance}
 								onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
 								className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 							>

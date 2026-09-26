@@ -1403,8 +1403,13 @@ own section. The kebab menu (`plan-menu`, a
   construction, and never again — unlike Monaco, which re-measures an untrusted early reading). Without the
   re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
   cols/rows. Initial attach therefore waits for `relayout()`, performs a final `fit()`, and only then captures
-  the PTY grid. The wait is **bounded by a deadline**, because `relayout()` in the pinned addon awaits
-  `document.fonts.ready` plus a `FontFace.load()` per registered face — one stalled font response keeps it
+  the PTY grid. It also waits for the host to confirm the tab's reservation (`reserved`): a tab placed in the
+  click frame mounts its body with `data-ready="false"` at once, so xterm construction overlaps the reserve
+  round-trip, but `terminal.attach` never runs first and so never lets the host mint the catalog entry with
+  its own title. The chunk is warmed once the workbench connects and when the pointer reaches a
+  new-terminal control, so `lazy` is normally resolved before the click. The relayout wait is **bounded by a
+  deadline**, because `relayout()` in the pinned addon awaits `document.fonts.ready` plus a
+  `FontFace.load()` per registered face — one stalled font response keeps it
   *pending* (not rejected) indefinitely, and an unbounded wait would leave the pane blank with no shell.
   Relayout failure or deadline expiry falls back to the construction-time measurement rather than stranding
   the pane; on expiry the stale relayout is neutralized first (disposing the addon skips its re-measuring

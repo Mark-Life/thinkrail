@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { LayoutAttention } from "../../lib";
 import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "../layout";
 import { findTabLocation } from "../layout";
@@ -104,5 +105,10 @@ describe("terminal intent routing", () => {
 		);
 		if ("reason" in centered) throw new Error(centered.reason);
 		expect(findTabLocation(centered.document, terminal.id)?.area).toBe("center");
+	});
+
+	test("a reservation-pending terminal is placed on the intent's first pass, not after host confirmation", () => {
+		const source = readFileSync(new URL("./layoutIntents.ts", import.meta.url), "utf8");
+		expect(source).not.toContain("reservationPending");
 	});
 });

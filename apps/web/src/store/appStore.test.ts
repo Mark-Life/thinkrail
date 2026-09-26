@@ -4047,7 +4047,12 @@ test("hidden terminal seeding stays non-activating, idempotent, and atomically r
 
 	useAppStore.getState().rejectTerminalReservation("w1", pending.tabKey);
 	expect(useAppStore.getState().terminalsByWorkspace.w1).toEqual([]);
-	expect(useAppStore.getState().layoutIntents).toEqual([]);
+	expect(useAppStore.getState().layoutIntents).toHaveLength(1);
+	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({
+		kind: "close-terminal",
+		workspaceId: "w1",
+		tabKey: pending.tabKey,
+	});
 });
 
 test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {
