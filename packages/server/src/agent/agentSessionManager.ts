@@ -728,6 +728,28 @@ async function sessionFileExists(cwd: string, sessionId: string): Promise<boolea
 	}
 }
 
+const creations = new Map<string, { workspaceId: string; settled: Promise<void> }>();
+let anonymousCreations = 0;
+
+function trackCreation(input: CreateSessionInput, result: Promise<CreateSessionResult>): void {
+	anonymousCreations += 1;
+	const key = input.sessionId ?? `creation:${anonymousCreations}`;
+	const settled = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	creations.set(key, { workspaceId: input.workspaceId, settled });
+	void settled.then(() => creations.delete(key));
+}
+
+async function settleWorkspaceCreations(workspaceId: string): Promise<void> {
+	await Promise.all(
+		[...creations.values()]
+			.filter((creation) => creation.workspaceId === workspaceId)
+			.map((creation) => creation.settled),
+	);
+}
+
 async function assertSessionIdAvailable(cwd: string, sessionId: string): Promise<void> {
 	if (
 		sessions.has(sessionId) ||
@@ -739,7 +761,16 @@ async function assertSessionIdAvailable(cwd: string, sessionId: string): Promise
 	}
 }
 
-export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+export function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+	if (input.sessionId !== undefined && creations.has(input.sessionId)) {
+		return Promise.reject(new Error(`Session id already exists: ${input.sessionId}`));
+	}
+	const result = createSessionNow(input);
+	trackCreation(input, result);
+	return result;
+}
+
+async function createSessionNow(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
 	if (input.sessionId !== undefined) await assertSessionIdAvailable(input.cwd, input.sessionId);
 	const settingsManager = buildSessionSettings(input.cwd);
@@ -920,7 +951,8 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	return [...live, ...disk];
 }
 
-export function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+export async function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+	await settleWorkspaceCreations(workspaceId);
 	return listSessionsInternal(workspaceId, cwd);
 }
 

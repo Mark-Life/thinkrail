@@ -345,6 +345,25 @@ test("createSession accepts a client-minted id and rejects one that is live, tom
 	}
 });
 
+test("session.list waits for an in-flight creation instead of reporting the session missing", async () => {
+	setSessionManagerFactory((cwd, options) => SessionManager.inMemory(cwd, options));
+	const cwd = tmpCwd("trpi-inflight-");
+	const workspaceId = "ws-inflight";
+	const input = { cwd, workspaceId, model: toWireModel(fauxA.getModel()) };
+	try {
+		const creation = createSession({ ...input, sessionId: "chat-inflight" });
+		expect(hasSession("chat-inflight")).toBe(false);
+		await expect(createSession({ ...input, sessionId: "chat-inflight" })).rejects.toThrow(
+			/already exists/,
+		);
+		const listed = await listSessions(workspaceId, cwd);
+		expect(listed.map((summary) => summary.sessionId)).toContain("chat-inflight");
+		expect((await creation).sessionId).toBe("chat-inflight");
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
 	fauxA.setResponses([fauxAssistantMessage("ALPHA_REPLY")]);
 	fauxB.setResponses([fauxAssistantMessage("BRAVO_REPLY")]);

@@ -102,7 +102,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (a supplied `sessionId` is handed to pi's `SessionManager.create(cwd, undefined, { id })`, which owns the
     format check; the host first rejects one that is registered, mid-attach, deletion-tombstoned, or named by
     a `_<id>.jsonl` transcript in the workspace's session directory — the file name is pi's, so the check is
-    one `readdir`, never a transcript parse)
+    one `readdir`, never a transcript parse; an id whose creation is still in flight is rejected the same way).
+    A creation is tracked from the call until it settles, and `listSessions(workspaceId, cwd)` awaits the
+    workspace's in-flight creations first: a frontend places a client-minted chat before the host has
+    registered it, and its next `session.list` (a reload, a reconnect) must not report that session missing
+    and let the frontend prune the placement
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;

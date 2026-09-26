@@ -43,7 +43,7 @@ import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
-	type LayoutIntent,
+	type LayoutIntentTransition,
 	layoutOpenOptionsForNavigation,
 	selectCanRenameChat,
 	selectContextProject,
@@ -77,6 +77,7 @@ import {
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import {
 	applyLayoutAttention,
+	commitLayoutIntentTransition,
 	commitWorkspaceLayout,
 	emptyWorkspaceProjection,
 	useWorkspaceLayoutState,
@@ -182,25 +183,18 @@ function ChatResourceBody({
 function useTerminalReservation(workspaceId: string): void {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
-	const pendingIntent = useAppStore((state) =>
-		state.layoutIntents.find(
-			(intent): intent is Extract<LayoutIntent, { kind: "place-terminal" }> =>
-				intent.kind === "place-terminal" &&
-				intent.workspaceId === workspaceId &&
-				state.terminalsByWorkspace[workspaceId]?.some(
-					(tab) => tab.tabKey === intent.tabKey && tab.reservationPending,
-				) === true,
-		),
+	const pendingTab = useAppStore((state) =>
+		state.terminalsByWorkspace[workspaceId]?.find((tab) => tab.reservationPending === true),
 	);
 
 	useEffect(() => {
-		if (!pendingIntent || status !== "connected" || connectionGeneration === 0) return;
+		if (!pendingTab || status !== "connected" || connectionGeneration === 0) return;
 		let current = true;
 		void getTransport()
 			.request("terminal.reserve", {
 				workspaceId,
-				tabKey: pendingIntent.tabKey,
-				title: pendingIntent.title,
+				tabKey: pendingTab.tabKey,
+				title: pendingTab.title,
 			})
 			.then(() => {
 				const state = useAppStore.getState();
@@ -211,7 +205,7 @@ function useTerminalReservation(workspaceId: string): void {
 				) {
 					return;
 				}
-				state.confirmTerminalReservation(workspaceId, pendingIntent.tabKey);
+				state.confirmTerminalReservation(workspaceId, pendingTab.tabKey);
 			})
 			.catch((error) => {
 				const state = useAppStore.getState();
@@ -223,16 +217,16 @@ function useTerminalReservation(workspaceId: string): void {
 					return;
 				}
 				const stillPending = state.terminalsByWorkspace[workspaceId]?.some(
-					(tab) => tab.tabKey === pendingIntent.tabKey && tab.reservationPending,
+					(tab) => tab.tabKey === pendingTab.tabKey && tab.reservationPending,
 				);
 				if (!stillPending) return;
-				state.rejectTerminalReservation(workspaceId, pendingIntent.tabKey);
+				state.rejectTerminalReservation(workspaceId, pendingTab.tabKey);
 				toast.error(errorText(error), "Couldn't create the terminal");
 			});
 		return () => {
 			current = false;
 		};
-	}, [connectionGeneration, pendingIntent, status, workspaceId]);
+	}, [connectionGeneration, pendingTab, status, workspaceId]);
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
@@ -339,13 +333,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[document, workspaceId],
 	);
 
+	const applyIntentTransition = useCallback(
+		(transition: LayoutIntentTransition) => {
+			commitLayoutIntentTransition(workspaceId, transition);
+			syncLegacySelectionFromAttention(workspaceId);
+		},
+		[workspaceId],
+	);
+
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useTerminalInstanceWarmup(status === "connected");
 	useChatViewWarmup(status === "connected");
-	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
-	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
+	useLayoutIntentProcessing(workspaceId, applyIntentTransition, setFocusRequest);
+	useWorkspaceChatCatalogReconciliation(workspaceId);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
 

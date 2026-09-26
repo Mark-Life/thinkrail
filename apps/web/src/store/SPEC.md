@@ -92,7 +92,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   it is neither persisted nor writable as authority. There is no accepted/projected pair, revision, mutation
   id, pending write, rollback queue, or conflict state.
 
-  `applyLocalLayoutTransition(result)` is the one atomic installation boundary for pure layout results. A
+  `applyLocalLayoutState(payload, options)` is the one atomic installation boundary for pure layout results;
+  `options.consumeIntentId` drops the layout intent that produced the payload in the same transaction, so an
+  intent's placement, attention and consumption are one notification. A
   resource-only result updates one workspace view and attention. A frame result replaces the singular frame
   together with every retained workspace-view remap, so an explicit group removal or preset application can
   never leave a hidden workspace referencing a dead group. Components never splice group/tab arrays. Empty
@@ -142,7 +144,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   supply reconnect and later-hydration truth, so there is no title-specific event buffer.
   `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
   state without becoming placement authority; its selector includes the matched cache/catalog key so identity
-  repair retriggers the mirror.
+  repair retriggers the mirror. It, `setLayoutAttention`, `enqueueLayoutIntent`, `consumeLayoutIntent`,
+  `addTerminal` and `restorePlacedChatCache` return the current state object when they resolve to no change,
+  so subscribers are not notified for a no-op.
 
   **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
   owns terminal existence keyed by `(workspaceId, tabKey)`; a workspace view locally references that key.

@@ -198,6 +198,17 @@ export interface LocalLayoutStatePayload {
 	preferences: LocalLayoutPreferences;
 }
 
+export interface LocalLayoutStateOptions {
+	invalidateProjection?: boolean;
+	consumeIntentId?: string;
+}
+
+export interface LayoutIntentTransition {
+	intentId: string;
+	document?: WorkspaceLayoutDocument;
+	attention?: LayoutAttention;
+}
+
 export interface CenterNavigationStamp {
 	groupId: string;
 	clock: number;
@@ -875,7 +886,10 @@ interface AppState {
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
-	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
+	applyLocalLayoutState: (
+		payload: LocalLayoutStatePayload,
+		options?: LocalLayoutStateOptions,
+	) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	syncLegacySelection: (
@@ -1964,20 +1978,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 						layoutStateReady: true,
 					},
 		),
-	applyLocalLayoutState: (payload, invalidateProjection = false) =>
+	applyLocalLayoutState: (payload, options = {}) =>
 		set((state) => ({
 			workbenchFrame: payload.frame,
 			workspaceViewsByWorkspace: payload.viewsByWorkspace,
 			layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 			layoutAttentionByWorkspace: payload.attentionByWorkspace,
 			localLayoutPreferences: payload.preferences,
-			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
+			layoutProjectionEpoch: state.layoutProjectionEpoch + (options.invalidateProjection ? 1 : 0),
+			layoutIntents: options.consumeIntentId
+				? state.layoutIntents.filter((intent) => intent.id !== options.consumeIntentId)
+				: state.layoutIntents,
 		})),
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
 	setLayoutAttention: (workspaceId, attention) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
-				? {}
+				? state
 				: {
 						layoutAttentionByWorkspace: {
 							...state.layoutAttentionByWorkspace,
@@ -1987,20 +2004,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	syncLegacySelection: (workspaceId, selection) =>
 		set((state) => {
-			if (state.removedWorkspaceIds[workspaceId]) return {};
+			if (state.removedWorkspaceIds[workspaceId]) return state;
 			if (selection?.kind === "terminal") {
 				if (
 					!state.terminalsByWorkspace[workspaceId]?.some(
 						(terminal) => terminal.tabKey === selection.tabKey,
 					)
 				) {
-					return {};
+					return state;
 				}
 				if (
 					state.activeTerminalByWorkspace[workspaceId] === selection.tabKey &&
 					state.activeTabByWorkspace[workspaceId] === null
 				) {
-					return {};
+					return state;
 				}
 				return {
 					activeTerminalByWorkspace: {
@@ -2012,13 +2029,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			if (selection?.kind === "editor") {
 				if (!state.tabsByWorkspace[workspaceId]?.some((tab) => tab.id === selection.tabId)) {
-					return {};
+					return state;
 				}
 				if (
 					state.activeTabByWorkspace[workspaceId] === selection.tabId &&
 					state.activeTerminalByWorkspace[workspaceId] === null
 				) {
-					return {};
+					return state;
 				}
 				return {
 					activeTabByWorkspace: {
@@ -2035,7 +2052,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				state.activeTabByWorkspace[workspaceId] === null &&
 				state.activeTerminalByWorkspace[workspaceId] === null
 			) {
-				return {};
+				return state;
 			}
 			return {
 				activeTabByWorkspace: { ...state.activeTabByWorkspace, [workspaceId]: null },
@@ -2049,13 +2066,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const id = randomId("layout-intent");
 		set((state) =>
 			state.removedWorkspaceIds[intent.workspaceId]
-				? {}
+				? state
 				: { layoutIntents: [...state.layoutIntents, { ...intent, id } as LayoutIntent] },
 		);
 		return id;
 	},
 	consumeLayoutIntent: (id) =>
-		set((state) => ({ layoutIntents: state.layoutIntents.filter((intent) => intent.id !== id) })),
+		set((state) =>
+			state.layoutIntents.some((intent) => intent.id === id)
+				? { layoutIntents: state.layoutIntents.filter((intent) => intent.id !== id) }
+				: state,
+		),
 	openTab: (tab, intent, syncLayout = true, options = {}) =>
 		set((s) => {
 			const wsId = tab.workspaceId;
@@ -2345,10 +2366,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		requestedTabKey,
 	) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			const tabKey = requestedTabKey ?? randomId("terminal");
-			if (list.some((tab) => tab.tabKey === tabKey)) return {};
+			if (list.some((tab) => tab.tabKey === tabKey)) return s;
 			const navigation =
 				targetGroupId && targetArea === "center"
 					? advanceCenterNavigation(s, workspaceId, targetGroupId)
@@ -2746,7 +2767,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	restorePlacedChatCache: (workspaceId, tabId, sessionId, title) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
-				return {};
+				return s;
 			}
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
 			const placed = tabs.find(
@@ -2764,7 +2785,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 			const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 			const metadataChanged = placed?.name !== title || placed.id !== id;
-			if (placed && !inHistory && !metadataChanged) return {};
+			if (placed && !inHistory && !metadataChanged) return s;
 			const tab: ChatTab = { kind: "chat", id, workspaceId, name: title, sessionId };
 			const retargeted = placed !== undefined && placed.id !== id;
 			return {
