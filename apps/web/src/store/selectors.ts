@@ -425,6 +425,18 @@ interface SkillsStaleState {
 	skillsSyncedTickBySession: Record<string, number>;
 }
 
+export function selectPendingSessionIds(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		sessions: Record<string, { pending?: true }>;
+	},
+	workspaceId: string,
+): string[] {
+	return (state.tabsByWorkspace[workspaceId] ?? []).flatMap((tab) =>
+		tab.kind === "chat" && state.sessions[tab.sessionId]?.pending ? [tab.sessionId] : [],
+	);
+}
+
 export function selectSkillsStale(
 	state: SkillsStaleState,
 	workspaceId: string,

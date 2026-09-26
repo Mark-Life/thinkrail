@@ -40,6 +40,7 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
+	selectPendingSessionIds,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -4367,4 +4368,67 @@ test("a workspace that changes project is re-attributed rather than counted twic
 	const map = useAppStore.getState().activityByWorkspace;
 	expect(projectActivityRollup(map, "pa")).toBeNull();
 	expect(projectActivityRollup(map, "pb")?.status).toBe("running");
+});
+
+test("a pending chat places its tab and runtime at once and resolves in place", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ connectionGeneration: 3, skillChangeTickByWorkspace: { ws1: 5 } });
+	store.openChatSession("ws1", "chat-p", null, "medium", undefined, { pending: true });
+	let state = useAppStore.getState();
+	expect(state.tabsByWorkspace.ws1?.[0]).toMatchObject({ kind: "chat", sessionId: "chat-p" });
+	expect(state.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "chat-p"));
+	expect(rt("chat-p").pending).toBe(true);
+	expect(rt("chat-p").model).toBeNull();
+	expect(state.skillsSyncedTickBySession["chat-p"]).toBeUndefined();
+	expect(selectPendingSessionIds(state, "ws1")).toEqual(["chat-p"]);
+	expect(state.layoutIntents.at(-1)).toMatchObject({ kind: "open", tab: { sessionId: "chat-p" } });
+
+	store.setChatDraft("chat-p", "typed while starting");
+	store.applyExtUi({ id: "t1", sessionId: "chat-p", kind: "setTitle", title: "Named at start" });
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]?.name).toBe("Named at start");
+
+	const model = { id: "m", name: "M", provider: "p" } as WireModel;
+	store.resolvePendingChat("ws1", "chat-p", model, "high", 7);
+	state = useAppStore.getState();
+	expect(rt("chat-p").pending).toBeUndefined();
+	expect(rt("chat-p")).toMatchObject({
+		model,
+		thinkingLevel: "high",
+		draft: "typed while starting",
+		syncedConnectionGeneration: 3,
+	});
+	expect(state.skillsSyncedTickBySession["chat-p"]).toBe(7);
+	expect(selectPendingSessionIds(state, "ws1")).toEqual([]);
+	expect(selectSkillsStale(state, "ws1", "chat-p")).toBe(false);
+});
+
+test("resolvePendingChat is a no-op without a pending runtime, after deletion, or after workspace removal", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "settled", null, "medium");
+	const before = useAppStore.getState();
+	store.resolvePendingChat("ws1", "settled", null, "high", 2);
+	expect(useAppStore.getState().sessions.settled).toBe(before.sessions.settled);
+	store.resolvePendingChat("ws1", "ghost", null, "high", 2);
+	expect(useAppStore.getState().sessions.ghost).toBeUndefined();
+
+	store.openChatSession("ws1", "failed", null, "medium", undefined, { pending: true });
+	store.deleteChat("ws1", "failed", false);
+	let state = useAppStore.getState();
+	expect(state.sessions.failed).toBeUndefined();
+	expect(
+		state.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "failed"),
+	).toBe(false);
+	expect(state.deletedSessionsByWorkspace.ws1?.failed).toBe(true);
+	expect(state.layoutIntents.at(-1)).toMatchObject({ kind: "remove-session", sessionId: "failed" });
+	store.resolvePendingChat("ws1", "failed", null, "high", 2);
+	expect(useAppStore.getState().sessions.failed).toBeUndefined();
+
+	store.openChatSession("ws1", "torn", null, "medium", undefined, { pending: true });
+	useAppStore.setState({ removedWorkspaceIds: { ws1: true } });
+	store.clearWorkspaceTabs("ws1");
+	store.resolvePendingChat("ws1", "torn", null, "high", 2);
+	state = useAppStore.getState();
+	expect(state.sessions.torn).toBeUndefined();
+	expect(state.skillsSyncedTickBySession.torn).toBeUndefined();
 });

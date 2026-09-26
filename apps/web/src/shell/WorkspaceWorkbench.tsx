@@ -20,7 +20,7 @@ import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
-import { type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { type LayoutAttention, layoutResourceIdentity, randomId } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
@@ -86,7 +86,22 @@ import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./l
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
-const ChatView = lazy(() => import("../chat/ChatView"));
+const loadChatView = () => import("../chat/ChatView");
+const ChatView = lazy(loadChatView);
+const IDLE_WARMUP_FALLBACK_MS = 1_000;
+
+function useChatViewWarmup(connected: boolean): void {
+	useEffect(() => {
+		if (!connected) return;
+		const warm = () => void loadChatView().catch(() => {});
+		if (typeof requestIdleCallback === "function") {
+			const handle = requestIdleCallback(warm);
+			return () => cancelIdleCallback(handle);
+		}
+		const handle = setTimeout(warm, IDLE_WARMUP_FALLBACK_MS);
+		return () => clearTimeout(handle);
+	}, [connected]);
+}
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
@@ -328,6 +343,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useTerminalInstanceWarmup(status === "connected");
+	useChatViewWarmup(status === "connected");
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
@@ -571,29 +587,42 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
 			const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, groupId);
-			useAppStore.getState().beginChatStart(workspaceId);
-			void createSessionWithSkillBaseline({ workspaceId })
-				.then(({ result: { sessionId, model, thinkingLevel }, syncedTick }) => {
-					const store = useAppStore.getState();
-					store.openChatSession(
+			const sessionId = randomId("chat");
+			const store = useAppStore.getState();
+			store.openChatSession(workspaceId, sessionId, null, "medium", undefined, {
+				...layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+				pending: true,
+			});
+			void createSessionWithSkillBaseline({ workspaceId, sessionId })
+				.then(({ result, syncedTick }) => {
+					const state = useAppStore.getState();
+					if (result.sessionId === sessionId) {
+						state.resolvePendingChat(
+							workspaceId,
+							sessionId,
+							result.model,
+							result.thinkingLevel,
+							syncedTick,
+						);
+						return;
+					}
+					state.deleteChat(workspaceId, sessionId, false);
+					state.openChatSession(
 						workspaceId,
-						sessionId,
-						model,
-						thinkingLevel,
+						result.sessionId,
+						result.model,
+						result.thinkingLevel,
 						syncedTick,
-						layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+						layoutOpenOptionsForNavigation(state, workspaceId, navigation),
 					);
 				})
-				.catch(() => {
+				.catch((err: unknown) => {
 					const state = useAppStore.getState();
-					if (
-						layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
-						!state.removedWorkspaceIds[workspaceId]
-					) {
-						toast.error("The agent session could not be created.", "Couldn't start the chat");
+					state.deleteChat(workspaceId, sessionId, false);
+					if (!state.removedWorkspaceIds[workspaceId]) {
+						toast.error(errorText(err), "Couldn't start the chat");
 					}
-				})
-				.finally(() => useAppStore.getState().endChatStart(workspaceId));
+				});
 		},
 		[changeAttention, workspaceId],
 	);

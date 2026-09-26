@@ -8,6 +8,7 @@ import {
 	createAgentSession,
 	type ExtensionError,
 	getAgentDir,
+	type NewSessionOptions,
 	type SessionInfo,
 	SessionManager,
 	SettingsManager,
@@ -343,8 +344,10 @@ export async function listSessionActivity(
 	return rows;
 }
 
-let sessionManagerFactory: (cwd: string) => SessionManager = (cwd) => SessionManager.create(cwd);
-export function setSessionManagerFactory(factory: (cwd: string) => SessionManager): void {
+type SessionManagerFactory = (cwd: string, options?: NewSessionOptions) => SessionManager;
+let sessionManagerFactory: SessionManagerFactory = (cwd, options) =>
+	SessionManager.create(cwd, undefined, options);
+export function setSessionManagerFactory(factory: SessionManagerFactory): void {
 	sessionManagerFactory = factory;
 }
 
@@ -515,6 +518,8 @@ export function buildSessionSettings(cwd: string): SettingsManager {
 export interface CreateSessionInput {
 	cwd: string;
 	workspaceId: string;
+	/** Client-minted id; rejected when it is live, deletion-tombstoned, or already on disk. */
+	sessionId?: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
 	/** True: an unresolvable `model` falls back to the default instead of throwing. */
@@ -713,8 +718,30 @@ async function registerSession(
 	return prepared.result;
 }
 
+async function sessionFileExists(cwd: string, sessionId: string): Promise<boolean> {
+	try {
+		const names = await readdir(defaultSessionDirectory(cwd));
+		return names.some((name) => name.endsWith(`_${sessionId}.jsonl`));
+	} catch (error) {
+		if (hasErrorCode(error, "ENOENT")) return false;
+		throw error;
+	}
+}
+
+async function assertSessionIdAvailable(cwd: string, sessionId: string): Promise<void> {
+	if (
+		sessions.has(sessionId) ||
+		attaching.has(sessionId) ||
+		hasDeletionTombstone(sessionId) ||
+		(await sessionFileExists(cwd, sessionId))
+	) {
+		throw new Error(`Session id already exists: ${sessionId}`);
+	}
+}
+
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
+	if (input.sessionId !== undefined) await assertSessionIdAvailable(input.cwd, input.sessionId);
 	const settingsManager = buildSessionSettings(input.cwd);
 	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	let model: Model<string> | undefined;
@@ -728,7 +755,10 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
 		modelRuntime: generation.runtime,
-		sessionManager: sessionManagerFactory(input.cwd),
+		sessionManager: sessionManagerFactory(
+			input.cwd,
+			input.sessionId !== undefined ? { id: input.sessionId } : undefined,
+		),
 		settingsManager,
 		resourceLoader: await buildResourceLoader(
 			input.cwd,

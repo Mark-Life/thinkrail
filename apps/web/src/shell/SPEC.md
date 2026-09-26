@@ -102,15 +102,31 @@ Built-in presets remain web-owned. The Layout section presents built-ins plus th
 
 ## Long-operation feedback
 
-Starting an agent session is seconds-long (watcher readiness + `session.create`), so it is never silent:
-every chat-start path — the empty-center New-chat button, `NewWorkspaceDialog`'s create-and-kick-off flow,
-and reopening a closed chat (`openChatInTab`) — brackets its request with the store's per-workspace
-chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can overlap); worktree
-creation does the same per-project (`beginWorktreeCreation`/`endWorktreeCreation`), which `ProjectTree`
-renders as a pending row under the project — the list stays put and the new worktree lands where the
-row was. Consumers show it as an inline pending state where the result will appear: the empty-center button flips to a disabled
-spinner ("Starting chat…", also the double-click guard), and the chat-history trigger spins while a
-reopened chat hydrates. Workspace removal drops the counter with the rest of the per-workspace state.
+Starting an agent session is seconds-long (watcher readiness + `session.create`), so it is never silent.
+The in-workspace new-chat paths — the empty-center button, the group header's New-chat button — share
+`startChat`, which shows the result itself in the click frame: it mints the session id (`randomId("chat")`,
+which satisfies pi's id grammar), opens the chat as a **pending** tab + runtime through
+`openChatSession(…, { pending: true })` with the navigation stamp consumed at click, then sends
+`session.create { workspaceId, sessionId }`. The reply resolves the placeholder in place
+(`resolvePendingChat`); a host that ignored the id (its reply names another) gets the placeholder deleted and
+its own id opened the old way; a rejection deletes the placeholder and toasts unless the workspace is gone.
+The transport bounds the wait: a request is re-sent across a reconnect and times out at 60 s, so a pending
+tab cannot outlive the request. The pending window is visible in the tab's own body (`chat` spec: the composer
+is typeable, send/model disabled with "Starting chat…"), so this path needs no spinner and no double-click
+guard — two clicks are two chats, as before. Because the tab exists before the host lists the session, the
+catalog pass excludes pending ids from its baselines (`chatReconciliation` spec) instead of tombstoning them.
+`NewWorkspaceDialog`'s create-and-kick-off flow and review send keep host-minted ids: they create the chat
+in a workspace that is not on screen yet or as part of a host-side transaction, so click-frame placement
+buys nothing there. Those paths and reopening a closed chat (`openChatInTab`) bracket their request with the
+store's per-workspace chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can
+overlap); worktree creation does the same per-project (`beginWorktreeCreation`/`endWorktreeCreation`), which
+`ProjectTree` renders as a pending row under the project — the list stays put and the new worktree lands
+where the row was. Consumers show it as an inline pending state where the result will appear: the
+empty-center button flips to a disabled spinner ("Starting chat…") while the dialog's chat is still being
+created, and the chat-history trigger spins while a reopened chat hydrates. Workspace removal drops the
+counter with the rest of the per-workspace state. `ChatView` stays a lazy chunk, but `WorkspaceWorkbench`
+warms it in an idle callback once connected (as `TerminalWorkbench` does for the terminal chunk), so the
+first pending chat's composer is not gated on a fetch.
 
 ## Error resilience
 

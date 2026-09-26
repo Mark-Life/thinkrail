@@ -10,6 +10,7 @@ import {
 	layoutOpenOptionsForNavigation,
 	selectAttentionCenterTab,
 	selectCurrentRouteChatTarget,
+	selectPendingSessionIds,
 	selectWorkspaceSessionIds,
 	shouldAdvanceAcceptedNavigation,
 	toast,
@@ -28,6 +29,31 @@ import {
 import { commitWorkspaceLayout } from "../layoutState";
 
 const sessionHydration = new Map<string, Promise<boolean>>();
+
+export function catalogBaselines(
+	state: Parameters<typeof selectWorkspaceSessionIds>[0] &
+		Parameters<typeof selectPendingSessionIds>[0],
+	workspaceId: string,
+): { baselineSessionIds: string[]; baselinePlacedSessionIds: string[] } {
+	const pending = new Set(selectPendingSessionIds(state, workspaceId));
+	const document = state.layoutDocumentsByWorkspace?.[workspaceId];
+	const baselinePlacedSessionIds = document
+		? collectAllGroups(document)
+				.flatMap((group) => group.tabs)
+				.flatMap((tab) =>
+					tab.kind === "chat"
+						? [tab.sessionId]
+						: tab.kind === "document" && tab.documentKind === "todo-plan"
+							? [tab.sourceId]
+							: [],
+				)
+				.filter((sessionId) => !pending.has(sessionId))
+		: [];
+	const baselineSessionIds = [
+		...new Set([...selectWorkspaceSessionIds(state, workspaceId), ...baselinePlacedSessionIds]),
+	].filter((sessionId) => !pending.has(sessionId));
+	return { baselineSessionIds, baselinePlacedSessionIds };
+}
 const AUTO_OPEN_CHAT_LIMIT = 4;
 
 let autoOpenAttemptGeneration = 0;
@@ -206,24 +232,10 @@ export function useWorkspaceChatCatalogReconciliation(
 		if (!layoutReady || status !== "connected" || connectionGeneration === 0) return;
 		const stateAtRequest = useAppStore.getState();
 		const startedRouteTargetGeneration = routeChatTargetGeneration;
-		const baselineDocument = stateAtRequest.layoutDocumentsByWorkspace[workspaceId];
-		const baselinePlacedSessionIds = baselineDocument
-			? collectAllGroups(baselineDocument)
-					.flatMap((group) => group.tabs)
-					.flatMap((tab) =>
-						tab.kind === "chat"
-							? [tab.sessionId]
-							: tab.kind === "document" && tab.documentKind === "todo-plan"
-								? [tab.sourceId]
-								: [],
-					)
-			: [];
-		const baselineSessionIds = [
-			...new Set([
-				...selectWorkspaceSessionIds(stateAtRequest, workspaceId),
-				...baselinePlacedSessionIds,
-			]),
-		];
+		const { baselineSessionIds, baselinePlacedSessionIds } = catalogBaselines(
+			stateAtRequest,
+			workspaceId,
+		);
 		let current = true;
 		const live = () => {
 			const state = useAppStore.getState();

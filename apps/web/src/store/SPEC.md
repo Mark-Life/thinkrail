@@ -172,7 +172,17 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
-  promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
+  promise) + `extUiStatus` / `extUiWidget`) / **`pending?: true`** (the host has not confirmed the session
+  yet). `openChatSession` creates a runtime; with `{ pending: true }` (a `ChatOpenOptions` field, not a layout
+  intent field) it creates the tab, runtime and open intent synchronously for a **client-minted id**, with
+  `model: null` and **no skill baseline** — the id is final, so nothing is re-keyed later. **`resolvePendingChat(workspaceId,
+  sessionId, model, thinkingLevel, syncedTick)`** is the one atomic confirmation: it sets model + thinking level,
+  drops `pending`, records the skill baseline and stamps `syncedConnectionGeneration` with the current
+  generation so the mounted chat does not immediately re-read a transcript the host has just created. It is a
+  no-op for a runtime that is missing or not pending, a removed workspace, or a tombstoned session, and never
+  touches activation or navigation — the user may have moved on. A failed start reuses `deleteChat(…, false)`
+  (below): the placeholder's tab, runtime, queued open and layout placement go through the same fold as a
+  confirmed deletion, and the tombstone is harmless because the id is random. `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
@@ -326,11 +336,13 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   test is **"no runtime"**, not "unknown session": every kind except `setTitle` is reduced by
   `withRuntime`, so a session that merely has a tab or a `closedChats` entry would pass a "do we know it"
   test and then be dropped by `withRuntime` — neither applied nor buffered. **No path builds that state
-  today** — `closeChatToHistory` keeps the runtime, `closeChatRuntime` has no production caller, and both
-  `openTab` sites that place a chat tab are guarded by its runtime already existing — so this rule is a
+  today** — `closeChatToHistory` keeps the runtime, `closeChatRuntime` has no production caller, both
+  `openTab` sites that place a chat tab are guarded by its runtime already existing, and a **pending** chat
+  places its runtime together with its tab, so the frames pi emits from `session_start` land on that runtime
+  directly (`setTitle` renames the placed tab in place) instead of being buffered — so this rule is a
   guard, not a live fix, and it is pinned by seeding the store directly rather than through an action
   sequence no user can perform. It starts earning its keep the moment anything places a chat tab before
-  its transcript is hydrated. `setTitle` is
+  its runtime exists. `setTitle` is
   the one exception, and it decides for itself: `renameChat` renames the tab or the `closedChats` entry
   and reports whether it found the session **at all**, so only a title for a session in neither map is
   buffered. Admission falls out of the rename instead of being computed beside it — one walk over

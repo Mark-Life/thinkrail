@@ -98,7 +98,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `refresh()`, and on login/logout), and being the one read makes the picker, default, and model resolution
     agree within a generation.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
-    `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
+    `workspaceId`), `createSession({ cwd, workspaceId, sessionId?, model?, thinkingLevel? })` → `createAgentSession(...)`
+    (a supplied `sessionId` is handed to pi's `SessionManager.create(cwd, undefined, { id })`, which owns the
+    format check; the host first rejects one that is registered, mid-attach, deletion-tombstoned, or named by
+    a `_<id>.jsonl` transcript in the workspace's session directory — the file name is pi's, so the check is
+    one `readdir`, never a transcript parse)
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;

@@ -219,6 +219,10 @@ export interface LayoutOpenOptions {
 	claimPreview?: boolean;
 }
 
+export interface ChatOpenOptions extends LayoutOpenOptions {
+	pending?: true;
+}
+
 export type LayoutIntent =
 	| {
 			id: string;
@@ -344,6 +348,7 @@ export interface SessionRuntime {
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
+	pending?: true;
 }
 
 const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
@@ -942,7 +947,14 @@ interface AppState {
 		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
 		syncedTick?: number,
-		options?: LayoutOpenOptions,
+		options?: ChatOpenOptions,
+	) => void;
+	resolvePendingChat: (
+		workspaceId: string,
+		sessionId: string,
+		model: WireModel | null,
+		thinkingLevel: ThinkingLevel,
+		syncedTick: number,
 	) => void;
 	closeChatRuntime: (sessionId: string) => void;
 	closeChatToHistory: (
@@ -2577,10 +2589,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessions: fresh
 					? {
 							...s.sessions,
-							[sessionId]: newRuntime(model, thinkingLevel, s.connectionGeneration),
+							[sessionId]: {
+								...newRuntime(model, thinkingLevel, s.connectionGeneration),
+								...(options.pending ? { pending: true } : {}),
+							},
 						}
 					: s.sessions,
-				...(fresh
+				...(fresh && !options.pending
 					? {
 							skillsSyncedTickBySession: {
 								...s.skillsSyncedTickBySession,
@@ -2592,6 +2607,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		replayExtUiOrphans(sessionId, set, get);
 	},
+	resolvePendingChat: (workspaceId, sessionId, model, thinkingLevel, syncedTick) =>
+		set((s) => {
+			const runtime = s.sessions[sessionId];
+			if (
+				!runtime?.pending ||
+				s.removedWorkspaceIds[workspaceId] ||
+				isSessionDeleted(s, workspaceId, sessionId)
+			) {
+				return {};
+			}
+			const { pending: _pending, ...resolved } = runtime;
+			return {
+				sessions: {
+					...s.sessions,
+					[sessionId]: {
+						...resolved,
+						model,
+						thinkingLevel,
+						syncedConnectionGeneration: s.connectionGeneration,
+					},
+				},
+				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: syncedTick },
+			};
+		}),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};

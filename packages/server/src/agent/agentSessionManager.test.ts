@@ -314,6 +314,37 @@ test("session creation publishes a domain summary for other frontends", async ()
 	}
 });
 
+test("createSession accepts a client-minted id and rejects one that is live, tombstoned, or on disk", async () => {
+	setSessionManagerFactory((cwd, options) => SessionManager.inMemory(cwd, options));
+	const cwd = tmpCwd("trpi-client-id-");
+	const workspaceId = "ws-client-id";
+	const input = { cwd, workspaceId, model: toWireModel(fauxA.getModel()) };
+	try {
+		const created = await createSession({ ...input, sessionId: "chat-minted" });
+		expect(created.sessionId).toBe("chat-minted");
+		expect(hasSession("chat-minted")).toBe(true);
+		await expect(createSession({ ...input, sessionId: "chat-minted" })).rejects.toThrow(
+			/already exists/,
+		);
+
+		await deleteSession("chat-minted", workspaceId, cwd);
+		await expect(createSession({ ...input, sessionId: "chat-minted" })).rejects.toThrow(
+			/already exists/,
+		);
+
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		writeFixtureSession(dir, { id: "chat-on-disk", cwd, messages: [] });
+		await expect(createSession({ ...input, sessionId: "chat-on-disk" })).rejects.toThrow(
+			/already exists/,
+		);
+		expect(hasSession("chat-on-disk")).toBe(false);
+
+		await expect(createSession({ ...input, sessionId: "-bad-" })).rejects.toThrow();
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
 	fauxA.setResponses([fauxAssistantMessage("ALPHA_REPLY")]);
 	fauxB.setResponses([fauxAssistantMessage("BRAVO_REPLY")]);

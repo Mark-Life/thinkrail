@@ -501,7 +501,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   off a phone viewport (and be clipped by the transcript scroller's `overflow-x-hidden`). So whatever
   must stay readable at any width goes in `meta`, not `label`: the `· W×H` size, and an attach error's
   reason (its filename truncates — the reason is what the user can act on, and a phone has no tooltip
-  to fall back to) — and `openHistory` on its
+  to fall back to). A **`pending`** prop (the runtime's `pending` flag, i.e. the host has not confirmed
+  the client-minted session yet) keeps the composer mounted and typeable — the draft lives in the runtime
+  and survives the resolve — while `canSubmit` refuses (send button disabled, "Starting chat…" as its
+  title and the field's placeholder) and the model selector is disabled; the thinking selector is already
+  disabled by the placeholder's `model: null` (no levels). `ChatView` likewise holds its transcript read,
+  stats read, `session.getCommands` and the skills-stale indicator until the runtime is no longer pending,
+  since none of those can succeed for a session the host has not registered — and `openHistory` on its
   imperative handle → `onHistoryOpen`) plus the shared `prompt` module's **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape); `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
   presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus **Save as template**
