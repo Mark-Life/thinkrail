@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
 import {
 	type EditorTab,
+	type LayoutIntent,
 	type LayoutIntentTransition,
 	layoutOpenOptionsForNavigation,
 	shouldAdvanceAcceptedNavigation,
@@ -183,6 +184,31 @@ function processNextLayoutIntent(
 	const document = currentState.layoutDocumentsByWorkspace[workspaceId];
 	const attention = currentState.layoutAttentionByWorkspace[workspaceId];
 	if (!layoutIntent || !document || !attention) return;
+	try {
+		handleLayoutIntent(
+			currentState,
+			workspaceId,
+			layoutIntent,
+			document,
+			attention,
+			apply,
+			requestFocus,
+		);
+	} catch (error) {
+		useAppStore.getState().consumeLayoutIntent(layoutIntent.id);
+		throw error;
+	}
+}
+
+function handleLayoutIntent(
+	currentState: ReturnType<typeof useAppStore.getState>,
+	workspaceId: string,
+	layoutIntent: LayoutIntent,
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	apply: (transition: LayoutIntentTransition) => void,
+	requestFocus: (request: LayoutTabFocusRequest) => void,
+): void {
 	const { maxSideGroups, maxBottomGroups } = currentState.localLayoutPreferences;
 	const intentId = layoutIntent.id;
 	if (
@@ -470,27 +496,35 @@ function processNextLayoutIntent(
 	}
 }
 
+export function createLayoutIntentDrain(
+	workspaceId: string,
+	apply: (transition: LayoutIntentTransition) => void,
+	requestFocus: (request: LayoutTabFocusRequest) => void,
+): () => void {
+	let draining = false;
+	let dirty = false;
+	return () => {
+		dirty = true;
+		if (draining) return;
+		draining = true;
+		try {
+			while (dirty) {
+				dirty = false;
+				processNextLayoutIntent(workspaceId, apply, requestFocus);
+			}
+		} finally {
+			draining = false;
+		}
+	};
+}
+
 export function useLayoutIntentProcessing(
 	workspaceId: string,
 	apply: (transition: LayoutIntentTransition) => void,
 	requestFocus: (request: LayoutTabFocusRequest) => void,
 ): void {
 	useEffect(() => {
-		let draining = false;
-		let dirty = false;
-		const drain = () => {
-			dirty = true;
-			if (draining) return;
-			draining = true;
-			try {
-				while (dirty) {
-					dirty = false;
-					processNextLayoutIntent(workspaceId, apply, requestFocus);
-				}
-			} finally {
-				draining = false;
-			}
-		};
+		const drain = createLayoutIntentDrain(workspaceId, apply, requestFocus);
 		const unsubscribe = useAppStore.subscribe(drain);
 		drain();
 		return unsubscribe;
