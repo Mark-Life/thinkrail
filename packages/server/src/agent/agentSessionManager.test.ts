@@ -365,6 +365,17 @@ test("session.list waits for an in-flight creation instead of reporting the sess
 		expect(hydrated.summary.sessionId).toBe("chat-reloaded");
 		await reloaded;
 
+		const renamed = createSession({ ...input, sessionId: "chat-renamed-early" });
+		await expect(renameSession("chat-renamed-early", workspaceId, cwd, "Early name")).resolves.toBe(
+			true,
+		);
+		expect(
+			(await listSessions(workspaceId, cwd)).find(
+				(summary) => summary.sessionId === "chat-renamed-early",
+			)?.title,
+		).toBe("Early name");
+		await renamed;
+
 		const deleted = createSession({ ...input, sessionId: "chat-deleted-early" });
 		await deleteSession("chat-deleted-early", workspaceId, cwd);
 		await expect(deleted).rejects.toThrow(/already exists|Unknown session/);

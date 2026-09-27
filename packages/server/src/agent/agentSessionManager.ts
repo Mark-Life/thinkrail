@@ -994,7 +994,7 @@ export interface RenameSessionOptions {
 	onlyIfUnnamed?: boolean;
 }
 
-export function renameSession(
+export async function renameSession(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
@@ -1002,7 +1002,8 @@ export function renameSession(
 	options: RenameSessionOptions = {},
 ): Promise<boolean> {
 	const normalized = normalizeSessionTitle(title);
-	if (!normalized) return Promise.reject(new Error("Invalid session title"));
+	if (!normalized) throw new Error("Invalid session title");
+	await creations.get(sessionId)?.settled;
 	return serializeSessionFileOperation(sessionId, async () => {
 		if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 		const live = sessions.get(sessionId);

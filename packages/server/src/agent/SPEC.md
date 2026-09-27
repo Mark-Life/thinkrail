@@ -105,13 +105,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     one `readdir`, never a transcript parse; an id whose creation is still in flight is rejected the same way).
     A client-minted creation is tracked from the call until it settles (a host-minted one has no placeholder
     anywhere, so nothing waits on it). `listSessions(workspaceId, cwd)` awaits the workspace's tracked
-    creations first, and `getSessionMessages` / `deleteSession` await the named id's: a frontend places a
-    client-minted chat before the host has registered it, so its next `session.list` (a reload, a reconnect)
-    must not report the session missing and let the frontend prune the placement, a reloaded placeholder's
-    transcript read must land once creation does instead of failing as an unknown session, and a delete must
-    see the entry it deletes. The list wait is bounded (`CREATION_SETTLE_TIMEOUT_MS`, 15 s) and rejects on
-    expiry rather than answering without the id, since a list missing a placed session is exactly what the
-    wait prevents
+    creations first, and `getSessionMessages` / `renameSession` / `deleteSession` await the named id's: a
+    frontend places a client-minted chat before the host has registered it, so its next `session.list` (a
+    reload, a reconnect) must not report the session missing and let the frontend prune the placement, a
+    reloaded placeholder's transcript read must land once creation does instead of failing as an unknown
+    session, a rename from the placeholder's tab must land on the live session once creation does, and a
+    delete must see the entry it deletes. The list wait is bounded (`CREATION_SETTLE_TIMEOUT_MS`, 15 s) and
+    rejects on expiry rather than answering without the id, since a list missing a placed session is exactly
+    what the wait prevents
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
@@ -774,10 +775,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 
 `agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
 workspaceId, cwd, title, { onlyIfUnnamed? })` validates one non-blank, single-line title within contracts'
-length limit, resolves the session strictly inside the supplied workspace/cwd, and avoids an append when the
-normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
-session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
-agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
+length limit, waits on a tracked client-minted creation of that id, resolves the session strictly inside the
+supplied workspace/cwd, and avoids an append when the normalized title is already current. A live session
+writes through `AgentSession.setSessionName`; a disk-only session opens its exact transcript with
+`SessionManager.open(...).appendSessionInfo(...)` without attaching an agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
 `SessionSummary.title` remains the hydration projection.
 
 `getSessionName(sessionId)` exposes only a live session's current Pi name so the host can skip title-model
