@@ -514,7 +514,12 @@ export interface WsMethodMap {
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"session.create": {
-		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
+		params: {
+			workspaceId: string;
+			sessionId?: string;
+			model?: WireModel;
+			thinkingLevel?: ThinkingLevel;
+		};
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
 	"session.prompt": {

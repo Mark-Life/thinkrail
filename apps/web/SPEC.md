@@ -73,6 +73,44 @@ reads `bun.lock` and rejects any second `react` or `react-dom` version. Every Re
 packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
 return to stable.
 
+**The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@rolldown/plugin-babel` running
+`@vitejs/plugin-react`'s `reactCompilerPreset()` over dev and build). Three devDependencies live in this
+manifest only, and the `@babel/core` 7.x pin is load-bearing: `babel-plugin-react-compiler` 1.0.0 mis-lowers
+destructuring defaults under Babel 8 and silently drops those functions from compilation. Bailouts never
+fail the build — a component that writes `ref.current` during render, or returns refs mixed with state, is
+skipped whole, not miscompiled — so keep the compilable set from shrinking by checking it ran: a production
+build's `dist/assets/*.js` carries `react.memo_cache_sentinel` in the hundreds (React's own runtime accounts
+for three). `bun test` transpiles without Vite, so only the browser E2E suite exercises compiled output.
+The shell, the workbench group views, `ChatView` and `useChatScroll` compile because they keep four
+conventions: a latest-value ref (`xRef.current = value`) is written in a `useLayoutEffect`, never in render,
+which is sound only while every reader is an event handler, a timer or an effect (the one reader outside
+that set is `useChatScroll`'s `readGeometry`, reached from Virtuoso's own layout effect via
+`totalListHeightChanged`, which runs before the parent's write effect and so can see the previous edge for
+one commit; benign because the controller's own `setLatestEdge` lands in the same parent effect pass and the
+runway-element effect re-runs `contentChanged` afterwards); a hook hands refs back
+beside render values as a tuple (`useElementSize`) or the caller destructures them (`useCollapsibleRegion`,
+dnd-kit results), because reading a render value off an object that also carries a ref counts as a ref
+read; a ref that travels as a prop is named `*Ref` (`selectionEpochRef`) so the compiler lets handlers
+mutate it; a closure that reads refs reaches a `useState` initialiser only through a hook
+(`useReadingBandController`), since the compiler rejects it as a direct hook or plain-function argument;
+and a ref is never handed to a plain helper as an argument — the helper becomes a hook that owns the ref
+(`useSideResizeBinder`). A fifth convention follows from memoisation itself: render never reads a
+value the compiler cannot see change — `matchMedia`, storage, `Date.now`, a module singleton — so a
+browser signal a component displays arrives through `useSyncExternalStore` or state (`AppearanceSettings`
+reads the system appearance through `onSystemAppearanceChange`, not by calling `readSystemAppearance` in
+render; the relative-time labels in history, the closed-chat strip and the commit menus take `now` from
+`components/useNow`, a 30 s ticker behind `useSyncExternalStore`, since `relativeTime` called on a
+memoised input would otherwise read "just now" for as long as the row stayed mounted). A sixth: a default
+parameter never reads a member expression (`caret = text.length`), since the compiler cannot reorder it and
+skips the whole function; `Composer`'s `replaceDraft` takes `caret?: number` and resolves the default in its
+body so the per-keystroke path stays compiled. Known bailouts, all cold: `useVirtualRows` reads the
+visible-anchor ref while adjusting state during render (state would cost a render per scroll); the
+latest-value-ref hooks and hosts that still write `ref.current` in render (`useWorkspaceRead`, `useChatTodos`,
+`useOpenBranchReview`, `useBranchList`, `useTemplateCommandPicker`, `MonacoEditor`, `MonacoDiff`,
+`AskUserQuestionCard`), `useLiveTabContent` (`??=`), `usePromptImages` (try without catch),
+`HistoryOverlay`'s `Highlight` (mutates a closure counter), and the try/finally dialogs and settings panes.
+A new bailout is a regression unless it joins this list.
+
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration

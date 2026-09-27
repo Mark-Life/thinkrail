@@ -41,6 +41,7 @@ async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 	await enterDefaultWorkspace(page);
 	await page.getByTestId("start-chat").first().click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.getByTestId("model-selector")).toBeEnabled();
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");

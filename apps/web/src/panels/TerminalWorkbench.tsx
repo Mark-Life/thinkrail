@@ -8,7 +8,12 @@ import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-const TerminalInstance = lazy(() => import("./TerminalInstance"));
+const loadTerminalInstance = () => import("./TerminalInstance");
+const TerminalInstance = lazy(loadTerminalInstance);
+
+export function warmTerminalInstance(): void {
+	void loadTerminalInstance().catch(() => {});
+}
 
 export function useTerminalCatalog(workspaceId: string | null): boolean {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -77,6 +82,7 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 				<TerminalInstance
 					tabKey={tab.tabKey}
 					workspaceId={tab.workspaceId}
+					reserved={!tab.reservationPending}
 					{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
 				/>
 			</Suspense>

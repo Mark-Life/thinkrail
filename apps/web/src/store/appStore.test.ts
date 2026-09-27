@@ -40,6 +40,7 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
+	selectPendingSessionIds,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -193,10 +194,19 @@ test("layout projection epoch advances only when projection invalidation is requ
 	const store = useAppStore.getState();
 	store.applyLocalLayoutState(payload);
 	expect(useAppStore.getState().layoutProjectionEpoch).toBe(0);
-	useAppStore.getState().applyLocalLayoutState(payload, true);
+	useAppStore.getState().applyLocalLayoutState(payload, { invalidateProjection: true });
 	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
 	useAppStore.getState().applyLocalLayoutState(payload);
 	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+
+	const intentId = useAppStore
+		.getState()
+		.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId: "workspace" });
+	const other = useAppStore
+		.getState()
+		.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId: "other" });
+	useAppStore.getState().applyLocalLayoutState(payload, { consumeIntentId: intentId });
+	expect(useAppStore.getState().layoutIntents.map((intent) => intent.id)).toEqual([other]);
 });
 
 function rt(sessionId: string): SessionRuntime {
@@ -2823,6 +2833,22 @@ test("the Changes deep link stamps the nav count at the click, so a later naviga
 	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
 });
 
+test("no-op legacy selection and intent actions leave the state object untouched", () => {
+	useAppStore.setState({
+		tabsByWorkspace: { ws1: [fileTab("ws1", "a.ts")] },
+		activeTabByWorkspace: { ws1: "ws1:a.ts" },
+		activeTerminalByWorkspace: { ws1: null },
+		layoutIntents: [],
+	});
+	const before = useAppStore.getState();
+	before.syncLegacySelection("ws1", { kind: "editor", tabId: "ws1:a.ts" });
+	expect(useAppStore.getState()).toBe(before);
+	before.syncLegacySelection("ws1", { kind: "editor", tabId: "ws1:missing.ts" });
+	expect(useAppStore.getState()).toBe(before);
+	before.consumeLayoutIntent("missing");
+	expect(useAppStore.getState()).toBe(before);
+});
+
 test("legacy selection reconciliation does not count as user navigation", () => {
 	useAppStore.setState({
 		tabsByWorkspace: { ws1: [fileTab("ws1", "a.ts"), fileTab("ws1", "b.ts")] },
@@ -4047,7 +4073,12 @@ test("hidden terminal seeding stays non-activating, idempotent, and atomically r
 
 	useAppStore.getState().rejectTerminalReservation("w1", pending.tabKey);
 	expect(useAppStore.getState().terminalsByWorkspace.w1).toEqual([]);
-	expect(useAppStore.getState().layoutIntents).toEqual([]);
+	expect(useAppStore.getState().layoutIntents).toHaveLength(1);
+	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({
+		kind: "close-terminal",
+		workspaceId: "w1",
+		tabKey: pending.tabKey,
+	});
 });
 
 test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {
@@ -4362,4 +4393,96 @@ test("a workspace that changes project is re-attributed rather than counted twic
 	const map = useAppStore.getState().activityByWorkspace;
 	expect(projectActivityRollup(map, "pa")).toBeNull();
 	expect(projectActivityRollup(map, "pb")?.status).toBe("running");
+});
+
+test("a pending chat places its tab and runtime at once and resolves in place", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ connectionGeneration: 3, skillChangeTickByWorkspace: { ws1: 5 } });
+	store.openChatSession("ws1", "chat-p", null, "medium", undefined, { pending: true });
+	let state = useAppStore.getState();
+	expect(state.tabsByWorkspace.ws1?.[0]).toMatchObject({ kind: "chat", sessionId: "chat-p" });
+	expect(state.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "chat-p"));
+	expect(rt("chat-p").pending).toBe(true);
+	expect(rt("chat-p").model).toBeNull();
+	expect(state.skillsSyncedTickBySession["chat-p"]).toBeUndefined();
+	expect(selectPendingSessionIds(state, "ws1")).toEqual(["chat-p"]);
+	expect(state.layoutIntents.at(-1)).toMatchObject({ kind: "open", tab: { sessionId: "chat-p" } });
+
+	store.setChatDraft("chat-p", "typed while starting");
+	store.applyExtUi({ id: "t1", sessionId: "chat-p", kind: "setTitle", title: "Named at start" });
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]?.name).toBe("Named at start");
+
+	const model = { id: "m", name: "M", provider: "p" } as WireModel;
+	store.resolvePendingChat("ws1", "chat-p", model, "high", 7);
+	state = useAppStore.getState();
+	expect(rt("chat-p").pending).toBeUndefined();
+	expect(rt("chat-p")).toMatchObject({
+		model,
+		thinkingLevel: "high",
+		draft: "typed while starting",
+		syncedConnectionGeneration: 3,
+	});
+	expect(state.skillsSyncedTickBySession["chat-p"]).toBe(7);
+	expect(selectPendingSessionIds(state, "ws1")).toEqual([]);
+	expect(selectSkillsStale(state, "ws1", "chat-p")).toBe(false);
+});
+
+test("resolvePendingChat is a no-op without a pending runtime, after deletion, or after workspace removal", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "settled", null, "medium");
+	const before = useAppStore.getState();
+	store.resolvePendingChat("ws1", "settled", null, "high", 2);
+	expect(useAppStore.getState().sessions.settled).toBe(before.sessions.settled);
+	store.resolvePendingChat("ws1", "ghost", null, "high", 2);
+	expect(useAppStore.getState().sessions.ghost).toBeUndefined();
+
+	store.openChatSession("ws1", "failed", null, "medium", undefined, { pending: true });
+	store.deleteChat("ws1", "failed", false);
+	let state = useAppStore.getState();
+	expect(state.sessions.failed).toBeUndefined();
+	expect(
+		state.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "failed"),
+	).toBe(false);
+	expect(state.deletedSessionsByWorkspace.ws1?.failed).toBe(true);
+	expect(state.layoutIntents.at(-1)).toMatchObject({ kind: "remove-session", sessionId: "failed" });
+	store.resolvePendingChat("ws1", "failed", null, "high", 2);
+	expect(useAppStore.getState().sessions.failed).toBeUndefined();
+
+	store.openChatSession("ws1", "torn", null, "medium", undefined, { pending: true });
+	useAppStore.setState({ removedWorkspaceIds: { ws1: true } });
+	store.clearWorkspaceTabs("ws1");
+	store.resolvePendingChat("ws1", "torn", null, "high", 2);
+	state = useAppStore.getState();
+	expect(state.sessions.torn).toBeUndefined();
+	expect(state.skillsSyncedTickBySession.torn).toBeUndefined();
+});
+
+test("discardPendingChat drops the placeholder without a tombstone so a late host creation can still land in history", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "timed-out", null, "medium", undefined, { pending: true });
+	store.discardPendingChat("ws1", "timed-out");
+	let state = useAppStore.getState();
+	expect(state.sessions["timed-out"]).toBeUndefined();
+	expect(
+		state.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "timed-out"),
+	).toBe(false);
+	expect(state.deletedSessionsByWorkspace.ws1?.["timed-out"]).toBeUndefined();
+	expect(state.layoutIntents.at(-1)).toMatchObject({
+		kind: "remove-session",
+		sessionId: "timed-out",
+	});
+	store.noteClosedChats("ws1", [{ sessionId: "timed-out", title: "Chat", closedAt: 1 }]);
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.map((c) => c.sessionId)).toEqual([
+		"timed-out",
+	]);
+
+	store.openChatSession("ws1", "settled", null, "medium");
+	const before = useAppStore.getState();
+	store.discardPendingChat("ws1", "settled");
+	expect(useAppStore.getState()).toBe(before);
+	store.discardPendingChat("ws1", "unknown");
+	expect(useAppStore.getState()).toBe(before);
+	state = useAppStore.getState();
+	expect(state.sessions.settled).toBeDefined();
 });

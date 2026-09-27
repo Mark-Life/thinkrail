@@ -8,6 +8,7 @@ import {
 	createAgentSession,
 	type ExtensionError,
 	getAgentDir,
+	type NewSessionOptions,
 	type SessionInfo,
 	SessionManager,
 	SettingsManager,
@@ -343,8 +344,10 @@ export async function listSessionActivity(
 	return rows;
 }
 
-let sessionManagerFactory: (cwd: string) => SessionManager = (cwd) => SessionManager.create(cwd);
-export function setSessionManagerFactory(factory: (cwd: string) => SessionManager): void {
+type SessionManagerFactory = (cwd: string, options?: NewSessionOptions) => SessionManager;
+let sessionManagerFactory: SessionManagerFactory = (cwd, options) =>
+	SessionManager.create(cwd, undefined, options);
+export function setSessionManagerFactory(factory: SessionManagerFactory): void {
 	sessionManagerFactory = factory;
 }
 
@@ -515,6 +518,8 @@ export function buildSessionSettings(cwd: string): SettingsManager {
 export interface CreateSessionInput {
 	cwd: string;
 	workspaceId: string;
+	/** Client-minted id. */
+	sessionId?: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
 	/** True: an unresolvable `model` falls back to the default instead of throwing. */
@@ -713,8 +718,77 @@ async function registerSession(
 	return prepared.result;
 }
 
-export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+async function sessionFileExists(cwd: string, sessionId: string): Promise<boolean> {
+	try {
+		const names = await readdir(defaultSessionDirectory(cwd));
+		return names.some((name) => name.endsWith(`_${sessionId}.jsonl`));
+	} catch (error) {
+		if (hasErrorCode(error, "ENOENT")) return false;
+		throw error;
+	}
+}
+
+const creations = new Map<string, { workspaceId: string; settled: Promise<void> }>();
+const CREATION_SETTLE_TIMEOUT_MS = 15_000;
+
+function trackCreation(
+	sessionId: string,
+	workspaceId: string,
+	result: Promise<CreateSessionResult>,
+): void {
+	const settled = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	creations.set(sessionId, { workspaceId, settled });
+	void settled.then(() => creations.delete(sessionId));
+}
+
+async function settleWorkspaceCreations(workspaceId: string): Promise<void> {
+	const inFlight = [...creations].filter(([, creation]) => creation.workspaceId === workspaceId);
+	if (inFlight.length === 0) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<never>((_, reject) => {
+		timer = setTimeout(
+			() =>
+				reject(
+					new Error(
+						`Session creation still in flight: ${inFlight.map(([sessionId]) => sessionId).join(", ")}`,
+					),
+				),
+			CREATION_SETTLE_TIMEOUT_MS,
+		);
+	});
+	try {
+		await Promise.race([Promise.all(inFlight.map(([, creation]) => creation.settled)), deadline]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+async function assertSessionIdAvailable(cwd: string, sessionId: string): Promise<void> {
+	if (
+		sessions.has(sessionId) ||
+		attaching.has(sessionId) ||
+		hasDeletionTombstone(sessionId) ||
+		(await sessionFileExists(cwd, sessionId))
+	) {
+		throw new Error(`Session id already exists: ${sessionId}`);
+	}
+}
+
+export function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+	if (input.sessionId !== undefined && creations.has(input.sessionId)) {
+		return Promise.reject(new Error(`Session id already exists: ${input.sessionId}`));
+	}
+	const result = createSessionNow(input);
+	if (input.sessionId !== undefined) trackCreation(input.sessionId, input.workspaceId, result);
+	return result;
+}
+
+async function createSessionNow(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
+	if (input.sessionId !== undefined) await assertSessionIdAvailable(input.cwd, input.sessionId);
 	const settingsManager = buildSessionSettings(input.cwd);
 	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	let model: Model<string> | undefined;
@@ -728,7 +802,10 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
 		modelRuntime: generation.runtime,
-		sessionManager: sessionManagerFactory(input.cwd),
+		sessionManager: sessionManagerFactory(
+			input.cwd,
+			input.sessionId !== undefined ? { id: input.sessionId } : undefined,
+		),
 		settingsManager,
 		resourceLoader: await buildResourceLoader(
 			input.cwd,
@@ -890,7 +967,8 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	return [...live, ...disk];
 }
 
-export function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+export async function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+	await settleWorkspaceCreations(workspaceId);
 	return listSessionsInternal(workspaceId, cwd);
 }
 
@@ -916,7 +994,7 @@ export interface RenameSessionOptions {
 	onlyIfUnnamed?: boolean;
 }
 
-export function renameSession(
+export async function renameSession(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
@@ -924,7 +1002,8 @@ export function renameSession(
 	options: RenameSessionOptions = {},
 ): Promise<boolean> {
 	const normalized = normalizeSessionTitle(title);
-	if (!normalized) return Promise.reject(new Error("Invalid session title"));
+	if (!normalized) throw new Error("Invalid session title");
+	await creations.get(sessionId)?.settled;
 	return serializeSessionFileOperation(sessionId, async () => {
 		if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 		const live = sessions.get(sessionId);
@@ -1067,11 +1146,12 @@ async function getSessionMessagesInternal(
 	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
 }
 
-export function getSessionMessages(
+export async function getSessionMessages(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
+	await creations.get(sessionId)?.settled;
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
@@ -1651,6 +1731,7 @@ async function runDeleteTransaction(
 	deletedSessions.set(sessionId, workspaceId);
 	let liveEntry: Entry | undefined;
 	try {
+		await creations.get(sessionId)?.settled;
 		await attaching.get(sessionId)?.catch(() => {});
 		const entry = sessions.get(sessionId);
 		if (entry && entry.workspaceId !== workspaceId) {
