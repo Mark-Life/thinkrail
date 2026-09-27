@@ -518,7 +518,7 @@ export function buildSessionSettings(cwd: string): SettingsManager {
 export interface CreateSessionInput {
 	cwd: string;
 	workspaceId: string;
-	/** Client-minted id; rejected when it is live, deletion-tombstoned, or already on disk. */
+	/** Client-minted id. */
 	sessionId?: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
@@ -729,25 +729,41 @@ async function sessionFileExists(cwd: string, sessionId: string): Promise<boolea
 }
 
 const creations = new Map<string, { workspaceId: string; settled: Promise<void> }>();
-let anonymousCreations = 0;
+const CREATION_SETTLE_TIMEOUT_MS = 15_000;
 
-function trackCreation(input: CreateSessionInput, result: Promise<CreateSessionResult>): void {
-	anonymousCreations += 1;
-	const key = input.sessionId ?? `creation:${anonymousCreations}`;
+function trackCreation(
+	sessionId: string,
+	workspaceId: string,
+	result: Promise<CreateSessionResult>,
+): void {
 	const settled = result.then(
 		() => undefined,
 		() => undefined,
 	);
-	creations.set(key, { workspaceId: input.workspaceId, settled });
-	void settled.then(() => creations.delete(key));
+	creations.set(sessionId, { workspaceId, settled });
+	void settled.then(() => creations.delete(sessionId));
 }
 
 async function settleWorkspaceCreations(workspaceId: string): Promise<void> {
-	await Promise.all(
-		[...creations.values()]
-			.filter((creation) => creation.workspaceId === workspaceId)
-			.map((creation) => creation.settled),
-	);
+	const inFlight = [...creations].filter(([, creation]) => creation.workspaceId === workspaceId);
+	if (inFlight.length === 0) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<never>((_, reject) => {
+		timer = setTimeout(
+			() =>
+				reject(
+					new Error(
+						`Session creation still in flight: ${inFlight.map(([sessionId]) => sessionId).join(", ")}`,
+					),
+				),
+			CREATION_SETTLE_TIMEOUT_MS,
+		);
+	});
+	try {
+		await Promise.race([Promise.all(inFlight.map(([, creation]) => creation.settled)), deadline]);
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 async function assertSessionIdAvailable(cwd: string, sessionId: string): Promise<void> {
@@ -766,7 +782,7 @@ export function createSession(input: CreateSessionInput): Promise<CreateSessionR
 		return Promise.reject(new Error(`Session id already exists: ${input.sessionId}`));
 	}
 	const result = createSessionNow(input);
-	trackCreation(input, result);
+	if (input.sessionId !== undefined) trackCreation(input.sessionId, input.workspaceId, result);
 	return result;
 }
 
@@ -1129,11 +1145,12 @@ async function getSessionMessagesInternal(
 	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
 }
 
-export function getSessionMessages(
+export async function getSessionMessages(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
+	await creations.get(sessionId)?.settled;
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
@@ -1713,6 +1730,7 @@ async function runDeleteTransaction(
 	deletedSessions.set(sessionId, workspaceId);
 	let liveEntry: Entry | undefined;
 	try {
+		await creations.get(sessionId)?.settled;
 		await attaching.get(sessionId)?.catch(() => {});
 		const entry = sessions.get(sessionId);
 		if (entry && entry.workspaceId !== workspaceId) {

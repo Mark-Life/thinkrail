@@ -103,10 +103,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     format check; the host first rejects one that is registered, mid-attach, deletion-tombstoned, or named by
     a `_<id>.jsonl` transcript in the workspace's session directory — the file name is pi's, so the check is
     one `readdir`, never a transcript parse; an id whose creation is still in flight is rejected the same way).
-    A creation is tracked from the call until it settles, and `listSessions(workspaceId, cwd)` awaits the
-    workspace's in-flight creations first: a frontend places a client-minted chat before the host has
-    registered it, and its next `session.list` (a reload, a reconnect) must not report that session missing
-    and let the frontend prune the placement
+    A client-minted creation is tracked from the call until it settles (a host-minted one has no placeholder
+    anywhere, so nothing waits on it). `listSessions(workspaceId, cwd)` awaits the workspace's tracked
+    creations first, and `getSessionMessages` / `deleteSession` await the named id's: a frontend places a
+    client-minted chat before the host has registered it, so its next `session.list` (a reload, a reconnect)
+    must not report the session missing and let the frontend prune the placement, a reloaded placeholder's
+    transcript read must land once creation does instead of failing as an unknown session, and a delete must
+    see the entry it deletes. The list wait is bounded (`CREATION_SETTLE_TIMEOUT_MS`, 15 s) and rejects on
+    expiry rather than answering without the id, since a list missing a placed session is exactly what the
+    wait prevents
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
