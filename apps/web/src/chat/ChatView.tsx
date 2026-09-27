@@ -8,7 +8,15 @@ import type {
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
-import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type RefCallback,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
@@ -51,7 +59,7 @@ import {
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
-import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
+import { estimateChatRowHeights } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
@@ -113,37 +121,33 @@ function transcriptMeasureClassName(bounded: boolean): string {
 }
 
 function StreamHeader({ context }: { context: ChatListContext }) {
-	const inset = context.runwayActive ? (
-		<div className="h-[clamp(48px,10cqh,80px)]" aria-hidden />
-	) : null;
+	const { headerRef, measureClassName, messageOrder, runwayActive, status } = context;
+	const inset = runwayActive ? <div className="h-[clamp(48px,10cqh,80px)]" aria-hidden /> : null;
 	return (
-		<div ref={context.headerRef}>
+		<div ref={headerRef}>
 			{inset}
-			{context.messageOrder === "newest-first" ? (
-				<StreamStatusSlot status={context.status} measureClassName={context.measureClassName} />
+			{messageOrder === "newest-first" ? (
+				<StreamStatusSlot status={status} measureClassName={measureClassName} />
 			) : null}
 		</div>
 	);
 }
 
 function StreamFooter({ context }: { context: ChatListContext }) {
-	if (context.messageOrder === "newest-first") {
-		return context.runwayActive ? (
-			<div ref={context.runwayRef} data-testid="chat-stream-runway" className="h-0" aria-hidden />
+	const { measureClassName, messageOrder, runwayActive, runwayRef, status, streamEdgeRef } =
+		context;
+	if (messageOrder === "newest-first") {
+		return runwayActive ? (
+			<div ref={runwayRef} data-testid="chat-stream-runway" className="h-0" aria-hidden />
 		) : null;
 	}
 	return (
 		<>
-			<StreamStatusSlot status={context.status} measureClassName={context.measureClassName} />
-			{context.runwayActive ? (
+			<StreamStatusSlot status={status} measureClassName={measureClassName} />
+			{runwayActive ? (
 				<>
-					<div ref={context.streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-					<div
-						ref={context.runwayRef}
-						data-testid="chat-stream-runway"
-						className="h-0"
-						aria-hidden
-					/>
+					<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
+					<div ref={runwayRef} data-testid="chat-stream-runway" className="h-0" aria-hidden />
 				</>
 			) : null}
 		</>
@@ -151,6 +155,27 @@ function StreamFooter({ context }: { context: ChatListContext }) {
 }
 
 const CHAT_LIST_COMPONENTS = { Header: StreamHeader, Footer: StreamFooter };
+
+function useVirtualRows(
+	rows: ChatRow[],
+	messageOrder: ChatMessageOrder,
+	visibleAnchorRowIdRef: React.RefObject<string | null>,
+) {
+	const [storedVirtualRows, setStoredVirtualRows] = useState(() =>
+		initialVirtualRows(rows, messageOrder),
+	);
+	if (storedVirtualRows.rows === rows && storedVirtualRows.order === messageOrder) {
+		return storedVirtualRows;
+	}
+	const virtualRows = advanceVirtualRows(
+		storedVirtualRows,
+		rows,
+		messageOrder,
+		visibleAnchorRowIdRef.current,
+	);
+	setStoredVirtualRows(virtualRows);
+	return virtualRows;
+}
 
 export default function ChatView({
 	sessionId,
@@ -241,32 +266,13 @@ export default function ChatView({
 		() => projectRows(chronologicalRows, chatMessageOrder),
 		[chronologicalRows, chatMessageOrder],
 	);
-	const rowHeightEstimateCacheRef = useRef<{
-		messageOrder: ChatMessageOrder;
-		cache: RowHeightEstimateCache;
-	}>({ messageOrder: chatMessageOrder, cache: new Map() });
-	if (rowHeightEstimateCacheRef.current.messageOrder !== chatMessageOrder) {
-		rowHeightEstimateCacheRef.current = { messageOrder: chatMessageOrder, cache: new Map() };
-	}
-	const rowHeightEstimateCache = rowHeightEstimateCacheRef.current.cache;
+	const rowHeightEstimateCache = useMemo(() => new Map<string, number>(), [chatMessageOrder]);
 	const rowHeightEstimates = useMemo(
 		() => estimateChatRowHeights(rows, rowHeightEstimateCache),
 		[rows, rowHeightEstimateCache],
 	);
 	const visibleAnchorRowId = useRef<string | null>(null);
-	const [storedVirtualRows, setStoredVirtualRows] = useState(() =>
-		initialVirtualRows(rows, chatMessageOrder),
-	);
-	let virtualRows = storedVirtualRows;
-	if (storedVirtualRows.rows !== rows || storedVirtualRows.order !== chatMessageOrder) {
-		virtualRows = advanceVirtualRows(
-			storedVirtualRows,
-			rows,
-			chatMessageOrder,
-			visibleAnchorRowId.current,
-		);
-		setStoredVirtualRows(virtualRows);
-	}
+	const virtualRows = useVirtualRows(rows, chatMessageOrder, visibleAnchorRowId);
 	const firstItemIndex = virtualRows.firstItemIndex;
 
 	const messageActions = useMemo(
@@ -379,7 +385,7 @@ export default function ChatView({
 		],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
-	const askFocusScope = useRef<object>({}).current;
+	const [askFocusScope] = useState<object>(() => ({}));
 
 	const {
 		state: historyState,
@@ -396,11 +402,13 @@ export default function ChatView({
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
 	const locationRowsRef = useRef(rows);
-	locationRowsRef.current = rows;
 	const locationTurnsRef = useRef(turns);
-	locationTurnsRef.current = turns;
 	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
-	locationTurnMapRef.current = runtime.turnIdByMessageIndex;
+	useLayoutEffect(() => {
+		locationRowsRef.current = rows;
+		locationTurnsRef.current = turns;
+		locationTurnMapRef.current = runtime.turnIdByMessageIndex;
+	});
 	const locationRowsReady = rows.length > 0;
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
