@@ -85,6 +85,7 @@ import {
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
+import { settleTerminalReservation } from "./terminalReservation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 const loadChatView = () => import("../chat/ChatView");
@@ -181,23 +182,7 @@ function useTerminalReservation(workspaceId: string): void {
 		let current = true;
 		void getTransport()
 			.request("terminal.reserve", { workspaceId, tabKey, title })
-			.then(() => {
-				const state = useAppStore.getState();
-				if (
-					!isConnectedGeneration(state, connectionGeneration) ||
-					state.removedWorkspaceIds[workspaceId]
-				) {
-					return;
-				}
-				if (!terminalStillWanted(state, workspaceId, tabKey)) {
-					void getTransport()
-						.request("terminal.close", { workspaceId, tabKey, force: false })
-						.catch(() => {});
-					return;
-				}
-				if (!current) return;
-				state.confirmTerminalReservation(workspaceId, tabKey);
-			})
+			.then(() => settleTerminalReservation(workspaceId, tabKey, connectionGeneration, current))
 			.catch((error) => {
 				const state = useAppStore.getState();
 				if (
@@ -218,28 +203,6 @@ function useTerminalReservation(workspaceId: string): void {
 			current = false;
 		};
 	}, [connectionGeneration, status, tabKey, title, workspaceId]);
-}
-
-function terminalStillWanted(
-	state: ReturnType<typeof useAppStore.getState>,
-	workspaceId: string,
-	tabKey: string,
-): boolean {
-	const document = state.layoutDocumentsByWorkspace[workspaceId];
-	const placed =
-		document !== undefined &&
-		collectAllGroups(document)
-			.flatMap((group) => group.tabs)
-			.some((tab) => tab.kind === "terminal" && tab.tabKey === tabKey);
-	return (
-		placed ||
-		state.layoutIntents.some(
-			(intent) =>
-				intent.kind === "place-terminal" &&
-				intent.workspaceId === workspaceId &&
-				intent.tabKey === tabKey,
-		)
-	);
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {

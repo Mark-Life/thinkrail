@@ -100,9 +100,16 @@ browser signal a component displays arrives through `useSyncExternalStore` or st
 reads the system appearance through `onSystemAppearanceChange`, not by calling `readSystemAppearance` in
 render; the relative-time labels in history, the closed-chat strip and the commit menus take `now` from
 `components/useNow`, a 30 s ticker behind `useSyncExternalStore`, since `relativeTime` called on a
-memoised input would otherwise read "just now" for as long as the row stayed mounted). Intentional bailouts: `useVirtualRows` reads the visible-anchor ref while
-adjusting state during render (state would cost a render per scroll), and the try/finally dialogs and
-settings panes are cold.
+memoised input would otherwise read "just now" for as long as the row stayed mounted). A sixth: a default
+parameter never reads a member expression (`caret = text.length`), since the compiler cannot reorder it and
+skips the whole function; `Composer`'s `replaceDraft` takes `caret?: number` and resolves the default in its
+body so the per-keystroke path stays compiled. Known bailouts, all cold: `useVirtualRows` reads the
+visible-anchor ref while adjusting state during render (state would cost a render per scroll); the
+latest-value-ref hooks and hosts that still write `ref.current` in render (`useWorkspaceRead`, `useChatTodos`,
+`useOpenBranchReview`, `useBranchList`, `useTemplateCommandPicker`, `MonacoEditor`, `MonacoDiff`,
+`AskUserQuestionCard`), `useLiveTabContent` (`??=`), `usePromptImages` (try without catch),
+`HistoryOverlay`'s `Highlight` (mutates a closure counter), and the try/finally dialogs and settings panes.
+A new bailout is a regression unless it joins this list.
 
 ### Dependency graph
 

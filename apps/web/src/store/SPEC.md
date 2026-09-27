@@ -593,7 +593,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
-  placement + history membership used as a reconnect-reconciliation baseline),
+  placement + history membership used as a reconnect-reconciliation baseline) + `selectPendingSessionIds` (the
+  subset of those ids — placed or closed to history — whose runtime is still `pending`; the reconciliation pass
+  subtracts it from both baselines, see the `chatReconciliation` spec),
   **`workspaceActivityRollup` / `projectActivityRollup`** (the Projects rail's agent-state rollup — pure
   functions *over* the slice rather than Zustand selectors, since a fresh rollup object returned from a
   selector would re-render the rail on every store change; see the activity section);
