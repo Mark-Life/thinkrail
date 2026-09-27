@@ -53,7 +53,11 @@ its own spec.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
   directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
-  `QuietScrollEdges` type via `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
+  `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useIdleWarmup(enabled, warm)` via
+  `@/components/useIdleWarmup` (runs `warm` once in an idle callback, or after 1 s where none exists, while
+  `enabled` holds — the lazy-chunk prefetch shared by the chat and terminal bodies); `useNow()` via
+  `@/components/useNow` (the wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a
+  render never calls `Date.now` itself). The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,

@@ -8,24 +8,11 @@ import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-const IDLE_WARMUP_FALLBACK_MS = 1_000;
 const loadTerminalInstance = () => import("./TerminalInstance");
 const TerminalInstance = lazy(loadTerminalInstance);
 
 export function warmTerminalInstance(): void {
 	void loadTerminalInstance().catch(() => {});
-}
-
-export function useTerminalInstanceWarmup(connected: boolean): void {
-	useEffect(() => {
-		if (!connected) return;
-		if (typeof requestIdleCallback === "function") {
-			const handle = requestIdleCallback(warmTerminalInstance);
-			return () => cancelIdleCallback(handle);
-		}
-		const handle = setTimeout(warmTerminalInstance, IDLE_WARMUP_FALLBACK_MS);
-		return () => clearTimeout(handle);
-	}, [connected]);
 }
 
 export function useTerminalCatalog(workspaceId: string | null): boolean {
