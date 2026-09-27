@@ -970,6 +970,7 @@ interface AppState {
 		thinkingLevel: ThinkingLevel,
 		syncedTick: number,
 	) => void;
+	discardPendingChat: (workspaceId: string, sessionId: string) => void;
 	closeChatRuntime: (sessionId: string) => void;
 	closeChatToHistory: (
 		sessionId: string,
@@ -1396,6 +1397,7 @@ function withoutChat(
 	workspaceId: string,
 	sessionId: string,
 	countNavigation: boolean,
+	tombstone = true,
 ): AppState {
 	if (s.removedWorkspaceIds[workspaceId]) return s;
 	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
@@ -1450,7 +1452,7 @@ function withoutChat(
 					workspaceId,
 					sessionId,
 				}),
-		...(!alreadyDeleted
+		...(tombstone && !alreadyDeleted
 			? {
 					deletedSessionsByWorkspace: Object.assign(
 						Object.create(null),
@@ -2403,7 +2405,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const local = s.terminalsByWorkspace[workspaceId] ?? [];
 			const known = new Set(tabs.map((tab) => tab.tabKey));
 			const pending = local.filter((tab) => !known.has(tab.tabKey) && tab.reservationPending);
@@ -2431,7 +2433,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	confirmTerminalReservation: (workspaceId, tabKey) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((tab) => tab.tabKey === tabKey && tab.reservationPending)) return s;
 			return {
@@ -2447,7 +2449,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	rejectTerminalReservation: (workspaceId, tabKey) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((tab) => tab.tabKey === tabKey && tab.reservationPending)) return s;
 			const terminals = list.filter((tab) => tab.tabKey !== tabKey);
@@ -2471,7 +2473,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	consumeTerminalInitialCommand: (workspaceId, tabKey) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((t) => t.tabKey === tabKey && t.initialCommand)) return s;
 			return {
@@ -2487,7 +2489,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	closeTerminalTab: (workspaceId, tabKey, syncLayout = true) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter((t) => t.tabKey !== tabKey);
 			const wasActive = s.activeTerminalByWorkspace[workspaceId] === tabKey;
 			return {
@@ -2636,7 +2638,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.removedWorkspaceIds[workspaceId] ||
 				isSessionDeleted(s, workspaceId, sessionId)
 			) {
-				return {};
+				return s;
 			}
 			const { pending: _pending, ...resolved } = runtime;
 			return {
@@ -2652,6 +2654,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: syncedTick },
 			};
 		}),
+	discardPendingChat: (workspaceId, sessionId) =>
+		set((s) =>
+			s.sessions[sessionId]?.pending ? withoutChat(s, workspaceId, sessionId, false, false) : s,
+		),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};

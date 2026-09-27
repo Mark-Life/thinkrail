@@ -16,7 +16,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 - **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, interview-invitation, and Toaster mounts plus the keyboard-opened Create workspace dialog; theme application and global shortcuts; the injected Layout and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `updates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `updates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `components/useIdleWarmup`, `components/useNow`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -94,7 +94,7 @@ Project/file/change/review/chat/terminal views receive only resource identity, v
 
 Every async resource/session/catalog hydration checks connection generation, workspace lifetime, and the current local frame/view identity before installing data or a follow-up placement. A peer-created chat remains discoverable through host history but does not open a local tab. Host terminal catalog membership is shared: reconciliation removes dead local references and places a newly discovered catalog tab into a compatible local terminal slot without changing frame geometry or stealing attention. Explicit terminal close remains host-domain lifetime and converges removal in every surface.
 
-Default-terminal creation no longer depends on a host layout revision. The workspace-creation flow carries a host-owned pending marker; the host reserves the deterministic process-free terminal catalog entry and clears the marker only after durable success. Each frontend then places the catalog tab locally, normally into its bottom slot; PTY attach still waits for the visibility gate.
+Default-terminal creation no longer depends on a host layout revision. The workspace-creation flow carries a host-owned pending marker; the host reserves the deterministic process-free terminal catalog entry and clears the marker only after durable success. Each frontend then places the catalog tab locally, normally into its bottom slot; PTY attach still waits for the visibility gate. A user-created terminal is placed while its `terminal.reserve` is still in flight, so it can be closed before the host knows it: that close is local (`closeTerminalTab` drops the catalog entry, the layout commit drops the placement, no `terminal.close` is sent, since a close queued behind a reconnect would reach the host before the reserve and miss). The reservation reply is what reconciles a reserve that lands after its local reference is gone — `useTerminalReservation` finds neither a placement nor a `place-terminal` intent for the key and sends `terminal.close` for the entry the host just minted, so nothing survives in the catalog that no surface can reach.
 
 ## Layout settings
 
@@ -108,12 +108,16 @@ The in-workspace new-chat paths — the empty-center button, the group header's 
 which satisfies pi's id grammar), opens the chat as a **pending** tab + runtime through
 `openChatSession(…, { pending: true })` with the navigation stamp consumed at click, then sends
 `session.create { workspaceId, sessionId }`. The reply resolves the placeholder in place
-(`resolvePendingChat`); a host that ignored the id (its reply names another) gets the placeholder deleted and
-its own id opened the old way; a rejection deletes the placeholder and toasts unless the workspace is gone.
+(`resolvePendingChat`); a host that ignored the id (its reply names another) gets the placeholder discarded and
+its own id opened the old way; a rejection or timeout discards the placeholder (`discardPendingChat` — no
+tombstone, since the host may still finish the creation and the session must then surface in history) and
+toasts unless the workspace is gone or the user already deleted that chat while it was pending.
 The transport bounds the wait: a request is re-sent across a reconnect and times out at 60 s, so a pending
 tab cannot outlive the request. The pending window is visible in the tab's own body (`chat` spec: the composer
 is typeable, send/model disabled with "Starting chat…"), so this path needs no spinner and no double-click
-guard — two clicks are two chats, as before. Because the tab exists before the host lists the session, the
+guard — two clicks are two chats (the group-header button always behaved this way; the empty-center button
+loses its guard, but its group gains a tab on the first click so a second click lands on the tab strip).
+Because the tab exists before the host lists the session, the
 catalog pass excludes pending ids from its baselines (`chatReconciliation` spec) instead of tombstoning them.
 `NewWorkspaceDialog`'s create-and-kick-off flow and review send keep host-minted ids: they create the chat
 in a workspace that is not on screen yet or as part of a host-side transaction, so click-frame placement
@@ -125,8 +129,8 @@ where the row was. Consumers show it as an inline pending state where the result
 empty-center button flips to a disabled spinner ("Starting chat…") while the dialog's chat is still being
 created, and the chat-history trigger spins while a reopened chat hydrates. Workspace removal drops the
 counter with the rest of the per-workspace state. `ChatView` stays a lazy chunk, but `WorkspaceWorkbench`
-warms it in an idle callback once connected (as `TerminalWorkbench` does for the terminal chunk), so the
-first pending chat's composer is not gated on a fetch.
+warms it in an idle callback once connected (`components/useIdleWarmup`, the same hook that warms the
+terminal chunk), so the first pending chat's composer is not gated on a fetch.
 
 ## Error resilience
 

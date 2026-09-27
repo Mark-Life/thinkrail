@@ -428,12 +428,17 @@ interface SkillsStaleState {
 export function selectPendingSessionIds(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
 		sessions: Record<string, { pending?: true }>;
 	},
 	workspaceId: string,
 ): string[] {
-	return (state.tabsByWorkspace[workspaceId] ?? []).flatMap((tab) =>
-		tab.kind === "chat" && state.sessions[tab.sessionId]?.pending ? [tab.sessionId] : [],
+	const placed = (state.tabsByWorkspace[workspaceId] ?? []).flatMap((tab) =>
+		tab.kind === "chat" ? [tab.sessionId] : [],
+	);
+	const closed = (state.closedChatsByWorkspace[workspaceId] ?? []).map((chat) => chat.sessionId);
+	return [...new Set([...placed, ...closed])].filter(
+		(sessionId) => state.sessions[sessionId]?.pending === true,
 	);
 }
 

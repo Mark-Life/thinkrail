@@ -144,9 +144,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   supply reconnect and later-hydration truth, so there is no title-specific event buffer.
   `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
   state without becoming placement authority; its selector includes the matched cache/catalog key so identity
-  repair retriggers the mirror. It, `setLayoutAttention`, `enqueueLayoutIntent`, `consumeLayoutIntent`,
-  `addTerminal` and `restorePlacedChatCache` return the current state object when they resolve to no change,
-  so subscribers are not notified for a no-op.
+  repair retriggers the mirror. An action that resolves to no change returns the current state object, not
+  `{}`, so subscribers are not notified for a no-op; the actions that still return `{}` predate this rule and
+  are migrated as they are touched.
 
   **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
   owns terminal existence keyed by `(workspaceId, tabKey)`; a workspace view locally references that key.
@@ -184,9 +184,13 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   drops `pending`, records the skill baseline and stamps `syncedConnectionGeneration` with the current
   generation so the mounted chat does not immediately re-read a transcript the host has just created. It is a
   no-op for a runtime that is missing or not pending, a removed workspace, or a tombstoned session, and never
-  touches activation or navigation — the user may have moved on. A failed start reuses `deleteChat(…, false)`
-  (below): the placeholder's tab, runtime, queued open and layout placement go through the same fold as a
-  confirmed deletion, and the tombstone is harmless because the id is random. `closeChatRuntime` /
+  touches activation or navigation — the user may have moved on. A failed start goes through
+  **`discardPendingChat(workspaceId, sessionId)`**: the placeholder's tab, runtime, queued open and layout
+  placement go through the same fold as a confirmed deletion (`withoutChat`, below) **without the tombstone**,
+  because the host may still finish the creation after the client gave up — a transport timeout, or a create
+  re-sent across a host restart that is rejected as `already exists` once the transcript is on disk — and
+  that session must then land in history on the next `session.list` or `session.created` push instead of
+  being hidden for the page lifetime. It is a no-op unless the runtime is still pending. `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call

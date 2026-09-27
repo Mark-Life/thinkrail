@@ -22,7 +22,7 @@ function documentWithChats(sessionIds: string[]): WorkspaceLayoutDocument {
 	};
 }
 
-test("catalog baselines leave a pending chat out so the session list cannot tombstone it", () => {
+test("catalog baselines leave a pending chat out, placed or closed to history, so the session list cannot tombstone it", () => {
 	const chat = (sessionId: string) => ({
 		kind: "chat" as const,
 		id: `ws1:chat:${sessionId}`,
@@ -32,9 +32,18 @@ test("catalog baselines leave a pending chat out so the session list cannot tomb
 	});
 	const state = {
 		tabsByWorkspace: { ws1: [chat("settled"), chat("starting")] },
-		closedChatsByWorkspace: { ws1: [{ sessionId: "closed", title: "Old", closedAt: 1 }] },
+		closedChatsByWorkspace: {
+			ws1: [
+				{ sessionId: "closed", title: "Old", closedAt: 1 },
+				{ sessionId: "closed-starting", title: "New chat", closedAt: 2 },
+			],
+		},
 		layoutDocumentsByWorkspace: { ws1: documentWithChats(["settled", "starting"]) },
-		sessions: { starting: { pending: true as const }, settled: {} },
+		sessions: {
+			starting: { pending: true as const },
+			"closed-starting": { pending: true as const },
+			settled: {},
+		},
 	};
 	expect(catalogBaselines(state, "ws1")).toEqual({
 		baselineSessionIds: ["settled", "closed"],

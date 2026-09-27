@@ -4457,3 +4457,32 @@ test("resolvePendingChat is a no-op without a pending runtime, after deletion, o
 	expect(state.sessions.torn).toBeUndefined();
 	expect(state.skillsSyncedTickBySession.torn).toBeUndefined();
 });
+
+test("discardPendingChat drops the placeholder without a tombstone so a late host creation can still land in history", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "timed-out", null, "medium", undefined, { pending: true });
+	store.discardPendingChat("ws1", "timed-out");
+	let state = useAppStore.getState();
+	expect(state.sessions["timed-out"]).toBeUndefined();
+	expect(
+		state.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "timed-out"),
+	).toBe(false);
+	expect(state.deletedSessionsByWorkspace.ws1?.["timed-out"]).toBeUndefined();
+	expect(state.layoutIntents.at(-1)).toMatchObject({
+		kind: "remove-session",
+		sessionId: "timed-out",
+	});
+	store.noteClosedChats("ws1", [{ sessionId: "timed-out", title: "Chat", closedAt: 1 }]);
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.map((c) => c.sessionId)).toEqual([
+		"timed-out",
+	]);
+
+	store.openChatSession("ws1", "settled", null, "medium");
+	const before = useAppStore.getState();
+	store.discardPendingChat("ws1", "settled");
+	expect(useAppStore.getState()).toBe(before);
+	store.discardPendingChat("ws1", "unknown");
+	expect(useAppStore.getState()).toBe(before);
+	state = useAppStore.getState();
+	expect(state.sessions.settled).toBeDefined();
+});
