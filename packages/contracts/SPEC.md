@@ -528,7 +528,10 @@ of the host.
   per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
-  `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain Pi's steering+followUp
+  `session.*` — `create` (params take an optional client-minted **`sessionId`** so a frontend can place
+  the chat's tab, runtime and URL before the host answers; the result still echoes the id actually used, so a
+  host that ignores the param is detected by comparison rather than a version pin, and the host rejects an id
+  that is live, deletion-tombstoned, or already on disk)/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain Pi's steering+followUp
   queues, returning complete `SessionQueueContent`; Pi itself emits the emptying `queue_update`; optional
   `requireTextOnly` rejects without draining when the host has observed queued images, which is the manual
   compaction precondition)/**`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE

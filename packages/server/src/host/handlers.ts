@@ -776,6 +776,7 @@ const handlers: Record<string, Handler> = {
 	"session.create": async (params) => {
 		const p = params as {
 			workspaceId: string;
+			sessionId?: string;
 			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 		};
@@ -785,6 +786,7 @@ const handlers: Record<string, Handler> = {
 		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
+			...(p.sessionId ? { sessionId: p.sessionId } : {}),
 			...(defaults.model ? { model: defaults.model } : {}),
 			thinkingLevel: defaults.thinkingLevel,
 		});
