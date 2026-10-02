@@ -315,6 +315,10 @@ export interface LayoutOpenOptions {
 	claimPreview?: boolean;
 }
 
+export interface ChatOpenOptions extends LayoutOpenOptions {
+	pending?: true;
+}
+
 export type LayoutIntent =
 	| {
 			id: string;
@@ -444,6 +448,7 @@ export interface SessionRuntime {
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
 	hostState: SessionState | null;
+	pending?: true;
 }
 
 const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
@@ -1193,8 +1198,16 @@ interface AppState {
 		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
 		syncedTick?: number,
-		options?: LayoutOpenOptions,
+		options?: ChatOpenOptions,
 	) => void;
+	resolvePendingChat: (
+		workspaceId: string,
+		sessionId: string,
+		model: WireModel | null,
+		thinkingLevel: ThinkingLevel,
+		syncedTick: number,
+	) => void;
+	discardPendingChat: (workspaceId: string, sessionId: string) => void;
 	closeChatRuntime: (sessionId: string) => void;
 	closeChatToHistory: (
 		sessionId: string,
@@ -1731,6 +1744,7 @@ function withoutChat(
 	workspaceId: string,
 	sessionId: string,
 	countNavigation: boolean,
+	tombstone = true,
 ): AppState {
 	if (s.removedWorkspaceIds[workspaceId]) return s;
 	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
@@ -1793,7 +1807,7 @@ function withoutChat(
 					workspaceId,
 					sessionId,
 				}),
-		...(!alreadyDeleted
+		...(tombstone && !alreadyDeleted
 			? {
 					deletedSessionsByWorkspace: Object.assign(
 						Object.create(null),
@@ -3375,10 +3389,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 							[sessionId]: {
 								...newRuntime(model, thinkingLevel, s.connectionGeneration),
 								hostState: s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null,
+								...(options.pending ? { pending: true } : {}),
 							},
 						}
 					: s.sessions,
-				...(fresh
+				...(fresh && !options.pending
 					? {
 							skillsSyncedTickBySession: {
 								...s.skillsSyncedTickBySession,
@@ -3390,6 +3405,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		replayExtUiOrphans(sessionId, set, get);
 	},
+	resolvePendingChat: (workspaceId, sessionId, model, thinkingLevel, syncedTick) =>
+		set((s) => {
+			const runtime = s.sessions[sessionId];
+			if (
+				!runtime?.pending ||
+				s.removedWorkspaceIds[workspaceId] ||
+				isSessionDeleted(s, workspaceId, sessionId)
+			) {
+				return s;
+			}
+			const { pending: _pending, ...resolved } = runtime;
+			return {
+				sessions: {
+					...s.sessions,
+					[sessionId]: {
+						...resolved,
+						model,
+						thinkingLevel,
+						syncedConnectionGeneration: s.connectionGeneration,
+					},
+				},
+				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: syncedTick },
+			};
+		}),
+	discardPendingChat: (workspaceId, sessionId) =>
+		set((s) =>
+			s.sessions[sessionId]?.pending ? withoutChat(s, workspaceId, sessionId, false, false) : s,
+		),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return s;

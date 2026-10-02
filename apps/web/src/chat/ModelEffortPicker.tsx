@@ -95,6 +95,7 @@ export interface ModelEffortPickerProps {
 	preferences: ModelPreferences;
 	defaultOption?: DefaultPairOption;
 	container?: HTMLElement | null;
+	disabled?: boolean;
 	className?: string;
 }
 
@@ -343,6 +344,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			preferences,
 			defaultOption,
 			container,
+			disabled = false,
 			className,
 		},
 		handleRef,
@@ -361,7 +363,11 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			onRefresh(false);
 		};
 
-		useImperativeHandle(handleRef, () => ({ open: (q = "") => openWith(q) }));
+		useImperativeHandle(handleRef, () => ({
+			open: (q = "") => {
+				if (!disabled) openWith(q);
+			},
+		}));
 
 		const close = () => {
 			setOpen(false);
@@ -489,8 +495,9 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<PopoverTrigger
 					data-testid="model-selector"
 					data-open={open}
+					disabled={disabled}
 					className={cn(
-						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected",
+						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-control-disabled-text disabled:hover:bg-transparent data-[open=true]:bg-control-bg-selected",
 						className,
 					)}
 				>

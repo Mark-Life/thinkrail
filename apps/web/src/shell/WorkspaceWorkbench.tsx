@@ -105,7 +105,9 @@ function PlanSummaryAutoDraft({
 	return null;
 }
 
-const ChatView = lazy(() => import("../chat/ChatView"));
+const loadChatView = () => import("../chat/ChatView");
+const ChatView = lazy(loadChatView);
+const warmChatView = () => void loadChatView().catch(() => {});
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 const ChangesReviewPane = lazy(() =>
 	import("../panels/ChangesReviewPane").then((module) => ({ default: module.ChangesReviewPane })),
@@ -400,6 +402,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useIdleWarmup(status === "connected", warmTerminalInstance);
+	useIdleWarmup(status === "connected", warmChatView);
 	useLayoutIntentProcessing(workspaceId, applyIntentTransition, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
