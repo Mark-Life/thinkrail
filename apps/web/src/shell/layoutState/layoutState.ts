@@ -4,6 +4,7 @@ import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../
 import { type LayoutAttention, randomId, sameLayoutAttention } from "../../lib";
 import {
 	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
+	type LayoutIntentTransition,
 	type LocalLayoutPreferences,
 	type LocalLayoutStatePayload,
 	toast,
@@ -58,6 +59,7 @@ let stablePreferenceOverride: StablePreferenceAdapter | null | undefined;
 let persistenceKey: string | null = null;
 let activeStablePreferences: StablePreferenceAdapter | null = null;
 let stopPersistence: (() => void) | null = null;
+let pendingPersistence: ReturnType<typeof setTimeout> | null = null;
 let releaseSurfaceLease: (() => void) | null = null;
 let initialization: Promise<void> | null = null;
 const workspaceInitializations = new Map<string, Promise<WorkspaceLayoutDocument>>();
@@ -515,9 +517,21 @@ function persistCurrentLayout(): void {
 	}
 }
 
+export function flushLayoutPersistence(): void {
+	if (pendingPersistence === null) return;
+	clearTimeout(pendingPersistence);
+	pendingPersistence = null;
+	persistCurrentLayout();
+}
+
+function schedulePersistence(): void {
+	if (pendingPersistence !== null) return;
+	pendingPersistence = setTimeout(flushLayoutPersistence, 0);
+}
+
 function startPersistence(): void {
 	if (stopPersistence) return;
-	stopPersistence = useAppStore.subscribe((state, previous) => {
+	const unsubscribe = useAppStore.subscribe((state, previous) => {
 		if (
 			state.workbenchFrame === previous.workbenchFrame &&
 			state.workspaceViewsByWorkspace === previous.workspaceViewsByWorkspace &&
@@ -527,8 +541,24 @@ function startPersistence(): void {
 		) {
 			return;
 		}
-		persistCurrentLayout();
+		schedulePersistence();
 	});
+	const onHidden = () => {
+		if (document.visibilityState === "hidden") flushLayoutPersistence();
+	};
+	const listening = typeof window !== "undefined";
+	if (listening) {
+		window.addEventListener("pagehide", flushLayoutPersistence);
+		document.addEventListener("visibilitychange", onHidden);
+	}
+	stopPersistence = () => {
+		unsubscribe();
+		if (listening) {
+			window.removeEventListener("pagehide", flushLayoutPersistence);
+			document.removeEventListener("visibilitychange", onHidden);
+		}
+		flushLayoutPersistence();
+	};
 }
 
 async function loadPersistedLayout(): Promise<LocalLayoutStatePayload | undefined> {
@@ -719,7 +749,7 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 				),
 			},
 		},
-		true,
+		{ invalidateProjection: true },
 	);
 }
 
@@ -742,23 +772,25 @@ function rebaseProjectedDocument(
 	};
 }
 
-export function applyLayoutAttention(workspaceId: string, next: LayoutAttention): void {
-	const state = useAppStore.getState();
-	if (state.removedWorkspaceIds[workspaceId]) return;
+type LocalLayoutState = ReturnType<typeof useAppStore.getState>;
+type FramedLayoutState = LocalLayoutState & { workbenchFrame: WorkbenchFrame };
+
+function hasWorkbenchFrame(state: LocalLayoutState): state is FramedLayoutState {
+	return state.workbenchFrame !== null;
+}
+
+function planAttentionChange(state: LocalLayoutState, workspaceId: string, next: LayoutAttention) {
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
 	const normalized = document ? reconcileAttention(document, next, document) : next;
-	if (sameLayoutAttention(state.layoutAttentionByWorkspace[workspaceId], normalized)) return;
-	const groups = document
-		? changedToolSelections(state.layoutAttentionByWorkspace[workspaceId], normalized, document)
-		: new Set<string>();
-	if (!document || groups.size === 0 || !state.workbenchFrame) {
-		state.setLayoutAttention(workspaceId, normalized);
-		return;
-	}
+	if (sameLayoutAttention(state.layoutAttentionByWorkspace[workspaceId], normalized)) return null;
 	const attentionByWorkspace = {
 		...state.layoutAttentionByWorkspace,
 		[workspaceId]: normalized,
 	};
+	const groups = document
+		? changedToolSelections(state.layoutAttentionByWorkspace[workspaceId], normalized, document)
+		: new Set<string>();
+	if (!document || groups.size === 0) return { normalized, attentionByWorkspace };
 	for (const [id, attention] of Object.entries(state.layoutAttentionByWorkspace)) {
 		if (id === workspaceId || state.removedWorkspaceIds[id]) continue;
 		const otherDocument = state.layoutDocumentsByWorkspace[id];
@@ -771,13 +803,32 @@ export function applyLayoutAttention(workspaceId: string, next: LayoutAttention)
 			groups,
 		);
 	}
-	state.applyLocalLayoutState({
+	return { normalized, attentionByWorkspace };
+}
+
+function attentionPayload(
+	state: FramedLayoutState,
+	attentionByWorkspace: Record<string, LayoutAttention>,
+): LocalLayoutStatePayload {
+	return {
 		frame: state.workbenchFrame,
 		viewsByWorkspace: state.workspaceViewsByWorkspace,
 		documentsByWorkspace: state.layoutDocumentsByWorkspace,
 		attentionByWorkspace,
 		preferences: state.localLayoutPreferences,
-	});
+	};
+}
+
+export function applyLayoutAttention(workspaceId: string, next: LayoutAttention): void {
+	const state = useAppStore.getState();
+	if (state.removedWorkspaceIds[workspaceId]) return;
+	const plan = planAttentionChange(state, workspaceId, next);
+	if (!plan) return;
+	if (!hasWorkbenchFrame(state)) {
+		state.setLayoutAttention(workspaceId, plan.normalized);
+		return;
+	}
+	state.applyLocalLayoutState(attentionPayload(state, plan.attentionByWorkspace));
 }
 
 export interface LayoutCommitOptions {
@@ -785,22 +836,12 @@ export interface LayoutCommitOptions {
 	attention?: LayoutAttention;
 }
 
-export async function commitWorkspaceLayout(
+function planDocumentCommit(
+	state: FramedLayoutState,
 	workspaceId: string,
-	document: WorkspaceLayoutDocument,
-	options: LayoutCommitOptions = {},
-): Promise<WorkspaceLayoutDocument> {
-	const { baseDocument } = options;
-	const state = useAppStore.getState();
-	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
-	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
-	const currentDocument = state.layoutDocumentsByWorkspace[workspaceId];
-	const effectiveDocument =
-		baseDocument && currentDocument
-			? rebaseProjectedDocument(baseDocument, document, currentDocument)
-			: document;
-	const validationErrors = validateLayoutDocument(effectiveDocument, 32, 32);
-	if (validationErrors.length > 0) throw new Error(validationErrors.join(" "));
+	effectiveDocument: WorkspaceLayoutDocument,
+	nextAttention: LayoutAttention | undefined,
+): { payload: LocalLayoutStatePayload; invalidateProjection: boolean } {
 	const projected = applyProjectedLayoutDocument(
 		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
 		workspaceId,
@@ -819,9 +860,9 @@ export async function commitWorkspaceLayout(
 		attentionByWorkspace[id] = reconcileAttention(
 			nextDocument,
 			id === workspaceId
-				? (options.attention ?? state.layoutAttentionByWorkspace[id])
+				? (nextAttention ?? state.layoutAttentionByWorkspace[id])
 				: state.layoutAttentionByWorkspace[id],
-			id === workspaceId && options.attention
+			id === workspaceId && nextAttention
 				? effectiveDocument
 				: state.layoutDocumentsByWorkspace[id],
 		);
@@ -836,32 +877,89 @@ export async function commitWorkspaceLayout(
 		committingDocument,
 	);
 	if (frameChanged || toolChanges.size > 0) {
-		if (committingAttention && committingDocument) {
-			for (const [id, attention] of Object.entries(attentionByWorkspace)) {
-				if (id === workspaceId) continue;
-				const otherDocument = documentsByWorkspace[id];
-				if (!otherDocument || state.removedWorkspaceIds[id]) continue;
-				attentionByWorkspace[id] = adoptToolSelections(
-					attention,
-					otherDocument,
-					committingAttention,
-					committingDocument,
-					frameChanged ? undefined : toolChanges,
-				);
-			}
+		for (const [id, attention] of Object.entries(attentionByWorkspace)) {
+			if (id === workspaceId) continue;
+			const otherDocument = documentsByWorkspace[id];
+			if (!otherDocument || state.removedWorkspaceIds[id]) continue;
+			attentionByWorkspace[id] = adoptToolSelections(
+				attention,
+				otherDocument,
+				committingAttention,
+				committingDocument,
+				frameChanged ? undefined : toolChanges,
+			);
 		}
 	}
-	state.applyLocalLayoutState(
-		{
+	return {
+		payload: {
 			frame,
 			viewsByWorkspace: projected.viewsByWorkspace,
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences: state.localLayoutPreferences,
 		},
-		frameChanged && !sameWorkbenchFrameShape(frame, state.workbenchFrame),
+		invalidateProjection: frameChanged && !sameWorkbenchFrameShape(frame, state.workbenchFrame),
+	};
+}
+
+export async function commitWorkspaceLayout(
+	workspaceId: string,
+	document: WorkspaceLayoutDocument,
+	options: LayoutCommitOptions = {},
+): Promise<WorkspaceLayoutDocument> {
+	const { baseDocument } = options;
+	const state = useAppStore.getState();
+	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
+	if (!hasWorkbenchFrame(state)) throw new Error("The local workbench frame is not ready");
+	const currentDocument = state.layoutDocumentsByWorkspace[workspaceId];
+	const effectiveDocument =
+		baseDocument && currentDocument
+			? rebaseProjectedDocument(baseDocument, document, currentDocument)
+			: document;
+	const validationErrors = validateLayoutDocument(effectiveDocument, 32, 32);
+	if (validationErrors.length > 0) throw new Error(validationErrors.join(" "));
+	const { payload, invalidateProjection } = planDocumentCommit(
+		state,
+		workspaceId,
+		effectiveDocument,
+		options.attention,
 	);
+	state.applyLocalLayoutState(payload, { invalidateProjection });
 	return useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] ?? document;
+}
+
+export function commitLayoutIntentTransition(
+	workspaceId: string,
+	transition: LayoutIntentTransition,
+): void {
+	const state = useAppStore.getState();
+	if (state.removedWorkspaceIds[workspaceId] || !hasWorkbenchFrame(state)) {
+		state.consumeLayoutIntent(transition.intentId);
+		return;
+	}
+	const consume = { consumeIntentId: transition.intentId };
+	if (transition.document) {
+		if (validateLayoutDocument(transition.document, 32, 32).length > 0) {
+			state.consumeLayoutIntent(transition.intentId);
+			return;
+		}
+		const { payload, invalidateProjection } = planDocumentCommit(
+			state,
+			workspaceId,
+			transition.document,
+			transition.attention,
+		);
+		state.applyLocalLayoutState(payload, { ...consume, invalidateProjection });
+		return;
+	}
+	const plan = transition.attention
+		? planAttentionChange(state, workspaceId, transition.attention)
+		: null;
+	if (!plan) {
+		state.consumeLayoutIntent(transition.intentId);
+		return;
+	}
+	state.applyLocalLayoutState(attentionPayload(state, plan.attentionByWorkspace), consume);
 }
 
 export function useLocalLayoutState(): void {
