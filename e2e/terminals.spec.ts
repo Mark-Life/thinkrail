@@ -770,6 +770,58 @@ test("closing an idle tab does not ask", async ({ page }) => {
 	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
 });
 
+test("a pending terminal waits for its reserve to attach and closes locally", async ({ page }) => {
+	let holdReserve = false;
+	let pendingTabKey: string | undefined;
+	let releaseReserve: (() => void) | undefined;
+	const attachedKeys: string[] = [];
+	const closedKeys: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as {
+					method?: string;
+					params?: { tabKey?: string };
+				};
+				const tabKey = frame.params?.tabKey;
+				if (frame.method === "terminal.attach" && tabKey) attachedKeys.push(tabKey);
+				if (frame.method === "terminal.close" && tabKey) closedKeys.push(tabKey);
+				if (holdReserve && frame.method === "terminal.reserve" && tabKey) {
+					holdReserve = false;
+					pendingTabKey = tabKey;
+					releaseReserve = () => server.send(message);
+					return;
+				}
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	holdReserve = true;
+	await page.getByTestId("terminal-add").click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+	await expect.poll(() => pendingTabKey).toBeDefined();
+	await expect(visibleTerminal(page)).toHaveAttribute("data-ready", "false");
+	await page.waitForTimeout(500);
+	expect(attachedKeys).not.toContain(pendingTabKey);
+
+	await page.getByTestId("terminal-tab-close").nth(1).click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+	expect(closedKeys).not.toContain(pendingTabKey);
+
+	releaseReserve?.();
+	await expect.poll(() => closedKeys).toContain(pendingTabKey);
+	expect(attachedKeys).not.toContain(pendingTabKey);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+});
+
 test("a terminal opened in one browser never creates placement in another", async ({
 	page,
 	context,
