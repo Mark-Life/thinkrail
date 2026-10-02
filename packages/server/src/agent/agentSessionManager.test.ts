@@ -338,6 +338,77 @@ test("concurrent idle nudges reserve one prompt and queue the later wake-up", as
 	removeSession(session.sessionId);
 });
 
+test("createSession accepts a client-minted id and rejects one that is live, tombstoned, or on disk", async () => {
+	setSessionManagerFactory((cwd, options) => SessionManager.inMemory(cwd, options));
+	const cwd = tmpCwd("trpi-client-id-");
+	const workspaceId = "ws-client-id";
+	const input = { cwd, workspaceId, model: toWireModel(fauxA.getModel()) };
+	try {
+		const created = await createSession({ ...input, sessionId: "chat-minted" });
+		expect(created.sessionId).toBe("chat-minted");
+		expect(hasSession("chat-minted")).toBe(true);
+		await expect(createSession({ ...input, sessionId: "chat-minted" })).rejects.toThrow(
+			/already exists/,
+		);
+
+		await deleteSession("chat-minted", workspaceId, cwd);
+		await expect(createSession({ ...input, sessionId: "chat-minted" })).rejects.toThrow(
+			/already exists/,
+		);
+
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		writeFixtureSession(dir, { id: "chat-on-disk", cwd, messages: [] });
+		await expect(createSession({ ...input, sessionId: "chat-on-disk" })).rejects.toThrow(
+			/already exists/,
+		);
+		expect(hasSession("chat-on-disk")).toBe(false);
+
+		await expect(createSession({ ...input, sessionId: "-bad-" })).rejects.toThrow();
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("session.list waits for an in-flight creation instead of reporting the session missing", async () => {
+	setSessionManagerFactory((cwd, options) => SessionManager.inMemory(cwd, options));
+	const cwd = tmpCwd("trpi-inflight-");
+	const workspaceId = "ws-inflight";
+	const input = { cwd, workspaceId, model: toWireModel(fauxA.getModel()) };
+	try {
+		const creation = createSession({ ...input, sessionId: "chat-inflight" });
+		expect(hasSession("chat-inflight")).toBe(false);
+		await expect(createSession({ ...input, sessionId: "chat-inflight" })).rejects.toThrow(
+			/already exists/,
+		);
+		const listed = await listSessions(workspaceId, cwd);
+		expect(listed.map((summary) => summary.sessionId)).toContain("chat-inflight");
+		expect((await creation).sessionId).toBe("chat-inflight");
+
+		const reloaded = createSession({ ...input, sessionId: "chat-reloaded" });
+		const hydrated = await getSessionMessages("chat-reloaded", workspaceId, cwd);
+		expect(hydrated.summary.sessionId).toBe("chat-reloaded");
+		await reloaded;
+
+		const renamed = createSession({ ...input, sessionId: "chat-renamed-early" });
+		await expect(renameSession("chat-renamed-early", workspaceId, cwd, "Early name")).resolves.toBe(
+			true,
+		);
+		expect(
+			(await listSessions(workspaceId, cwd)).find(
+				(summary) => summary.sessionId === "chat-renamed-early",
+			)?.title,
+		).toBe("Early name");
+		await renamed;
+
+		const deleted = createSession({ ...input, sessionId: "chat-deleted-early" });
+		await deleteSession("chat-deleted-early", workspaceId, cwd);
+		await expect(deleted).rejects.toThrow(/already exists|Unknown session/);
+		expect(hasSession("chat-deleted-early")).toBe(false);
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
 	fauxA.setResponses([fauxAssistantMessage("ALPHA_REPLY")]);
 	fauxB.setResponses([fauxAssistantMessage("BRAVO_REPLY")]);

@@ -122,6 +122,7 @@ interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
 	isStreaming: boolean;
+	pending: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
 	templatePending: boolean;
@@ -162,6 +163,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		value,
 		onChange,
 		isStreaming,
+		pending,
 		growthLimit,
 		commands,
 		templatePending,
@@ -270,7 +272,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	);
 
 	const canSubmit = (raw: string) =>
-		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+		!pending && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
 
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
 		if (!canSubmit(raw)) return;
@@ -536,6 +538,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
+							disabled={pending}
 							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector
@@ -607,11 +610,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onDrop={onDrop}
 							rows={1}
 							placeholder={
-								isStreaming
-									? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
-									: expanded
-										? "Message the agent…  (@ files · / commands · Enter to send)"
-										: "Message…"
+								pending
+									? "Starting chat…"
+									: isStreaming
+										? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
+										: expanded
+											? "Message the agent…  (@ files · / commands · Enter to send)"
+											: "Message…"
 							}
 							className={cn(
 								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
@@ -683,6 +688,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="chat-send"
 							aria-label={isStreaming ? "Steer" : "Send"}
+							title={pending ? "Starting chat…" : undefined}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!canSubmit(value)}
 							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"

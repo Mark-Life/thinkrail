@@ -3,6 +3,7 @@ import type { LayoutAttention } from "../../lib";
 import {
 	type EditorTab,
 	type LayoutIntent,
+	type LayoutIntentTransition,
 	layoutOpenOptionsForNavigation,
 	shouldAdvanceAcceptedNavigation,
 	toast,
@@ -172,36 +173,52 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 	}
 }
 
-interface LayoutIntentEffects {
-	commit: (document: WorkspaceLayoutDocument) => void;
-	changeAttention: (next: LayoutAttention) => void;
-	requestFocus: (request: LayoutTabFocusRequest) => void;
+function processNextLayoutIntent(
+	workspaceId: string,
+	apply: (transition: LayoutIntentTransition) => void,
+	requestFocus: (request: LayoutTabFocusRequest) => void,
+): void {
+	const currentState = useAppStore.getState();
+	const layoutIntent =
+		currentState.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null;
+	const document = currentState.layoutDocumentsByWorkspace[workspaceId];
+	const attention = currentState.layoutAttentionByWorkspace[workspaceId];
+	if (!layoutIntent || !document || !attention) return;
+	try {
+		handleLayoutIntent(
+			currentState,
+			workspaceId,
+			layoutIntent,
+			document,
+			attention,
+			apply,
+			requestFocus,
+		);
+	} catch (error) {
+		useAppStore.getState().consumeLayoutIntent(layoutIntent.id);
+		toast.error(errorText(error), "Couldn't update the layout");
+	}
 }
 
-export function processLayoutIntent(
+function handleLayoutIntent(
+	currentState: ReturnType<typeof useAppStore.getState>,
 	workspaceId: string,
 	layoutIntent: LayoutIntent,
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention,
-	{ maxSideGroups, maxBottomGroups }: { maxSideGroups: number; maxBottomGroups: number },
-	{ commit, changeAttention, requestFocus }: LayoutIntentEffects,
+	apply: (transition: LayoutIntentTransition) => void,
+	requestFocus: (request: LayoutTabFocusRequest) => void,
 ): void {
-	const currentState = useAppStore.getState();
-	if (
-		currentState.layoutDocumentsByWorkspace[workspaceId] !== document ||
-		currentState.layoutAttentionByWorkspace[workspaceId] !== attention
-	) {
-		return;
-	}
+	const { maxSideGroups, maxBottomGroups } = currentState.localLayoutPreferences;
+	const intentId = layoutIntent.id;
 	if (
 		layoutIntent.kind === "select" &&
 		layoutIntent.historyRequestId !== undefined &&
 		currentState.historyOpenRequest?.id !== layoutIntent.historyRequestId
 	) {
-		currentState.consumeLayoutIntent(layoutIntent.id);
+		apply({ intentId });
 		return;
 	}
-	currentState.consumeLayoutIntent(layoutIntent.id);
 	const carriesRequestNavigation =
 		(layoutIntent.kind === "open" ||
 			layoutIntent.kind === "select" ||
@@ -209,7 +226,7 @@ export function processLayoutIntent(
 		Object.hasOwn(layoutIntent, "navigation");
 	const requestNavigation = carriesRequestNavigation ? layoutIntent.navigation : undefined;
 	const currentRouting = carriesRequestNavigation
-		? layoutOpenOptionsForNavigation(useAppStore.getState(), workspaceId, requestNavigation ?? null)
+		? layoutOpenOptionsForNavigation(currentState, workspaceId, requestNavigation ?? null)
 		: null;
 	let result:
 		| { document: WorkspaceLayoutDocument; focusGroupId?: string; focusTabId?: string }
@@ -249,15 +266,14 @@ export function processLayoutIntent(
 				: findLayoutTab(document, layoutIntent.tabId);
 			const selectedTabId = placed?.id;
 			if (!selectedTabId) {
-				const state = useAppStore.getState();
-				const historyRequest = state.historyOpenRequest;
+				const historyRequest = currentState.historyOpenRequest;
 				if (
 					layoutIntent.resource?.kind === "chat" &&
 					historyRequest !== null &&
 					historyRequest.id === layoutIntent.historyRequestId &&
 					historyRequest.sessionId === layoutIntent.resource.sessionId
 				) {
-					state.clearHistoryOpen();
+					currentState.clearHistoryOpen();
 				}
 				break;
 			}
@@ -265,15 +281,14 @@ export function processLayoutIntent(
 			if (!location) break;
 			if (currentRouting?.activate === false) {
 				if (layoutIntent.focus === false) {
-					const state = useAppStore.getState();
-					const historyRequest = state.historyOpenRequest;
+					const historyRequest = currentState.historyOpenRequest;
 					if (
 						placed.kind === "chat" &&
 						historyRequest !== null &&
 						historyRequest.id === layoutIntent.historyRequestId &&
 						historyRequest.sessionId === placed.sessionId
 					) {
-						state.clearHistoryOpen();
+						currentState.clearHistoryOpen();
 					}
 				}
 				break;
@@ -290,17 +305,15 @@ export function processLayoutIntent(
 				layoutIntent.countNavigation ??
 					shouldAdvanceAcceptedNavigation(attention, requestNavigation),
 			);
-			changeAttention(nextAttention);
 			if (layoutIntent.focus !== false) {
-				requestFocus({ key: layoutIntent.id, location, tabId: selectedTabId });
+				requestFocus({ key: intentId, location, tabId: selectedTabId });
 			}
 			if (placed.kind === "chat" && layoutIntent.historyRequestId) {
-				const state = useAppStore.getState();
-				const historyRequest = state.historyOpenRequest;
+				const historyRequest = currentState.historyOpenRequest;
 				if (
 					historyRequest?.id === layoutIntent.historyRequestId &&
 					historyRequest.sessionId === placed.sessionId &&
-					!state.sessions[placed.sessionId]
+					!currentState.sessions[placed.sessionId]
 				) {
 					void hydrateChatResource(workspaceId, placed.sessionId)
 						.then((installed) => {
@@ -347,8 +360,12 @@ export function processLayoutIntent(
 						});
 				}
 			}
-			if (nextDocument !== document) commit(nextDocument);
-			break;
+			apply({
+				intentId,
+				attention: nextAttention,
+				...(nextDocument !== document ? { document: nextDocument } : {}),
+			});
+			return;
 		}
 		case "reveal-tool": {
 			const revealed = revealTool(document, layoutIntent.tool, maxSideGroups, maxBottomGroups);
@@ -376,10 +393,7 @@ export function processLayoutIntent(
 				attention,
 				tab,
 				target,
-				{
-					maxSideGroups,
-					maxBottomGroups,
-				},
+				{ maxSideGroups, maxBottomGroups },
 				layoutIntent.reveal !== false,
 			);
 			if (!isLayoutUnavailable(placed)) result = placed;
@@ -402,11 +416,10 @@ export function processLayoutIntent(
 				);
 			if (!tab) break;
 			const location = findTabLocation(document, tab.id);
-			if (location) {
-				changeAttention(selectTab(attention, location, tab.id));
-				requestFocus({ key: layoutIntent.id, location, tabId: tab.id });
-			}
-			break;
+			if (!location) break;
+			requestFocus({ key: intentId, location, tabId: tab.id });
+			apply({ intentId, attention: selectTab(attention, location, tab.id) });
+			return;
 		}
 		case "toggle-side":
 			if (document[layoutIntent.side].visible) {
@@ -430,7 +443,10 @@ export function processLayoutIntent(
 			}
 			break;
 	}
-	if (!result) return;
+	if (!result) {
+		apply({ intentId });
+		return;
+	}
 	let nextAttention = reconcileAttention(result.document, attention, document);
 	const activateResult =
 		layoutIntent.kind === "open"
@@ -464,52 +480,53 @@ export function processLayoutIntent(
 				);
 			}
 			requestFocus({
-				key: layoutIntent.id,
+				key: intentId,
 				location,
 				...(result.focusTabId ? { tabId: result.focusTabId } : {}),
 			});
 		}
 	}
-	changeAttention(nextAttention);
-	if (result.document !== document) commit(result.document);
+	apply({
+		intentId,
+		attention: nextAttention,
+		...(result.document !== document ? { document: result.document } : {}),
+	});
 	if (terminalTargetAfterCommit) {
 		useAppStore.getState().addTerminal(workspaceId, undefined, terminalTargetAfterCommit, "bottom");
 	}
 }
 
+export function createLayoutIntentDrain(
+	workspaceId: string,
+	apply: (transition: LayoutIntentTransition) => void,
+	requestFocus: (request: LayoutTabFocusRequest) => void,
+): () => void {
+	let draining = false;
+	let dirty = false;
+	return () => {
+		dirty = true;
+		if (draining) return;
+		draining = true;
+		try {
+			while (dirty) {
+				dirty = false;
+				processNextLayoutIntent(workspaceId, apply, requestFocus);
+			}
+		} finally {
+			draining = false;
+		}
+	};
+}
+
 export function useLayoutIntentProcessing(
 	workspaceId: string,
-	commit: (document: WorkspaceLayoutDocument) => void,
-	changeAttention: (next: LayoutAttention) => void,
+	apply: (transition: LayoutIntentTransition) => void,
 	requestFocus: (request: LayoutTabFocusRequest) => void,
 ): void {
-	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
-	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
-	const layoutIntent = useAppStore(
-		(state) => state.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null,
-	);
-	const maxSideGroups = useAppStore((state) => state.localLayoutPreferences.maxSideGroups);
-	const maxBottomGroups = useAppStore((state) => state.localLayoutPreferences.maxBottomGroups);
-
 	useEffect(() => {
-		if (!layoutIntent || !document || !attention) return;
-		processLayoutIntent(
-			workspaceId,
-			layoutIntent,
-			document,
-			attention,
-			{ maxSideGroups, maxBottomGroups },
-			{ commit, changeAttention, requestFocus },
-		);
-	}, [
-		attention,
-		changeAttention,
-		commit,
-		document,
-		layoutIntent,
-		maxBottomGroups,
-		maxSideGroups,
-		requestFocus,
-		workspaceId,
-	]);
+		const drain = createLayoutIntentDrain(workspaceId, apply, requestFocus);
+		const unsubscribe = useAppStore.subscribe(drain);
+		drain();
+		return unsubscribe;
+	}, [apply, requestFocus, workspaceId]);
 }
