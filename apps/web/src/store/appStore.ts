@@ -2764,11 +2764,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.activeTerminalByWorkspace,
 					[workspaceId]: active === tabKey ? (terminals.at(-1)?.tabKey ?? null) : active,
 				},
-				layoutIntents: s.layoutIntents.filter(
-					(intent) =>
-						intent.kind !== "place-terminal" ||
-						intent.workspaceId !== workspaceId ||
-						intent.tabKey !== tabKey,
+				layoutIntents: appendLayoutIntent(
+					s.layoutIntents.filter(
+						(intent) =>
+							intent.kind !== "place-terminal" ||
+							intent.workspaceId !== workspaceId ||
+							intent.tabKey !== tabKey,
+					),
+					{ kind: "close-terminal", workspaceId, tabKey },
 				),
 			};
 		}),
