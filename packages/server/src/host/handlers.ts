@@ -816,6 +816,7 @@ const handlers: WsHandlers = {
 		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
+			...(p.sessionId ? { sessionId: p.sessionId } : {}),
 			...(defaults.model ? { model: defaults.model } : {}),
 			thinkingLevel: defaults.thinkingLevel,
 		});
