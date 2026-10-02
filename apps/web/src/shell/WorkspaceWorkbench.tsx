@@ -84,6 +84,7 @@ import {
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
+import { settleTerminalReservation } from "./terminalReservation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
@@ -178,17 +179,7 @@ function useTerminalReservation(workspaceId: string): void {
 		let current = true;
 		void getTransport()
 			.request("terminal.reserve", { workspaceId, tabKey, title })
-			.then(() => {
-				const state = useAppStore.getState();
-				if (
-					!current ||
-					!isConnectedGeneration(state, connectionGeneration) ||
-					state.removedWorkspaceIds[workspaceId]
-				) {
-					return;
-				}
-				state.confirmTerminalReservation(workspaceId, tabKey);
-			})
+			.then(() => settleTerminalReservation(workspaceId, tabKey, connectionGeneration, current))
 			.catch((error) => {
 				const state = useAppStore.getState();
 				if (
@@ -761,8 +752,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							);
 						};
 						const terminal = terminalByKey.get(tab.tabKey);
-						if (terminal) terminalClose.requestClose(terminal, close);
-						else close();
+						if (terminal?.reservationPending) {
+							useAppStore.getState().closeTerminalTab(workspaceId, tab.tabKey, false);
+							close();
+						} else if (terminal) {
+							terminalClose.requestClose(terminal, close);
+						} else {
+							close();
+						}
 						return;
 					}
 					const prepared = prepare();
