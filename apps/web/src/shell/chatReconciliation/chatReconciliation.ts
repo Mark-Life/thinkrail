@@ -174,10 +174,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 	}, [connectionGeneration, deletedSessions, document, workspaceId]);
 }
 
-export function useWorkspaceChatCatalogReconciliation(
-	workspaceId: string,
-	commit: (document: WorkspaceLayoutDocument) => void,
-): void {
+export function useWorkspaceChatCatalogReconciliation(workspaceId: string): void {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
@@ -259,8 +256,8 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (latestDocument && missingPlacedSessionIds.length > 0) {
 					const pruned = missingPlacedSessionIds.reduce(removeSessionLayoutTabs, latestDocument);
 					if (pruned !== latestDocument) {
+						void commitWorkspaceLayout(workspaceId, pruned, latestDocument).catch(() => {});
 						latestDocument = pruned;
-						commit(pruned);
 					}
 				}
 				const placed = new Set(
@@ -432,7 +429,7 @@ export function useWorkspaceChatCatalogReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [commit, connectionGeneration, layoutReady, routeChatTargetGeneration, status, workspaceId]);
+	}, [connectionGeneration, layoutReady, routeChatTargetGeneration, status, workspaceId]);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;

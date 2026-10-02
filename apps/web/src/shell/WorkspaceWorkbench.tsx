@@ -44,6 +44,7 @@ import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	type LayoutIntentTransition,
 	layoutOpenOptionsForNavigation,
 	selectCanRenameChat,
 	selectContextProject,
@@ -77,6 +78,7 @@ import {
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import {
 	applyLayoutAttention,
+	commitLayoutIntentTransition,
 	commitWorkspaceLayout,
 	emptyWorkspaceProjection,
 	useWorkspaceLayoutState,
@@ -306,12 +308,20 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[document, workspaceId],
 	);
 
+	const applyIntentTransition = useCallback(
+		(transition: LayoutIntentTransition) => {
+			commitLayoutIntentTransition(workspaceId, transition);
+			syncLegacySelectionFromAttention(workspaceId);
+		},
+		[workspaceId],
+	);
+
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useIdleWarmup(status === "connected", warmTerminalInstance);
-	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
-	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
+	useLayoutIntentProcessing(workspaceId, applyIntentTransition, setFocusRequest);
+	useWorkspaceChatCatalogReconciliation(workspaceId);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
 

@@ -207,10 +207,19 @@ test("layout projection epoch advances only when projection invalidation is requ
 	const store = useAppStore.getState();
 	store.applyLocalLayoutState(payload);
 	expect(useAppStore.getState().layoutProjectionEpoch).toBe(0);
-	useAppStore.getState().applyLocalLayoutState(payload, true);
+	useAppStore.getState().applyLocalLayoutState(payload, { invalidateProjection: true });
 	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
 	useAppStore.getState().applyLocalLayoutState(payload);
 	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+
+	const intentId = useAppStore
+		.getState()
+		.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId: "workspace" });
+	const other = useAppStore
+		.getState()
+		.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId: "other" });
+	useAppStore.getState().applyLocalLayoutState(payload, { consumeIntentId: intentId });
+	expect(useAppStore.getState().layoutIntents.map((intent) => intent.id)).toEqual([other]);
 });
 
 function rt(sessionId: string): SessionRuntime {
@@ -3218,6 +3227,22 @@ test("the Changes deep link stamps the nav count at the click, so a later naviga
 
 	s().setActiveTab("ws1:a.ts");
 	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
+});
+
+test("no-op legacy selection and intent actions leave the state object untouched", () => {
+	useAppStore.setState({
+		tabsByWorkspace: { ws1: [fileTab("ws1", "a.ts")] },
+		activeTabByWorkspace: { ws1: "ws1:a.ts" },
+		activeTerminalByWorkspace: { ws1: null },
+		layoutIntents: [],
+	});
+	const before = useAppStore.getState();
+	before.syncLegacySelection("ws1", { kind: "editor", tabId: "ws1:a.ts" });
+	expect(useAppStore.getState()).toBe(before);
+	before.syncLegacySelection("ws1", { kind: "editor", tabId: "ws1:missing.ts" });
+	expect(useAppStore.getState()).toBe(before);
+	before.consumeLayoutIntent("missing");
+	expect(useAppStore.getState()).toBe(before);
 });
 
 test("legacy selection reconciliation does not count as user navigation", () => {

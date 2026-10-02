@@ -13,9 +13,11 @@ import {
 	applyLayoutAttention,
 	applyLayoutPresetLocally,
 	claimLayoutSurfaceId,
+	commitLayoutIntentTransition,
 	commitWorkspaceLayout,
 	emptyWorkspaceProjection,
 	ensureWorkspaceLayoutState,
+	flushLayoutPersistence,
 	initializeLocalLayoutState,
 	localLayoutStorageKey,
 	resetLayoutStateForTests,
@@ -52,6 +54,15 @@ class MemoryStorage implements Storage {
 	}
 }
 
+class CountingStorage extends MemoryStorage {
+	writes = 0;
+
+	override setItem(key: string, value: string): void {
+		this.writes += 1;
+		super.setItem(key, value);
+	}
+}
+
 const endpoint = "http://host.test";
 
 function resetStore(): void {
@@ -69,6 +80,7 @@ function resetStore(): void {
 		},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
+		layoutIntents: [],
 		layoutProjectionEpoch: 0,
 		workspaceSelectionHistory: [],
 		toasts: [],
@@ -140,6 +152,7 @@ describe("frontend-local layout state", () => {
 		]);
 		expect(first.bottom).toMatchObject({ visible: true, groups: [{ tabs: [] }] });
 		expect(second).toBe(first);
+		flushLayoutPersistence();
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 	});
 
@@ -378,6 +391,7 @@ describe("frontend-local layout state", () => {
 		useAppStore.setState({
 			workspaceViewsByWorkspace: { [oversizedWorkspaceId]: { groups: {} } },
 		});
+		flushLayoutPersistence();
 
 		expect(stablePreferences.length).toBe(0);
 		expect(useAppStore.getState().toasts.at(-1)).toMatchObject({
@@ -421,6 +435,87 @@ describe("frontend-local layout state", () => {
 			left: { ...resized.left, visible: false },
 		});
 		expect(useAppStore.getState().layoutProjectionEpoch).toBe(epoch + 1);
+	});
+
+	test("an intent transition lands document, attention and consumption in one store update", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const base = await ensureWorkspaceLayoutState("workspace");
+		const attention = useAppStore.getState().layoutAttentionByWorkspace.workspace;
+		if (!attention) throw new Error("missing workspace attention");
+		const intentId = useAppStore
+			.getState()
+			.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId: "workspace" });
+		const centerGroupId = attention.lastFocusedCenterGroupId;
+		const nextAttention = {
+			...attention,
+			navigationClockByGroup: { ...attention.navigationClockByGroup, [centerGroupId]: 5 },
+		};
+		let updates = 0;
+		const unsubscribe = useAppStore.subscribe(() => {
+			updates += 1;
+		});
+
+		commitLayoutIntentTransition("workspace", {
+			intentId,
+			document: resizeBottomRegion(base, 0.4),
+			attention: nextAttention,
+		});
+		unsubscribe();
+
+		const state = useAppStore.getState();
+		expect(updates).toBe(1);
+		expect(state.layoutDocumentsByWorkspace.workspace?.bottom.height).toBe(0.4);
+		expect(state.layoutAttentionByWorkspace.workspace?.navigationClockByGroup[centerGroupId]).toBe(
+			5,
+		);
+		expect(state.layoutIntents).toHaveLength(0);
+	});
+
+	test("an invalid intent transition still consumes the intent and changes nothing else", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const base = await ensureWorkspaceLayoutState("workspace");
+		const intentId = useAppStore
+			.getState()
+			.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId: "workspace" });
+
+		commitLayoutIntentTransition("workspace", {
+			intentId,
+			document: {
+				...base,
+				left: { ...base.left, groups: [...base.left.groups, ...base.left.groups] },
+			},
+		});
+
+		const state = useAppStore.getState();
+		expect(state.layoutDocumentsByWorkspace.workspace).toBe(base);
+		expect(state.layoutIntents).toHaveLength(0);
+	});
+
+	test("persistence coalesces a task's store updates into one deferred write", async () => {
+		const local = new CountingStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const base = await ensureWorkspaceLayoutState("workspace");
+		flushLayoutPersistence();
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const before = local.getItem(key);
+		local.writes = 0;
+
+		await commitWorkspaceLayout("workspace", resizeSideRegion(base, "left", 0.31), base);
+		await commitWorkspaceLayout("workspace", resizeBottomRegion(base, 0.45), base);
+		expect(local.writes).toBe(0);
+		expect(local.getItem(key)).toBe(before);
+
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(local.writes).toBe(1);
+		expect(local.getItem(key)).not.toBe(before);
 	});
 
 	test("a newly shown singleton tool cannot collide with a hidden workspace resource", async () => {
@@ -521,6 +616,7 @@ describe("frontend-local layout state", () => {
 		setLayoutStateStorageForTests({ local, session: secondSession }, endpoint);
 
 		const second = await ensureWorkspaceLayoutState("workspace");
+		flushLayoutPersistence();
 		expect(second.left.width).toBe(0.18);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-b"))).not.toBeNull();

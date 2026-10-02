@@ -110,7 +110,9 @@ selected-log state belong to chat integration, not domain persistence. See
   it is neither persisted nor writable as authority. There is no accepted/projected pair, revision, mutation
   id, pending write, rollback queue, or conflict state.
 
-  `applyLocalLayoutTransition(result)` is the one atomic installation boundary for pure layout results. A
+  `applyLocalLayoutState(payload, options)` is the one atomic installation boundary for pure layout results;
+  `options.consumeIntentId` drops the layout intent that produced the payload in the same transaction, so an
+  intent's placement, attention and consumption are one notification. A
   resource-only result updates one workspace view and attention. A frame result replaces the singular frame
   together with every retained workspace-view remap, so an explicit group removal or preset application can
   never leave a hidden workspace referencing a dead group. Components never splice group/tab arrays. Empty
@@ -160,7 +162,10 @@ selected-log state belong to chat integration, not domain persistence. See
   supply reconnect and later-hydration truth, so there is no title-specific event buffer.
   `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
   state without becoming placement authority; its selector includes the matched cache/catalog key so identity
-  repair retriggers the mirror.
+  repair retriggers the mirror. An action that resolves to no change returns the current state object, not
+  `{}`, so subscribers are not notified for a no-op. The survivors are merge-fragment helpers
+  (`workspaceActivationPatch`, `pruneExpandedProjects`, `reconcileProjectNavigation`): their `{}` means
+  "nothing to merge" inside a larger patch.
 
   **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
   owns terminal existence keyed by `(workspaceId, tabKey)`; a workspace view locally references that key.
