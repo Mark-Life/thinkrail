@@ -180,6 +180,7 @@ export default function ChatView({
 }) {
 	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
 	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
+	const pending = sessionRuntime?.pending === true;
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
@@ -189,7 +190,7 @@ export default function ChatView({
 		runtime,
 		status,
 		connectionGeneration,
-		enabled: sessionRuntime !== undefined,
+		enabled: sessionRuntime !== undefined && !pending,
 	});
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
@@ -204,7 +205,9 @@ export default function ChatView({
 				.find((w) => w.id === workspaceId)?.projectId,
 	);
 	const [skillsOpen, setSkillsOpen] = useState(false);
-	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
+	const skillsStale = useAppStore(
+		(s) => !s.sessions[sessionId]?.pending && selectSkillsStale(s, workspaceId, sessionId),
+	);
 	const workspaceRoot = useAppStore(
 		(s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? undefined,
 	);
@@ -244,7 +247,7 @@ export default function ChatView({
 		syncedConnectionGeneration,
 		status,
 		connectionGeneration,
-		enabled: sessionRuntime !== undefined,
+		enabled: sessionRuntime !== undefined && !pending,
 	});
 
 	const chronologicalRows = useMemo(
@@ -501,11 +504,12 @@ export default function ChatView({
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
 	useEffect(() => {
+		if (pending) return;
 		getTransport()
 			.request("session.getCommands", { sessionId })
 			.then((c) => useAppStore.getState().setCommands(sessionId, c))
 			.catch(() => {});
-	}, [sessionId]);
+	}, [pending, sessionId]);
 
 	useEffect(() => {
 		if (!slashActive) return;
@@ -1169,6 +1173,7 @@ export default function ChatView({
 							value={draft}
 							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
 							isStreaming={isStreaming}
+							pending={pending}
 							growthLimit={composerGrowthLimit}
 							commands={mergedCommands}
 							templatePending={templatePending}

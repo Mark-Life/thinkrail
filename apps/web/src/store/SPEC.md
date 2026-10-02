@@ -195,7 +195,21 @@ selected-log state belong to chat integration, not domain persistence. See
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
-  promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
+  promise) + `extUiStatus` / `extUiWidget`) / **`pending?: true`** (the host has not confirmed the session
+  yet). `openChatSession` creates a runtime; with `{ pending: true }` (a `ChatOpenOptions` field, not a layout
+  intent field) it creates the tab, runtime and open intent synchronously for a **client-minted id**, with
+  `model: null` and **no skill baseline** — the id is final, so nothing is re-keyed later. **`resolvePendingChat(workspaceId,
+  sessionId, model, thinkingLevel, syncedTick)`** is the one atomic confirmation: it sets model + thinking level,
+  drops `pending`, records the skill baseline and stamps `syncedConnectionGeneration` with the current
+  generation so the mounted chat does not immediately re-read a transcript the host has just created. It is a
+  no-op for a runtime that is missing or not pending, a removed workspace, or a tombstoned session, and never
+  touches activation or navigation — the user may have moved on. A failed start goes through
+  **`discardPendingChat(workspaceId, sessionId)`**: the placeholder's tab, runtime, queued open and layout
+  placement go through the same fold as a confirmed deletion (`withoutChat`, below) **without the tombstone**,
+  because the host may still finish the creation after the client gave up — a transport timeout, or a create
+  re-sent across a host restart that is rejected as `already exists` once the transcript is on disk — and
+  that session must then land in history on the next `session.list` or `session.created` push instead of
+  being hidden for the page lifetime. It is a no-op unless the runtime is still pending. `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
@@ -336,11 +350,13 @@ selected-log state belong to chat integration, not domain persistence. See
   test is **"no runtime"**, not "unknown session": every kind except `setTitle` is reduced by
   `withRuntime`, so a session that merely has a tab or a `closedChats` entry would pass a "do we know it"
   test and then be dropped by `withRuntime` — neither applied nor buffered. **No path builds that state
-  today** — `closeChatToHistory` keeps the runtime, `closeChatRuntime` has no production caller, and both
-  `openTab` sites that place a chat tab are guarded by its runtime already existing — so this rule is a
+  today** — `closeChatToHistory` keeps the runtime, `closeChatRuntime` has no production caller, both
+  `openTab` sites that place a chat tab are guarded by its runtime already existing, and a **pending** chat
+  places its runtime together with its tab, so the frames pi emits from `session_start` land on that runtime
+  directly (`setTitle` renames the placed tab in place) instead of being buffered — so this rule is a
   guard, not a live fix, and it is pinned by seeding the store directly rather than through an action
   sequence no user can perform. It starts earning its keep the moment anything places a chat tab before
-  its transcript is hydrated. `setTitle` is
+  its runtime exists. `setTitle` is
   the one exception, and it decides for itself: `renameChat` renames the tab or the `closedChats` entry
   and reports whether it found the session **at all**, so only a title for a session in neither map is
   buffered. Admission falls out of the rename instead of being computed beside it — one walk over
@@ -587,7 +603,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
-  placement + history membership used as a reconnect-reconciliation baseline), normalized session-state
+  placement + history membership used as a reconnect-reconciliation baseline) + `selectPendingSessionIds` (the
+  subset of those ids — placed or closed to history — whose runtime is still `pending`; the reconciliation pass
+  subtracts it from both baselines, see the `chatReconciliation` spec), normalized session-state
   selectors/actions (exact session + workspace/project needs-input/working/unread-finished rollups, direct
   activation, ready exact-completion acknowledgement), `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports

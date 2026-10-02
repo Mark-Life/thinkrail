@@ -21,7 +21,7 @@ import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
 import { useIdleWarmup } from "../components/useIdleWarmup";
-import { type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { type LayoutAttention, layoutResourceIdentity, randomId } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
@@ -89,7 +89,9 @@ import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { settleTerminalReservation } from "./terminalReservation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
-const ChatView = lazy(() => import("../chat/ChatView"));
+const loadChatView = () => import("../chat/ChatView");
+const ChatView = lazy(loadChatView);
+const warmChatView = () => void loadChatView().catch(() => {});
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
@@ -320,6 +322,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useIdleWarmup(status === "connected", warmTerminalInstance);
+	useIdleWarmup(status === "connected", warmChatView);
 	useLayoutIntentProcessing(workspaceId, applyIntentTransition, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
@@ -566,29 +569,45 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
 			const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, groupId);
-			useAppStore.getState().beginChatStart(workspaceId);
-			void createSessionWithSkillBaseline({ workspaceId })
-				.then(({ result: { sessionId, model, thinkingLevel }, syncedTick }) => {
-					const store = useAppStore.getState();
-					store.openChatSession(
+			const sessionId = randomId("chat");
+			const store = useAppStore.getState();
+			store.openChatSession(workspaceId, sessionId, null, "medium", undefined, {
+				...layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+				pending: true,
+			});
+			void createSessionWithSkillBaseline({ workspaceId, sessionId })
+				.then(({ result, syncedTick }) => {
+					const state = useAppStore.getState();
+					if (result.sessionId === sessionId) {
+						state.resolvePendingChat(
+							workspaceId,
+							sessionId,
+							result.model,
+							result.thinkingLevel,
+							syncedTick,
+						);
+						return;
+					}
+					state.discardPendingChat(workspaceId, sessionId);
+					state.openChatSession(
 						workspaceId,
-						sessionId,
-						model,
-						thinkingLevel,
+						result.sessionId,
+						result.model,
+						result.thinkingLevel,
 						syncedTick,
-						layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+						layoutOpenOptionsForNavigation(state, workspaceId, navigation),
 					);
 				})
-				.catch(() => {
+				.catch((err: unknown) => {
 					const state = useAppStore.getState();
+					state.discardPendingChat(workspaceId, sessionId);
 					if (
-						layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
-						!state.removedWorkspaceIds[workspaceId]
+						!state.removedWorkspaceIds[workspaceId] &&
+						!state.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 					) {
-						toast.error("The agent session could not be created.", "Couldn't start the chat");
+						toast.error(errorText(err), "Couldn't start the chat");
 					}
-				})
-				.finally(() => useAppStore.getState().endChatStart(workspaceId));
+				});
 		},
 		[changeAttention, workspaceId],
 	);
