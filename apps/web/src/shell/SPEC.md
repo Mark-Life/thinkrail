@@ -16,7 +16,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 - **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, interview-invitation, and Toaster mounts plus the keyboard-opened Create workspace dialog; theme application and global shortcuts; the injected Layout and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `updates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `updates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `components/useIdleWarmup`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -103,7 +103,7 @@ Project/file/change/review/chat/terminal views receive only resource identity, v
 
 Every async resource/session/catalog hydration checks connection generation, workspace lifetime, and the current local frame/view identity before installing data or a follow-up placement. A peer-created chat remains discoverable through host history but does not open a local tab. Host terminal catalog membership is shared: reconciliation removes dead local references and places a newly discovered catalog tab into a compatible local terminal slot without changing frame geometry or stealing attention. Explicit terminal close remains host-domain lifetime and converges removal in every surface.
 
-Default-terminal creation no longer depends on a host layout revision. The workspace-creation flow carries a host-owned pending marker; the host reserves the deterministic process-free terminal catalog entry and clears the marker only after durable success. Each frontend then places the catalog tab locally, normally into its bottom slot; PTY attach still waits for the visibility gate.
+Default-terminal creation no longer depends on a host layout revision. The workspace-creation flow carries a host-owned pending marker; the host reserves the deterministic process-free terminal catalog entry and clears the marker only after durable success. Each frontend then places the catalog tab locally, normally into its bottom slot; PTY attach still waits for the visibility gate. `useTerminalReservation` keys on the pending catalog tab's primitives (`tabKey`, `title`), not on the placement intent, which is consumed in the click frame.
 
 ## Layout settings
 

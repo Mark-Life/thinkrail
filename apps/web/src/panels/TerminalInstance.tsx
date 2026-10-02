@@ -103,16 +103,19 @@ function tryLoad(fn: () => void): void {
 interface Props {
 	tabKey: string;
 	workspaceId: string;
+	reserved: boolean;
 	initialCommand?: string;
 }
 
-export default function TerminalInstance({ tabKey, workspaceId, initialCommand }: Props) {
+export default function TerminalInstance({ tabKey, workspaceId, reserved, initialCommand }: Props) {
 	const rootRef = useRef<HTMLDivElement>(null);
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
 	const fitFnRef = useRef<(() => void) | null>(null);
 	const reattachRef = useRef<(() => void) | null>(null);
+	const reservedRef = useRef(reserved);
+	const attachWhenReservedRef = useRef<(() => void) | null>(null);
 	const initialCommandRef = useRef(initialCommand);
 	const [ready, setReady] = useState(false);
 	const [exited, setExited] = useState(false);
@@ -335,7 +338,8 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			() => {
 				if (disposed) return;
 				applyFit();
-				attach();
+				if (reservedRef.current) attach();
+				else attachWhenReservedRef.current = attach;
 			},
 			{
 				timeoutMs: RELAYOUT_TIMEOUT_MS,
@@ -354,6 +358,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		return () => {
 			disposed = true;
 			reattachRef.current = null;
+			attachWhenReservedRef.current = null;
 			prebind.stop();
 			sizeSync.dispose();
 			clearTimeout(fitTimer);
@@ -370,6 +375,14 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			term.dispose();
 		};
 	}, [tabKey, workspaceId]);
+
+	useEffect(() => {
+		reservedRef.current = reserved;
+		if (!reserved) return;
+		const attach = attachWhenReservedRef.current;
+		attachWhenReservedRef.current = null;
+		attach?.();
+	}, [reserved]);
 
 	useEffect(() => {
 		const frame = requestAnimationFrame(() => {

@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
+import { useAppStore } from "../../store";
 import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "../layout";
 import { findTabLocation } from "../layout";
-import { placeTerminalForIntent } from "./layoutIntents";
+import { terminalLayoutId } from "../terminalReconciliation";
+import { placeTerminalForIntent, processLayoutIntent } from "./layoutIntents";
 
 function document(): WorkspaceLayoutDocument {
 	return {
@@ -104,5 +106,37 @@ describe("terminal intent routing", () => {
 		);
 		if ("reason" in centered) throw new Error(centered.reason);
 		expect(findTabLocation(centered.document, terminal.id)?.area).toBe("center");
+	});
+
+	test("a reservation-pending terminal is placed on the intent's first pass, before host confirmation", () => {
+		const workspaceId = "ws-pending";
+		useAppStore.setState({
+			removedWorkspaceIds: {},
+			layoutIntents: [],
+			layoutDocumentsByWorkspace: { [workspaceId]: document() },
+			layoutAttentionByWorkspace: { [workspaceId]: attention },
+			terminalsByWorkspace: {},
+			activeTerminalByWorkspace: {},
+		});
+		useAppStore.getState().addTerminal(workspaceId, undefined, undefined, "bottom");
+		const state = useAppStore.getState();
+		const tab = state.terminalsByWorkspace[workspaceId]?.[0];
+		const intent = state.layoutIntents[0];
+		const current = state.layoutDocumentsByWorkspace[workspaceId];
+		if (!tab || !intent || !current) throw new Error("terminal intent missing");
+		expect(tab.reservationPending).toBe(true);
+
+		let committed: WorkspaceLayoutDocument | undefined;
+		processLayoutIntent(workspaceId, intent, current, attention, limits, {
+			commit: (next) => {
+				committed = next;
+			},
+			changeAttention: () => {},
+			requestFocus: () => {},
+		});
+
+		expect(useAppStore.getState().layoutIntents).toEqual([]);
+		if (!committed) throw new Error("placement not committed");
+		expect(findTabLocation(committed, terminalLayoutId(tab.tabKey))?.area).toBe("bottom");
 	});
 });

@@ -168,7 +168,10 @@ selected-log state belong to chat integration, not domain persistence. See
   reservation is in flight, removes dead references, and offers unrepresented catalog tabs to local placement
   reconciliation without changing frame geometry or attention. `addTerminal` mints a durable key and emits one
   local placement intent; captured group destination preserves contextual creation, while an uncaptured request
-  resolves to bottom. Default-terminal reservation is a host-owned workspace-creation handshake and surfaces
+  resolves to bottom. The tab carries `reservationPending` until the host confirms it: placement never waits on
+  the flag, only PTY attach does, and `rejectTerminalReservation` drops the tab, retracts its placement intent
+  and appends a `close-terminal` intent in the same transaction so an already-placed reference is removed
+  deterministically. Default-terminal reservation is a host-owned workspace-creation handshake and surfaces
   receive the resulting catalog entry. Confirmed close removes domain membership and every local reference;
   rejection preserves placement. There is no workspace-global `activeTerminal`: workspace attention decides
   which bodies mount, while host exclusive attach/takeover decides which client controls a PTY. The
