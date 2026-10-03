@@ -12,7 +12,8 @@ Build-time tooling for `apps/web`. **Nothing here ships**: these modules run und
 machine or in CI, never in the browser bundle. They read files from `src/`, write generated files back
 into `src/`, and exit with a status code.
 
-The directory holds three pipelines — typography, colour and spacing — built the same way. They live here rather than in `src/` because
+The directory holds three pipelines — typography, colour and spacing — built the same way, plus one
+read-only diagnostic, the React Compiler census. They live here rather than in `src/` because
 they are *generators*: they use `node:fs` and `node:path`, which must never reach browser-bundled code.
 
 ## What it owns
@@ -29,6 +30,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `generate-spacing.ts` | CLI. Writes `src/styles/generated/spacing.css` — the `--space-<n>` tokens + the Tailwind base; `--check` fails when it is stale. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
+| `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over `src/` (tests excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. Read-only; not a gate. |
 
 Public surface: the `typography.ts`, `colors.ts`, `spacing.ts` and `generatedFiles.ts` exports. There is no `index.ts` barrel — the CLIs are entry points
 invoked by name from `package.json`, and the one importer outside this directory
@@ -44,12 +46,17 @@ in agreement about the same functions.
 - **Forbidden:** React, Tailwind, anything under `src/` other than the three JSON files, any
   `@thinkrail/*` package, and any network or shell access. A generator that needed one of those would be
   the wrong shape.
+- **Census exception:** `compiler-census.ts` also uses `@babel/core` and `babel-plugin-react-compiler`
+  and reads every `src/**/*.{ts,tsx}` file as *text*. It must pass the compiler the same options as
+  `reactCompilerPreset()` in `vite.config.ts` and mirror the preset's file filter, so its counts match
+  the real build. Build-time compiler validations differ from the lint rules (for example
+  `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
-  `colors:generate` / `:check`, `spacing:generate` / `:check`, re-exported from the root `package.json`), and
+  `colors:generate` / `:check`, `spacing:generate` / `:check`, re-exported from the root `package.json`; `compiler:census` is web-only), and
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +
   `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts`. Nothing in the shipped app may import from here — the generated
   CSS is the interface.
-- **Writes:** `src/styles/generated/` only. That directory is committed (so every typography, colour or spacing
+- **Writes:** `src/styles/generated/` only (the census writes nothing). That directory is committed (so every typography, colour or spacing
   change is reviewable as a diff) and excluded from biome in `biome.json`.
 
 ## Invariants
