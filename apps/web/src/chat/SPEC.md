@@ -139,7 +139,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   non-1 ordered list that micromark reads as a paragraph; an empty list item with a trailing space before
   a table; an unclosed fence in a list item followed by 2+ blank lines and a dedent; one construct with no closed block, such as a list whose items run on through lazy lines,
   re-lexes from the start on every delta; when blocks merge or the message turns whole, the moved blocks
-  remount, so a code block shows plain text until Shiki answers again, a Mermaid diagram redraws, and focus
+  remount, so a code block re-renders from the highlight cache (highlighted at once on a hit), a Mermaid diagram redraws, and focus
   or a selection inside them is lost; kept blocks hold substrings of older stream texts, about 1 MB for a
   110k-char message, until the row unmounts.
 - **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 120)
@@ -1304,7 +1304,8 @@ Unknown custom messages retain their existing behavior.
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `marked` (block lexer for
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter` / `lib/highlightCode`; a streaming fence shows its last highlight plus
+  the newer text as plain until the worker catches up); `marked` (block lexer for
   `markdownBlocks` splitting only, never for rendering); `mermaid`
   (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
   package); `react-virtuoso`; `@remixicon/react`; `components/ui`; `components/useNow`; `lib`.
