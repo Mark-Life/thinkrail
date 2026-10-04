@@ -27,7 +27,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib";
+import { cn, shallowEqualArrays } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -351,13 +351,15 @@ export default function ChatView({
 		[turns, isStreaming, currentAssistantId],
 	);
 
-	const recentPrompts = useMemo(() => {
+	const nextRecentPrompts = useMemo(() => {
 		const texts = turns
 			.filter((t) => t.kind === "user")
 			.map((t) => turnAnchorText(t))
 			.filter(Boolean);
 		return [...new Set(texts.reverse())];
 	}, [turns]);
+	const [recentPrompts, setRecentPrompts] = useState(nextRecentPrompts);
+	if (!shallowEqualArrays(recentPrompts, nextRecentPrompts)) setRecentPrompts(nextRecentPrompts);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
