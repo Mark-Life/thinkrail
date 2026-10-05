@@ -48,6 +48,7 @@
 		"cmdk": "1.1.1",
 		"diff": "8.0.4",
 		"jsondiffpatch": "0.7.3",
+		"marked": "16.4.2",
 		"mermaid": "catalog:",
 		"monaco-editor": "0.55.1",
 		"node-htmldiff": "0.9.4",
