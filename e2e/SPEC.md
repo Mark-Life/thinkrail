@@ -101,6 +101,50 @@ browser agent execution.
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
 
+## Render profiling harness
+
+`bun run perf:render [--runs N] [--out file] [--cpu N] [--scenario a,b] [playwright args]` is an opt-in
+measurement run, never a gate. It builds `apps/web/dist-profile` (see [[module-web]]), boots the ordinary
+isolated host on it through `playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the
+default config does not match. It uses the worktree's serial lane (port block and state dir), so do not
+run it alongside another serial E2E run in the same worktree. Defaults: 5 runs, output
+`$TMPDIR/thinkrail-render-profile.json`. Unknown `--scenario` names fail before the build. A failed
+Playwright run writes no output, so the last good file survives.
+
+- **Collection.** An init script installs a minimal `__REACT_DEVTOOLS_GLOBAL_HOOK__` before React loads,
+  which puts the root in profile mode. Each commit walks the fiber tree DevTools-style (descend only into
+  re-rendered subtrees) and records, per component name, commits, self time (`selfBaseDuration`) and
+  inclusive time (`actualDuration`, not double-counted for nested same-name instances). Unnamed components
+  are labelled by their nearest named owner. Hooks report under their host component. Labels are bundle
+  function names: a `$N` suffix marks a name the bundler renamed to avoid a clash (`Markdown$1` is
+  react-markdown, not the app's `Markdown`). A named subtree
+  (`markdown`: roots `AssistantMarkdown,Markdown`, override with `THINKRAIL_PERF_MARKDOWN_ROOTS`) sums the
+  self time and renders of every component under its outermost root, so any markdown engine is counted.
+- **Timer precision.** The harness adds COOP/COEP headers to documents and scripts through `page.route` so
+  the page is cross-origin isolated (5 µs timers, not 100 µs); the measurement browser disables Chromium's
+  local-network-access check, which otherwise blocks the WS from a fulfilled document. A run fails if the
+  page is not isolated, or if no profiled commit with nonzero duration was recorded since load, which means
+  the host serves `dist/` instead of `dist-profile/`.
+- **Scenarios.** Chat streaming seeds a persisted transcript and replays a deterministic Pi event stream
+  (`text_delta` chunks, tool calls, `partialResult` updates, `agent_settled`) into the browser at the
+  wire seam with fixed pacing; this measures client rendering only and is not evidence of agent behavior.
+  Live file edits rewrite a worktree file under an open file tab. Large diff opens a 3,000-line Pierre diff
+  and wheel-scrolls it. Runs interleave scenarios; the runner reports medians and run-to-run spread.
+- **Heavy scenarios** (only with `--scenario`; the default set is the three above). `long-stream` replays one
+  ~26k-char seeded markdown answer (headings, nested lists, ts/py/bash/json fences, a GFM table, mermaid) in
+  10–60-char deltas every 15 ms; `long-stream-xl` is the same at ~100k chars. `parallel-agents` opens 20
+  persisted chats as tabs in one workspace and interleaves 20 replays; `background-agents` streams the 19
+  hidden tabs while the visible chat stays idle, so every commit it records is cost the visible UI pays for
+  background work. Both then open a hidden tab and assert its streamed text arrived.
+- **Weak machine.** `--cpu N` applies CDP `Emulation.setCPUThrottlingRate` for the measured window only.
+- **Extra metrics.** Per run: long tasks (count, total, max), rAF frame gaps (p50/p95/max, dropped 60 Hz
+  frames), CDP main-thread task/script/layout/style ms and heap delta, scenario counters (deltas, mounted
+  chats), and markdown subtree root renders, self ms, and self ms per delta. Main-thread time includes
+  Playwright's `routeWebSocket` relay, so compare it only across variants of the same scenario.
+- **Variants.** Run the command from a worktree root to measure that worktree; the output records
+  `rootDir`, `gitHead`, `dirty` and `dirtyTreeHash` (sha256 of `git status --porcelain` plus `git diff HEAD`;
+  untracked file contents are not hashed).
+
 ## Desktop-backed mode
 
 `bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged
@@ -173,8 +217,8 @@ Connect is withheld while the verdict says signed out, every connect-driven scen
 button appears instead of assuming it — a verdict left behind by an earlier scenario would otherwise hide it,
 exactly as it would for someone returning to the panel inside the window. Each state is also captured as a
 review PNG under `e2e/screenshots/<group>/`
-(gitignored, stable path, one element shot per state, retina). Screenshots are evidence, never the
-assertion — a state that only a picture would catch is a missing `data-testid`. Identical files across
+(gitignored, stable path, one element shot per state, retina, CSS animations fast-forwarded so a
+spring mid-flight never ends up in the picture). Screenshots are evidence, never the assertion — a state that only a picture would catch is a missing `data-testid`. Identical files across
 scenarios are a finding, not a defect: they are how the suite shows two distinct host situations rendering
 one indistinguishable card.
 
@@ -222,6 +266,14 @@ reservation. Terminal creation now exercises the host pending-marker handshake p
 placement, not a layout revision or peer geometry synchronization.
 
 ## Isolation contract
+
+The no-agent setup seeds a test-owned empty `models.json` and never reads or copies developer
+`auth.json` or `models.json`; provider scenarios use synthetic fixtures, and the separately authorized
+real-Central mode keeps its opaque-artifact-only credential contract above. Model-context coverage
+exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
+retained live-chat limits versus new-chat metadata, Custom validation and Apply focus, cross-client
+convergence with draft invalidation, sanitized read/write failures with Retry, mobile keyboard use,
+and pre-v76 hiding.
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
 unrelated scenarios stay unblocked. They also seed the automatic interview invitation as permanently

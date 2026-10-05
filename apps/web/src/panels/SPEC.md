@@ -318,12 +318,20 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected from the host's
-  `model.default` result, which is the saved default when available or the first available model. Values
-  are held in dialog state and applied at create time. Only when no model is available does the host return
-  `model: null`; the effort control is disabled and create omits the model. The dialog does not choose a
-  competing default: its display and newly-created session share the host resolver (see `submodule-server-agent`).
-  The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
+  `chat/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
+  `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
+  the first available model) and the popover's Default row is checked. Any explicit pick (model, level, or
+  both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
+  — return it to following **synchronously**, so a Create pressed right after choosing Default already
+  omits the pair; the `model.default` read that follows only refreshes the displayed pair. Every such
+  read in flight is cancelled by an explicit pick, so a reply that lands after the user chose never
+  overwrites the choice (it still refreshes what the Default row displays). Create sends `{model, thinkingLevel}` only for an explicit pair and **omits both
+  while following**, so the host resolver decides at creation time and the display can never snapshot a
+  default that Settings changed in between. When no model is available the host returns `model: null` and
+  the pill shows a bare Default. The dialog does not choose a competing default: its display and
+  newly-created session share the host resolver (see `submodule-server-agent`). Favorites/recents arrive
+  through `chat/useModelPreferences`, the same seam the composer uses.
+  The picker's popover portals into the dialog node (so its list scrolls under the Dialog scroll
   lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
   cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
   held selection. The dialog therefore reconciles the held model against it on every change via the pure
@@ -558,7 +566,21 @@ a project picker, the prompt hero, and the reused
   if persistence fails. The host's `model.default` result is the displayed effective choice, including the
   first-available fallback when a saved model is missing; supported effort levels and the displayed effort
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
-  picker are ignored, while a save or re-read is in flight.
+  picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
+  one Default / 1M / Custom selector over every eligible GPT model the host returns as
+  `ModelContextSetting[]`; Customize reveals one selector per provider/model pair, so the same model on
+  different providers stays independently editable. Selection is keyed on the explicit `override`
+  (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
+  contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
+  differ, counts the external rows it leaves alone, and is omitted when it would govern none — and
+  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
+  range with explicit Apply; the copy labels it an app policy, not a verified provider limit, and
+  external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
+  when their authoritative override changes; inputs are not remounted, and after a disabled save focus
+  returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
+  no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
+  replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
+  `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
   **`ReviewSettings`** is the
   **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
   `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
@@ -927,8 +949,10 @@ own section. The kebab menu (`plan-menu`, a
   surfaces; the shell layout module wraps these renderers.
 - **Allowed deps:** `store`, `transport`, `components` (`SkeletonRows` — every async panel's pending
   state renders content-shaped skeleton rows, never a bare "Loading…" line), `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
-  reused by `NewWorkspaceDialog`; `Markdown`,
+  dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
+  reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
+  `ReviewSettings`/`ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
+  `ProvidersSettings` shares with the picker; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
