@@ -1,13 +1,12 @@
 import type { WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import { E2E_PORT } from "./paths";
 
 export class E2eWireTransientError extends Error {}
 
 function readResponse(data: unknown, id: string): { ok: boolean; result?: unknown } | null {
-	if (typeof data !== "object" || data === null) return null;
-	const frame = data as Record<string, unknown>;
-	if (frame.id !== id || typeof frame.ok !== "boolean") return null;
-	return frame.ok ? { ok: true, result: frame.result } : { ok: false };
+	if (!isRecord(data) || data.id !== id || typeof data.ok !== "boolean") return null;
+	return data.ok ? { ok: true, result: data.result } : { ok: false };
 }
 
 export class E2eWire {
