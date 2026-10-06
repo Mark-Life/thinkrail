@@ -63,6 +63,7 @@ import {
 	type LayoutAttention,
 	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
+	nullProto,
 	parseSkillInvocation,
 	randomId,
 	readLayoutNavigationClock,
@@ -1375,11 +1376,10 @@ function advanceCenterNavigation(
 				[workspaceId]: {
 					...attention,
 					lastFocusedCenterGroupId: groupId,
-					navigationClockByGroup: Object.assign(
-						Object.create(null),
+					navigationClockByGroup: nullProto<Record<string, number>>(
 						attention.navigationClockByGroup,
 						{ [groupId]: clock },
-					) as Record<string, number>,
+					),
 				},
 			},
 		},
@@ -1535,17 +1535,15 @@ function withoutChat(
 				}),
 		...(!alreadyDeleted
 			? {
-					deletedSessionsByWorkspace: Object.assign(
-						Object.create(null),
+					deletedSessionsByWorkspace: nullProto<Record<string, Record<string, true>>>(
 						s.deletedSessionsByWorkspace,
 						{
-							[workspaceId]: Object.assign(
-								Object.create(null),
+							[workspaceId]: nullProto<Record<string, true>>(
 								s.deletedSessionsByWorkspace[workspaceId],
-								{ [sessionId]: true as const },
-							) as Record<string, true>,
+								{ [sessionId]: true },
+							),
 						},
-					) as Record<string, Record<string, true>>,
+					),
 				}
 			: {}),
 		...(sessionTabs.length > 0
@@ -1848,8 +1846,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
-	removedWorkspaceIds: Object.create(null) as Record<string, true>,
-	expandedProjectIds: Object.create(null) as Record<string, true>,
+	removedWorkspaceIds: nullProto<Record<string, true>>(),
+	expandedProjectIds: nullProto<Record<string, true>>(),
 	selectedProjectId: null,
 	activeWorkspaceId: null,
 	workspaceSelectionHistory: [],
@@ -1871,7 +1869,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closedChatsByWorkspace: {},
 	chatStartsByWorkspace: {},
 	worktreeCreationsByProject: {},
-	deletedSessionsByWorkspace: Object.create(null) as Record<string, Record<string, true>>,
+	deletedSessionsByWorkspace: nullProto<Record<string, Record<string, true>>>(),
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
@@ -2122,9 +2120,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => {
 			const removedSessions = new Set(selectWorkspaceSessionIds(state, workspaceId));
 			return {
-				removedWorkspaceIds: Object.assign(Object.create(null), state.removedWorkspaceIds, {
+				removedWorkspaceIds: nullProto<Record<string, true>>(state.removedWorkspaceIds, {
 					[workspaceId]: true,
-				}) as Record<string, true>,
+				}),
 				workspaceSelectionHistory: state.workspaceSelectionHistory.filter(
 					(id) => id !== workspaceId,
 				),
