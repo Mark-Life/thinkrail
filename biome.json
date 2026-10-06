@@ -30,7 +30,8 @@
 			"nursery": {
 				"noImpliedEval": "error",
 				"noPlaywrightMissingAwait": "error",
-				"noIdenticalTestTitle": "error"
+				"noIdenticalTestTitle": "error",
+				"useExhaustiveSwitchCases": "error"
 			},
 			"style": {
 				"useThrowOnlyError": "error",
