@@ -17,7 +17,6 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
-import { isRecord } from "@thinkrail/shared/guards";
 import specGraphExtension from "pi-spec-graph";
 import {
 	omitDisabledRegistryExtensions,
@@ -86,7 +85,7 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 	pi.on("tool_call", (event) => {
 		if (event.toolName !== "web_search") return;
-		if (isRecord(event.input) && event.input.workflow == null) event.input.workflow = "none";
+		if (event.input.workflow == null) event.input.workflow = "none";
 	});
 };
 
