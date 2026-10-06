@@ -548,7 +548,7 @@ test("stop-all acknowledges after signalling every sibling without awaiting sett
 		}),
 	);
 	const children: ChildHandle[] = [];
-	const runs = [];
+	const runs: ReturnType<ChildHandle["runQueued"]>[] = [];
 	for (let i = 0; i < 6; i++) {
 		const child = await service.createChild({
 			parent: p.sessionId,
@@ -786,7 +786,7 @@ test("shutdown and disposal signal commands and every child before waiting for a
 		}),
 	);
 	const children: ChildHandle[] = [];
-	const runs = [];
+	const runs: ReturnType<ChildHandle["runQueued"]>[] = [];
 	for (let i = 0; i < 5; i++) {
 		const child = await service.createChild({
 			parent: p.sessionId,
