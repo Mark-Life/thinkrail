@@ -31,6 +31,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
+  `@thinkrail/shared/guards` → `isRecord()` + `errnoCode()`, the cast-free narrowing guards host code uses
+  for parsed JSON and caught errors;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
   overrides that would reach outside it — the single list every hermetic host spawner (e2e, workflow
@@ -134,6 +136,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
   the module that knows the failure throws it (today `server/src/git`, for a vanished commit scope) and the
   host's request handler reads it onto `WsResponse.errorCode`.
+- **/guards** — `isRecord(value)`: a non-null, non-array object, narrowed to `Record<string, unknown>`.
+  `errnoCode(error)`: the string `code` of any thrown object (Node/Bun errno errors), else `undefined`. Host
+  code narrows `unknown` through these instead of `as Record<string, unknown>` or
+  `as NodeJS.ErrnoException` casts; a numeric or absent `code` reads as `undefined`.
 - **/removeTree** — `removeTree(path, options?)`: delete a tree that a child process ran from, and keep
   trying while the failure is one a short wait can resolve (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
   `EPERM`, `EACCES`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows

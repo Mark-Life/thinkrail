@@ -1,12 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { isRecord } from "@thinkrail/shared/guards";
 import {
 	ATTRIBUTION_MAX_POLLS,
 	ATTRIBUTION_ORIGIN,
 	ATTRIBUTION_POLL_INTERVAL_MS,
 	claimIdPattern,
 	hasExactKeys,
-	isRecord,
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
 } from "../persistence";

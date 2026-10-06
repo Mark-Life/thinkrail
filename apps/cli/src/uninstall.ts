@@ -13,6 +13,7 @@ import { homedir } from "node:os";
 import { basename, join, posix, win32 } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { dataDir } from "@thinkrail/server";
+import { errnoCode } from "@thinkrail/shared/guards";
 import { channel, version } from "@thinkrail/shared/version";
 import {
 	type InstallMeta,
@@ -284,7 +285,7 @@ function step(kind: StepKind, path: string, outcome: Outcome, detail?: string): 
 }
 
 function isMissing(err: unknown): boolean {
-	return (err as { code?: string } | null)?.code === "ENOENT";
+	return errnoCode(err) === "ENOENT";
 }
 
 function removeFile(path: string): Outcome {

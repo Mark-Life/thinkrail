@@ -11,6 +11,7 @@ import {
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { errnoCode } from "@thinkrail/shared/guards";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	assertSafeRef,
@@ -318,7 +319,7 @@ export function ensureWorkspaceScratchDir(ws: Workspace): void {
 	try {
 		writeFileSync(gitignore, "*\n", { flag: "wx" });
 	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+		if (errnoCode(err) !== "EEXIST") throw err;
 	}
 }
 
