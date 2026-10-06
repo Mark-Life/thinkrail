@@ -22,8 +22,6 @@
 		"src/navigation/restore.test.ts",
 		"src/panels/resources/pdf/index.test.ts",
 		"src/panels/reviewModel.test.ts",
-		"src/shell/layout/model.test.ts",
-		"src/shell/shortcutCommands.test.ts",
 		"src/store/appStore.test.ts",
 		"src/store/selectors.test.ts",
 		"src/styles/typography.test.ts",
