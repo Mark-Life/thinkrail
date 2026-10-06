@@ -5,7 +5,7 @@ import { configurePiRuntimeGenerationInitializer } from "./agent";
 import { initializeJbcentralRuntime } from "./auth";
 import { bootHost } from "./host";
 
-resolveShellEnv();
+await resolveShellEnv();
 
 if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	const fakeOauth = {
