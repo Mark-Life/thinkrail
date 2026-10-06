@@ -924,11 +924,7 @@ describe("reading-band derived room", () => {
 		harness.setGeometry({ maxScrollTop: 170, edgeBottom: 571 });
 		harness.controller.contentChanged();
 		expect(harness.runwayHeights.at(-1)).toBe(30);
-		expect(
-			harness.runwayHeights.every(
-				(value, index, values) => index === 0 || value <= values[index - 1],
-			),
-		).toBe(true);
+		expect(harness.runwayHeights).toEqual(harness.runwayHeights.toSorted((a, b) => b - a));
 		expect(harness.writes).toEqual(writes);
 	});
 
