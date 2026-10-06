@@ -232,7 +232,7 @@ function colorSchemeMediaQuery(): ColorSchemeMediaQuery | null {
 		) {
 			return null;
 		}
-		return query as ColorSchemeMediaQuery;
+		return query;
 	} catch {
 		return null;
 	}
