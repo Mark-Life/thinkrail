@@ -45,7 +45,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `shell` | responsive composition + frontend-local workbench ownership (bounded `layout/` and `layoutState/` children) | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `updates` | optional native/host update shell hook and props-driven controls | yes | [updates/SPEC.md](src/updates/SPEC.md) |
-| `components` | dependency-light app primitives: error isolation, status icons, custom icons, quiet scroll frames | no | [components/SPEC.md](src/components/SPEC.md) |
+| `components` | dependency-light app primitives: error isolation, status icons, custom icons, quiet scroll frames, preloaded split chunks | no | [components/SPEC.md](src/components/SPEC.md) |
 | `extensions` | ordered composition of web extension descriptors into the chat registry | yes | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | shared path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
