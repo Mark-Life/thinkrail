@@ -36,8 +36,6 @@
 		"src/panels/resources/pdf/index.test.ts",
 		"src/panels/reviewModel.test.ts",
 		"src/shell/layout/auxiliaryPresentation.test.ts",
-		"src/shell/layout/model.test.ts",
-		"src/shell/shortcutCommands.test.ts",
 		"src/shell/useGlobalHotkeys.test.ts",
 		"src/store/appStore.test.ts",
 		"src/store/changesTabProgress.test.ts",
