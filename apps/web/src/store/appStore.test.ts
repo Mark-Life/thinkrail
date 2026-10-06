@@ -15,6 +15,7 @@ import {
 	type WorkspaceFsChangedPayload,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
+import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
 import {
@@ -47,6 +48,12 @@ import {
 	selectWorkspaceTick,
 } from "./selectors";
 
+const emptyHydration = (): HydratedRuntime => ({
+	turns: [],
+	toolResults: {},
+	askAnswers: {},
+	turnIdByMessageIndex: [],
+});
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
 const agentEnd = { type: "agent_end", willRetry: false, messages: [] } as unknown as PiEvent;
 const agentSettled = (terminal: Extract<PiEvent, { type: "agent_settled" }>["terminal"] = null) =>
@@ -54,7 +61,7 @@ const agentSettled = (terminal: Extract<PiEvent, { type: "agent_settled" }>["ter
 const recoveredOverflow: PiEvent = {
 	type: "compaction_end",
 	reason: "overflow",
-	result: {},
+	result: undefined,
 	aborted: false,
 	willRetry: true,
 };
@@ -100,10 +107,7 @@ const userStart = (text: string) =>
 		type: "message_start",
 		message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
 	}) as unknown as PiEvent;
-const sessionTitleChanged = (name?: string): PiEvent => ({
-	type: "session_info_changed",
-	...(name !== undefined ? { name } : {}),
-});
+const sessionTitleChanged = (name?: string): PiEvent => ({ type: "session_info_changed", name });
 const assistantText = (text: string) =>
 	({
 		type: "message_update",
@@ -581,15 +585,12 @@ test("hydrateSession seeds the queue from the summary snapshot", () => {
 		live: true,
 		queue: { steering: [], followUp: ["waiting in line"] },
 	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	store.hydrateSession(summary, emptyHydration());
 	expect(rt("q1").queue).toEqual({ steering: [], followUp: ["waiting in line"] });
 
 	const { queue, ...bare } = summary;
 	void queue;
-	store.hydrateSession(
-		{ ...bare, sessionId: "q2" },
-		{ turns: [], toolResults: {}, askAnswers: {} },
-	);
+	store.hydrateSession({ ...bare, sessionId: "q2" }, emptyHydration());
 	expect(rt("q2").queue).toEqual({ steering: [], followUp: [] });
 });
 
@@ -1663,7 +1664,7 @@ test("a frame that beats a reopened chat's transcript is replayed by hydrateSess
 		updatedAt: 0,
 		live: true,
 	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	store.hydrateSession(summary, emptyHydration());
 
 	expect(rt("reopened").extUiStatus).toEqual({ test: "Theme works" });
 	expect(useAppStore.getState().extUiOrphans).toEqual([]);
@@ -1991,12 +1992,7 @@ test("a deletion that beats getMessages prevents its late hydrate from restoring
 	};
 
 	store.deleteChat("ws1", "late");
-	store.hydrateSession(summary, {
-		turns: [],
-		toolResults: {},
-		askAnswers: {},
-		turnIdByMessageIndex: [],
-	});
+	store.hydrateSession(summary, emptyHydration());
 
 	const state = useAppStore.getState();
 	expect(state.sessions.late).toBeUndefined();
@@ -2019,7 +2015,7 @@ test("a page-lifetime deletion tombstone survives workspace cleanup until late h
 
 	store.deleteChat("ws1", "late");
 	store.clearWorkspaceTabs("ws1");
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	store.hydrateSession(summary, emptyHydration());
 
 	expect(useAppStore.getState().sessions.late).toBeUndefined();
 });
@@ -2058,10 +2054,7 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 	expect(st.sessions.h1?.turnIdByMessageIndex).toEqual(["u1"]);
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "h1")).toBe(true);
 
-	store.hydrateSession(
-		{ ...summary, messageCount: 99 },
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
-	);
+	store.hydrateSession({ ...summary, messageCount: 99 }, emptyHydration());
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
 });
 
@@ -2160,7 +2153,7 @@ test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi
 			updatedAt: 2,
 			live: true,
 		},
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		emptyHydration(),
 		expectedRevision,
 		3,
 	);
@@ -2250,7 +2243,7 @@ test("hydrateSession preserves the stable id of an already-restored shared place
 		live: true,
 	};
 	store.restorePlacedChatCache("ws1", "legacy-placement-id", summary.sessionId, summary.title);
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} }, false);
+	store.hydrateSession(summary, emptyHydration(), false);
 	const chats = useAppStore.getState().tabsByWorkspace.ws1?.filter((tab) => tab.kind === "chat");
 	expect(chats).toHaveLength(1);
 	expect(chats?.[0]?.id).toBe("legacy-placement-id");
@@ -2273,11 +2266,7 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 		updatedAt: 1,
 		live: true,
 	};
-	store.hydrateSession(
-		summary,
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
-		true,
-	);
+	store.hydrateSession(summary, emptyHydration(), true);
 
 	const st = useAppStore.getState();
 	expect(st.sessions.disk1).toBeDefined();
@@ -2724,6 +2713,7 @@ test("installWelcomeSnapshot lands one complete snapshot and advances its own ge
 	});
 
 	useAppStore.getState().installWelcomeSnapshot(44, [p1, closed], [p1, closed], {
+		...DEFAULT_CONFIG,
 		theme: "test-theme",
 		analyticsEnabled: false,
 		terminalReplayKb: 256,
@@ -2869,7 +2859,7 @@ test("updateWorkspace applies the pushed snapshot by id, keeping the computed di
 			p1: [
 				{
 					...pushedWorkspace({ name: "workspace-1", branch: "workspace-1" }),
-					renamed: undefined,
+					renamed: false,
 					diffStats: { added: 3, removed: 1 },
 				},
 			],
@@ -3065,14 +3055,17 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 		lastFocusedSideGroupId: {},
 		navigationClockByGroup: { center: 0 },
 	});
-	s.openTab({
-		kind: "file",
-		id: "late-file",
-		workspaceId: "w1",
-		name: "late",
-		path: "late",
-		content: "",
-	});
+	s.openTab(
+		{
+			kind: "file",
+			id: "late-file",
+			workspaceId: "w1",
+			name: "late",
+			path: "late",
+			content: "",
+		},
+		"keep",
+	);
 	s.setWorkspaceTerminals("w1", [{ tabKey: "late-terminal", title: "Late terminal" }]);
 	s.closeTerminalTab("w1", "late-terminal");
 	s.setWorkspaceSpecs("w1", []);
@@ -3212,12 +3205,14 @@ test("the Changes deep link stamps the nav count at the click, so a later naviga
 	const beforeClick = selectWorkspaceNavTick(s(), "ws1");
 
 	s().requestChangesView("ws1", "src/b.ts");
-	expect(s().changesRequest?.navTick).toBe(beforeClick + 1);
+	const request = s().changesRequest;
+	if (!request) throw new Error("expected a changes request");
+	expect(request.navTick).toBe(beforeClick + 1);
 
-	expect(selectWorkspaceNavTick(s(), "ws1")).toBe(s().changesRequest?.navTick);
+	expect(selectWorkspaceNavTick(s(), "ws1")).toBe(request.navTick);
 
 	s().setActiveTab("ws1:a.ts");
-	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
+	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(request.navTick);
 });
 
 test("legacy selection reconciliation does not count as user navigation", () => {
@@ -3724,13 +3719,14 @@ test("applyConfig projects synchronized chat and file line-width settings", () =
 });
 
 test("applyConfig defaults absent or malformed line-width fields independently", () => {
-	useAppStore.getState().applyConfig({
+	const config = {
 		...DEFAULT_CONFIG,
 		chatLineWidth: 999,
 		fileLineWidth: 160,
-		chatLineWidthBounded: "yes",
 		fileLineWidthBounded: false,
-	} as Parameters<ReturnType<typeof useAppStore.getState>["applyConfig"]>[0]);
+	};
+	Reflect.set(config, "chatLineWidthBounded", "yes");
+	useAppStore.getState().applyConfig(config);
 	expect(useAppStore.getState()).toMatchObject({
 		chatLineWidth: 120,
 		fileLineWidth: 160,
@@ -3796,8 +3792,8 @@ test("diff tabs: openTab dedupes by id + activates; renderer, view state, and co
 		loadedTick: 1,
 		loadedTarget: "main",
 	};
-	s().openTab(tab);
-	s().openTab(tab);
+	s().openTab(tab, "keep");
+	s().openTab(tab, "keep");
 	expect(s().tabsByWorkspace.ws1).toHaveLength(1);
 	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
 
@@ -3870,7 +3866,8 @@ test("live content updates are scoped when two workspaces reuse an opaque cache 
 	useAppStore.setState({ activeWorkspaceId: "ws2" });
 	useAppStore.getState().setTabRenderer("ws2", "legacy-placement", "thinkrail/code");
 	useAppStore.getState().setTabViewState("ws2", "legacy-placement", { scrollTop: 7 });
-	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]?.content).toBe("one");
+	const untouched = useAppStore.getState().tabsByWorkspace.ws1?.[0];
+	expect(untouched?.kind === "file" && untouched.content).toBe("one");
 	const updated = useAppStore.getState().tabsByWorkspace.ws2?.[0];
 	expect(updated?.kind === "file" && updated.content).toBe("fresh");
 	expect(updated?.kind === "file" && updated.rendererId).toBe("thinkrail/code");
@@ -4072,12 +4069,12 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 	const s = () => useAppStore.getState();
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 
-	s().hydrateSession(summaryFor("live1", true), { turns: [], toolResults: {}, askAnswers: {} });
+	s().hydrateSession(summaryFor("live1", true), emptyHydration());
 	expect(isStale("ws1", "live1")).toBe(true);
 
 	s().hydrateSession(
 		summaryFor("disk1", false),
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		emptyHydration(),
 		false,
 		selectWorkspaceTick(s(), "ws1"),
 	);
@@ -4086,13 +4083,9 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 
 test("explicitly passive hydration never becomes navigation just because the cache has no active tab", () => {
 	const store = useAppStore.getState();
-	store.hydrateSession(
-		summaryFor("passive", true),
-		{ turns: [], toolResults: {}, askAnswers: {} },
-		false,
-		undefined,
-		{ activate: false },
-	);
+	store.hydrateSession(summaryFor("passive", true), emptyHydration(), false, undefined, {
+		activate: false,
+	});
 	expect(useAppStore.getState().activeTabByWorkspace.ws1).toBeUndefined();
 	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
 });
@@ -4295,7 +4288,7 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 			updatedAt: 0,
 			live: true,
 		} as unknown as SessionSummary,
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		emptyHydration(),
 	);
 	expect(tick()).toBe(before);
 
