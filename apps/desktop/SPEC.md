@@ -60,12 +60,12 @@ another.
    has a stripped PATH, so the login-shell probe runs on every such launch; overlapping it with the bundle
    import hides up to the import time. The bundle's own `shellEnv` copy is a separate module instance, so
    the run is cached on a `Symbol.for` global key: its `bootHost()` call awaits the same run instead of
-   probing again. That bundle is built with
-   pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
-   with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
-   single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
-   it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
-   forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
+   probing again. That bundle is built with pi's `PI_BUNDLED_NODE=true` define, which makes PI use its
+   embedded-modules extension loader (static jiti with Babel bundled, plus virtual modules) for external
+   extensions such as Central. Without the define a single-file bundle is treated as a plain Node runtime
+   and PI's lazy Babel `require` cannot resolve inside it ([[submodule-server-agent]] owns the seam).
+   Flattening PI into Electrobun's normal entry is still forbidden: it would load `bun-pty` before
+   `BUN_PTY_LIB` is set.
 3. The runtime value-imports the five bundled extension factories and calls `registerBundledRuntime()`
    with those factories, the named `pi-web-access` factory needed by delegation children, the staged skills,
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
