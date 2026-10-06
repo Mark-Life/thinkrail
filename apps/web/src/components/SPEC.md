@@ -66,11 +66,19 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
+- **Also owns:** `preloadedLazy.tsx` — `preloadedLazy(load)` starts a split chunk's `import()` when it is
+  called and returns a component that renders the loaded module directly, falling back to `React.lazy`
+  only while the chunk is still in flight. Each mount picks its path once, so a mounted body never swaps
+  component type. A plain `lazy` component suspends on its first render even when the chunk is already
+  cached, and a store update renders synchronously, so React commits the Suspense fallback and then
+  holds the reveal for its fallback throttle (~300ms). Use it only for a chunk the first view almost
+  always needs; it keeps the chunk out of the entry bundle.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
   directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
-  `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the
+  `QuietScrollEdges` type via `@/components/QuietScrollArea`; `preloadedLazy` via
+  `@/components/preloadedLazy`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
   itself).
 - **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
