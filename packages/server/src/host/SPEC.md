@@ -161,11 +161,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
-  `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
-  install the crash report, resolve the login-shell PATH, pre-warm the same Central watcher/runtime
-  initialization before choosing the serving port, await `createServer` (which idempotently enforces
-  runtime bootstrap for low-level embedders), and write the `listening on` info line (see
-  `submodule-server-log`). Its
+  `boot.ts` (`bootHost` → start the async login-shell probe, await `initLogging` — debug level when the
+  launcher passed `verbose` — then install the crash report, await the probe before anything spawns,
+  pre-warm the same Central watcher/runtime initialization before choosing the serving port,
+  await `createServer` (which idempotently enforces runtime bootstrap for low-level embedders), and write the
+  `listening on` info line (see `submodule-server-log`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
   and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired,
   except a session blocked on `ask_user_question`: shutdown deliberately leaves that call dangling and the

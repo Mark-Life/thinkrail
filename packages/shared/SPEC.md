@@ -17,8 +17,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Boundary
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
-- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`,
-  `localeRepair()`;
+- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`,
+  `pathLooksComplete()`, `localeRepair()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
@@ -201,12 +201,21 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 ## Get right (shellEnv)
 
-- Runs **once at startup, before creating any `AgentSession`**.
+- **Async, one run per module instance, awaited before the first spawn.** `resolveShellEnv()` returns one
+  cached promise; every caller awaits that same run. A GUI launch pays 0.6–1.2s for the login shell, and a
+  sync probe stalls the whole boot for it. The async probe lets a launcher overlap it with work that spawns
+  nothing (bundle import, logging init) and await it before the first spawn. Gating each spawn site
+  instead was rejected: the sites are many (git, PTY, editors, Central, pi tools, extensions), a missed
+  one silently gets the stripped PATH, and the boot-time Central probe needs the PATH before listen anyway.
+- `repairShellEnv(env, platform)` is the uncached worker over an injectable env, so tests drive it with a
+  fake `SHELL` instead of mutating `process.env`.
 - No-op on win32, or when PATH already contains a user dir (`/.nvm/`, `/homebrew/`, `/usr/local/bin`,
-  `/.bun/`) — `pathLooksComplete()`.
+  `/.bun/`) — `pathLooksComplete()`. The locale repair is applied synchronously on the call; the PATH and
+  `SSH_AUTH_SOCK` probes run in parallel.
 - Else spawn a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit),
-  5s timeout, parse the `\0`-separated entries, overwrite `process.env.PATH`. Never throws — on any
-  failure it leaves PATH untouched.
+  5s timeout, parse the `\0`-separated entries, overwrite `PATH`. The read is abandoned 500ms past the
+  timeout, so a grandchild holding the pipe open cannot hang boot. Never throws — on any failure it leaves
+  PATH untouched.
 
 ## Get right (jbcentral)
 
