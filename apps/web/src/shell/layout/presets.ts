@@ -5,6 +5,7 @@ import type {
 	LayoutPresetSideRegion,
 	LayoutToolId,
 } from "@thinkrail/contracts";
+import { nullProto } from "../../lib";
 import {
 	collectAllGroups,
 	collectCenterGroups,
@@ -260,7 +261,7 @@ export function reflowWorkspaceViewForFrame(
 		.flatMap((group) => group.tabs)
 		.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
 	const centerGroups = collectWorkbenchCenterGroups(nextFrame.center);
-	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
+	const groups = nullProto<Record<string, WorkspaceGroupView>>();
 	for (let index = 0; index < centerTabs.length; index += 1) {
 		const tab = centerTabs[index];
 		const target = index < centerGroups.length ? centerGroups[index] : centerGroups[0];

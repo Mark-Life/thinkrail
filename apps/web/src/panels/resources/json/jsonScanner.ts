@@ -1,4 +1,5 @@
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { nullProto } from "@/lib";
 import type { AnchorDraft, ReviewThread } from "@/resources";
 
 export type JsonNodeType = "object" | "array" | "string" | "number" | "boolean" | "null";
@@ -156,7 +157,7 @@ class JsonScanner {
 
 	private parseObject(pointer: string): ParsedValue {
 		this.index += 1;
-		const value: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+		const value = nullProto<Record<string, unknown>>();
 		const children: JsonNode[] = [];
 		const childIndex = new Map<string, number>();
 		this.skipTrivia();

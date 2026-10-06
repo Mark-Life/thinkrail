@@ -56,6 +56,9 @@ not this module; the theme-aware highlighter remains app-local.
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
   semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
+  **`nullProto<T>(...sources)`** builds every prototype-free dictionary (id-keyed maps whose keys may be
+  `__proto__` or `constructor`): it merges sources onto `Object.create(null)` and type-checks each source
+  against `T`, so no call site casts an `any` result.
 - **Public surface (barrel):** `stripFrontmatter`, `cssColorToHex`, `isPhoneViewport`,
   `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
@@ -64,7 +67,7 @@ not this module; the theme-aware highlighter remains app-local.
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
-  `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
+  `readLayoutSelection`, `readLayoutNavigationClock`, `nullProto`, and the `LayoutAttention` type.
 - **Allowed deps:** React (the viewport subscription hook only);
   `@thinkrail/contracts` (types only for canonical messages; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).

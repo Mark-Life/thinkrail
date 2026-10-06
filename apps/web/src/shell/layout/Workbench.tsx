@@ -87,6 +87,7 @@ import { CustomIcon } from "../../components/CustomIcon";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	type LayoutAttention,
+	nullProto,
 	readLayoutNavigationClock,
 	readLayoutSelection,
 	tupleKey,
@@ -2113,8 +2114,7 @@ function BottomGroupView({
 				}
 				shared.onAttentionChange({
 					...shared.attention,
-					lastFocusedSideGroupId: Object.assign(
-						Object.create(null),
+					lastFocusedSideGroupId: nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
 						shared.attention.lastFocusedSideGroupId,
 						{ bottom: group.id },
 					),
@@ -2750,14 +2750,13 @@ export function Workbench({
 								nextAttention = {
 									...nextAttention,
 									lastFocusedCenterGroupId: focusLocation.groupId,
-									navigationClockByGroup: Object.assign(
-										Object.create(null),
+									navigationClockByGroup: nullProto<Record<string, number>>(
 										nextAttention.navigationClockByGroup,
 										{
 											[focusLocation.groupId]:
 												(readLayoutNavigationClock(nextAttention, focusLocation.groupId) ?? 0) + 1,
 										},
-									) as Record<string, number>,
+									),
 								};
 							}
 						}
@@ -3082,8 +3081,7 @@ export function Workbench({
 			if (target.location.area !== "center") {
 				onAttentionChange({
 					...currentAttention,
-					lastFocusedSideGroupId: Object.assign(
-						Object.create(null),
+					lastFocusedSideGroupId: nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
 						currentAttention.lastFocusedSideGroupId,
 						{ [target.location.area]: target.location.groupId },
 					),
@@ -3097,14 +3095,13 @@ export function Workbench({
 			const nextAttention = {
 				...currentAttention,
 				lastFocusedCenterGroupId: target.location.groupId,
-				navigationClockByGroup: Object.assign(
-					Object.create(null),
+				navigationClockByGroup: nullProto<Record<string, number>>(
 					currentAttention.navigationClockByGroup,
 					{
 						[target.location.groupId]:
 							(readLayoutNavigationClock(currentAttention, target.location.groupId) ?? 0) + 1,
 					},
-				) as Record<string, number>,
+				),
 			};
 			onAttentionChange(nextAttention);
 			setLocalFocusRequest({
