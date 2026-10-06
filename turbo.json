@@ -17,6 +17,10 @@
 			"outputs": [],
 			"cache": false
 		},
+		"//#typecheck:root": {
+			"outputs": [],
+			"cache": false
+		},
 		"test": {
 			"cache": false
 		},
