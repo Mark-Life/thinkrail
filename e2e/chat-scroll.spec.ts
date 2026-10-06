@@ -408,7 +408,9 @@ for (const testCase of orderCases) {
 				testCase.historyWheel,
 			);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
-			await page.getByTestId(testCase.buttonTestId).evaluate((button) => button.click());
+			await page
+				.getByTestId(testCase.buttonTestId)
+				.evaluate((button: HTMLElement) => button.click());
 			await chatScroll.evaluate(
 				(root, { scrollTop, deltaY }) => {
 					const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
@@ -725,10 +727,9 @@ test("scrolling up through variable-height history never jumps visible content",
 				if (differences.length > 0) {
 					differences.sort((left, right) => left - right);
 					const middle = Math.floor(differences.length / 2);
+					const upper = differences[middle] ?? 0;
 					const median =
-						differences.length % 2 === 0
-							? (differences[middle - 1] + differences[middle]) / 2
-							: differences[middle];
+						differences.length % 2 === 0 ? ((differences[middle - 1] ?? 0) + upper) / 2 : upper;
 					shifts.push(median);
 					documentRoot.dataset.chatVisualShifts = JSON.stringify(shifts);
 				}

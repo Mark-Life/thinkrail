@@ -5,6 +5,7 @@ import type {
 	AskUserQuestionAckDetails,
 	AskUserQuestionArgs,
 	AskUserQuestionOption,
+	ToolCall,
 } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
@@ -31,7 +32,7 @@ function tallPreview(pageName: string): string {
 	).join("\n\n");
 }
 
-function optionsFor(pageName: string): AskUserQuestionOption[] {
+function optionsFor(pageName: string) {
 	return [
 		{
 			label: `${pageName} alpha`,
@@ -40,7 +41,7 @@ function optionsFor(pageName: string): AskUserQuestionOption[] {
 		},
 		{ label: `${pageName} beta`, description: "Use the second deterministic fixture choice." },
 		{ label: `${pageName} gamma`, description: "Use the third deterministic fixture choice." },
-	];
+	] satisfies AskUserQuestionOption[];
 }
 
 async function selectOldestFirst(page: Page): Promise<void> {
@@ -52,7 +53,11 @@ async function selectOldestFirst(page: Page): Promise<void> {
 	await page.keyboard.press("Escape");
 }
 
-function seedQuestionnaire(name: string, toolCallId: string, args: AskUserQuestionArgs) {
+function seedQuestionnaire(
+	name: string,
+	toolCallId: string,
+	args: AskUserQuestionArgs & ToolCall["arguments"],
+) {
 	const ack: AskUserQuestionAckDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name,
