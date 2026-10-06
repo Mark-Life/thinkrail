@@ -22,8 +22,27 @@
 	},
 	"linter": {
 		"enabled": true,
+		"domains": {
+			"test": "recommended"
+		},
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"nursery": {
+				"noImpliedEval": "error",
+				"noPlaywrightMissingAwait": "error",
+				"noIdenticalTestTitle": "error"
+			},
+			"style": {
+				"useThrowOnlyError": "error",
+				"useThrowNewError": "error"
+			},
+			"suspicious": {
+				"useErrorMessage": "error",
+				"noNestedPromises": "error",
+				"noUnusedExpressions": "error",
+				"useGuardForIn": "error",
+				"noEvolvingTypes": "error"
+			}
 		}
 	},
 	"javascript": {
@@ -52,6 +71,21 @@
 					"correctness": {
 						"noUnusedVariables": "off",
 						"noUnusedImports": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"apps/web/**",
+				"apps/website/**",
+				"packages/ui/**",
+				"thinkrail-extensions/*/web/**"
+			],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"useHookAtTopLevel": "error"
 					}
 				}
 			}

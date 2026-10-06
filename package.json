@@ -57,7 +57,7 @@
 		"smoke:subagents": "bun scripts/smoke-pure-pi-subagents.ts",
 		"typecheck": "turbo run typecheck",
 		"test": "bun test ./scripts/ && turbo run test",
-		"lint": "biome check .",
+		"lint": "biome check --error-on-warnings .",
 		"format": "biome check --write .",
 		"prepare": "husky",
 		"e2e": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts",
