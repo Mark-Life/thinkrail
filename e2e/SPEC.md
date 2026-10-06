@@ -313,7 +313,7 @@ Windows lane into the real profile (see `module-shared`).
   `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
   resize and hide the auxiliary stacks.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper, git,
+  exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper and `guards`, git,
   Chromium, and Playwright. Standalone native/installer smoke and shared artifact probes are owned by
   that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
