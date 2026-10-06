@@ -15,13 +15,14 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { errnoCode, isRecord } from "@thinkrail/shared/guards";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
 	replaceAcquisitionWithTerminalMarkerIn,
 	saveAcquisitionIn,
 } from "./attribution";
-import { type AcquisitionRecord, isRecord } from "./attributionProtocol";
+import type { AcquisitionRecord } from "./attributionProtocol";
 import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
 
 export {
@@ -33,7 +34,6 @@ export {
 	type AttributionTouch,
 	claimIdPattern,
 	hasExactKeys,
-	isRecord,
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
 } from "./attributionProtocol";
@@ -90,7 +90,7 @@ function loadSessionMetadata<T>(
 		if (value !== null) return { kind: "loaded", value };
 		error = new Error(`Invalid ${file}`);
 	} catch (caught) {
-		if ((caught as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+		if (errnoCode(caught) === "ENOENT") return { kind: "missing" };
 		error = caught;
 	}
 	const setAsidePath = `${path}.corrupt-${Date.now()}`;
@@ -241,9 +241,8 @@ function storedModels(value: unknown): WireModel[] {
 }
 
 export function loadConfig(): AppConfig {
-	const raw = readJson<unknown>("config.json", {});
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
-	const value = raw as Record<string, unknown>;
+	const value = readJson<unknown>("config.json", {});
+	if (!isRecord(value)) return structuredClone(DEFAULT_CONFIG);
 	const extensions = { ...value };
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;

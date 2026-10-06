@@ -11,6 +11,7 @@ import {
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
@@ -22,15 +23,14 @@ type RuntimeAppConfigUpdate = AppConfigUpdate & {
 };
 
 function isWireModelRef(value: unknown): value is WireModel {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-	const record = value as Record<string, unknown>;
+	if (!isRecord(value)) return false;
 	return (
-		typeof record.provider === "string" &&
-		record.provider.length > 0 &&
-		typeof record.id === "string" &&
-		record.id.length > 0 &&
-		typeof record.name === "string" &&
-		Array.isArray(record.thinkingLevels)
+		typeof value.provider === "string" &&
+		value.provider.length > 0 &&
+		typeof value.id === "string" &&
+		value.id.length > 0 &&
+		typeof value.name === "string" &&
+		Array.isArray(value.thinkingLevels)
 	);
 }
 

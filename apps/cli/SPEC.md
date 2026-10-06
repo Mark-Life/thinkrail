@@ -306,7 +306,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/startupMark` (the shared boot
-  signature renderer) + `@thinkrail/shared/version` (the shared release identity), Bun/Node; the generated build module may
+  signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
+  `@thinkrail/shared/guards`, Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public

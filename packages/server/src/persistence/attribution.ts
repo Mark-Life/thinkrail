@@ -8,10 +8,10 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { errnoCode, isRecord } from "@thinkrail/shared/guards";
 import {
 	type AcquisitionRecord,
 	hasExactKeys,
-	isRecord,
 	parseAcquisitionRecord,
 } from "./attributionProtocol";
 
@@ -79,7 +79,7 @@ export function claimBrowserAttributionAttemptIn(directory: string): boolean {
 		});
 		return true;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+		if (errnoCode(error) === "EEXIST") return false;
 		throw error;
 	}
 }

@@ -18,6 +18,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode } from "@thinkrail/shared/guards";
 import { classifyBytes, decodeText, hashBytes, resolveWorktreeFile } from "../fs";
 import { readBlobBytesAtAsync, readPathModeAtAsync, resolveDiffRange } from "../git";
 import { loadWorkspaces } from "../persistence";
@@ -110,8 +111,7 @@ function worktreeState(abs: string, path: string): FileState {
 	try {
 		stat = lstatSync(abs);
 	} catch (error) {
-		const code =
-			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+		const code = errnoCode(error);
 		if (code === "ENOENT") return { bytes: null, mode: null };
 		throw error;
 	}

@@ -20,6 +20,7 @@ import {
 	type ModelContextSetting,
 	type ModelContextTarget,
 } from "@thinkrail/contracts";
+import { errnoCode } from "@thinkrail/shared/guards";
 import {
 	applyEdits,
 	findNodeAtLocation,
@@ -52,7 +53,7 @@ function readSource(path: string): string | undefined {
 	try {
 		return readFileSync(path, "utf8");
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		if (errnoCode(error) === "ENOENT") return undefined;
 		throw new Error("Couldn't read pi's models.json. Fix the file and retry.");
 	}
 }

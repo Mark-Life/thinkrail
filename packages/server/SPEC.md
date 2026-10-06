@@ -46,7 +46,7 @@ e2e).
   drives real in-process sessions through the production wiring without booting the HTTP host — a
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
-- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` and the Central adapter), `bun-pty`,
+- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`, the Central adapter, and the `guards` every sub-module may use), `bun-pty`,
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `pino` + its pretty/rolling
   destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.
 - **Deployment obligation:** product behavior lives in the owning server feature module and is composed by

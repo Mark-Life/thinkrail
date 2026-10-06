@@ -3,6 +3,7 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
+import { errnoCode } from "@thinkrail/shared/guards";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { runDesktopAnalyticsProbe } from "./src/analyticsProbe";
 import { locateDesktopLauncher, repoRoot } from "./src/artifact";
@@ -22,7 +23,7 @@ function readSettledJson(path: string): unknown {
 		return JSON.parse(readFileSync(path, "utf8"));
 	} catch (error) {
 		if (error instanceof SyntaxError) return undefined;
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		if (errnoCode(error) === "ENOENT") return undefined;
 		throw error;
 	}
 }

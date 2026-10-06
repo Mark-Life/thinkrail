@@ -1,3 +1,5 @@
+import { errnoCode } from "@thinkrail/shared/guards";
+
 export interface PollUntilOptions {
 	readonly timeoutMs: number;
 	readonly what: string;
@@ -83,12 +85,7 @@ function processAlive(pid: number): boolean {
 		process.kill(pid, 0);
 		return true;
 	} catch (error) {
-		return !(
-			typeof error === "object" &&
-			error !== null &&
-			"code" in error &&
-			error.code === "ESRCH"
-		);
+		return errnoCode(error) !== "ESRCH";
 	}
 }
 
@@ -134,14 +131,7 @@ function killPosixProcess(pid: number): void {
 	try {
 		process.kill(pid, "SIGKILL");
 	} catch (error) {
-		if (
-			typeof error !== "object" ||
-			error === null ||
-			!("code" in error) ||
-			error.code !== "ESRCH"
-		) {
-			throw error;
-		}
+		if (errnoCode(error) !== "ESRCH") throw error;
 	}
 }
 
