@@ -393,13 +393,13 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
 		const retainedPreviewTop = (await retainedPreviewAnchor.boundingBox())?.y;
 		expect(retainedPreviewTop).toBeDefined();
-		await longOutputToggle.evaluate((element) => element.click());
+		await longOutputToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "false");
 		expect(
 			await maximumAnchorDeviation(retainedPreviewAnchor, retainedPreviewTop ?? 0),
 		).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
-		await longOutputToggle.evaluate((element) => element.click());
+		await longOutputToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "true");
 		expect(
 			await maximumAnchorDeviation(retainedPreviewAnchor, retainedPreviewTop ?? 0),
@@ -416,7 +416,7 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		});
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
-		await longOutputToggle.evaluate((element) => element.click());
+		await longOutputToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "false");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		const collapsedOutputBoundary = await longOutputToggle.evaluate((element) => {
@@ -453,12 +453,12 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		expect((await readChatViewportIntersection(activityToggle)).intersects).toBe(false);
 		const anchorTop = (await offscreenAnchor.boundingBox())?.y;
 		expect(anchorTop).toBeDefined();
-		await activityToggle.evaluate((element) => element.click());
+		await activityToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(activityToggle).toHaveAttribute("aria-expanded", "false");
 		expect(await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0)).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		expect((await readChatViewportIntersection(activityToggle)).intersects).toBe(false);
-		await activityToggle.evaluate((element) => element.click());
+		await activityToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(activityToggle).toHaveAttribute("aria-expanded", "true");
 		expect(await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0)).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
@@ -495,7 +495,7 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 			return element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
 		});
 		expect(Math.abs(nestedHeaderOffset - parentBreadcrumbHeight)).toBeLessThanOrEqual(2);
-		await thinkingToggle.evaluate((element) => element.click());
+		await thinkingToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(thinkingToggle).toHaveAttribute("aria-expanded", "true");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		const activityContent = page.getByText("coalescer regression line 30", { exact: true });

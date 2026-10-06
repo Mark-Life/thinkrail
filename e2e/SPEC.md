@@ -322,6 +322,10 @@ Windows lane into the real profile (see `module-shared`).
 
 ## Verification policy
 
+`e2e/tsconfig.json` type-checks every `e2e/` TypeScript file as part of root `typecheck:root`. Its
+`exclude` list is a shrinking to-do of files with known type errors; fix a file and drop it from the list
+rather than adding new entries.
+
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
 arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on
