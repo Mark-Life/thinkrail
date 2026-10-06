@@ -110,6 +110,8 @@ try {
 			"build",
 			"--compile",
 			"--no-compile-autoload-bunfig",
+			"--bytecode",
+			"--format=esm",
 			`--target=${target ?? "bun"}`,
 			entryPath,
 			"--outfile",
