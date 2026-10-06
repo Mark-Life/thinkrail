@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { InterviewResponse } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import { dataDir } from "../persistence";
 
 interface FeedbackState {
@@ -27,19 +28,18 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
 }
 
 function parseState(value: unknown): FeedbackState | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	const candidate = value as Partial<FeedbackState>;
+	if (!isRecord(value)) return null;
 	if (
-		!isNonNegativeSafeInteger(candidate.acceptedMessages) ||
-		!isNonNegativeSafeInteger(candidate.nextInvitationAt) ||
-		typeof candidate.dismissed !== "boolean"
+		!isNonNegativeSafeInteger(value.acceptedMessages) ||
+		!isNonNegativeSafeInteger(value.nextInvitationAt) ||
+		typeof value.dismissed !== "boolean"
 	) {
 		return null;
 	}
 	return {
-		acceptedMessages: candidate.acceptedMessages,
-		nextInvitationAt: candidate.nextInvitationAt,
-		dismissed: candidate.dismissed,
+		acceptedMessages: value.acceptedMessages,
+		nextInvitationAt: value.nextInvitationAt,
+		dismissed: value.dismissed,
 	};
 }
 

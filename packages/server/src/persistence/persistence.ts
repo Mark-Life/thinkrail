@@ -69,9 +69,12 @@ function writeJsonAtomic(file: string, value: unknown): void {
 }
 
 function stringRecord(value: unknown): Record<string, string> | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	if (!isRecord(value)) return null;
 	const entries = Object.entries(value);
-	return entries.every(([, item]) => typeof item === "string") ? Object.fromEntries(entries) : null;
+	const strings = entries.filter(
+		(entry): entry is [string, string] => typeof entry[1] === "string",
+	);
+	return strings.length === entries.length ? Object.fromEntries(strings) : null;
 }
 
 export type SessionMetadataLoad<T> =

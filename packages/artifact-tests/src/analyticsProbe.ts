@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isRecord } from "@thinkrail/shared/guards";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { channel, version } from "@thinkrail/shared/version";
 import {
@@ -17,10 +18,6 @@ export interface CollectedEvent {
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function startAnalyticsCollector() {
