@@ -3079,13 +3079,11 @@ export function Workbench({
 				return;
 			}
 			if (target.location.area !== "center") {
-				onAttentionChange({
-					...currentAttention,
-					lastFocusedSideGroupId: nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
-						currentAttention.lastFocusedSideGroupId,
-						{ [target.location.area]: target.location.groupId },
-					),
-				});
+				const lastFocusedSideGroupId = nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
+					currentAttention.lastFocusedSideGroupId,
+				);
+				lastFocusedSideGroupId[target.location.area] = target.location.groupId;
+				onAttentionChange({ ...currentAttention, lastFocusedSideGroupId });
 				setLocalFocusRequest({
 					key: createLayoutId("focus-group"),
 					location: target.location,

@@ -1290,6 +1290,13 @@ export function selectTab(
 	) {
 		return attention;
 	}
+	let lastFocusedSideGroupId = attention.lastFocusedSideGroupId;
+	if (location.area !== "center") {
+		lastFocusedSideGroupId = nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
+			attention.lastFocusedSideGroupId,
+		);
+		lastFocusedSideGroupId[location.area] = location.groupId;
+	}
 	return {
 		...attention,
 		selectedByGroup: nullProto<Record<string, string>>(attention.selectedByGroup, {
@@ -1297,15 +1304,7 @@ export function selectTab(
 		}),
 		lastFocusedCenterGroupId:
 			location.area === "center" ? location.groupId : attention.lastFocusedCenterGroupId,
-		lastFocusedSideGroupId:
-			location.area === "center"
-				? attention.lastFocusedSideGroupId
-				: nullProto<Partial<Record<LayoutAuxiliaryRegion, string>>>(
-						attention.lastFocusedSideGroupId,
-						{
-							[location.area]: location.groupId,
-						},
-					),
+		lastFocusedSideGroupId,
 		navigationClockByGroup:
 			location.area === "center" && countNavigation
 				? nullProto<Record<string, number>>(attention.navigationClockByGroup, {
