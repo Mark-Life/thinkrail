@@ -81,7 +81,7 @@ export function notebookMarkdownComponents(
 			</span>
 		);
 	}
-	return { img: NotebookMarkdownImage, a: NotebookMarkdownLink } as Components;
+	return { img: NotebookMarkdownImage, a: NotebookMarkdownLink };
 }
 
 function NotebookMarkdownLink({

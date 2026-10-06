@@ -551,10 +551,7 @@ function markCancelledRun(entry: Entry): void {
 	try {
 		saveSessionLifecycle(next);
 	} catch (error) {
-		log.warn(
-			`session cancellation state was not persisted for ${entry.session.sessionId}`,
-			error as Error,
-		);
+		log.warn(`session cancellation state was not persisted for ${entry.session.sessionId}`, error);
 	}
 }
 
@@ -981,7 +978,7 @@ function resolveWireModel(
 	const available = settledAvailableModels(runtime);
 	const match = available.find((model) => sameModel(model, ref));
 	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
-	return match as unknown as Model<string>;
+	return match;
 }
 
 const RENAMED_PI_PROVIDERS: Readonly<Record<string, string>> = {
@@ -1121,7 +1118,7 @@ async function prepareSessionEntry(
 			try {
 				recordSettlement(entry, terminal);
 			} catch (error) {
-				log.warn(`session state settlement was not persisted for ${sessionId}`, error as Error);
+				log.warn(`session state settlement was not persisted for ${sessionId}`, error);
 			}
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
@@ -1171,9 +1168,7 @@ async function prepareSessionEntry(
 		entry,
 		result: {
 			sessionId,
-			model: session.model
-				? sessionWireModel(session.model as unknown as Model<string>, generation)
-				: null,
+			model: session.model ? sessionWireModel(session.model, generation) : null,
 			thinkingLevel: session.thinkingLevel,
 		},
 	};
@@ -1438,9 +1433,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		sessionId,
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "Chat",
-		model: session.model
-			? sessionWireModel(session.model as unknown as Model<string>, entry.generation)
-			: null,
+		model: session.model ? sessionWireModel(session.model, entry.generation) : null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
@@ -2422,8 +2415,7 @@ export async function refreshAvailableModels(force = false): Promise<RefreshedMo
 
 function readAvailableWireModels(generation: PiRuntimeGeneration): WireModel[] {
 	const authByProvider = new Map<string, WireModelAuth>();
-	return settledAvailableModels(generation.runtime).map((m) => {
-		const model = m as unknown as Model<string>;
+	return settledAvailableModels(generation.runtime).map((model) => {
 		let auth = authByProvider.get(model.provider);
 		if (!auth) {
 			auth = catalogProviderAuth(generation, model.provider);
@@ -2688,7 +2680,7 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 		try {
 			removeSessionStateMetadata(info.id);
 		} catch (error) {
-			log.warn(`session state metadata was not pruned for ${info.id}`, error as Error);
+			log.warn(`session state metadata was not pruned for ${info.id}`, error);
 		}
 	}
 }
@@ -2760,7 +2752,7 @@ async function runDeleteTransaction(
 	try {
 		removeSessionStateMetadata(sessionId);
 	} catch (error) {
-		log.warn(`session state metadata was not pruned for ${sessionId}`, error as Error);
+		log.warn(`session state metadata was not pruned for ${sessionId}`, error);
 	}
 	publishDeleted({ workspaceId, sessionId });
 }
