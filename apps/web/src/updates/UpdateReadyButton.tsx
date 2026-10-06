@@ -1,4 +1,5 @@
 import { RiDownloadCloud2Line as DownloadCloud } from "@remixicon/react";
+import type { NativeUpdateState } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import type { UpdatesController } from "./useUpdates";
 
@@ -12,7 +13,7 @@ export function UpdateReadyButton({
 	const hostUpdate = updates.source === "host";
 	const hostStatus = updates.source === "host" ? updates.state.status : undefined;
 	const hostRequestFailed = updates.source === "host" && updates.requestFailed;
-	const nativeState = updates.source === "native" ? updates.state : null;
+	const nativeState: NativeUpdateState | null = updates.source === "native" ? updates.state : null;
 	const nativeNeedsAttention = updates.source === "native" && updates.requestError !== null;
 	const nativeActionable =
 		nativeNeedsAttention ||
@@ -77,6 +78,11 @@ export function UpdateReadyButton({
 			case "installing":
 				label = "Installing update";
 				ariaLabel = label;
+				break;
+			case "disabled":
+			case "idle":
+			case "checking":
+			case "error":
 				break;
 		}
 	}
