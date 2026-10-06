@@ -236,10 +236,7 @@ function storedModels(value: unknown): WireModel[] {
 	if (!Array.isArray(value)) return [];
 	return value.filter(
 		(entry): entry is WireModel =>
-			typeof entry === "object" &&
-			entry !== null &&
-			typeof (entry as WireModel).provider === "string" &&
-			typeof (entry as WireModel).id === "string",
+			isRecord(entry) && typeof entry.provider === "string" && typeof entry.id === "string",
 	);
 }
 

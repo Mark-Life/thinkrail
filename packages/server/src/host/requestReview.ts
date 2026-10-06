@@ -5,6 +5,7 @@ import type {
 	ReviewFixComment,
 } from "@thinkrail/contracts";
 import { isPlanReviewResult } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import type { Todo } from "pi-todos/core";
 import {
 	getSessionWorkspaceId,
@@ -91,8 +92,8 @@ export function parseVerdict(
 	} catch {
 		return null;
 	}
-	if (typeof parsed !== "object" || parsed === null) return null;
-	const candidate = { ...(parsed as object), itemId, itemTitle };
+	if (!isRecord(parsed)) return null;
+	const candidate = { ...parsed, itemId, itemTitle };
 	if (!isPlanReviewResult(candidate)) return null;
 	const findings: ReviewFixComment[] = candidate.findings.map((f) => ({
 		id: f.id,
