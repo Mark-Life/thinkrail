@@ -5,6 +5,7 @@ import {
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { isControlMessage, isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 
 export interface HistoryEntry {
 	text: string;
@@ -24,11 +25,7 @@ function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
 	if (!Array.isArray(content)) return "";
 	return content
-		.map((b) =>
-			b && typeof b === "object" && (b as { type?: string }).type === "text"
-				? String((b as { text?: unknown }).text ?? "")
-				: "",
-		)
+		.map((b) => (isRecord(b) && b.type === "text" ? String(b.text ?? "") : ""))
 		.filter(Boolean)
 		.join("\n");
 }

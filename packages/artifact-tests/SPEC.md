@@ -22,7 +22,7 @@ It consumes finished artifacts; it does not build the application or supply appl
   and artifact-collector contract tests.
 - **Public surface:** `locateDesktopLauncher`
 - **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export;
-  shared release identity and retrying teardown; read-only access to
+  shared release identity, retrying teardown, and `guards`; read-only access to
   `.github/actions/build-binary/action.yml` for executing its packaging invocation and collector in
   isolated fixture directories; Bun/Node and native installer tools.
 - **Forbidden:** application or SDK source internals, Electrobun imports/dependency, a fake host or agent,

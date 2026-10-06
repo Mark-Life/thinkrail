@@ -79,8 +79,7 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 	pi.on("tool_call", (event) => {
 		if (event.toolName !== "web_search") return;
-		const input = event.input as Record<string, unknown>;
-		if (input.workflow == null) input.workflow = "none";
+		if (event.input.workflow == null) event.input.workflow = "none";
 	});
 };
 

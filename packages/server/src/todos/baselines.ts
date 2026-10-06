@@ -1,5 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { isRecord } from "@thinkrail/shared/guards";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 
 const BASELINE_SUFFIX = ".baselines.json";
@@ -20,21 +21,20 @@ function baselinePath(root: string, sessionId: string): string {
 }
 
 function isBaseline(raw: unknown): raw is Baseline {
-	if (typeof raw !== "object" || raw === null) return false;
-	const o = raw as Record<string, unknown>;
+	if (!isRecord(raw)) return false;
 	return (
-		Array.isArray(o.paths) &&
-		o.paths.every((p) => typeof p === "string") &&
-		(o.head === null || typeof o.head === "string") &&
-		(o.shared === undefined || typeof o.shared === "boolean")
+		Array.isArray(raw.paths) &&
+		raw.paths.every((p) => typeof p === "string") &&
+		(raw.head === null || typeof raw.head === "string") &&
+		(raw.shared === undefined || typeof raw.shared === "boolean")
 	);
 }
 
 export function readBaselines(root: string, sessionId: string): Record<string, Baseline> {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(baselinePath(root, sessionId), "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return {};
-		const items = (parsed as Record<string, unknown>).items;
+		if (!isRecord(parsed)) return {};
+		const items = parsed.items;
 		if (typeof items !== "object" || items === null) return {};
 		const out: Record<string, Baseline> = {};
 		for (const [id, value] of Object.entries(items)) {

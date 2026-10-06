@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { errnoCode, isRecord } from "@thinkrail/shared/guards";
 
 export interface InstallationRecord {
 	id: string;
@@ -13,7 +14,7 @@ interface PersistedInstallationRecord extends InstallationRecord {
 function readInstallation(directory: string): Partial<PersistedInstallationRecord> {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(join(directory, "installation.json"), "utf8"));
-		return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+		return isRecord(parsed) ? parsed : {};
 	} catch {
 		return {};
 	}
@@ -26,7 +27,7 @@ function hasInstallationId(
 }
 
 function isAlreadyExists(error: unknown): boolean {
-	return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
+	return errnoCode(error) === "EEXIST";
 }
 
 export function ensureInstallationIn(

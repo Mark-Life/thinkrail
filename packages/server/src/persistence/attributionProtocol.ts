@@ -1,3 +1,5 @@
+import { isRecord } from "@thinkrail/shared/guards";
+
 export const ATTRIBUTION_ORIGIN = "https://thinkrail.ai";
 export const ATTRIBUTION_POLL_INTERVAL_MS = 10_000;
 export const ATTRIBUTION_MAX_POLLS = 54;
@@ -40,10 +42,6 @@ const campaignBounds = {
 	content: 128,
 } as const;
 const referrerClassSet = new Set<string>(referrerClasses);
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
 	const actual = Object.keys(value).sort();

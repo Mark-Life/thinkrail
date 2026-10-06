@@ -1,5 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { isRecord } from "@thinkrail/shared/guards";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 
 const REVIEWS_SUFFIX = ".reviews.json";
@@ -33,17 +34,16 @@ function reviewsPath(root: string, sessionId: string): string {
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${REVIEWS_SUFFIX}`);
 }
 
-function isRecord(raw: unknown): raw is TodoReviewRecord {
-	if (typeof raw !== "object" || raw === null) return false;
-	const o = raw as Record<string, unknown>;
+function isTodoReviewRecord(raw: unknown): raw is TodoReviewRecord {
+	if (!isRecord(raw)) return false;
 	return (
-		(o.state === "reviewed" || o.state === "changes_requested") &&
-		Array.isArray(o.reviewedShas) &&
-		o.reviewedShas.every((s) => typeof s === "string") &&
-		(o.feedback === undefined || typeof o.feedback === "string") &&
-		(o.reviewedBy === undefined || o.reviewedBy === "agent") &&
-		(o.requestId === undefined || typeof o.requestId === "string") &&
-		typeof o.at === "string"
+		(raw.state === "reviewed" || raw.state === "changes_requested") &&
+		Array.isArray(raw.reviewedShas) &&
+		raw.reviewedShas.every((s) => typeof s === "string") &&
+		(raw.feedback === undefined || typeof raw.feedback === "string") &&
+		(raw.reviewedBy === undefined || raw.reviewedBy === "agent") &&
+		(raw.requestId === undefined || typeof raw.requestId === "string") &&
+		typeof raw.at === "string"
 	);
 }
 
@@ -58,30 +58,29 @@ function parseAutoCycles(raw: unknown): Record<string, number> | undefined {
 function readFile(root: string, sessionId: string): ReviewsFile {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(reviewsPath(root, sessionId), "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return { version: 1, items: {} };
-		const o = parsed as Record<string, unknown>;
+		if (!isRecord(parsed)) return { version: 1, items: {} };
 		const items: Record<string, TodoReviewRecord> = {};
-		if (typeof o.items === "object" && o.items !== null) {
-			for (const [id, value] of Object.entries(o.items)) {
-				if (isRecord(value)) items[id] = value;
+		if (typeof parsed.items === "object" && parsed.items !== null) {
+			for (const [id, value] of Object.entries(parsed.items)) {
+				if (isTodoReviewRecord(value)) items[id] = value;
 			}
 		}
 		const file: ReviewsFile = { version: 1, items };
-		if (typeof o.pending === "object" && o.pending !== null) {
+		if (typeof parsed.pending === "object" && parsed.pending !== null) {
 			const pending: ReviewsFile["pending"] = {};
-			for (const [id, value] of Object.entries(o.pending)) {
-				const entry = value as Record<string, unknown> | null;
-				const at = entry?.at;
+			for (const [id, value] of Object.entries(parsed.pending)) {
+				if (!isRecord(value)) continue;
+				const { at, shas: rawShas } = value;
 				if (typeof at !== "string") continue;
 				const shas =
-					Array.isArray(entry?.shas) && entry.shas.every((s) => typeof s === "string")
-						? (entry.shas as string[])
+					Array.isArray(rawShas) && rawShas.every((s): s is string => typeof s === "string")
+						? rawShas
 						: undefined;
 				pending[id] = { at, ...(shas ? { shas } : {}) };
 			}
 			if (Object.keys(pending).length > 0) file.pending = pending;
 		}
-		const autoCycles = parseAutoCycles(o.autoCycles);
+		const autoCycles = parseAutoCycles(parsed.autoCycles);
 		if (autoCycles) file.autoCycles = autoCycles;
 		return file;
 	} catch {

@@ -1,10 +1,11 @@
 import type { Page } from "@playwright/test";
+import { isRecord } from "@thinkrail/shared/guards";
 
 function parseFrame(message: unknown): Record<string, unknown> | null {
 	if (typeof message !== "string") return null;
 	try {
 		const value: unknown = JSON.parse(message);
-		return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
+		return isRecord(value) ? value : null;
 	} catch {
 		return null;
 	}
