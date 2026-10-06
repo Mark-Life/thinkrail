@@ -312,7 +312,7 @@ export function pendingAsk(rt: {
 			const tool = rt.toolResults[block.id];
 			found = {
 				toolCallId: block.id,
-				args: (block.arguments ?? {}) as Record<string, unknown>,
+				args: block.arguments ?? {},
 				result: tool?.raw,
 				status: tool?.status ?? "running",
 				streaming: turn.streaming,
