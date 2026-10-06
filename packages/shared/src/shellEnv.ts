@@ -71,9 +71,10 @@ export async function repairShellEnv(
 	await Promise.all([resolvePath(env), resolveSshAgentSock(env, platform)]);
 }
 
-let pending: Promise<void> | undefined;
+const pendingKey = Symbol.for("thinkrail.shellEnv.pending");
+const processState = globalThis as typeof globalThis & { [pendingKey]?: Promise<void> };
 
 export function resolveShellEnv(): Promise<void> {
-	pending ??= repairShellEnv();
-	return pending;
+	processState[pendingKey] ??= repairShellEnv();
+	return processState[pendingKey];
 }

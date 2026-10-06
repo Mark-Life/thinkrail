@@ -58,9 +58,9 @@ another.
 2. Start `resolveShellEnv()` at the top of `start()`, then dynamically import the separately built, unpacked
    `server-runtime.ts` resource, and await the shell env before `startDesktopHost()`. A Dock/Finder launch
    has a stripped PATH, so the login-shell probe runs on every such launch; overlapping it with the bundle
-   import hides up to the import time. The bundle's own `shellEnv` copy is a separate module instance:
-   awaiting first makes its `bootHost()` call find PATH complete and skip a second probe (only a failed
-   probe repeats there). That bundle is built with
+   import hides up to the import time. The bundle's own `shellEnv` copy is a separate module instance, so
+   the run is cached on a `Symbol.for` global key: its `bootHost()` call awaits the same run instead of
+   probing again. That bundle is built with
    pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
    with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
    single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside

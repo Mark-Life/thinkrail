@@ -116,8 +116,12 @@ test("win32 is a no-op", async () => {
 	expect(env).toEqual({ PATH: "C:\\Windows", SHELL: printingShell });
 });
 
-test("every resolveShellEnv caller awaits the same run", async () => {
+test("every resolveShellEnv caller awaits the same run, across bundled copies", async () => {
 	const run = resolveShellEnv();
 	expect(resolveShellEnv()).toBe(run);
+	const copySpecifier = `${import.meta.dir}/shellEnv.ts?bundled-copy`;
+	const copy: typeof import("./shellEnv") = await import(copySpecifier);
+	expect(copy.resolveShellEnv).not.toBe(resolveShellEnv);
+	expect(copy.resolveShellEnv()).toBe(run);
 	await run;
 });

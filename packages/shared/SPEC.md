@@ -201,9 +201,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 ## Get right (shellEnv)
 
-- **Async, one run per module instance, awaited before the first spawn.** `resolveShellEnv()` returns one
-  cached promise; every caller awaits that same run. A GUI launch pays 0.6–1.2s for the login shell, and a
-  sync probe stalls the whole boot for it. The async probe lets a launcher overlap it with work that spawns
+- **Async, one run per process, awaited before the first spawn.** `resolveShellEnv()` returns one
+  promise cached on a `Symbol.for` global key, so every caller awaits that same run, even from a second
+  bundled copy of the module (the desktop shell and its server bundle). A GUI launch pays 0.6–1.2s for
+  the login shell, and a sync probe stalls the whole boot for it. The async probe lets a launcher overlap it with work that spawns
   nothing (bundle import, logging init) and await it before the first spawn. Gating each spawn site
   instead was rejected: the sites are many (git, PTY, editors, Central, pi tools, extensions), a missed
   one silently gets the stripped PATH, and the boot-time Central probe needs the PATH before listen anyway.
