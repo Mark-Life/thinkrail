@@ -2,6 +2,7 @@ import { existsSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { JbcentralInstall } from "@thinkrail/contracts";
+import { isRecord } from "./guards";
 
 export type ParseEnv = Record<string, string | undefined>;
 
@@ -365,16 +366,11 @@ function parseJbcentralQuota(output: string): JbcentralQuotaReadResult {
 	} catch {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+	if (!isRecord(parsed) || !isRecord(parsed.tariffQuota)) {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
-	const tariffQuota = (parsed as Record<string, unknown>).tariffQuota;
-	if (!tariffQuota || typeof tariffQuota !== "object" || Array.isArray(tariffQuota)) {
-		return { outcome: "failed", reason: "invalid-output" };
-	}
-	const values = tariffQuota as Record<string, unknown>;
-	const remaining = quotaAmount(values.available);
-	const total = quotaAmount(values.maximum);
+	const remaining = quotaAmount(parsed.tariffQuota.available);
+	const total = quotaAmount(parsed.tariffQuota.maximum);
 	if (remaining === null || total === null) {
 		return { outcome: "failed", reason: "invalid-output" };
 	}

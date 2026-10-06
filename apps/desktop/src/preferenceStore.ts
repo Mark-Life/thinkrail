@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { isRecord } from "@thinkrail/shared/guards";
 import {
 	isDesktopPreferenceKey,
 	isDesktopPreferenceScopeId,
@@ -19,10 +20,6 @@ interface PreferenceDocument {
 
 function emptyDocument(): PreferenceDocument {
 	return { version: PREFERENCE_VERSION, preferences: {} };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function scopeKey(backendProfileId: unknown, windowId: unknown): string | null {

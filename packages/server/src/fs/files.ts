@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
+import { errnoCode } from "@thinkrail/shared/guards";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
 
@@ -21,8 +22,7 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 		try {
 			real = realpathSync(cursor);
 		} catch (error) {
-			const code =
-				typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+			const code = errnoCode(error);
 			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
 			const parent = dirname(cursor);
 			if (parent === cursor) throw error;

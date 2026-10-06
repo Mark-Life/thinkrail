@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { errnoCode } from "@thinkrail/shared/guards";
 
 export interface InstallationRecord {
 	id: string;
@@ -26,7 +27,7 @@ function hasInstallationId(
 }
 
 function isAlreadyExists(error: unknown): boolean {
-	return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
+	return errnoCode(error) === "EEXIST";
 }
 
 export function ensureInstallationIn(
