@@ -71,6 +71,18 @@ test("the login shell probe does not block the event loop", async () => {
 	expect(env.PATH).toBe(loginPath);
 });
 
+test("a background job holding stdout neither delays nor drops the PATH", async () => {
+	const env: Record<string, string | undefined> = {
+		PATH: "/usr/bin:/bin",
+		SHELL: fakeShell("forking", `sleep 3 &\nprintf 'PATH=${loginPath}\\0'`),
+		LANG: "en_US.UTF-8",
+	};
+	const started = performance.now();
+	await repairShellEnv(env, "linux");
+	expect(env.PATH).toBe(loginPath);
+	expect(performance.now() - started).toBeLessThan(1500);
+});
+
 test("localeRepair supplies a UTF-8 locale only when none is configured", () => {
 	expect(localeRepair({}, "linux")).toBe("C.UTF-8");
 	expect(localeRepair({}, "darwin")).toBe("en_US.UTF-8");
@@ -104,6 +116,8 @@ test("win32 is a no-op", async () => {
 	expect(env).toEqual({ PATH: "C:\\Windows", SHELL: printingShell });
 });
 
-test("every resolveShellEnv caller awaits the same run", () => {
-	expect(resolveShellEnv()).toBe(resolveShellEnv());
+test("every resolveShellEnv caller awaits the same run", async () => {
+	const run = resolveShellEnv();
+	expect(resolveShellEnv()).toBe(run);
+	await run;
 });

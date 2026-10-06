@@ -213,8 +213,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `/.bun/`) — `pathLooksComplete()`. The locale repair is applied synchronously on the call; the PATH and
   `SSH_AUTH_SOCK` probes run in parallel.
 - Else spawn a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit),
-  5s timeout, parse the `\0`-separated entries, overwrite `PATH`. The read is abandoned 500ms past the
-  timeout, so a grandchild holding the pipe open cannot hang boot. Never throws — on any failure it leaves
+  5s timeout, parse the `\0`-separated entries, overwrite `PATH`. Once the shell exits, the read stops
+  after 100ms, so a background job from an rc file that keeps the pipe open neither hangs boot nor drops
+  the PATH. Never throws — on any failure it leaves
   PATH untouched.
 
 ## Get right (jbcentral)

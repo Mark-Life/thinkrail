@@ -1,7 +1,7 @@
 const USER_PATH_MARKERS = ["/.nvm/", "/homebrew/", "/usr/local/bin", "/.bun/"];
 const PROBE_TIMEOUT_MS = 5000;
 const LAUNCHCTL_TIMEOUT_MS = 3000;
-const ORPHAN_PIPE_GRACE_MS = 500;
+const ORPHAN_PIPE_GRACE_MS = 100;
 
 type ShellEnv = Record<string, string | undefined>;
 
@@ -12,13 +12,18 @@ export function pathLooksComplete(path: string): boolean {
 async function readStdout(argv: string[], timeout: number): Promise<string | null> {
 	try {
 		const child = Bun.spawn(argv, { timeout, stdin: "ignore", stdout: "pipe", stderr: "ignore" });
-		const finished = Promise.all([new Response(child.stdout).text(), child.exited]).then(
-			([text, code]) => (code === 0 ? text : null),
-		);
-		const abandoned = new Promise<null>((resolve) => {
-			setTimeout(resolve, timeout + ORPHAN_PIPE_GRACE_MS, null).unref();
-		});
-		return await Promise.race([finished, abandoned]);
+		const reader = child.stdout.getReader();
+		const decoder = new TextDecoder();
+		let text = "";
+		const drained = (async () => {
+			for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+				text += decoder.decode(chunk.value, { stream: true });
+			}
+		})().catch(() => {});
+		const code = await child.exited;
+		await Promise.race([drained, Bun.sleep(ORPHAN_PIPE_GRACE_MS)]);
+		void reader.cancel().catch(() => {});
+		return code === 0 ? text + decoder.decode() : null;
 	} catch {
 		return null;
 	}
