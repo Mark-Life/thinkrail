@@ -169,10 +169,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
   and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired,
   except a session blocked on `ask_user_question`: shutdown deliberately leaves that call dangling and the
-  next attach repairs it to an answerable ack; explicit user Stop remains the terminal-abort path); `handlers.ts` (the WS method→handler
-  registry, typed `WsHandlers = { [M in WsMethodName]: WsHandler<M> }`, so a missing, extra, or mistyped
-  handler fails typecheck; `handleRequest` narrows the wire's `unknown` params once, at dispatch, and
-  params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
+  next attach repairs it to an answerable ack; explicit user Stop remains the terminal-abort path); `handlers/` (the WS method→handler
+  registry, see [[submodule-server-host-handlers]]; `server.ts` reaches it only through its barrel. Its
+  edges to siblings: `ackSend`, `authAnalytics`, `fsNudge`, `historyScope`, `initialTerminal`,
+  `loginAnalytics`, `newChatModel`, `planReviewQueue`, `productAnalytics`, `requestReview`, `reviewLock`,
+  `runAnalytics`, `taskAnalytics`, `todoReview`. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
