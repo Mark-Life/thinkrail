@@ -69,7 +69,7 @@ test("a pending ask surfaces on the rail as waiting_question glance, not paused"
 
 test("a pending ask_user_question is answerable from the plan page", async ({ page }) => {
 	await openFixtureProject(page);
-	const args: AskUserQuestionArgs = {
+	const args = {
 		questions: [
 			{
 				question: "Which rollout should we use?",
@@ -80,7 +80,7 @@ test("a pending ask_user_question is answerable from the plan page", async ({ pa
 				],
 			},
 		],
-	};
+	} satisfies AskUserQuestionArgs;
 	const ack: AskUserQuestionAckDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "plan ask question",
@@ -138,7 +138,7 @@ test("the plan shows the agent's latest message when it isn't asking or on a ste
 						text: "Two problems with Lab Organic reminders: the day_of_visit avalanche and duplicates on resend \u2014 digging into the sender now.",
 					},
 				],
-				stopReason: "endTurn",
+				stopReason: "stop",
 				timestamp: BASE_TS + 1000,
 			},
 		],

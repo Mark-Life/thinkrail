@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { ToolCall } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
 	expandDisclosure,
@@ -15,7 +16,7 @@ const MALFORMED_SOURCE = "flowchart TD; Start --> --> broken";
 async function openVisualization(
 	page: Page,
 	name: string,
-	args: Record<string, unknown>,
+	args: ToolCall["arguments"],
 	assistantText?: string,
 ): Promise<Locator> {
 	await openFixtureProject(page);
