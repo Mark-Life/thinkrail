@@ -61,7 +61,7 @@ const agentSettled = (terminal: Extract<PiEvent, { type: "agent_settled" }>["ter
 const recoveredOverflow: PiEvent = {
 	type: "compaction_end",
 	reason: "overflow",
-	result: { tokensBefore: 1000 },
+	result: undefined,
 	aborted: false,
 	willRetry: true,
 };
@@ -1992,12 +1992,7 @@ test("a deletion that beats getMessages prevents its late hydrate from restoring
 	};
 
 	store.deleteChat("ws1", "late");
-	store.hydrateSession(summary, {
-		turns: [],
-		toolResults: {},
-		askAnswers: {},
-		turnIdByMessageIndex: [],
-	});
+	store.hydrateSession(summary, emptyHydration());
 
 	const state = useAppStore.getState();
 	expect(state.sessions.late).toBeUndefined();
@@ -2059,10 +2054,7 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 	expect(st.sessions.h1?.turnIdByMessageIndex).toEqual(["u1"]);
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "h1")).toBe(true);
 
-	store.hydrateSession(
-		{ ...summary, messageCount: 99 },
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
-	);
+	store.hydrateSession({ ...summary, messageCount: 99 }, emptyHydration());
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
 });
 
@@ -2161,7 +2153,7 @@ test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi
 			updatedAt: 2,
 			live: true,
 		},
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		emptyHydration(),
 		expectedRevision,
 		3,
 	);
@@ -2274,11 +2266,7 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 		updatedAt: 1,
 		live: true,
 	};
-	store.hydrateSession(
-		summary,
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
-		true,
-	);
+	store.hydrateSession(summary, emptyHydration(), true);
 
 	const st = useAppStore.getState();
 	expect(st.sessions.disk1).toBeDefined();
