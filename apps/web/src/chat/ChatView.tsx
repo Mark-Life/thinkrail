@@ -30,6 +30,7 @@ import {
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useNow } from "@/components/useNow";
 import { registerWebExtensions } from "@/extensions";
+import { shallowEqualArrays } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -355,13 +356,15 @@ export default function ChatView({
 		[turns, isStreaming, currentAssistantId],
 	);
 
-	const recentPrompts = useMemo(() => {
+	const nextRecentPrompts = useMemo(() => {
 		const texts = turns
 			.filter((t) => t.kind === "user")
 			.map((t) => turnAnchorText(t))
 			.filter(Boolean);
 		return [...new Set(texts.reverse())];
 	}, [turns]);
+	const [recentPrompts, setRecentPrompts] = useState(nextRecentPrompts);
+	if (!shallowEqualArrays(recentPrompts, nextRecentPrompts)) setRecentPrompts(nextRecentPrompts);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
@@ -1062,7 +1065,13 @@ export default function ChatView({
 					data-message-order={chatMessageOrder}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
-					<Popover open={planOpen} onOpenChange={setPlanOpen}>
+					<Popover
+						open={planOpen}
+						onOpenChange={(next) => {
+							if (next && !planOpen) plan.notifyOpened("popup");
+							setPlanOpen(next);
+						}}
+					>
 						<PopoverAnchor asChild>
 							<div className="shrink-0">
 								<ChatHeader

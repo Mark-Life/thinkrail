@@ -6,7 +6,7 @@ import type {
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import {
 	isConnectedGeneration,
@@ -42,9 +42,10 @@ export function planIsCompleteWithoutSummary(
 export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
-	add: (title: string) => Promise<void>;
+	add: (title: string, surface?: "chat" | "page") => Promise<void>;
 	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
+	notifyOpened: (surface: "popup") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
 	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
@@ -59,7 +60,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const currentIdentity = useRef(identity);
 	const readGeneration = useRef(0);
 	const initializedIdentity = useRef<string | null>(null);
-	currentIdentity.current = identity;
+	useInsertionEffect(() => {
+		currentIdentity.current = identity;
+	}, [identity]);
 	const live = useCallback(
 		(expectedIdentity: string) => {
 			const state = useAppStore.getState();
@@ -171,11 +174,16 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			.catch(() => {});
 	}, [data, identity, live, sessionId, workspaceId]);
 
-	const add = async (rawTitle: string) => {
+	const add = async (rawTitle: string, surface: "chat" | "page" = "chat") => {
 		const title = rawTitle.trim();
 		if (!title) return;
 		const requestIdentity = identity;
-		const todo = await getTransport().request("todo.add", { workspaceId, sessionId, title });
+		const todo = await getTransport().request("todo.add", {
+			workspaceId,
+			sessionId,
+			title,
+			surface,
+		});
 		if (!live(requestIdentity)) return;
 		readGeneration.current += 1;
 		setData((prev) =>
@@ -195,23 +203,22 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const requestConnectionGeneration =
 			requestState.status === "connected" ? requestState.connectionGeneration : null;
 		const mine = ++readGeneration.current;
-		try {
-			const plan = await getTransport().request("todo.list", { workspaceId, sessionId });
-			const current = useAppStore.getState();
-			if (
-				requestConnectionGeneration !== null &&
-				current.connectionGeneration !== requestConnectionGeneration &&
-				readGeneration.current === mine &&
-				live(requestIdentity)
-			) {
-				return reloadPlan();
-			}
-			if (readGeneration.current !== mine || !live(requestIdentity)) return false;
-			setData(plan);
-			return true;
-		} catch {
-			return false;
+		const plan = await getTransport()
+			.request("todo.list", { workspaceId, sessionId })
+			.catch(() => null);
+		if (!plan) return false;
+		const current = useAppStore.getState();
+		if (
+			requestConnectionGeneration !== null &&
+			current.connectionGeneration !== requestConnectionGeneration &&
+			readGeneration.current === mine &&
+			live(requestIdentity)
+		) {
+			return reloadPlan();
 		}
+		if (readGeneration.current !== mine || !live(requestIdentity)) return false;
+		setData(plan);
+		return true;
 	};
 
 	const remove = async (id: string) => {
@@ -237,9 +244,16 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		}
 	};
 
+	const notifyOpened = (surface: "page" | "popup") => {
+		void getTransport()
+			.request("todo.list", { workspaceId, sessionId, opened: surface })
+			.catch(() => {});
+	};
+
 	const openPlan = () => {
 		const state = useAppStore.getState();
 		const title = selectChatTitle(state, workspaceId, sessionId);
+		notifyOpened("page");
 		state.openDoc({
 			kind: "plan",
 			id: `${workspaceId}:plan:${sessionId}`,
@@ -280,6 +294,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		add,
 		remove,
 		openPlan,
+		notifyOpened: (surface: "popup") => notifyOpened(surface),
 		openChanges,
 		startReview,
 		reviewAll,

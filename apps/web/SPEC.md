@@ -117,7 +117,7 @@ and `PlanComposer` on every plan-pane keystroke. Shared hooks and resource surfa
 compilation of the chat/shell hot paths does not imply coverage of every file/diff renderer.
 
 - Ref access in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
-  state would cost a render per scroll), `useWorkspaceRead`, `useChatTodos`, `useOpenBranchReview`,
+  state would cost a render per scroll), `useWorkspaceRead`, `useOpenBranchReview`,
   `useBranchList`, `useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `AskUserQuestionCard`,
   `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
   image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
@@ -171,6 +171,9 @@ surface acquires Pierre's module-singleton worker pool; an ordinary workspace th
 nor initializes its pool. Renderer metadata and loaders are the only eager edge. A production build must
 retain distinct Pierre diff, Pierre file, worker-pool, and Monaco chunks, with none of their implementation
 code in the entry chunk.
+Vite emits every worker as an ES module (`worker.format: "es"`), so worker `import()` calls split into
+on-demand chunks instead of inlining; every target webview (Chromium, WebKit/Safari 15+, WebView2) runs
+module workers.
 
 The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
 layout-agnostic Project/File/Specs/Changes/Review renderers; registry-dispatched resource bodies and lazy xterm terminal
