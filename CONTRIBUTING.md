@@ -64,7 +64,7 @@ Run the fast gates before opening a PR (they also run as the husky pre-commit ho
 
 ```bash
 bun run lint        # biome
-bun run typecheck   # tsc across all packages
+bun run typecheck   # tsrs across all packages (macOS arm64 and Linux only: no Intel Mac or Windows binary)
 bun run test        # unit tests (root tooling + each package)
 ```
 
