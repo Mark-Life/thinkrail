@@ -6,7 +6,10 @@ export default defineConfig({
 	singleQuote: false,
 	semi: true,
 	trailingComma: "all",
-	sortImports: false,
+	sortImports: {
+		newlinesBetween: false,
+		partitionByNewline: true,
+	},
 	sortPackageJson: false,
 	sortTailwindcss: false,
 	astro: false,
