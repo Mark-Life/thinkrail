@@ -13,7 +13,8 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
-import { isOverrideEntry, isRecord } from "./config";
+import { errnoCode, isRecord } from "@thinkrail/shared/guards";
+import { isOverrideEntry } from "./config";
 
 export class McpConfigPathUnsafeError extends Error {
 	readonly code = "MCP_PATH_UNSAFE" as const;
@@ -23,7 +24,7 @@ function lstatOrNull(path: string): Stats | null {
 	try {
 		return lstatSync(path);
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+		if (errnoCode(error) === "ENOENT") return null;
 		throw error;
 	}
 }

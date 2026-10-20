@@ -2,11 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
 import type { McpProjectOverride, McpServerScope } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { isRecord } from "@thinkrail/shared/guards";
 import {
 	fingerprintMcpEntry,
 	globalMcpConfigPath,
 	isOverrideEntry,
-	isRecord,
 	loadHostMcpConfig,
 	type McpProjectPolicy,
 	projectMcpConfigPath,

@@ -1,5 +1,5 @@
 import type { McpContentBlockSummary, McpResultSummary } from "@thinkrail/contracts";
-import { isRecord } from "./config";
+import { isRecord } from "@thinkrail/shared/guards";
 
 export const MCP_SUMMARY_BYTES = 64 * 1024;
 const RESOURCE_TOOLS = new Set([

@@ -9,6 +9,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { McpProjectOverride, McpToolGrant, Project } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 
 // Port of pi's `core/mcp-servers.ts` and `extensions/mcp/config.ts` (MIT, Earendil Works).
 
@@ -30,10 +31,6 @@ export function projectMcpConfigPath(cwd: string): string {
 
 export function mcpNamespace(server: string): string {
 	return `mcp__${server.replace(/-/g, "_")}`;
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
