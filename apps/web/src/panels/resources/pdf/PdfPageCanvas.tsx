@@ -1,8 +1,8 @@
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SurfaceReview } from "@/resources";
-import { RegionReviewSurface } from "../RegionReviewSurface";
 import type { Size } from "../regionReview";
+import { RegionReviewSurface } from "../RegionReviewSurface";
 import type { PdfRenderQueue } from "./pdfLoader";
 import { pdfPageContentStamp, pdfRegionDraft, pdfReviewForPage } from "./pdfModel";
 import { releasePdfCanvas, renderPdfPageToCanvas } from "./pdfRender";

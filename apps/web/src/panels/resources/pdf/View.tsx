@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResourceViewProps } from "@/resources";
 import type { Size } from "../regionReview";
-import { PdfPageCanvas } from "./PdfPageCanvas";
-import { PdfToolbar } from "./PdfToolbar";
 import { PdfRenderQueue } from "./pdfLoader";
 import {
 	clampPdfZoom,
@@ -16,6 +14,8 @@ import {
 	resolvePdfPage,
 	updatePdfPageSet,
 } from "./pdfModel";
+import { PdfPageCanvas } from "./PdfPageCanvas";
+import { PdfToolbar } from "./PdfToolbar";
 import { usePdfDocument } from "./usePdfDocument";
 
 const NO_THREADS: ReadonlySet<string> = new Set();

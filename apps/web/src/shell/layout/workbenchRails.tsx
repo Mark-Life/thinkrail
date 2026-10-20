@@ -9,6 +9,12 @@ import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { type LayoutAttention, tupleKey } from "../../lib";
 import {
+	type AuxiliaryRailEntry,
+	activateAuxiliaryRailEntry,
+	isUnplacedRailEntry,
+	projectAuxiliaryRail,
+} from "./auxiliaryPresentation";
+import {
 	AuxiliaryRail,
 	type AuxiliaryRailControlProps,
 	AuxiliaryRailIndicator,
@@ -16,12 +22,6 @@ import {
 	railEntryFrameClass,
 	railTooltipSide,
 } from "./AuxiliaryRail";
-import {
-	type AuxiliaryRailEntry,
-	activateAuxiliaryRailEntry,
-	isUnplacedRailEntry,
-	projectAuxiliaryRail,
-} from "./auxiliaryPresentation";
 import {
 	canCreateAuxiliaryGroup,
 	canJoinAuxiliaryGroup,

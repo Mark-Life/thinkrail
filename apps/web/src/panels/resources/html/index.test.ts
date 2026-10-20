@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { htmlRenderer } from ".";
-import { HtmlFrame } from "./HtmlFrame";
 import { HTML_PREVIEW_CSP, prepareHtmlPreviewDocument } from "./htmlDocument";
+import { HtmlFrame } from "./HtmlFrame";
 
 interface FakeAttribute {
 	name: string;

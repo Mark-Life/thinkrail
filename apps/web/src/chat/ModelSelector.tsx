@@ -20,7 +20,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { formatContext } from "./modelPicker";
-import { ProviderGlyph } from "./ProviderGlyph";
 import {
 	GROUPED_ROW,
 	type GroupExpansion,
@@ -35,6 +34,7 @@ import {
 	rowValue,
 	toggleGroup,
 } from "./pickerGroups";
+import { ProviderGlyph } from "./ProviderGlyph";
 import type { ModelPreferences } from "./useModelPreferences";
 
 function subLine(model: WireModel): string {

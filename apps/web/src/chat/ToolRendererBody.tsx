@@ -1,6 +1,6 @@
 import { parseToolResultContent, type ToolRenderProps } from "@thinkrail/extension-api/web";
-import { ToolResultImages } from "./ToolResultImages";
 import { getToolRenderer } from "./toolRegistry";
+import { ToolResultImages } from "./ToolResultImages";
 
 export function ToolRendererBody({
 	imageLabel,

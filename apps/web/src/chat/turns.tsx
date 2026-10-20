@@ -39,13 +39,13 @@ import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
-import { ReviewPackageComments } from "./ReviewPackageComments";
 import { parseReviewPackage, reviewFixCommentsToItems, reviewPackageLabel } from "./reviewPackage";
+import { ReviewPackageComments } from "./ReviewPackageComments";
 import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
-import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary } from "./toolRegistry";
+import { ToolRendererBody } from "./ToolRendererBody";
 import type { CompactionState } from "./types";
 
 function ChatTurnViewImpl({

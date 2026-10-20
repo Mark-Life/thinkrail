@@ -63,13 +63,13 @@ import {
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import type { ChatAttachment } from "./types";
 import { useChatResources, useCommandLog } from "./useChatResources";
+import { useHistorySearch } from "./useHistorySearch";
 import { useModelCatalog } from "./useModelCatalog";
+import "./tools/register";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
-import "./tools/register";
-import type { ChatAttachment } from "./types";
-import { useHistorySearch } from "./useHistorySearch";
 
 registerWebExtensions();
 

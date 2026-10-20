@@ -6,11 +6,11 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { type JbcentralQuotaPolling, startJbcentralQuotaPolling } from "./jbcentralQuota";
 import {
 	JbcentralQuotaIndicator,
 	type JbcentralQuotaViewSnapshot,
 } from "./JbcentralQuotaIndicator";
-import { type JbcentralQuotaPolling, startJbcentralQuotaPolling } from "./jbcentralQuota";
 
 function transportFailureSnapshot(current: JbcentralQuotaViewSnapshot): JbcentralQuotaViewSnapshot {
 	if (current.state === "available" || current.state === "stale") {

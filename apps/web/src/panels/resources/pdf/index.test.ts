@@ -7,8 +7,8 @@ import {
 	registerResourceRenderer,
 	resolveRenderers,
 } from "@/resources";
-import { denormalizeRegion, normalizeRegion } from "../regionReview";
 import { pdfRenderer } from ".";
+import { denormalizeRegion, normalizeRegion } from "../regionReview";
 import { PdfRenderQueue } from "./pdfLoader";
 import {
 	pdfCurrentPage,

@@ -18,12 +18,12 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
-import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
+import { BranchPicker } from "./BranchPicker";
 import { ChangeRowActions } from "./ChangeRowActions";
+import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
-import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChangesTab, openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";

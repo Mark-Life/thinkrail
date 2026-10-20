@@ -1,6 +1,6 @@
 import { expect, mock, test } from "bun:test";
-import { addMcpServersWithProjectOptIn, type McpAddResult } from "./McpServerDialogs";
 import { MCP_PRESETS } from "./mcpPresets";
+import { addMcpServersWithProjectOptIn, type McpAddResult } from "./McpServerDialogs";
 
 function playwrightServer() {
 	const preset = MCP_PRESETS.find((preset) => preset.id === "playwright");

@@ -3,14 +3,14 @@ import type { JbcentralQuotaSnapshot } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-	JbcentralQuotaIndicator,
-	type JbcentralQuotaViewSnapshot,
-} from "./JbcentralQuotaIndicator";
-import {
 	formatJbcentralQuota,
 	startJbcentralQuotaPolling,
 	type TimerHandle,
 } from "./jbcentralQuota";
+import {
+	JbcentralQuotaIndicator,
+	type JbcentralQuotaViewSnapshot,
+} from "./JbcentralQuotaIndicator";
 
 function deferred<T>() {
 	let resolve: (value: T) => void = () => {};

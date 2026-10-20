@@ -52,7 +52,6 @@ import {
 	litBars,
 	trailingLevel,
 } from "./modelPicker";
-import { ProviderGlyph } from "./ProviderGlyph";
 import {
 	GROUPED_ROW,
 	type GroupExpansion,
@@ -67,6 +66,7 @@ import {
 	rowValue,
 	toggleGroup,
 } from "./pickerGroups";
+import { ProviderGlyph } from "./ProviderGlyph";
 import type { ModelPreferences } from "./useModelPreferences";
 
 export interface ModelEffortPickerHandle {
