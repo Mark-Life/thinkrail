@@ -2207,7 +2207,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				!isConnectedGeneration(state, read.connectionGeneration) ||
 				state.removedWorkspaceIds[read.workspaceId]
 			)
-				return {};
+				return state;
 			const deleted = state.deletedSessionsByWorkspace[read.workspaceId] ?? {};
 			return {
 				mcpByWorkspace: {
@@ -2230,7 +2230,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				state.status !== "connected" ||
 				!isChatResourceScopeAlive(state, snapshot)
 			)
-				return {};
+				return state;
 			const projection = state.mcpByWorkspace[snapshot.workspaceId] ?? EMPTY_MCP_PROJECTION;
 			const revision = state.mcpRevision + 1;
 			const held = foldMcpSnapshot(
@@ -2239,7 +2239,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				state.connectionGeneration,
 				revision,
 			);
-			if (!held) return {};
+			if (!held) return state;
 			return {
 				mcpRevision: revision,
 				mcpByWorkspace: {
@@ -2505,7 +2505,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	toggleSettledShelf: (projectId, expanded) =>
 		set((state) => {
 			const next = expanded ?? !state.settledShelfExpanded[projectId];
-			if (next === (state.settledShelfExpanded[projectId] === true)) return {};
+			if (next === (state.settledShelfExpanded[projectId] === true)) return state;
 			return {
 				settledShelfExpanded: next
 					? withExpandedProject(state.settledShelfExpanded, projectId)
@@ -2515,7 +2515,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	showMoreSettled: (projectId, count) =>
 		set((state) => {
 			const shown = Math.max(state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE, count);
-			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return {};
+			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return state;
 			return { settledShelfShown: { ...state.settledShelfShown, [projectId]: shown } };
 		}),
 	hydrateExpandedProjects: (projectIds) =>
@@ -2996,7 +2996,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setWorkspaceTurns: (workspaceId, turns, baseline, connectionGeneration) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || !isConnectedGeneration(s, connectionGeneration)) {
-				return {};
+				return s;
 			}
 			const baselineTurns = new Set(baseline);
 			const pushed = (s.turnsByWorkspace[workspaceId] ?? []).filter(
@@ -3011,7 +3011,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyTurnChanged: (turn) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[turn.workspaceId]) return {};
+			if (s.removedWorkspaceIds[turn.workspaceId]) return s;
 			return {
 				turnsByWorkspace: {
 					...s.turnsByWorkspace,
