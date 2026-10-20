@@ -15,7 +15,7 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 ## Boundary
 
-- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
+- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the lint warning ratchet; declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
 - **Allowed deps:** Bun/Node, the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
@@ -31,6 +31,8 @@ The extension boundary follows [[module-thinkrail-extensions]] and is registered
 - Browser sources (web app, UI, extension-api's browser half, and extension web halves) must never import extension-api's server half. All of extension-api remains runtime-browser-safe: pi types may describe the server contract, but neither entry may value-import pi. Browser sources and contracts likewise reject pi value imports, including external pi packages not registered as workspace roots. Explicit type imports/re-exports remain subject to the existing workspace-edge rules; a type-only import cannot bypass a forbidden module or source-half edge.
 
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.
+
+`lint` runs `lint-ratchet.ts`, then `oxfmt --check`. The ratchet runs oxlint once under the Bun runtime (so the TypeScript plugin loads without Node type stripping) with JSON output, and fails on any error. A diagnostic without a rule code (a parse error) is reported as `parse`. An unreadable report or a nonzero oxlint exit with no errors fails with the raw oxlint output and exit code. It counts warnings per (rule, file) against the committed `lint-baseline.json` and fails when a count rises or a new (rule, file) pair appears. A drop passes with a hint. `--update` rewrites the baseline only downward unless `--allow-increase` is given. Rule severity policy lives in `tools/oxlint/anti-slop/SPEC.md`.
 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 
