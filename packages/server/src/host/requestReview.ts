@@ -103,7 +103,7 @@ export function parseVerdict(
 		return null;
 	}
 	if (typeof parsed !== "object" || parsed === null) return null;
-	const candidate = { ...(parsed as object), itemId, itemTitle };
+	const candidate = { ...parsed, itemId, itemTitle };
 	if (!isPlanReviewResult(candidate)) return null;
 	const findings: ReviewFixComment[] = candidate.findings.map((f) => ({
 		id: f.id,
@@ -340,7 +340,7 @@ async function recordVerdict(
 				at: Date.now(),
 			});
 		} catch (error) {
-			log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
+			log.warn(`review guide was not recorded for ${params.workspaceId}`, error);
 		}
 	};
 	if (result.verdict === "approve") {
