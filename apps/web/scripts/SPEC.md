@@ -73,7 +73,7 @@ in agreement about the same functions.
   `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts`. Nothing in the shipped app may import from here — the generated
   CSS is the interface.
 - **Writes:** `src/styles/generated/` and `src/chat/generated/`, plus the census's `compiler-census.baseline.txt`. Both directories are committed (so every typography, colour, spacing
-  or glyph change is reviewable as a diff) and excluded from lint and format in `.oxlintrc.json` and `.oxfmtrc.json`.
+  or glyph change is reviewable as a diff) and excluded from lint and format in `oxlint.config.ts` and `.oxfmtrc.json`.
 
 ## Invariants
 

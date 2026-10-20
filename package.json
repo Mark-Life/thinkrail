@@ -109,7 +109,8 @@
 		"pi-spec-graph": "workspace:*",
 		"pi-todos": "workspace:*",
 		"turbo": "2.9.18",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"ultracite": "8.0.1"
 	},
 	"trustedDependencies": [
 		"esbuild"
