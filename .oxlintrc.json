@@ -54,7 +54,31 @@
 		"unicorn/prefer-string-starts-ends-with": "warn",
 		"jest/no-duplicate-hooks": "error",
 		"jest/no-export": "error",
-		"jest/no-focused-tests": "error"
+		"jest/no-focused-tests": "error",
+		"oxc/no-accumulating-spread": "warn",
+		"anti-slop/no-array-filter-map": "warn",
+		"anti-slop/no-reduce-accumulator-copy": "error",
+		"anti-slop/no-chained-type-assertions": "warn",
+		"anti-slop/no-known-value-widening": "warn",
+		"anti-slop/no-module-mocking": "error",
+		"anti-slop/no-object-parameters": "warn",
+		"anti-slop/no-reflect-apply": "warn",
+		"anti-slop/no-reflect-get": "warn",
+		"anti-slop/no-runtime-typeof": [
+			"warn",
+			{
+				"allowInTypeGuards": true
+			}
+		],
+		"anti-slop/no-shape-in-symbol-names": "warn",
+		"anti-slop/no-unknown-parameters": "warn",
+		"anti-slop/no-unknown-returns": "warn",
+		"anti-slop/no-unknown-type-aliases": "error",
+		"anti-slop/no-unsafe-dictionary-type": "warn",
+		"anti-slop/no-widen-then-assert": "error",
+		"anti-slop/require-safety-comment-for-type-assertion": "warn",
+		"anti-slop/no-conditional-empty-object-spread": "off",
+		"anti-slop/require-readable-spacing": "off"
 	},
 	"overrides": [
 		{
@@ -82,6 +106,12 @@
 				"react/rules-of-hooks": "error",
 				"react/set-state-in-effect": "warn",
 				"react/static-components": "warn"
+			}
+		},
+		{
+			"files": ["**/*.test.*", "**/*.spec.*", "e2e/**"],
+			"rules": {
+				"anti-slop/require-safety-comment-for-type-assertion": "off"
 			}
 		}
 	],
