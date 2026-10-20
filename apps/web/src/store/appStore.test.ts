@@ -404,6 +404,7 @@ test("a matching user echo adopts the host clock while retaining optimistic iden
 		{ name: "screen.png", content: { type: "image", data: "test", mimeType: "image/png" } },
 	]);
 	const optimistic = rt("clock").turns[0];
+	if (optimistic?.kind !== "user") throw new Error("optimistic turn missing");
 	const message = {
 		role: "user" as const,
 		content: [{ type: "text" as const, text: "fix the tests" }],
@@ -1437,6 +1438,7 @@ test("an exact host-authored pending dialog replays when its session hydrates", 
 				completion: null,
 				completionUnread: false,
 				queuedCount: 0,
+				backgroundWork: false,
 			},
 		},
 	]);
@@ -1457,6 +1459,7 @@ test("an exact host-authored pending dialog replays when its session hydrates", 
 			completion: null,
 			completionUnread: false,
 			queuedCount: 0,
+			backgroundWork: false,
 		},
 	});
 	expect(rt(request.sessionId).pendingExtUi).toBeNull();
@@ -1489,6 +1492,7 @@ test("a peer-cleared host dialog cannot replay from the orphan buffer", () => {
 			completion: null,
 			completionUnread: false,
 			queuedCount: 0,
+			backgroundWork: false,
 		},
 	});
 	store.applyExtUi(request);
@@ -1502,6 +1506,7 @@ test("a peer-cleared host dialog cannot replay from the orphan buffer", () => {
 			completion: null,
 			completionUnread: false,
 			queuedCount: 0,
+			backgroundWork: false,
 		},
 	});
 	expect(useAppStore.getState().extUiOrphans).toEqual([]);
@@ -2792,6 +2797,7 @@ test("applyWorkspaceRemoved restores the most-recent workspace across projects",
 						completion: { completionId: "completion:fallback", outcome: "succeeded" },
 						completionUnread: true,
 						queuedCount: 0,
+						backgroundWork: false,
 					},
 				},
 			},
