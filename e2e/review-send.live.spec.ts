@@ -7,63 +7,67 @@ import { selectPierreLine } from "./fixtures/pierre";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
-test("a review send reads back from the chat: summary → file → comment + fragment, disk reopen included", {
-	tag: "@agent",
-}, async ({ page }) => {
-	test.setTimeout(120_000);
-	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+test(
+	"a review send reads back from the chat: summary → file → comment + fragment, disk reopen included",
+	{
+		tag: "@agent",
+	},
+	async ({ page }) => {
+		test.setTimeout(120_000);
+		await openFixtureProject(page);
+		await createWorkspaceViaDialog(page);
 
-	writeFileSync(
-		join(worktree(), "script.ts"),
-		"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
-	);
-	await revealWorkbenchTool(page, "changes");
-	const changeItem = page.getByTestId("change-item").filter({ hasText: "script.ts" });
-	await expect(async () => {
-		const staleNotification = page
-			.getByRole("listitem")
-			.filter({ hasText: "Couldn't load this workspace's chats" })
-			.getByRole("button", { name: "Dismiss" });
-		if (await staleNotification.isVisible()) await staleNotification.click();
-		await changeItem.dblclick({ timeout: 2_000 });
-	}).toPass({ timeout: 30_000 });
-	await selectPierreLine(page.getByTestId("diff-view"), "two = 2");
-	await page.getByTestId("review-composer-input").fill("Please rename `two` to `pair`.");
-	await page.getByTestId("review-composer-send").click();
-
-	const summary = page.getByTestId("review-package-summary");
-	await expect(summary).toContainText("Sent 1 review comment on script.ts", { timeout: 30_000 });
-	const item = page.getByTestId("review-package-item");
-	await expect(item).toContainText("Please rename `two` to `pair`.");
-	await expect(item).toContainText("L2");
-
-	const unfoldAndAssert = async () => {
-		await expect(item.locator("pre")).toHaveCount(0);
+		writeFileSync(
+			join(worktree(), "script.ts"),
+			"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
+		);
+		await revealWorkbenchTool(page, "changes");
+		const changeItem = page.getByTestId("change-item").filter({ hasText: "script.ts" });
 		await expect(async () => {
-			await page.getByTestId("review-package-item-toggle").click();
-			await expect(item).toHaveAttribute("data-expanded", "true", { timeout: 1000 });
-		}).toPass({ timeout: 10_000 });
+			const staleNotification = page
+				.getByRole("listitem")
+				.filter({ hasText: "Couldn't load this workspace's chats" })
+				.getByRole("button", { name: "Dismiss" });
+			if (await staleNotification.isVisible()) await staleNotification.click();
+			await changeItem.dblclick({ timeout: 2_000 });
+		}).toPass({ timeout: 30_000 });
+		await selectPierreLine(page.getByTestId("diff-view"), "two = 2");
+		await page.getByTestId("review-composer-input").fill("Please rename `two` to `pair`.");
+		await page.getByTestId("review-composer-send").click();
+
+		const summary = page.getByTestId("review-package-summary");
+		await expect(summary).toContainText("Sent 1 review comment on script.ts", { timeout: 30_000 });
+		const item = page.getByTestId("review-package-item");
+		await expect(item).toContainText("Please rename `two` to `pair`.");
+		await expect(item).toContainText("L2");
+
+		const unfoldAndAssert = async () => {
+			await expect(item.locator("pre")).toHaveCount(0);
+			await expect(async () => {
+				await page.getByTestId("review-package-item-toggle").click();
+				await expect(item).toHaveAttribute("data-expanded", "true", { timeout: 1000 });
+			}).toPass({ timeout: 10_000 });
+			await expect(item.locator("pre")).toContainText("const two = 2;");
+		};
+		await unfoldAndAssert();
+
+		await expect(
+			page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
+		).toBeVisible({ timeout: 90_000 });
+		await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
+			timeout: 90_000,
+		});
+
+		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+		await chatTabs.first().getByTestId("editor-tab-close").click();
+		await expect(chatTabs).toHaveCount(0);
+		await page.getByTestId("chat-history").first().click();
+		await page.getByTestId("closed-chat-item").first().click();
+		await expect(chatTabs).toHaveCount(1);
+		await expect(page.getByTestId("review-package-summary")).toContainText(
+			"Sent 1 review comment on script.ts",
+		);
+		await expect(item).toContainText("Please rename `two` to `pair`.");
 		await expect(item.locator("pre")).toContainText("const two = 2;");
-	};
-	await unfoldAndAssert();
-
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
-	).toBeVisible({ timeout: 90_000 });
-	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
-		timeout: 90_000,
-	});
-
-	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await chatTabs.first().getByTestId("editor-tab-close").click();
-	await expect(chatTabs).toHaveCount(0);
-	await page.getByTestId("chat-history").first().click();
-	await page.getByTestId("closed-chat-item").first().click();
-	await expect(chatTabs).toHaveCount(1);
-	await expect(page.getByTestId("review-package-summary")).toContainText(
-		"Sent 1 review comment on script.ts",
-	);
-	await expect(item).toContainText("Please rename `two` to `pair`.");
-	await expect(item.locator("pre")).toContainText("const two = 2;");
-});
+	},
+);

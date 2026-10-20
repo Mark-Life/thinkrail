@@ -1,4 +1,4 @@
-type Mermaid = typeof import("mermaid")["default"];
+type Mermaid = (typeof import("mermaid"))["default"];
 
 let mermaidPromise: Promise<Mermaid> | null = null;
 let idCounter = 0;

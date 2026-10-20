@@ -10,8 +10,10 @@ const GROUP_LAYER_SELECTOR = '[data-testid="history-overlay"]';
 
 const GROUP_ID_SELECTOR = "[data-group-id]";
 
-export interface LayerDocument
-	extends Pick<Document, "querySelector" | "querySelectorAll" | "activeElement"> {}
+export interface LayerDocument extends Pick<
+	Document,
+	"querySelector" | "querySelectorAll" | "activeElement"
+> {}
 
 function hasGroupLayer(doc: LayerDocument) {
 	const groupId = doc.activeElement?.closest(GROUP_ID_SELECTOR)?.getAttribute("data-group-id");

@@ -423,8 +423,7 @@ export function isTodoReviewFixMessage(message: unknown): message is TodoReviewF
 
 export const BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE = "background-command-completion";
 
-export interface BackgroundCommandCompletionMessage
-	extends WireCustomMessage<BackgroundCommandCompletionDetails> {
+export interface BackgroundCommandCompletionMessage extends WireCustomMessage<BackgroundCommandCompletionDetails> {
 	customType: typeof BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE;
 	display: true;
 	details: BackgroundCommandCompletionDetails;
@@ -508,8 +507,10 @@ export function isModelContextWindow(value: unknown): value is number {
 
 export type ModelContextTarget = "available" | Pick<WireModel, "provider" | "id">;
 
-export interface ModelContextSetting
-	extends Pick<WireModel, "provider" | "id" | "name" | "contextWindow"> {
+export interface ModelContextSetting extends Pick<
+	WireModel,
+	"provider" | "id" | "name" | "contextWindow"
+> {
 	override: number | null;
 }
 

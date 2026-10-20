@@ -56,13 +56,11 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 
 	return readdirSync(abs, { withFileTypes: true })
 		.filter((entry) => entry.name !== ".git")
-		.map(
-			(entry): FileNode => ({
-				path: relative(root, join(abs, entry.name)),
-				name: entry.name,
-				kind: entry.isDirectory() ? "dir" : "file",
-			}),
-		)
+		.map((entry): FileNode => ({
+			path: relative(root, join(abs, entry.name)),
+			name: entry.name,
+			kind: entry.isDirectory() ? "dir" : "file",
+		}))
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 

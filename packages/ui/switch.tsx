@@ -1,11 +1,10 @@
 import type * as React from "react";
 import { cn } from "./utils";
 
-export interface SwitchProps
-	extends Omit<
-		React.ButtonHTMLAttributes<HTMLButtonElement>,
-		"aria-checked" | "aria-label" | "onChange" | "role" | "type"
-	> {
+export interface SwitchProps extends Omit<
+	React.ButtonHTMLAttributes<HTMLButtonElement>,
+	"aria-checked" | "aria-label" | "onChange" | "role" | "type"
+> {
 	checked: boolean;
 	label: string;
 	testId?: string;

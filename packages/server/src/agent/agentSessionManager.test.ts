@@ -1557,65 +1557,64 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 	}
 });
 
-test.each([
-	"removeSession",
-	"removeWorkspaceSessions",
-	"archiveDuringDelete",
-])("%s drains queued input while allowing an accepted answer to persist", async (teardown) => {
-	const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
-	const toolCallId = `accepted-on-${teardown}`;
-	const cwd = tmpCwd("trpi-removal-accepted-");
-	const manager = SessionManager.inMemory(cwd);
-	setSessionManagerFactory(() => manager);
-	fauxA.setResponses([
-		gatedQuestionMessage(toolCallId),
-		fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
-	]);
-	const session = await createSession({
-		cwd,
-		workspaceId: "ws-removal-accepted",
-		model: toWireModel(fauxA.getModel()),
-	});
-	const prompting = promptSession(session.sessionId, "Ask before continuing.");
-	prompting.catch(() => {});
-	try {
-		await waitForPath(gate.startedPath);
-		await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
-		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
-		const removing =
-			teardown === "removeSession"
-				? removeSession(session.sessionId)
-				: teardown === "removeWorkspaceSessions"
-					? removeWorkspaceSessions("ws-removal-accepted")
-					: Promise.all([
-							deleteSession(session.sessionId, "ws-removal-accepted", cwd),
-							removeWorkspaceSessions("ws-removal-accepted"),
-						]);
-		if (teardown === "archiveDuringDelete") {
-			await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
-		} else {
-			await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+test.each(["removeSession", "removeWorkspaceSessions", "archiveDuringDelete"])(
+	"%s drains queued input while allowing an accepted answer to persist",
+	async (teardown) => {
+		const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
+		const toolCallId = `accepted-on-${teardown}`;
+		const cwd = tmpCwd("trpi-removal-accepted-");
+		const manager = SessionManager.inMemory(cwd);
+		setSessionManagerFactory(() => manager);
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
+		]);
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-removal-accepted",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const prompting = promptSession(session.sessionId, "Ask before continuing.");
+		prompting.catch(() => {});
+		try {
+			await waitForPath(gate.startedPath);
+			await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
+			const result = gatedQuestionAnswer();
+			const answering = answerQuestion(session.sessionId, toolCallId, result);
+			const removing =
+				teardown === "removeSession"
+					? removeSession(session.sessionId)
+					: teardown === "removeWorkspaceSessions"
+						? removeWorkspaceSessions("ws-removal-accepted")
+						: Promise.all([
+								deleteSession(session.sessionId, "ws-removal-accepted", cwd),
+								removeWorkspaceSessions("ws-removal-accepted"),
+							]);
+			if (teardown === "archiveDuringDelete") {
+				await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
+			} else {
+				await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+			}
+			gate.release();
+			await Promise.all([answering, removing, prompting]);
+			const messages = manager.buildSessionContext().messages;
+			const persisted = messages.find(
+				(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+			);
+			if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+			expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
+			expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
+			expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
+			expect(hasSession(session.sessionId)).toBe(false);
+		} finally {
+			gate.release();
+			gate.remove();
+			if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+			await prompting.catch(() => {});
+			setSessionManagerFactory(() => SessionManager.inMemory());
 		}
-		gate.release();
-		await Promise.all([answering, removing, prompting]);
-		const messages = manager.buildSessionContext().messages;
-		const persisted = messages.find(
-			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
-		);
-		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
-		expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
-		expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
-		expect(hasSession(session.sessionId)).toBe(false);
-	} finally {
-		gate.release();
-		gate.remove();
-		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
-		await prompting.catch(() => {});
-		setSessionManagerFactory(() => SessionManager.inMemory());
-	}
-});
+	},
+);
 
 test("an answer accepted before execute persists before Stop aborts the continuation", async () => {
 	const gate = installAskToolGate("ask-answer-stop-gate");

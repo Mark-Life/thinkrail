@@ -1,10 +1,4 @@
-export {
-	buildTextQuote,
-	hashContent,
-	lineRangeOf,
-	reanchor,
-	textQuoteOf,
-} from "./anchoring";
+export { buildTextQuote, hashContent, lineRangeOf, reanchor, textQuoteOf } from "./anchoring";
 export { buildReviewFixDetails, renderPackage, toReviewFixComment } from "./packageRender";
 export {
 	addComment,

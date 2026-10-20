@@ -175,93 +175,102 @@ function persistedWorkspaceId(): string {
 	return workspace.id;
 }
 
-test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, agent resumes", {
-	tag: "@agent",
-}, async ({ page }) => {
-	test.setTimeout(300_000);
-	seedState();
-	await startHost();
+test(
+	"a pending questionnaire survives a host kill -9: reboot, reopen, answer, agent resumes",
+	{
+		tag: "@agent",
+	},
+	async ({ page }) => {
+		test.setTimeout(300_000);
+		seedState();
+		await startHost();
 
-	await page.goto(BASE);
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("add-project-menu").click();
-	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("project-item").first()).toBeVisible();
+		await page.goto(BASE);
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await page.getByTestId("add-project-menu").click();
+		await page.getByTestId("menu-open-project").click();
+		await expect(page.getByTestId("project-item").first()).toBeVisible();
 
-	await page.getByTestId("add-workspace").first().click();
-	const dialog = page.getByTestId("new-workspace-dialog");
-	await expect(dialog).toBeVisible();
-	await page.getByTestId("create-workspace").click();
-	await expect(dialog).toBeHidden();
-	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1, {
-		timeout: 20_000,
-	});
-	await expect(page.getByTestId("chat-input")).toBeVisible();
-
-	await page
-		.getByTestId("chat-input")
-		.fill(
-			"Call the ask_user_question tool with EXACTLY ONE single-select question (multiSelect false) offering 2 short options with descriptions and no previews. Call no other tool, and do nothing else besides asking. After I answer, reply with one short sentence.",
+		await page.getByTestId("add-workspace").first().click();
+		const dialog = page.getByTestId("new-workspace-dialog");
+		await expect(dialog).toBeVisible();
+		await page.getByTestId("create-workspace").click();
+		await expect(dialog).toBeHidden();
+		await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(
+			1,
+			{
+				timeout: 20_000,
+			},
 		);
-	await page.getByTestId("chat-send").click();
-	await expect(activeCard(page)).toBeVisible({ timeout: 90_000 });
-	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "true", {
-		timeout: 30_000,
-	});
+		await expect(page.getByTestId("chat-input")).toBeVisible();
 
-	await stopHost("SIGKILL");
-	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
-		"data-status",
-		"connected",
-		{ timeout: 30_000 },
-	);
-	await startHost();
-	await page.reload();
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await page
+			.getByTestId("chat-input")
+			.fill(
+				"Call the ask_user_question tool with EXACTLY ONE single-select question (multiSelect false) offering 2 short options with descriptions and no previews. Call no other tool, and do nothing else besides asking. After I answer, reply with one short sentence.",
+			);
+		await page.getByTestId("chat-send").click();
+		await expect(activeCard(page)).toBeVisible({ timeout: 90_000 });
+		await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "true", {
+			timeout: 30_000,
+		});
 
-	await expect(activeWorktreeRow(page)).toHaveCount(1, { timeout: 15_000 });
-	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await expect(chatTab).toHaveCount(1);
-	const sessionId = await chatTab.getAttribute("data-session-id");
-	if (!sessionId) throw new Error("Restarted chat tab is missing its session id");
-	const workspaceId = persistedWorkspaceId();
-	const wire = await E2eWire.connect(PORT);
-	try {
-		const before = await wire.request("session.getMessages", { sessionId, workspaceId });
-		const assistantCount = before.messages.filter((message) => message.role === "assistant").length;
-		const card = activeCard(page);
-		await expect(card).toBeVisible({ timeout: 30_000 });
-		await card.getByTestId("ask-option").first().click();
-		await card.getByTestId("ask-submit").click();
+		await stopHost("SIGKILL");
+		await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+			"data-status",
+			"connected",
+			{ timeout: 30_000 },
+		);
+		await startHost();
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
-		await expect(
-			page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first(),
-		).toBeVisible({ timeout: 60_000 });
-		await expect
-			.poll(
-				async () => {
-					const transcript = await wire.request("session.getMessages", {
-						sessionId,
-						workspaceId,
-					});
-					return transcript.messages.filter((message) => message.role === "assistant").length;
-				},
-				{ timeout: 90_000 },
-			)
-			.toBeGreaterThan(assistantCount);
-		await expect
-			.poll(
-				async () =>
-					(
-						await wire.request("session.getMessages", {
+		await expect(activeWorktreeRow(page)).toHaveCount(1, { timeout: 15_000 });
+		const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+		await expect(chatTab).toHaveCount(1);
+		const sessionId = await chatTab.getAttribute("data-session-id");
+		if (!sessionId) throw new Error("Restarted chat tab is missing its session id");
+		const workspaceId = persistedWorkspaceId();
+		const wire = await E2eWire.connect(PORT);
+		try {
+			const before = await wire.request("session.getMessages", { sessionId, workspaceId });
+			const assistantCount = before.messages.filter(
+				(message) => message.role === "assistant",
+			).length;
+			const card = activeCard(page);
+			await expect(card).toBeVisible({ timeout: 30_000 });
+			await card.getByTestId("ask-option").first().click();
+			await card.getByTestId("ask-submit").click();
+
+			await expect(
+				page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first(),
+			).toBeVisible({ timeout: 60_000 });
+			await expect
+				.poll(
+					async () => {
+						const transcript = await wire.request("session.getMessages", {
 							sessionId,
 							workspaceId,
-						})
-					).summary.isStreaming,
-				{ timeout: 30_000 },
-			)
-			.toBe(false);
-	} finally {
-		wire.close();
-	}
-});
+						});
+						return transcript.messages.filter((message) => message.role === "assistant").length;
+					},
+					{ timeout: 90_000 },
+				)
+				.toBeGreaterThan(assistantCount);
+			await expect
+				.poll(
+					async () =>
+						(
+							await wire.request("session.getMessages", {
+								sessionId,
+								workspaceId,
+							})
+						).summary.isStreaming,
+					{ timeout: 30_000 },
+				)
+				.toBe(false);
+		} finally {
+			wire.close();
+		}
+	},
+);

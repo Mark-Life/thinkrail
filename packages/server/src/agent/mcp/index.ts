@@ -25,11 +25,7 @@ export {
 	writeMcpServerEntry,
 } from "./management";
 export { maskMcpEndpoint, redactMcpText } from "./redact";
-export {
-	isMcpResultTool,
-	MCP_SUMMARY_BYTES,
-	summarizeMcpResult,
-} from "./results";
+export { isMcpResultTool, MCP_SUMMARY_BYTES, summarizeMcpResult } from "./results";
 export {
 	createMcpSessionHost,
 	MCP_CONFIRM_ALWAYS,

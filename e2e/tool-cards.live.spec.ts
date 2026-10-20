@@ -35,39 +35,45 @@ test("read tool renders a file step naming the file", { tag: "@agent" }, async (
 	await expect(step.getByTestId("tool-read")).toContainText("README.md");
 });
 
-test("write then edit render a preview body and a diff body", { tag: "@agent" }, async ({
-	page,
-}) => {
-	test.setTimeout(150_000);
-	await openChatAndSend(
-		page,
-		"First use the write tool to create a new file notes.txt whose only content is the line: hello world. " +
-			"Then use the edit tool to replace 'hello world' with 'goodbye world' in notes.txt.",
-	);
-	const write = await expandToolStep(page, "write");
-	await expect(write.getByTestId("tool-write")).toContainText("notes.txt");
+test(
+	"write then edit render a preview body and a diff body",
+	{ tag: "@agent" },
+	async ({ page }) => {
+		test.setTimeout(150_000);
+		await openChatAndSend(
+			page,
+			"First use the write tool to create a new file notes.txt whose only content is the line: hello world. " +
+				"Then use the edit tool to replace 'hello world' with 'goodbye world' in notes.txt.",
+		);
+		const write = await expandToolStep(page, "write");
+		await expect(write.getByTestId("tool-write")).toContainText("notes.txt");
 
-	const edit = await expandToolStep(page, "edit");
-	await expect(edit.getByTestId("tool-edit")).toContainText("notes.txt");
-});
+		const edit = await expandToolStep(page, "edit");
+		await expect(edit.getByTestId("tool-edit")).toContainText("notes.txt");
+	},
+);
 
-test("long written content collapses behind a Show all toggle (Task 10)", {
-	tag: "@agent",
-}, async ({ page }) => {
-	test.setTimeout(120_000);
-	await openChatAndSend(
-		page,
-		"Use the write tool to create a file count.txt containing the numbers 1 to 40, one number per line, and nothing else.",
-	);
-	const step = await expandToolStep(page, "write");
+test(
+	"long written content collapses behind a Show all toggle (Task 10)",
+	{
+		tag: "@agent",
+	},
+	async ({ page }) => {
+		test.setTimeout(120_000);
+		await openChatAndSend(
+			page,
+			"Use the write tool to create a file count.txt containing the numbers 1 to 40, one number per line, and nothing else.",
+		);
+		const step = await expandToolStep(page, "write");
 
-	const toggle = step.getByTestId("collapsible-toggle").first();
-	await expect(toggle).toBeVisible({ timeout: 30_000 });
-	await expect(toggle).toContainText("Show all");
-	const collapsible = step.getByTestId("collapsible").first();
-	await expect(collapsible).toHaveAttribute("data-expanded", "false");
+		const toggle = step.getByTestId("collapsible-toggle").first();
+		await expect(toggle).toBeVisible({ timeout: 30_000 });
+		await expect(toggle).toContainText("Show all");
+		const collapsible = step.getByTestId("collapsible").first();
+		await expect(collapsible).toHaveAttribute("data-expanded", "false");
 
-	await toggle.click();
-	await expect(collapsible).toHaveAttribute("data-expanded", "true");
-	await expect(toggle).toContainText("Show less");
-});
+		await toggle.click();
+		await expect(collapsible).toHaveAttribute("data-expanded", "true");
+		await expect(toggle).toContainText("Show less");
+	},
+);

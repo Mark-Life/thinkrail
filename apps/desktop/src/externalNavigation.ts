@@ -23,10 +23,10 @@ export function externalNavigationUrl(value: unknown, origin: string): string | 
 		typeof detail === "string"
 			? detail
 			: typeof detail === "object" &&
-					detail !== null &&
-					!Array.isArray(detail) &&
-					"url" in detail &&
-					typeof detail.url === "string"
+				  detail !== null &&
+				  !Array.isArray(detail) &&
+				  "url" in detail &&
+				  typeof detail.url === "string"
 				? detail.url
 				: null;
 	if (!raw || raw.length > MAX_NAVIGATION_DETAIL_LENGTH) return null;
