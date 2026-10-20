@@ -25,28 +25,30 @@ async function awaitExpandedCard(page: Page, tool: string): Promise<Locator> {
 	return card;
 }
 
-test("a disabled visualize extension is not offered to the agent", { tag: "@agent" }, async ({
-	page,
-}) => {
-	test.setTimeout(150_000);
-	await openWorkspaceChat(page);
-	await setVisualizeEnabled(page, false);
-	try {
-		await page
-			.getByTestId("chat-input")
-			.fill(
-				"If you have a tool named visualize, call it with type='diagram' and mermaid `flowchart TD; A --> B`. If you do not have it, reply with exactly NO_VISUALIZE_TOOL and call no tools.",
-			);
-		await page.getByTestId("chat-send").click();
-		await waitForAgentSettled(page);
-		await expect(page.locator('[data-testid="tool-card"][data-tool="visualize"]')).toHaveCount(0);
-		await expect(
-			page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
-		).toContainText("NO_VISUALIZE_TOOL");
-	} finally {
-		if (!page.isClosed()) await setVisualizeEnabled(page, true);
-	}
-});
+test(
+	"a disabled visualize extension is not offered to the agent",
+	{ tag: "@agent" },
+	async ({ page }) => {
+		test.setTimeout(150_000);
+		await openWorkspaceChat(page);
+		await setVisualizeEnabled(page, false);
+		try {
+			await page
+				.getByTestId("chat-input")
+				.fill(
+					"If you have a tool named visualize, call it with type='diagram' and mermaid `flowchart TD; A --> B`. If you do not have it, reply with exactly NO_VISUALIZE_TOOL and call no tools.",
+				);
+			await page.getByTestId("chat-send").click();
+			await waitForAgentSettled(page);
+			await expect(page.locator('[data-testid="tool-card"][data-tool="visualize"]')).toHaveCount(0);
+			await expect(
+				page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
+			).toContainText("NO_VISUALIZE_TOOL");
+		} finally {
+			if (!page.isClosed()) await setVisualizeEnabled(page, true);
+		}
+	},
+);
 
 test("visualize (diagram) renders mermaid as an SVG", { tag: "@agent" }, async ({ page }) => {
 	test.setTimeout(150_000);
@@ -92,18 +94,22 @@ test("visualize (diagram) renders mermaid as an SVG", { tag: "@agent" }, async (
 	await expect(dialog).toBeHidden();
 });
 
-test("visualize (comparison) renders option cards with a recommended pick", {
-	tag: "@agent",
-}, async ({ page }) => {
-	test.setTimeout(150_000);
-	await openChatAndSend(
-		page,
-		"Use the visualize tool with type='comparison' to compare REST and GraphQL — give each two pros and one con, and mark exactly one option as recommended. Use only that tool.",
-	);
-	const card = await awaitExpandedCard(page, "visualize");
-	const body = card.getByTestId("tool-visualize-comparison");
-	await expect(body).toBeVisible();
-	await expect(body).toContainText("REST");
-	await expect(body).toContainText("GraphQL");
-	await expect(body.locator('[data-recommended="true"]').first()).toBeVisible();
-});
+test(
+	"visualize (comparison) renders option cards with a recommended pick",
+	{
+		tag: "@agent",
+	},
+	async ({ page }) => {
+		test.setTimeout(150_000);
+		await openChatAndSend(
+			page,
+			"Use the visualize tool with type='comparison' to compare REST and GraphQL — give each two pros and one con, and mark exactly one option as recommended. Use only that tool.",
+		);
+		const card = await awaitExpandedCard(page, "visualize");
+		const body = card.getByTestId("tool-visualize-comparison");
+		await expect(body).toBeVisible();
+		await expect(body).toContainText("REST");
+		await expect(body).toContainText("GraphQL");
+		await expect(body.locator('[data-recommended="true"]').first()).toBeVisible();
+	},
+);

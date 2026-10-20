@@ -107,17 +107,11 @@ export function BottomCreationTargets({
 			: null;
 	const canCreateLeft = Boolean(
 		tab &&
-			canCreateAuxiliaryGroup(shared.document, "bottom", tab, shared.maxBottomGroups, groupIndex),
+		canCreateAuxiliaryGroup(shared.document, "bottom", tab, shared.maxBottomGroups, groupIndex),
 	);
 	const canCreateRight = Boolean(
 		tab &&
-			canCreateAuxiliaryGroup(
-				shared.document,
-				"bottom",
-				tab,
-				shared.maxBottomGroups,
-				groupIndex + 1,
-			),
+		canCreateAuxiliaryGroup(shared.document, "bottom", tab, shared.maxBottomGroups, groupIndex + 1),
 	);
 	if (!canCreateLeft && !canCreateRight) return null;
 	return (

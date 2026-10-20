@@ -1,7 +1,7 @@
 import type { MermaidValidator } from "@thinkrail/pi-visualize";
 import { parseHTML } from "linkedom";
 
-type Mermaid = typeof import("mermaid")["default"];
+type Mermaid = (typeof import("mermaid"))["default"];
 type DomGlobalName = "document" | "window";
 
 const parseTailKey = Symbol.for("thinkrail.visualize.mermaid.parseTail");

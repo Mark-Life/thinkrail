@@ -331,8 +331,10 @@ export interface BackgroundCommandSummary {
 	errorMessage?: string;
 }
 
-export interface BackgroundCommandCompletionDetails
-	extends Omit<BackgroundCommandSummary, "command"> {
+export interface BackgroundCommandCompletionDetails extends Omit<
+	BackgroundCommandSummary,
+	"command"
+> {
 	status: "completed" | "error" | "stopped";
 	finishedAt: number;
 	output: { text: string; truncated: boolean };

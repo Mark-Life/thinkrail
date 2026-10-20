@@ -65,54 +65,62 @@ async function expectHeldThenLit(
 	if (lastRunning !== -1) expect(firstUnread).toBeGreaterThan(lastRunning);
 }
 
-test("a running background command keeps the dot off until it finishes and the woken turn settles", {
-	tag: "@agent",
-}, async ({ page }) => {
-	test.setTimeout(300_000);
-	const states = observeStates(page);
-	await openWorkspaceChat(page);
-	await page
-		.getByTestId("chat-input")
-		.fill(
-			'Call background_command once with action start, name attention-hold, timeout 90, and command "sleep 20; printf HOLD_DONE". Then reply with the single word started. Do not call output or list, and do not wait for completion. When the completion arrives later, reply with the single word done.',
-		);
-	await page.getByTestId("chat-send").click();
-	const sessionId = await currentParentId(page);
-	await expectHeldThenLit(
-		page,
-		() => states(sessionId),
-		async () => {
-			await expect(page.getByTestId("background-command-completion")).toHaveAttribute(
-				"data-status",
-				"completed",
-				{ timeout: 120_000 },
+test(
+	"a running background command keeps the dot off until it finishes and the woken turn settles",
+	{
+		tag: "@agent",
+	},
+	async ({ page }) => {
+		test.setTimeout(300_000);
+		const states = observeStates(page);
+		await openWorkspaceChat(page);
+		await page
+			.getByTestId("chat-input")
+			.fill(
+				'Call background_command once with action start, name attention-hold, timeout 90, and command "sleep 20; printf HOLD_DONE". Then reply with the single word started. Do not call output or list, and do not wait for completion. When the completion arrives later, reply with the single word done.',
 			);
-		},
-	);
-});
+		await page.getByTestId("chat-send").click();
+		const sessionId = await currentParentId(page);
+		await expectHeldThenLit(
+			page,
+			() => states(sessionId),
+			async () => {
+				await expect(page.getByTestId("background-command-completion")).toHaveAttribute(
+					"data-status",
+					"completed",
+					{ timeout: 120_000 },
+				);
+			},
+		);
+	},
+);
 
-test("a running background subagent keeps the dot off until it finishes and the woken turn settles", {
-	tag: "@agent",
-}, async ({ page }) => {
-	test.setTimeout(360_000);
-	const states = observeStates(page);
-	await openWorkspaceChat(page);
-	await page
-		.getByTestId("chat-input")
-		.fill(
-			'Call the Agent tool once with subagent_type "worker", run_in_background set to true, and task "Run the bash command `sleep 25`, then reply with exactly: HOLD-MARKER". Then reply with the single word started. Do NOT call get_subagent_result — the result arrives on its own. When it arrives, reply with the single word done.',
-		);
-	await page.getByTestId("chat-send").click();
-	const sessionId = await currentParentId(page);
-	await expectHeldThenLit(
-		page,
-		() => states(sessionId),
-		async () => {
-			await expect(page.getByTestId("subagent-completion")).toHaveAttribute(
-				"data-status",
-				"completed",
-				{ timeout: 240_000 },
+test(
+	"a running background subagent keeps the dot off until it finishes and the woken turn settles",
+	{
+		tag: "@agent",
+	},
+	async ({ page }) => {
+		test.setTimeout(360_000);
+		const states = observeStates(page);
+		await openWorkspaceChat(page);
+		await page
+			.getByTestId("chat-input")
+			.fill(
+				'Call the Agent tool once with subagent_type "worker", run_in_background set to true, and task "Run the bash command `sleep 25`, then reply with exactly: HOLD-MARKER". Then reply with the single word started. Do NOT call get_subagent_result — the result arrives on its own. When it arrives, reply with the single word done.',
 			);
-		},
-	);
-});
+		await page.getByTestId("chat-send").click();
+		const sessionId = await currentParentId(page);
+		await expectHeldThenLit(
+			page,
+			() => states(sessionId),
+			async () => {
+				await expect(page.getByTestId("subagent-completion")).toHaveAttribute(
+					"data-status",
+					"completed",
+					{ timeout: 240_000 },
+				);
+			},
+		);
+	},
+);

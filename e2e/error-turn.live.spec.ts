@@ -32,26 +32,30 @@ async function forceBadModelOnCreate(page: Page): Promise<void> {
 	});
 }
 
-test("a bad model surfaces a visible error toast, not a false ✓ Done", {
-	tag: "@agent",
-}, async ({ page }) => {
-	await forceBadModelOnCreate(page);
-	await openFixtureProject(page);
+test(
+	"a bad model surfaces a visible error toast, not a false ✓ Done",
+	{
+		tag: "@agent",
+	},
+	async ({ page }) => {
+		await forceBadModelOnCreate(page);
+		await openFixtureProject(page);
 
-	await page.getByTestId("add-workspace").first().click();
-	const dialog = page.getByTestId("new-workspace-dialog");
-	await expect(dialog).toBeVisible();
-	await expect(dialog.getByTestId("thinking-selector")).toBeVisible();
-	await page.getByTestId("ws-prompt").fill("Reply with the single word: pong");
-	await page.getByTestId("create-workspace").click();
-	await expect(dialog).toBeHidden();
+		await page.getByTestId("add-workspace").first().click();
+		const dialog = page.getByTestId("new-workspace-dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByTestId("thinking-selector")).toBeVisible();
+		await page.getByTestId("ws-prompt").fill("Reply with the single word: pong");
+		await page.getByTestId("create-workspace").click();
+		await expect(dialog).toBeHidden();
 
-	const toast = page.locator('[data-testid="toast"][data-variant="error"]');
-	await expect(toast).toBeVisible({ timeout: 15_000 });
-	await expect(toast).toContainText("Couldn't start the chat");
-	await expect(toast).toContainText(BOGUS_MODEL_ID);
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
-	).toHaveCount(0);
-});
+		const toast = page.locator('[data-testid="toast"][data-variant="error"]');
+		await expect(toast).toBeVisible({ timeout: 15_000 });
+		await expect(toast).toContainText("Couldn't start the chat");
+		await expect(toast).toContainText(BOGUS_MODEL_ID);
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+		await expect(
+			page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
+		).toHaveCount(0);
+	},
+);

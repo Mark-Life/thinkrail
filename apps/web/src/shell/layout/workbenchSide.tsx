@@ -74,19 +74,13 @@ export const SideGroupView = memo(function SideGroupView({
 			: null;
 	const canCreateAbove = Boolean(
 		draggedSideTab &&
-			canPlaceLayoutTab(draggedSideTab, side) &&
-			canCreateSideGroup(shared.document, side, draggedSideTab, shared.maxSideGroups, groupIndex),
+		canPlaceLayoutTab(draggedSideTab, side) &&
+		canCreateSideGroup(shared.document, side, draggedSideTab, shared.maxSideGroups, groupIndex),
 	);
 	const canCreateBelow = Boolean(
 		draggedSideTab &&
-			canPlaceLayoutTab(draggedSideTab, side) &&
-			canCreateSideGroup(
-				shared.document,
-				side,
-				draggedSideTab,
-				shared.maxSideGroups,
-				groupIndex + 1,
-			),
+		canPlaceLayoutTab(draggedSideTab, side) &&
+		canCreateSideGroup(shared.document, side, draggedSideTab, shared.maxSideGroups, groupIndex + 1),
 	);
 	const creationTargets =
 		canCreateAbove || canCreateBelow ? (
