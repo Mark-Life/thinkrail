@@ -56,7 +56,7 @@ function entryText(def: ScenarioDef): Promise<string> {
 		return Promise.resolve(
 			`/skill:${def.entry.skill}${def.entry.args ? ` ${def.entry.args}` : ""}`,
 		);
-	// biome-ignore lint/style/noNonNullAssertion: defineScenario guarantees entry or user.
+	// oxlint-disable-next-line typescript/no-non-null-assertion -- defineScenario guarantees entry or user.
 	return openingMessage(def.user!);
 }
 
