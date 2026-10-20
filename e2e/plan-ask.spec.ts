@@ -18,7 +18,7 @@ test("a pending ask surfaces on the rail as waiting_question glance, not paused"
 	page,
 }) => {
 	await openFixtureProject(page);
-	const askArgs: AskUserQuestionArgs = {
+	const askArgs = {
 		questions: [
 			{
 				question: "Is this blocking?",
@@ -29,7 +29,7 @@ test("a pending ask surfaces on the rail as waiting_question glance, not paused"
 				],
 			},
 		],
-	};
+	} satisfies AskUserQuestionArgs;
 	const ack: AskUserQuestionAckDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "rail glance on pending ask",
