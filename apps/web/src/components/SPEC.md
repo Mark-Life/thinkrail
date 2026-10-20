@@ -73,7 +73,8 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
-  itself).
+  itself); `useIdleWarmup(enabled, warm)` via `@/components/useIdleWarmup` (runs `warm` once in an idle
+  callback, or after 1 s where none exists, while `enabled` holds: the shared lazy-chunk prefetch).
 - **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` — the monogram regions `RunningIcon` clips to,
   shared with the shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
