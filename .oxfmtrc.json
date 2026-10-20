@@ -5,7 +5,10 @@
 	"singleQuote": false,
 	"semi": true,
 	"trailingComma": "all",
-	"sortImports": false,
+	"sortImports": {
+		"newlinesBetween": false,
+		"partitionByNewline": true
+	},
 	"sortPackageJson": false,
 	"sortTailwindcss": false,
 	"astro": false,
@@ -22,7 +25,9 @@
 	"overrides": [
 		{
 			"files": ["*.json", "*.jsonc"],
-			"options": { "trailingComma": "none" }
+			"options": {
+				"trailingComma": "none"
+			}
 		}
 	]
 }
