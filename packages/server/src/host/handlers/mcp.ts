@@ -1,0 +1,36 @@
+import {
+	mcpAdd,
+	mcpApprove,
+	mcpList,
+	mcpLogin,
+	mcpLogout,
+	mcpReadLog,
+	mcpReadOutput,
+	mcpReconnect,
+	mcpRemove,
+	mcpRevokeToolGrant,
+	mcpSetProjectOverride,
+	mcpSetSessionOverride,
+	mcpShareWithRepo,
+	mcpTestConnection,
+	mcpUpdate,
+} from "../mcp";
+import type { HandlersFor } from "./types";
+
+export const mcpHandlers: HandlersFor<"mcp"> = {
+	"mcp.list": (params) => mcpList(params),
+	"mcp.add": (params) => mcpAdd(params),
+	"mcp.update": (params) => mcpUpdate(params),
+	"mcp.remove": (params) => mcpRemove(params),
+	"mcp.setProjectOverride": (params) => mcpSetProjectOverride(params),
+	"mcp.revokeToolGrant": (params) => mcpRevokeToolGrant(params),
+	"mcp.setSessionOverride": (params) => mcpSetSessionOverride(params),
+	"mcp.approve": (params) => mcpApprove(params),
+	"mcp.shareWithRepo": (params) => mcpShareWithRepo(params),
+	"mcp.reconnect": (params) => mcpReconnect(params),
+	"mcp.login": (params, ctx) => mcpLogin(params, ctx.clientKey),
+	"mcp.logout": (params, ctx) => mcpLogout(params, ctx.clientKey),
+	"mcp.readOutput": (params) => mcpReadOutput(params),
+	"mcp.readLog": (params) => mcpReadLog(params),
+	"mcp.testConnection": (params, ctx) => mcpTestConnection(params, ctx.clientKey),
+};
