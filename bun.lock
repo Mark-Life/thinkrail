@@ -36,7 +36,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "apps/desktop": {
@@ -54,7 +53,6 @@
         "pe-library": "2.0.1",
         "resedit": "3.1.0",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "apps/web": {
@@ -108,7 +106,6 @@
         "babel-plugin-react-compiler": "1.0.0",
         "tailwindcss": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
         "vite": "8.0.16",
       },
     },
@@ -153,7 +150,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/contracts": {
@@ -164,7 +160,6 @@
         "@earendil-works/pi-ai": "catalog:",
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/extension-api": {
@@ -178,7 +173,6 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -199,7 +193,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -219,7 +212,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-agent-core": "*",
@@ -238,7 +230,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-agent-core": "*",
@@ -259,7 +250,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-agent-core": "*",
@@ -275,7 +265,6 @@
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -290,7 +279,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-ai": "*",
@@ -329,7 +317,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/shared": {
@@ -341,7 +328,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/spec-graph": {
@@ -356,7 +342,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-ai": "*",
@@ -388,7 +373,6 @@
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/website-analytics": {
@@ -397,7 +381,6 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "pi-extensions/visualize": {
@@ -413,7 +396,6 @@
         "@types/bun": "catalog:",
         "tsrs": "catalog:",
         "typebox": "catalog:",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-ai": "*",
@@ -439,7 +421,6 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "tsrs": "catalog:",
-        "typescript": "catalog:",
       },
     },
   },

@@ -71,7 +71,6 @@
 		"babel-plugin-react-compiler": "1.0.0",
 		"tailwindcss": "catalog:",
 		"tsrs": "catalog:",
-		"typescript": "catalog:",
 		"vite": "8.0.16"
 	}
 }
