@@ -151,10 +151,18 @@ function stringLiteralValue(node: Argument | null | undefined): string | undefin
 	return undefined;
 }
 
+function parseLang(path: string) {
+	if (path.endsWith(".tsx")) return "tsx";
+	return /\.[mc]?ts$/.test(path) ? "ts" : "jsx";
+}
+
 function importSpecifiers(path: string): SourceImport[] {
-	const { program } = parseSync(path, readFileSync(path, "utf8"), {
-		lang: path.endsWith("x") ? "tsx" : "ts",
+	const { program, errors } = parseSync(path, readFileSync(path, "utf8"), {
+		lang: parseLang(path),
 	});
+	if (errors.length > 0) {
+		throw new Error(`cannot parse ${path}: ${errors.map((error) => error.message).join("; ")}`);
+	}
 	const specifiers: SourceImport[] = [];
 	const add = (node: Argument | null | undefined, typeOnly = false): void => {
 		const specifier = stringLiteralValue(node);
