@@ -8,7 +8,8 @@
 		"designs/**",
 		"**/.claude/**",
 		"apps/web/src/styles/generated/**",
-		"apps/web/src/chat/generated/**"
+		"apps/web/src/chat/generated/**",
+		"tools/oxlint/anti-slop/**"
 	],
 	"rules": {
 		"default-case-last": "error",
@@ -82,6 +83,12 @@
 				"react/set-state-in-effect": "warn",
 				"react/static-components": "warn"
 			}
+		}
+	],
+	"jsPlugins": [
+		{
+			"name": "anti-slop",
+			"specifier": "./tools/oxlint/anti-slop/index.ts"
 		}
 	]
 }
