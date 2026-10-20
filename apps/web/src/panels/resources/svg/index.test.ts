@@ -2,10 +2,9 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { registerResourceRenderer, resolveRenderers } from "@/resources";
+import { svgRenderer } from ".";
 import { codeRenderer } from "../code";
 import { imageRenderer } from "../image";
-import { svgRenderer } from ".";
-import { SvgFrame } from "./SvgFrame";
 import {
 	buildSvgDocument,
 	svgByteLength,
@@ -13,6 +12,7 @@ import {
 	svgDiffViewState,
 	svgIntrinsicSize,
 } from "./svgDocument";
+import { SvgFrame } from "./SvgFrame";
 
 test("SVG renderer registration outranks raster images and stays sandboxed", () => {
 	expect(svgRenderer).toMatchObject({

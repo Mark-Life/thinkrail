@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import type { ResourceContent, ResourceDiffProps } from "@/resources";
 import { diffContentStamp } from "../reviewComposerState";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
-import { SvgFrame } from "./SvgFrame";
 import {
 	buildSvgDocument,
 	type SvgThemeTokens,
@@ -10,6 +9,7 @@ import {
 	svgDiffViewState,
 	svgIntrinsicSize,
 } from "./svgDocument";
+import { SvgFrame } from "./SvgFrame";
 import { useSvgTheme } from "./useSvgTheme";
 
 function textOf(content: ResourceContent): string | null {

@@ -7,7 +7,6 @@ import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { useScrollViewState } from "../../useScrollViewState";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
-import { NotebookCellBody } from "./NotebookOutputView";
 import {
 	type NotebookCell,
 	notebookCellDraft,
@@ -15,6 +14,7 @@ import {
 	parseNotebook,
 	placedNotebookThreadIds,
 } from "./notebookModel";
+import { NotebookCellBody } from "./NotebookOutputView";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 

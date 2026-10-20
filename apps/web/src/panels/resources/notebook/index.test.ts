@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { HTML_PREVIEW_CSP } from "../html/htmlDocument";
 import { notebookRenderer } from ".";
+import { HTML_PREVIEW_CSP } from "../html/htmlDocument";
 import { NotebookFrame } from "./NotebookOutputView";
 import {
 	buildNotebookSvgDocument,

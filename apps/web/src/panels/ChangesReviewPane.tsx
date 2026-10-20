@@ -21,13 +21,13 @@ import {
 } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { ChangesFileSection } from "./ChangesFileSection";
-import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
+import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { ownsReviewShortcut } from "./reviewShortcuts";
-import { SendAllReviewsButton } from "./SendReviewButton";
 import { createSectionContentCache } from "./sectionContentCache";
+import { SendAllReviewsButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";

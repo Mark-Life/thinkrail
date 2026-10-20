@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ResourceViewProps } from "@/resources";
-import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { HtmlFrame } from "./HtmlFrame";
 
 export default function HtmlView({ resource, content }: ResourceViewProps) {
 	const text = content.kind === "text" ? content.text : "";

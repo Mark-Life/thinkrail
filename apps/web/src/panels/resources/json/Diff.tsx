@@ -4,7 +4,6 @@ import { ReviewComposer } from "../../ReviewComposer";
 import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
-import { JsonTree, type JsonTreeThread } from "./JsonTree";
 import { classifyJsonDiff, type JsonDiffMark } from "./jsonDiff";
 import { buildJsonDiffReviewLayout } from "./jsonDiffReview";
 import {
@@ -14,6 +13,7 @@ import {
 	jsonPrimitiveLabel,
 	scanJson,
 } from "./jsonScanner";
+import { JsonTree, type JsonTreeThread } from "./JsonTree";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 type Side = "base" | "worktree";

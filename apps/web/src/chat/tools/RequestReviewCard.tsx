@@ -5,8 +5,8 @@ import {
 import { isPlanReviewResult, type PlanReviewResult } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { ReactNode } from "react";
-import { ReviewPackageComments } from "../ReviewPackageComments";
 import { reviewFixCommentsToItems } from "../reviewPackage";
+import { ReviewPackageComments } from "../ReviewPackageComments";
 
 export function readPlanReview(raw: unknown): PlanReviewResult | null {
 	if (

@@ -70,9 +70,9 @@ import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
+import { FileRow } from "./planFileRow";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
 import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
-import { FileRow } from "./planFileRow";
 import {
 	isOpenBranchReview,
 	openReviewLabel,

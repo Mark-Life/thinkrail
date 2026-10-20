@@ -9,7 +9,6 @@ import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { useScrollViewState } from "../../useScrollViewState";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
 import PierreProvider from "./PierreProvider";
-import { PierreScroller } from "./PierreScroller";
 import {
 	composerLineLabel,
 	draftLineLabel,
@@ -17,6 +16,7 @@ import {
 	threadLineRange,
 	usePierreFocus,
 } from "./pierreReview";
+import { PierreScroller } from "./PierreScroller";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();

@@ -1,6 +1,6 @@
-import { defineCollection, reference } from "astro:content";
 import { file, glob } from "astro/loaders";
 import { z } from "astro/zod";
+import { defineCollection, reference } from "astro:content";
 
 const RESERVED_SLUGS = new Set([
 	"index",

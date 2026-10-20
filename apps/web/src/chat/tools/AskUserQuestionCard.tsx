@@ -24,8 +24,8 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { AttentionLine } from "../AttentionLine";
 import { readAskResult, useAskFocusScope, useAskState } from "../askState";
+import { AttentionLine } from "../AttentionLine";
 import { useChatActions } from "../ChatActions";
 import { useFoldGeometry } from "../foldState";
 import { Markdown } from "../Markdown";

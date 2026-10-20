@@ -4,7 +4,6 @@ import { ReviewComposer } from "../../ReviewComposer";
 import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
-import { JsonTree, type JsonTreeThread } from "./JsonTree";
 import {
 	type JsonDialect,
 	type JsonNode,
@@ -13,6 +12,7 @@ import {
 	placedJsonThreadIds,
 	scanJson,
 } from "./jsonScanner";
+import { JsonTree, type JsonTreeThread } from "./JsonTree";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 
