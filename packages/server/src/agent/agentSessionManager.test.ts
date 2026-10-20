@@ -376,13 +376,13 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 	const a = await createSession({
 		cwd: tmpCwd("trpi-a-"),
 		workspaceId: "ws-a",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+		// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 		model: fauxA.getModel() as any,
 	});
 	const b = await createSession({
 		cwd: tmpCwd("trpi-b-"),
 		workspaceId: "ws-b",
-		// biome-ignore lint/suspicious/noExplicitAny: see above
+		// oxlint-disable-next-line typescript/no-explicit-any -- see above
 		model: fauxB.getModel() as any,
 	});
 	expect(a.sessionId).not.toBe(b.sessionId);
@@ -1467,7 +1467,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 	const s = await createSession({
 		cwd: tmpCwd("trpi-stats-"),
 		workspaceId: "ws-s",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+		// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 		model: fauxA.getModel() as any,
 	});
 	await promptSession(s.sessionId, "count me");
@@ -2498,7 +2498,7 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	const s = await createSession({
 		cwd,
 		workspaceId: "ws-hyd",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+		// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 		model: fauxA.getModel() as any,
 	});
 	await promptSession(s.sessionId, "hello hydrate");
@@ -2653,7 +2653,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		const s = await createSession({
 			cwd,
 			workspaceId: "ws-disk",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+			// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 			model: fauxA.getModel() as any,
 		});
 		await promptSession(s.sessionId, "persist me");
@@ -3402,14 +3402,14 @@ test("removeWorkspaceSessions: archives a workspace's live sessions + purges the
 		const doomed = await createSession({
 			cwd: doomedCwd,
 			workspaceId: "ws-doomed",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+			// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 			model: fauxA.getModel() as any,
 		});
 		const keepCwd = tmpCwd("trpi-arch-keep-");
 		const survivor = await createSession({
 			cwd: keepCwd,
 			workspaceId: "ws-keep",
-			// biome-ignore lint/suspicious/noExplicitAny: see above
+			// oxlint-disable-next-line typescript/no-explicit-any -- see above
 			model: fauxB.getModel() as any,
 		});
 		await Promise.all([

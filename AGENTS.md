@@ -108,7 +108,7 @@ Green gates are necessary but not sufficient:
 - For nontrivial implementation, do a subtraction pass: remove avoidable abstractions, state owners,
   dependencies, compatibility layers, and fallbacks. Report material removals and justify layers that
   remain; do not add ceremony for a localized edit.
-- Never add `biome-ignore`, `@ts-expect-error`, `@ts-ignore`, `eslint-disable`, or `as any` merely to make
+- Never add `oxlint-disable`, `@ts-expect-error`, `@ts-ignore`, `eslint-disable`, or `as any` merely to make
   a gate pass. Treat the error as a design signal. If a suppression is genuinely required, get explicit
   user approval first.
 - Audit newly added comments and suppressions in the same diff range being reviewed. Do not let prior,

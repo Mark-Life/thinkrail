@@ -1,0 +1,87 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": ["eslint", "typescript", "unicorn", "oxc", "jest"],
+	"categories": {
+		"correctness": "error"
+	},
+	"ignorePatterns": [
+		"designs/**",
+		"**/.claude/**",
+		"apps/web/src/styles/generated/**",
+		"apps/web/src/chat/generated/**"
+	],
+	"rules": {
+		"default-case-last": "error",
+		"eqeqeq": [
+			"error",
+			"always",
+			{
+				"null": "ignore"
+			}
+		],
+		"no-case-declarations": "error",
+		"no-constructor-return": "error",
+		"no-fallthrough": "error",
+		"no-prototype-builtins": "error",
+		"no-self-compare": "error",
+		"no-sequences": "error",
+		"no-template-curly-in-string": "error",
+		"no-unsafe-optional-chaining": "warn",
+		"no-unused-vars": [
+			"error",
+			{
+				"argsIgnorePattern": "^_",
+				"varsIgnorePattern": "^_",
+				"caughtErrorsIgnorePattern": "^_",
+				"ignoreRestSiblings": true
+			}
+		],
+		"no-useless-constructor": "error",
+		"typescript/ban-types": "error",
+		"typescript/no-explicit-any": "error",
+		"typescript/no-invalid-void-type": "warn",
+		"typescript/no-non-null-assertion": "error",
+		"typescript/no-this-alias": "warn",
+		"typescript/no-unnecessary-type-constraint": "error",
+		"typescript/triple-slash-reference": "warn",
+		"unicorn/no-document-cookie": "error",
+		"unicorn/no-instanceof-array": "error",
+		"unicorn/no-useless-fallback-in-spread": "warn",
+		"unicorn/no-useless-length-check": "warn",
+		"unicorn/no-useless-spread": "warn",
+		"unicorn/no-useless-switch-case": "error",
+		"unicorn/prefer-string-starts-ends-with": "warn",
+		"jest/no-duplicate-hooks": "error",
+		"jest/no-export": "error",
+		"jest/no-focused-tests": "error"
+	},
+	"overrides": [
+		{
+			"files": [
+				"apps/web/**",
+				"apps/website/**",
+				"packages/ui/**",
+				"thinkrail-extensions/*/web/**"
+			],
+			"plugins": ["react", "jsx-a11y"],
+			"rules": {
+				"jsx-a11y/no-autofocus": "warn",
+				"jsx-a11y/interactive-supports-focus": "warn",
+				"jsx-a11y/label-has-associated-control": "warn",
+				"jsx-a11y/no-noninteractive-element-interactions": "warn",
+				"jsx-a11y/prefer-tag-over-role": "off",
+				"jsx-a11y/role-has-required-aria-props": "warn",
+				"react/exhaustive-deps": "warn",
+				"react/immutability": "warn",
+				"react/jsx-no-comment-textnodes": "error",
+				"react/jsx-no-target-blank": "error",
+				"react/no-danger": "warn",
+				"react/preserve-manual-memoization": "warn",
+				"react/refs": "warn",
+				"react/rules-of-hooks": "error",
+				"react/set-state-in-effect": "warn",
+				"react/static-components": "warn"
+			}
+		}
+	]
+}

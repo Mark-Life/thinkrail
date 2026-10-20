@@ -63,7 +63,7 @@ each module carries its own `SPEC.md`.
 Run the fast gates before opening a PR (they also run as the husky pre-commit hook):
 
 ```bash
-bun run lint        # biome
+bun run lint        # oxlint + oxfmt --check
 bun run typecheck   # tsc across all packages
 bun run test        # unit tests (root tooling + each package)
 ```
