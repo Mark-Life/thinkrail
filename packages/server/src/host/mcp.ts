@@ -11,6 +11,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { isRecord } from "@thinkrail/shared/guards";
 import {
 	effectiveMcpServerConfig,
 	getSessionWorkspaceId,
@@ -144,9 +145,6 @@ function renderedTarget(params: unknown): McpRenderedTarget {
 	}
 	return { scope, expectedFingerprint };
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
 
 function ownedSession(workspaceId: string, sessionId: string): void {
 	if (getSessionWorkspaceId(sessionId) !== workspaceId) {

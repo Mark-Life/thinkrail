@@ -1,8 +1,8 @@
 import type { McpConfigFileError, McpExposure, McpServerSummary } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import {
 	fingerprintMcpEntry,
 	grantedMcpTools,
-	isRecord,
 	type LoadedMcpFiles,
 	loadHostMcpConfig,
 	loadMcpConfigFiles,
