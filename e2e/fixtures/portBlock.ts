@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { errnoCode } from "@thinkrail/shared/guards";
 import { removeTree } from "@thinkrail/shared/removeTree";
 
 export const PORT_BLOCK_BASE = 25000;
@@ -97,8 +98,7 @@ function pidAlive(pid: number): boolean {
 		process.kill(pid, 0);
 		return true;
 	} catch (error) {
-		const code = error instanceof Error && "code" in error ? error.code : undefined;
-		return code === "EPERM";
+		return errnoCode(error) === "EPERM";
 	}
 }
 

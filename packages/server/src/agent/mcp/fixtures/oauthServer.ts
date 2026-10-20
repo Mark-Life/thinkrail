@@ -1,3 +1,5 @@
+import { isRecord } from "@thinkrail/shared/guards";
+
 const TOKEN = "fixture-access-token";
 
 function rpc(body: { id?: unknown; method?: string; params?: { protocolVersion?: string } }) {
@@ -54,7 +56,8 @@ export function startOAuthMcpFixture(): {
 				});
 			}
 			if (pathname === "/register") {
-				const metadata = (await request.json()) as Record<string, unknown>;
+				const body: unknown = await request.json();
+				const metadata = isRecord(body) ? body : {};
 				return json(
 					{ ...metadata, client_id: "fixture-client", token_endpoint_auth_method: "none" },
 					201,

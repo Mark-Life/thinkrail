@@ -1,4 +1,5 @@
 import type { ReviewAnchor, ReviewAnchorState, ReviewSelector } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import { hashBytes } from "../fs";
 
 const UTF8_BYTES = new TextEncoder();
@@ -40,9 +41,8 @@ function shown(value: unknown): string {
 }
 
 function selectorFields(value: unknown): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value))
-		throw new Error(`A selector must be an object, got ${shown(value)}.`);
-	return value as Record<string, unknown>;
+	if (!isRecord(value)) throw new Error(`A selector must be an object, got ${shown(value)}.`);
+	return value;
 }
 
 function fraction(fields: Record<string, unknown>, name: string): number {

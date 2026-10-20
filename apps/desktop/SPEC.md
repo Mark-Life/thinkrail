@@ -27,7 +27,7 @@ engine architecture.
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
-  for release identity; `contracts` for
+  for release identity and `guards`; `contracts` for
   compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
   artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
   Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon

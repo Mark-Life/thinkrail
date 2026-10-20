@@ -1,4 +1,5 @@
 import type { LayoutPreset, LayoutToolId } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 
 const MAX_PRESETS = 32;
 const MAX_LAYOUT_BYTES = 512 * 1024;
@@ -10,9 +11,7 @@ const MAX_BOTTOM_HEIGHT = 0.7;
 const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "changes", "review"]);
 
 function record(value: unknown): Record<string, unknown> | null {
-	return value !== null && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: null;
+	return isRecord(value) ? value : null;
 }
 
 function nonEmptyString(value: unknown, max = MAX_NAME_LENGTH): value is string {

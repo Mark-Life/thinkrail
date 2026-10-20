@@ -1,4 +1,5 @@
 import type { BranchReviewState, OpenBranchReview } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import { gitAsync, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
@@ -279,8 +280,8 @@ function parseReviewRows(output: string, field: "number" | "iid"): ParsedReviewR
 		if (!Array.isArray(rows)) return { valid: false };
 		const parsed: ReviewRow[] = [];
 		for (const item of rows) {
-			if (typeof item !== "object" || item === null) return { valid: false };
-			const row = item as Record<string, unknown>;
+			if (!isRecord(item)) return { valid: false };
+			const row = item;
 			const value = row[field];
 			if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
 				return { valid: false };

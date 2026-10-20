@@ -1,4 +1,5 @@
 import { rmSync } from "node:fs";
+import { errnoCode } from "./guards";
 
 const RETRYABLE_CODES = new Set(["EBUSY", "EMFILE", "ENFILE", "ENOTEMPTY", "EPERM", "EACCES"]);
 const DEFAULT_ATTEMPTS = 10;
@@ -18,11 +19,6 @@ function sleepSync(ms: number): void {
 	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function codeOf(error: unknown): string | undefined {
-	const code = (error as { code?: unknown } | null)?.code;
-	return typeof code === "string" ? code : undefined;
-}
-
 export function removeTree(path: string, options: RemoveTreeOptions = {}): void {
 	const attempts = options.attempts ?? DEFAULT_ATTEMPTS;
 	const delayMs = options.delayMs ?? DEFAULT_DELAY_MS;
@@ -32,7 +28,7 @@ export function removeTree(path: string, options: RemoveTreeOptions = {}): void 
 			remove(path);
 			return;
 		} catch (error) {
-			const code = codeOf(error);
+			const code = errnoCode(error);
 			if (attempt >= attempts || !code || !RETRYABLE_CODES.has(code)) throw error;
 			sleepSync(attempt * delayMs);
 		}

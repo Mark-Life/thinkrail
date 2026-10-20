@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { isRecord } from "@thinkrail/shared/guards";
 
 const ROUTE_VERSION = 1;
 const FALLBACK_ROUTE = "#/v1";
@@ -30,19 +31,11 @@ function validRoute(value: unknown): value is string {
 function readDocument(path: string): RouteDocument {
 	try {
 		const value = JSON.parse(readFileSync(path, "utf8")) as unknown;
-		if (
-			typeof value !== "object" ||
-			value === null ||
-			Reflect.get(value, "version") !== ROUTE_VERSION ||
-			typeof Reflect.get(value, "routes") !== "object" ||
-			Reflect.get(value, "routes") === null
-		) {
+		if (!isRecord(value) || value.version !== ROUTE_VERSION || !isRecord(value.routes)) {
 			return { version: ROUTE_VERSION, routes: {} };
 		}
 		const routes: Record<string, string> = {};
-		for (const [key, route] of Object.entries(
-			Reflect.get(value, "routes") as Record<string, unknown>,
-		)) {
+		for (const [key, route] of Object.entries(value.routes)) {
 			if (validRoute(route)) routes[key] = route;
 		}
 		return { version: ROUTE_VERSION, routes };

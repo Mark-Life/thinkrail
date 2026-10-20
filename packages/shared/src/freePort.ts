@@ -1,14 +1,14 @@
 import { connect, createServer } from "node:net";
+import { errnoCode, isRecord } from "./guards";
 
 const DEFAULT_HOST = "localhost";
 const PROBE_TIMEOUT_MS = 300;
 const DEFAULT_SCAN_ATTEMPTS = 20;
 
 function isConnectionRefused(err: unknown): boolean {
-	const e = err as NodeJS.ErrnoException & { errors?: NodeJS.ErrnoException[] };
-	if (e.code === "ECONNREFUSED") return true;
-	if (Array.isArray(e.errors) && e.errors.length > 0) {
-		return e.errors.every((inner) => inner.code === "ECONNREFUSED");
+	if (errnoCode(err) === "ECONNREFUSED") return true;
+	if (isRecord(err) && Array.isArray(err.errors) && err.errors.length > 0) {
+		return err.errors.every((inner) => errnoCode(inner) === "ECONNREFUSED");
 	}
 	return false;
 }

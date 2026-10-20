@@ -18,13 +18,14 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { errnoCode, isRecord } from "@thinkrail/shared/guards";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
 	replaceAcquisitionWithTerminalMarkerIn,
 	saveAcquisitionIn,
 } from "./attribution";
-import { type AcquisitionRecord, isRecord } from "./attributionProtocol";
+import type { AcquisitionRecord } from "./attributionProtocol";
 import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
 
 export {
@@ -36,7 +37,6 @@ export {
 	type AttributionTouch,
 	claimIdPattern,
 	hasExactKeys,
-	isRecord,
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
 } from "./attributionProtocol";
@@ -72,9 +72,12 @@ function writeJsonAtomic(file: string, value: unknown): void {
 }
 
 function stringRecord(value: unknown): Record<string, string> | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	if (!isRecord(value)) return null;
 	const entries = Object.entries(value);
-	return entries.every(([, item]) => typeof item === "string") ? Object.fromEntries(entries) : null;
+	const strings = entries.filter(
+		(entry): entry is [string, string] => typeof entry[1] === "string",
+	);
+	return strings.length === entries.length ? Object.fromEntries(strings) : null;
 }
 
 export type SessionMetadataLoad<T> =
@@ -93,7 +96,7 @@ function loadSessionMetadata<T>(
 		if (value !== null) return { kind: "loaded", value };
 		error = new Error(`Invalid ${file}`);
 	} catch (caught) {
-		if ((caught as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+		if (errnoCode(caught) === "ENOENT") return { kind: "missing" };
 		error = caught;
 	}
 	const setAsidePath = `${path}.corrupt-${Date.now()}`;
@@ -304,10 +307,7 @@ function storedModels(value: unknown): WireModel[] {
 	if (!Array.isArray(value)) return [];
 	return value.filter(
 		(entry): entry is WireModel =>
-			typeof entry === "object" &&
-			entry !== null &&
-			typeof (entry as WireModel).provider === "string" &&
-			typeof (entry as WireModel).id === "string",
+			isRecord(entry) && typeof entry.provider === "string" && typeof entry.id === "string",
 	);
 }
 
@@ -321,9 +321,8 @@ function storedExtensionNames(value: unknown): string[] {
 }
 
 export function loadConfig(): AppConfig {
-	const raw = readJson<unknown>("config.json", {});
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
-	const value = raw as Record<string, unknown>;
+	const value = readJson<unknown>("config.json", {});
+	if (!isRecord(value)) return structuredClone(DEFAULT_CONFIG);
 	const extensions = { ...value };
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
