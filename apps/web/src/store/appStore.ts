@@ -283,6 +283,17 @@ export interface LocalLayoutStatePayload {
 	preferences: LocalLayoutPreferences;
 }
 
+export interface LocalLayoutStateOptions {
+	invalidateProjection?: boolean;
+	consumeIntentId?: string;
+}
+
+export interface LayoutIntentTransition {
+	intentId: string;
+	document?: WorkspaceLayoutDocument;
+	attention?: LayoutAttention;
+}
+
 export interface CenterNavigationStamp {
 	groupId: string;
 	clock: number;
@@ -302,6 +313,10 @@ export interface LayoutOpenOptions {
 	navigation?: CenterNavigationStamp | null;
 	countNavigation?: boolean;
 	claimPreview?: boolean;
+}
+
+export interface ChatOpenOptions extends LayoutOpenOptions {
+	pending?: true;
 }
 
 export type LayoutIntent =
@@ -433,6 +448,7 @@ export interface SessionRuntime {
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
 	hostState: SessionState | null;
+	pending?: true;
 }
 
 const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
@@ -1032,7 +1048,10 @@ interface AppState {
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
-	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
+	applyLocalLayoutState: (
+		payload: LocalLayoutStatePayload,
+		options?: LocalLayoutStateOptions,
+	) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	syncLegacySelection: (
@@ -1179,8 +1198,16 @@ interface AppState {
 		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
 		syncedTick?: number,
-		options?: LayoutOpenOptions,
+		options?: ChatOpenOptions,
 	) => void;
+	resolvePendingChat: (
+		workspaceId: string,
+		sessionId: string,
+		model: WireModel | null,
+		thinkingLevel: ThinkingLevel,
+		syncedTick: number,
+	) => void;
+	discardPendingChat: (workspaceId: string, sessionId: string) => void;
 	closeChatRuntime: (sessionId: string) => void;
 	closeChatToHistory: (
 		sessionId: string,
@@ -1496,7 +1523,7 @@ function patchResourceTab(
 ): Partial<AppState> {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	if (!tabs.some((tab) => tab.id === id && (tab.kind === "file" || tab.kind === "diff"))) {
-		return {};
+		return state;
 	}
 	return {
 		tabsByWorkspace: {
@@ -1514,9 +1541,9 @@ function patchDiffTab(
 	patch: Partial<Omit<DiffTab, "kind" | "id">>,
 ): Partial<AppState> {
 	const wsId = state.activeWorkspaceId;
-	if (!wsId) return {};
+	if (!wsId) return state;
 	const tabs = state.tabsByWorkspace[wsId] ?? [];
-	if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
+	if (!tabs.some((t) => t.id === id && t.kind === "diff")) return state;
 	return {
 		tabsByWorkspace: {
 			...state.tabsByWorkspace,
@@ -1717,6 +1744,7 @@ function withoutChat(
 	workspaceId: string,
 	sessionId: string,
 	countNavigation: boolean,
+	tombstone = true,
 ): AppState {
 	if (s.removedWorkspaceIds[workspaceId]) return s;
 	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
@@ -1779,7 +1807,7 @@ function withoutChat(
 					workspaceId,
 					sessionId,
 				}),
-		...(!alreadyDeleted
+		...(tombstone && !alreadyDeleted
 			? {
 					deletedSessionsByWorkspace: Object.assign(
 						Object.create(null),
@@ -1900,8 +1928,8 @@ function bufferExtUiOrphan(s: AppState, request: ExtUiRequest): Partial<AppState
 	const stateAuthorizesDialog = Object.values(s.sessionStateByWorkspace).some((records) =>
 		dialogIsAuthorized(records[request.sessionId]?.state, request),
 	);
-	if (!REPLAYABLE_EXT_UI.has(request.kind) && !stateAuthorizesDialog) return {};
-	if (s.extUiOrphans.some((frame) => frame.id === request.id)) return {};
+	if (!REPLAYABLE_EXT_UI.has(request.kind) && !stateAuthorizesDialog) return s;
+	if (s.extUiOrphans.some((frame) => frame.id === request.id)) return s;
 	return { extUiOrphans: [...s.extUiOrphans, request].slice(-EXT_UI_ORPHAN_LIMIT) };
 }
 
@@ -1988,7 +2016,7 @@ function renameChat(s: AppState, sessionId: string, title: string): Partial<AppS
 			},
 		};
 	}
-	return found ? {} : null;
+	return found ? s : null;
 }
 
 function withRuntime(
@@ -1997,9 +2025,9 @@ function withRuntime(
 	update: (rt: SessionRuntime) => SessionRuntime,
 ): Partial<AppState> {
 	const rt = s.sessions[sessionId];
-	if (!rt) return {};
+	if (!rt) return s;
 	const next = update(rt);
-	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
+	return next === rt ? s : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
 function newLoginState(
@@ -2179,7 +2207,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				!isConnectedGeneration(state, read.connectionGeneration) ||
 				state.removedWorkspaceIds[read.workspaceId]
 			)
-				return {};
+				return state;
 			const deleted = state.deletedSessionsByWorkspace[read.workspaceId] ?? {};
 			return {
 				mcpByWorkspace: {
@@ -2202,7 +2230,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				state.status !== "connected" ||
 				!isChatResourceScopeAlive(state, snapshot)
 			)
-				return {};
+				return state;
 			const projection = state.mcpByWorkspace[snapshot.workspaceId] ?? EMPTY_MCP_PROJECTION;
 			const revision = state.mcpRevision + 1;
 			const held = foldMcpSnapshot(
@@ -2211,7 +2239,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				state.connectionGeneration,
 				revision,
 			);
-			if (!held) return {};
+			if (!held) return state;
 			return {
 				mcpRevision: revision,
 				mcpByWorkspace: {
@@ -2230,7 +2258,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				!supportsChatResources(state.protocolVersion) ||
 				state.status !== "connected"
 			)
-				return {};
+				return state;
 			const previous = state.resourceSnapshots[scope.workspaceId]?.[scope.sessionId];
 			const revision = state.resourceRevision + 1;
 			return {
@@ -2257,7 +2285,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				snapshot.workspaceId !== read.workspaceId ||
 				snapshot.sessionId !== read.sessionId
 			)
-				return {};
+				return state;
 			return {
 				resourceSnapshots: {
 					...state.resourceSnapshots,
@@ -2277,7 +2305,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	failChatResources: (read, error) =>
 		set((state) => {
 			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
-			if (!previous || !isChatResourceReadCurrent(state, read)) return {};
+			if (!previous || !isChatResourceReadCurrent(state, read)) return state;
 			return {
 				resourceSnapshots: {
 					...state.resourceSnapshots,
@@ -2367,9 +2395,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		})),
 	addWorkspace: (workspace) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspace.id]) return {};
+			if (s.removedWorkspaceIds[workspace.id]) return s;
 			const list = s.workspaces[workspace.projectId];
-			if (!list) return {};
+			if (!list) return s;
 			return {
 				workspaces: {
 					...s.workspaces,
@@ -2383,7 +2411,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			const list = s.workspaces[workspace.projectId];
 			const previous = list?.find((w) => w.id === workspace.id);
-			if (!list || !previous) return {};
+			if (!list || !previous) return s;
 			const worked =
 				s.activeWorkspaceId === workspace.id &&
 				(workspace.lastActiveAt ?? 0) > (previous.lastActiveAt ?? 0);
@@ -2402,7 +2430,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	removeWorkspace: (projectId, workspaceId) =>
 		set((s) => {
 			const list = s.workspaces[projectId];
-			if (!list) return {};
+			if (!list) return s;
 			return {
 				workspaces: { ...s.workspaces, [projectId]: list.filter((w) => w.id !== workspaceId) },
 			};
@@ -2472,12 +2500,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	expandProject: (projectId) =>
 		set((state) => {
 			const expandedProjectIds = withExpandedProject(state.expandedProjectIds, projectId);
-			return expandedProjectIds === state.expandedProjectIds ? {} : { expandedProjectIds };
+			return expandedProjectIds === state.expandedProjectIds ? state : { expandedProjectIds };
 		}),
 	toggleSettledShelf: (projectId, expanded) =>
 		set((state) => {
 			const next = expanded ?? !state.settledShelfExpanded[projectId];
-			if (next === (state.settledShelfExpanded[projectId] === true)) return {};
+			if (next === (state.settledShelfExpanded[projectId] === true)) return state;
 			return {
 				settledShelfExpanded: next
 					? withExpandedProject(state.settledShelfExpanded, projectId)
@@ -2487,7 +2515,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	showMoreSettled: (projectId, count) =>
 		set((state) => {
 			const shown = Math.max(state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE, count);
-			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return {};
+			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return state;
 			return { settledShelfShown: { ...state.settledShelfShown, [projectId]: shown } };
 		}),
 	hydrateExpandedProjects: (projectIds) =>
@@ -2506,7 +2534,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
-			if (state.removedWorkspaceIds[workspace.id]) return {};
+			if (state.removedWorkspaceIds[workspace.id]) return state;
 			const advanced = advanceCenterNavigation(state, workspace.id);
 			return {
 				...advanced.patch,
@@ -2536,7 +2564,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
-				? {}
+				? state
 				: {
 						workbenchFrame: payload.frame,
 						workspaceViewsByWorkspace: payload.viewsByWorkspace,
@@ -2547,21 +2575,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 					},
 		);
 	},
-	applyLocalLayoutState: (payload, invalidateProjection = false) => {
+	applyLocalLayoutState: (payload, options = {}) => {
 		set((state) => ({
 			workbenchFrame: payload.frame,
 			workspaceViewsByWorkspace: payload.viewsByWorkspace,
 			layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 			layoutAttentionByWorkspace: payload.attentionByWorkspace,
 			localLayoutPreferences: payload.preferences,
-			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
+			layoutProjectionEpoch: state.layoutProjectionEpoch + (options.invalidateProjection ? 1 : 0),
+			layoutIntents: options.consumeIntentId
+				? state.layoutIntents.filter((intent) => intent.id !== options.consumeIntentId)
+				: state.layoutIntents,
 		}));
 	},
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
 	setLayoutAttention: (workspaceId, attention) => {
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
-				? {}
+				? state
 				: {
 						layoutAttentionByWorkspace: {
 							...state.layoutAttentionByWorkspace,
@@ -2572,20 +2603,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 	syncLegacySelection: (workspaceId, selection) =>
 		set((state) => {
-			if (state.removedWorkspaceIds[workspaceId]) return {};
+			if (state.removedWorkspaceIds[workspaceId]) return state;
 			if (selection?.kind === "terminal") {
 				if (
 					!state.terminalsByWorkspace[workspaceId]?.some(
 						(terminal) => terminal.tabKey === selection.tabKey,
 					)
 				) {
-					return {};
+					return state;
 				}
 				if (
 					state.activeTerminalByWorkspace[workspaceId] === selection.tabKey &&
 					state.activeTabByWorkspace[workspaceId] === null
 				) {
-					return {};
+					return state;
 				}
 				return {
 					activeTerminalByWorkspace: {
@@ -2597,13 +2628,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			if (selection?.kind === "editor") {
 				if (!state.tabsByWorkspace[workspaceId]?.some((tab) => tab.id === selection.tabId)) {
-					return {};
+					return state;
 				}
 				if (
 					state.activeTabByWorkspace[workspaceId] === selection.tabId &&
 					state.activeTerminalByWorkspace[workspaceId] === null
 				) {
-					return {};
+					return state;
 				}
 				return {
 					activeTabByWorkspace: {
@@ -2620,7 +2651,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				state.activeTabByWorkspace[workspaceId] === null &&
 				state.activeTerminalByWorkspace[workspaceId] === null
 			) {
-				return {};
+				return state;
 			}
 			return {
 				activeTabByWorkspace: { ...state.activeTabByWorkspace, [workspaceId]: null },
@@ -2634,13 +2665,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const id = randomId("layout-intent");
 		set((state) =>
 			state.removedWorkspaceIds[intent.workspaceId]
-				? {}
+				? state
 				: { layoutIntents: [...state.layoutIntents, { ...intent, id } as LayoutIntent] },
 		);
 		return id;
 	},
 	consumeLayoutIntent: (id) =>
-		set((state) => ({ layoutIntents: state.layoutIntents.filter((intent) => intent.id !== id) })),
+		set((state) =>
+			state.layoutIntents.some((intent) => intent.id === id)
+				? { layoutIntents: state.layoutIntents.filter((intent) => intent.id !== id) }
+				: state,
+		),
 	openTab: (tab, intent, syncLayout = true, options = {}) =>
 		set((s) => {
 			const wsId = tab.workspaceId;
@@ -2649,7 +2684,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.removedWorkspaceIds[wsId] ||
 				(sessionId !== null && isSessionDeleted(s, wsId, sessionId))
 			) {
-				return {};
+				return s;
 			}
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const resolvedId = availableEditorTabId(tabs, tab);
@@ -2722,7 +2757,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.removedWorkspaceIds[tab.workspaceId] ||
 				(sessionId !== null && isSessionDeleted(s, tab.workspaceId, sessionId))
 			) {
-				return {};
+				return s;
 			}
 			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
 			const existing = tabs.find(
@@ -2753,7 +2788,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeTab: (id, syncLayout = true, countNavigation = true, workspaceId) =>
 		set((s) => {
 			const wsId = workspaceId ?? s.activeWorkspaceId;
-			if (!wsId || s.removedWorkspaceIds[wsId]) return {};
+			if (!wsId || s.removedWorkspaceIds[wsId]) return s;
 			const tabs = (s.tabsByWorkspace[wsId] ?? []).filter((t) => t.id !== id);
 			const wasActive = s.activeTabByWorkspace[wsId] === id;
 			return {
@@ -2780,7 +2815,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setActiveTab: (id, intent, syncLayout = true) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
+			if (!wsId) return s;
 			return {
 				...(syncLayout
 					? {
@@ -2802,7 +2837,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	beginCenterNavigation: (workspaceId, preferredGroupId) => {
 		let stamp: CenterNavigationStamp | null = null;
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const advanced = advanceCenterNavigation(s, workspaceId, preferredGroupId);
 			stamp = advanced.stamp;
 			return advanced.patch;
@@ -2811,7 +2846,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 	noteNavigation: (workspaceId) =>
 		set((s) =>
-			s.removedWorkspaceIds[workspaceId] ? {} : { navTickByWorkspace: bumpNav(s, workspaceId) },
+			s.removedWorkspaceIds[workspaceId] ? s : { navTickByWorkspace: bumpNav(s, workspaceId) },
 		),
 	setTabRenderer: (workspaceId, id, rendererId) =>
 		set((s) =>
@@ -2955,13 +2990,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setDiffScope: (workspaceId, scope) =>
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId]
-				? {}
+				? s
 				: { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } },
 		),
 	setWorkspaceTurns: (workspaceId, turns, baseline, connectionGeneration) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || !isConnectedGeneration(s, connectionGeneration)) {
-				return {};
+				return s;
 			}
 			const baselineTurns = new Set(baseline);
 			const pushed = (s.turnsByWorkspace[workspaceId] ?? []).filter(
@@ -2976,7 +3011,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyTurnChanged: (turn) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[turn.workspaceId]) return {};
+			if (s.removedWorkspaceIds[turn.workspaceId]) return s;
 			return {
 				turnsByWorkspace: {
 					...s.turnsByWorkspace,
@@ -2989,7 +3024,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	noteFsChanged: (payload) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[payload.workspaceId]) return {};
+			if (s.removedWorkspaceIds[payload.workspaceId]) return s;
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
 			const tick = (prev?.tick ?? 0) + 1;
 			const skillChanged = payload.skillChange !== "none";
@@ -3010,7 +3045,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	markSkillsSynced: (sessionId, syncedTick) =>
 		set((s) => {
-			if (!s.sessions[sessionId]) return {};
+			if (!s.sessions[sessionId]) return s;
 			const synced = Math.max(s.skillsSyncedTickBySession[sessionId] ?? 0, syncedTick);
 			return {
 				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: synced },
@@ -3018,9 +3053,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	updateFileTabContent: (workspaceId, id, content, meta, tick) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-			if (!tabs.some((tab) => tab.id === id && tab.kind === "file")) return {};
+			if (!tabs.some((tab) => tab.id === id && tab.kind === "file")) return s;
 			return {
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
@@ -3048,9 +3083,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		loadedTarget,
 	) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-			if (!tabs.some((tab) => tab.id === id && tab.kind === "diff")) return {};
+			if (!tabs.some((tab) => tab.id === id && tab.kind === "diff")) return s;
 			return {
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
@@ -3106,10 +3141,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		newPaneBelow = false,
 	) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			const tabKey = requestedTabKey ?? randomId("terminal");
-			if (list.some((tab) => tab.tabKey === tabKey)) return {};
+			if (list.some((tab) => tab.tabKey === tabKey)) return s;
 			const navigation =
 				targetGroupId && targetArea === "center"
 					? advanceCenterNavigation(s, workspaceId, targetGroupId)
@@ -3144,7 +3179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const local = s.terminalsByWorkspace[workspaceId] ?? [];
 			const known = new Set(tabs.map((tab) => tab.tabKey));
 			const pending = local.filter((tab) => !known.has(tab.tabKey) && tab.reservationPending);
@@ -3172,7 +3207,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	confirmTerminalReservation: (workspaceId, tabKey) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((tab) => tab.tabKey === tabKey && tab.reservationPending)) return s;
 			return {
@@ -3188,7 +3223,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	rejectTerminalReservation: (workspaceId, tabKey) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((tab) => tab.tabKey === tabKey && tab.reservationPending)) return s;
 			const terminals = list.filter((tab) => tab.tabKey !== tabKey);
@@ -3212,7 +3247,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	consumeTerminalInitialCommand: (workspaceId, tabKey) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((t) => t.tabKey === tabKey && t.initialCommand)) return s;
 			return {
@@ -3228,7 +3263,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	closeTerminalTab: (workspaceId, tabKey, syncLayout = true) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter((t) => t.tabKey !== tabKey);
 			const wasActive = s.activeTerminalByWorkspace[workspaceId] === tabKey;
 			return {
@@ -3253,7 +3288,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setActiveTerminalTab: (workspaceId, tabKey, syncLayout = true) =>
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId]
-				? {}
+				? s
 				: {
 						...(syncLayout
 							? {
@@ -3304,7 +3339,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) => {
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
-				return {};
+				return s;
 			}
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
 			const existing = tabs.find(
@@ -3354,10 +3389,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 							[sessionId]: {
 								...newRuntime(model, thinkingLevel, s.connectionGeneration),
 								hostState: s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null,
+								...(options.pending ? { pending: true } : {}),
 							},
 						}
 					: s.sessions,
-				...(fresh
+				...(fresh && !options.pending
 					? {
 							skillsSyncedTickBySession: {
 								...s.skillsSyncedTickBySession,
@@ -3369,9 +3405,37 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		replayExtUiOrphans(sessionId, set, get);
 	},
+	resolvePendingChat: (workspaceId, sessionId, model, thinkingLevel, syncedTick) =>
+		set((s) => {
+			const runtime = s.sessions[sessionId];
+			if (
+				!runtime?.pending ||
+				s.removedWorkspaceIds[workspaceId] ||
+				isSessionDeleted(s, workspaceId, sessionId)
+			) {
+				return s;
+			}
+			const { pending: _pending, ...resolved } = runtime;
+			return {
+				sessions: {
+					...s.sessions,
+					[sessionId]: {
+						...resolved,
+						model,
+						thinkingLevel,
+						syncedConnectionGeneration: s.connectionGeneration,
+					},
+				},
+				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: syncedTick },
+			};
+		}),
+	discardPendingChat: (workspaceId, sessionId) =>
+		set((s) =>
+			s.sessions[sessionId]?.pending ? withoutChat(s, workspaceId, sessionId, false, false) : s,
+		),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
-			if (!s.sessions[sessionId]) return {};
+			if (!s.sessions[sessionId]) return s;
 			return {
 				sessions: omitKey(s.sessions, sessionId),
 				skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
@@ -3380,10 +3444,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeChatToHistory: (sessionId, syncLayout = true, workspaceId, countNavigation = true) =>
 		set((s) => {
 			const wsId = workspaceId ?? s.activeWorkspaceId;
-			if (!wsId || s.removedWorkspaceIds[wsId]) return {};
+			if (!wsId || s.removedWorkspaceIds[wsId]) return s;
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const tab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-			if (!tab) return {};
+			if (!tab) return s;
 			const remaining = tabs.filter((t) => t.id !== tab.id);
 			const wasActive = s.activeTabByWorkspace[wsId] === tab.id;
 			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
@@ -3421,7 +3485,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withoutChat(s, workspaceId, sessionId, countNavigation)),
 	reconcileWorkspaceSessions: (workspaceId, baselineSessionIds, authoritativeSessionIds) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const authoritative = new Set(authoritativeSessionIds);
 			let next = s;
 			for (const sessionId of baselineSessionIds) {
@@ -3471,7 +3535,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.removedWorkspaceIds[record.workspaceId] ||
 				isSessionDeleted(s, record.workspaceId, record.sessionId)
 			) {
-				return {};
+				return s;
 			}
 			const workspaceStates = s.sessionStateByWorkspace[record.workspaceId] ?? {};
 			const runtime = s.sessions[record.sessionId];
@@ -3483,7 +3547,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			);
 			const orphansChanged = extUiOrphans.length !== s.extUiOrphans.length;
 			if (sameSessionStateRecord(workspaceStates[record.sessionId], record)) {
-				if ((!runtime || runtime.hostState === record.state) && !orphansChanged) return {};
+				if ((!runtime || runtime.hostState === record.state) && !orphansChanged) return s;
 				return {
 					...(runtime && runtime.hostState !== record.state
 						? {
@@ -3516,8 +3580,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	noteRenderedCompletion: (sessionId, completionId) =>
 		set((s) => {
-			if (s.sessions[sessionId]?.hostState?.completion?.completionId !== completionId) return {};
-			if (s.renderedCompletionBySession[sessionId] === completionId) return {};
+			if (s.sessions[sessionId]?.hostState?.completion?.completionId !== completionId) return s;
+			if (s.renderedCompletionBySession[sessionId] === completionId) return s;
 			return {
 				renderedCompletionBySession: {
 					...s.renderedCompletionBySession,
@@ -3527,7 +3591,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setChatObscured: (sessionId, obscured) =>
 		set((s) => {
-			if (obscured === Boolean(s.obscuredChatSessions[sessionId])) return {};
+			if (obscured === Boolean(s.obscuredChatSessions[sessionId])) return s;
 			return {
 				obscuredChatSessions: obscured
 					? { ...s.obscuredChatSessions, [sessionId]: true }
@@ -3536,10 +3600,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	reopenChat: (wsId, sessionId, options = {}) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[wsId] || isSessionDeleted(s, wsId, sessionId)) return {};
+			if (s.removedWorkspaceIds[wsId] || isSessionDeleted(s, wsId, sessionId)) return s;
 			const closed = s.closedChatsByWorkspace[wsId] ?? [];
 			const entry = closed.find((c) => c.sessionId === sessionId);
-			if (!entry) return {};
+			if (!entry) return s;
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const existing = tabs.find(
 				(candidate): candidate is ChatTab =>
@@ -3587,7 +3651,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	restorePlacedChatCache: (workspaceId, tabId, sessionId, title) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
-				return {};
+				return s;
 			}
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
 			const placed = tabs.find(
@@ -3605,7 +3669,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 			const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 			const metadataChanged = placed?.name !== title || placed.id !== id;
-			if (placed && !inHistory && !metadataChanged) return {};
+			if (placed && !inHistory && !metadataChanged) return s;
 			const tab: ChatTab = { kind: "chat", id, workspaceId, name: title, sessionId };
 			const retargeted = placed !== undefined && placed.id !== id;
 			return {
@@ -3635,7 +3699,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	noteClosedChats: (workspaceId, entries) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const existing = s.closedChatsByWorkspace[workspaceId] ?? [];
 			const open = new Set(
 				(s.tabsByWorkspace[workspaceId] ?? [])
@@ -3662,7 +3726,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				return { ...entry, title: replacement.title };
 			});
 			if (incoming.size > 0) changed = true;
-			if (!changed) return {};
+			if (!changed) return s;
 			return {
 				closedChatsByWorkspace: {
 					...s.closedChatsByWorkspace,
@@ -3678,9 +3742,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.removedWorkspaceIds[summary.workspaceId] ||
 				isSessionDeleted(s, summary.workspaceId, summary.sessionId)
 			) {
-				return {};
+				return s;
 			}
-			if (s.sessions[summary.sessionId]) return {};
+			if (s.sessions[summary.sessionId]) return s;
 			const wsId = summary.workspaceId;
 			const runtime: SessionRuntime = {
 				...newRuntime(summary.model, summary.thinkingLevel, s.connectionGeneration),
@@ -3771,7 +3835,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				isSessionDeleted(s, summary.workspaceId, summary.sessionId) ||
 				!selectWorkspaceSessionIds(s, summary.workspaceId).includes(summary.sessionId)
 			) {
-				return {};
+				return s;
 			}
 			const { turnIdByMessageIndex: _previousMessageIndex, ...preserved } = current;
 			void _previousMessageIndex;
@@ -3864,7 +3928,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				if (event.type === "session_info_changed") {
 					const title = event.name?.trim() || "Chat";
 					const renamed = renameChat(state, sessionId, title);
-					if (renamed && Object.keys(renamed).length > 0) state = { ...state, ...renamed };
+					if (renamed && renamed !== state) state = { ...state, ...renamed };
 				}
 				const runtime = sessions[sessionId];
 				if (!runtime) continue;
@@ -3954,7 +4018,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	finishLoginStart: () => set({ loginStarting: false }),
 	beginLogin: (loginId, providerId, target) =>
 		set((s) => {
-			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (target && s.removedWorkspaceIds[target.workspaceId]) return s;
 			return {
 				activeLogin:
 					s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active"
@@ -3966,7 +4030,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
 			const cur = s.activeLogin;
-			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
+			if (cur && cur.loginId !== push.loginId && cur.status === "active") return s;
 			const base =
 				cur && cur.loginId === push.loginId
 					? cur
@@ -3975,7 +4039,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearLoginInput: () =>
 		set((s) => {
-			if (!s.activeLogin?.input) return {};
+			if (!s.activeLogin?.input) return s;
 			const { input: _drop, ...rest } = s.activeLogin;
 			return { activeLogin: rest };
 		}),
@@ -4003,7 +4067,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
-				? {}
+				? state
 				: {
 						layoutIntents: appendLayoutIntent(state.layoutIntents, {
 							kind: "reveal-tool",
@@ -4014,7 +4078,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	requestChangesView: (workspaceId, path, scope) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const advanced = advanceCenterNavigation(s, workspaceId);
 			return {
 				layoutIntents: appendLayoutIntent(s.layoutIntents, {
@@ -4041,7 +4105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				state.removedWorkspaceIds[req.workspaceId] ||
 				isSessionDeleted(state, req.workspaceId, req.sessionId)
 			) {
-				return {};
+				return state;
 			}
 			const hydrated = state.layoutAttentionByWorkspace[req.workspaceId] !== undefined;
 			const advanced = hydrated ? advanceCenterNavigation(state, req.workspaceId) : null;
@@ -4061,7 +4125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.removedWorkspaceIds[target.workspaceId] ||
 				isSessionDeleted(s, target.workspaceId, target.sessionId)
 			) {
-				return {};
+				return s;
 			}
 			const cache = s.tabsByWorkspace[target.workspaceId]?.find(
 				(candidate): candidate is ChatTab =>
@@ -4103,7 +4167,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
 	requestSpecView: (workspaceId, path) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId]) return s;
 			const advanced = advanceCenterNavigation(s, workspaceId);
 			return {
 				layoutIntents: appendLayoutIntent(s.layoutIntents, {
@@ -4119,34 +4183,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setWorkspaceSpecs: (workspaceId, nodes) =>
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId] || sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
-				? {}
+				? s
 				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
 		),
 	requestReviewFocus: (workspaceId, commentId) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
-				? {}
+				? state
 				: { reviewFocusRequest: { workspaceId, commentId } },
 		),
 	clearReviewFocus: (commentId) =>
 		set((state) =>
 			commentId !== undefined && state.reviewFocusRequest?.commentId !== commentId
-				? {}
+				? state
 				: { reviewFocusRequest: null },
 		),
 	setWorkspaceReview: (workspaceId, snapshot) =>
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId] ||
 			sameReviewSnapshot(s.reviewsByWorkspace[workspaceId], snapshot)
-				? {}
+				? s
 				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [workspaceId]: snapshot } },
 		),
 	applyReviewChanged: (payload) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[payload.workspaceId]) return {};
+			if (s.removedWorkspaceIds[payload.workspaceId]) return s;
 			const next = { review: payload.review, comments: payload.comments };
 			return sameReviewSnapshot(s.reviewsByWorkspace[payload.workspaceId], next)
-				? {}
+				? s
 				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [payload.workspaceId]: next } };
 		}),
 	pushToast: (toast) => {
@@ -4176,7 +4240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 	dismissToast: (id) =>
 		set((s) =>
-			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
+			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : s,
 		),
 }));
 

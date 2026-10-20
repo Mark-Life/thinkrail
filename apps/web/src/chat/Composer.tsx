@@ -147,6 +147,7 @@ interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
 	isStreaming: boolean;
+	pending: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
 	templatePending: boolean;
@@ -188,6 +189,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		value,
 		onChange,
 		isStreaming,
+		pending,
 		growthLimit,
 		commands,
 		templatePending,
@@ -298,7 +300,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	);
 
 	const canSubmit = (raw: string) =>
-		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+		!pending && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
 	const canSend = canSubmit(value);
 
 	const openModelPicker = (query: string) => {
@@ -580,6 +582,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onSelect={onSelectModel}
 							onSelectLevel={onSelectThinking}
 							preferences={modelPreferences}
+							disabled={pending}
 							className="max-w-[60vw] px-4 sm:max-w-[320px]"
 						/>
 					</div>
@@ -644,11 +647,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onDrop={onDrop}
 							rows={1}
 							placeholder={
-								isStreaming
-									? "Steer the agent at its next step…"
-									: expanded
-										? "Message the agent…  (@ files · / commands)"
-										: "Message…"
+								pending
+									? "Starting chat…"
+									: isStreaming
+										? "Steer the agent at its next step…"
+										: expanded
+											? "Message the agent…  (@ files · / commands)"
+											: "Message…"
 							}
 							className={cn(
 								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
@@ -690,6 +695,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								type="button"
 								data-testid="chat-send"
 								aria-label={isStreaming ? "Steer" : "Send"}
+								title={pending ? "Starting chat…" : undefined}
 								onClick={() => submit(isStreaming ? "steer" : "send")}
 								disabled={!canSend}
 								className={cn(

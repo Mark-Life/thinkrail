@@ -1,4 +1,5 @@
 import { messagesToRuntime } from "../chat/hydrate";
+import { randomId } from "../lib";
 import {
 	type CenterNavigationStamp,
 	type LayoutOpenOptions,
@@ -17,31 +18,46 @@ export async function startChatInTab(
 	preferredGroupId?: string,
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
-	useAppStore.getState().beginChatStart(workspaceId);
+	const sessionId = randomId("chat");
+	const store = useAppStore.getState();
+	store.openChatSession(workspaceId, sessionId, null, "medium", undefined, {
+		...layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+		pending: true,
+	});
 	try {
-		const {
-			result: { sessionId, model, thinkingLevel },
-			syncedTick,
-		} = await createSessionWithSkillBaseline({ workspaceId });
-		const store = useAppStore.getState();
-		store.openChatSession(
+		const { result, syncedTick } = await createSessionWithSkillBaseline({
 			workspaceId,
 			sessionId,
-			model,
-			thinkingLevel,
-			syncedTick,
-			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
-		);
-	} catch {
+		});
 		const state = useAppStore.getState();
-		if (
-			layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
-			!state.removedWorkspaceIds[workspaceId]
-		) {
-			toast.error("The agent session could not be created.", "Couldn't start the chat");
+		if (result.sessionId === sessionId) {
+			state.resolvePendingChat(
+				workspaceId,
+				sessionId,
+				result.model,
+				result.thinkingLevel,
+				syncedTick,
+			);
+			return;
 		}
-	} finally {
-		useAppStore.getState().endChatStart(workspaceId);
+		state.discardPendingChat(workspaceId, sessionId);
+		state.openChatSession(
+			workspaceId,
+			result.sessionId,
+			result.model,
+			result.thinkingLevel,
+			syncedTick,
+			layoutOpenOptionsForNavigation(state, workspaceId, navigation),
+		);
+	} catch (err) {
+		const state = useAppStore.getState();
+		state.discardPendingChat(workspaceId, sessionId);
+		if (
+			!state.removedWorkspaceIds[workspaceId] &&
+			!state.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+		) {
+			toast.error(errorText(err), "Couldn't start the chat");
+		}
 	}
 }
 

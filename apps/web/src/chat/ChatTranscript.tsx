@@ -191,6 +191,7 @@ const ChatTranscript = forwardRef<
 	ref,
 ) {
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
+	const pending = useAppStore((s) => s.sessions[sessionId]?.pending === true);
 	// Subscribe only to the runtime fields the transcript renders from, so composer keystrokes
 	// (`draft`), stats/model/extUi churn, etc. no longer re-render the transcript subtree.
 	const runtime = useAppStore(
@@ -218,7 +219,7 @@ const ChatTranscript = forwardRef<
 		runtime,
 		status,
 		connectionGeneration,
-		enabled: sessionExists,
+		enabled: sessionExists && !pending,
 	});
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);

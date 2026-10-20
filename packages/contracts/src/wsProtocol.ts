@@ -712,7 +712,12 @@ export interface WsMethodMap {
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
 	"session.create": {
-		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
+		params: {
+			workspaceId: string;
+			sessionId?: string;
+			model?: WireModel;
+			thinkingLevel?: ThinkingLevel;
+		};
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
 	"session.prompt": {

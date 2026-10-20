@@ -84,6 +84,7 @@ export default function ChatView({
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
+	const pending = useAppStore((s) => s.sessions[sessionId]?.pending === true);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
@@ -137,7 +138,9 @@ export default function ChatView({
 				.find((w) => w.id === workspaceId)?.projectId,
 	);
 	const [skillsOpen, setSkillsOpen] = useState(false);
-	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
+	const skillsStale = useAppStore(
+		(s) => !s.sessions[sessionId]?.pending && selectSkillsStale(s, workspaceId, sessionId),
+	);
 	const workspaceRoot = useAppStore(
 		(s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? undefined,
 	);
@@ -157,7 +160,7 @@ export default function ChatView({
 		syncedConnectionGeneration,
 		status,
 		connectionGeneration,
-		enabled: sessionExists,
+		enabled: sessionExists && !pending,
 	});
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -311,11 +314,12 @@ export default function ChatView({
 	}, [historyState.open, sessionId]);
 
 	useEffect(() => {
+		if (pending) return;
 		getTransport()
 			.request("session.getCommands", { sessionId })
 			.then((c) => useAppStore.getState().setCommands(sessionId, c))
 			.catch(() => {});
-	}, [sessionId]);
+	}, [pending, sessionId]);
 
 	useEffect(() => {
 		if (!slashActive) return;
@@ -791,6 +795,7 @@ export default function ChatView({
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
 					isStreaming={isStreaming}
+					pending={pending}
 					growthLimit={composerGrowthLimit}
 					commands={mergedCommands}
 					templatePending={templatePending}

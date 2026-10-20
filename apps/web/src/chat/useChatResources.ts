@@ -169,6 +169,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 	const welcome = useAppStore((state) => state.welcomeGeneration);
 	const protocol = useAppStore((state) => state.protocolVersion);
 	const alive = useAppStore((state) => isChatResourceScopeAlive(state, scope));
+	const pending = useAppStore((state) => state.sessions[sessionId]?.pending === true);
 	const supported = supportsChatResources(protocol);
 	const knownUnsupported = isChatResourcesKnownUnsupported(protocol);
 	const supportsMcp = selectSupportsMcp({ protocolVersion: protocol });
@@ -190,7 +191,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 
 	useEffect(() => {
 		setActionState(null);
-		if (status !== "connected" || !supported || !alive) return;
+		if (status !== "connected" || !supported || !alive || pending) return;
 		const transport = getTransport();
 		const reader = startChatResourceSync(scope, {
 			state: useAppStore.getState,
@@ -225,7 +226,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 			sync.current = null;
 			controls.current = null;
 		};
-	}, [scope, workspaceId, sessionId, status, supported, alive, generation, welcome]);
+	}, [scope, workspaceId, sessionId, status, supported, alive, pending, generation, welcome]);
 
 	return {
 		visible,

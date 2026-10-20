@@ -48,6 +48,7 @@ import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	type LayoutIntentTransition,
 	selectCanRenameChat,
 	selectContextProject,
 	selectDiffTabTargetRef,
@@ -82,6 +83,7 @@ import {
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import {
 	applyLayoutAttention,
+	commitLayoutIntentTransition,
 	commitWorkspaceLayout,
 	emptyWorkspaceProjection,
 	useWorkspaceLayoutState,
@@ -103,7 +105,9 @@ function PlanSummaryAutoDraft({
 	return null;
 }
 
-const ChatView = lazy(() => import("../chat/ChatView"));
+const loadChatView = () => import("../chat/ChatView");
+const ChatView = lazy(loadChatView);
+const warmChatView = () => void loadChatView().catch(() => {});
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 const ChangesReviewPane = lazy(() =>
 	import("../panels/ChangesReviewPane").then((module) => ({ default: module.ChangesReviewPane })),
@@ -386,12 +390,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[document, workspaceId],
 	);
 
+	const applyIntentTransition = useCallback(
+		(transition: LayoutIntentTransition) => {
+			commitLayoutIntentTransition(workspaceId, transition);
+			syncLegacySelectionFromAttention(workspaceId);
+		},
+		[workspaceId],
+	);
+
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useIdleWarmup(status === "connected", warmTerminalInstance);
-	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
-	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
+	useIdleWarmup(status === "connected", warmChatView);
+	useLayoutIntentProcessing(workspaceId, applyIntentTransition, setFocusRequest);
+	useWorkspaceChatCatalogReconciliation(workspaceId);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
 
