@@ -19,8 +19,8 @@
         "oxc-parser": "catalog:",
         "pi-spec-graph": "workspace:*",
         "pi-todos": "workspace:*",
+        "tsrs": "catalog:",
         "turbo": "2.9.18",
-        "typescript": "catalog:",
       },
     },
     "apps/cli": {
