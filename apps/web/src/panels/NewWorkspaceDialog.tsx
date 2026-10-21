@@ -374,18 +374,20 @@ export function NewWorkspaceDialog({
 			workspace = def;
 		} else {
 			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
-			try {
-				workspace = await getTransport().request("workspace.create", {
+			const createWorktree = async () =>
+				getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
 					...(baseRef ? { baseRef } : {}),
 				});
-			} catch (err) {
-				toast.error(errorText(err), "Couldn't create workspace");
-				setCreating(false);
-				return;
-			} finally {
-				useAppStore.getState().endWorktreeCreation(selectedProjectId);
-			}
+			const created = await createWorktree()
+				.catch((err: unknown) => {
+					toast.error(errorText(err), "Couldn't create workspace");
+					setCreating(false);
+					return null;
+				})
+				.finally(() => useAppStore.getState().endWorktreeCreation(selectedProjectId));
+			if (!created) return;
+			workspace = created;
 		}
 
 		const store = useAppStore.getState();
@@ -396,7 +398,7 @@ export function NewWorkspaceDialog({
 		onOpenChange(false);
 
 		store.beginChatStart(workspace.id);
-		try {
+		const startChat = async () => {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
 				workspaceId: workspace.id,
 				...(model && explicitPair ? { model, thinkingLevel } : {}),
@@ -421,17 +423,16 @@ export function NewWorkspaceDialog({
 					...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
 				})
 				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
-		} catch (err) {
-			toast.error(errorText(err), "Couldn't start the chat");
-		} finally {
-			useAppStore.getState().endChatStart(workspace.id);
-		}
+		};
+		await startChat()
+			.catch((err: unknown) => toast.error(errorText(err), "Couldn't start the chat"))
+			.finally(() => useAppStore.getState().endChatStart(workspace.id));
 	};
 
 	const trustProject = async (notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>) => {
 		if (trusting) return;
 		setTrusting(true);
-		try {
+		const trust = async () => {
 			const updated = await getTransport().request(
 				"project.setTrust",
 				trustGrantParams(selectedProjectId, notice),
@@ -441,11 +442,10 @@ export function NewWorkspaceDialog({
 				getTransport().request("skill.list", { projectId: selectedProjectId }),
 			);
 			setSkillCommands(commands);
-		} catch (err) {
-			toast.error(errorText(err), "Couldn't trust project");
-		} finally {
-			setTrusting(false);
-		}
+		};
+		await trust()
+			.catch((err: unknown) => toast.error(errorText(err), "Couldn't trust project"))
+			.finally(() => setTrusting(false));
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);

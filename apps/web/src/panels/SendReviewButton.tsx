@@ -69,12 +69,9 @@ function SendButtonBase({
 	if (count === 0) return null;
 	const run = async () => {
 		setBusy(true);
-		try {
-			await send();
-		} catch {
-		} finally {
-			setBusy(false);
-		}
+		await send()
+			.catch(() => {})
+			.finally(() => setBusy(false));
 	};
 	return (
 		<button

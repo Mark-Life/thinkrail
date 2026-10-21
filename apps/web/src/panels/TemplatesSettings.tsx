@@ -333,12 +333,13 @@ function TemplateRow({
 	const [confirmOpen, setConfirmOpen] = useState(false);
 
 	const del = async () => {
+		const params = {
+			...(workspaceId ? { workspaceId } : {}),
+			scope: template.scope,
+			name: template.name,
+		};
 		try {
-			await getTransport().request("template.delete", {
-				...(workspaceId ? { workspaceId } : {}),
-				scope: template.scope,
-				name: template.name,
-			});
+			await getTransport().request("template.delete", params);
 			useAppStore.getState().bumpTemplatesVersion();
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't delete the template");
