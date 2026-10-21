@@ -27,7 +27,9 @@ so `--last-failed` remains a valid serial repair loop. No-agent coverage is iden
 is one or many.
 
 The automatic count is half the available CPU parallelism, clamped to 1–8. Developers may explicitly
-select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
+select 1–16 lanes; `e2e:serial` is the stable debugging fallback. `perf:compare` browser suites default
+to lane 15, so a compare and a 16-lane run in the same checkout collide; use 15 lanes or fewer, or move
+the compare with `THINKRAIL_E2E_LANE`. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
 CI splits the suite across machines with `THINKRAIL_E2E_JOB_SHARD=k/N`: the invocation runs slice `k` of
 `N`, and its local lanes subdivide that slice into global Playwright shards `(k-1)·L+i` of `N·L`, so the

@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { prepareSha, resolveSha } from "./checkout";
+import { cleanSha, prepareSha, releaseSha, resolveSha } from "./checkout";
 import type { Artifact } from "./types";
 
 const root = mkdtempSync(join(tmpdir(), "perf-checkout-test-"));
@@ -52,4 +52,12 @@ test("a failed rebuild is built again on the next run", async () => {
 	broken = false;
 	expect((await prepare(false)).failed.size).toBe(0);
 	expect(builds).toBe(3);
+
+	const users = join(root, "cache", "locks", `${sha}.users`);
+	writeFileSync(join(users, String(process.ppid)), "");
+	await expect(prepare(true)).rejects.toThrow("cannot rebuild");
+	await expect(cleanSha(sha)).rejects.toThrow("cannot clean");
+	rmSync(join(users, String(process.ppid)));
+	releaseSha(sha);
+	expect(await cleanSha(sha)).toBe(join(root, "cache", "wt", sha));
 }, 60_000);

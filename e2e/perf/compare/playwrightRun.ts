@@ -47,7 +47,6 @@ export async function runPerfSpec(input: {
 		PLAYWRIGHT_BROWSERS_PATH: defaultBrowsersPath(),
 		THINKRAIL_E2E_LANE: PERF_E2E_LANE,
 		...passthrough(),
-		THINKRAIL_E2E_SKIP_BUILD: "1",
 		THINKRAIL_PERF_APP_ROOT: context.appRoot,
 		THINKRAIL_PERF_BROWSER: input.browser,
 		...input.env,

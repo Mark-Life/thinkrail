@@ -4,6 +4,7 @@ import {
 	appendFileSync,
 	existsSync,
 	mkdirSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
@@ -153,6 +154,32 @@ async function withShaLock<T>(sha: Sha, task: () => Promise<T>) {
 	}
 }
 
+function usersDir(sha: Sha) {
+	return join(cachePaths().locks, `${sha}.users`);
+}
+
+function otherLiveUsers(sha: Sha) {
+	const dir = usersDir(sha);
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir).filter((name) => {
+		const pid = Number(name);
+		if (pid === process.pid) return false;
+		if (Number.isInteger(pid) && pidAlive(pid)) return true;
+		rmSync(join(dir, name), { force: true });
+		return false;
+	});
+}
+
+function refuseIfUsed(sha: Sha, action: string) {
+	const users = otherLiveUsers(sha);
+	if (users.length === 0) return;
+	throw new Error(`cannot ${action} ${sha.slice(0, 10)}: in use by pid ${users.join(", ")}`);
+}
+
+export function releaseSha(sha: Sha) {
+	rmSync(join(usersDir(sha), String(process.pid)), { force: true });
+}
+
 function readMarker(dir: string): BuiltMarker {
 	const file = join(dir, MARKER);
 	return existsSync(file)
@@ -200,6 +227,7 @@ export async function prepareSha(input: {
 }) {
 	const repo = ensureCacheRepo(input.toolRoot);
 	return withShaLock(input.sha, async () => {
+		if (input.rebuild) refuseIfUsed(input.sha, "rebuild");
 		const dir = ensureWorktree(repo, input.sha);
 		let marker = await install(dir, readMarker(dir), input.rebuild);
 		writeMarker(dir, marker);
@@ -225,22 +253,31 @@ export async function prepareSha(input: {
 			marker = { ...marker, artifacts: { ...marker.artifacts, [artifact.key]: entry } };
 			writeMarker(dir, marker);
 		}
+		mkdirSync(usersDir(input.sha), { recursive: true });
+		writeFileSync(join(usersDir(input.sha), String(process.pid)), "");
 		return { appRoot: dir, failed };
 	});
 }
 
 export function cleanSha(sha: Sha) {
-	const { repo } = cachePaths();
-	const dir = worktreeDir(sha);
-	if (existsSync(repo) && existsSync(dir)) git(repo, "worktree", "remove", "--force", dir);
-	rmSync(dir, { recursive: true, force: true });
-	if (existsSync(repo)) git(repo, "worktree", "prune");
-	return dir;
+	return withShaLock(sha, async () => {
+		refuseIfUsed(sha, "clean");
+		const { repo } = cachePaths();
+		const dir = worktreeDir(sha);
+		if (existsSync(repo) && existsSync(dir)) git(repo, "worktree", "remove", "--force", dir);
+		rmSync(dir, { recursive: true, force: true });
+		if (existsSync(repo)) git(repo, "worktree", "prune");
+		return dir;
+	});
 }
 
 export function cleanAll() {
-	const { root, repo, worktrees } = cachePaths();
+	const { root, repo, worktrees, locks } = cachePaths();
 	if (!existsSync(root)) return root;
+	const used = existsSync(locks)
+		? readdirSync(locks).filter((name) => name.endsWith(".users"))
+		: [];
+	for (const name of used) refuseIfUsed(name.slice(0, -".users".length) as Sha, "clean");
 	const looksLikeCache = existsSync(repo) || existsSync(worktrees);
 	if (root === homedir() || dirname(root) === root || !looksLikeCache) {
 		throw new Error(`refusing to remove ${root}: not a perf:compare cache`);

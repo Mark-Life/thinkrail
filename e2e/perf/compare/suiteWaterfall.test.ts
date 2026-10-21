@@ -24,6 +24,26 @@ describe("wire timeline", () => {
 		expect(timeline.getMessagesSentMs).toBeLessThan(timeline.watchReadyReplyMs);
 	});
 
+	test("accepts getMessages sent before watchReady", () => {
+		const frame = (at: number, direction: WireFrame["direction"], body: object) => ({
+			at,
+			direction,
+			payload: JSON.stringify(body),
+		});
+		const params = { workspaceId: "w1" };
+		const timeline = wireTimeline([
+			frame(10, "sent", { id: "m", method: "session.getMessages", params }),
+			frame(11, "sent", { id: "w", method: "workspace.watchReady", params }),
+			frame(12, "received", { id: "m", result: [] }),
+			frame(13, "received", { id: "w", result: null }),
+		]);
+		expect(timeline).toEqual({
+			watchReadyReplyMs: 13,
+			getMessagesSentMs: 10,
+			getMessagesReplyMs: 12,
+		});
+	});
+
 	test("fails without a transcript read", () => {
 		const frames = fixture<WireFrame[]>("head-wire.json").filter(
 			(frame) => !frame.payload.includes("session.getMessages"),
