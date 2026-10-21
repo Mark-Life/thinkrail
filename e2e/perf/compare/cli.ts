@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { E2E_ROOT_DIR, processRunnerInterruption, signalExitCode } from "../../processRunner";
 import { cacheRoot, cleanAll, cleanSha, resolveSha } from "./checkout";
 import { prepareRefs, runCompare } from "./compare";
+import { HOSTS, type Host, runOnHosts } from "./remote";
 import { renderReport } from "./report";
 import { DEFAULT_SUITE_NAMES, SUITE_NAMES } from "./suites";
 import type { CompareOptions, CompareResult } from "./types";
@@ -27,7 +28,9 @@ Flags:
   --threshold P        percent change treated as noise (default 0)
   --cpu N              CPU throttling rate for browser suites (default 1)
   --browser NAME       chromium (default) or webkit (waterfall only; renders stay chromium)
-  --host local         where to run (only local is supported)
+  --host NAME          where to run: ${HOSTS.join(", ")}; repeatable, hosts run in
+                       parallel. A remote host needs a clean, pushed tool commit and
+                       base/head on origin; its result lands in <out>/<host>/
   --strict-protocol    abort browser suites when protocol versions differ
   --out DIR            output directory (default $TMPDIR/thinkrail-perf-compare/<time>)
   --rebuild            ignore build markers and rebuild artifacts
@@ -37,7 +40,7 @@ Cache: ${cacheRoot()} (override with THINKRAIL_PERF_CACHE)`;
 
 type Command =
 	| { kind: "help" }
-	| { kind: "run"; base: string; head: string; options: CompareOptions }
+	| { kind: "run"; base: string; head: string; hosts: readonly Host[]; options: CompareOptions }
 	| { kind: "prepare"; refs: string[]; options: CompareOptions }
 	| { kind: "report"; file: string }
 	| { kind: "clean"; target: { all: true } | { ref: string } };
@@ -76,6 +79,7 @@ function defaultOptions(): CompareOptions {
 export function parseArgs(argv: readonly string[]): Command {
 	const options = defaultOptions();
 	const positional: string[] = [];
+	const hosts: Host[] = [];
 	let all = false;
 	for (let index = 0; index < argv.length; index += 1) {
 		const arg = argv[index] ?? "";
@@ -100,8 +104,9 @@ export function parseArgs(argv: readonly string[]): Command {
 				throw new Error("--browser: chromium|webkit");
 			options.browser = browser;
 		} else if (arg === "--host") {
-			const host = next();
-			if (host !== "local") throw new Error(`--host ${host ?? ""}: only local is supported`);
+			const host = HOSTS.find((name) => name === next());
+			if (!host) throw new Error(`--host needs one of ${HOSTS.join(", ")}`);
+			hosts.push(host);
 		} else if (arg === "--strict-protocol") options.strictProtocol = true;
 		else if (arg === "--out") options.out = resolve(next() ?? "");
 		else if (arg === "--rebuild") options.rebuild = true;
@@ -112,6 +117,10 @@ export function parseArgs(argv: readonly string[]): Command {
 	}
 	const [first, ...rest] = positional;
 	if (first === undefined) return { kind: "help" };
+	const remoteHosts = hosts.some((host) => host !== "local");
+	if (remoteHosts && ["prepare", "report", "clean"].includes(first)) {
+		throw new Error(`--host applies to compare runs only, not ${first}`);
+	}
 	if (first === "prepare") {
 		if (rest.length === 0) throw new Error("prepare needs at least one ref");
 		return { kind: "prepare", refs: rest, options };
@@ -126,7 +135,13 @@ export function parseArgs(argv: readonly string[]): Command {
 		throw new Error("clean needs --all or one ref");
 	}
 	if (positional.length !== 2 || !rest[0]) throw new Error("expected <base> <head>");
-	return { kind: "run", base: first, head: rest[0], options };
+	return {
+		kind: "run",
+		base: first,
+		head: rest[0],
+		hosts: hosts.length > 0 ? hosts : ["local"],
+		options,
+	};
 }
 
 async function main(argv: readonly string[]) {
@@ -154,6 +169,19 @@ async function main(argv: readonly string[]) {
 		});
 		for (const side of prepared) console.log(`${side.ref} ${side.sha} ${side.appRoot}`);
 		return 0;
+	}
+	if (command.hosts.length > 1 || command.hosts[0] !== "local") {
+		const run = await runOnHosts({
+			toolRoot: E2E_ROOT_DIR,
+			baseRef: command.base,
+			headRef: command.head,
+			hosts: command.hosts,
+			options: command.options,
+		});
+		if (!command.options.jsonOnly) process.stdout.write(run.markdown);
+		console.error(`perf:compare: wrote ${run.markdownPath ?? run.outDir}`);
+		for (const failure of run.failures) console.error(`perf:compare: ${failure}`);
+		return run.failures.length > 0 ? 1 : 0;
 	}
 	const run = await runCompare({
 		toolRoot: E2E_ROOT_DIR,

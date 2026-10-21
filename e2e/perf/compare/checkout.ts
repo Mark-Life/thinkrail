@@ -5,6 +5,7 @@ import {
 	existsSync,
 	mkdirSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
@@ -76,7 +77,8 @@ export function ensureCacheRepo(toolRoot: string) {
 	);
 	const alternates = join(repo, "objects", "info", "alternates");
 	const current = existsSync(alternates) ? readFileSync(alternates, "utf8").split("\n") : [];
-	if (!current.includes(objects)) {
+	const own = realpathSync(join(repo, "objects")) === realpathSync(objects);
+	if (!own && !current.includes(objects)) {
 		mkdirSync(join(repo, "objects", "info"), { recursive: true });
 		appendFileSync(alternates, `${objects}\n`);
 	}
