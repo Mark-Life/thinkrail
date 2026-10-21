@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { summarizeMetrics } from "./stats";
 import {
 	componentMeasurements,
+	markTimingOnly,
 	pinnedComponents,
 	scenarioMeasurements,
 	selectScenarios,
@@ -49,5 +51,31 @@ describe("renders suite mapping", () => {
 	test("validates scenario names against the tool", () => {
 		expect(selectScenarios(["large-diff"])).toEqual(["large-diff"]);
 		expect(() => selectScenarios(["nope"])).toThrow("unknown scenario: nope");
+	});
+
+	test("marks a component self-ms change as timing only when its counts hold", () => {
+		const names = ["Steady", "Busier"];
+		const sides = (selfMs: number, busierRenders: number) =>
+			[0, 1, 2].flatMap((jitter) =>
+				componentMeasurements(
+					{
+						...run,
+						profile: {
+							...run.profile,
+							components: {
+								Steady: { selfTotalMs: selfMs + jitter, commits: 4, renders: 6 },
+								Busier: { selfTotalMs: selfMs + jitter, commits: 4, renders: busierRenders },
+							},
+						},
+					},
+					names,
+				),
+			);
+		const metrics = markTimingOnly(
+			summarizeMetrics({ base: sides(10, 6), head: sides(30, 9), threshold: 0 }),
+		);
+		const flagged = metrics.filter((metric) => metric.timingOnly).map((metric) => metric.id);
+		expect(flagged).toEqual(["renders/chat-streaming/component/Steady/selfMs"]);
+		expect(metrics.find((m) => m.id.endsWith("Busier/selfMs"))?.verdict).toBe("worse");
 	});
 });

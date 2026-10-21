@@ -140,3 +140,22 @@ test("small nonzero values keep enough precision to differ from zero", () => {
 	expect(formatValue(-0.00012, "score")).toBe("-0.00012");
 	expect(formatValue(0, "score")).toBe("0");
 });
+
+test("timing-only rows carry a label and a legend through compare.json", () => {
+	const input = result();
+	const suite = input.suites[0];
+	const boot = suite?.metrics.find((metric) => metric.id === "boot");
+	if (!suite || !boot) throw new Error("fixture has a boot row");
+	boot.timingOnly = true;
+	const markdown = renderReport(JSON.parse(JSON.stringify(input)) as CompareResult);
+	expect(markdown).toMatch(/\| boot \|.*\| ▮▮▮ better \(timing only\) \|/);
+	expect(markdown).toContain("(timing only): the component's renders and commits are unchanged");
+	expect(renderReport(result())).not.toContain("timing only");
+});
+
+test("a run of one commit against itself is labeled A/A", () => {
+	const input = result();
+	const markdown = renderReport({ ...input, head: { ...input.base, ref: "HEAD" } });
+	expect(markdown).toContain("A/A run: both sides are the same commit.");
+	expect(renderReport(input)).not.toContain("A/A run");
+});

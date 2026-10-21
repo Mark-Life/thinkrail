@@ -42,14 +42,14 @@ interface SampleState {
 function sampleState(
 	context: SuiteContext,
 	cache: Cache,
-	extra: (shaDir: string) => Env,
+	extra: (sideDir: string) => Env,
 	slot: string = cache,
 ) {
 	const stateDir = join(context.sampleDir, slot);
-	const shaDir = join(context.options.out, "state", "startup", context.sha);
+	const sideDir = join(context.options.out, "state", "startup", context.side);
 	const env = hermeticEnv(stateDir, {
-		BUN_RUNTIME_TRANSPILER_CACHE_PATH: join(cache === "warm" ? shaDir : stateDir, "transpiler"),
-		...(cache === "warm" ? extra(shaDir) : {}),
+		BUN_RUNTIME_TRANSPILER_CACHE_PATH: join(cache === "warm" ? sideDir : stateDir, "transpiler"),
+		...(cache === "warm" ? extra(sideDir) : {}),
 	});
 	const cwd = join(stateDir, "cwd");
 	mkdirSync(cwd, { recursive: true });
@@ -115,7 +115,7 @@ async function sampleBinary(context: SuiteContext) {
 	const executable = join(context.appRoot, "apps/cli/dist", BINARY_NAME);
 	const rows: Measurement[] = [];
 	for (const cache of ["cold", "warm"] as const) {
-		const stagingCache = (shaDir: string) => ({ XDG_CACHE_HOME: join(shaDir, "xdg-cache") });
+		const stagingCache = (sideDir: string) => ({ XDG_CACHE_HOME: join(sideDir, "xdg-cache") });
 		const version = sampleState(context, cache, stagingCache);
 		const value = await timeToExit(
 			{ ...version, command: [executable, "--version"] },

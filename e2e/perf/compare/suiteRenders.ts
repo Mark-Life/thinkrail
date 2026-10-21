@@ -5,7 +5,7 @@ import { EMPTY_COST, MARKDOWN_SUBTREE } from "../renderProfiler";
 import { DEFAULT_SCENARIOS, isScenarioName, KEY_COMPONENTS, parseScenarios } from "../scenarios";
 import { profileWeb } from "./artifacts";
 import { failureReason, runPerfSpec } from "./playwrightRun";
-import type { Measurement, SampleResult, Suite, SuiteContext } from "./types";
+import type { Measurement, MetricSummary, SampleResult, Suite, SuiteContext } from "./types";
 
 const DEFAULT_ROUNDS = 5;
 const TOP_COMPONENTS = 15;
@@ -96,6 +96,24 @@ export function componentMeasurements(run: ScenarioRun, names: readonly string[]
 	});
 }
 
+function countUnchanged(metric: MetricSummary | undefined) {
+	if (!metric) return false;
+	return (
+		metric.verdict === "same" ||
+		(metric.verdict === "unsure" && metric.base.median === metric.head.median)
+	);
+}
+
+export function markTimingOnly(metrics: readonly MetricSummary[]): MetricSummary[] {
+	const byId = new Map(metrics.map((metric) => [metric.id, metric]));
+	return metrics.map((metric) => {
+		const self = /^(renders\/[^/]+\/component\/.+\/)selfMs$/.exec(metric.id);
+		if (!self || (metric.verdict !== "better" && metric.verdict !== "worse")) return metric;
+		const counts = ["renders", "commits"].map((key) => byId.get(`${self[1]}${key}`));
+		return counts.every(countUnchanged) ? { ...metric, timingOnly: true } : metric;
+	});
+}
+
 export function pinnedComponents(scenario: string) {
 	return (isScenarioName(scenario) && KEY_COMPONENTS[scenario]) || [];
 }
@@ -145,4 +163,5 @@ export const rendersSuite: Suite = {
 	schedule: (options) => ({ kind: "rounds", rounds: options.rounds ?? DEFAULT_ROUNDS }),
 	variants: (options) => selectScenarios(options.scenarios),
 	sample,
+	annotate: markTimingOnly,
 };

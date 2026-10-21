@@ -58,6 +58,7 @@ export interface Suite {
 	schedule(options: CompareOptions): Schedule;
 	variants(options: CompareOptions): readonly string[];
 	sample(context: SuiteContext, variant: string): Promise<SampleResult>;
+	annotate?(metrics: readonly MetricSummary[]): MetricSummary[];
 }
 
 export interface SampleStats {
@@ -81,6 +82,7 @@ export interface MetricSummary extends Omit<Measurement, "value"> {
 	deltaPct: number;
 	ci: Interval | null;
 	verdict: Verdict;
+	timingOnly?: true;
 }
 
 export type VariantStatus =
