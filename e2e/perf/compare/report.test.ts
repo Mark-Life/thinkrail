@@ -121,3 +121,23 @@ test("timed rows show means and name a zero side instead of n<2", () => {
 	expect(markdown).toContain("| skewed | 20 ms | 11 ms | -45% |");
 	expect(markdown).toContain("| appeared | 0 ms | 40 ms | n/a | base 0 | ▮▮▮▮ worse |");
 });
+
+test("small nonzero values keep enough precision to differ from zero", () => {
+	const input = result();
+	const suite = input.suites[0];
+	if (!suite) throw new Error("fixture has one suite");
+	const shift = (value: number): Measurement => ({
+		...measurement("shift in chat-toolbar", "timed", value),
+		unit: "score",
+	});
+	suite.metrics = summarizeMetrics({
+		base: [0, 0.0009, 0].map(shift),
+		head: [0, 0.0003, 0].map(shift),
+		threshold: 0,
+	});
+	const markdown = renderReport(input);
+	expect(markdown).toContain("| shift in chat-toolbar | 0.0003 | 0.0001 | -66.7% |");
+	expect(formatValue(0.04, "px")).toBe("0.04 px");
+	expect(formatValue(-0.00012, "score")).toBe("-0.00012");
+	expect(formatValue(0, "score")).toBe("0");
+});

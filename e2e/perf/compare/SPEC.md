@@ -105,7 +105,9 @@ identical for both sides and only the app under test differs.
   existing clone on the host.
 - **Output.** `<out>/compare.json` (`CompareResult`) and `<out>/compare.md`; `--json-only` skips the
   markdown. Base/Head cells show medians for exact rows and means for timed and offset rows, matching
-  the statistic behind Δ. Rows with verdict `same` collapse into `<details>`; ▮ marks 5/10/20/50% tiers.
+  the statistic behind Δ. A nonzero value that rounds to zero at its unit's usual precision shows two
+  significant digits, so a cell never reads 0 for a nonzero value. Rows with verdict `same` collapse
+  into `<details>`; ▮ marks 5/10/20/50% tiers.
   `report <compare.json>` re-renders markdown. A local compare where no suite produced a metric exits 1. Per-sample files live under `<out>/samples/`.
 - **Hermeticity check.** Every entry under `~/.thinkrail` is stamped (path to mtime and size) before and
   after; any added, removed or rewritten entry is a warning naming up to 3 paths, not an abort, because a running ThinkRail on the same machine also writes there.

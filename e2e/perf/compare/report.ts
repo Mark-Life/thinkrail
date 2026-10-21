@@ -10,7 +10,9 @@ export function tier(deltaPct: number) {
 }
 
 function trim(value: number, digits: number) {
-	return Number(value.toFixed(digits)).toString();
+	const fixed = Number(value.toFixed(digits));
+	if (fixed !== 0 || value === 0) return fixed.toString();
+	return Number(value.toPrecision(2)).toString();
 }
 
 export function formatValue(value: number, unit: MetricSummary["unit"]) {
