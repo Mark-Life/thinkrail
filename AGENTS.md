@@ -94,6 +94,9 @@ caused by the requested change, and rerun them without asking for approval at ea
   and `bun run typecheck`. Unit tests are `bun run test`; `bun run check:spec-surface` validates enrolled
   spec/barrel public surfaces; `bun run check:compiler` fails when a web function newly bails out of the
   React Compiler (or starts compiling) against the committed census baseline.
+- For a change that can affect rendering, startup, bundle size or chat restore, run
+  `bun run perf:compare <base> <head>` and put its rows in the PR; `e2e/perf/compare/SPEC.md` owns suites
+  and flags.
 - `bun run test:workflows` is on-demand: it uses real provider tokens and is not a commit/CI gate.
 - Binary and desktop artifact modes have separate gates; use them when changing those artifacts.
 
