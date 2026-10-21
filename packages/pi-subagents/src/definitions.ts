@@ -80,6 +80,15 @@ export function parseAgentDefinition(
 	};
 }
 
+const reportedSkips = new Set<string>();
+
+function reportSkippedDefinition(filePath: string, reason: string): void {
+	const key = `${filePath}\0${reason}`;
+	if (reportedSkips.has(key)) return;
+	reportedSkips.add(key);
+	console.warn(`Skipped agent definition ${filePath}: ${reason}`);
+}
+
 function readDefinitionDir(dir: string, source: AgentDefinition["source"]): AgentDefinition[] {
 	let files: string[];
 	try {
@@ -93,7 +102,14 @@ function readDefinitionDir(dir: string, source: AgentDefinition["source"]): Agen
 		try {
 			const parsed = parseAgentDefinition(readFileSync(filePath, "utf8"), source, filePath);
 			if (parsed) definitions.push(parsed);
-		} catch {}
+			else
+				reportSkippedDefinition(
+					filePath,
+					"needs frontmatter with name and description, and a body",
+				);
+		} catch (error) {
+			reportSkippedDefinition(filePath, error instanceof Error ? error.message : "unreadable");
+		}
 	}
 	return definitions;
 }

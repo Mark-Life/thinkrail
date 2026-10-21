@@ -91,7 +91,7 @@ self-commit fragments the parent's history and detaches the work from whatever t
 ThinkRail, the per-plan-step commit map); the parent/host owns
 committing, git-read stays open. User-authored definitions keep the community `.md` + frontmatter convention
 (`name`, `description`, `tools`, `model`, `thinking`, `max_turns`, `inherit_project_context`,
-`skills`, `extensions`; body = system prompt). Malformed files are skipped, never fatal. All four
+`skills`, `extensions`; body = system prompt). Malformed or unreadable files are skipped, never fatal; each skip warns once per file and reason through `console.warn`, because discovery reruns every parent turn. All four
 builtins set `extensions: true` (the embedder's curated child set — inert under pure-pi
 zero-config) with the spec READ tools (`spec_grep`/`spec_get`/`spec_graph`) allowlisted for the
 read-only roles and web tools (`web_search`/`fetch_content`) for the scout. The reviewer alone opts
