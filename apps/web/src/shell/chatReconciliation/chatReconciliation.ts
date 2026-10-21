@@ -462,7 +462,9 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (state.sessions[currentPlacement.sessionId]) continue;
 				try {
 					await hydrateChatResource(workspaceId, currentPlacement.sessionId);
-				} catch {}
+				} catch (error) {
+					if (current) toast.error(errorText(error), "Couldn't load this chat");
+				}
 			}
 		})();
 		return () => {
