@@ -25,7 +25,10 @@ export function normalizeHost(name: string) {
 
 function sshHostname(host: string) {
 	try {
-		const config = execFileSync("ssh", ["-G", host], { encoding: "utf8" });
+		const config = execFileSync("ssh", ["-G", host], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		});
 		return /^hostname (.+)$/m.exec(config)?.[1] ?? host;
 	} catch {
 		return host;
