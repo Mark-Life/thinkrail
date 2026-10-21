@@ -45,10 +45,9 @@ import {
 	specPathMatcher,
 } from "./selectors";
 
-const projects: Project[] = [
-	{ id: "p1", name: "One", path: "/one", slug: "one", lastOpened: 1 },
-	{ id: "p2", name: "Two", path: "/two", slug: "two", lastOpened: 2 },
-];
+const projectOne: Project = { id: "p1", name: "One", path: "/one", slug: "one", lastOpened: 1 };
+const projectTwo: Project = { id: "p2", name: "Two", path: "/two", slug: "two", lastOpened: 2 };
+const projects = [projectOne, projectTwo];
 const workspace: Workspace = {
 	id: "w2",
 	projectId: "p2",
@@ -545,7 +544,7 @@ test("context project prefers the active workspace owner", () => {
 			projects,
 			workspaces,
 		}),
-	).toBe(projects[1]);
+	).toBe(projectTwo);
 });
 
 test("context project falls back to the selected Project Home", () => {
@@ -556,7 +555,7 @@ test("context project falls back to the selected Project Home", () => {
 			projects,
 			workspaces,
 		}),
-	).toBe(projects[0]);
+	).toBe(projectOne);
 });
 
 test("selectSkillsStale is a strict tick comparison, defaulting missing ticks to 0", () => {
@@ -596,6 +595,7 @@ const fileTab: EditorTab = {
 	workspaceId: "w2",
 	name: "a.ts",
 	path: "src/a.ts",
+	content: "",
 };
 
 test("selectKnownChatLocation resolves open and history chats without guessing unknown sessions", () => {
@@ -621,7 +621,7 @@ test("selectActiveEditorTab resolves the mirrored render-cache selection", () =>
 			{ tabsByWorkspace: { w2: tabs }, activeTabByWorkspace: { w2: "legacy-stable-placement" } },
 			"w2",
 		),
-	).toBe(tabs[1]);
+	).toBe(legacyPlacement);
 });
 
 test("selectHistoryTarget prefers the active chat tab", () => {
