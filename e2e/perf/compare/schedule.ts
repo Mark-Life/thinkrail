@@ -20,14 +20,14 @@ interface SideTarget {
 	appRoot: string;
 }
 
-export interface SuiteRunInput {
+interface SuiteRunInput {
 	suite: Suite;
 	sides: Record<Side, SideTarget>;
 	options: CompareOptions;
 	outDir: string;
 }
 
-export interface SuiteRun {
+interface SuiteRun {
 	variants: VariantStatus[];
 	samples: Record<Side, Measurement[]>;
 	loadavg: LoadSample[];
