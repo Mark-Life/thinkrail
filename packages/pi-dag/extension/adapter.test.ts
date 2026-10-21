@@ -192,9 +192,9 @@ async function tool<T>(
 	id = `invocation-${serial++}`,
 	signal?: AbortSignal,
 ): Promise<DagResult<T>> {
-	const definition = session.getToolDefinition(name);
-	if (!definition) throw new Error(`Missing tool ${name}`);
-	const result = await definition.execute(
+	const toolDefinition = session.getToolDefinition(name);
+	if (!toolDefinition) throw new Error(`Missing tool ${name}`);
+	const result = await toolDefinition.execute(
 		id,
 		args,
 		signal,

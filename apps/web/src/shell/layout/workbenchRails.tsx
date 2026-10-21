@@ -245,7 +245,7 @@ export function AuxiliaryRegionRail({
 							candidate.groupId === entry.groupId && !(candidate.kind === "tool" && !candidate.tab),
 					);
 					const index = peers.indexOf(entry);
-					const groupIndex = groups.findIndex((group) => group.id === entry.groupId);
+					const groupIndex = groups.findIndex((candidate) => candidate.id === entry.groupId);
 					const previousIndex = index > 0 ? anchor(peers[index - 1]) : undefined;
 					const afterIndex =
 						index < peers.length - 1 ? anchor(peers[index + 1]) : (group?.tabs.length ?? 0);

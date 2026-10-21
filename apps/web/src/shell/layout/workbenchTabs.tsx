@@ -544,7 +544,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		const result = moveTabToGroup(document, tab, target, targetIndex);
 		if (!isLayoutUnavailable(result)) onApply(result);
 	};
-	const reorder = (nextIndex: number) => move(location, nextIndex);
+	const reorder = (targetIndex: number) => move(location, targetIndex);
 	const focusTab = (keep?: boolean) => {
 		onSelect(tab.id, keep);
 		focusControl();

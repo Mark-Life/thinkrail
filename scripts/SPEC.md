@@ -34,7 +34,9 @@ These are static literal-import checks, not a runtime module resolver. Negative 
 
 `lint` runs `oxlint`, then `oxfmt --check`. `oxlint.config.ts` extends the ultracite `core` preset everywhere and its `react` preset only on the React UI paths (`apps/web`, `apps/website`, `packages/ui`, extension `web` halves), because server and e2e functions named `use*` trip `rules-of-hooks`. Rule policy, with no warning ratchet:
 
-- A preset rule with no hits is `error`. A rule with hits is `off` (`withHits`, `reactWithHits`) until a change fixes its hits and turns it on. `import/no-cycle`, `no-shadow`, and `no-empty` are the next to turn on.
+- A preset rule with no hits is `error`. A rule with hits is `off` (`withHits`, `reactWithHits`) until a change fixes its hits and turns it on. `import/no-cycle` is the next to turn on.
+- `no-empty` allows an empty `catch`: best-effort catches around storage, analytics, and URL parsing stay legal. A catch that hides a failure someone must diagnose logs it instead.
+- `no-shadow` uses `hoist: "never"` and `ignoreOnInitialization: true`. They drop shadows of a later declaration and callbacks like `items.find((item) => …)` inside `const item = …` (113 → 93 hits); a shadowed module logger or outer scope stays caught.
 - Rules that were `warn` before the preset keep `warn`.
 - Style-only rules are off even at zero hits (`cosmetic`, `reactCosmetic`). So are rules whose hits were sampled and found to be noise or false positives (`lowValue`, `reactLowValue`): for example `no-await-in-loop` (sequential on purpose), `no-barrel-file` (barrels are the module surface), `no-redeclare` (TS type/value pairs; `tsc` covers it), `require-post-message-target-origin` (Worker and BroadcastChannel have no origin), and `react/todo` (duplicates `check:compiler`).
 - `import/no-named-as-default*` is off: import spelling only, and its desktop hits appear only after `electrobun prepare` writes the gitignored `.hutch` devkit.

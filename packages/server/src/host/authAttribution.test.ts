@@ -178,7 +178,7 @@ async function createChat(provider = faux): Promise<string> {
 }
 
 function properties(name: string) {
-	return events.filter(({ event }) => event === name).map(({ properties }) => properties);
+	return events.filter(({ event }) => event === name).map((entry) => entry.properties);
 }
 
 test("preconfigured API-key chats and accepted prompt, steer and follow-up sends report auth without optional consent", async () => {

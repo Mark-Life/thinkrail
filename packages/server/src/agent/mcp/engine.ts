@@ -85,8 +85,8 @@ function engineApi(
 			shutdownHandlers.push(handler);
 			return pi.on("session_shutdown", shutdown);
 		}
-		const guarded: typeof handler = (event, ctx) => {
-			if (!closed) return handler(event, ctx);
+		const guarded: typeof handler = (payload, ctx) => {
+			if (!closed) return handler(payload, ctx);
 		};
 		return Reflect.apply(pi.on, pi, [
 			event,

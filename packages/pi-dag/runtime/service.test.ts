@@ -972,12 +972,12 @@ test("artifact capture rejects same-size mutation observed through the open desc
 			Object.defineProperty(handle, "read", {
 				configurable: true,
 				async value(buffer: Uint8Array, offset: number, length: number, position: number) {
-					const result = await read(buffer, offset, length, position);
+					const bytesRead = await read(buffer, offset, length, position);
 					if (!changed) {
 						changed = true;
 						writeFileSync(path, "BBBBBBBB");
 					}
-					return result;
+					return bytesRead;
 				},
 			});
 		}
@@ -1526,9 +1526,9 @@ test("oversized terminal commentary does not erase actual settlement or its save
 					const child = await resource.createChild(spec);
 					return {
 						...child,
-						async runQueued(task, options) {
+						async runQueued(task, runOptions) {
 							return {
-								...(await child.runQueued(task, options)),
+								...(await child.runQueued(task, runOptions)),
 								finalText: "x".repeat(LIMITS.valueBytes + 1),
 							};
 						},
@@ -1558,9 +1558,9 @@ test.skipIf(process.platform === "win32")(
 		const fifo = realpathSync(path),
 			entered = latch(),
 			open = fs.open;
-		const spy = spyOn(fs, "open").mockImplementation((path, flags, mode) => {
-			if (path === fifo) entered.release();
-			return open(path, flags, mode);
+		const spy = spyOn(fs, "open").mockImplementation((openedPath, flags, mode) => {
+			if (openedPath === fifo) entered.release();
+			return open(openedPath, flags, mode);
 		});
 		const graph = definition();
 		const node = graph.nodes[0];

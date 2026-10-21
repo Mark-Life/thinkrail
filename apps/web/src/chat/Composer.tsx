@@ -287,12 +287,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const focusSelection = usePendingSelection(ref, setCaret);
 
 	const replaceDraft = useCallback(
-		(text: string, caret?: number) => {
+		(text: string, nextCaret?: number) => {
 			recallIdxRef.current = null;
 			setSlotSession(null);
 			setSubmitError(null);
 			onChange(text);
-			focusSelection(caret ?? text.length);
+			focusSelection(nextCaret ?? text.length);
 		},
 		[onChange, focusSelection],
 	);

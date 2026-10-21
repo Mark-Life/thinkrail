@@ -411,15 +411,15 @@ test("grepSpecs marks truncated only when a match exists beyond the limit", () =
 });
 
 test("grepSpecs strips the CR of a CRLF spec so anchored patterns still match", () => {
-	const entries = [
+	const crlfEntries = [
 		{
 			path: "a.md",
 			content: "---\r\nid: a\r\ntype: t\r\n---\r\nhello world\r\n",
 			frontmatter: { id: "a", type: "t" },
 		},
 	];
-	expect(grepSpecs(entries, { pattern: "world$", regex: true }).matches).toHaveLength(1);
-	expect(grepSpecs(entries, { pattern: "^hello", regex: true }).matches[0]?.snippet).toBe(
+	expect(grepSpecs(crlfEntries, { pattern: "world$", regex: true }).matches).toHaveLength(1);
+	expect(grepSpecs(crlfEntries, { pattern: "^hello", regex: true }).matches[0]?.snippet).toBe(
 		"hello world",
 	);
 });

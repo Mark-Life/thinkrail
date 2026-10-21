@@ -82,10 +82,10 @@ function recoveryFiles(): string[] {
 function revert(
 	path: string,
 	target: RevertTarget,
-	expect: { originalHash: string | null; modifiedHash: string | null },
+	expected: { originalHash: string | null; modifiedHash: string | null },
 	scope: GitDiffScope = UNCOMMITTED,
 ): Promise<ChangeReceipt> {
-	return revertChange({ workspaceId, path, scope, target, expect });
+	return revertChange({ workspaceId, path, scope, target, expect: expected });
 }
 
 function range(original: LineSpan, modified: LineSpan): RevertTarget {

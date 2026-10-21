@@ -403,28 +403,28 @@ export function captureSession(
 	return captureBranch(parseTranscript(jsonl, source.sessionId), entryId);
 }
 
-function isAnthropicFamily(message: AssistantMessage): boolean {
+function isAnthropicFamily(assistant: AssistantMessage): boolean {
 	return (
-		message.provider.toLowerCase() === "anthropic" ||
-		message.api.toLowerCase() === "anthropic-messages" ||
-		/claude/i.test(message.model)
+		assistant.provider.toLowerCase() === "anthropic" ||
+		assistant.api.toLowerCase() === "anthropic-messages" ||
+		/claude/i.test(assistant.model)
 	);
 }
 
 function removeBoundThinking(manager: SessionManager): void {
 	for (const { sourceEntry, messages } of manager.buildSessionProjection().entries) {
 		if (sourceEntry.type !== "message" || sourceEntry.message.role !== "assistant") continue;
-		const message = messages.find(
+		const assistant = messages.find(
 			(candidate): candidate is AssistantMessage => candidate.role === "assistant",
 		);
-		if (!message || !isAnthropicFamily(message)) continue;
-		const content = message.content.filter(
+		if (!assistant || !isAnthropicFamily(assistant)) continue;
+		const kept = assistant.content.filter(
 			(block) =>
 				block.type !== "thinking" ||
 				(block.redacted !== true && !nonempty(block.thinkingSignature)),
 		);
-		if (content.length !== message.content.length)
-			manager.appendContextEdit(sourceEntry.id, { content });
+		if (kept.length !== assistant.content.length)
+			manager.appendContextEdit(sourceEntry.id, { content: kept });
 	}
 }
 

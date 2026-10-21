@@ -17,7 +17,7 @@ const count = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 const positive = Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER });
 const nullableId = Type.Union([text, Type.Null()]);
 const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
-const file = Type.Object(
+const fileSchema = Type.Object(
 	{
 		artifactId: hash,
 		sha256: hash,
@@ -37,10 +37,10 @@ const decision = Type.Object(
 	{ actor, reason: text, at: text, commandId: Type.Optional(IdSchema) },
 	closed,
 );
-const value = Type.Object(
+const valueSchema = Type.Object(
 	{
 		kind: Type.Union([Type.Literal("text"), Type.Literal("json"), Type.Literal("artifact")]),
-		file,
+		file: fileSchema,
 		preview: Type.String({ maxLength: LIMITS.preview }),
 	},
 	closed,
@@ -95,8 +95,8 @@ const outcome = Type.Object(
 	{
 		status: runStatus,
 		details,
-		finalText: Type.Optional(file),
-		errorMessage: Type.Optional(file),
+		finalText: Type.Optional(fileSchema),
+		errorMessage: Type.Optional(fileSchema),
 		historyEntryId: nullableId,
 		stopReason: Type.Optional(
 			Type.Union([
@@ -122,7 +122,7 @@ const activation = Type.Object(
 			Type.Literal("settled"),
 			Type.Literal("uncertain"),
 		]),
-		payload: file,
+		payload: fileSchema,
 		createdAt: text,
 		calls: Type.Optional(
 			Type.Record(
@@ -139,7 +139,7 @@ const activation = Type.Object(
 			),
 		),
 		outcome: Type.Optional(outcome),
-		failure: Type.Optional(file),
+		failure: Type.Optional(fileSchema),
 		proposalId: Type.Optional(IdSchema),
 		gateId: Type.Optional(IdSchema),
 		interrupted: Type.Optional(Type.Boolean()),
@@ -150,14 +150,20 @@ const attempt = Type.Object(
 	{
 		number: positive,
 		graphRevision: positive,
-		configuration: file,
+		configuration: fileSchema,
 		reusedOutputs: Type.Optional(
 			Type.Array(Type.Object({ proposalId: IdSchema, name: IdSchema }, closed)),
 		),
 		birth: Type.Optional(birth),
 		inputs: Type.Array(
 			Type.Object(
-				{ connectionId: IdSchema, proposalId: IdSchema, output: IdSchema, input: IdSchema, value },
+				{
+					connectionId: IdSchema,
+					proposalId: IdSchema,
+					output: IdSchema,
+					input: IdSchema,
+					value: valueSchema,
+				},
 				closed,
 			),
 		),
@@ -167,16 +173,16 @@ const attempt = Type.Object(
 	},
 	closed,
 );
-const node = Type.Object(
+const nodeSchema = Type.Object(
 	{
 		id: IdSchema,
-		taskFile: file,
+		taskFile: fileSchema,
 		attempts: Type.Array(attempt),
 		held: Type.Boolean(),
 		cancelled: Type.Boolean(),
 		skipped: Type.Optional(decision),
 		continuation: Type.Optional(
-			Type.Object({ payload: file, sourceActivation: Type.Optional(positive) }, closed),
+			Type.Object({ payload: fileSchema, sourceActivation: Type.Optional(positive) }, closed),
 		),
 		retryOutputs: Type.Optional(
 			Type.Array(Type.Object({ proposalId: IdSchema, name: IdSchema }, closed)),
@@ -189,7 +195,7 @@ const proposal = Type.Object(
 		id: IdSchema,
 		createdVersion: positive,
 		target: ActivationRefSchema,
-		outputs: Type.Record(IdSchema, value, closed),
+		outputs: Type.Record(IdSchema, valueSchema, closed),
 		createdAt: text,
 		disposition: Type.Union([
 			Type.Literal("pending"),
@@ -209,7 +215,7 @@ const gate = Type.Object(
 		kind: Type.Union([Type.Literal("approval"), Type.Literal("input")]),
 		target: ActivationRefSchema,
 		authority: AuthoritySchema,
-		question: file,
+		question: fileSchema,
 		questionPreview: Type.String({ maxLength: LIMITS.preview }),
 		proposalId: Type.Optional(IdSchema),
 		historyCaptureId: Type.Optional(hash),
@@ -221,7 +227,7 @@ const gate = Type.Object(
 			Type.Literal("superseded"),
 		]),
 		decision: Type.Optional(decision),
-		answer: Type.Optional(file),
+		answer: Type.Optional(fileSchema),
 	},
 	closed,
 );
@@ -232,7 +238,7 @@ const capture = Type.Object(
 		entryId: nullableId,
 		sha256: hash,
 		sizeBytes: count,
-		file,
+		file: fileSchema,
 	},
 	closed,
 );
@@ -244,7 +250,7 @@ const intervention = Type.Object(
 	{
 		commandId: IdSchema,
 		target: ActivationRefSchema,
-		text: file,
+		text: fileSchema,
 		status: Type.Union([
 			Type.Literal("pending"),
 			Type.Literal("offered"),
@@ -264,8 +270,8 @@ const history = Type.Object(
 		kind: text,
 		actor: Type.Optional(actor),
 		target: Type.Optional(ActivationRefSchema),
-		content: file,
-		files: Type.Array(file),
+		content: fileSchema,
+		files: Type.Array(fileSchema),
 	},
 	closed,
 );
@@ -305,9 +311,9 @@ const StateSchema = Type.Object(
 		createdAt: text,
 		updatedAt: text,
 		definitionValue: DefinitionSchema,
-		definitionFile: file,
+		definitionFile: fileSchema,
 		profile: Type.Object({ cwd: text }, closed),
-		nodes: Type.Record(IdSchema, node, closed),
+		nodes: Type.Record(IdSchema, nodeSchema, closed),
 		proposals: Type.Record(IdSchema, proposal, closed),
 		gates: Type.Record(IdSchema, gate, closed),
 		captures: Type.Record(hash, capture, closed),
@@ -328,8 +334,8 @@ const StateSchema = Type.Object(
 	closed,
 );
 
-export type StoredFile = Static<typeof file>;
-export type StoredValue = Static<typeof value>;
+export type StoredFile = Static<typeof fileSchema>;
+export type StoredValue = Static<typeof valueSchema>;
 export type DagCaller = Static<typeof actor>;
 export type DecisionRecord = Static<typeof decision>;
 export type DagReceipt = Static<typeof receipt>;
@@ -338,7 +344,7 @@ export type StoredOutcome = Static<typeof outcome>;
 export type Activation = Static<typeof activation>;
 export type Attempt = Static<typeof attempt>;
 export type ConsumedInput = Attempt["inputs"][number];
-export type NodeRecord = Static<typeof node>;
+export type NodeRecord = Static<typeof nodeSchema>;
 export type Proposal = Static<typeof proposal>;
 export type Gate = Static<typeof gate>;
 export type Intervention = Static<typeof intervention>;

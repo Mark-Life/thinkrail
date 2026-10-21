@@ -327,8 +327,8 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			pending = new Set();
 			pendingParentPreparations.set(lifetime, pending);
 		}
-		const scope = pending;
-		scope.add(settled);
+		const preparations = pending;
+		preparations.add(settled);
 		let completed = false;
 		return {
 			lifetime,
@@ -336,8 +336,8 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				if (completed) return;
 				completed = true;
 				finish();
-				scope.delete(settled);
-				if (scope.size === 0) pendingParentPreparations.delete(lifetime);
+				preparations.delete(settled);
+				if (preparations.size === 0) pendingParentPreparations.delete(lifetime);
 				if (
 					parentLifetimes.get(parentSessionId) === lifetime &&
 					!byParent.has(parentSessionId) &&

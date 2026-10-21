@@ -52,9 +52,9 @@ class MemoryClaimRepository implements ClaimRepository {
 		return "created";
 	}
 
-	async bind(id: string, bridgeId: string, context: BindClaimRequest): Promise<BindResult> {
+	async bind(id: string, nextBridgeId: string, context: BindClaimRequest): Promise<BindResult> {
 		if (this.record?.claimId !== id) return "missing";
-		this.record.bridgeId = bridgeId;
+		this.record.bridgeId = nextBridgeId;
 		this.record.context = structuredClone(context);
 		return "bound";
 	}

@@ -266,9 +266,10 @@ function moduleContainers(symbol: ts.Symbol): ExportContainer[] {
 			continue;
 		}
 		if (!ts.isModuleDeclaration(declaration)) continue;
-		let body = declaration.body;
-		while (body !== undefined && ts.isModuleDeclaration(body)) body = body.body;
-		if (body !== undefined && ts.isModuleBlock(body)) containers.push(body);
+		let moduleBody = declaration.body;
+		while (moduleBody !== undefined && ts.isModuleDeclaration(moduleBody))
+			moduleBody = moduleBody.body;
+		if (moduleBody !== undefined && ts.isModuleBlock(moduleBody)) containers.push(moduleBody);
 	}
 	return containers;
 }

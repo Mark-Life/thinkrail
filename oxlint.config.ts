@@ -238,10 +238,8 @@ const reactLowValue = [
 const withHits = [
 	"default-param-last",
 	"import/default",
-	"no-empty",
 	"no-param-reassign",
 	"no-script-url",
-	"no-shadow",
 	"no-unmodified-loop-condition",
 	"node/callback-return",
 	"oxc/no-accumulating-spread",
@@ -286,10 +284,12 @@ export default defineConfig({
 		"import/no-cycle": "error",
 		"no-case-declarations": "error",
 		"no-constructor-return": "error",
+		"no-empty": ["error", { allowEmptyCatch: true }],
 		"no-fallthrough": "error",
 		"no-prototype-builtins": "error",
 		"no-self-compare": "error",
 		"no-sequences": "error",
+		"no-shadow": ["error", { hoist: "never", ignoreOnInitialization: true }],
 		"no-template-curly-in-string": "error",
 		"no-unsafe-optional-chaining": "warn",
 		"no-unused-vars": [

@@ -1105,7 +1105,7 @@ export default function PlanPane({
 		);
 	const reviewAll = async (): Promise<void> =>
 		plan.reviewAll().then(
-			({ total, alreadyRunning }) => {
+			({ total: queued, alreadyRunning }) => {
 				pushToast(
 					alreadyRunning
 						? {
@@ -1113,11 +1113,11 @@ export default function PlanPane({
 								title: "Check All is already running",
 								message: "The current pass continues — the per-row Checking… pulses track it.",
 							}
-						: total > 0
+						: queued > 0
 							? {
 									variant: "success",
 									title: "Check All started",
-									message: `Checking ${total} step${total === 1 ? "" : "s"} one at a time — findings land in the Review tab.`,
+									message: `Checking ${queued} step${queued === 1 ? "" : "s"} one at a time — findings land in the Review tab.`,
 								}
 							: {
 									variant: "info",
@@ -1490,7 +1490,7 @@ export default function PlanPane({
 					allDone={buildDone}
 					glance={glance}
 					renderLive={() => <PlanSessionLive workspaceId={workspaceId} sessionId={sessionId} />}
-					onAdd={(title) => plan.add(title, "page")}
+					onAdd={(pageTitle) => plan.add(pageTitle, "page")}
 					onOpenChat={() => {
 						void openChatInTab(workspaceId, sessionId);
 					}}

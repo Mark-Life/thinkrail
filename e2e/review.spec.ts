@@ -625,12 +625,12 @@ test("preview selection stays honest: a dragged piece stays a piece, and the com
 
 	const state = await page.evaluate(() => {
 		const sel = document.getSelection();
-		const li = document.querySelector('[data-testid="markdown-preview"] li');
+		const bulletItem = document.querySelector('[data-testid="markdown-preview"] li');
 		const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
 		return {
 			text: sel?.toString() ?? "",
-			insideBullet: !!(range && li?.contains(range.commonAncestorContainer)),
-			bullet: li?.textContent ?? "",
+			insideBullet: !!(range && bulletItem?.contains(range.commonAncestorContainer)),
+			bullet: bulletItem?.textContent ?? "",
 		};
 	});
 	expect(state.text.length).toBeGreaterThan(3);

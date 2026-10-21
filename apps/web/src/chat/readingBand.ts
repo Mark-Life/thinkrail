@@ -835,10 +835,10 @@ export function createReadingBandController(
 			writeRunwayHeight(0);
 			publish({ following: true, runway: true });
 		},
-		cancelImmediateTurn: (streaming) => {
+		cancelImmediateTurn: (stillStreaming) => {
 			immediateTurnPending = false;
 			cancelAnchor();
-			if (!streaming) {
+			if (!stillStreaming) {
 				settle();
 				return;
 			}

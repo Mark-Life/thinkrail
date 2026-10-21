@@ -237,7 +237,7 @@ export const BottomStack = memo(function BottomStack({
 		() => visibleAuxiliaryGroups(shared.document, "bottom"),
 		[shared.document],
 	);
-	const current = useMemo(() => visible.map(({ size }) => size), [visible]);
+	const current = useMemo(() => visible.map((entry) => entry.size), [visible]);
 	const groupRef = useRef<ImperativePanelGroupHandle>(null);
 	const roomForMinimums = size.width >= visible.length * LAYOUT_LIMITS.minBottomGroupWidth;
 	const settled = useTopologySettled(tupleKey("bottom", ...visible.map(({ group }) => group.id)));

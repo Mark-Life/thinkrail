@@ -19,9 +19,9 @@ export async function createTestRuntime(prompts?: string[]): Promise<ModelRuntim
 		api: faux.api,
 		baseUrl: "http://faux.local",
 		apiKey: "synthetic",
-		streamSimple: (model, context, options) => {
+		streamSimple: (streamModel, context, options) => {
 			prompts?.push(JSON.stringify(context.messages));
-			return faux.streamSimple(model, context, options);
+			return faux.streamSimple(streamModel, context, options);
 		},
 		models: [
 			{

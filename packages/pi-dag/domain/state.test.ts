@@ -367,9 +367,9 @@ test("human release and historical input policies cannot be removed by controlle
 		questionPreview: "Decide",
 		disposition: "superseded",
 	};
-	const edits = state.definitionValue.nodes.map((node) => ({
+	const edits = state.definitionValue.nodes.map((definitionNode) => ({
 		kind: "put-node" as const,
-		node: { ...node, inputAuthority: "human-or-controller" as const },
+		node: { ...definitionNode, inputAuthority: "human-or-controller" as const },
 	}));
 	expect(() => prepareEdit(state, edits, { kind: "controller" })).toThrow("human input policy");
 	expect(prepareEdit(state, edits, actor).authority).toBe("human");

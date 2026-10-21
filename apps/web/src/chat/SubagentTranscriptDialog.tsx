@@ -43,7 +43,7 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 					childSessionId,
 				}),
 			isLive: (response) => current() && isLiveTranscriptStatus(response.status),
-			isPermanentError: (error) => !current() || isPermanentTranscriptError(error),
+			isPermanentError: (failure) => !current() || isPermanentTranscriptError(failure),
 			onResult: (response) => {
 				if (!current()) return;
 				setMessages(response.messages);

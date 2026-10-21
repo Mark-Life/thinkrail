@@ -215,7 +215,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 			setMcpEnabled: (name, enabled) =>
 				transport.request("mcp.setSessionOverride", { ...scope, name, enabled }),
 			reconnectMcp: (name) => transport.request("mcp.reconnect", { ...scope, name }),
-			onChange: (actions) => setActionState({ scope, generation, actions }),
+			onChange: (nextActions) => setActionState({ scope, generation, actions: nextActions }),
 		});
 		sync.current = reader;
 		controls.current = controller;

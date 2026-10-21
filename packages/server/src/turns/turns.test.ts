@@ -157,11 +157,11 @@ function snapshotNow(cwd: string): string {
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-	let resolve!: (value: T) => void;
+	let fulfill!: (value: T) => void;
 	const promise = new Promise<T>((done) => {
-		resolve = done;
+		fulfill = done;
 	});
-	return { promise, resolve };
+	return { promise, resolve: fulfill };
 }
 
 test("the head is captured the moment the run settles, not after a slow base snapshot", async () => {

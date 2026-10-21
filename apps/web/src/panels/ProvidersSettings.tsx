@@ -41,10 +41,10 @@ export function ProvidersSettings() {
 
 	const load = useCallback(async () => {
 		const sequence = ++loadSequence.current;
-		const providerVersion = useAppStore.getState().providerVersion;
+		const requestedVersion = useAppStore.getState().providerVersion;
 		const isCurrent = () =>
 			sequence === loadSequence.current &&
-			providerVersion === useAppStore.getState().providerVersion;
+			requestedVersion === useAppStore.getState().providerVersion;
 		setRefreshing(true);
 		try {
 			const next = await getTransport().request("provider.status", {});

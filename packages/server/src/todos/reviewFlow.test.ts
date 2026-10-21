@@ -333,7 +333,6 @@ test("renderFixPackage names changed paths for the fallback change set", () => {
 test("review sidecar meta: pending marks; decoration ships reviewing/reviewedBy", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
-	const { startTodoReview } = await import("./todos");
 
 	// Start review marks the item in flight (the `reviewing` decoration) and renders the package: a
 	// change-set REFERENCE only — the reviewer role and output contract belong to host/reviewerRole.
@@ -356,8 +355,7 @@ test("review sidecar meta: pending marks; decoration ships reviewing/reviewedBy"
 test("recordAgentChangesRequested stores the verdict note + autoCycles for the 1-cycle cap", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
-	const { recordAgentChangesRequested, todoReviewAutoCycles, todoReviewRecord, startTodoReview } =
-		await import("./todos");
+	const { recordAgentChangesRequested, todoReviewRecord } = await import("./todos");
 	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
 	recordAgentChangesRequested({
 		workspaceId: "w1",
@@ -378,8 +376,7 @@ test("recordAgentChangesRequested writes record + cycle + pending-clear as one s
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
 	const ref = { workspaceId: "w1", sessionId: SESSION, id };
-	const { recordAgentChangesRequested, todoReviewAutoCycles, todoReviewRecord, startTodoReview } =
-		await import("./todos");
+	const { recordAgentChangesRequested, todoReviewRecord } = await import("./todos");
 	startTodoReview(ref);
 
 	// Fail the SECOND sidecar rename. A three-write recorder would already have the record + autoCycles on

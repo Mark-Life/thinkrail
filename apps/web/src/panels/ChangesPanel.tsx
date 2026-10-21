@@ -112,8 +112,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const pointAt = async (ref: string) => {
 		try {
 			await getTransport().request("workspace.setDiffBase", { id: workspaceId, ref });
-		} catch (error) {
-			toast.error(`Could not change the target branch: ${errorText(error)}`);
+		} catch (failure) {
+			toast.error(`Could not change the target branch: ${errorText(failure)}`);
 		}
 	};
 

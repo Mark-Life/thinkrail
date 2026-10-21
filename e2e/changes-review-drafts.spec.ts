@@ -99,10 +99,10 @@ test("Changes keeps unsaved composer selection and text through virtualization a
 		.poll(() =>
 			first
 				.getByTestId("review-composer-input")
-				.evaluate((input: HTMLTextAreaElement) => [
-					input.selectionStart,
-					input.selectionEnd,
-					input.selectionDirection,
+				.evaluate((textarea: HTMLTextAreaElement) => [
+					textarea.selectionStart,
+					textarea.selectionEnd,
+					textarea.selectionDirection,
 				]),
 		)
 		.toEqual([2, 9, "backward"]);

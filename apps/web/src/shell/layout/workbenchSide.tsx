@@ -331,7 +331,7 @@ export const SideStack = memo(function SideStack({
 		() => visibleAuxiliaryGroups(shared.document, side),
 		[shared.document, side],
 	);
-	const current = useMemo(() => visible.map(({ size }) => size), [visible]);
+	const current = useMemo(() => visible.map((entry) => entry.size), [visible]);
 	const groupRef = useRef<ImperativePanelGroupHandle>(null);
 	const roomForMinimums = size.height >= visible.length * LAYOUT_LIMITS.minSideBodyHeight;
 	const settled = useTopologySettled(tupleKey(side, ...visible.map(({ group }) => group.id)));

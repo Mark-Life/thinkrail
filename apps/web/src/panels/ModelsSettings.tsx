@@ -140,8 +140,8 @@ export function ModelsSettings() {
 							<ThinkingSelector
 								level={level}
 								levels={model?.thinkingLevels ?? []}
-								onSelect={(defaultEffort) =>
-									void saveConfig({ defaultEffort }, "Couldn't save the default effort")
+								onSelect={(effort) =>
+									void saveConfig({ defaultEffort: effort }, "Couldn't save the default effort")
 								}
 								disabled={saving || reading}
 							/>
@@ -172,7 +172,7 @@ export function ModelsSettings() {
 						<ThinkingSelector
 							level={reviewerEffortLevel}
 							levels={reviewerEffortModel?.thinkingLevels ?? []}
-							onSelect={(level) => updateReviewer({ reviewEffort: level })}
+							onSelect={(effort) => updateReviewer({ reviewEffort: effort })}
 						/>
 					</div>
 				</div>

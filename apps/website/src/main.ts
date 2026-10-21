@@ -512,7 +512,7 @@ if (mockElements.length > 0) {
 	const MARGIN = 8;
 	const RAIL_OFFSET = 12;
 	const titlebar = document.querySelector(".titlebar");
-	const railRight = document.getElementById("rail-right");
+	const rightRail = document.getElementById("rail-right");
 
 	const positionTooltip = (trigger: HTMLElement) => {
 		const triggerRect = trigger.getBoundingClientRect();
@@ -523,9 +523,9 @@ if (mockElements.length > 0) {
 		let left: number;
 		let top: number;
 
-		if (trigger.classList.contains("rail-tabs") && titlebar && railRight) {
+		if (trigger.classList.contains("rail-tabs") && titlebar && rightRail) {
 			const titlebarRect = titlebar.getBoundingClientRect();
-			const railRect = railRight.getBoundingClientRect();
+			const railRect = rightRail.getBoundingClientRect();
 			left = railRect.left - tooltipRect.width - RAIL_OFFSET;
 			top = titlebarRect.bottom + RAIL_OFFSET;
 		} else {

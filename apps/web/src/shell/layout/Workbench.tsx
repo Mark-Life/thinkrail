@@ -189,41 +189,41 @@ export function Workbench({
 			tabId: string,
 			options?: { center?: boolean; keep?: boolean },
 		) => {
-			const document = documentRef.current;
-			const attention = attentionRef.current;
+			const latestDocument = documentRef.current;
+			const latestAttention = attentionRef.current;
 			if (!options?.center) {
-				onAttentionChange(selectTab(attention, location, tabId));
+				onAttentionChange(selectTab(latestAttention, location, tabId));
 				return;
 			}
 			onUserNavigation();
 			if (
 				options.keep &&
-				findCenterGroup(document.center, location.groupId)?.previewTabId === tabId
+				findCenterGroup(latestDocument.center, location.groupId)?.previewTabId === tabId
 			) {
-				const result = keepPreview(document, location.groupId, tabId);
+				const result = keepPreview(latestDocument, location.groupId, tabId);
 				if (!isLayoutUnavailable(result)) {
 					apply(result);
 					return;
 				}
 			}
-			onAttentionChange(selectTab(attention, location, tabId, true, true));
+			onAttentionChange(selectTab(latestAttention, location, tabId, true, true));
 		},
 		[apply, onAttentionChange, onUserNavigation],
 	);
 
 	const focusGroup = useCallback(
 		(location: LayoutGroupLocation, selectedTabId?: string) => {
-			const attention = attentionRef.current;
+			const latestAttention = attentionRef.current;
 			if (selectedTabId) {
-				onAttentionChange(selectTab(attention, location, selectedTabId, false));
+				onAttentionChange(selectTab(latestAttention, location, selectedTabId, false));
 				return;
 			}
 			if (location.area === "bottom") {
 				onAttentionChange({
-					...attention,
+					...latestAttention,
 					lastFocusedSideGroupId: Object.assign(
 						Object.create(null),
-						attention.lastFocusedSideGroupId,
+						latestAttention.lastFocusedSideGroupId,
 						{ bottom: location.groupId },
 					),
 				});

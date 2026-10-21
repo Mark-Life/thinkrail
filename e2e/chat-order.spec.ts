@@ -212,27 +212,27 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();
 		await chatScroll.evaluate((root) => {
-			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) return;
-			scroller.scrollTop = Math.max(50, scroller.scrollTop / 2);
-			scroller.dispatchEvent(new Event("scroll"));
+			const element = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!element) return;
+			element.scrollTop = Math.max(50, element.scrollTop / 2);
+			element.dispatchEvent(new Event("scroll"));
 		});
 		await chatScroll.dispatchEvent("pointerdown", { pointerType: "touch" });
 		await chatScroll.evaluate((root) => {
-			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) return;
-			scroller.scrollTop = Math.max(1, scroller.scrollTop - 20);
-			scroller.dispatchEvent(new Event("scroll"));
+			const element = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!element) return;
+			element.scrollTop = Math.max(1, element.scrollTop - 20);
+			element.dispatchEvent(new Event("scroll"));
 		});
 		await page.waitForTimeout(300);
 		await chatScroll.dispatchEvent("pointercancel", { pointerType: "touch" });
 		await chatScroll.evaluate((root) => {
-			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-			if (!scroller) return;
-			scroller.scrollTop += 40;
-			scroller.dispatchEvent(new Event("scroll"));
-			scroller.scrollTop = 0;
-			scroller.dispatchEvent(new Event("scroll"));
+			const element = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!element) return;
+			element.scrollTop += 40;
+			element.dispatchEvent(new Event("scroll"));
+			element.scrollTop = 0;
+			element.dispatchEvent(new Event("scroll"));
 		});
 		await expect(latest).toHaveCount(0);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");

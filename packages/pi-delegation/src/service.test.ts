@@ -913,8 +913,8 @@ test.each([undefined, "user", "engine", ""])(
 		const childA = await paced.createChild(subagentSpec());
 		const childB = await paced.createChild(subagentSpec());
 		const childC = await paced.createChild(subagentSpec());
-		const events: LifecycleEvent[] = [];
-		childB.onEvent((event) => events.push(event));
+		const childEvents: LifecycleEvent[] = [];
+		childB.onEvent((event) => childEvents.push(event));
 		try {
 			const runA = childA.runQueued("Slow.");
 			await started.opened;
@@ -927,8 +927,8 @@ test.each([undefined, "user", "engine", ""])(
 			expect(outcomeB.status).toBe("aborted");
 			expect(outcomeB.details.abortReason).toBe(reason);
 			expect(childB.collectResult()?.details).toEqual(outcomeB.details);
-			expect(events.map((event) => event.type)).toEqual(["run-queued", "run-terminal"]);
-			expect(events.at(-1)).toMatchObject({ outcome: outcomeB });
+			expect(childEvents.map((event) => event.type)).toEqual(["run-queued", "run-terminal"]);
+			expect(childEvents.at(-1)).toMatchObject({ outcome: outcomeB });
 			expect(childA.snapshot?.status).toBe("running");
 			expect(childC.snapshot?.status).toBe("queued");
 			expect(faux.state.callCount).toBe(callsBefore + 1);
@@ -1063,9 +1063,9 @@ test("ChildHandle.dispose settles a queued run before removing the child", async
 	]);
 	const childA = await paced.createChild(subagentSpec());
 	const childB = await paced.createChild(subagentSpec());
-	const events: string[] = [];
+	const eventTypes: string[] = [];
 	paced.onLifecycle((event) => {
-		if ("sessionId" in event && event.sessionId === childB.sessionId) events.push(event.type);
+		if ("sessionId" in event && event.sessionId === childB.sessionId) eventTypes.push(event.type);
 	});
 	try {
 		const runA = childA.runQueued("Slow.");
@@ -1077,7 +1077,7 @@ test("ChildHandle.dispose settles a queued run before removing the child", async
 		expect(childA.snapshot?.status).toBe("running");
 		expect((await runB).status).toBe("aborted");
 		expect(paced.findChild(childB.sessionId)).toBeUndefined();
-		expect(events).toEqual(["run-queued", "run-terminal", "child-disposed"]);
+		expect(eventTypes).toEqual(["run-queued", "run-terminal", "child-disposed"]);
 		expect((await runA).status).toBe("completed");
 	} finally {
 		await paced.disposeChildrenOf(parent.sessionId);
@@ -1101,9 +1101,9 @@ test("concurrent child and parent disposal share one teardown and both await it"
 		},
 	]);
 	const child = await paced.createChild(subagentSpec());
-	const events: string[] = [];
+	const eventTypes: string[] = [];
 	paced.onLifecycle((event) => {
-		if ("sessionId" in event && event.sessionId === child.sessionId) events.push(event.type);
+		if ("sessionId" in event && event.sessionId === child.sessionId) eventTypes.push(event.type);
 	});
 	const run = child.runQueued("Slow.");
 	await Bun.sleep(20);
@@ -1115,7 +1115,7 @@ test("concurrent child and parent disposal share one teardown and both await it"
 		expect(paced.findChild(child.sessionId)).toBeUndefined();
 		expect((await run).status).toBe("aborted");
 		await childDisposal;
-		expect(events).toEqual(["run-queued", "run-started", "run-terminal", "child-disposed"]);
+		expect(eventTypes).toEqual(["run-queued", "run-started", "run-terminal", "child-disposed"]);
 	} finally {
 		await Promise.allSettled([childDisposal, run]);
 		await paced.disposeChildrenOf(parent.sessionId);

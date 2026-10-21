@@ -26,7 +26,7 @@ import {
 } from "./normalized";
 import type { LayoutCenterTab, LayoutTerminalTab, LayoutToolTab } from "./types";
 
-const group = (id: string): LayoutPresetCenterNode => ({ kind: "group", id });
+const centerGroup = (id: string): LayoutPresetCenterNode => ({ kind: "group", id });
 const split = (
 	id: string,
 	direction: "horizontal" | "vertical",
@@ -52,13 +52,13 @@ const weightedGroups = (
 	}));
 };
 
-const side = (
+const sideRegion = (
 	visible: boolean,
 	width: number,
 	groups: Array<{ id: string; tools: LayoutToolId[]; weight?: number; folded?: boolean }>,
 ): LayoutPresetSideRegion => ({ visible, width, groups: weightedGroups(groups) });
 
-const bottom = (
+const bottomRegion = (
 	visible: boolean,
 	groups: Array<{ id: string; tools: LayoutToolId[]; weight?: number; folded?: boolean }>,
 ): LayoutPresetBottomRegion => ({
@@ -74,34 +74,39 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 	{
 		id: "balanced",
 		name: "Balanced",
-		center: group("balanced-primary"),
-		left: side(true, 0.18, [{ id: "balanced-left", tools: ["projects"] }]),
-		right: side(true, 0.28, [
+		center: centerGroup("balanced-primary"),
+		left: sideRegion(true, 0.18, [{ id: "balanced-left", tools: ["projects"] }]),
+		right: sideRegion(true, 0.28, [
 			{ id: "balanced-right-top", tools: ["specs", "files"], weight: 1.25 },
 			{ id: "balanced-right-bottom", tools: ["changes", "review"] },
 		]),
-		bottom: bottom(true, [{ id: "balanced-bottom", tools: [] }]),
+		bottom: bottomRegion(true, [{ id: "balanced-bottom", tools: [] }]),
 	},
 	{
 		id: "focus",
 		name: "Focus",
-		center: group("focus-primary"),
-		left: side(false, 0.18, [{ id: "focus-left", tools: ["projects"] }]),
-		right: side(false, 0.26, [
+		center: centerGroup("focus-primary"),
+		left: sideRegion(false, 0.18, [{ id: "focus-left", tools: ["projects"] }]),
+		right: sideRegion(false, 0.26, [
 			{ id: "focus-right", tools: ["specs", "files", "changes", "review"] },
 		]),
-		bottom: bottom(false, [{ id: "focus-bottom", tools: [] }]),
+		bottom: bottomRegion(false, [{ id: "focus-bottom", tools: [] }]),
 	},
 	{
 		id: "review",
 		name: "Review",
-		center: split("review-center", "vertical", group("review-primary"), group("review-secondary")),
-		left: side(true, 0.16, [{ id: "review-left", tools: ["projects"] }]),
-		right: side(true, 0.32, [
+		center: split(
+			"review-center",
+			"vertical",
+			centerGroup("review-primary"),
+			centerGroup("review-secondary"),
+		),
+		left: sideRegion(true, 0.16, [{ id: "review-left", tools: ["projects"] }]),
+		right: sideRegion(true, 0.32, [
 			{ id: "review-right-main", tools: ["changes", "review"], weight: 1.4 },
 			{ id: "review-right-reference", tools: ["specs", "files"] },
 		]),
-		bottom: bottom(true, [{ id: "review-bottom", tools: [] }]),
+		bottom: bottomRegion(true, [{ id: "review-bottom", tools: [] }]),
 	},
 ] as const;
 

@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
-import { channel as bakedChannel, version } from "@thinkrail/shared/version";
+import { channel as bakedChannel, version as bakedVersion } from "@thinkrail/shared/version";
 import {
 	type InstallMeta,
 	normalizeWindowsInstallPrefix,
@@ -449,7 +449,7 @@ export async function runUpdate(
 		return 1;
 	}
 
-	console.log(`Updating ThinkRail (current: ${version}, channel: ${plan.channel}) …`);
+	console.log(`Updating ThinkRail (current: ${bakedVersion}, channel: ${plan.channel}) …`);
 
 	if ("psArgs" in plan) return await runWindowsUpdate(plan, env);
 

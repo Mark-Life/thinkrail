@@ -451,7 +451,9 @@ test("accepts SDK edges, extension manifest unions, same-half sources, and publi
 			`${moduleRoot}/package.json`,
 			JSON.stringify({
 				name,
-				dependencies: Object.fromEntries(dependencies.map((name) => [name, "workspace:*"])),
+				dependencies: Object.fromEntries(
+					dependencies.map((dependency) => [dependency, "workspace:*"]),
+				),
 			}),
 		);
 	}

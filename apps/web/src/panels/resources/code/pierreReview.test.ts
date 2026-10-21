@@ -118,7 +118,7 @@ test("a one-sided selection opens a composer on that side; a cross-side selectio
 });
 
 test("a file places only the threads whose end line still exists in the text", () => {
-	const thread = (id: string, endLine: number): ReviewThread => ({
+	const threadEndingAt = (id: string, endLine: number): ReviewThread => ({
 		id,
 		body: id,
 		status: "draft",
@@ -131,12 +131,18 @@ test("a file places only the threads whose end line still exists in the text", (
 		},
 	});
 	const whole: ReviewThread = {
-		...thread("whole", 1),
-		anchor: { ...thread("whole", 1).anchor, selectors: [] },
+		...threadEndingAt("whole", 1),
+		anchor: { ...threadEndingAt("whole", 1).anchor, selectors: [] },
 	};
 	expect([
-		...filePlacedThreadIds("one\ntwo\nthree\n", [thread("a", 3), thread("b", 4), whole]),
+		...filePlacedThreadIds("one\ntwo\nthree\n", [
+			threadEndingAt("a", 3),
+			threadEndingAt("b", 4),
+			whole,
+		]),
 	]).toEqual(["a"]);
-	expect([...filePlacedThreadIds("one\ntwo", [thread("a", 2), thread("b", 3)])]).toEqual(["a"]);
-	expect([...filePlacedThreadIds("", [thread("a", 1)])]).toEqual([]);
+	expect([
+		...filePlacedThreadIds("one\ntwo", [threadEndingAt("a", 2), threadEndingAt("b", 3)]),
+	]).toEqual(["a"]);
+	expect([...filePlacedThreadIds("", [threadEndingAt("a", 1)])]).toEqual([]);
 });

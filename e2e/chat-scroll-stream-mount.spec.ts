@@ -88,7 +88,7 @@ const history = (exchanges: number) =>
 		{ role: "user" as const, text: `Request ${turn}`, timestamp: BASE_TS + turn * 10_000 },
 		{
 			role: "assistant" as const,
-			text: Array.from({ length: 6 }, (_, block) =>
+			text: Array.from({ length: 6 }, (_paragraph, block) =>
 				`Answer ${turn} paragraph ${block}. `.repeat(12),
 			).join("\n\n"),
 			timestamp: BASE_TS + turn * 10_000 + 1_000,

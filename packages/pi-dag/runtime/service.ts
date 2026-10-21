@@ -142,13 +142,13 @@ class Engine implements D.DagService {
 					this.id(request.name);
 					const state = await this.read(request.dagId);
 					const proposal = state.proposals[request.proposalId];
-					const value = proposal?.outputs[request.name];
-					if (!proposal || !value) return D.fail("not-found", "Unknown output");
+					const output = proposal?.outputs[request.name];
+					if (!proposal || !output) return D.fail("not-found", "Unknown output");
 					return {
 						proposalId: proposal.id,
 						target: proposal.target,
 						name: request.name,
-						value: { ...value, file: this.store.reference(state.dagId, value.file) },
+						value: { ...output, file: this.store.reference(state.dagId, output.file) },
 						disposition: proposal.disposition,
 						...(proposal.acceptance ? { acceptance: proposal.acceptance } : {}),
 					};

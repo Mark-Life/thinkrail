@@ -2329,8 +2329,8 @@ async function waitForAcceptedAnswerGrace(
 ): Promise<void> {
 	if (!acceptedResult) return;
 	let timer: ReturnType<typeof setTimeout> | undefined;
-	const timeout = new Promise<void>((resolve) => {
-		timer = setTimeout(resolve, Math.max(0, timeoutMs));
+	const timeout = new Promise<void>((done) => {
+		timer = setTimeout(done, Math.max(0, timeoutMs));
 		timer.unref?.();
 	});
 	await Promise.race([acceptedResult.catch(() => {}), timeout]);
@@ -2588,8 +2588,8 @@ function emitSessionShutdown(entry: Entry, timeoutMs = SESSION_SHUTDOWN_BUDGET_M
 	];
 	const settled = Promise.race([
 		Promise.all(steps).then(() => {}),
-		new Promise<void>((resolve) => {
-			timer = setTimeout(resolve, timeoutMs);
+		new Promise<void>((done) => {
+			timer = setTimeout(done, timeoutMs);
 		}),
 	]).finally(() => clearTimeout(timer));
 	entry.shutdown = { runner, settled };
@@ -2717,8 +2717,8 @@ export async function settleSessionsForShutdown(
 	try {
 		await Promise.race([
 			Promise.allSettled(settling),
-			new Promise<void>((resolve) => {
-				timer = setTimeout(resolve, timeoutMs);
+			new Promise<void>((done) => {
+				timer = setTimeout(done, timeoutMs);
 			}),
 		]);
 	} finally {

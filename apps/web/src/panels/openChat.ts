@@ -110,7 +110,7 @@ export async function openChatInTab(
 		const installed =
 			settled.sessions[sessionId] !== undefined &&
 			(settled.tabsByWorkspace[workspaceId] ?? []).some(
-				(tab) => tab.kind === "chat" && tab.sessionId === sessionId,
+				(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
 			);
 		if (
 			!installed &&

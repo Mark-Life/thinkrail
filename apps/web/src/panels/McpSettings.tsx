@@ -991,9 +991,9 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					onOpenChange={(open) => {
 						if (!open) setAdding(null);
 					}}
-					onAdd={async (servers, scope) => {
+					onAdd={async (added, scope) => {
 						setFeedback(null);
-						const { results, last } = await addServers(workspaceId, servers, scope);
+						const { results, last } = await addServers(workspaceId, added, scope);
 						if (last) setFeedback(mcpSaveFeedback(last));
 						return results;
 					}}

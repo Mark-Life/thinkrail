@@ -734,18 +734,18 @@ test("Test connection judges the effective server of a name, not the shadowed on
 		join(repo, ".pi", "mcp.json"),
 		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp" } } }),
 	);
-	const test = () =>
+	const testConnection = () =>
 		handleRequest("mcp.testConnection", { workspaceId: "w1", name: "docs" }, CTX) as Promise<{
 			loginId: string;
 		}>;
-	expect(await codeOf(test())).toBe("MCP_CONFIG_INVALID");
+	expect(await codeOf(testConnection())).toBe("MCP_CONFIG_INVALID");
 	const pending = find(await request("mcp.list", { workspaceId: "w1" }), "project", "docs");
 	await request("mcp.approve", {
 		workspaceId: "w1",
 		name: "docs",
 		fingerprint: pending?.approval?.fingerprint,
 	});
-	const started = await test();
+	const started = await testConnection();
 	expect(typeof started.loginId).toBe("string");
 	await request("provider.loginCancel", { loginId: started.loginId });
 });

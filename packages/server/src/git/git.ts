@@ -605,7 +605,7 @@ function plainText(raw: string): string {
 
 export async function listCommits(workspaceId: string): Promise<{ commits: GitCommit[] }> {
 	const ws = workspace(workspaceId);
-	const log = await gitAsync(ws.worktreePath, [
+	const history = await gitAsync(ws.worktreePath, [
 		"log",
 		`--max-count=${COMMIT_LIST_MAX}`,
 		`--format=%H%x00%h%x00%cI%x00%an%x00%s`,
@@ -613,10 +613,10 @@ export async function listCommits(workspaceId: string): Promise<{ commits: GitCo
 		`${diffBaseRef(ws)}..HEAD`,
 		"--",
 	]);
-	if (log.failure) throw new Error(`Could not list commits: ${log.err || "git failed"}`);
-	if (!log.ok || !log.out) return { commits: [] };
+	if (history.failure) throw new Error(`Could not list commits: ${history.err || "git failed"}`);
+	if (!history.ok || !history.out) return { commits: [] };
 	const commits: GitCommit[] = [];
-	for (const line of log.out.split("\n")) {
+	for (const line of history.out.split("\n")) {
 		const parts = line.split(LOG_SEP);
 		const [sha, shortSha, committedAt, author] = parts;
 		if (!sha || !shortSha) continue;
@@ -642,7 +642,7 @@ export async function listCommitsSince(
 ): Promise<{ sha: string; subject: string }[]> {
 	if (!sinceSha || !/^[0-9a-f]{4,64}$/.test(sinceSha)) return [];
 	const ws = workspace(workspaceId);
-	const log = await gitAsync(ws.worktreePath, [
+	const history = await gitAsync(ws.worktreePath, [
 		"log",
 		"--reverse",
 		`--max-count=${COMMIT_LIST_MAX}`,
@@ -651,11 +651,11 @@ export async function listCommitsSince(
 		`${sinceSha}..HEAD`,
 		"--",
 	]);
-	if (log.failure)
-		throw new Error(`Could not list commits since ${sinceSha}: ${log.err || "git failed"}`);
-	if (!log.ok || !log.out) return [];
+	if (history.failure)
+		throw new Error(`Could not list commits since ${sinceSha}: ${history.err || "git failed"}`);
+	if (!history.ok || !history.out) return [];
 	const commits: { sha: string; subject: string }[] = [];
-	for (const line of log.out.split("\n")) {
+	for (const line of history.out.split("\n")) {
 		const sep = line.indexOf(LOG_SEP);
 		const sha = sep === -1 ? line : line.slice(0, sep);
 		if (!/^[0-9a-f]{40,64}$/.test(sha)) continue;

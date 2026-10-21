@@ -33,8 +33,8 @@ const delegation: DelegationService = {
 				const child = await resource.createChild(spec);
 				return {
 					...child,
-					async runQueued(task, options) {
-						const outcome = await child.runQueued(task, options);
+					async runQueued(task, runOptions) {
+						const outcome = await child.runQueued(task, runOptions);
 						process.stdout.write(`${JSON.stringify({ dagId })}\n`);
 						await new Promise<void>(() => {});
 						return outcome;

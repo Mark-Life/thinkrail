@@ -11,8 +11,8 @@ function countSuiteTests(value: unknown): number {
 	if (!suite) return 0;
 	let count = 0;
 	if (Array.isArray(suite.specs)) {
-		for (const value of suite.specs) {
-			const spec = record(value);
+		for (const entry of suite.specs) {
+			const spec = record(entry);
 			if (spec && Array.isArray(spec.tests)) count += spec.tests.length;
 		}
 	}

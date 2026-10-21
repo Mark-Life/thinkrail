@@ -276,9 +276,14 @@ export default function ChatView({
 	);
 
 	const resultOpener = useMemo(() => {
-		const { commands, finishedCommands, subagents, finishedSubagents } = resources.groups;
+		const {
+			commands: liveCommands,
+			finishedCommands,
+			subagents,
+			finishedSubagents,
+		} = resources.groups;
 		const commandIds = new Set(
-			resources.visible ? [...commands, ...finishedCommands].map((command) => command.id) : [],
+			resources.visible ? [...liveCommands, ...finishedCommands].map((command) => command.id) : [],
 		);
 		const subagentIds = new Set(
 			resources.visible

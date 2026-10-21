@@ -206,14 +206,14 @@ function renderedEntry(
 		project: Project,
 	) => void,
 ): Promise<McpListResult> {
-	const target = renderedTarget(params);
+	const rendered = renderedTarget(params);
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
-		if (target.scope === "project") assertRepositoryWritable(project);
-		const onDisk = mcpEntryFingerprint(target.scope, workspace.worktreePath, name);
-		assertRenderedEntry(name, onDisk, target.expectedFingerprint);
-		write({ scope: target.scope, worktree: workspace.worktreePath, name }, onDisk, project);
-		return target.scope === "user" ? allWorkspaces() : projectWorkspaces(project);
+		if (rendered.scope === "project") assertRepositoryWritable(project);
+		const onDisk = mcpEntryFingerprint(rendered.scope, workspace.worktreePath, name);
+		assertRenderedEntry(name, onDisk, rendered.expectedFingerprint);
+		write({ scope: rendered.scope, worktree: workspace.worktreePath, name }, onDisk, project);
+		return rendered.scope === "user" ? allWorkspaces() : projectWorkspaces(project);
 	});
 }
 

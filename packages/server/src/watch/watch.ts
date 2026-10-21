@@ -200,8 +200,8 @@ export function ensureWatch(
 			stopWatch(workspaceId);
 		});
 		let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
-		const ready = new Promise<WorkspaceWatchReadyResult>((resolve) => {
-			resolveReady = resolve;
+		const ready = new Promise<WorkspaceWatchReadyResult>((done) => {
+			resolveReady = done;
 		});
 		const entry: WatchEntry = {
 			watcher,

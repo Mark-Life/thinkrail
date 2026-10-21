@@ -452,24 +452,24 @@ for (const testCase of orderCases) {
 				isPrimary: true,
 			});
 			await chatScroll.evaluate(
-				async (root, { order, target }) => {
+				async (root, { order, target: edge }) => {
 					await new Promise(requestAnimationFrame);
-					const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-					if (!scroller) throw new Error("missing Virtuoso scroller");
-					const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-					scroller.scrollTop =
-						target === "history"
+					const element = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+					if (!element) throw new Error("missing Virtuoso scroller");
+					const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+					element.scrollTop =
+						edge === "history"
 							? order === "newest-first"
 								? Math.min(300, maxScrollTop)
 								: Math.max(0, maxScrollTop - 300)
-							: target === "near-latest"
+							: edge === "near-latest"
 								? order === "newest-first"
 									? 25
 									: Math.max(0, maxScrollTop - 25)
 								: order === "newest-first"
 									? 0
 									: maxScrollTop;
-					scroller.dispatchEvent(new Event("scroll"));
+					element.dispatchEvent(new Event("scroll"));
 				},
 				{ order: testCase.order, target },
 			);
@@ -503,11 +503,11 @@ for (const testCase of orderCases) {
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 			await page.waitForTimeout(NATIVE_SCROLL_INTENT_EXPIRY_MS);
 			await chatScroll.evaluate((root, order) => {
-				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-				if (!scroller) throw new Error("missing Virtuoso scroller");
-				scroller.scrollTop =
-					order === "newest-first" ? 0 : Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-				scroller.dispatchEvent(new Event("scroll"));
+				const element = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+				if (!element) throw new Error("missing Virtuoso scroller");
+				element.scrollTop =
+					order === "newest-first" ? 0 : Math.max(0, element.scrollHeight - element.clientHeight);
+				element.dispatchEvent(new Event("scroll"));
 			}, testCase.order);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 		} finally {

@@ -572,8 +572,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return mcpPolicyOf(undefined);
 		}
 	});
-	setMcpToolGrantWriter((workspaceId, server, target, tool) => {
-		grantProjectMcpTool(getWorkspace(workspaceId).projectId, server, target, tool);
+	setMcpToolGrantWriter((workspaceId, serverName, target, tool) => {
+		grantProjectMcpTool(getWorkspace(workspaceId).projectId, serverName, target, tool);
 	});
 
 	setSubagentsEnabledResolver((workspaceId) => {
