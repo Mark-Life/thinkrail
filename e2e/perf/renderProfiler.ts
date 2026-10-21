@@ -1,6 +1,6 @@
 import type { Page, Request, Route } from "@playwright/test";
 
-export interface ComponentCost {
+interface ComponentCost {
 	commits: number;
 	renders: number;
 	selfTotalMs: number;

@@ -12,7 +12,7 @@ const REVIEW_FILES = 8;
 const COMMENTS_PER_FILE = 5;
 const COMMENT_SELECTIONS = 24;
 
-export type Measure = (
+type Measure = (
 	page: Page,
 	scenario: string,
 	run: number,
