@@ -45,13 +45,13 @@ import { ASK_ACK_TEXT, assessAnswerability } from "./askUserQuestion";
 import {
 	getSessionResources,
 	readBackgroundCommandOutput,
-	setSessionResourcesPublisher,
 	stopAllSubagents,
 	stopBackgroundCommand,
 	stopSubagent,
 } from "./chatResources";
 import { delegationServiceFor, readChildTranscript } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
+import { setSessionResourcesPublisher } from "./sessionResourcesEvents";
 import { admissionContextFor } from "./skillAdmission";
 
 const model = {

@@ -238,7 +238,6 @@ const reactLowValue = [
 const withHits = [
 	"default-param-last",
 	"import/default",
-	"import/no-cycle",
 	"no-empty",
 	"no-param-reassign",
 	"no-script-url",
@@ -284,6 +283,7 @@ export default defineConfig({
 		...off([...cosmetic, ...lowValue, ...withHits]),
 		"default-case-last": "error",
 		eqeqeq: ["error", "always", { null: "ignore" }],
+		"import/no-cycle": "error",
 		"no-case-declarations": "error",
 		"no-constructor-return": "error",
 		"no-fallthrough": "error",

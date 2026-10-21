@@ -3,7 +3,6 @@ export * from "./askUserQuestion";
 export {
 	getSessionResources,
 	readBackgroundCommandOutput,
-	setSessionResourcesPublisher,
 	stopAllSubagents,
 	stopBackgroundCommand,
 	stopSubagent,
@@ -88,6 +87,7 @@ export {
 	setReviewCommentHandler,
 } from "./reviewTool";
 export * from "./sessionRepair";
+export { setSessionResourcesPublisher } from "./sessionResourcesEvents";
 export * from "./sessionState";
 export {
 	admissionContextFor,

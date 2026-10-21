@@ -872,6 +872,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 - **Forbidden:** `host`; sibling features other than `log`, `trash` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
+- **Internal edges:** acyclic; oxlint `import/no-cycle` is an error. `agentSessionManager` imports
+  `delegation` and `mcpSessions`. Those two never import it back: they reach the live session map only
+  through the callbacks it installs at load (`setDelegationSessionHost`, `setMcpSessionHost`).
+  `mcpSessions` owns the `McpSessionView` and `SessionReloadDisposition` types it consumes.
+  `chatResources` sits above all three. The resource-change publisher lives in the leaf
+  `sessionResourcesEvents`, so session code can publish without importing `chatResources`.
 
 ## Session titles
 
