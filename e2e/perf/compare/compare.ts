@@ -48,13 +48,15 @@ export async function prepareRefs(input: {
 	const prepared: ({ ref: string; sha: Sha } & Awaited<ReturnType<typeof prepareSha>>)[] = [];
 	for (const ref of input.refs) {
 		const sha = resolveSha(input.toolRoot, ref);
-		const built = await prepareSha({
-			toolRoot: input.toolRoot,
-			sha,
-			artifacts,
-			rebuild: input.options.rebuild,
-		});
-		prepared.push({ ref, sha, ...built });
+		const built =
+			prepared.find((side) => side.sha === sha) ??
+			(await prepareSha({
+				toolRoot: input.toolRoot,
+				sha,
+				artifacts,
+				rebuild: input.options.rebuild,
+			}));
+		prepared.push({ ...built, ref, sha });
 	}
 	return prepared;
 }
@@ -135,11 +137,12 @@ export async function runCompare(input: {
 				warnings.push(`${suite.name} skipped: ${reason}`);
 				continue;
 			}
+			const metrics = summarizeMetrics({ ...run.samples, threshold: options.threshold });
 			results.push({
 				name: suite.name,
 				schedule: suite.schedule(options),
 				variants: run.variants,
-				metrics: summarizeMetrics({ ...run.samples, threshold: options.threshold }),
+				metrics: suite.annotate?.(metrics) ?? metrics,
 				loadavg: run.loadavg,
 			});
 			warnings.push(...run.warnings);
@@ -165,7 +168,6 @@ export async function runCompare(input: {
 		writeFileSync(markdownPath, markdown);
 		return { result, markdown, markdownPath };
 	} finally {
-		releaseSha(base.sha);
-		releaseSha(head.sha);
+		for (const sha of new Set([base.sha, head.sha])) releaseSha(sha);
 	}
 }

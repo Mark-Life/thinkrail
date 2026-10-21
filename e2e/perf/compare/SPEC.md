@@ -31,9 +31,12 @@ the measuring harness is identical for both sides and only the app under test di
   gitignored `perf-manifest/dist` so `build:binary` cannot clobber it and Tailwind never scans a previous
   build's output on rebuild), `binary` (`build:binary`), `desktop` (`desktop:build`, darwin
   only). Each builds once per (SHA, key) from the union over selected suites.
+- **A/A.** When base and head resolve to one SHA, it is prepared and marked once and both sides
+  sample it as separate runs on the same schedule. Per-side state is keyed by side, never by SHA.
 - **Suites.** A `Suite` declares its artifacts (a list, or a function of the options so opt-in variants
   build only when selected), a `Schedule`, its variants and `sample()`; an `optIn` suite runs only when
-  named in `--suite`. The core never imports a suite by name: adding one is a file plus a line in
+  named in `--suite`; optional `annotate()` adds suite-specific fields to the summarized metrics. The
+  core never imports a suite by name: adding one is a file plus a line in
   `suites.ts`. Each sample gets its own `sampleDir`; `hermeticEnv(stateDir)` gives it fresh `HOME`,
   data, pi and XDG dirs, `PI_OFFLINE=1`, analytics off, and `CI=1`.
 - **Schedule.** `once` takes one sample per side. `rounds` and `auto` first run one discarded warmup per
@@ -52,7 +55,9 @@ the measuring harness is identical for both sides and only the app under test di
   Welch–Satterthwaite df, Student t. The CI wholly beyond `±threshold` gives `better`/`worse`, wholly
   inside gives `same`, otherwise `unsure`. At `--threshold 0` an unchanged timed row reads `unsure` with
   a narrow CI; pass a threshold to fold such rows. When exactly one side's mean is zero the verdict
-  comes from the Welch difference CI. Offset metrics (signed gaps where a ratio is meaningless) report
+  comes from the Welch difference CI. A renders component `selfMs` row that is `better`/`worse` while
+  that component's `renders` and `commits` rows are unchanged (`same`, or `unsure` with equal medians)
+  gets `timingOnly: true`: the time moved but the render work did not. Offset metrics (signed gaps where a ratio is meaningless) report
   the difference of means with a Welch 95% CI in the metric's unit; the threshold does not apply.
 - **Remote hosts.** `--host` (repeatable: `local` or an ssh alias) runs the compare on each host in
   parallel. Aliases that resolve to this machine run once, locally, so one machine never runs two timed
@@ -67,7 +72,9 @@ the measuring harness is identical for both sides and only the app under test di
 - **Output.** `<out>/compare.json` (`CompareResult`, every metric) and `<out>/compare.md`. Base/Head
   cells show medians for exact rows and means for timed and offset rows. The markdown shows only rows
   whose verdict is not `same`, plus a count of unchanged rows per group; ▮ marks 5/10/20/50% tiers. A
-  local compare where no suite produced a metric exits 1. Per-sample files live under `<out>/samples/`.
+  local compare where no suite produced a metric exits 1. A `timingOnly` row's verdict reads
+  `worse (timing only)` with a one-line legend under the suite. When both sides are one SHA the header
+  says it is an A/A run, so every `better`/`worse` row is a false positive. Per-sample files live under `<out>/samples/`.
 - **Hermeticity check.** Every entry under `~/.thinkrail` is stamped (mtime and size) before and after;
   a change is a warning, not an abort, because a running ThinkRail on the same machine also writes there.
 - **Bundle suite.** One sample of the `manifest-web` build. Initial JS, initial CSS and per-type totals
@@ -76,7 +83,7 @@ the measuring harness is identical for both sides and only the app under test di
 - **Startup suite.** Variants from `--startup` (default `cli,server`; `binary` and `desktop` opt in and
   add their artifact). Every spawn runs from an empty `cwd` under `hermeticEnv`, in its own process
   group. `cli` times `--version`; `server` times the source CLI to its `thinkrail →` line and to
-  `/health` 200; both run with a cold and a warm transpiler cache. `binary` times `--version` and `/health` of the
+  `/health` 200; both run with a cold and a warm transpiler cache (warm state per side). `binary` times `--version` and `/health` of the
   compiled CLI with cold and warm asset staging. `desktop` (macOS) times the dev launcher to webview
   `dom-ready`. Schedule is `auto`. Signal handlers kill a live startup group, because a detached group
   never sees the terminal's Ctrl-C.

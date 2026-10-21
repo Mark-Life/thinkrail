@@ -68,7 +68,8 @@ function ci(metric: MetricSummary) {
 function verdict(metric: MetricSummary) {
 	if (metric.verdict !== "better" && metric.verdict !== "worse") return metric.verdict;
 	const marks = "▮".repeat(tier(metric.deltaPct));
-	return marks ? `${marks} ${metric.verdict}` : metric.verdict;
+	const label = metric.timingOnly ? `${metric.verdict} (timing only)` : metric.verdict;
+	return marks ? `${marks} ${label}` : label;
 }
 
 function metricRow(metric: MetricSummary) {
@@ -104,6 +105,11 @@ export function renderSuite(suite: SuiteResult) {
 		suite.schedule.kind === "rounds" ? `${suite.schedule.rounds} rounds` : suite.schedule.kind;
 	lines.push(`Schedule: ${runs}. Variants: ${suite.variants.map((v) => v.name).join(", ")}.`);
 	lines.push("Base and head show medians for exact rows and means for timed and offset rows.");
+	if (suite.metrics.some((metric) => metric.timingOnly)) {
+		lines.push(
+			"(timing only): the component's renders and commits are unchanged; only its self ms moved.",
+		);
+	}
 	const load = loadLine(suite);
 	if (load) lines.push(load);
 	for (const variant of suite.variants) {
@@ -141,6 +147,12 @@ export function renderReport(result: CompareResult) {
 		"",
 		`Host \`${result.host}\`, tool \`${result.tool.sha.slice(0, 10)}\`${result.tool.dirty ? " (dirty)" : ""}, threshold ${result.threshold}%, protocol ${protocol}, ${result.generatedAt}.`,
 	];
+	if (result.base.sha === result.head.sha) {
+		header.push(
+			"",
+			"A/A run: both sides are the same commit. Expect no real differences; any `better` or `worse` row is a false positive.",
+		);
+	}
 	const warnings =
 		result.warnings.length > 0
 			? ["", "Warnings:", ...result.warnings.map((warning) => `- ${warning}`)]
