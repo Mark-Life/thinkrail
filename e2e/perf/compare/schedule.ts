@@ -1,5 +1,5 @@
-import { mkdirSync } from "node:fs";
-import { availableParallelism, loadavg } from "node:os";
+import { mkdirSync, rmSync } from "node:fs";
+import { availableParallelism, hostname, loadavg } from "node:os";
 import { join } from "node:path";
 import { processRunnerInterruption } from "../../processRunner";
 import { settled, summarizeMetrics } from "./stats";
@@ -23,7 +23,6 @@ interface SideTarget {
 export interface SuiteRunInput {
 	suite: Suite;
 	sides: Record<Side, SideTarget>;
-	toolRoot: string;
 	options: CompareOptions;
 	outDir: string;
 }
@@ -59,13 +58,13 @@ async function sampleOnce(
 		side,
 		sha: input.sides[side].sha,
 		appRoot: input.sides[side].appRoot,
-		toolRoot: input.toolRoot,
 		sampleDir,
 		round,
 		options: input.options,
 	};
 	let result: SampleResult;
 	try {
+		rmSync(sampleDir, { recursive: true, force: true });
 		mkdirSync(sampleDir, { recursive: true });
 		result = await input.suite.sample(context, variant);
 	} catch (error) {
@@ -80,9 +79,13 @@ async function sampleOnce(
 	return result;
 }
 
-function resolved(collected: Collected, threshold: number) {
-	const flat = (side: Side) => [...collected.values()].flatMap((sides) => sides[side]);
-	return summarizeMetrics({ base: flat("base"), head: flat("head"), threshold }).every((metric) =>
+function flatten(collected: Collected, variants: readonly string[] = [...collected.keys()]) {
+	const flat = (side: Side) => variants.flatMap((variant) => collected.get(variant)?.[side] ?? []);
+	return { base: flat("base"), head: flat("head") };
+}
+
+function resolved(collected: Collected, variants: readonly string[], threshold: number) {
+	return summarizeMetrics({ ...flatten(collected, variants), threshold }).every((metric) =>
 		settled(metric, AUTO_PRECISION_PCT),
 	);
 }
@@ -98,7 +101,7 @@ export async function runSuite(input: SuiteRunInput): Promise<SuiteRun> {
 		incompatible.set(variant, `${side}: ${reason}`);
 		collected.delete(variant);
 	};
-	const log = (line: string) => console.error(`perf:compare: ${suite.name} ${line}`);
+	const log = (line: string) => console.error(`perf:compare[${hostname()}]: ${suite.name} ${line}`);
 	const loads: LoadSample[] = [];
 	const warnings: string[] = [];
 	const proven = new Set<string>();
@@ -153,7 +156,7 @@ export async function runSuite(input: SuiteRunInput): Promise<SuiteRun> {
 		if (schedule.kind === "rounds") return round >= schedule.rounds;
 		if (Date.now() - started > schedule.maxMinutes * 60_000) return true;
 		if (round < schedule.minRuns || (round - schedule.minRuns) % schedule.batch !== 0) return false;
-		return resolved(collected, options.threshold);
+		return resolved(collected, active(), options.threshold);
 	};
 
 	for (let round = 1; !done(round - 1); round += 1) {
@@ -175,10 +178,9 @@ export async function runSuite(input: SuiteRunInput): Promise<SuiteRun> {
 		const reasons = variants.map((v) => (v.status === "ok" ? v.name : `${v.name}: ${v.reason}`));
 		throw new Error(`${suite.name}: every variant failed (${reasons.join("; ")})`);
 	}
-	const flat = (side: Side) => [...collected.values()].flatMap((sides) => sides[side]);
 	return {
 		variants,
-		samples: { base: flat("base"), head: flat("head") },
+		samples: flatten(collected),
 		loadavg: loads,
 		warnings,
 	};

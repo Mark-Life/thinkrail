@@ -48,7 +48,6 @@ export interface SuiteContext {
 	side: Side;
 	sha: Sha;
 	appRoot: string;
-	toolRoot: string;
 	sampleDir: string;
 	round: number;
 	options: CompareOptions;

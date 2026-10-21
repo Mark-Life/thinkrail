@@ -112,7 +112,6 @@ function start(launch: Launch) {
 			}),
 		exitedYet: () => done,
 		output: () => ({ stdout, stderr }),
-		track,
 		async stop(extraPids: readonly number[] = []) {
 			for (const extra of extraPids) signalGroup(extra, "SIGTERM");
 			signalGroup(pid, "SIGTERM");
@@ -197,7 +196,10 @@ export async function timeToReady(launch: Launch, probes: ReadyProbes, timeoutMs
 			if (elapsed > timeoutMs) throw new Error(`not ready after ${timeoutMs} ms`);
 			if (probes.file !== undefined && times.file === undefined) {
 				ready = readJson(probes.file);
-				if (ready) times.file = performance.now() - proc.startedAt;
+				if (ready) {
+					times.file = performance.now() - proc.startedAt;
+					track(extraPids());
+				}
 			}
 			if (port !== undefined && times.health === undefined && (await healthy(port))) {
 				times.health = performance.now() - proc.startedAt;

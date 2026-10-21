@@ -31,7 +31,11 @@ async function main(argv: readonly string[]) {
 			options: command.options,
 		});
 		for (const side of prepared) console.log(`${side.ref} ${side.sha} ${side.appRoot}`);
-		return 0;
+		const failures = prepared.flatMap((side) =>
+			[...side.failed].map(([key, reason]) => `${side.ref}: ${key} build failed: ${reason}`),
+		);
+		for (const failure of failures) console.error(`perf:compare: ${failure}`);
+		return failures.length > 0 ? 1 : 0;
 	}
 	if (command.hosts.length > 1 || command.hosts[0] !== "local") {
 		const run = await runOnHosts({

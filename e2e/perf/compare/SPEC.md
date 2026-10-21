@@ -25,7 +25,10 @@ identical for both sides and only the app under test differs.
   worktree is added at `wt/<sha>.tmp` and moved into place only after `git worktree add` succeeds, so an
   interrupted checkout is never reused. The SHA then gets `bun install --frozen-lockfile` with `HUSKY=0`, then each selected `Artifact` builds inside the
   worktree. `wt/<sha>/.perf-built.json` records the lockfile hash, Bun version and per-artifact inputs;
-  matching entries skip work, `--rebuild` ignores them. Builds get an allowlisted environment (`PATH`,
+  matching entries skip work, `--rebuild` ignores them. An entry is removed before its install or build
+  starts and written back only on success, so a failed build is never reused. A failed artifact build does
+  not stop the run: suites that declare that artifact are reported incompatible with the build error, and
+  the other suites run. Builds get an allowlisted environment (`PATH`,
   `HOME`, `TMPDIR`, `LANG`, `TERM`, `USER`, `SHELL`), never the caller's `THINKRAIL_*`/`XDG_*`.
 - **Artifacts.** `profile-web` (`build:profile`, `apps/web/dist-profile`), `manifest-web`
   (`vite build --manifest`, `apps/web/dist-manifest`, a separate dir so `build:binary` cannot clobber it),
@@ -43,20 +46,21 @@ identical for both sides and only the app under test differs.
   line and to `/health` 200 (polled every 10 ms). Each runs cold (fresh
   `BUN_RUNTIME_TRANSPILER_CACHE_PATH`) and warm (per-SHA dir under `<out>/state/startup/`). `binary` times
   `--version` and `/health` of `apps/cli/dist/thinkrail` with cold and warm `XDG_CACHE_HOME` (asset
-  staging). `desktop` (macOS) times spawn of the dev launcher to `THINKRAIL_DESKTOP_READY_FILE`, written
+  staging); `--version` also stages, so the cold serve gets its own state dir. `desktop` (macOS) times spawn of the dev launcher to `THINKRAIL_DESKTOP_READY_FILE`, written
   on webview `dom-ready`, hidden window, fresh user data. Schedule is `auto` (`--min-runs`, `--max-minutes`).
   While a startup child (or a pid from the ready file) is alive, SIGINT/SIGTERM handlers SIGKILL its
   process group and exit with the signal code, because a detached group never sees the terminal's
   Ctrl-C and no `runE2eProcess` handler is installed between spawns.
 - **Schedule.** `once` takes one sample per side. `rounds` and `auto` first run one discarded warmup per
   side and variant; rounds then alternate ABBA (odd rounds base first). `auto` stops after `minRuns`
-  once every timed metric is settled, re-checking every `batch` rounds, or at `maxMinutes`. A timed
+  once every timed metric of the still-sampling variants is settled, re-checking every `batch` rounds, or at `maxMinutes`. A timed
   metric is settled when its verdict is not `unsure` or its CI half-width is at most 2%; without the
   width rule an unchanged metric at `--threshold 0` stays `unsure` and every run would hit the cap. `os.loadavg()`
   is recorded per round; load above one per core is a report warning.
 - **Compatibility.** A variant whose first sample on a side fails (the warmup, or round 1 of a `once`
-  suite) is excluded from both sides and reported with its reason; a suite aborts only when every
-  variant fails. A later failure is treated as transient (a slow host, a timeout): the sample is retried
+  suite) is excluded from both sides and reported with its reason; when every variant fails, the
+  suite is reported with all variants incompatible and the other suites still run; only an interrupt or
+  `ENOSPC` aborts the run. Each attempt starts from an empty `sampleDir`. A later failure is treated as transient (a slow host, a timeout): the sample is retried
   once, then the round is skipped with a report warning and collected samples are kept; after 3 failed
   rounds the variant stops sampling and keeps its data. `ENOSPC` aborts the run with a disk-full message. The
   `PROTOCOL_VERSION` of each side is recorded and a difference is a warning, because it changes in most
@@ -86,7 +90,7 @@ identical for both sides and only the app under test differs.
   measurement flags into `<cache>/runs/<id>/` under `remoteRun.sh`: the compare runs in its own process
   group (`set -m`, pgid in `compare.pid`) and a watcher kills that group when ssh's stdin closes, which
   happens when the local ssh dies, since `-T` gives no pty and so no SIGHUP. After a non-interrupt
-  failure the tool also sends `kill -TERM -<pgid>` over a new ssh. Its `compare.json` is read back,
+  failure the tool also sends `kill -TERM -<pgid>` over a new ssh. Its `compare.json` is read back (one retry; on failure the error names the remote path, which is kept),
   the remote run dir is removed, refs are restored
   to the local names, and `<out>/<host>/compare.{json,md}` plus a combined `<out>/compare.md` are
   written. A failed host does not stop the others; the run then exits 1. Remote runs never touch an
@@ -105,9 +109,12 @@ identical for both sides and only the app under test differs.
   A missing `<scenario>-1.json` makes the scenario incompatible with the first Playwright error as
   the reason; the full log stays in the sample dir. All metrics are `timed`. Per-component rows track
   the union of the top 15 by self ms across both warmups, frozen for the measured rounds, so every
-  sample reports the same ids (absent components count as zero). `THINKRAIL_E2E_LANE`,
-  `THINKRAIL_E2E_PORT_BASE` and `PLAYWRIGHT_BROWSERS_PATH` pass through so two compares from one
-  tool checkout can use separate port blocks.
+  sample reports the same ids (absent components count as zero). Browser suites run on e2e lane 15
+  (`THINKRAIL_E2E_LANE`) by default, so their port block and e2e data dir never collide with a
+  lane-free `bun run e2e` in the same tool checkout. `THINKRAIL_E2E_LANE`, `THINKRAIL_E2E_PORT_BASE`
+  and `PLAYWRIGHT_BROWSERS_PATH` pass through so two compares from one tool checkout can use separate
+  lanes. Browsers are looked up in the platform's default Playwright cache (`~/.cache/ms-playwright`
+  on Linux); set `PLAYWRIGHT_BROWSERS_PATH` when they live elsewhere. `--cpu` throttles renders only.
 - **Waterfall suite.** Opt-in (`--suite waterfall`), one variant `restore`, `rounds` schedule, 7 by
   default. Each sample is one fresh Playwright run (fresh host) of `waterfall.perf.ts` with
   `THINKRAIL_PERF_WATERFALL_OUT`; without it the spec skips, so `perf:render` ignores it. The spec seeds a

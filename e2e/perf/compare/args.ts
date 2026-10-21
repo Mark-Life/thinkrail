@@ -22,7 +22,7 @@ Flags:
   --min-runs N         auto-stop minimum runs per side (default 10)
   --max-minutes N      auto-stop time cap (default 3)
   --threshold P        percent change treated as noise (default 0)
-  --cpu N              CPU throttling rate for browser suites (default 1)
+  --cpu N              CPU throttling rate, renders only (default 1)
   --browser NAME       chromium (default) or webkit (waterfall only; renders stay chromium)
   --host NAME          where to run: local or an ssh alias; repeatable, hosts run in
                        parallel (aliases of this machine run once). A remote host needs
