@@ -1,29 +1,17 @@
 {
 	"scenario": "chat-streaming",
-	"run": 1,
-	"cpuRate": 1,
 	"wallMs": 16230.036999999998,
-	"counters": { "deltas": 1025 },
 	"mainThread": {
 		"taskMs": 1654.4809999999998,
 		"scriptMs": 833.763,
 		"layoutMs": 62.984,
-		"styleMs": 75.83099999999999,
-		"heapDeltaMb": 18.119674682617188
+		"styleMs": 75.83099999999999
 	},
 	"profile": {
 		"commits": 1055,
 		"totalMs": 307.79499999061227,
 		"maxCommitMs": 1.4900000058114529,
 		"components": {
-			"ChatView": {
-				"commits": 9,
-				"renders": 9,
-				"selfTotalMs": 1.04500000923872,
-				"selfMaxMs": 0.19999999925494194,
-				"inclusiveTotalMs": 5.085000012069941,
-				"inclusiveMaxMs": 1.4750000014901161
-			},
 			"ChatTranscript": {
 				"commits": 427,
 				"renders": 427,
@@ -31,390 +19,6 @@
 				"selfMaxMs": 0.6650000028312206,
 				"inclusiveTotalMs": 121.78999999165535,
 				"inclusiveMaxMs": 0.7000000029802322
-			},
-			"FoldGeometryProvider": {
-				"commits": 387,
-				"renders": 387,
-				"selfTotalMs": 1.3050000220537186,
-				"selfMaxMs": 0.010000001639127731,
-				"inclusiveTotalMs": 9.025000017136335,
-				"inclusiveMaxMs": 0.5750000029802322
-			},
-			"FoldGeometryProvider>anonymous": {
-				"commits": 387,
-				"renders": 387,
-				"selfTotalMs": 6.509999964386225,
-				"selfMaxMs": 0.04000000283122063,
-				"inclusiveTotalMs": 7.549999985843897,
-				"inclusiveMaxMs": 0.5700000040233135
-			},
-			"HistoryOverlay": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.004999998956918716,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.004999998956918716,
-				"inclusiveMaxMs": 0.004999998956918716
-			},
-			"Composer": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.33500000089406967,
-				"selfMaxMs": 0.19999999925494194,
-				"inclusiveTotalMs": 0.6700000017881393,
-				"inclusiveMaxMs": 0.5150000005960464
-			},
-			"PromptImageChips": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.009999997913837433,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.009999997913837433,
-				"inclusiveMaxMs": 0.004999998956918716
-			},
-			"hN": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.019999999552965164,
-				"selfMaxMs": 0.019999999552965164,
-				"inclusiveTotalMs": 0.05999999865889549,
-				"inclusiveMaxMs": 0.05999999865889549
-			},
-			"Popover": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.015000000596046448,
-				"selfMaxMs": 0.015000000596046448,
-				"inclusiveTotalMs": 0.20000000298023224,
-				"inclusiveMaxMs": 0.20000000298023224
-			},
-			"Popper": {
-				"commits": 2,
-				"renders": 4,
-				"selfTotalMs": 0.010000001639127731,
-				"selfMaxMs": 0.005000002682209015,
-				"inclusiveTotalMs": 0.255000002682209,
-				"inclusiveMaxMs": 0.1850000023841858
-			},
-			"PopperProvider": {
-				"commits": 2,
-				"renders": 4,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.24500000104308128,
-				"inclusiveMaxMs": 0.17999999970197678
-			},
-			"PopoverProvider": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.17999999970197678,
-				"inclusiveMaxMs": 0.17999999970197678
-			},
-			"IconTooltip": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.004999998956918716,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.14499999955296516,
-				"inclusiveMaxMs": 0.14499999955296516
-			},
-			"Tooltip": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.02500000223517418,
-				"selfMaxMs": 0.015000000596046448,
-				"inclusiveTotalMs": 0.20000000298023224,
-				"inclusiveMaxMs": 0.13500000163912773
-			},
-			"TooltipProvider": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.004999998956918716,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.17500000074505806,
-				"inclusiveMaxMs": 0.125
-			},
-			"TooltipTrigger": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.004999998956918716,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.15000000223517418,
-				"inclusiveMaxMs": 0.10999999940395355
-			},
-			"PopperAnchor": {
-				"commits": 2,
-				"renders": 4,
-				"selfTotalMs": 0.010000001639127731,
-				"selfMaxMs": 0.005000002682209015,
-				"inclusiveTotalMs": 0.14500000327825546,
-				"inclusiveMaxMs": 0.10500000044703484
-			},
-			"Primitive.div": {
-				"commits": 2,
-				"renders": 4,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.13500000163912773,
-				"inclusiveMaxMs": 0.10000000149011612
-			},
-			"Primitive.div.Slot": {
-				"commits": 2,
-				"renders": 4,
-				"selfTotalMs": 0.044999998062849045,
-				"selfMaxMs": 0.02500000223517418,
-				"inclusiveTotalMs": 0.13500000163912773,
-				"inclusiveMaxMs": 0.10000000149011612
-			},
-			"Primitive.button": {
-				"commits": 2,
-				"renders": 4,
-				"selfTotalMs": 0.009999997913837433,
-				"selfMaxMs": 0.009999997913837433,
-				"inclusiveTotalMs": 0.10500000417232513,
-				"inclusiveMaxMs": 0.08500000089406967
-			},
-			"Primitive.button.Slot": {
-				"commits": 2,
-				"renders": 4,
-				"selfTotalMs": 0.040000006556510925,
-				"selfMaxMs": 0.02500000223517418,
-				"inclusiveTotalMs": 0.10500000417232513,
-				"inclusiveMaxMs": 0.08500000089406967
-			},
-			"PopoverTrigger": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.009999997913837433,
-				"selfMaxMs": 0.009999997913837433,
-				"inclusiveTotalMs": 0.07000000029802322,
-				"inclusiveMaxMs": 0.07000000029802322
-			},
-			"f1": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.010000001639127731,
-				"inclusiveMaxMs": 0.010000001639127731
-			},
-			"TooltipContent": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.004999998956918716,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.015000000596046448,
-				"inclusiveMaxMs": 0.015000000596046448
-			},
-			"TooltipPortal": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.015000000596046448,
-				"inclusiveMaxMs": 0.010000001639127731
-			},
-			"TooltipPortalProvider": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.004999998956918716,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.015000000596046448,
-				"inclusiveMaxMs": 0.010000001639127731
-			},
-			"Presence": {
-				"commits": 3,
-				"renders": 7,
-				"selfTotalMs": 0.025000005960464478,
-				"selfMaxMs": 0.01000000536441803,
-				"inclusiveTotalMs": 0.025000005960464478,
-				"inclusiveMaxMs": 0.01000000536441803
-			},
-			"PopoverContent": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.019999999552965164,
-				"selfMaxMs": 0.019999999552965164,
-				"inclusiveTotalMs": 0.030000001192092896,
-				"inclusiveMaxMs": 0.030000001192092896
-			},
-			"PopoverPortal": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.004999998956918716,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.010000001639127731,
-				"inclusiveMaxMs": 0.010000001639127731
-			},
-			"PopoverPortalProvider": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.005000002682209015,
-				"inclusiveMaxMs": 0.005000002682209015
-			},
-			"SkillsDialog": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.05499999597668648,
-				"selfMaxMs": 0.029999997466802597,
-				"inclusiveTotalMs": 0.12000000104308128,
-				"inclusiveMaxMs": 0.07499999925494194
-			},
-			"Dialog": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.015000004321336746,
-				"selfMaxMs": 0.010000001639127731,
-				"inclusiveTotalMs": 0.0650000050663948,
-				"inclusiveMaxMs": 0.04500000178813934
-			},
-			"DialogProvider": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.009999997913837433,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.05000000074505806,
-				"inclusiveMaxMs": 0.03500000014901161
-			},
-			"DialogContent": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.005000002682209015,
-				"selfMaxMs": 0.005000002682209015,
-				"inclusiveTotalMs": 0.04000000283122063,
-				"inclusiveMaxMs": 0.030000001192092896
-			},
-			"DialogPortal": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.019999995827674866,
-				"selfMaxMs": 0.01499999687075615,
-				"inclusiveTotalMs": 0.03500000014901161,
-				"inclusiveMaxMs": 0.02499999850988388
-			},
-			"DialogPortalProvider": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.015000004321336746,
-				"inclusiveMaxMs": 0.010000001639127731
-			},
-			"FoldGeometryProvider>anonymous>anonymous": {
-				"commits": 355,
-				"renders": 355,
-				"selfTotalMs": 2.664999980479479,
-				"selfMaxMs": 0.020000003278255463,
-				"inclusiveTotalMs": 158.2149999216199,
-				"inclusiveMaxMs": 1.1900000013411045
-			},
-			"FoldGeometryProvider>anonymous>anonymous>anonymous": {
-				"commits": 355,
-				"renders": 355,
-				"selfTotalMs": 3.165000006556511,
-				"selfMaxMs": 0.03500000014901161,
-				"inclusiveTotalMs": 155.52499994263053,
-				"inclusiveMaxMs": 1.1850000023841858
-			},
-			"vr": {
-				"commits": 355,
-				"renders": 355,
-				"selfTotalMs": 1.784999966621399,
-				"selfMaxMs": 0.02500000223517418,
-				"inclusiveTotalMs": 151.81999991461635,
-				"inclusiveMaxMs": 1.175000000745058
-			},
-			"vr>anonymous": {
-				"commits": 647,
-				"renders": 1357,
-				"selfTotalMs": 24.589999940246344,
-				"selfMaxMs": 0.08500000461935997,
-				"inclusiveTotalMs": 164.4549999423325,
-				"inclusiveMaxMs": 1.1650000028312206
-			},
-			"StreamHeader": {
-				"commits": 355,
-				"renders": 355,
-				"selfTotalMs": 0.4350000098347664,
-				"selfMaxMs": 0.015000000596046448,
-				"inclusiveTotalMs": 0.4650000035762787,
-				"inclusiveMaxMs": 0.015000000596046448
-			},
-			"StreamFooter": {
-				"commits": 355,
-				"renders": 355,
-				"selfTotalMs": 0.7650000229477882,
-				"selfMaxMs": 0.019999999552965164,
-				"inclusiveTotalMs": 2.884999994188547,
-				"inclusiveMaxMs": 0.4450000002980232
-			},
-			"StreamStatusSlot": {
-				"commits": 353,
-				"renders": 353,
-				"selfTotalMs": 0.7850000001490116,
-				"selfMaxMs": 0.010000001639127731,
-				"inclusiveTotalMs": 2.0349999703466892,
-				"inclusiveMaxMs": 0.4400000013411045
-			},
-			"StreamIndicator": {
-				"commits": 352,
-				"renders": 352,
-				"selfTotalMs": 0.5299999825656414,
-				"selfMaxMs": 0.07000000029802322,
-				"inclusiveTotalMs": 1.0149999782443047,
-				"inclusiveMaxMs": 0.4350000023841858
-			},
-			"RunningIcon": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.15000000223517418,
-				"selfMaxMs": 0.15000000223517418,
-				"inclusiveTotalMs": 0.3450000025331974,
-				"inclusiveMaxMs": 0.3450000025331974
-			},
-			"ChatTurnViewImpl": {
-				"commits": 380,
-				"renders": 386,
-				"selfTotalMs": 1.2099999748170376,
-				"selfMaxMs": 0.01499999687075615,
-				"inclusiveTotalMs": 130.4850000180304,
-				"inclusiveMaxMs": 1.1099999994039536
-			},
-			"MessageWithCopy": {
-				"commits": 343,
-				"renders": 344,
-				"selfTotalMs": 0.984999991953373,
-				"selfMaxMs": 0.019999999552965164,
-				"inclusiveTotalMs": 126.76000002771616,
-				"inclusiveMaxMs": 1.1050000004470348
-			},
-			"AssistantMarkdown": {
-				"commits": 341,
-				"renders": 341,
-				"selfTotalMs": 0.41999998316168785,
-				"selfMaxMs": 0.015000000596046448,
-				"inclusiveTotalMs": 123.67499999701977,
-				"inclusiveMaxMs": 1.0999999977648258
-			},
-			"BlockMarkdown": {
-				"commits": 341,
-				"renders": 341,
-				"selfTotalMs": 20.38000001758337,
-				"selfMaxMs": 0.669999998062849,
-				"inclusiveTotalMs": 123.23500001057982,
-				"inclusiveMaxMs": 1.0999999977648258
-			},
-			"MarkdownBlock": {
-				"commits": 341,
-				"renders": 353,
-				"selfTotalMs": 0.9500000216066837,
-				"selfMaxMs": 0.01000000536441803,
-				"inclusiveTotalMs": 102.36999999731779,
-				"inclusiveMaxMs": 0.75
 			},
 			"Markdown$1": {
 				"commits": 341,
@@ -424,133 +28,21 @@
 				"inclusiveTotalMs": 101.32999997213483,
 				"inclusiveMaxMs": 0.7450000010430813
 			},
-			"CopyButton": {
+			"vr>anonymous": {
+				"commits": 647,
+				"renders": 1357,
+				"selfTotalMs": 24.589999940246344,
+				"selfMaxMs": 0.08500000461935997,
+				"inclusiveTotalMs": 164.4549999423325,
+				"inclusiveMaxMs": 1.1650000028312206
+			},
+			"BlockMarkdown": {
 				"commits": 341,
 				"renders": 341,
-				"selfTotalMs": 1.3900000229477882,
-				"selfMaxMs": 0.019999999552965164,
-				"inclusiveTotalMs": 1.6600000374019146,
-				"inclusiveMaxMs": 0.05000000074505806
-			},
-			"BC": {
-				"commits": 3,
-				"renders": 3,
-				"selfTotalMs": 0.02499999850988388,
-				"selfMaxMs": 0.009999997913837433,
-				"inclusiveTotalMs": 0.06000000238418579,
-				"inclusiveMaxMs": 0.030000001192092896
-			},
-			"CodeBlock$1": {
-				"commits": 50,
-				"renders": 127,
-				"selfTotalMs": 0.1550000011920929,
-				"selfMaxMs": 0.010000001639127731,
-				"inclusiveTotalMs": 0.4299999885261059,
-				"inclusiveMaxMs": 0.029999997466802597
-			},
-			"ActivityGroup": {
-				"commits": 40,
-				"renders": 40,
-				"selfTotalMs": 1.029999990016222,
-				"selfMaxMs": 0.20500000193715096,
-				"inclusiveTotalMs": 2.355000015348196,
-				"inclusiveMaxMs": 0.4450000002980232
-			},
-			"RoutineToolRow": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.10999999940395355,
-				"selfMaxMs": 0.07000000029802322,
-				"inclusiveTotalMs": 0.39499999955296516,
-				"inclusiveMaxMs": 0.19999999925494194
-			},
-			"StepHeader": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.009999997913837433,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.255000002682209,
-				"inclusiveMaxMs": 0.15000000223517418
-			},
-			"Um": {
-				"commits": 4,
-				"renders": 4,
-				"selfTotalMs": 0.08999999985098839,
-				"selfMaxMs": 0.06500000134110451,
-				"inclusiveTotalMs": 0.19500000029802322,
-				"inclusiveMaxMs": 0.10500000044703484
-			},
-			"r2": {
-				"commits": 4,
-				"renders": 4,
-				"selfTotalMs": 0.019999995827674866,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.09000000357627869,
-				"inclusiveMaxMs": 0.03500000014901161
-			},
-			"ToolPromptSlot": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0,
-				"inclusiveMaxMs": 0
-			},
-			"GroupDisclosure": {
-				"commits": 38,
-				"renders": 38,
-				"selfTotalMs": 0.5200000293552876,
-				"selfMaxMs": 0.10999999940395355,
-				"inclusiveTotalMs": 0.9300000257790089,
-				"inclusiveMaxMs": 0.23999999836087227
-			},
-			"AwaitingStep": {
-				"commits": 38,
-				"renders": 38,
-				"selfTotalMs": 0.11500000208616257,
-				"selfMaxMs": 0.03999999910593033,
-				"inclusiveTotalMs": 0.11500000208616257,
-				"inclusiveMaxMs": 0.03999999910593033
-			},
-			"yE": {
-				"commits": 2,
-				"renders": 2,
-				"selfTotalMs": 0.009999997913837433,
-				"selfMaxMs": 0.004999998956918716,
-				"inclusiveTotalMs": 0.07999999821186066,
-				"inclusiveMaxMs": 0.03999999910593033
-			},
-			"SystemTurn": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.02500000223517418,
-				"selfMaxMs": 0.02500000223517418,
-				"inclusiveTotalMs": 0.04500000178813934,
-				"inclusiveMaxMs": 0.04500000178813934
-			},
-			"TurnDivider": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.030000001192092896,
-				"selfMaxMs": 0.030000001192092896,
-				"inclusiveTotalMs": 0.0949999988079071,
-				"inclusiveMaxMs": 0.0949999988079071
-			},
-			"RB": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0.005000002682209015,
-				"selfMaxMs": 0.005000002682209015,
-				"inclusiveTotalMs": 0.030000001192092896,
-				"inclusiveMaxMs": 0.030000001192092896
-			},
-			"gB": {
-				"commits": 1,
-				"renders": 1,
-				"selfTotalMs": 0,
-				"selfMaxMs": 0,
-				"inclusiveTotalMs": 0.009999997913837433,
-				"inclusiveMaxMs": 0.009999997913837433
+				"selfTotalMs": 20.38000001758337,
+				"selfMaxMs": 0.669999998062849,
+				"inclusiveTotalMs": 123.23500001057982,
+				"inclusiveMaxMs": 1.0999999977648258
 			}
 		},
 		"subtrees": {
@@ -562,7 +54,11 @@
 				"selfMaxMs": 1.0649999976158142
 			}
 		},
-		"longTasks": { "count": 0, "totalMs": 0, "maxMs": 0 },
+		"longTasks": {
+			"count": 0,
+			"totalMs": 0,
+			"maxMs": 0
+		},
 		"frames": {
 			"frames": 973,
 			"p50GapMs": 16.665000000000873,

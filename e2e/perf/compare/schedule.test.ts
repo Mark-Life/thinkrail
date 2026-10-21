@@ -19,17 +19,14 @@ const OPTIONS: CompareOptions = {
 	threshold: 0,
 	cpu: 1,
 	browser: "chromium",
-	strictProtocol: false,
 	out: outDir,
 	rebuild: false,
-	jsonOnly: true,
 };
 
 function suite(sample: (context: SuiteContext, variant: string) => SampleResult): Suite {
 	return {
 		name: "fake",
 		artifacts: [],
-		browser: false,
 		schedule: () => ({ kind: "rounds", rounds: 4 }),
 		variants: () => ["a", "b"],
 		sample: async (context, variant) => sample(context, variant),

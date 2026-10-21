@@ -30,3 +30,13 @@ export const KEY_COMPONENTS: Partial<Record<ScenarioName, readonly string[]>> = 
 export function isScenarioName(name: string): name is ScenarioName {
 	return (SCENARIO_NAMES as readonly string[]).includes(name);
 }
+
+export function parseScenarios(list: readonly string[]) {
+	const unknown = list.filter((name) => !isScenarioName(name));
+	if (unknown.length > 0) {
+		throw new Error(
+			`unknown scenario: ${unknown.join(", ")} (known: ${SCENARIO_NAMES.join(", ")})`,
+		);
+	}
+	return list as readonly ScenarioName[];
+}

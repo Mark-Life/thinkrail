@@ -90,11 +90,10 @@ function isFatal(error: unknown) {
 	return processRunnerInterruption() !== null || message.startsWith("disk full");
 }
 
-function protocolWarnings(base: number | null, head: number | null, suites: readonly Suite[]) {
+function protocolWarnings(base: number | null, head: number | null) {
 	if (base === head) return [];
-	const browserSuites = suites.filter((suite) => suite.browser).map((suite) => suite.name);
 	return [
-		`protocol version differs (${base ?? "unknown"} → ${head ?? "unknown"}): the tool's browser harness may not match one side${browserSuites.length > 0 ? `; affects ${browserSuites.join(", ")}` : ""}`,
+		`protocol version differs (${base ?? "unknown"} → ${head ?? "unknown"}): the tool's browser harness may not match one side`,
 	];
 }
 
@@ -115,10 +114,7 @@ export async function runCompare(input: {
 	try {
 		const baseProtocol = readProtocolVersion(base.appRoot);
 		const headProtocol = readProtocolVersion(head.appRoot);
-		const warnings = protocolWarnings(baseProtocol, headProtocol, suites);
-		if (warnings.length > 0 && options.strictProtocol && suites.some((suite) => suite.browser)) {
-			throw new Error(`${warnings[0]} (--strict-protocol)`);
-		}
+		const warnings = protocolWarnings(baseProtocol, headProtocol);
 		const stamp = userStateStamp();
 		mkdirSync(options.out, { recursive: true });
 		const results: SuiteResult[] = [];
@@ -163,12 +159,11 @@ export async function runCompare(input: {
 			warnings: hermetic ? [...warnings, hermetic] : warnings,
 			suites: results,
 		};
-		const jsonPath = join(options.out, "compare.json");
-		writeFileSync(jsonPath, `${JSON.stringify(result, null, 2)}\n`);
 		const markdown = renderReport(result);
-		const markdownPath = options.jsonOnly ? null : join(options.out, "compare.md");
-		if (markdownPath) writeFileSync(markdownPath, markdown);
-		return { result, markdown, jsonPath, markdownPath };
+		const markdownPath = join(options.out, "compare.md");
+		writeFileSync(join(options.out, "compare.json"), `${JSON.stringify(result, null, 2)}\n`);
+		writeFileSync(markdownPath, markdown);
+		return { result, markdown, markdownPath };
 	} finally {
 		releaseSha(base.sha);
 		releaseSha(head.sha);

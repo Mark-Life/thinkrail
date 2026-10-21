@@ -10,12 +10,6 @@ repo=$cache/repo.git
 host=$(hostname)
 lock=$cache/locks/bootstrap
 
-command -v bun >/dev/null 2>&1 || PATH="$HOME/.bun/bin:$PATH"
-if ! command -v bun >/dev/null 2>&1; then
-	echo "perf:compare[$(hostname)]: bun not on PATH for non-interactive ssh (looked in ~/.bun/bin too)" >&2
-	exit 6
-fi
-
 mkdir -p "$cache/locks"
 waited=0
 until mkdir "$lock" 2>/dev/null; do

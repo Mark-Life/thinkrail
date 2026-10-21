@@ -11,7 +11,7 @@ import {
 } from "../processRunner";
 import type { ScenarioRun } from "./render.perf";
 import { EMPTY_COST, MARKDOWN_SUBTREE } from "./renderProfiler";
-import { isScenarioName, SCENARIO_NAMES } from "./scenarios";
+import { parseScenarios } from "./scenarios";
 import { median, spreadPct } from "./stats";
 
 const bun = process.execPath;
@@ -46,12 +46,7 @@ function parseArgs(argv: string[]): RunnerArgs {
 		} else if (arg === "--scenario") {
 			scenarios = argv[++index] ?? null;
 			if (!scenarios) throw new Error("--scenario needs a comma-separated list");
-			const unknown = scenarios.split(",").filter((name) => !isScenarioName(name));
-			if (unknown.length > 0) {
-				throw new Error(
-					`unknown scenario: ${unknown.join(", ")} (known: ${SCENARIO_NAMES.join(", ")})`,
-				);
-			}
+			parseScenarios(scenarios.split(","));
 		} else if (arg !== undefined) {
 			playwrightArgs.push(arg);
 		}

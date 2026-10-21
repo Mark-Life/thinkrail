@@ -13,3 +13,15 @@ test("--host rejects malformed hosts and non-run commands", () => {
 	expect(() => parseArgs(["a", "b", "--host", "-oProxyCommand=x"])).toThrow("--host needs");
 	expect(() => parseArgs(["prepare", "a", "--host", "box-a"])).toThrow("compare runs only");
 });
+
+test("forward keeps measurement flags and drops host and output flags", () => {
+	const argv = ["a", "b", "--host", "box", "--rounds", "2", "--out", "x", "--rebuild"];
+	const run = parseArgs([...argv, "--suite", "bundle"]);
+	expect(run.kind === "run" && run.forward).toEqual([
+		"--rounds",
+		"2",
+		"--rebuild",
+		"--suite",
+		"bundle",
+	]);
+});

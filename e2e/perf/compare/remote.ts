@@ -12,6 +12,7 @@ const BOOTSTRAP = readFileSync(new URL("./bootstrap.sh", import.meta.url), "utf8
 const REMOTE_RUN = readFileSync(new URL("./remoteRun.sh", import.meta.url), "utf8");
 const HOST_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._@-]*$/;
 const SSH_OPTIONS = ["-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30"];
+const BUN_CHECK = `command -v bun >/dev/null 2>&1 || { echo "perf:compare[$(hostname)]: bun not on PATH or in ~/.bun/bin" >&2; exit 6; }\n`;
 
 export function parseHost(value: string | undefined) {
 	if (value === undefined || !HOST_PATTERN.test(value)) {
@@ -48,29 +49,6 @@ export function isLocalHost(input: { host: string; localName: string; sshHostnam
 		normalizeHost(input.host) === local ||
 		normalizeHost(input.sshHostname) === local
 	);
-}
-
-export function forwardArgs(options: CompareOptions) {
-	return [
-		"--suite",
-		options.suites.join(","),
-		...(options.scenarios ? ["--scenario", options.scenarios.join(",")] : []),
-		...(options.rounds === null ? [] : ["--rounds", String(options.rounds)]),
-		"--startup",
-		options.startup.join(","),
-		"--min-runs",
-		String(options.minRuns),
-		"--max-minutes",
-		String(options.maxMinutes),
-		"--threshold",
-		String(options.threshold),
-		"--cpu",
-		String(options.cpu),
-		"--browser",
-		options.browser,
-		...(options.strictProtocol ? ["--strict-protocol"] : []),
-		...(options.rebuild ? ["--rebuild"] : []),
-	];
 }
 
 export function requiredBrowsers(options: CompareOptions) {
@@ -112,7 +90,7 @@ async function ssh(
 }
 
 function script(source: string, name: string, args: readonly string[]) {
-	return `bash -c ${shellQuote(source)} ${name} ${args.map(shellQuote).join(" ")}`;
+	return `PATH="$HOME/.bun/bin:$PATH" bash -c ${shellQuote(BUN_CHECK + source)} ${name} ${args.map(shellQuote).join(" ")}`;
 }
 
 async function runRemote(input: {
@@ -122,6 +100,7 @@ async function runRemote(input: {
 	base: Sha;
 	head: Sha;
 	options: CompareOptions;
+	forward: readonly string[];
 }) {
 	const { host, options } = input;
 	const bootstrapArgs = [
@@ -142,10 +121,9 @@ async function runRemote(input: {
 		input.head,
 		"--host",
 		"local",
-		"--json-only",
 		"--out",
 		remoteOut,
-		...forwardArgs(options),
+		...input.forward,
 	];
 	const pidFile = `${remoteOut}/compare.pid`;
 	try {
@@ -185,10 +163,10 @@ function withRefs(result: CompareResult, refs: { base: string; head: string }): 
 	};
 }
 
-function writeHost(dir: string, result: CompareResult, jsonOnly: boolean) {
+function writeHost(dir: string, result: CompareResult) {
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(join(dir, "compare.json"), `${JSON.stringify(result, null, 2)}\n`);
-	if (!jsonOnly) writeFileSync(join(dir, "compare.md"), renderReport(result));
+	writeFileSync(join(dir, "compare.md"), renderReport(result));
 }
 
 export async function runOnHosts(input: {
@@ -197,6 +175,7 @@ export async function runOnHosts(input: {
 	headRef: string;
 	hosts: readonly string[];
 	options: CompareOptions;
+	forward: readonly string[];
 }) {
 	const { options } = input;
 	const base = resolveSha(input.toolRoot, input.baseRef);
@@ -215,13 +194,16 @@ export async function runOnHosts(input: {
 			headRef: input.headRef,
 			options: { ...options, out: join(options.out, first ?? "local") },
 		});
-		for (const alias of aliases) writeHost(join(options.out, alias), run.result, options.jsonOnly);
+		for (const alias of aliases) writeHost(join(options.out, alias), run.result);
 		return run.result;
 	};
 	const runHost = async (host: string) => {
 		if (!remote) throw new Error("remote preflight missing");
-		const result = withRefs(await runRemote({ host, ...remote, base, head, options }), refs);
-		writeHost(join(options.out, host), result, options.jsonOnly);
+		const result = withRefs(
+			await runRemote({ host, ...remote, base, head, options, forward: input.forward }),
+			refs,
+		);
+		writeHost(join(options.out, host), result);
 		return result;
 	};
 	const tasks = [
@@ -239,8 +221,7 @@ export async function runOnHosts(input: {
 	const markdown = settled
 		.flatMap((entry) => (entry.status === "fulfilled" ? [renderReport(entry.value)] : []))
 		.join("\n---\n\n");
-	const markdownPath = options.jsonOnly ? null : join(options.out, "compare.md");
-	if (markdownPath && settled.some((entry) => entry.status === "fulfilled"))
-		writeFileSync(markdownPath, markdown);
-	return { failures, markdown, markdownPath, outDir: options.out };
+	const markdownPath = join(options.out, "compare.md");
+	if (settled.some((entry) => entry.status === "fulfilled")) writeFileSync(markdownPath, markdown);
+	return { failures, markdown, markdownPath };
 }

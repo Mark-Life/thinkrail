@@ -12,25 +12,36 @@ function byId(record: WaterfallRecord) {
 	return new Map(waterfallMeasurements(record).map((row) => [row.id, row]));
 }
 
+const params = { workspaceId: "w1" };
+
+function frame(at: number, direction: WireFrame["direction"], body: object): WireFrame {
+	return { at, direction, payload: JSON.stringify(body) };
+}
+
+function restoreFrames(getMessagesAt: number) {
+	return [
+		frame(1, "sent", { id: "l", method: "workspace.list", params: {} }),
+		frame(2, "sent", { id: "w", method: "workspace.watchReady", params }),
+		frame(3, "received", { id: "l", ok: true }),
+		frame(getMessagesAt, "sent", { id: "m", method: "session.getMessages", params }),
+		frame(20, "received", { id: "w", ok: true }),
+		frame(30, "received", { id: "m", ok: true }),
+	].sort((a, b) => a.at - b.at);
+}
+
 describe("wire timeline", () => {
 	test("base sends getMessages only after the watchReady reply", () => {
-		const timeline = wireTimeline(fixture<WireFrame[]>("base-wire.json"));
+		const timeline = wireTimeline(restoreFrames(21));
 		expect(timeline.getMessagesSentMs).toBeGreaterThanOrEqual(timeline.watchReadyReplyMs);
 		expect(timeline.getMessagesReplyMs).toBeGreaterThan(timeline.getMessagesSentMs);
 	});
 
 	test("head sends getMessages before the watchReady reply", () => {
-		const timeline = wireTimeline(fixture<WireFrame[]>("head-wire.json"));
+		const timeline = wireTimeline(restoreFrames(5));
 		expect(timeline.getMessagesSentMs).toBeLessThan(timeline.watchReadyReplyMs);
 	});
 
 	test("accepts getMessages sent before watchReady", () => {
-		const frame = (at: number, direction: WireFrame["direction"], body: object) => ({
-			at,
-			direction,
-			payload: JSON.stringify(body),
-		});
-		const params = { workspaceId: "w1" };
 		const timeline = wireTimeline([
 			frame(10, "sent", { id: "m", method: "session.getMessages", params }),
 			frame(11, "sent", { id: "w", method: "workspace.watchReady", params }),
@@ -45,7 +56,7 @@ describe("wire timeline", () => {
 	});
 
 	test("fails without a transcript read", () => {
-		const frames = fixture<WireFrame[]>("head-wire.json").filter(
+		const frames = restoreFrames(5).filter(
 			(frame) => !frame.payload.includes("session.getMessages"),
 		);
 		expect(() => wireTimeline(frames)).toThrow("no session.getMessages request");

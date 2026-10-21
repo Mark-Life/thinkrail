@@ -1,21 +1,13 @@
-import { readFileSync } from "node:fs";
 import { E2E_ROOT_DIR, processRunnerInterruption, signalExitCode } from "../../processRunner";
 import { HELP, parseArgs } from "./args";
 import { cleanAll, cleanSha, resolveSha } from "./checkout";
 import { prepareRefs, runCompare } from "./compare";
 import { runOnHosts } from "./remote";
-import { renderReport } from "./report";
-import type { CompareResult } from "./types";
 
 async function main(argv: readonly string[]) {
 	const command = parseArgs(argv);
 	if (command.kind === "help") {
 		console.log(HELP);
-		return 0;
-	}
-	if (command.kind === "report") {
-		const result = JSON.parse(readFileSync(command.file, "utf8")) as CompareResult;
-		process.stdout.write(renderReport(result));
 		return 0;
 	}
 	if (command.kind === "clean") {
@@ -46,9 +38,10 @@ async function main(argv: readonly string[]) {
 			headRef: command.head,
 			hosts: command.hosts,
 			options: command.options,
+			forward: command.forward,
 		});
-		if (!command.options.jsonOnly) process.stdout.write(run.markdown);
-		console.error(`perf:compare: wrote ${run.markdownPath ?? run.outDir}`);
+		process.stdout.write(run.markdown);
+		console.error(`perf:compare: wrote ${run.markdownPath}`);
 		for (const failure of run.failures) console.error(`perf:compare: ${failure}`);
 		return run.failures.length > 0 ? 1 : 0;
 	}
@@ -58,8 +51,8 @@ async function main(argv: readonly string[]) {
 		headRef: command.head,
 		options: command.options,
 	});
-	if (!command.options.jsonOnly) process.stdout.write(run.markdown);
-	console.error(`perf:compare: wrote ${run.markdownPath ?? run.jsonPath}`);
+	process.stdout.write(run.markdown);
+	console.error(`perf:compare: wrote ${run.markdownPath}`);
 	if (run.result.suites.some((suite) => suite.metrics.length > 0)) return 0;
 	console.error("perf:compare: no suite produced metrics");
 	return 1;
