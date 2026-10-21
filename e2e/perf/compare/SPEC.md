@@ -28,7 +28,8 @@ the measuring harness is identical for both sides and only the app under test di
 - **Use marks.** A running compare marks each SHA it samples. `--rebuild`, `clean <ref>` and
   `clean --all` refuse while another live process uses the SHA.
 - **Artifacts.** `profile-web` (`build:profile`), `manifest-web` (`vite build --manifest` into its own
-  dir so `build:binary` cannot clobber it), `binary` (`build:binary`), `desktop` (`desktop:build`, darwin
+  gitignored `perf-manifest/dist` so `build:binary` cannot clobber it and Tailwind never scans a previous
+  build's output on rebuild), `binary` (`build:binary`), `desktop` (`desktop:build`, darwin
   only). Each builds once per (SHA, key) from the union over selected suites.
 - **Suites.** A `Suite` declares its artifacts (a list, or a function of the options so opt-in variants
   build only when selected), a `Schedule`, its variants and `sample()`; an `optIn` suite runs only when
