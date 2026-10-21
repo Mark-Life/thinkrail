@@ -7,6 +7,7 @@ import {
 	readdirSync,
 	readFileSync,
 	realpathSync,
+	renameSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
@@ -119,17 +120,29 @@ function pidAlive(pid: number) {
 	}
 }
 
-function tryLock(dir: string) {
+function lockOwner(dir: string) {
 	try {
-		mkdirSync(dir);
-		writeFileSync(join(dir, "pid"), String(process.pid));
+		const owner = Number(readFileSync(join(dir, "pid"), "utf8"));
+		return Number.isInteger(owner) && owner > 0 ? owner : null;
+	} catch {
+		return null;
+	}
+}
+
+export function tryLock(dir: string) {
+	const staging = `${dir}.${process.pid}.tmp`;
+	rmSync(staging, { recursive: true, force: true });
+	try {
+		mkdirSync(staging);
+		writeFileSync(join(staging, "pid"), String(process.pid));
+		renameSync(staging, dir);
 		return true;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-		const owner = Number(
-			existsSync(join(dir, "pid")) ? readFileSync(join(dir, "pid"), "utf8") : NaN,
-		);
-		if (Number.isInteger(owner) && !pidAlive(owner)) rmSync(dir, { recursive: true, force: true });
+		rmSync(staging, { recursive: true, force: true });
+		const code = (error as NodeJS.ErrnoException).code;
+		if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
+		const owner = lockOwner(dir);
+		if (owner === null || !pidAlive(owner)) rmSync(dir, { recursive: true, force: true });
 		return false;
 	}
 }
@@ -191,6 +204,10 @@ function writeMarker(dir: string, marker: BuiltMarker) {
 	writeFileSync(join(dir, MARKER), `${JSON.stringify(marker, null, 2)}\n`);
 }
 
+function artifactInputs(artifact: Artifact) {
+	return [artifact.cwd, ...artifact.command];
+}
+
 function sameInputs(entry: BuiltEntry | undefined, inputs: readonly string[]) {
 	return (
 		entry !== undefined &&
@@ -233,20 +250,24 @@ export async function prepareSha(input: {
 		writeMarker(dir, marker);
 		const failed = new Map<Artifact["key"], string>();
 		for (const artifact of input.artifacts) {
-			if (!input.rebuild && sameInputs(marker.artifacts[artifact.key], artifact.inputs)) continue;
+			if (!input.rebuild && sameInputs(marker.artifacts[artifact.key], artifactInputs(artifact)))
+				continue;
 			const { [artifact.key]: _stale, ...kept } = marker.artifacts;
 			marker = { ...marker, artifacts: kept };
 			writeMarker(dir, marker);
 			console.error(`perf:compare: building ${artifact.key} for ${input.sha.slice(0, 10)}`);
 			try {
-				await artifact.build(dir, buildEnv());
+				await runBun(
+					["run", "--cwd", join(dir, artifact.cwd), ...artifact.command],
+					`${artifact.key} build`,
+				);
 			} catch (error) {
 				if (processRunnerInterruption()) throw error;
 				failed.set(artifact.key, error instanceof Error ? error.message : String(error));
 				continue;
 			}
 			const entry = {
-				inputs: artifact.inputs,
+				inputs: artifactInputs(artifact),
 				bunVersion: Bun.version,
 				builtAt: new Date().toISOString(),
 			};

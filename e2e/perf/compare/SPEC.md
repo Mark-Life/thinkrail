@@ -21,10 +21,12 @@ identical for both sides and only the app under test differs.
   worktree registers in the shared repo (parallel agents and ThinkRail's own worktree list never see
   cache worktrees). `wt/<sha>` is a detached worktree of that bare repo. A ref the tool repo cannot
   resolve fails with "SHA not found; fetch it".
-- **Prepare.** Under an atomic `locks/<sha>` directory (a dead owner pid is reclaimed), a missing
+- **Prepare.** Under an atomic `locks/<sha>` directory (staged with its `pid` file, then renamed into
+  place; a dead or unreadable owner pid is reclaimed), a missing
   worktree is added at `wt/<sha>.tmp` and moved into place only after `git worktree add` succeeds, so an
   interrupted checkout is never reused. The SHA then gets `bun install --frozen-lockfile` with `HUSKY=0`, then each selected `Artifact` builds inside the
-  worktree. `wt/<sha>/.perf-built.json` records the lockfile hash, Bun version and per-artifact inputs;
+  worktree. `wt/<sha>/.perf-built.json` records the lockfile hash, Bun version and per-artifact inputs (the `cwd` and `bun run` argv that the
+  build runs, so the cache key cannot drift from the command);
   matching entries skip work, `--rebuild` ignores them. An entry is removed before its install or build
   starts and written back only on success, so a failed build is never reused. A failed artifact build does
   not stop the run: suites that declare that artifact are reported incompatible with the build error, and
@@ -86,7 +88,7 @@ identical for both sides and only the app under test differs.
   runs two timed compares at once. Before any
   ssh, the tool tree must be clean and `git branch -r --contains` must find base, head and the tool
   SHA on `origin`, else it fails fast. Over `ssh -T -o BatchMode=yes`, `bootstrap.sh` holds a
-  `<cache>/locks/bootstrap` mkdir lock (dead pid reclaimed) for its whole run, prunes `<cache>/runs/`
+  `<cache>/locks/bootstrap` mkdir lock (dead pid, or no pid after a minute, reclaimed) for its whole run, prunes `<cache>/runs/`
   entries older than 7 days, keeps a remote cache `repo.git` (`git clone --bare` of origin, then `fetch`), checks out the tool SHA as a detached
   worktree at `<cache>/tool/<toolSha>` (staged at `.tmp`, then moved), runs `bun install` (`HUSKY=0`), and checks the Playwright
   browsers the selected suites need, installing them into the user cache if missing (never system
@@ -128,7 +130,8 @@ identical for both sides and only the app under test differs.
   routing disables the HTTP cache, so the reload fetches every chunk) and records passively: Playwright
   WebSocket frame events and `requestfinished`, all on one Node clock from the reload. Order rows:
   `session.getMessages` sent minus the reply to the last `workspace.watchReady` for the same workspace
-  sent before it (offset, plus an exact 1/0 "waits" flag), and the `ChatView-*.js` chunk finish minus the
+  sent before it (offset, plus a 1/0 "waits" flag summarized as a timed row, so its mean is the wait rate across
+  rounds and its verdict comes from a CI, not one median), and the `ChatView-*.js` chunk finish minus the
   `getMessages` reply (offset). Timing rows are those points from the reload, plus page-side composer
   typeable and first message painted. Layout rows count only shifts after the composer is typeable:
   on Chromium the `layout-shift` sum, max and count, and per-region scores (nearest `data-testid` of

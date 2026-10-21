@@ -55,8 +55,8 @@ describe("wire timeline", () => {
 describe("waterfall measurements", () => {
 	test("order flag separates base from head", () => {
 		const id = "waterfall/restore/getMessagesWaitsForWatchReady";
-		expect(byId(fixture("base-chromium.json")).get(id)).toMatchObject({ kind: "exact", value: 1 });
-		expect(byId(fixture("head-chromium.json")).get(id)).toMatchObject({ kind: "exact", value: 0 });
+		expect(byId(fixture("base-chromium.json")).get(id)).toMatchObject({ kind: "timed", value: 1 });
+		expect(byId(fixture("head-chromium.json")).get(id)).toMatchObject({ kind: "timed", value: 0 });
 	});
 
 	test("counts only shifts after the composer is typeable, split by region", () => {
