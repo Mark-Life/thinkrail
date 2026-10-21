@@ -1,9 +1,8 @@
 /// <reference path="../bundler.d.ts" />
 import { loader } from "@monaco-editor/react";
-import { shikiToMonaco, textmateThemeToMonacoTheme } from "@shikijs/monaco";
 import type { Translator } from "@thinkrail/locales/react";
-import { createHighlighterCore, type HighlighterCore, type ThemeRegistration } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import type { ThemeRegistration } from "shiki/core";
+import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 import "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css";
 import "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css";
 import "monaco-editor/esm/vs/editor/browser/coreCommands.js";
@@ -26,6 +25,7 @@ import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import type { ResourceCodeHost } from "../host";
 import { editorWrappingOptions } from "./editorWrapping";
+import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
 declare global {
 	interface Window {
@@ -152,52 +152,62 @@ function currentTheme(code: ResourceCodeHost): {
 	};
 }
 
-function defineTheme(highlighter: HighlighterCore, base: editor.BuiltinTheme): void {
-	const converted = textmateThemeToMonacoTheme(
-		highlighter.getTheme(EDITOR_THEME),
-	) as editor.IStandaloneThemeData;
+function defineTheme(registration: ThemeRegistration, base: editor.BuiltinTheme): void {
 	try {
-		monaco.editor.defineTheme(EDITOR_THEME, {
-			base,
-			inherit: true,
-			rules: converted.rules,
-			colors: converted.colors,
-		});
+		const { rules, colors } = monacoThemeData(registration);
+		monaco.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules, colors });
 	} catch {
 		monaco.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules: [], colors: {} });
 	}
 }
 
-let highlighter: HighlighterCore | null = null;
-let shikiAdapterInstalled = false;
-let setup: { code: ResourceCodeHost; ready: Promise<void> } | null = null;
-
-async function initializeMonaco(code: ResourceCodeHost): Promise<void> {
-	registerShikiLanguages(code);
-	const { registration, base } = currentTheme(code);
-	highlighter = await createHighlighterCore({
-		themes: [registration],
-		langs: code.languages.map((language) => language.load()),
-		engine: createJavaScriptRegexEngine(),
-	});
-	if (!shikiAdapterInstalled) {
-		shikiToMonaco(highlighter, monaco);
-		shikiAdapterInstalled = true;
+async function createEngine() {
+	try {
+		return await createOnigurumaEngine(import("shiki/wasm"));
+	} catch {
+		const { createJavaScriptRegexEngine } = await import("shiki/engine/javascript");
+		return createJavaScriptRegexEngine();
 	}
-	defineTheme(highlighter, base);
-	monaco.editor.setTheme(EDITOR_THEME);
 }
 
-export function ensureMonaco(code: ResourceCodeHost): Promise<void> {
-	if (!setup) setup = { code, ready: initializeMonaco(code) };
-	return setup.ready;
+interface MonacoSetup {
+	code: ResourceCodeHost;
+	tokens: ReturnType<typeof createShikiTokens>;
+}
+
+let setup: MonacoSetup | null = null;
+
+function registerTokenProviders(code: ResourceCodeHost, tokens: MonacoSetup["tokens"]): void {
+	for (const { id } of code.languages) {
+		monaco.languages.registerTokensProviderFactory(id, {
+			create: async () => {
+				if (!(await tokens.ready(id))) return null;
+				void tokens.loadEmbeds(id).then((loaded) => {
+					if (loaded) monaco.languages.setTokensProvider(id, tokens.provider(id));
+				});
+				return tokens.provider(id);
+			},
+		});
+	}
+}
+
+export function ensureMonaco(code: ResourceCodeHost): void {
+	if (setup) return;
+	const tokens = createShikiTokens({ languages: code.languages, engine: createEngine });
+	registerShikiLanguages(code);
+	registerTokenProviders(code, tokens);
+	const { registration, base } = currentTheme(code);
+	void tokens.applyTheme(registration);
+	defineTheme(registration, base);
+	monaco.editor.setTheme(EDITOR_THEME);
+	setup = { code, tokens };
 }
 
 async function refreshTheme(): Promise<void> {
-	if (!highlighter || !setup) return;
+	if (!setup) return;
 	const { registration, base } = currentTheme(setup.code);
-	await highlighter.loadTheme(registration);
-	defineTheme(highlighter, base);
+	await setup.tokens.applyTheme(registration);
+	defineTheme(registration, base);
 	monaco.editor.setTheme(EDITOR_THEME);
 }
 

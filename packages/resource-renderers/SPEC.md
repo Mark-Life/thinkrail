@@ -77,8 +77,8 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   diff and notebook cells pass their plugins and components through it.
 - `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
   the code `theme` resolved from CSS variables). Monaco is page-global: the first `MonacoEditor` initializes it
-  from its host's `code` once (`ensureMonaco`), and every later editor reuses that setup; it re-themes on every
-  completed theme swap.
+  from its host's `code` once (`ensureMonaco`, synchronous after the Monaco chunk loads), and every later editor
+  reuses that setup; it re-themes on every completed theme swap. A grammar loads on its language's first model.
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).
@@ -546,11 +546,12 @@ content's own height.
   twice (a chat card and its full screen, a card and the file's tab).
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
-  same definition plus its complete editor/widget/menu/input colour map to hex, loads it into a dedicated
-  JS-regex Shiki highlighter, and installs `@shikijs/monaco` once per page. Its curated language catalog is
-  shared with the chat highlighter and extended for the desktop file formats; missing Monaco language ids are
-  registered with their file associations before Shiki installs providers. A theme swap replaces the
-  highlighter theme under the same name, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
+  same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
+  it directly. Token colours come from `shikiTokens.ts`, a Monaco-free owner of one Shiki highlighter, its
+  per-language grammar loads and the colour→scope map. Its curated language catalog is shared with the chat
+  highlighter and extended for the desktop file formats; missing Monaco language ids are registered with their
+  file associations, then each catalog id gets a `registerTokensProviderFactory` entry. A swap loads the
+  highlighter theme under a fresh name and rebuilds the scope map from it, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
   base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
   colours outside the explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
   omitted so the selected base palette wins rather than crashing the panel. Pierre's one registered
