@@ -1,0 +1,60 @@
+{
+	"index.html": {
+		"file": "assets/index-MaoJkJi8.js",
+		"name": "index",
+		"src": "index.html",
+		"isEntry": true,
+		"imports": ["_chunk-QTnfLwEv.js"],
+		"dynamicImports": [
+			"_c-BvoqrSVH.js",
+			"../../node_modules/.bun/@shikijs+langs@4.2.0/node_modules/@shikijs/langs/dist/cpp.mjs",
+			"src/panels/PlanPane.tsx"
+		],
+		"css": ["assets/index-D8ugW8tW.css"],
+		"assets": ["assets/geist-latin-wght-normal-BgDaEnEv.woff2"]
+	},
+	"_chunk-QTnfLwEv.js": {
+		"file": "assets/chunk-QTnfLwEv.js",
+		"name": "chunk"
+	},
+	"_c-BEiaufqY.js": {
+		"file": "assets/c-BEiaufqY.js",
+		"name": "c",
+		"imports": ["_chunk-QTnfLwEv.js"]
+	},
+	"_c-BvoqrSVH.js": {
+		"file": "assets/c-BvoqrSVH.js",
+		"name": "c",
+		"imports": ["_chunk-QTnfLwEv.js"]
+	},
+	"_dist-Dua8BRh2.js": {
+		"file": "assets/dist-Dua8BRh2.js",
+		"name": "dist",
+		"imports": ["_chunk-QTnfLwEv.js"]
+	},
+	"src/panels/PlanPane.tsx": {
+		"file": "assets/PlanPane-COEiQm23.js",
+		"name": "PlanPane",
+		"src": "src/panels/PlanPane.tsx",
+		"isDynamicEntry": true,
+		"imports": ["_chunk-QTnfLwEv.js", "index.html", "_dist-Dua8BRh2.js"]
+	},
+	"../../node_modules/.bun/@shikijs+langs@4.2.0/node_modules/@shikijs/langs/dist/cpp.mjs": {
+		"file": "assets/cpp-DSsr8YE8.js",
+		"name": "cpp",
+		"src": "../../node_modules/.bun/@shikijs+langs@4.2.0/node_modules/@shikijs/langs/dist/cpp.mjs",
+		"isDynamicEntry": true,
+		"imports": ["_c-BvoqrSVH.js"]
+	},
+	"../../node_modules/.bun/@shikijs+langs@4.4.3/node_modules/@shikijs/langs/dist/chapel.mjs": {
+		"file": "assets/chapel-BoSsA8QO.js",
+		"name": "chapel",
+		"src": "../../node_modules/.bun/@shikijs+langs@4.4.3/node_modules/@shikijs/langs/dist/chapel.mjs",
+		"isDynamicEntry": true,
+		"imports": ["_c-BEiaufqY.js"]
+	},
+	"../../node_modules/.bun/@fontsource-variable+geist@5.3.0/node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2": {
+		"file": "assets/geist-latin-wght-normal-BgDaEnEv.woff2",
+		"src": "../../node_modules/.bun/@fontsource-variable+geist@5.3.0/node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2"
+	}
+}

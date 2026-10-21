@@ -1,71 +1,74 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join } from "node:path";
-import { brotliCompressSync, gzipSync } from "node:zlib";
+import { promisify } from "node:util";
+import { brotliCompress, gzip } from "node:zlib";
 import { MANIFEST_DIST, manifestWeb } from "./artifacts";
+import { chunkIds, hashMask, initialFiles, type Manifest } from "./bundleManifest";
 import type { Measurement, Suite } from "./types";
-
-interface ManifestChunk {
-	file: string;
-	isEntry?: boolean;
-	imports?: string[];
-	css?: string[];
-	assets?: string[];
-}
-
-type Manifest = Record<string, ManifestChunk>;
 
 const ENCODINGS = ["raw", "gzip", "brotli"] as const;
 type Encoding = (typeof ENCODINGS)[number];
 type Sizes = Record<Encoding, number>;
 
-function fileSizes(path: string): Sizes {
-	const bytes = readFileSync(path);
+const gzipAsync = promisify(gzip);
+const brotliAsync = promisify(brotliCompress);
+const ZERO: Sizes = { raw: 0, gzip: 0, brotli: 0 };
+const CODE = /\.(js|css)$/;
+
+async function fileSizes(path: string, mask: (text: string) => string): Promise<Sizes> {
+	const content = readFileSync(path);
+	const bytes = CODE.test(path) ? Buffer.from(mask(content.toString("utf8"))) : content;
 	return {
-		raw: bytes.byteLength,
-		gzip: gzipSync(bytes, { level: 9 }).byteLength,
-		brotli: brotliCompressSync(bytes).byteLength,
+		raw: content.byteLength,
+		gzip: (await gzipAsync(bytes, { level: 9 })).byteLength,
+		brotli: (await brotliAsync(bytes)).byteLength,
 	};
 }
 
-function add(a: Sizes, b: Sizes): Sizes {
-	return { raw: a.raw + b.raw, gzip: a.gzip + b.gzip, brotli: a.brotli + b.brotli };
+function sum(sizes: readonly Sizes[]): Sizes {
+	return sizes.reduce(
+		(total, size) => ({
+			raw: total.raw + size.raw,
+			gzip: total.gzip + size.gzip,
+			brotli: total.brotli + size.brotli,
+		}),
+		ZERO,
+	);
 }
 
-const ZERO: Sizes = { raw: 0, gzip: 0, brotli: 0 };
-
-function bytes(input: { id: string; group: string; label: string; value: number }): Measurement {
-	return { ...input, unit: "bytes", kind: "exact", better: "lower" };
+function exact(input: Pick<Measurement, "id" | "group" | "label" | "value" | "unit">): Measurement {
+	return { ...input, kind: "exact", better: "lower" };
 }
 
-function sizeRows(id: string, group: string, label: string, sizes: Sizes) {
+function sizeRows(input: { id: string; group: string; label: string; sizes: Sizes }) {
 	return ENCODINGS.map((encoding) =>
-		bytes({
-			id: `${id}/${encoding}`,
-			group,
-			label: `${label} (${encoding})`,
-			value: sizes[encoding],
+		exact({
+			id: `${input.id}/${encoding}`,
+			group: input.group,
+			label: `${input.label} (${encoding})`,
+			value: input.sizes[encoding],
+			unit: "bytes",
 		}),
 	);
 }
 
-export function initialJsFiles(manifest: Manifest) {
-	const seen = new Set<string>();
-	const visit = (key: string) => {
-		if (seen.has(key)) return;
-		seen.add(key);
-		for (const next of manifest[key]?.imports ?? []) visit(next);
-	};
-	for (const [key, chunk] of Object.entries(manifest)) if (chunk.isEntry) visit(key);
-	return [...seen].flatMap((key) => {
-		const file = manifest[key]?.file;
-		return file?.endsWith(".js") ? [file] : [];
-	});
+function distBytes(dir: string): number {
+	return readdirSync(dir, { withFileTypes: true }).reduce((total, entry) => {
+		if (entry.name === ".vite") return total;
+		const path = join(dir, entry.name);
+		return total + (entry.isDirectory() ? distBytes(path) : statSync(path).size);
+	}, 0);
 }
 
-export function measureBundle(distDir: string): Measurement[] {
-	const manifestPath = join(distDir, ".vite", "manifest.json");
-	if (!existsSync(manifestPath)) throw new Error(`no Vite manifest at ${manifestPath}`);
-	const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
+export function readManifest(distDir: string): Manifest {
+	const path = join(distDir, ".vite", "manifest.json");
+	if (!existsSync(path)) throw new Error(`no Vite manifest at ${path}`);
+	return JSON.parse(readFileSync(path, "utf8")) as Manifest;
+}
+
+export async function measureBundle(distDir: string): Promise<Measurement[]> {
+	const manifest = readManifest(distDir);
+	const ids = chunkIds(manifest);
 	const files = new Set(
 		Object.values(manifest).flatMap((chunk) => [
 			chunk.file,
@@ -73,33 +76,85 @@ export function measureBundle(distDir: string): Measurement[] {
 			...(chunk.assets ?? []),
 		]),
 	);
-	const sizes = new Map([...files].map((file) => [file, fileSizes(join(distDir, file))]));
-	const byType = new Map<string, Sizes>();
-	for (const [file, size] of sizes) {
-		const type = extname(file).slice(1) || "other";
-		byType.set(type, add(byType.get(type) ?? ZERO, size));
-	}
-	const initial = initialJsFiles(manifest).reduce(
-		(total, file) => add(total, sizes.get(file) ?? ZERO),
-		ZERO,
+	const mask = hashMask(files);
+	const sizes = new Map(
+		await Promise.all(
+			[...files].map(async (file) => [file, await fileSizes(join(distDir, file), mask)] as const),
+		),
 	);
-	const chunks = Object.entries(manifest)
-		.filter(([, chunk]) => chunk.file.endsWith(".js") || chunk.file.endsWith(".css"))
-		.sort(([a], [b]) => a.localeCompare(b))
-		.flatMap(([key, chunk]) =>
-			sizeRows(`bundle/chunk/${key}`, "chunks", key, sizes.get(chunk.file) ?? ZERO),
-		);
+	const sizeOf = (list: readonly string[]) => sum(list.map((file) => sizes.get(file) ?? ZERO));
+	const byType = new Map<string, string[]>();
+	for (const file of files) {
+		const type = extname(file).slice(1) || "other";
+		byType.set(type, [...(byType.get(type) ?? []), file]);
+	}
+	const initial = initialFiles(manifest);
+	const entries = [...ids].sort(([, a], [, b]) => a.localeCompare(b));
+	const rows = entries.flatMap(([key, id]) => {
+		const chunk = manifest[key];
+		if (!chunk) return [];
+		const own = CODE.test(chunk.file)
+			? sizeRows({
+					id: `bundle/chunk/${id}`,
+					group: "chunks",
+					label: id,
+					sizes: sizeOf([chunk.file]),
+				})
+			: [
+					exact({
+						id: `bundle/asset/${id}`,
+						group: "assets",
+						label: id,
+						value: sizeOf([chunk.file]).raw,
+						unit: "bytes",
+					}),
+				];
+		const css = chunk.css?.length
+			? sizeRows({
+					id: `bundle/css/${id}`,
+					group: "css",
+					label: `${id} css`,
+					sizes: sizeOf(chunk.css),
+				})
+			: [];
+		return [...own, ...css];
+	});
 	const totals = [...byType]
 		.sort(([a], [b]) => a.localeCompare(b))
-		.flatMap(([type, size]) => sizeRows(`bundle/total/${type}`, "totals", `total ${type}`, size));
+		.flatMap(([type, list]) =>
+			sizeRows({
+				id: `bundle/total/${type}`,
+				group: "totals",
+				label: `total ${type}`,
+				sizes: sizeOf(list),
+			}),
+		);
+	const count = (id: string, label: string, value: number) =>
+		exact({ id, group: "totals", label, value, unit: "count" });
 	return [
-		...sizeRows("bundle/initial-js", "totals", "initial JS", initial),
+		...sizeRows({
+			id: "bundle/initial-js",
+			group: "totals",
+			label: "initial JS",
+			sizes: sizeOf(initial.js),
+		}),
+		...sizeRows({
+			id: "bundle/initial-css",
+			group: "totals",
+			label: "initial CSS",
+			sizes: sizeOf(initial.css),
+		}),
 		...totals,
-		{
-			...bytes({ id: "bundle/files", group: "totals", label: "files", value: files.size }),
-			unit: "count",
-		},
-		...chunks,
+		exact({
+			id: "bundle/dist",
+			group: "totals",
+			label: "dist on disk",
+			value: distBytes(distDir),
+			unit: "bytes",
+		}),
+		count("bundle/files", "files", files.size),
+		count("bundle/js-chunks", "JS chunks", byType.get("js")?.length ?? 0),
+		...rows,
 	];
 }
 
@@ -110,6 +165,6 @@ export const bundleSuite: Suite<"bundle"> = {
 	schedule: () => ({ kind: "once" }),
 	variants: () => ["web"],
 	async sample(context) {
-		return { ok: true, measurements: measureBundle(join(context.appRoot, MANIFEST_DIST)) };
+		return { ok: true, measurements: await measureBundle(join(context.appRoot, MANIFEST_DIST)) };
 	},
 };
