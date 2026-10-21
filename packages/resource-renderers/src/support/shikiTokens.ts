@@ -13,6 +13,35 @@ import type { ResourceCodeHost, ResourceCodeLanguage } from "../host";
 const MAX_LINE_LENGTH = 20_000;
 const EMBED_REFERENCE = /^[ \t]*(?:`{3,}|~{3,})[ \t]*\{?\.?([\w#+.-]+)|\blang=["']?([\w#+.-]+)/gm;
 const TOKENIZE_TIME_LIMIT_MS = 500;
+const IMPLICIT_EMBEDS = [
+	[/^-{3,}/, "yaml"],
+	[/<[A-Za-z!/]/, "html"],
+] as const;
+const FENCE_EMBEDS = new Map([
+	["h", "c"],
+	["cxx", "cpp"],
+	["golang", "go"],
+	["conf", "ini"],
+	["bsh", "java"],
+	["jsx", "javascript"],
+	["es6", "javascript"],
+	["dataviewjs", "javascript"],
+	["json5", "json"],
+	["py3", "python"],
+	["pyw", "python"],
+	["rpy", "python"],
+	["gyp", "python"],
+	["gypi", "python"],
+	["rbx", "ruby"],
+	["rake", "ruby"],
+	["gemfile", "ruby"],
+	["profile", "shellscript"],
+	["rej", "diff"],
+	["xsd", "xml"],
+	["shtml", "html"],
+	["tpl", "html"],
+	["php", "html"],
+]);
 const FONT_STYLE_BITS = [
 	[1, "italic"],
 	[2, "bold"],
@@ -64,6 +93,7 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 	const loads = new Map<string, Promise<readonly string[] | null>>();
 	const embedded = new Map<string, Set<string>>();
 	const scopeByStyle = new Map<string, string>();
+	const scopeByMetadata = new Map<number, string>();
 	let colorMap: readonly (string | undefined)[] = [];
 	let theme: ThemeRegistration | null = null;
 	let themeRules: readonly editor.ITokenThemeRule[] = [];
@@ -79,6 +109,7 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 		colorMap = hl.setTheme(name).colorMap.map(normalizeColor);
 		selectedName = name;
 		scopeByStyle.clear();
+		scopeByMetadata.clear();
 		for (const rule of themeRules) {
 			const color = normalizeColor(rule.foreground);
 			if (!color) continue;
@@ -125,8 +156,11 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 
 	function referencedLanguages(text: string) {
 		const ids = new Set<string>();
-		for (const match of text.matchAll(EMBED_REFERENCE)) {
-			const id = languageId(match[1] ?? match[2] ?? "");
+		for (const [pattern, id] of IMPLICIT_EMBEDS) if (pattern.test(text)) ids.add(id);
+		for (const [, fence, attribute] of text.matchAll(EMBED_REFERENCE)) {
+			const fenceId = fence ? FENCE_EMBEDS.get(fence.toLowerCase()) : undefined;
+			if (fenceId) ids.add(fenceId);
+			const id = languageId(fence ?? attribute ?? "");
 			if (id) ids.add(id);
 		}
 		return ids;
@@ -150,10 +184,15 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 	}
 
 	function scopeOf(metadata: number) {
-		const color = colorMap[EncodedTokenMetadata.getForeground(metadata)];
-		if (!color) return "";
-		const fontStyle = fontStyleName(EncodedTokenMetadata.getFontStyle(metadata));
-		return scopeByStyle.get(styleKey(color, fontStyle)) ?? "";
+		const foreground = EncodedTokenMetadata.getForeground(metadata);
+		const fontBits = EncodedTokenMetadata.getFontStyle(metadata);
+		const key = foreground * 16 + fontBits;
+		const cached = scopeByMetadata.get(key);
+		if (cached !== undefined) return cached;
+		const color = colorMap[foreground];
+		const scope = color ? (scopeByStyle.get(styleKey(color, fontStyleName(fontBits))) ?? "") : "";
+		scopeByMetadata.set(key, scope);
+		return scope;
 	}
 
 	function provider(id: string): languages.TokensProvider {

@@ -8,6 +8,9 @@ const CATALOG = [
 	{ id: "typescript", load: () => import("shiki/langs/typescript.mjs") },
 	{ id: "markdown", load: () => import("shiki/langs/markdown.mjs") },
 	{ id: "shellscript", load: () => import("shiki/langs/bash.mjs") },
+	{ id: "javascript", load: () => import("shiki/langs/javascript.mjs") },
+	{ id: "yaml", load: () => import("shiki/langs/yaml.mjs") },
+	{ id: "html", load: () => import("shiki/langs/html-derivative.mjs") },
 ];
 const ALIASES = new Map([
 	["ts", "typescript"],
@@ -17,6 +20,10 @@ const ALIASES = new Map([
 	["sh", "shellscript"],
 	["bash", "shellscript"],
 	["shellscript", "shellscript"],
+	["js", "javascript"],
+	["javascript", "javascript"],
+	["yaml", "yaml"],
+	["html", "html"],
 ]);
 const FENCE = ["# hi", "```ts", "const x = 1", "```"];
 
@@ -189,6 +196,36 @@ describe("createShikiTokens", () => {
 		expect(await tokens.loadEmbeds("markdown", text)).toBe(false);
 		expect(counts.get("typescript")).toBe(1);
 		expect(counts.get("shellscript")).toBeUndefined();
+	});
+
+	test("front matter and inline HTML colour without a fence reference", async () => {
+		const counts = new Map<string, number>();
+		const tokens = await themedTokens(countingCatalog(counts));
+		const text = ["---", "name: demo", "---", "", '<p align="center">', "<kbd>Ctrl</kbd>", "</p>"];
+		await tokens.ready("markdown");
+		const before = tokenize(tokens.provider("markdown"), text);
+		expect(before[1]).toHaveLength(1);
+		expect(before[4]).toHaveLength(1);
+
+		expect(await tokens.loadEmbeds("markdown", () => text.join("\n"))).toBe(true);
+		const after = tokenize(tokens.provider("markdown"), text);
+		expect(scopeOf(after[1], "name")).toBeTruthy();
+		expect(scopeOf(after[4], "p")).toBeTruthy();
+		expect(scopeOf(after[5], "kbd")).toBeTruthy();
+		expect(counts.get("yaml")).toBe(1);
+		expect(counts.get("html")).toBe(1);
+		expect(counts.get("typescript")).toBeUndefined();
+	});
+
+	test("a fence alias the markdown grammar embeds under another language colours", async () => {
+		const counts = new Map<string, number>();
+		const tokens = await themedTokens(countingCatalog(counts));
+		const text = ["```jsx", "const x = 1", "```"];
+		expect(await tokens.loadEmbeds("markdown", () => text.join("\n"))).toBe(true);
+		const keyword = scopeOf(tokenize(tokens.provider("javascript"), ["const x = 1"])[0], "const");
+		expect(scopeOf(tokenize(tokens.provider("markdown"), text)[1], "const")).toBe(keyword);
+		expect(keyword).toBeTruthy();
+		expect(counts.get("javascript")).toBe(1);
 	});
 
 	test("a provider keeps the grammar its line states came from after embeds rebuild it", async () => {

@@ -573,6 +573,10 @@ content's own height.
   states only fit the old one. Embeds load per model: a regex scan of fence info strings and `lang=`
   attributes picks the in-catalog `embeddedLangsLazy` the text names (markdown 26, vue 8, svelte 2
   otherwise), they load after the first colour, then the provider is re-registered so Monaco re-tokenizes.
+  A leading `---` adds `yaml` and an HTML tag adds `html` (front matter and inline HTML embed them with no
+  fence). Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
+  `javascript`, `golang` as `go`, `h` as `c`) map through `FENCE_EMBEDS` before the host's `languageId`.
+  The `html` catalog entry loads `html-derivative`, the grammar markdown includes for inline HTML.
   The scan reruns on content and language changes. Nothing suspends on the engine or a grammar: a Suspense
   fallback is held for at least 300 ms. The engine falls back to the JS regex engine when WASM cannot load
   (WebKit Lockdown Mode), and to plain text when neither engine builds. Shiki's `setTheme` is a no-op for
