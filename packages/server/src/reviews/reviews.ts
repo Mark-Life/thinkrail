@@ -292,7 +292,9 @@ export function reanchorWorkspace(workspaceId: string): void {
 		const snapshot = openSnapshot(workspaceId);
 		if (!snapshot || snapshot.comments.length === 0) return;
 		if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
-	} catch {}
+	} catch (error) {
+		log.warn(`review comments could not be re-anchored for workspace ${workspaceId}`, error);
+	}
 }
 
 export function anchorProblem(workspaceId: string, path: string, startLine: number): string | null {
