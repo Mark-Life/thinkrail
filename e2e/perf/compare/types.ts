@@ -56,7 +56,7 @@ export interface SuiteContext {
 
 export interface Suite<Name extends string = string> {
 	name: Name;
-	artifacts: readonly Artifact[];
+	artifacts: readonly Artifact[] | ((options: CompareOptions) => readonly Artifact[]);
 	browser: boolean;
 	schedule(options: CompareOptions): Schedule;
 	variants(options: CompareOptions): readonly string[];

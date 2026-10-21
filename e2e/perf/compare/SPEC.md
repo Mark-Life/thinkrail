@@ -30,10 +30,20 @@ identical for both sides and only the app under test differs.
   (`vite build --manifest`, `apps/web/dist-manifest`, a separate dir so `build:binary` cannot clobber it),
   `binary` (`build:binary`), `desktop` (`desktop:build`, darwin only). Each is built once per
   (SHA, key) from the union over selected suites.
-- **Suites.** A `Suite` declares its artifacts, whether it drives a browser, a `Schedule`, its variants,
+- **Suites.** A `Suite` declares its artifacts (a list, or a function of the options so opt-in variants
+  build only when selected), whether it drives a browser, a `Schedule`, its variants,
   and `sample()`. The core never imports a suite by name: adding one is a file plus a line in
   `suites.ts`. A sample receives a `SuiteContext` with its own `sampleDir`; `hermeticEnv(stateDir)`
   gives it fresh `HOME`, data, pi, and XDG dirs, `PI_OFFLINE=1`, analytics off, and `CI=1`.
+- **Startup suite.** Variants from `--startup` (default `cli,server`; `binary` and `desktop` opt in and
+  add their artifact). Every spawn runs from an empty `cwd` with `hermeticEnv` plus empty shell rc files
+  in `HOME`, in its own process group, killed after the probe. `cli` times source `--version` to exit;
+  `server` times the source CLI (`--host 127.0.0.1 --port <free> --no-open`) to the `thinkrail →` stdout
+  line and to `/health` 200 (polled every 10 ms). Each runs cold (fresh
+  `BUN_RUNTIME_TRANSPILER_CACHE_PATH`) and warm (per-SHA dir under `<out>/state/startup/`). `binary` times
+  `--version` and `/health` of `apps/cli/dist/thinkrail` with cold and warm `XDG_CACHE_HOME` (asset
+  staging). `desktop` (macOS) times spawn of the dev launcher to `THINKRAIL_DESKTOP_READY_FILE`, written
+  on webview `dom-ready`, hidden window, fresh user data. Schedule is `auto` (`--min-runs`, `--max-minutes`).
 - **Schedule.** `once` takes one sample per side. `rounds` and `auto` first run one discarded warmup per
   side and variant; rounds then alternate ABBA (odd rounds base first). `auto` stops after `minRuns`
   once no timed metric is `unsure`, re-checking every `batch` rounds, or at `maxMinutes`. `os.loadavg()`
@@ -71,7 +81,7 @@ identical for both sides and only the app under test differs.
   `type SampleResult`, `type Schedule`, `type Side`, `type Sha`, `type Suite`, `type SuiteContext`
 - **Entrypoint:** `cli.ts` backs `perf:compare`; commands `run` (implicit), `prepare`, `report`, `clean`.
 - **Allowed:** `../renderProfiler`, `../scenarios`, `../../processRunner`, `../../fixtures/*`,
-  node/bun built-ins, `@playwright/test`.
+  `@thinkrail/artifact-tests` (`locateDesktopLauncher`), node/bun built-ins, `@playwright/test`.
 - **Forbidden:** importing app `src`, writing outside the cache root, `--out`, and per-sample temp
   state, and reading or writing `~/.thinkrail`.
 - Unit tests (`*.test.ts`) run under root `bun run test`; `playwright.config.ts` ignores them. The
@@ -80,5 +90,4 @@ identical for both sides and only the app under test differs.
 
 ## Not yet built
 
-Renders, startup and waterfall suites; remote hosts (`--host` accepts `local` only); the
-`THINKRAIL_PERF_APP_ROOT` and `THINKRAIL_PERF_BROWSER` switches in `playwright.perf.config.ts`.
+Waterfall suite; remote hosts (`--host` accepts `local` only).
