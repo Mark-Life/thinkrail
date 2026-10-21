@@ -15,7 +15,7 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 ## Boundary
 
-- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
+- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the root lint rule policy; declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
 - **Allowed deps:** Bun/Node, the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
@@ -31,6 +31,14 @@ The extension boundary follows [[module-thinkrail-extensions]] and is registered
 - Browser sources (web app, UI, extension-api's browser half, and extension web halves) must never import extension-api's server half. All of extension-api remains runtime-browser-safe: pi types may describe the server contract, but neither entry may value-import pi. Browser sources and contracts likewise reject pi value imports, including external pi packages not registered as workspace roots. Explicit type imports/re-exports remain subject to the existing workspace-edge rules; a type-only import cannot bypass a forbidden module or source-half edge.
 
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.
+
+`lint` runs `oxlint`, then `oxfmt --check`. `oxlint.config.ts` extends the ultracite `core` preset everywhere and its `react` preset only on the React UI paths (`apps/web`, `apps/website`, `packages/ui`, extension `web` halves), because server and e2e functions named `use*` trip `rules-of-hooks`. Rule policy, with no warning ratchet:
+
+- A preset rule with no hits is `error`. A rule with hits is `off` (`withHits`, `reactWithHits`) until a change fixes its hits and turns it on. `import/no-cycle`, `no-shadow`, and `no-empty` are the next to turn on.
+- Rules that were `warn` before the preset keep `warn`.
+- Style-only rules are off even at zero hits (`cosmetic`, `reactCosmetic`). So are rules whose hits were sampled and found to be noise or false positives (`lowValue`, `reactLowValue`): for example `no-await-in-loop` (sequential on purpose), `no-barrel-file` (barrels are the module surface), `no-redeclare` (TS type/value pairs; `tsc` covers it), `require-post-message-target-origin` (Worker and BroadcastChannel have no origin), and `react/todo` (duplicates `check:compiler`).
+- `import/no-named-as-default*` is off: import spelling only, and its desktop hits appear only after `electrobun prepare` writes the gitignored `.hutch` devkit.
+- Type-aware preset rules stay inert until oxlint runs with `--type-aware`.
 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 
