@@ -20,9 +20,9 @@ the measuring harness is identical for both sides and only the app under test di
   whose alternates point at the tool's git common dir, so no worktree registers in the shared repo and
   parallel agents never see cache worktrees. `wt/<sha>` is a detached worktree of it.
 - **Prepare.** Under a per-SHA lock, each SHA gets `bun install --frozen-lockfile`, then each selected
-  `Artifact` builds in its worktree. `.perf-built.json` keys every entry on lockfile hash, Bun version
-  and the artifact's `cwd` plus build argv, so the key cannot drift from the command; `--rebuild` ignores
-  it. A failed install or build is never reused. A failed artifact build marks the suites that need it
+  `Artifact` builds in its worktree. In `.perf-built.json` the install entry keys on lockfile hash and Bun
+  version; each artifact entry keys on Bun version and the artifact's `cwd` plus build argv, so the key
+  cannot drift from the command. `--rebuild` ignores it. A failed install or build is never reused. A failed artifact build marks the suites that need it
   incompatible; the other suites run. Builds get an allowlisted environment, never the caller's
   `THINKRAIL_*`/`XDG_*`.
 - **Use marks.** A running compare marks each SHA it samples. `--rebuild`, `clean <ref>` and

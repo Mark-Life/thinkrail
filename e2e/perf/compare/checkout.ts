@@ -216,7 +216,7 @@ function sameInputs(entry: BuiltEntry | undefined, inputs: readonly string[]) {
 	);
 }
 
-export async function runBun(command: string[], label: string, env = buildEnv()) {
+async function runBun(command: string[], label: string, env = buildEnv()) {
 	const result = await runE2eProcess([process.execPath, ...command], { env, stdout: "pipe" });
 	if (result.exitCode === 0) return;
 	process.stderr.write(result.stdout.split("\n").slice(-40).join("\n"));
