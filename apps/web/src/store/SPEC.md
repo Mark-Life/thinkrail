@@ -212,10 +212,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`
   promotes one-way. A coalesced preview→keep gesture carries `claimPreview` on its single final intent, so no
   intermediate state persists; a keep after a landed preview promotes that existing placement in place.
-  Arrangement-agnostic opens enter the store, but only shell layout integration resolves them against that workspace's last focus and commits local placement. Reopening an existing
-  canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
-  repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
-  focus. **The durable-title fold** routes
+  Arrangement-agnostic opens enter the store, but only shell layout integration resolves them against that
+  workspace's last focus and commits local placement. Reopening an existing canonical resource changes
+  attention only unless non-identity metadata changed. A late chat-title event may repair cache/history
+  labels or a still-queued open, but cannot recreate a locally closed placement or steal focus.
+  **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
   `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s `chatName`, as
   `selectChatTitle` does; `selectChatName` returns the stored name, and `workspaceName(t, ws)` words the

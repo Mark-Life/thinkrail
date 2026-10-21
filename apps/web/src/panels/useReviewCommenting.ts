@@ -116,7 +116,7 @@ export function reviewFocusId(
 	kind: "inline" | "diff",
 ): string | null {
 	if (!request || request.workspaceId !== workspaceId) return null;
-	return !request.surface || request.surface === kind ? request.commentId : null;
+	return request.surface === kind ? request.commentId : null;
 }
 
 function resolveFocus(

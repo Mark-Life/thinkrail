@@ -46,6 +46,5 @@ test("a surface-targeted focus is left for that surface, not a mounted sibling",
 	const toFile = { workspaceId: "w1", commentId: "c1", surface: "inline" as const };
 	expect(reviewFocusId(toFile, "w1", "inline")).toBe("c1");
 	expect(reviewFocusId(toFile, "w1", "diff")).toBeNull();
-	expect(reviewFocusId({ workspaceId: "w1", commentId: "c1" }, "w1", "diff")).toBe("c1");
 	expect(reviewFocusId(toFile, "w2", "inline")).toBeNull();
 });

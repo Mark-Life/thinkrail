@@ -1443,8 +1443,9 @@ own section. The kebab menu (`plan-menu`, a
   away (the `FileText` glyph runs the file+focus navigation; the chat glyph is gone from open rows).
   The file focus works through (the store's
   `reviewFocusRequest`, which names the surface the row opens (`inline` file or `diff`) so an
-  already-mounted pane of the other kind cannot consume it, consumed exactly once by the pane: Monaco reveals the anchor line — including
-  on a fresh mount, via `onMount` — the preview scrolls the in-flow card into view). **No editing
+  already-mounted pane of the other kind cannot consume it, consumed exactly once by the pane: Monaco
+  reveals the anchor line — including on a fresh mount, via `onMount` — the preview scrolls the in-flow
+  card into view). **No editing
   here** — the in-file card is the editor; the row's action icons (their own layer, never triggering
   navigation) are per-row **Send** (→ `review.sendComment`, opens the created chat tab via the same
   `openChatSession` tail as New Workspace), **Delete for DRAFT rows** (ConfirmPopover →
@@ -1963,13 +1964,15 @@ own section. The kebab menu (`plan-menu`, a
 
   A preview replaces only that group's slot at the same index, so browsing never reshuffles the strip. A
   single click opens its preview at once, from the open-tab cache or the read, with no settle wait. A
-  double click composes preview then promote. If the read already landed, that is two local transitions:
-  the preview, then an in-place keep of the same placement. If the read is still in flight, `openTabs.ts`
-  single-flights it and carries the leading click's slot claim into one final kept transition. Either way
-  network latency cannot reverse the intents. The Changes review-tab preview is the one row open that still
-  waits the settle window: its double click opens a different resource (the kept per-file diff), so an
-  instant review tab would flash and then be replaced. Freshness stamps (`loadedTick`, plus a diff's `loadedTarget`) are
-  captured before the read leaves, never from newer state at response time. The local per-group navigation
+  double click composes preview then promote: the row's second click (`event.detail > 1`) sends no
+  preview, so only the leading preview and the `dblclick` keep go out. If the read already landed, that
+  is two local transitions: the preview, then an in-place keep of the same placement. If the read is
+  still in flight, `openTabs.ts` single-flights it and carries the leading click's slot claim into one
+  final kept transition. Either way network latency cannot reverse the intents. The Changes review-tab
+  preview is the one row open that still waits the settle window: its double click opens a different
+  resource (the kept per-file diff), so an instant review tab would flash and then be replaced.
+  Freshness stamps (`loadedTick`, plus a diff's `loadedTarget`) are captured before the read leaves,
+  never from newer state at response time. The local per-group navigation
   clock is captured at request time: a stale preview completion loses to later attention; deliberate keep
   still commits. If the destination group disappeared, the shell reroutes to current last focus, and if a
   a newer local transition already placed the canonical resource, completion selects that placement instead

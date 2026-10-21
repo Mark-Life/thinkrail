@@ -180,7 +180,9 @@ function SpecNodeRow({
 						role: isMainSpec ? t("panels.specs.mainSpec") : role,
 					})}
 					title={`${node.title}\n${node.id} · ${node.type}`}
-					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
+					onClick={(event) => {
+						if (event.detail <= 1) void openFileInTab(workspaceId, node.path, "preview");
+					}}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
 					className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>

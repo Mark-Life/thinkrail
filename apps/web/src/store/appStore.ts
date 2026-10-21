@@ -1011,7 +1011,7 @@ interface AppState {
 	reviewFocusRequest: {
 		workspaceId: string;
 		commentId: string;
-		surface?: "inline" | "diff";
+		surface: "inline" | "diff";
 	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
@@ -1358,7 +1358,7 @@ interface AppState {
 	requestReviewFocus: (
 		workspaceId: string,
 		commentId: string,
-		surface?: NonNullable<AppState["reviewFocusRequest"]>["surface"],
+		surface: NonNullable<AppState["reviewFocusRequest"]>["surface"],
 	) => void;
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
@@ -3021,7 +3021,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				};
 			});
 			return target?.commentId && !s.removedWorkspaceIds[workspaceId]
-				? { ...patched, reviewFocusRequest: { workspaceId, commentId: target.commentId } }
+				? {
+						...patched,
+						reviewFocusRequest: { workspaceId, commentId: target.commentId, surface: "diff" },
+					}
 				: patched;
 		}),
 	setChangesTabSectionRenderer: (workspaceId, id, path, rendererId) =>
@@ -4368,7 +4371,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
 				? {}
-				: { reviewFocusRequest: { workspaceId, commentId, ...(surface ? { surface } : {}) } },
+				: { reviewFocusRequest: { workspaceId, commentId, surface } },
 		),
 	clearReviewFocus: (commentId) =>
 		set((state) =>

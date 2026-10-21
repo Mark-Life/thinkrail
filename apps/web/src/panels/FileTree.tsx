@@ -155,7 +155,13 @@ function FileNodeRow({
 						/>
 					) : undefined
 				}
-				onClick={isDir ? toggleDirectory : () => open("preview")}
+				onClick={
+					isDir
+						? toggleDirectory
+						: (event) => {
+								if (event.detail <= 1) open("preview");
+							}
+				}
 				onDoubleClick={isDir ? undefined : () => open("keep")}
 			/>
 			{isDir && expanded && children && (
