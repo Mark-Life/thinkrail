@@ -1,6 +1,10 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { buildSessionContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	buildSessionContext,
+	SessionManager,
+	type SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import {
 	type DelegationRunStatus,
 	isTranscriptMessageRole,
@@ -13,23 +17,34 @@ import {
 	createDelegationService,
 	type DelegationService,
 	deriveChildSessionFile,
+	type ParentContext,
 	type RunStatus,
 } from "pi-delegation";
 import { createSubagents, type Subagents } from "pi-subagents";
 import { dataDir } from "../persistence";
-import {
-	buildSessionSettings,
-	canUseSessionResources,
-	liveParentContext,
-	scheduleSessionStatePublish,
-} from "./agentSessionManager";
-import { publishSessionResourcesChanged } from "./chatResources";
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
+import { publishSessionResourcesChanged } from "./sessionResourcesEvents";
 
 export function delegationRootDir(): string {
 	return join(dataDir(), "delegation");
+}
+
+interface DelegationSessionHost {
+	canUseSessionResources: (sessionId: string, workspaceId: string) => boolean;
+	liveParentContext: (sessionId: string) => ParentContext | undefined;
+	scheduleSessionStatePublish: (sessionId: string) => void;
+	buildSessionSettings: (cwd: string, projectTrusted: boolean) => SettingsManager;
+}
+
+let sessionHost: DelegationSessionHost | null = null;
+export function setDelegationSessionHost(next: DelegationSessionHost): void {
+	sessionHost = next;
+}
+function host(): DelegationSessionHost {
+	if (!sessionHost) throw new Error("Delegation session host is not set");
+	return sessionHost;
 }
 
 const services = new Map<string, DelegationService>();
@@ -52,6 +67,12 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
 		const maxConcurrentPerParent = concurrencyResolver?.(workspaceId);
+		const {
+			buildSessionSettings,
+			canUseSessionResources,
+			liveParentContext,
+			scheduleSessionStatePublish,
+		} = host();
 		service = createDelegationService({
 			...(maxConcurrentPerParent === undefined ? {} : { maxConcurrentPerParent }),
 			resolveParent: (sessionId) =>

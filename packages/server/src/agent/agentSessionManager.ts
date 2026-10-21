@@ -11,9 +11,7 @@ import {
 	type ExtensionError,
 	type ExtensionUIContext,
 	getAgentDir,
-	type McpServerConfig,
 	type PromptOptions,
-	type RegisteredMcpServer,
 	type SessionEntry,
 	type SessionInfo,
 	SessionManager,
@@ -85,11 +83,11 @@ import {
 	createAskUserQuestionWaiters,
 	hasQuestionAck,
 } from "./askUserQuestion";
-import { publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
 	hasLiveSessionChildren,
 	removeWorkspaceDelegation,
+	setDelegationSessionHost,
 	stopSessionChildren,
 	subagentsFor,
 } from "./delegation";
@@ -104,10 +102,14 @@ import {
 	assertMcpServerDisablableInChat,
 	forgetMcpStatus,
 	hasFailedMcpReload,
+	type McpCommandNotify,
+	type McpSessionView,
 	reconcileMcpSessions,
 	recordMcpReloadFailure,
 	restartMcpStatus,
 	scheduleMcpStatusRefresh,
+	type SessionReloadDisposition,
+	setMcpSessionHost,
 	showPendingMcpReload,
 	watchMcpStatus,
 } from "./mcpSessions";
@@ -121,6 +123,7 @@ import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
+import { publishSessionResourcesChanged } from "./sessionResourcesEvents";
 import { deriveSessionState } from "./sessionState";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import {
@@ -769,8 +772,6 @@ export async function reloadSessionResources(sessionId: string): Promise<void> {
 	if (blocked) throw new Error(`Can't reload while ${blocked} — try again after the turn.`);
 	await runGatedReload(entry);
 }
-
-export type SessionReloadDisposition = "reloaded" | "deferred";
 
 export async function requestSessionReload(sessionId: string): Promise<SessionReloadDisposition> {
 	const entry = mustGetEntry(sessionId);
@@ -2392,17 +2393,6 @@ export function getSessionStats(sessionId: string): SessionStats {
 	};
 }
 
-export interface McpSessionView {
-	workspaceId: string;
-	cwd: string;
-	projectTrusted: boolean;
-	policy: McpProjectPolicy;
-	disabledInChat: ReadonlySet<string>;
-	loaded: ReadonlyMap<string, McpServerConfig> | null;
-	registered: readonly RegisteredMcpServer[];
-	commandOwner: string | null;
-}
-
 export function mcpSessionView(sessionId: string): McpSessionView | undefined {
 	const entry = sessions.get(sessionId);
 	if (
@@ -2433,8 +2423,6 @@ export function liveSessionIdsOf(workspaceId?: string): string[] {
 		)
 		.map(([sessionId]) => sessionId);
 }
-
-type McpCommandNotify = (message: string, level: "info" | "warning" | "error") => void;
 
 function notifyingCommandContext(
 	context: ExtensionCommandContext,
@@ -2858,3 +2846,18 @@ async function runDeleteTransaction(
 	}
 	publishDeleted({ workspaceId, sessionId });
 }
+
+setDelegationSessionHost({
+	buildSessionSettings,
+	canUseSessionResources,
+	liveParentContext,
+	scheduleSessionStatePublish,
+});
+
+setMcpSessionHost({
+	dispatchSessionMcpCommand,
+	getSessionMessages,
+	liveSessionIdsOf,
+	mcpSessionView,
+	requestSessionReload,
+});

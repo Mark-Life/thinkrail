@@ -8,7 +8,11 @@ import {
 	watch,
 } from "node:fs";
 import { basename, isAbsolute } from "node:path";
-import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
+import {
+	getAgentDir,
+	type McpServerConfig,
+	type RegisteredMcpServer,
+} from "@earendil-works/pi-coding-agent";
 import {
 	MCP_PROTOCOL_VERSION,
 	type McpListResult,
@@ -18,24 +22,16 @@ import {
 	type McpStatusSnapshot,
 	type McpTransportKind,
 	type Project,
+	type TranscriptMessage,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
-import {
-	dispatchSessionMcpCommand,
-	getSessionMessages,
-	liveSessionIdsOf,
-	type McpSessionView,
-	mcpSessionView,
-	requestSessionReload,
-	type SessionReloadDisposition,
-} from "./agentSessionManager";
-import { publishSessionResourcesChanged } from "./chatResources";
 import { isBuiltinExtensionEnabled } from "./extensions";
 import {
 	deriveMcpServerStatuses,
 	isMcpResultTool,
 	loadHostMcpConfig,
+	type McpProjectPolicy,
 	mcpPolicyOf,
 	type ParsedMcpStatus,
 	parseMcpAttentionNotice,
@@ -44,6 +40,7 @@ import {
 	summarizeMcpConfigErrors,
 	summarizeMcpServers,
 } from "./mcp";
+import { publishSessionResourcesChanged } from "./sessionResourcesEvents";
 import { interceptExtUiNotify, notifyExtUi } from "./webUiContext";
 
 const log = logger("mcp");
@@ -65,6 +62,46 @@ interface Tracked {
 	stopAttention: () => void;
 }
 
+export interface McpSessionView {
+	workspaceId: string;
+	cwd: string;
+	projectTrusted: boolean;
+	policy: McpProjectPolicy;
+	disabledInChat: ReadonlySet<string>;
+	loaded: ReadonlyMap<string, McpServerConfig> | null;
+	registered: readonly RegisteredMcpServer[];
+	commandOwner: string | null;
+}
+
+export type SessionReloadDisposition = "reloaded" | "deferred";
+
+export type McpCommandNotify = (message: string, level: "info" | "warning" | "error") => void;
+
+interface McpSessionHost {
+	mcpSessionView: (sessionId: string) => McpSessionView | undefined;
+	liveSessionIdsOf: (workspaceId?: string) => string[];
+	dispatchSessionMcpCommand: (
+		sessionId: string,
+		args: string,
+		notify?: McpCommandNotify,
+	) => Promise<void> | null;
+	requestSessionReload: (sessionId: string) => Promise<SessionReloadDisposition>;
+	getSessionMessages: (
+		sessionId: string,
+		workspaceId: string,
+		cwd: string,
+	) => Promise<{ messages: TranscriptMessage[] }>;
+}
+
+let sessionHost: McpSessionHost | null = null;
+export function setMcpSessionHost(next: McpSessionHost): void {
+	sessionHost = next;
+}
+function host(): McpSessionHost {
+	if (!sessionHost) throw new Error("MCP session host is not set");
+	return sessionHost;
+}
+
 const tracked = new Map<string, Tracked>();
 
 let publish: (snapshot: McpStatusSnapshot) => void = () => {};
@@ -73,7 +110,7 @@ export function setMcpStatusPublisher(fn: (snapshot: McpStatusSnapshot) => void)
 }
 
 function snapshotOf(sessionId: string): McpStatusSnapshot | null {
-	const view = mcpSessionView(sessionId);
+	const view = host().mcpSessionView(sessionId);
 	const state = tracked.get(sessionId);
 	if (!view || !state || state.generation === 0) return null;
 	return {
@@ -114,7 +151,7 @@ function configuredServers(view: McpSessionView) {
 }
 
 export function pendingMcpReload(sessionId: string): Set<string> {
-	const view = mcpSessionView(sessionId);
+	const view = host().mcpSessionView(sessionId);
 	const failed = tracked.get(sessionId)?.reloadFailed === true;
 	if (!ownsMcp(view) || (!view.loaded && !failed)) return new Set();
 	const loaded = view.loaded ?? new Map<string, McpServerConfig>();
@@ -143,7 +180,7 @@ function publishResources(sessionId: string, workspaceId: string, state: Tracked
 }
 
 function apply(sessionId: string, reported: ParsedMcpStatus | null, partial: boolean): void {
-	const view = mcpSessionView(sessionId);
+	const view = host().mcpSessionView(sessionId);
 	const state = tracked.get(sessionId);
 	if (!ownsMcp(view) || !state) return;
 	const merged: ParsedMcpStatus | null =
@@ -206,7 +243,7 @@ function startingReport(view: McpSessionView): ParsedMcpStatus {
 }
 
 export function restartMcpStatus(sessionId: string): void {
-	const view = mcpSessionView(sessionId);
+	const view = host().mcpSessionView(sessionId);
 	if (!view) return;
 	const state = trackedOf(sessionId);
 	state.load++;
@@ -217,7 +254,7 @@ export function restartMcpStatus(sessionId: string): void {
 }
 
 export function assertMcpServerDisablableInChat(sessionId: string, name: string): void {
-	const view = mcpSessionView(sessionId);
+	const view = host().mcpSessionView(sessionId);
 	if (!ownsMcp(view)) {
 		throw new CodedError("MCP_HANDLED_ELSEWHERE", "MCP is not managed by ThinkRail here.");
 	}
@@ -258,7 +295,7 @@ export function recordMcpReloadFailure(
 	wasLoaded: boolean,
 ): void {
 	const state = tracked.get(sessionId);
-	const view = mcpSessionView(sessionId);
+	const view = host().mcpSessionView(sessionId);
 	if (!state || !view || (!wasLoaded && view.loaded === null && !state.reloadFailed)) return;
 	state.reloadFailed = true;
 	const detail = redactMcpText(error instanceof Error ? error.message : String(error));
@@ -278,7 +315,7 @@ export async function reconcileMcpSessions(
 	for (const sessionId of sessionIds) {
 		if (!hasFailedMcpReload(sessionId) && pendingMcpReload(sessionId).size === 0) continue;
 		try {
-			const disposition = await requestSessionReload(sessionId);
+			const disposition = await host().requestSessionReload(sessionId);
 			dispositions[sessionId] = disposition;
 			if (disposition === "deferred") showPendingMcpReload(sessionId);
 		} catch {}
@@ -314,13 +351,13 @@ export function watchUserMcpConfig(): () => void {
 				if (event === "rename") restart();
 				clearTimeout(timer);
 				timer = setTimeout(
-					() => void reconcileMcpSessions(liveSessionIdsOf()),
+					() => void reconcileMcpSessions(host().liveSessionIdsOf()),
 					USER_CONFIG_DEBOUNCE_MS,
 				);
 			});
 			watcher.on("error", restart);
 			retryMs = USER_CONFIG_DEBOUNCE_MS;
-			void reconcileMcpSessions(liveSessionIdsOf());
+			void reconcileMcpSessions(host().liveSessionIdsOf());
 		} catch {
 			restart();
 		}
@@ -368,7 +405,7 @@ async function capture(sessionId: string, state: Tracked): Promise<void> {
 	const load = state.load;
 	const notices: string[] = [];
 	try {
-		await dispatchSessionMcpCommand(sessionId, "", (message) => notices.push(message));
+		await host().dispatchSessionMcpCommand(sessionId, "", (message) => notices.push(message));
 	} catch {}
 	if (tracked.get(sessionId) !== state || state.load !== load) return;
 	const parsed = notices.map(parseMcpStatusText).findLast((status) => status !== null);
@@ -379,7 +416,7 @@ export async function refreshMcpStatus(
 	sessionId: string,
 	waitMs: number,
 ): Promise<McpStatusSnapshot | null> {
-	const view = mcpSessionView(sessionId);
+	const view = host().mcpSessionView(sessionId);
 	if (!view) return null;
 	if (!ownsMcp(view)) {
 		retire(sessionId, view);
@@ -405,8 +442,8 @@ export async function refreshMcpStatus(
 
 export async function reconnectMcpServer(sessionId: string, name: string): Promise<void> {
 	const failures: string[] = [];
-	const reconnect = ownsMcp(mcpSessionView(sessionId))
-		? dispatchSessionMcpCommand(sessionId, `reconnect ${name}`, (message, level) => {
+	const reconnect = ownsMcp(host().mcpSessionView(sessionId))
+		? host().dispatchSessionMcpCommand(sessionId, `reconnect ${name}`, (message, level) => {
 				if (level === "error") failures.push(message);
 			})
 		: null;
@@ -454,9 +491,9 @@ export async function mcpOwnershipGuard(options: {
 	);
 	return () =>
 		mcpOwnerElsewhere(
-			liveSessionIdsOf(options.workspaceId).map(
-				(sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null,
-			),
+			host()
+				.liveSessionIdsOf(options.workspaceId)
+				.map((sessionId) => host().mcpSessionView(sessionId)?.commandOwner ?? null),
 			enabledInSettings,
 		);
 }
@@ -467,7 +504,7 @@ export async function listMcpServers(options: {
 	project: Pick<Project, "piResourceTrust" | "mcpApprovals" | "mcpOverrides"> | undefined;
 	waitMs: number;
 }): Promise<McpListResult> {
-	const sessionIds = liveSessionIdsOf(options.workspaceId);
+	const sessionIds = host().liveSessionIdsOf(options.workspaceId);
 	const projectTrusted = options.project?.piResourceTrust === "granted";
 	const [snapshots, ownership] = await Promise.all([
 		Promise.all(sessionIds.map((sessionId) => refreshMcpStatus(sessionId, options.waitMs))),
@@ -502,7 +539,7 @@ export async function readMcpToolOutput(
 	toolCallId: string,
 	cwd: string,
 ): Promise<McpReadOutputResult> {
-	const { messages } = await getSessionMessages(sessionId, workspaceId, cwd);
+	const { messages } = await host().getSessionMessages(sessionId, workspaceId, cwd);
 	const result = messages.find(
 		(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 	);

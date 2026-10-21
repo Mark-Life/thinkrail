@@ -30,7 +30,7 @@ import {
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
-import { getSessionResources, setSessionResourcesPublisher } from "./chatResources";
+import { getSessionResources } from "./chatResources";
 import { MCP_CONFIRM_ONCE } from "./mcp";
 import {
 	listMcpServers,
@@ -41,6 +41,7 @@ import {
 	watchUserMcpConfig,
 } from "./mcpSessions";
 import { configurePiRuntime } from "./piRuntime";
+import { setSessionResourcesPublisher } from "./sessionResourcesEvents";
 import { admissionContextFor } from "./skillAdmission";
 import { resolveExtUi, setExtUiPublisher } from "./webUiContext";
 
