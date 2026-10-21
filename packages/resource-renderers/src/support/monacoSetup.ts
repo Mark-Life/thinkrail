@@ -23,6 +23,7 @@ import { onThemeSwap } from "@thinkrail/ui/theme";
 import type { Environment, editor } from "monaco-editor/esm/vs/editor/editor.api.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import onigWasmUrl from "shiki/onig.wasm?url";
 import type { ResourceCodeHost } from "../host";
 import { editorWrappingOptions } from "./editorWrapping";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";
@@ -163,7 +164,7 @@ function defineTheme({ base, data }: ReturnType<typeof currentTheme>): void {
 
 async function createEngine() {
 	try {
-		return await createOnigurumaEngine(import("shiki/wasm"));
+		return await createOnigurumaEngine(fetch(onigWasmUrl));
 	} catch {
 		const { createJavaScriptRegexEngine } = await import("shiki/engine/javascript");
 		return createJavaScriptRegexEngine();

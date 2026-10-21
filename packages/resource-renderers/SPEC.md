@@ -551,7 +551,7 @@ content's own height.
   per-language grammar loads and the colour→scope map. Its curated language catalog is shared with the chat
   highlighter and extended for the desktop file formats; missing Monaco language ids are registered with their
   file associations, then each catalog id gets a `registerTokensProviderFactory` entry. A swap loads the
-  highlighter theme under a fresh name and rebuilds the scope map from the same converted Monaco rules it
+  highlighter theme under the other of two names and rebuilds the scope map from the same converted Monaco rules it
   defines, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast base comes from manifest
   appearance/contrast metadata—never a known id—and remains inherited for specialist colours outside the
   explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
@@ -577,6 +577,9 @@ content's own height.
   fallback is held for at least 300 ms. The engine falls back to the JS regex engine when WASM cannot load
   (WebKit Lockdown Mode), and to plain text when neither engine builds. Shiki's `setTheme` is a no-op for
   the name it last selected, so each swap loads the theme under the other of two names to get the new
-  colour map.
-  Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and
-  `shiki/wasm` is a lazy 622 kB chunk; Pierre's newer Shiki ships its own copy.
+  colour map. The engine fetches the raw `shiki/onig.wasm` asset and compiles it with
+  `instantiateStreaming`; `shiki/wasm` inlines it as base64 and decodes it byte by byte on the main thread
+  (about 22 ms at 1x CPU) before the first coloured line. Every shipped host serves `.wasm` as
+  `application/wasm`: Vite in dev, `Bun.file` in `serveStatic` for the desktop app and the staged CLI binary.
+  Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and the
+  engine fetches a 466 kB `.wasm` asset; Pierre's newer Shiki ships its own copy.
