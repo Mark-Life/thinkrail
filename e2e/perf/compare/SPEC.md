@@ -60,6 +60,18 @@ identical for both sides and only the app under test differs.
   Two all-zero sides are `same`. Offset metrics (signed gaps such as "A minus B", where a ratio is
   meaningless) report the difference of means with a Welch 95% CI in the metric's unit; the CI wholly
   below or above zero gives `better`/`worse`, the threshold does not apply.
+- **Remote hosts.** `--host` (repeatable: `local`, `rs8000`, `studio`) runs the compare on each host in
+  parallel; a host whose alias or `ssh -G` hostname matches the local hostname runs locally. Before any
+  ssh, the tool tree must be clean and `git branch -r --contains` must find base, head and the tool
+  SHA on `origin`, else it fails fast. Over `ssh -T -o BatchMode=yes`, `bootstrap.sh` keeps a remote
+  cache `repo.git` (`git clone --bare` of origin, then `fetch`), checks out the tool SHA as a detached
+  worktree at `<cache>/tool/<toolSha>`, runs `bun install` (`HUSKY=0`), and checks the Playwright
+  browsers the selected suites need, installing them into the user cache if missing (never system
+  deps). The host then runs `perf:compare <baseSha> <headSha> --host local --json-only` with the same
+  measurement flags into `<cache>/runs/`; its `compare.json` is read back over ssh, refs are restored
+  to the local names, and `<out>/<host>/compare.{json,md}` plus a combined `<out>/compare.md` are
+  written. A failed host does not stop the others; the run then exits 1. Remote runs never touch an
+  existing clone on the host.
 - **Output.** `<out>/compare.json` (`CompareResult`) and `<out>/compare.md`; `--json-only` skips the
   markdown. Rows with verdict `same` collapse into `<details>`; ▮ marks 5/10/20/50% tiers.
   `report <compare.json>` re-renders markdown. Per-sample files live under `<out>/samples/`.
@@ -99,15 +111,13 @@ identical for both sides and only the app under test differs.
   `type CompareOptions`, `type CompareResult`, `type Measurement`, `type MetricSummary`,
   `type SampleResult`, `type Schedule`, `type Side`, `type Sha`, `type Suite`, `type SuiteContext`
 - **Entrypoint:** `cli.ts` backs `perf:compare`; commands `run` (implicit), `prepare`, `report`, `clean`.
+  `bootstrap.sh` is the remote-host setup script that `remote.ts` sends over ssh.
 - **Allowed:** `../renderProfiler`, `../scenarios`, `../chatReplay`, `../../processRunner`,
   `../../fixtures/*`,
-  `@thinkrail/artifact-tests` (`locateDesktopLauncher`), node/bun built-ins, `@playwright/test`.
+  `@thinkrail/artifact-tests` (`locateDesktopLauncher`), node/bun built-ins, `@playwright/test`, the
+  `ssh` and `git` binaries.
 - **Forbidden:** importing app `src`, writing outside the cache root, `--out`, and per-sample temp
   state, and reading or writing `~/.thinkrail`.
 - Unit tests (`*.test.ts`) run under root `bun run test`; `playwright.config.ts` ignores them. The
   module typechecks with `bunx tsc --noEmit -p e2e/perf/compare` (root `typecheck` does not cover
   `e2e/`).
-
-## Not yet built
-
-Remote hosts (`--host` accepts `local` only).
