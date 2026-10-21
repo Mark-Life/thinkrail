@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runSuite } from "./schedule";
@@ -36,7 +36,7 @@ function suite(sample: (context: SuiteContext, variant: string) => SampleResult)
 	};
 }
 
-function ok(variant: string): SampleResult {
+function ok(variant: string, value = 10): SampleResult {
 	const measurement = {
 		id: variant,
 		group: "g",
@@ -44,18 +44,17 @@ function ok(variant: string): SampleResult {
 		unit: "ms",
 		kind: "timed",
 		better: "lower",
-		value: 10,
+		value,
 	} as const;
 	return { ok: true, measurements: [measurement] };
 }
 
-function run(fake: Suite) {
+function run(fake: Suite, options = OPTIONS) {
 	const side = { sha: "a".repeat(40) as Sha, appRoot: outDir };
 	return runSuite({
 		suite: fake,
 		sides: { base: side, head: side },
-		toolRoot: outDir,
-		options: OPTIONS,
+		options,
 		outDir,
 	});
 }
@@ -114,4 +113,32 @@ test("a full disk aborts the suite", async () => {
 		throw enospc;
 	};
 	await expect(run(fake)).rejects.toThrow("disk full");
+});
+
+test("a retry starts from an empty sample dir", async () => {
+	const leftovers: boolean[] = [];
+	const result = await run(
+		suite((context, variant) => {
+			if (variant !== "a" || context.round !== 2 || context.side !== "base") return ok(variant);
+			const marker = join(context.sampleDir, "marker");
+			leftovers.push(existsSync(marker));
+			writeFileSync(marker, "");
+			return { ok: false, incompatible: "flake" };
+		}),
+	);
+	expect(leftovers).toEqual([false, false]);
+	expect(result.warnings).toHaveLength(1);
+});
+
+test("a retired variant does not keep an auto schedule running", async () => {
+	const fake = suite((context, variant) => {
+		if (variant === "b") return ok(variant);
+		if (context.round >= 3) return { ok: false, incompatible: "flake" };
+		return ok(variant, Math.random() * 100);
+	});
+	fake.schedule = () => ({ kind: "auto", minRuns: 2, batch: 1, maxMinutes: 1 });
+	const started = Date.now();
+	const result = await run(fake, { ...OPTIONS, threshold: 5 });
+	expect(Date.now() - started).toBeLessThan(10_000);
+	expect(result.loadavg.length).toBeLessThan(10);
 });

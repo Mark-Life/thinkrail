@@ -177,8 +177,8 @@ Playwright run writes no output, so the last good file survives.
 
 ### Compare mode
 
-`bun run perf:compare <base> <head>` measures two commits on one machine. The tool checkout builds each
-SHA in a cached detached worktree under `~/.cache/thinkrail-perf/`, interleaves samples ABBA, and writes
+`bun run perf:compare <base> <head>` measures two commits on each host (`--host`, local by default). The
+tool checkout builds each SHA in a cached detached worktree under `~/.cache/thinkrail-perf/` and writes
 markdown and JSON. See [[submodule-perf-compare]].
 
 ## Desktop-backed mode

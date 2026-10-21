@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
+import { processRunnerInterruption } from "../../processRunner";
 import { prepareSha, resolveSha, toolState } from "./checkout";
 import { hermeticWarning, userStateStamp } from "./env";
 import { renderReport } from "./report";
@@ -15,16 +16,17 @@ export function selectSuites(names: readonly string[]): readonly Suite[] {
 	return SUITES.filter((suite) => names.includes(suite.name));
 }
 
-function selectArtifacts(
-	suites: readonly Suite[],
-	options: CompareOptions,
-	platform = process.platform,
-) {
-	const byKey = new Map<Artifact["key"], Artifact>();
-	const declared = (suite: Suite) =>
+function suiteArtifacts(suite: Suite, options: CompareOptions) {
+	const declared =
 		typeof suite.artifacts === "function" ? suite.artifacts(options) : suite.artifacts;
-	for (const artifact of suites.flatMap(declared)) {
-		if (artifact.platforms && !artifact.platforms.includes(platform)) continue;
+	return declared.filter(
+		(artifact) => !artifact.platforms || artifact.platforms.includes(process.platform),
+	);
+}
+
+function selectArtifacts(suites: readonly Suite[], options: CompareOptions) {
+	const byKey = new Map<Artifact["key"], Artifact>();
+	for (const artifact of suites.flatMap((suite) => suiteArtifacts(suite, options))) {
 		byKey.set(artifact.key, artifact);
 	}
 	return [...byKey.values()];
@@ -43,18 +45,49 @@ export async function prepareRefs(input: {
 	options: CompareOptions;
 }) {
 	const artifacts = selectArtifacts(selectSuites(input.options.suites), input.options);
-	const prepared: { ref: string; sha: Sha; appRoot: string }[] = [];
+	const prepared: ({ ref: string; sha: Sha } & Awaited<ReturnType<typeof prepareSha>>)[] = [];
 	for (const ref of input.refs) {
 		const sha = resolveSha(input.toolRoot, ref);
-		const appRoot = await prepareSha({
+		const built = await prepareSha({
 			toolRoot: input.toolRoot,
 			sha,
 			artifacts,
 			rebuild: input.options.rebuild,
 		});
-		prepared.push({ ref, sha, appRoot });
+		prepared.push({ ref, sha, ...built });
 	}
 	return prepared;
+}
+
+function buildFailure(
+	suite: Suite,
+	options: CompareOptions,
+	sides: readonly Awaited<ReturnType<typeof prepareRefs>>[number][],
+) {
+	for (const artifact of suiteArtifacts(suite, options)) {
+		for (const side of sides) {
+			const reason = side.failed.get(artifact.key);
+			if (reason !== undefined) return `${side.ref}: ${artifact.key} build failed: ${reason}`;
+		}
+	}
+	return null;
+}
+
+function failedSuite(suite: Suite, options: CompareOptions, reason: string): SuiteResult {
+	return {
+		name: suite.name,
+		schedule: suite.schedule(options),
+		variants: suite
+			.variants(options)
+			.map((name) => ({ name, status: "incompatible" as const, reason })),
+		metrics: [],
+		loadavg: [],
+	};
+}
+
+function isFatal(error: unknown) {
+	const message = error instanceof Error ? error.message : String(error);
+	return processRunnerInterruption() !== null || message.startsWith("disk full");
 }
 
 function protocolWarnings(base: number | null, head: number | null, suites: readonly Suite[]) {
@@ -89,13 +122,22 @@ export async function runCompare(input: {
 	mkdirSync(options.out, { recursive: true });
 	const results: SuiteResult[] = [];
 	for (const suite of suites) {
-		const run = await runSuite({
-			suite,
-			sides: { base, head },
-			toolRoot: input.toolRoot,
-			options,
-			outDir: options.out,
-		});
+		const unbuilt = buildFailure(suite, options, [base, head]);
+		if (unbuilt) {
+			results.push(failedSuite(suite, options, unbuilt));
+			warnings.push(`${suite.name} skipped: ${unbuilt}`);
+			continue;
+		}
+		let run: Awaited<ReturnType<typeof runSuite>>;
+		try {
+			run = await runSuite({ suite, sides: { base, head }, options, outDir: options.out });
+		} catch (error) {
+			if (isFatal(error)) throw error;
+			const reason = error instanceof Error ? error.message : String(error);
+			results.push(failedSuite(suite, options, reason));
+			warnings.push(`${suite.name} skipped: ${reason}`);
+			continue;
+		}
 		results.push({
 			name: suite.name,
 			schedule: suite.schedule(options),

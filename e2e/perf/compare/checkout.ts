@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { runE2eProcess } from "../../processRunner";
+import { processRunnerInterruption, runE2eProcess } from "../../processRunner";
 import { buildEnv } from "./env";
 import type { Artifact, Sha } from "./types";
 
@@ -185,9 +185,11 @@ async function install(dir: string, marker: BuiltMarker, rebuild: boolean) {
 		.digest("hex");
 	const fresh = marker.install?.lockHash === lockHash && marker.install.bunVersion === Bun.version;
 	if (fresh && !rebuild && existsSync(join(dir, "node_modules"))) return marker;
+	const { install: _stale, ...pending } = marker;
+	writeMarker(dir, pending);
 	console.error(`perf:compare: bun install in ${dir}`);
 	await runBun(["install", "--frozen-lockfile", "--cwd", dir], `bun install at ${dir}`);
-	return { ...marker, install: { lockHash, bunVersion: Bun.version } };
+	return { ...pending, install: { lockHash, bunVersion: Bun.version } };
 }
 
 export async function prepareSha(input: {
@@ -201,10 +203,20 @@ export async function prepareSha(input: {
 		const dir = ensureWorktree(repo, input.sha);
 		let marker = await install(dir, readMarker(dir), input.rebuild);
 		writeMarker(dir, marker);
+		const failed = new Map<Artifact["key"], string>();
 		for (const artifact of input.artifacts) {
 			if (!input.rebuild && sameInputs(marker.artifacts[artifact.key], artifact.inputs)) continue;
+			const { [artifact.key]: _stale, ...kept } = marker.artifacts;
+			marker = { ...marker, artifacts: kept };
+			writeMarker(dir, marker);
 			console.error(`perf:compare: building ${artifact.key} for ${input.sha.slice(0, 10)}`);
-			await artifact.build(dir, buildEnv());
+			try {
+				await artifact.build(dir, buildEnv());
+			} catch (error) {
+				if (processRunnerInterruption()) throw error;
+				failed.set(artifact.key, error instanceof Error ? error.message : String(error));
+				continue;
+			}
 			const entry = {
 				inputs: artifact.inputs,
 				bunVersion: Bun.version,
@@ -213,7 +225,7 @@ export async function prepareSha(input: {
 			marker = { ...marker, artifacts: { ...marker.artifacts, [artifact.key]: entry } };
 			writeMarker(dir, marker);
 		}
-		return dir;
+		return { appRoot: dir, failed };
 	});
 }
 

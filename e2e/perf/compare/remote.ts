@@ -165,7 +165,14 @@ async function runRemote(input: {
 		}
 		throw error;
 	}
-	const json = await ssh(host, `cat ${shellQuote(`${remoteOut}/compare.json`)}`, "copy back");
+	const remoteJson = `${remoteOut}/compare.json`;
+	const copyBack = () => ssh(host, `cat ${shellQuote(remoteJson)}`, "copy back");
+	const json = await copyBack()
+		.catch(copyBack)
+		.catch((error: unknown) => {
+			const reason = error instanceof Error ? error.message : String(error);
+			throw new Error(`${reason}; result kept at ${host}:${remoteJson}`);
+		});
 	await ssh(host, `rm -rf ${shellQuote(remoteOut)}`, "cleanup").catch(() => "");
 	return JSON.parse(json) as CompareResult;
 }
@@ -222,11 +229,6 @@ export async function runOnHosts(input: {
 		...remoteHosts.map((host) => ({ hosts: [host], run: () => runHost(host) })),
 	];
 	const settled = await Promise.allSettled(tasks.map((task) => task.run()));
-	const results = settled.flatMap((entry, index) =>
-		entry.status === "fulfilled"
-			? (tasks[index]?.hosts ?? []).map((host) => ({ host, result: entry.value }))
-			: [],
-	);
 	const failures = settled.flatMap((entry, index) =>
 		entry.status === "rejected"
 			? [
@@ -238,6 +240,7 @@ export async function runOnHosts(input: {
 		.flatMap((entry) => (entry.status === "fulfilled" ? [renderReport(entry.value)] : []))
 		.join("\n---\n\n");
 	const markdownPath = options.jsonOnly ? null : join(options.out, "compare.md");
-	if (markdownPath && results.length > 0) writeFileSync(markdownPath, markdown);
-	return { results, failures, markdown, markdownPath, outDir: options.out };
+	if (markdownPath && settled.some((entry) => entry.status === "fulfilled"))
+		writeFileSync(markdownPath, markdown);
+	return { failures, markdown, markdownPath, outDir: options.out };
 }

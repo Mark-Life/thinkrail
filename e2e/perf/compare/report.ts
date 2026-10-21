@@ -4,8 +4,8 @@ const TIERS = [50, 20, 10, 5];
 const HEADER = "| Metric | Base | Head | Δ | 95% CI | Verdict |\n|---|---:|---:|---:|---:|---|";
 
 export function tier(deltaPct: number) {
+	if (!Number.isFinite(deltaPct)) return TIERS.length;
 	const size = Math.abs(deltaPct);
-	if (!Number.isFinite(deltaPct)) return deltaPct === 0 ? 0 : TIERS.length;
 	return TIERS.filter((limit) => size >= limit).length;
 }
 

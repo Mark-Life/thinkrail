@@ -39,8 +39,13 @@ interface SampleState {
 	env: Env;
 }
 
-function sampleState(context: SuiteContext, cache: Cache, extra: (shaDir: string) => Env) {
-	const stateDir = join(context.sampleDir, cache);
+function sampleState(
+	context: SuiteContext,
+	cache: Cache,
+	extra: (shaDir: string) => Env,
+	slot: string = cache,
+) {
+	const stateDir = join(context.sampleDir, slot);
 	const shaDir = join(context.options.out, "state", "startup", context.sha);
 	const env = hermeticEnv(stateDir, {
 		BUN_RUNTIME_TRANSPILER_CACHE_PATH: join(cache === "warm" ? shaDir : stateDir, "transpiler"),
@@ -124,7 +129,7 @@ async function sampleBinary(context: SuiteContext) {
 				value,
 			}),
 		);
-		const serve = sampleState(context, cache, stagingCache);
+		const serve = sampleState(context, cache, stagingCache, `${cache}-serve`);
 		const launch = { ...serve, command: [executable] };
 		rows.push(
 			...(await serveRows(launch, "binary", `startup/binary/${cache}`, `binary server (${cache})`)),

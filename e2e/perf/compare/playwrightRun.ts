@@ -5,6 +5,8 @@ import { runE2eProcess } from "../../processRunner";
 import { hermeticEnv } from "./env";
 import type { CompareOptions, Env, SuiteContext } from "./types";
 
+const PERF_E2E_LANE = "15";
+
 const PASSTHROUGH = [
 	"THINKRAIL_E2E_LANE",
 	"THINKRAIL_E2E_PORT_BASE",
@@ -14,7 +16,7 @@ const PASSTHROUGH = [
 function defaultBrowsersPath() {
 	if (process.platform === "darwin") return join(homedir(), "Library", "Caches", "ms-playwright");
 	if (process.platform === "win32") return join(homedir(), "AppData", "Local", "ms-playwright");
-	return join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "ms-playwright");
+	return join(homedir(), ".cache", "ms-playwright");
 }
 
 function passthrough(): Env {
@@ -43,6 +45,7 @@ export async function runPerfSpec(input: {
 	const { context } = input;
 	const env = hermeticEnv(join(context.sampleDir, "state"), {
 		PLAYWRIGHT_BROWSERS_PATH: defaultBrowsersPath(),
+		THINKRAIL_E2E_LANE: PERF_E2E_LANE,
 		...passthrough(),
 		THINKRAIL_E2E_SKIP_BUILD: "1",
 		THINKRAIL_PERF_APP_ROOT: context.appRoot,
