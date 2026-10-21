@@ -551,8 +551,8 @@ content's own height.
   per-language grammar loads and the colour→scope map. Its curated language catalog is shared with the chat
   highlighter and extended for the desktop file formats; missing Monaco language ids are registered with their
   file associations, then each catalog id gets a `registerTokensProviderFactory` entry. A swap loads the
-  highlighter theme under a fresh name and rebuilds the scope map from it, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
-  base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
+  highlighter theme under a fresh name and rebuilds the scope map from it, redefines Monaco, and selects
+  `EDITOR_THEME`. The normal/high-contrast base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
   colours outside the explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
   omitted so the selected base palette wins rather than crashing the panel. Pierre's one registered
   `thinkrail` CSS-variable Shiki theme emits variable references instead of catalog colours; inherited
@@ -560,3 +560,17 @@ content's own height.
   addition/deletion paint to feedback roles, so a theme swap needs no re-highlight. `TerminalInstance`
   similarly rebuilds from the complete 16-slot ANSI variable set. Monaco and xterm consume the nullable
   editor selection-foreground override when provided.
+- **Monaco loads one grammar per language and tokenizes on Oniguruma WASM.** Compiling all 35 catalog
+  grammars up front was a 210-250 ms main-thread task (about 870 ms at 4x CPU) before the first coloured
+  line, and the JS regex engine tokenized about 4.5x slower than Oniguruma (a 2,861-line TS file: about
+  1,715 ms against 380 ms). The factory's `create()` loads the grammar when Monaco first meets a model of
+  that language; the `languageForPath` probe model starts it before the editor mounts. Concurrent
+  requests share one load, a failed load answers plain text and the next request retries, and an unknown
+  id stays plain. A grammar's in-catalog `embeddedLangsLazy` (markdown fences) load after its first
+  colour, then the provider is re-registered so Monaco re-tokenizes. `create()` never throws, because
+  Monaco does not retry a rejected factory. Nothing suspends on the engine or a grammar: a Suspense
+  fallback is held for at least 300 ms. The engine falls back to the JS regex engine when WASM cannot load
+  (WebKit Lockdown Mode), and to plain text when neither engine builds. Shiki's `setTheme` is a no-op for
+  the name it last selected, so each swap loads the theme under a fresh name to get the new colour map.
+  Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and
+  `shiki/wasm` is a lazy 622 kB chunk; Pierre's newer Shiki ships its own copy.
