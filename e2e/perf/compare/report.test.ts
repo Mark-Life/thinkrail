@@ -59,7 +59,7 @@ test("formatValue scales bytes", () => {
 	expect(formatValue(3 * 1024 ** 2, "bytes")).toBe("3 MiB");
 });
 
-test("renderReport collapses unchanged rows and shows CI only for timed rows", () => {
+test("renderReport counts unchanged rows and shows CI only for timed rows", () => {
 	const markdown = renderReport(result());
 	expect(markdown).toContain("# perf:compare `main` (`aaaaaaaaaa`) → `bbbbbbbbbb`");
 	expect(markdown).toContain("protocol 87 → 88");
@@ -70,9 +70,8 @@ test("renderReport collapses unchanged rows and shows CI only for timed rows", (
 	expect(markdown).toMatch(
 		/\| boot \| 100\.3 ms \| 80 ms \| -20\.2% \| -2\d[.\d]*% … -1\d[.\d]*% \| ▮▮▮ better \|/,
 	);
-	expect(markdown).toContain("<details><summary>1 unchanged</summary>");
-	const collapsed = markdown.slice(markdown.indexOf("<details>"));
-	expect(collapsed).toContain("| same.js | 2 KiB | 2 KiB | 0 B (0%) | exact | same |");
+	expect(markdown).toContain("1 unchanged rows (see compare.json)");
+	expect(markdown).not.toContain("same.js");
 });
 
 test("renderReport survives a JSON round trip of infinite deltas", () => {

@@ -143,10 +143,9 @@ async function sample(context: SuiteContext): Promise<SampleResult> {
 	return { ok: true, measurements: waterfallMeasurements(record) };
 }
 
-export const waterfallSuite: Suite<"waterfall"> = {
+export const waterfallSuite: Suite = {
 	name: "waterfall",
 	artifacts: [profileWeb],
-	browser: true,
 	optIn: true,
 	schedule: (options) => ({ kind: "rounds", rounds: options.rounds ?? DEFAULT_ROUNDS }),
 	variants: () => [VARIANT],

@@ -10,7 +10,6 @@ export const HELP = `perf:compare: compare app performance between two commits
 Usage:
   bun run perf:compare <base> <head> [flags]
   bun run perf:compare prepare <ref...> [--suite ...] [--rebuild]
-  bun run perf:compare report <compare.json>
   bun run perf:compare clean (--all | <ref>)
 
 Flags:
@@ -28,18 +27,24 @@ Flags:
                        parallel (aliases of this machine run once). A remote host needs
                        a clean, pushed tool commit and base/head on origin; its result
                        lands in <out>/<host>/
-  --strict-protocol    abort browser suites when protocol versions differ
   --out DIR            output directory (default $TMPDIR/thinkrail-perf-compare/<time>)
   --rebuild            ignore build markers and rebuild artifacts
-  --json-only          write compare.json only, print no markdown
 
 Cache: ${cacheRoot()} (override with THINKRAIL_PERF_CACHE)`;
 
+const LOCAL_FLAGS = ["--host", "--out", "--all"];
+
 type Command =
 	| { kind: "help" }
-	| { kind: "run"; base: string; head: string; hosts: readonly string[]; options: CompareOptions }
+	| {
+			kind: "run";
+			base: string;
+			head: string;
+			hosts: readonly string[];
+			options: CompareOptions;
+			forward: readonly string[];
+	  }
 	| { kind: "prepare"; refs: string[]; options: CompareOptions }
-	| { kind: "report"; file: string }
 	| { kind: "clean"; target: { all: true } | { ref: string } };
 
 function list(value: string | undefined, flag: string) {
@@ -66,10 +71,8 @@ function defaultOptions(): CompareOptions {
 		threshold: 0,
 		cpu: 1,
 		browser: "chromium",
-		strictProtocol: false,
 		out: join(tmpdir(), "thinkrail-perf-compare", stamp),
 		rebuild: false,
-		jsonOnly: false,
 	};
 }
 
@@ -77,8 +80,10 @@ export function parseArgs(argv: readonly string[]): Command {
 	const options = defaultOptions();
 	const positional: string[] = [];
 	const hosts: string[] = [];
+	const forward: string[] = [];
 	let all = false;
 	for (let index = 0; index < argv.length; index += 1) {
+		const start = index;
 		const arg = argv[index] ?? "";
 		const next = () => argv[++index];
 		if (arg === "--help" || arg === "-h") return { kind: "help" };
@@ -102,27 +107,24 @@ export function parseArgs(argv: readonly string[]): Command {
 			options.browser = browser;
 		} else if (arg === "--host") {
 			hosts.push(parseHost(next()));
-		} else if (arg === "--strict-protocol") options.strictProtocol = true;
-		else if (arg === "--out") options.out = resolve(next() ?? "");
+		} else if (arg === "--out") options.out = resolve(next() ?? "");
 		else if (arg === "--rebuild") options.rebuild = true;
-		else if (arg === "--json-only") options.jsonOnly = true;
 		else if (arg === "--all") all = true;
 		else if (arg.startsWith("--")) throw new Error(`unknown flag ${arg}`);
 		else positional.push(arg);
+		if (arg.startsWith("--") && !LOCAL_FLAGS.includes(arg)) {
+			forward.push(...argv.slice(start, index + 1));
+		}
 	}
 	const [first, ...rest] = positional;
 	if (first === undefined) return { kind: "help" };
 	const remoteHosts = hosts.some((host) => host !== "local");
-	if (remoteHosts && ["prepare", "report", "clean"].includes(first)) {
+	if (remoteHosts && ["prepare", "clean"].includes(first)) {
 		throw new Error(`--host applies to compare runs only, not ${first}`);
 	}
 	if (first === "prepare") {
 		if (rest.length === 0) throw new Error("prepare needs at least one ref");
 		return { kind: "prepare", refs: rest, options };
-	}
-	if (first === "report") {
-		if (rest.length !== 1 || !rest[0]) throw new Error("report needs one compare.json path");
-		return { kind: "report", file: rest[0] };
 	}
 	if (first === "clean") {
 		if (all && rest.length === 0) return { kind: "clean", target: { all: true } };
@@ -136,5 +138,6 @@ export function parseArgs(argv: readonly string[]): Command {
 		head: rest[0],
 		hosts: hosts.length > 0 ? hosts : ["local"],
 		options,
+		forward,
 	};
 }

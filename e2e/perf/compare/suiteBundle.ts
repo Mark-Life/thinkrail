@@ -40,8 +40,14 @@ function exact(input: Pick<Measurement, "id" | "group" | "label" | "value" | "un
 	return { ...input, kind: "exact", better: "lower" };
 }
 
-function sizeRows(input: { id: string; group: string; label: string; sizes: Sizes }) {
-	return ENCODINGS.map((encoding) =>
+function sizeRows(input: {
+	id: string;
+	group: string;
+	label: string;
+	sizes: Sizes;
+	encodings?: readonly Encoding[];
+}) {
+	return (input.encodings ?? ENCODINGS).map((encoding) =>
 		exact({
 			id: `${input.id}/${encoding}`,
 			group: input.group,
@@ -99,6 +105,7 @@ export async function measureBundle(distDir: string): Promise<Measurement[]> {
 					group: "chunks",
 					label: id,
 					sizes: sizeOf([chunk.file]),
+					encodings: ["gzip"],
 				})
 			: [
 					exact({
@@ -115,6 +122,7 @@ export async function measureBundle(distDir: string): Promise<Measurement[]> {
 					group: "css",
 					label: `${id} css`,
 					sizes: sizeOf(chunk.css),
+					encodings: ["gzip"],
 				})
 			: [];
 		return [...own, ...css];
@@ -158,10 +166,9 @@ export async function measureBundle(distDir: string): Promise<Measurement[]> {
 	];
 }
 
-export const bundleSuite: Suite<"bundle"> = {
+export const bundleSuite: Suite = {
 	name: "bundle",
 	artifacts: [manifestWeb],
-	browser: false,
 	schedule: () => ({ kind: "once" }),
 	variants: () => ["web"],
 	async sample(context) {

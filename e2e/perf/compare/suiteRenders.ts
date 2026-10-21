@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ScenarioRun as RenderRun } from "../render.perf";
 import { EMPTY_COST, MARKDOWN_SUBTREE } from "../renderProfiler";
-import { DEFAULT_SCENARIOS, isScenarioName, KEY_COMPONENTS, SCENARIO_NAMES } from "../scenarios";
+import { DEFAULT_SCENARIOS, isScenarioName, KEY_COMPONENTS, parseScenarios } from "../scenarios";
 import { profileWeb } from "./artifacts";
 import { failureReason, runPerfSpec } from "./playwrightRun";
 import type { Measurement, SampleResult, Suite, SuiteContext } from "./types";
@@ -15,14 +15,7 @@ type ScenarioRun = Pick<RenderRun, "scenario" | "wallMs" | "mainThread" | "profi
 const trackedComponents = new Map<string, readonly string[]>();
 
 export function selectScenarios(selected: readonly string[] | null): readonly string[] {
-	if (!selected) return DEFAULT_SCENARIOS;
-	const unknown = selected.filter((name) => !isScenarioName(name));
-	if (unknown.length > 0) {
-		throw new Error(
-			`unknown scenario: ${unknown.join(", ")} (known: ${SCENARIO_NAMES.join(", ")})`,
-		);
-	}
-	return selected;
+	return selected ? parseScenarios(selected) : DEFAULT_SCENARIOS;
 }
 
 function timed(input: {
@@ -146,10 +139,9 @@ async function sample(context: SuiteContext, scenario: string): Promise<SampleRe
 	};
 }
 
-export const rendersSuite: Suite<"renders"> = {
+export const rendersSuite: Suite = {
 	name: "renders",
 	artifacts: [profileWeb],
-	browser: true,
 	schedule: (options) => ({ kind: "rounds", rounds: options.rounds ?? DEFAULT_ROUNDS }),
 	variants: (options) => selectScenarios(options.scenarios),
 	sample,

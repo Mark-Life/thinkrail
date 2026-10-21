@@ -38,10 +38,8 @@ export interface CompareOptions {
 	threshold: number;
 	cpu: number;
 	browser: "chromium" | "webkit";
-	strictProtocol: boolean;
 	out: string;
 	rebuild: boolean;
-	jsonOnly: boolean;
 }
 
 export interface SuiteContext {
@@ -53,10 +51,9 @@ export interface SuiteContext {
 	options: CompareOptions;
 }
 
-export interface Suite<Name extends string = string> {
-	name: Name;
+export interface Suite {
+	name: string;
 	artifacts: readonly Artifact[] | ((options: CompareOptions) => readonly Artifact[]);
-	browser: boolean;
 	optIn?: boolean;
 	schedule(options: CompareOptions): Schedule;
 	variants(options: CompareOptions): readonly string[];

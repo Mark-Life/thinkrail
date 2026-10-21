@@ -115,19 +115,11 @@ export function renderSuite(suite: SuiteResult) {
 	for (const group of groups) {
 		const metrics = suite.metrics.filter((metric) => metric.group === group);
 		const changed = ordered(metrics.filter((metric) => metric.verdict !== "same"));
-		const same = metrics.filter((metric) => metric.verdict === "same");
+		const same = metrics.length - changed.length;
 		lines.push("", `### ${group}`, "");
-		lines.push(changed.length > 0 ? table(changed) : "No changes.");
-		if (same.length > 0) {
-			lines.push(
-				"",
-				`<details><summary>${same.length} unchanged</summary>`,
-				"",
-				table(same),
-				"",
-				"</details>",
-			);
-		}
+		if (changed.length > 0) lines.push(table(changed));
+		if (changed.length > 0 && same > 0) lines.push("");
+		if (same > 0) lines.push(`${same} unchanged rows (see compare.json)`);
 	}
 	return lines.join("\n");
 }

@@ -3,14 +3,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	forwardArgs,
-	isLocalHost,
-	normalizeHost,
-	parseHost,
-	requiredBrowsers,
-	shellQuote,
-} from "./remote";
+import { isLocalHost, normalizeHost, parseHost, requiredBrowsers, shellQuote } from "./remote";
 import type { CompareOptions } from "./types";
 
 const OPTIONS: CompareOptions = {
@@ -23,10 +16,8 @@ const OPTIONS: CompareOptions = {
 	threshold: 0,
 	cpu: 1,
 	browser: "chromium",
-	strictProtocol: false,
 	out: "/tmp/out",
 	rebuild: false,
-	jsonOnly: false,
 };
 
 test("shellQuote survives a real shell", () => {
@@ -49,40 +40,6 @@ test("isLocalHost matches the alias, its ssh hostname, or local", () => {
 	expect(isLocalHost({ host: "a", localName, sshHostname: "box-a" })).toBe(true);
 	expect(isLocalHost({ host: "box-b", localName, sshHostname: "box-b" })).toBe(false);
 	expect(isLocalHost({ host: "box-b", localName: "box-b", sshHostname: "box-b" })).toBe(true);
-});
-
-test("forwardArgs carries every measurement option and nothing host-specific", () => {
-	const args = forwardArgs({
-		...OPTIONS,
-		scenarios: ["chat-streaming"],
-		rounds: 2,
-		strictProtocol: true,
-		rebuild: true,
-		jsonOnly: true,
-	});
-	expect(args).toEqual([
-		"--suite",
-		"bundle,startup",
-		"--scenario",
-		"chat-streaming",
-		"--rounds",
-		"2",
-		"--startup",
-		"cli,server",
-		"--min-runs",
-		"10",
-		"--max-minutes",
-		"3",
-		"--threshold",
-		"0",
-		"--cpu",
-		"1",
-		"--browser",
-		"chromium",
-		"--strict-protocol",
-		"--rebuild",
-	]);
-	expect(forwardArgs(OPTIONS)).not.toContain("--rounds");
 });
 
 test("requiredBrowsers follows the browser suites", () => {

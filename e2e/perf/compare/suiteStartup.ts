@@ -172,7 +172,7 @@ const SAMPLERS: Record<StartupKind, (context: SuiteContext) => Promise<Measureme
 	desktop: sampleDesktop,
 };
 
-export const startupSuite: Suite<"startup"> = {
+export const startupSuite: Suite = {
 	name: "startup",
 	artifacts: (options) => {
 		const kinds = startupKinds(options);
@@ -181,7 +181,6 @@ export const startupSuite: Suite<"startup"> = {
 			...(kinds.includes("desktop") ? [desktop] : []),
 		];
 	},
-	browser: false,
 	schedule: (options) => ({
 		kind: "auto",
 		minRuns: options.minRuns,

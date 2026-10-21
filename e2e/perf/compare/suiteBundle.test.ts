@@ -81,7 +81,7 @@ test("initial files follow static imports from entries only", () => {
 	});
 });
 
-test("measureBundle reports raw, gzip and brotli sizes per chunk and totals", async () => {
+test("measureBundle reports raw, gzip and brotli totals and gzip per chunk", async () => {
 	const byId = new Map((await measureBundle(baseDist)).map((m) => [m.id, m]));
 	expect(byId.get("bundle/initial-js/raw")?.value).toBe(2000);
 	expect(byId.get("bundle/initial-css/raw")?.value).toBe(1000);
@@ -90,17 +90,18 @@ test("measureBundle reports raw, gzip and brotli sizes per chunk and totals", as
 	expect(byId.get("bundle/dist")?.value).toBe(10000 + "<!doctype html>".length);
 	expect(byId.get("bundle/files")).toMatchObject({ value: 10, unit: "count" });
 	expect(byId.get("bundle/js-chunks")?.value).toBe(8);
-	expect(byId.get("bundle/css/index.html/raw")?.value).toBe(1000);
+	expect(byId.get("bundle/initial-js/brotli")?.value).toBeGreaterThan(0);
+	expect(byId.get("bundle/css/index.html/gzip")?.value).toBeGreaterThan(0);
+	expect(byId.has("bundle/chunk/_dist.js/raw")).toBe(false);
+	expect(byId.has("bundle/chunk/_dist.js/brotli")).toBe(false);
 	expect(
 		byId.get(
 			"bundle/asset/node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2",
 		)?.value,
 	).toBe(1000);
 	const gzip = byId.get("bundle/chunk/_dist.js/gzip")?.value ?? 0;
-	const brotli = byId.get("bundle/chunk/_dist.js/brotli")?.value ?? 0;
 	expect(gzip).toBeGreaterThan(0);
 	expect(gzip).toBeLessThan(100);
-	expect(brotli).toBeGreaterThan(0);
 	expect([...byId.values()].every((m) => m.kind === "exact")).toBe(true);
 });
 
@@ -111,11 +112,15 @@ test("a base/head compare shows added, removed and changed chunks with exact del
 		threshold: 0,
 	});
 	const byId = new Map(metrics.map((m) => [m.id, m]));
-	const chapel = byId.get("bundle/chunk/node_modules/@shikijs/langs/dist/chapel.mjs/raw");
-	expect(chapel).toMatchObject({ deltaPct: 50, verdict: "worse" });
-	expect(byId.get("bundle/chunk/src/panels/PlanPane.tsx/raw")?.head.n).toBe(0);
-	expect(byId.get("bundle/chunk/src/panels/FilesPane.tsx/raw")?.base.n).toBe(0);
-	expect(byId.get("bundle/chunk/_c.js (from index.html)/raw")?.verdict).toBe("same");
+	const chapel = byId.get("bundle/chunk/node_modules/@shikijs/langs/dist/chapel.mjs/gzip");
+	expect(chapel).toMatchObject({ verdict: "worse" });
+	expect(byId.get("bundle/total/js/raw")).toMatchObject({
+		deltaPct: (500 / 8000) * 100,
+		verdict: "worse",
+	});
+	expect(byId.get("bundle/chunk/src/panels/PlanPane.tsx/gzip")?.head.n).toBe(0);
+	expect(byId.get("bundle/chunk/src/panels/FilesPane.tsx/gzip")?.base.n).toBe(0);
+	expect(byId.get("bundle/chunk/_c.js (from index.html)/gzip")?.verdict).toBe("same");
 	const markdown = renderSuite({
 		name: "bundle",
 		schedule: { kind: "once" },
@@ -124,10 +129,14 @@ test("a base/head compare shows added, removed and changed chunks with exact del
 		loadavg: [],
 	});
 	expect(markdown).toContain(
-		"| node_modules/@shikijs/langs/dist/chapel.mjs (raw) | 1000 B | 1.5 KiB | +500 B (+50%) | exact | ▮▮▮▮ worse |",
+		"| total js (raw) | 7.8 KiB | 8.3 KiB | +500 B (+6.3%) | exact | ▮ worse |",
 	);
-	expect(markdown).toContain("| src/panels/PlanPane.tsx (raw) | 1000 B | – | removed |");
-	expect(markdown).toContain("| src/panels/FilesPane.tsx (raw) | – | 1000 B | new |");
+	expect(markdown).toMatch(
+		/\| node_modules\/@shikijs\/langs\/dist\/chapel\.mjs \(gzip\) \| \d+ B \| \d+ B \| \+\d+ B/,
+	);
+	expect(markdown).toMatch(/\| src\/panels\/PlanPane\.tsx \(gzip\) \| \d+ B \| – \| removed \|/);
+	expect(markdown).toMatch(/\| src\/panels\/FilesPane\.tsx \(gzip\) \| – \| \d+ B \| new \|/);
+	expect(markdown).toMatch(/\d+ unchanged rows \(see compare\.json\)/);
 });
 
 test("measureBundle fails without a manifest", async () => {
