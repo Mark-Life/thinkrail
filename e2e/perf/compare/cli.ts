@@ -5,7 +5,7 @@ import { E2E_ROOT_DIR, processRunnerInterruption, signalExitCode } from "../../p
 import { cacheRoot, cleanAll, cleanSha, resolveSha } from "./checkout";
 import { prepareRefs, runCompare } from "./compare";
 import { renderReport } from "./report";
-import { SUITE_NAMES } from "./suites";
+import { DEFAULT_SUITE_NAMES, SUITE_NAMES } from "./suites";
 import type { CompareOptions, CompareResult } from "./types";
 
 const HELP = `perf:compare: compare app performance between two commits
@@ -17,15 +17,16 @@ Usage:
   bun run perf:compare clean (--all | <ref>)
 
 Flags:
-  --suite a,b          suites to run (known: ${SUITE_NAMES.join(", ")}; default all)
+  --suite a,b          suites to run (known: ${SUITE_NAMES.join(", ")};
+                       default ${DEFAULT_SUITE_NAMES.join(", ")})
   --scenario a,b       scenarios for browser suites
-  --rounds N           fixed rounds for round-based suites
+  --rounds N           fixed rounds (renders 5, waterfall 7)
   --startup a,b        startup variants (cli, server, binary, desktop)
   --min-runs N         auto-stop minimum runs per side (default 10)
   --max-minutes N      auto-stop time cap (default 3)
   --threshold P        percent change treated as noise (default 0)
   --cpu N              CPU throttling rate for browser suites (default 1)
-  --browser NAME       chromium (default) or webkit
+  --browser NAME       chromium (default) or webkit (waterfall only; renders stay chromium)
   --host local         where to run (only local is supported)
   --strict-protocol    abort browser suites when protocol versions differ
   --out DIR            output directory (default $TMPDIR/thinkrail-perf-compare/<time>)
@@ -56,7 +57,7 @@ function number(value: string | undefined, flag: string, min: number) {
 function defaultOptions(): CompareOptions {
 	const stamp = new Date().toISOString().replaceAll(":", "-").replace(/\..+$/, "");
 	return {
-		suites: SUITE_NAMES,
+		suites: DEFAULT_SUITE_NAMES,
 		scenarios: null,
 		rounds: null,
 		startup: ["cli", "server"],

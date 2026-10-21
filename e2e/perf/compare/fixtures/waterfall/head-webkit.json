@@ -1,0 +1,16 @@
+{
+	"browser": "webkit",
+	"wire": {
+		"watchReadyReplyMs": 383.970417,
+		"getMessagesSentMs": 347.5699999999997,
+		"getMessagesReplyMs": 384.5967499999997
+	},
+	"chatViewChunkMs": 384.6882089999999,
+	"page": {
+		"layoutShiftSupported": false,
+		"typeableAt": 703,
+		"transcriptAt": 744,
+		"shifts": [],
+		"movementPx": { "chat-input": 0, "chat-scroll": 0, "chat-row": 0 }
+	}
+}

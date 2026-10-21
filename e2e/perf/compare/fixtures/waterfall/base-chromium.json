@@ -1,0 +1,41 @@
+{
+	"browser": "chromium",
+	"wire": {
+		"watchReadyReplyMs": 279.4714170000002,
+		"getMessagesSentMs": 279.4792080000002,
+		"getMessagesReplyMs": 286.11041699999987
+	},
+	"chatViewChunkMs": 305.33100000000013,
+	"page": {
+		"layoutShiftSupported": true,
+		"typeableAt": 588.7,
+		"transcriptAt": 622,
+		"shifts": [
+			{
+				"at": 72.5,
+				"value": 0.009095343695746527,
+				"hadRecentInput": false,
+				"regions": ["other", "topbar"]
+			},
+			{
+				"at": 291.30000000074506,
+				"value": 0.0007158033582899305,
+				"hadRecentInput": false,
+				"regions": ["workbench"]
+			},
+			{
+				"at": 612.1000000014901,
+				"value": 0.026475694444444444,
+				"hadRecentInput": false,
+				"regions": ["chat-scroll"]
+			},
+			{
+				"at": 624.7000000029802,
+				"value": 0.000007884979248046874,
+				"hadRecentInput": false,
+				"regions": ["chat-toolbar"]
+			}
+		],
+		"movementPx": { "chat-input": 0, "chat-scroll": 0, "chat-row": 0 }
+	}
+}

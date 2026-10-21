@@ -52,6 +52,9 @@ export function relativeDifferenceCi(
 	if (base.length < 2 || head.length < 2) return null;
 	const baseMean = mean(base);
 	const headMean = mean(head);
+	if (baseMean === 0 && headMean === 0 && variance(base) === 0 && variance(head) === 0) {
+		return { low: 0, high: 0 };
+	}
 	if (baseMean === 0 || headMean === 0) return null;
 	const ratio = headMean / baseMean;
 	const headTerm = variance(head) / (head.length * headMean ** 2);
@@ -61,6 +64,18 @@ export function relativeDifferenceCi(
 	const df = total ** 2 / (headTerm ** 2 / (head.length - 1) + baseTerm ** 2 / (base.length - 1));
 	const margin = tCritical95(df) * ratio * Math.sqrt(total);
 	return { low: (ratio - margin - 1) * 100, high: (ratio + margin - 1) * 100 };
+}
+
+export function differenceCi(base: readonly number[], head: readonly number[]): Interval | null {
+	if (base.length < 2 || head.length < 2) return null;
+	const difference = mean(head) - mean(base);
+	const headTerm = variance(head) / head.length;
+	const baseTerm = variance(base) / base.length;
+	const total = headTerm + baseTerm;
+	if (total === 0) return { low: difference, high: difference };
+	const df = total ** 2 / (headTerm ** 2 / (head.length - 1) + baseTerm ** 2 / (base.length - 1));
+	const margin = tCritical95(df) * Math.sqrt(total);
+	return { low: difference - margin, high: difference + margin };
 }
 
 export function relativeDelta(base: number, head: number): number {
@@ -110,6 +125,11 @@ export function summarizeMetric(input: {
 		const deltaPct = relativeDelta(base.median, head.median);
 		const verdict = exactVerdict({ deltaPct, better: meta.better, threshold: input.threshold });
 		return { ...meta, base, head, deltaPct, ci: null, verdict };
+	}
+	if (meta.kind === "offset") {
+		const ci = differenceCi(base.values, head.values);
+		const verdict = timedVerdict({ ci, better: meta.better, threshold: 0 });
+		return { ...meta, base, head, deltaPct: 0, ci, verdict };
 	}
 	const ci = relativeDifferenceCi(base.values, head.values);
 	const deltaPct = relativeDelta(base.mean, head.mean);

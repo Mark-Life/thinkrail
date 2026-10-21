@@ -7,7 +7,7 @@ export interface Measurement {
 	group: string;
 	label: string;
 	unit: "ms" | "bytes" | "count" | "score" | "px";
-	kind: "exact" | "timed";
+	kind: "exact" | "timed" | "offset";
 	better: "lower" | "higher";
 	value: number;
 }
@@ -58,6 +58,7 @@ export interface Suite<Name extends string = string> {
 	name: Name;
 	artifacts: readonly Artifact[] | ((options: CompareOptions) => readonly Artifact[]);
 	browser: boolean;
+	optIn?: boolean;
 	schedule(options: CompareOptions): Schedule;
 	variants(options: CompareOptions): readonly string[];
 	sample(context: SuiteContext, variant: string): Promise<SampleResult>;

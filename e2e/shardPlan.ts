@@ -27,7 +27,7 @@ export function parseRunnerArgs(args: readonly string[]): RunnerArgs {
 	};
 
 	for (let index = 0; index < args.length; index += 1) {
-		const arg = args[index];
+		const arg = args[index] ?? "";
 		if (arg === "--serial") {
 			setOverride(1, "--serial");
 			continue;

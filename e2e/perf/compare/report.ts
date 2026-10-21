@@ -31,6 +31,10 @@ export function formatPct(value: number | null) {
 	return `${sign}${trim(value, Math.abs(value) < 1 ? 2 : 1)}%`;
 }
 
+function signed(value: number, unit: MetricSummary["unit"]) {
+	return `${value > 0 ? "+" : ""}${formatValue(value, unit)}`;
+}
+
 function sideValue(metric: MetricSummary, side: "base" | "head") {
 	const stats = metric[side];
 	if (stats.n === 0) return "–";
@@ -41,6 +45,7 @@ function delta(metric: MetricSummary) {
 	if (metric.base.n === 0) return "new";
 	if (metric.head.n === 0) return "removed";
 	if (metric.kind === "timed") return formatPct(metric.deltaPct);
+	if (metric.kind === "offset") return signed(metric.head.mean - metric.base.mean, metric.unit);
 	const absolute = formatValue(metric.head.median - metric.base.median, metric.unit);
 	const sign = metric.head.median > metric.base.median ? "+" : "";
 	return `${sign}${absolute} (${formatPct(metric.deltaPct)})`;
@@ -49,6 +54,9 @@ function delta(metric: MetricSummary) {
 function ci(metric: MetricSummary) {
 	if (metric.kind === "exact") return "exact";
 	if (!metric.ci) return "n<2";
+	if (metric.kind === "offset") {
+		return `${signed(metric.ci.low, metric.unit)} … ${signed(metric.ci.high, metric.unit)}`;
+	}
 	return `${formatPct(metric.ci.low)} … ${formatPct(metric.ci.high)}`;
 }
 
