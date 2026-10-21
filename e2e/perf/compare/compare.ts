@@ -15,9 +15,15 @@ export function selectSuites(names: readonly string[]): readonly Suite[] {
 	return SUITES.filter((suite) => names.includes(suite.name));
 }
 
-export function selectArtifacts(suites: readonly Suite[], platform = process.platform) {
+export function selectArtifacts(
+	suites: readonly Suite[],
+	options: CompareOptions,
+	platform = process.platform,
+) {
 	const byKey = new Map<Artifact["key"], Artifact>();
-	for (const artifact of suites.flatMap((suite) => suite.artifacts)) {
+	const declared = (suite: Suite) =>
+		typeof suite.artifacts === "function" ? suite.artifacts(options) : suite.artifacts;
+	for (const artifact of suites.flatMap(declared)) {
 		if (artifact.platforms && !artifact.platforms.includes(platform)) continue;
 		byKey.set(artifact.key, artifact);
 	}
@@ -34,9 +40,9 @@ export function readProtocolVersion(appRoot: string) {
 export async function prepareRefs(input: {
 	toolRoot: string;
 	refs: readonly string[];
-	options: Pick<CompareOptions, "suites" | "rebuild">;
+	options: CompareOptions;
 }) {
-	const artifacts = selectArtifacts(selectSuites(input.options.suites));
+	const artifacts = selectArtifacts(selectSuites(input.options.suites), input.options);
 	const prepared: { ref: string; sha: Sha; appRoot: string }[] = [];
 	for (const ref of input.refs) {
 		const sha = resolveSha(input.toolRoot, ref);
