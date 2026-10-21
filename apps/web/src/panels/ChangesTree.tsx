@@ -50,7 +50,9 @@ function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTre
 							dataViewed={isViewed(node.path)}
 							label={node.name}
 							labelClassName={`${statusNameClass(node.status)} ${isViewed(node.path) ? "opacity-60" : ""}`}
-							onClick={() => onOpen(node.path, "preview")}
+							onClick={(event) => {
+								if (event.detail <= 1) onOpen(node.path, "preview");
+							}}
 							onDoubleClick={() => onOpen(node.path, "keep", true)}
 							trailing={
 								<>

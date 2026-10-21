@@ -250,7 +250,9 @@ export function ChangesPanel({
 												data-status={change.status}
 												data-active={isActive(change.path) ? true : undefined}
 												data-viewed={isViewed(change.path) ? true : undefined}
-												onClick={() => openDiff(change.path, "preview")}
+												onClick={(event) => {
+													if (event.detail <= 1) openDiff(change.path, "preview");
+												}}
 												onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
 												title={change.path}
 												className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui"

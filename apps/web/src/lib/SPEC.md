@@ -49,8 +49,9 @@ not this module; the theme-aware highlighter remains app-local.
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
   **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
-  commit something a double click contradicts: the tab strip's touch-path keep and the Changes review-tab
-  preview), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
+  commit something a double click contradicts: a single click (or keyboard activation) on the already
+  active preview tab keeps it after the 250 ms settle window, so a double click is not read as two keeps;
+  and the Changes review-tab preview), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
   `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
   (the text helpers here take the caller's translator first, so render output follows a language change),
   and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
