@@ -47,9 +47,10 @@ export function createCoalescer(options: CoalescerOptions): Coalescer {
 				skillChange = eventSkillChange;
 			}
 			if (path === null) truncated = true;
-			else if (pending.has(path)) {
-			} else if (pending.size >= maxPaths) truncated = true;
-			else pending.add(path);
+			else if (!pending.has(path)) {
+				if (pending.size >= maxPaths) truncated = true;
+				else pending.add(path);
+			}
 			if (quietTimer) clearTimeout(quietTimer);
 			quietTimer = setTimeout(flush, quietMs);
 			if (!maxTimer) maxTimer = setTimeout(flush, maxWaitMs);

@@ -55,8 +55,7 @@ export function messagesToRuntime(
 				turns.push({ kind: "user", id: turnId, message });
 			}
 		} else if (message.role === "assistant") {
-			if (isRetriedAttempt(messages, index)) {
-			} else {
+			if (!isRetriedAttempt(messages, index)) {
 				turnId = transcriptTurnId(message, index, options);
 				turns.push({ kind: "assistant", id: turnId, message, streaming: false });
 			}
