@@ -10,7 +10,7 @@
 	},
 	"scripts": {
 		"test": "bun test",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsrs --noEmit"
 	},
 	"dependencies": {
 		"@thinkrail/contracts": "workspace:*"
@@ -31,6 +31,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }

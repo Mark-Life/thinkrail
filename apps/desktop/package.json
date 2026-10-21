@@ -8,7 +8,7 @@
 		"dev": "electrobun dev",
 		"package:canary": "electrobun build --env=canary",
 		"package:stable": "electrobun build --env=stable",
-		"typecheck": "electrobun prepare && tsc --noEmit",
+		"typecheck": "electrobun prepare && tsrs --noEmit",
 		"test": "bun test",
 		"generate-icons": "bun scripts/generate-icons.ts"
 	},
@@ -23,6 +23,7 @@
 		"electrobun": "2.0.1",
 		"pe-library": "2.0.1",
 		"resedit": "3.1.0",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }
