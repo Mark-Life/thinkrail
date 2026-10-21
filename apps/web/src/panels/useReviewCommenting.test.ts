@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { commentKindForDraft, draftNeedsRichAnchors } from "./useReviewCommenting";
+import { commentKindForDraft, draftNeedsRichAnchors, reviewFocusId } from "./useReviewCommenting";
 
 test("only region and structural selectors need the rich-anchor host capability", () => {
 	expect(
@@ -40,4 +40,12 @@ test("a positioned draft keeps its surface kind and a bare draft is a file comme
 			label: "region",
 		}),
 	).toBe("diff");
+});
+
+test("a surface-targeted focus is left for that surface, not a mounted sibling", () => {
+	const toFile = { workspaceId: "w1", commentId: "c1", surface: "inline" as const };
+	expect(reviewFocusId(toFile, "w1", "inline")).toBe("c1");
+	expect(reviewFocusId(toFile, "w1", "diff")).toBeNull();
+	expect(reviewFocusId({ workspaceId: "w1", commentId: "c1" }, "w1", "diff")).toBe("c1");
+	expect(reviewFocusId(toFile, "w2", "inline")).toBeNull();
 });

@@ -965,6 +965,7 @@ test("opening a comment far outside the virtualized window scrolls its card into
 		await reviewSection.getByTestId("review-file-row").click();
 	}
 	await reviewSection.getByTestId("review-comment-open").first().click();
-	await expect(card).toBeInViewport();
-	await expect(card).toContainText("Far-off remark.");
+	const fileCard = page.getByRole("tabpanel").getByTestId("review-thread-card");
+	await expect(fileCard).toBeInViewport();
+	await expect(fileCard).toContainText("Far-off remark.");
 });

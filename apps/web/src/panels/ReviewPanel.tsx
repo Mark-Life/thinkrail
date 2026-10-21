@@ -70,8 +70,11 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	const navigateTo = (comment: ReviewComment) => {
 		const path = comment.anchor?.path;
 		if (!path) return;
-		useAppStore.getState().requestReviewFocus(workspaceId, comment.id);
-		openSurface(path, commentSurface(comment));
+		const surface = commentSurface(comment);
+		useAppStore
+			.getState()
+			.requestReviewFocus(workspaceId, comment.id, surface.kind === "file" ? "inline" : "diff");
+		openSurface(path, surface);
 	};
 
 	const sendOne = async (comment: ReviewComment) => {

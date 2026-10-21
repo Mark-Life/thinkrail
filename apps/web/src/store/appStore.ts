@@ -1008,7 +1008,11 @@ interface AppState {
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
-	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
+	reviewFocusRequest: {
+		workspaceId: string;
+		commentId: string;
+		surface?: "inline" | "diff";
+	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;
@@ -1351,7 +1355,11 @@ interface AppState {
 	clearSpecRequest: () => void;
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
-	requestReviewFocus: (workspaceId: string, commentId: string) => void;
+	requestReviewFocus: (
+		workspaceId: string,
+		commentId: string,
+		surface?: NonNullable<AppState["reviewFocusRequest"]>["surface"],
+	) => void;
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
@@ -4356,11 +4364,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
 		),
-	requestReviewFocus: (workspaceId, commentId) =>
+	requestReviewFocus: (workspaceId, commentId, surface) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
 				? {}
-				: { reviewFocusRequest: { workspaceId, commentId } },
+				: { reviewFocusRequest: { workspaceId, commentId, ...(surface ? { surface } : {}) } },
 		),
 	clearReviewFocus: (commentId) =>
 		set((state) =>

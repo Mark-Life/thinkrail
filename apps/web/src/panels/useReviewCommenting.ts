@@ -32,8 +32,7 @@ export function useFileReview(
 		useMemo(() => fileThreads(comments, path, "base"), [comments, path]),
 	);
 	const focusRequest = useAppStore((state) => state.reviewFocusRequest);
-	const focusId =
-		focusRequest && focusRequest.workspaceId === workspaceId ? focusRequest.commentId : null;
+	const focusId = reviewFocusId(focusRequest, workspaceId, kind);
 	const worktreeFocus = useMemo(
 		() => resolveFocus(worktreeThreads, focusId),
 		[worktreeThreads, focusId],
@@ -109,6 +108,15 @@ function useStableThreads(threads: ReviewThread[]): ReviewThread[] {
 	if (stable === threads || sameThreads(stable, threads)) return stable;
 	setStable(threads);
 	return threads;
+}
+
+export function reviewFocusId(
+	request: ReturnType<typeof useAppStore.getState>["reviewFocusRequest"],
+	workspaceId: string,
+	kind: "inline" | "diff",
+): string | null {
+	if (!request || request.workspaceId !== workspaceId) return null;
+	return !request.surface || request.surface === kind ? request.commentId : null;
 }
 
 function resolveFocus(
