@@ -110,7 +110,7 @@ identical for both sides and only the app under test differs.
 - **Public surface (barrel):** `runCompare`, `renderReport`, `SUITES`, `type Artifact`,
   `type CompareOptions`, `type CompareResult`, `type Measurement`, `type MetricSummary`,
   `type SampleResult`, `type Schedule`, `type Side`, `type Sha`, `type Suite`, `type SuiteContext`
-- **Entrypoint:** `cli.ts` backs `perf:compare`; commands `run` (implicit), `prepare`, `report`, `clean`.
+- **Entrypoint:** `cli.ts` backs `perf:compare` (flags parsed in `args.ts`); commands `run` (implicit), `prepare`, `report`, `clean`.
   `bootstrap.sh` is the remote-host setup script that `remote.ts` sends over ssh.
 - **Allowed:** `../renderProfiler`, `../scenarios`, `../chatReplay`, `../../processRunner`,
   `../../fixtures/*`,
