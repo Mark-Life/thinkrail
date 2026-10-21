@@ -15,7 +15,7 @@ export function selectSuites(names: readonly string[]): readonly Suite[] {
 	return SUITES.filter((suite) => names.includes(suite.name));
 }
 
-export function selectArtifacts(
+function selectArtifacts(
 	suites: readonly Suite[],
 	options: CompareOptions,
 	platform = process.platform,
@@ -30,7 +30,7 @@ export function selectArtifacts(
 	return [...byKey.values()];
 }
 
-export function readProtocolVersion(appRoot: string) {
+function readProtocolVersion(appRoot: string) {
 	const file = join(appRoot, PROTOCOL_FILE);
 	if (!existsSync(file)) return null;
 	const match = /export const PROTOCOL_VERSION = (\d+);/.exec(readFileSync(file, "utf8"));
@@ -103,6 +103,7 @@ export async function runCompare(input: {
 			metrics: summarizeMetrics({ ...run.samples, threshold: options.threshold }),
 			loadavg: run.loadavg,
 		});
+		warnings.push(...run.warnings);
 	}
 	const hermetic = hermeticWarning(stamp);
 	const busy = results.filter((suite) => suite.loadavg.some((load) => load.load1 > load.cores));

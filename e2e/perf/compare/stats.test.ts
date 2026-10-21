@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { median, spreadPct } from "../stats";
 import {
 	differenceCi,
 	exactVerdict,
-	median,
 	relativeDifferenceCi,
-	spreadPct,
+	settled,
 	summarizeMetrics,
 	tCritical95,
 	timedVerdict,
@@ -105,4 +105,19 @@ test("summarizeMetrics keeps metrics seen on one side only", () => {
 		["a", 4, 4, "worse"],
 		["b", 0, 1, "unsure"],
 	]);
+});
+
+test("auto settles a timed metric on a decided verdict or a narrow interval", () => {
+	const summarize = (head: number[]) =>
+		summarizeMetrics({
+			base: [100, 101, 99, 100, 101, 99].map((value) => timed("t", value)),
+			head: head.map((value) => timed("t", value)),
+			threshold: 0,
+		})[0];
+	const unchanged = summarize([100, 99, 101, 100, 99, 101]);
+	expect(unchanged?.verdict).toBe("unsure");
+	expect(unchanged && settled(unchanged, 2)).toBe(true);
+	const noisy = summarize([60, 140, 90, 110, 70, 130]);
+	expect(noisy?.verdict).toBe("unsure");
+	expect(noisy && settled(noisy, 2)).toBe(false);
 });

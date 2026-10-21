@@ -1,3 +1,4 @@
+import { median, spreadPct } from "../stats";
 import type { Interval, Measurement, MetricSummary, SampleStats, Verdict } from "./types";
 
 const T_95 = [
@@ -5,14 +6,6 @@ const T_95 = [
 	2.131, 2.12, 2.11, 2.101, 2.093, 2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048,
 	2.045, 2.042,
 ];
-
-export function median(values: readonly number[]): number {
-	const sorted = [...values].sort((a, b) => a - b);
-	const middle = Math.floor(sorted.length / 2);
-	return sorted.length % 2 === 1
-		? (sorted[middle] ?? 0)
-		: ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
-}
 
 export function mean(values: readonly number[]): number {
 	return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -24,18 +17,12 @@ export function variance(values: readonly number[]): number {
 	return values.reduce((sum, value) => sum + (value - center) ** 2, 0) / (values.length - 1);
 }
 
-export function spreadPct(values: readonly number[]): number {
-	const middle = median(values);
-	if (values.length === 0 || middle === 0) return 0;
-	return ((Math.max(...values) - Math.min(...values)) / middle) * 100;
-}
-
 export function tCritical95(df: number): number {
 	if (!Number.isFinite(df) || df > T_95.length) return 1.96;
 	return T_95[Math.max(1, Math.floor(df)) - 1] ?? 1.96;
 }
 
-export function sampleStats(values: readonly number[]): SampleStats {
+function sampleStats(values: readonly number[]): SampleStats {
 	return {
 		n: values.length,
 		median: median(values),
@@ -78,7 +65,7 @@ export function differenceCi(base: readonly number[], head: readonly number[]): 
 	return { low: difference - margin, high: difference + margin };
 }
 
-export function relativeDelta(base: number, head: number): number {
+function relativeDelta(base: number, head: number): number {
 	if (base === head) return 0;
 	if (base === 0) return head > 0 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
 	return (head / base - 1) * 100;
@@ -111,7 +98,7 @@ export function timedVerdict(input: {
 	return "unsure";
 }
 
-export function summarizeMetric(input: {
+function summarizeMetric(input: {
 	base: readonly Measurement[];
 	head: readonly Measurement[];
 	threshold: number;
@@ -133,7 +120,14 @@ export function summarizeMetric(input: {
 	}
 	const ci = relativeDifferenceCi(base.values, head.values);
 	const deltaPct = relativeDelta(base.mean, head.mean);
-	const verdict = timedVerdict({ ci, better: meta.better, threshold: input.threshold });
+	const zeroSide = ci === null && base.n >= 2 && head.n >= 2;
+	const verdict = zeroSide
+		? timedVerdict({
+				ci: differenceCi(base.values, head.values),
+				better: meta.better,
+				threshold: 0,
+			})
+		: timedVerdict({ ci, better: meta.better, threshold: input.threshold });
 	return { ...meta, base, head, deltaPct, ci, verdict };
 }
 
@@ -151,4 +145,13 @@ export function summarizeMetrics(input: {
 		});
 		return summary ? [summary] : [];
 	});
+}
+
+export function settled(metric: MetricSummary, precisionPct: number) {
+	if (metric.kind === "exact" || metric.verdict !== "unsure") return true;
+	return (
+		metric.kind === "timed" &&
+		metric.ci !== null &&
+		(metric.ci.high - metric.ci.low) / 2 <= precisionPct
+	);
 }

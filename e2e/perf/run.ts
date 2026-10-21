@@ -10,8 +10,9 @@ import {
 	signalExitCode,
 } from "../processRunner";
 import type { ScenarioRun } from "./render.perf";
-import { type ComponentCost, MARKDOWN_SUBTREE } from "./renderProfiler";
+import { EMPTY_COST, MARKDOWN_SUBTREE } from "./renderProfiler";
 import { isScenarioName, SCENARIO_NAMES } from "./scenarios";
+import { median, spreadPct } from "./stats";
 
 const bun = process.execPath;
 const DEFAULT_RUNS = 5;
@@ -58,31 +59,9 @@ function parseArgs(argv: string[]): RunnerArgs {
 	return { runs, out, cpu, scenarios, playwrightArgs };
 }
 
-function median(values: number[]): number {
-	const sorted = [...values].sort((a, b) => a - b);
-	const middle = Math.floor(sorted.length / 2);
-	return sorted.length % 2 === 1
-		? (sorted[middle] ?? 0)
-		: ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
-}
-
 function round(value: number): number {
 	return Math.round(value * 100) / 100;
 }
-
-function spreadPct(values: number[]): number {
-	const middle = median(values);
-	return middle === 0 ? 0 : round(((Math.max(...values) - Math.min(...values)) / middle) * 100);
-}
-
-const EMPTY_COST: ComponentCost = {
-	commits: 0,
-	renders: 0,
-	selfTotalMs: 0,
-	selfMaxMs: 0,
-	inclusiveTotalMs: 0,
-	inclusiveMaxMs: 0,
-};
 
 function markdownCost(run: ScenarioRun) {
 	const tree = run.profile.subtrees[MARKDOWN_SUBTREE];
@@ -120,14 +99,14 @@ function summarize(runs: ScenarioRun[]) {
 				medianSelfMaxMs: round(median(costs.map((cost) => cost.selfMaxMs))),
 				medianInclusiveTotalMs: round(median(costs.map((cost) => cost.inclusiveTotalMs))),
 				medianInclusiveMaxMs: round(median(costs.map((cost) => cost.inclusiveMaxMs))),
-				selfTotalSpreadPct: spreadPct(selfTotals),
+				selfTotalSpreadPct: round(spreadPct(selfTotals)),
 			};
 		})
 		.sort((a, b) => b.medianSelfTotalMs - a.medianSelfTotalMs);
 	return {
 		runs: ordered.length,
 		medianTotalMs: round(median(totals)),
-		totalSpreadPct: spreadPct(totals),
+		totalSpreadPct: round(spreadPct(totals)),
 		medianCommits: median(ordered.map((run) => run.profile.commits)),
 		medianMaxCommitMs: round(median(ordered.map((run) => run.profile.maxCommitMs))),
 		medianWallMs: round(median(ordered.map((run) => run.wallMs))),

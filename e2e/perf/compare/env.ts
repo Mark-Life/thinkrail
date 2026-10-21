@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Env } from "./types";
@@ -45,14 +45,31 @@ export function hermeticEnv(stateDir: string, extra: Env = {}): Env {
 	};
 }
 
-export function userStateStamp() {
-	const dir = join(homedir(), ".thinkrail");
-	return existsSync(dir) ? statSync(dir).mtimeMs : null;
+const USER_STATE_DIR = join(homedir(), ".thinkrail");
+
+export function userStateStamp(dir = USER_STATE_DIR) {
+	if (!existsSync(dir)) return null;
+	const entries = readdirSync(dir, { recursive: true, encoding: "utf8" }).flatMap((path) => {
+		try {
+			const stat = lstatSync(join(dir, path));
+			return [[path, `${stat.mtimeMs}:${stat.size}`] as const];
+		} catch {
+			return [];
+		}
+	});
+	return new Map<string, string>(entries);
 }
 
-export function hermeticWarning(before: number | null) {
-	const after = userStateStamp();
-	return after === before
-		? null
-		: "~/.thinkrail changed during the run: a sample may have used real user state, or another ThinkRail process wrote it";
+function changedPaths(before: Map<string, string> | null, after: Map<string, string> | null) {
+	if (!before || !after) return before === after ? [] : ["."];
+	const paths = new Set([...before.keys(), ...after.keys()]);
+	return [...paths].filter((path) => before.get(path) !== after.get(path)).sort();
+}
+
+export function hermeticWarning(before: ReturnType<typeof userStateStamp>, dir = USER_STATE_DIR) {
+	const changed = changedPaths(before, userStateStamp(dir));
+	if (changed.length === 0) return null;
+	const shown = changed.slice(0, 3).join(", ");
+	const more = changed.length > 3 ? ` and ${changed.length - 3} more` : "";
+	return `~/.thinkrail changed during the run (${shown}${more}): a sample may have used real user state, or another ThinkRail process wrote it`;
 }

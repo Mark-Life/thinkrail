@@ -60,7 +60,7 @@ function distBytes(dir: string): number {
 	}, 0);
 }
 
-export function readManifest(distDir: string): Manifest {
+function readManifest(distDir: string): Manifest {
 	const path = join(distDir, ".vite", "manifest.json");
 	if (!existsSync(path)) throw new Error(`no Vite manifest at ${path}`);
 	return JSON.parse(readFileSync(path, "utf8")) as Manifest;

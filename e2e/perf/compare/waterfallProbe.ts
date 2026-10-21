@@ -9,16 +9,16 @@ export const SHIFT_REGIONS = [
 export const TRACKED_ELEMENTS = ["chat-input", "chat-scroll", "chat-row"] as const;
 
 export type ShiftRegion = (typeof SHIFT_REGIONS)[number] | "other";
-export type TrackedElement = (typeof TRACKED_ELEMENTS)[number];
+type TrackedElement = (typeof TRACKED_ELEMENTS)[number];
 
-export interface LayoutShiftSample {
+interface LayoutShiftSample {
 	at: number;
 	value: number;
 	hadRecentInput: boolean;
 	regions: ShiftRegion[];
 }
 
-export interface PageProbeSnapshot {
+interface PageProbeSnapshot {
 	layoutShiftSupported: boolean;
 	typeableAt: number | null;
 	transcriptAt: number | null;
@@ -32,7 +32,7 @@ export interface WireFrame {
 	payload: string;
 }
 
-export interface WireTimeline {
+interface WireTimeline {
 	watchReadyReplyMs: number;
 	getMessagesSentMs: number;
 	getMessagesReplyMs: number;

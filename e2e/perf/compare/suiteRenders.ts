@@ -1,11 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-	type ComponentCost,
-	MARKDOWN_SUBTREE,
-	type MainThreadCost,
-	type RenderProfile,
-} from "../renderProfiler";
+import type { ScenarioRun as RenderRun } from "../render.perf";
+import { EMPTY_COST, MARKDOWN_SUBTREE } from "../renderProfiler";
 import { DEFAULT_SCENARIOS, isScenarioName, SCENARIO_NAMES } from "../scenarios";
 import { profileWeb } from "./artifacts";
 import { failureReason, runPerfSpec } from "./playwrightRun";
@@ -14,21 +10,7 @@ import type { Measurement, SampleResult, Suite, SuiteContext } from "./types";
 const DEFAULT_ROUNDS = 5;
 const TOP_COMPONENTS = 15;
 
-const EMPTY_COST: ComponentCost = {
-	commits: 0,
-	renders: 0,
-	selfTotalMs: 0,
-	selfMaxMs: 0,
-	inclusiveTotalMs: 0,
-	inclusiveMaxMs: 0,
-};
-
-interface ScenarioRun {
-	scenario: string;
-	wallMs: number;
-	mainThread: MainThreadCost;
-	profile: RenderProfile;
-}
+type ScenarioRun = Pick<RenderRun, "scenario" | "wallMs" | "mainThread" | "profile">;
 
 const trackedComponents = new Map<string, readonly string[]>();
 

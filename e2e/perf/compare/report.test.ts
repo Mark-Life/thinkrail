@@ -28,7 +28,7 @@ function result(): CompareResult {
 	];
 	return {
 		generatedAt: "2026-10-21T00:00:00.000Z",
-		host: "studio",
+		host: "box-a",
 		tool: { sha: "1234567890abcdef", dirty: false },
 		base: { ref: "main", sha: "aaaaaaaaaaaaaaaa" as Sha, protocolVersion: 87 },
 		head: { ref: "bbbbbbbbbb", sha: "bbbbbbbbbbbbbbbb" as Sha, protocolVersion: 88 },
@@ -68,7 +68,7 @@ test("renderReport collapses unchanged rows and shows CI only for timed rows", (
 	expect(markdown).toContain("above 1 per core");
 	expect(markdown).toContain("| grown.js | 1000 B | 1.3 KiB | +300 B (+30%) | exact | ▮▮▮ worse |");
 	expect(markdown).toMatch(
-		/\| boot \| 100\.5 ms \| 80 ms \| -20\.2% \| -2\d[.\d]*% … -1\d[.\d]*% \| ▮▮▮ better \|/,
+		/\| boot \| 100\.3 ms \| 80 ms \| -20\.2% \| -2\d[.\d]*% … -1\d[.\d]*% \| ▮▮▮ better \|/,
 	);
 	expect(markdown).toContain("<details><summary>1 unchanged</summary>");
 	const collapsed = markdown.slice(markdown.indexOf("<details>"));
@@ -100,4 +100,24 @@ test("offset rows show signed deltas and intervals in the metric unit", () => {
 	expect(renderReport(input)).toMatch(
 		/\| gap \| 0 ms \| -45 ms \| -45 ms \| -\d+(\.\d)? ms … -\d+(\.\d)? ms \| better \|/,
 	);
+});
+
+test("timed rows show means and name a zero side instead of n<2", () => {
+	const input = result();
+	const suite = input.suites[0];
+	if (!suite) throw new Error("fixture has one suite");
+	suite.metrics = summarizeMetrics({
+		base: [
+			...[10, 10, 10, 10, 60].map((v) => measurement("skewed", "timed", v)),
+			...[0, 0, 0, 0, 0].map((v) => measurement("appeared", "timed", v)),
+		],
+		head: [
+			...[11, 11, 11, 11, 11].map((v) => measurement("skewed", "timed", v)),
+			...[39, 40, 41, 40, 40].map((v) => measurement("appeared", "timed", v)),
+		],
+		threshold: 0,
+	});
+	const markdown = renderReport(input);
+	expect(markdown).toContain("| skewed | 20 ms | 11 ms | -45% |");
+	expect(markdown).toContain("| appeared | 0 ms | 40 ms | n/a | base 0 | ▮▮▮▮ worse |");
 });

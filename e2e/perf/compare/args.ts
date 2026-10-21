@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { cacheRoot } from "./checkout";
-import { HOSTS, type Host } from "./remote";
+import { parseHost } from "./remote";
 import { DEFAULT_SUITE_NAMES, SUITE_NAMES } from "./suites";
 import type { CompareOptions } from "./types";
 
@@ -24,9 +24,10 @@ Flags:
   --threshold P        percent change treated as noise (default 0)
   --cpu N              CPU throttling rate for browser suites (default 1)
   --browser NAME       chromium (default) or webkit (waterfall only; renders stay chromium)
-  --host NAME          where to run: ${HOSTS.join(", ")}; repeatable, hosts run in
-                       parallel. A remote host needs a clean, pushed tool commit and
-                       base/head on origin; its result lands in <out>/<host>/
+  --host NAME          where to run: local or an ssh alias; repeatable, hosts run in
+                       parallel (aliases of this machine run once). A remote host needs
+                       a clean, pushed tool commit and base/head on origin; its result
+                       lands in <out>/<host>/
   --strict-protocol    abort browser suites when protocol versions differ
   --out DIR            output directory (default $TMPDIR/thinkrail-perf-compare/<time>)
   --rebuild            ignore build markers and rebuild artifacts
@@ -36,7 +37,7 @@ Cache: ${cacheRoot()} (override with THINKRAIL_PERF_CACHE)`;
 
 type Command =
 	| { kind: "help" }
-	| { kind: "run"; base: string; head: string; hosts: readonly Host[]; options: CompareOptions }
+	| { kind: "run"; base: string; head: string; hosts: readonly string[]; options: CompareOptions }
 	| { kind: "prepare"; refs: string[]; options: CompareOptions }
 	| { kind: "report"; file: string }
 	| { kind: "clean"; target: { all: true } | { ref: string } };
@@ -75,7 +76,7 @@ function defaultOptions(): CompareOptions {
 export function parseArgs(argv: readonly string[]): Command {
 	const options = defaultOptions();
 	const positional: string[] = [];
-	const hosts: Host[] = [];
+	const hosts: string[] = [];
 	let all = false;
 	for (let index = 0; index < argv.length; index += 1) {
 		const arg = argv[index] ?? "";
@@ -100,10 +101,7 @@ export function parseArgs(argv: readonly string[]): Command {
 				throw new Error("--browser: chromium|webkit");
 			options.browser = browser;
 		} else if (arg === "--host") {
-			const value = next();
-			const host = HOSTS.find((name) => name === value);
-			if (!host) throw new Error(`--host needs one of ${HOSTS.join(", ")}`);
-			hosts.push(host);
+			hosts.push(parseHost(next()));
 		} else if (arg === "--strict-protocol") options.strictProtocol = true;
 		else if (arg === "--out") options.out = resolve(next() ?? "");
 		else if (arg === "--rebuild") options.rebuild = true;
