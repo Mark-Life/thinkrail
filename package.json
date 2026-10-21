@@ -57,8 +57,8 @@
 		"smoke:subagents": "bun scripts/smoke-pure-pi-subagents.ts",
 		"typecheck": "turbo run typecheck",
 		"test": "bun test ./scripts/ && turbo run test --continue",
-		"lint": "biome check .",
-		"format": "biome check --write .",
+		"lint": "oxlint && oxfmt --check",
+		"format": "oxfmt",
 		"prepare": "husky",
 		"e2e": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts",
 		"e2e:serial": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --serial",
@@ -95,22 +95,22 @@
 	"devDependencies": {
 		"@changesets/changelog-github": "catalog:",
 		"@changesets/cli": "catalog:",
-		"@biomejs/biome": "2.5.0",
 		"@earendil-works/pi-coding-agent": "catalog:",
+		"@playwright/test": "1.61.0",
 		"@thinkrail/artifact-tests": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/server": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
-		"@playwright/test": "1.61.0",
 		"husky": "9.1.7",
 		"mdast-util-from-markdown": "2.0.3",
+		"oxfmt": "0.74.0",
+		"oxlint": "1.89.0",
 		"pi-spec-graph": "workspace:*",
 		"pi-todos": "workspace:*",
 		"turbo": "2.9.18",
 		"typescript": "catalog:"
 	},
 	"trustedDependencies": [
-		"@biomejs/biome",
 		"esbuild"
 	],
 	"patchedDependencies": {

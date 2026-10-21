@@ -187,7 +187,9 @@ const devWebAccess: BundledExtensionFactory = async (pi) => {
 			default: true,
 		}),
 	);
-	await (await devWebAccessFactory)(pi);
+	await (
+		await devWebAccessFactory
+	)(pi);
 };
 
 function webAccessFactory(): BundledExtensionFactory {

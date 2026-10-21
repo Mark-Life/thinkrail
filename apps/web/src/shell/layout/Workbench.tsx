@@ -242,7 +242,7 @@ export function Workbench({
 			const requestedLocation = findTabLocation(requestedDocument, tab.id);
 			const wasSelectedAtRequest = Boolean(
 				requestedLocation &&
-					readLayoutSelection(requestedAttention, requestedLocation.groupId) === tab.id,
+				readLayoutSelection(requestedAttention, requestedLocation.groupId) === tab.id,
 			);
 			const requestedTabElement = requestedLocation
 				? globalThis.document.getElementById(tabDomId(requestedLocation, tab.id))
@@ -250,7 +250,7 @@ export function Workbench({
 			const activeElement = globalThis.document.activeElement;
 			const closeControlHadFocusAtRequest = Boolean(
 				requestedTabElement?.parentElement?.contains(activeElement) ||
-					activeElement?.closest('[role="menu"]'),
+				activeElement?.closest('[role="menu"]'),
 			);
 			onRequestClose(tab, (latestDocumentInput) => {
 				const latestDocument = latestDocumentInput ?? documentRef.current;

@@ -22,10 +22,13 @@ export interface ResolveCommentOutcome {
 	resolvedBody: string;
 }
 
-let handler: (sessionId: string, commentId: string, note?: string) => ResolveCommentOutcome =
-	() => {
-		throw new Error("Review comments are not available on this host.");
-	};
+let handler: (
+	sessionId: string,
+	commentId: string,
+	note?: string,
+) => ResolveCommentOutcome = () => {
+	throw new Error("Review comments are not available on this host.");
+};
 
 export function setReviewCommentHandler(
 	fn: (sessionId: string, commentId: string, note?: string) => ResolveCommentOutcome,

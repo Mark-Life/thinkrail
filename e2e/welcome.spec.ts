@@ -57,64 +57,72 @@ test("Settings → Providers lists in-app auth options", async ({ page }) => {
 	await expect(page.getByTestId("providers-error")).toHaveCount(0);
 });
 
-test("a real provider's API key round-trips through the login dialog (add in Settings, sign out)", {
-	tag: "@dev-seam",
-}, async ({ page }) => {
-	await openAppFresh(page);
-	await page.getByTestId("open-settings").click();
-	await expect(page.getByTestId("settings-providers")).toBeVisible();
+test(
+	"a real provider's API key round-trips through the login dialog (add in Settings, sign out)",
+	{
+		tag: "@dev-seam",
+	},
+	async ({ page }) => {
+		await openAppFresh(page);
+		await page.getByTestId("open-settings").click();
+		await expect(page.getByTestId("settings-providers")).toBeVisible();
 
-	const keyBtn = page.getByTestId("provider-apikey").first();
-	await expect(keyBtn).toBeVisible();
-	const providerId = await keyBtn.getAttribute("data-provider");
-	expect(providerId).toBeTruthy();
-	await keyBtn.click();
+		const keyBtn = page.getByTestId("provider-apikey").first();
+		await expect(keyBtn).toBeVisible();
+		const providerId = await keyBtn.getAttribute("data-provider");
+		expect(providerId).toBeTruthy();
+		await keyBtn.click();
 
-	const dialog = page.getByTestId("login-dialog");
-	await expect(dialog).toBeVisible();
-	for (let i = 0; i < 8; i++) {
-		if (await page.getByTestId("login-success").isVisible()) break;
-		const option = page.getByTestId("login-option").first();
-		const input = page.getByTestId("login-input");
-		if (await option.isVisible()) {
-			await option.click();
-		} else if (await input.isVisible()) {
-			await input.fill(`e2e-dummy-${i}`);
-			await page.getByTestId("login-submit").click();
-		} else {
-			await page.waitForTimeout(200);
+		const dialog = page.getByTestId("login-dialog");
+		await expect(dialog).toBeVisible();
+		for (let i = 0; i < 8; i++) {
+			if (await page.getByTestId("login-success").isVisible()) break;
+			const option = page.getByTestId("login-option").first();
+			const input = page.getByTestId("login-input");
+			if (await option.isVisible()) {
+				await option.click();
+			} else if (await input.isVisible()) {
+				await input.fill(`e2e-dummy-${i}`);
+				await page.getByTestId("login-submit").click();
+			} else {
+				await page.waitForTimeout(200);
+			}
 		}
-	}
-	await expect(page.getByTestId("login-success")).toBeVisible();
-	await page.getByTestId("login-close").click();
-	await expect(dialog).toHaveCount(0);
+		await expect(page.getByTestId("login-success")).toBeVisible();
+		await page.getByTestId("login-close").click();
+		await expect(dialog).toHaveCount(0);
 
-	const configuredRow = page.locator(
-		`[data-testid="provider-row"][data-provider="${providerId}"][data-configured="true"]`,
-	);
-	await expect(configuredRow).toBeVisible();
+		const configuredRow = page.locator(
+			`[data-testid="provider-row"][data-provider="${providerId}"][data-configured="true"]`,
+		);
+		await expect(configuredRow).toBeVisible();
 
-	await page.locator(`[data-testid="provider-signout"][data-provider="${providerId}"]`).click();
-	await expect(configuredRow).toHaveCount(0);
-});
+		await page.locator(`[data-testid="provider-signout"][data-provider="${providerId}"]`).click();
+		await expect(configuredRow).toHaveCount(0);
+	},
+);
 
-test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dismisses it", {
-	tag: "@dev-seam",
-}, async ({ page }) => {
-	await openAppFresh(page);
-	await page.getByTestId("open-settings").click();
-	await expect(page.getByTestId("settings-providers")).toBeVisible();
+test(
+	"clicking Sign in (Settings) opens the in-app login dialog, and Cancel dismisses it",
+	{
+		tag: "@dev-seam",
+	},
+	async ({ page }) => {
+		await openAppFresh(page);
+		await page.getByTestId("open-settings").click();
+		await expect(page.getByTestId("settings-providers")).toBeVisible();
 
-	const signIn = page.getByTestId("provider-signin").first();
-	await expect(signIn).toBeVisible();
-	await signIn.click();
+		const signIn = page.getByTestId("provider-signin").first();
+		await expect(signIn).toBeVisible();
+		await signIn.click();
 
-	const dialog = page.getByTestId("login-dialog");
-	await expect(dialog).toBeVisible();
+		const dialog = page.getByTestId("login-dialog");
+		await expect(dialog).toBeVisible();
 
-	await page.getByTestId("login-cancel").click();
-	await expect(dialog).toHaveCount(0);
-});
+		await page.getByTestId("login-cancel").click();
+		await expect(dialog).toHaveCount(0);
+	},
+);
 
 test("Settings → Providers offers JetBrains AI with host-authoritative Central guidance", async ({
 	page,

@@ -60,9 +60,9 @@ binary.
     VitePress (Vue), Eleventy (docs features assemble-yourself — the bespoke trap again), Hugo/Zola
     (non-TS toolchain, token/tests integration lost). The prior bespoke pipeline
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
-  - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
-    are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
-    be a false positive). `astro check` covers the templates instead.
+  - *Lint caveat:* Oxlint and oxfmt skip `.astro` files. `astro check` covers them instead.
+    Oxlint also does not lint `.css` or `.json` (oxfmt only formats them), so Biome's duplicate-property,
+    unknown-property, and duplicate-key checks on `src/styles.css` and the JSON files are gone.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 

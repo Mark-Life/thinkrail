@@ -260,7 +260,7 @@ async function numstat(
 	});
 	if (!out.ok) throw diffFailure(out.err);
 	const fields = nulFields(out.out);
-	for (let index = 0; index < fields.length; ) {
+	for (let index = 0; index < fields.length;) {
 		const header = fields[index++] ?? "";
 		const firstTab = header.indexOf("\t");
 		const secondTab = firstTab < 0 ? -1 : header.indexOf("\t", firstTab + 1);
@@ -310,7 +310,7 @@ function nulFields(output: string): string[] {
 function parseNameStatus(output: string): Array<{ code: string; path: string }> {
 	const fields = nulFields(output);
 	const parsed: Array<{ code: string; path: string }> = [];
-	for (let index = 0; index < fields.length; ) {
+	for (let index = 0; index < fields.length;) {
 		const code = fields[index++] ?? "";
 		let path = fields[index++] ?? "";
 		if (code.startsWith("R") || code.startsWith("C")) path = fields[index++] ?? "";

@@ -953,7 +953,9 @@ test("gitCommitPaths stages a deletion, and returns null for an empty set or pat
 	const committed = gitCommitPaths("w1", "chore: drop the readme", ["README.md"]);
 	expect(committed).not.toBeNull();
 	expect(
-		await (await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })).changes[0],
+		await (
+			await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })
+		).changes[0],
 	).toMatchObject({
 		path: "README.md",
 		status: "deleted",

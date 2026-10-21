@@ -376,13 +376,13 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 	const a = await createSession({
 		cwd: tmpCwd("trpi-a-"),
 		workspaceId: "ws-a",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+		// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 		model: fauxA.getModel() as any,
 	});
 	const b = await createSession({
 		cwd: tmpCwd("trpi-b-"),
 		workspaceId: "ws-b",
-		// biome-ignore lint/suspicious/noExplicitAny: see above
+		// oxlint-disable-next-line typescript/no-explicit-any -- see above
 		model: fauxB.getModel() as any,
 	});
 	expect(a.sessionId).not.toBe(b.sessionId);
@@ -1467,7 +1467,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 	const s = await createSession({
 		cwd: tmpCwd("trpi-stats-"),
 		workspaceId: "ws-s",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+		// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 		model: fauxA.getModel() as any,
 	});
 	await promptSession(s.sessionId, "count me");
@@ -1557,65 +1557,64 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 	}
 });
 
-test.each([
-	"removeSession",
-	"removeWorkspaceSessions",
-	"archiveDuringDelete",
-])("%s drains queued input while allowing an accepted answer to persist", async (teardown) => {
-	const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
-	const toolCallId = `accepted-on-${teardown}`;
-	const cwd = tmpCwd("trpi-removal-accepted-");
-	const manager = SessionManager.inMemory(cwd);
-	setSessionManagerFactory(() => manager);
-	fauxA.setResponses([
-		gatedQuestionMessage(toolCallId),
-		fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
-	]);
-	const session = await createSession({
-		cwd,
-		workspaceId: "ws-removal-accepted",
-		model: toWireModel(fauxA.getModel()),
-	});
-	const prompting = promptSession(session.sessionId, "Ask before continuing.");
-	prompting.catch(() => {});
-	try {
-		await waitForPath(gate.startedPath);
-		await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
-		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
-		const removing =
-			teardown === "removeSession"
-				? removeSession(session.sessionId)
-				: teardown === "removeWorkspaceSessions"
-					? removeWorkspaceSessions("ws-removal-accepted")
-					: Promise.all([
-							deleteSession(session.sessionId, "ws-removal-accepted", cwd),
-							removeWorkspaceSessions("ws-removal-accepted"),
-						]);
-		if (teardown === "archiveDuringDelete") {
-			await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
-		} else {
-			await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+test.each(["removeSession", "removeWorkspaceSessions", "archiveDuringDelete"])(
+	"%s drains queued input while allowing an accepted answer to persist",
+	async (teardown) => {
+		const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
+		const toolCallId = `accepted-on-${teardown}`;
+		const cwd = tmpCwd("trpi-removal-accepted-");
+		const manager = SessionManager.inMemory(cwd);
+		setSessionManagerFactory(() => manager);
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
+		]);
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-removal-accepted",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const prompting = promptSession(session.sessionId, "Ask before continuing.");
+		prompting.catch(() => {});
+		try {
+			await waitForPath(gate.startedPath);
+			await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
+			const result = gatedQuestionAnswer();
+			const answering = answerQuestion(session.sessionId, toolCallId, result);
+			const removing =
+				teardown === "removeSession"
+					? removeSession(session.sessionId)
+					: teardown === "removeWorkspaceSessions"
+						? removeWorkspaceSessions("ws-removal-accepted")
+						: Promise.all([
+								deleteSession(session.sessionId, "ws-removal-accepted", cwd),
+								removeWorkspaceSessions("ws-removal-accepted"),
+							]);
+			if (teardown === "archiveDuringDelete") {
+				await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
+			} else {
+				await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+			}
+			gate.release();
+			await Promise.all([answering, removing, prompting]);
+			const messages = manager.buildSessionContext().messages;
+			const persisted = messages.find(
+				(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+			);
+			if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+			expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
+			expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
+			expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
+			expect(hasSession(session.sessionId)).toBe(false);
+		} finally {
+			gate.release();
+			gate.remove();
+			if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+			await prompting.catch(() => {});
+			setSessionManagerFactory(() => SessionManager.inMemory());
 		}
-		gate.release();
-		await Promise.all([answering, removing, prompting]);
-		const messages = manager.buildSessionContext().messages;
-		const persisted = messages.find(
-			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
-		);
-		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
-		expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
-		expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
-		expect(hasSession(session.sessionId)).toBe(false);
-	} finally {
-		gate.release();
-		gate.remove();
-		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
-		await prompting.catch(() => {});
-		setSessionManagerFactory(() => SessionManager.inMemory());
-	}
-});
+	},
+);
 
 test("an answer accepted before execute persists before Stop aborts the continuation", async () => {
 	const gate = installAskToolGate("ask-answer-stop-gate");
@@ -2498,7 +2497,7 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	const s = await createSession({
 		cwd,
 		workspaceId: "ws-hyd",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+		// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 		model: fauxA.getModel() as any,
 	});
 	await promptSession(s.sessionId, "hello hydrate");
@@ -2653,7 +2652,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		const s = await createSession({
 			cwd,
 			workspaceId: "ws-disk",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+			// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 			model: fauxA.getModel() as any,
 		});
 		await promptSession(s.sessionId, "persist me");
@@ -3402,14 +3401,14 @@ test("removeWorkspaceSessions: archives a workspace's live sessions + purges the
 		const doomed = await createSession({
 			cwd: doomedCwd,
 			workspaceId: "ws-doomed",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+			// oxlint-disable-next-line typescript/no-explicit-any -- faux Model<string> satisfies the SDK's Model<any>
 			model: fauxA.getModel() as any,
 		});
 		const keepCwd = tmpCwd("trpi-arch-keep-");
 		const survivor = await createSession({
 			cwd: keepCwd,
 			workspaceId: "ws-keep",
-			// biome-ignore lint/suspicious/noExplicitAny: see above
+			// oxlint-disable-next-line typescript/no-explicit-any -- see above
 			model: fauxB.getModel() as any,
 		});
 		await Promise.all([

@@ -297,16 +297,16 @@ describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 valida
 		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
 	});
 
-	test.each([
-		"C:/isolated/100%",
-		"C:/isolated/unsafe!prefix",
-	])("rejects the cmd-unsafe prefix %s before network access", (prefix) => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", prefix);
-		expect(result.exitCode).not.toBe(0);
-		expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
-		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
-	});
+	test.each(["C:/isolated/100%", "C:/isolated/unsafe!prefix"])(
+		"rejects the cmd-unsafe prefix %s before network access",
+		(prefix) => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", prefix);
+			expect(result.exitCode).not.toBe(0);
+			expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
+			expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
+		},
+	);
 
 	test("rejects a resolved stable tag before constructing an artifact URL", () => {
 		const fixture = makeFixture();
@@ -341,36 +341,39 @@ describe("install.sh controlled installation", () => {
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Linux", "aarch64", "thinkrail-linux-arm64"],
 		["stable", "1.2.3", "v1.2.3", "Darwin", "arm64", "thinkrail-darwin-arm64"],
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "arm64", "thinkrail-darwin-arm64"],
-	])("selects the exact %s %s target (%s, %s/%s, %s)", (channel, version, tag, unameS, unameM, assetName) => {
-		const fixture = makeFixture();
-		const result = runInstaller(
-			fixture,
-			[
-				"--channel",
-				channel,
-				"--version",
-				version,
-				"--prefix",
-				shellPath(fixture.prefix),
-				"--no-modify-path",
-			],
-			{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
-		);
-		expect(result.exitCode).toBe(0);
-		const requests = curlRequests(fixture);
-		expect(requests).toHaveLength(2);
-		expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
-		expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
-		const metadata = JSON.parse(
-			readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
-		);
-		expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
-		expect(
-			readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
-				name.includes(".tmp."),
-			),
-		).toEqual([]);
-	});
+	])(
+		"selects the exact %s %s target (%s, %s/%s, %s)",
+		(channel, version, tag, unameS, unameM, assetName) => {
+			const fixture = makeFixture();
+			const result = runInstaller(
+				fixture,
+				[
+					"--channel",
+					channel,
+					"--version",
+					version,
+					"--prefix",
+					shellPath(fixture.prefix),
+					"--no-modify-path",
+				],
+				{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
+			);
+			expect(result.exitCode).toBe(0);
+			const requests = curlRequests(fixture);
+			expect(requests).toHaveLength(2);
+			expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
+			expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
+			const metadata = JSON.parse(
+				readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
+			);
+			expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
+			expect(
+				readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
+					name.includes(".tmp."),
+				),
+			).toEqual([]);
+		},
+	);
 
 	test("installs under a Unix prefix containing Unicode and safe punctuation", () => {
 		const fixture = makeFixture();

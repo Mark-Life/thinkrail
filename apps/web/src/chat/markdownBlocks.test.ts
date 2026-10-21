@@ -45,7 +45,7 @@ function streamRandomDeltas(input: string, seed: number) {
 	const random = seededRandom(seed);
 	const split = createMarkdownSplitter();
 	let sawWhole = false;
-	for (let end = 0; end < input.length; ) {
+	for (let end = 0; end < input.length;) {
 		end = Math.min(input.length, end + 1 + Math.floor(random() * 60));
 		const prefix = input.slice(0, end);
 		sawWhole = expectMatchesFresh(split(prefix), prefix, sawWhole);
@@ -60,14 +60,18 @@ describe("splitMarkdown", () => {
 		});
 	}
 
-	test("incremental split equals fresh split on the long stream fixture", {
-		timeout: 30_000,
-	}, () => {
-		streamCharByChar(longMarkdown(5_000), 7);
-		const text = longMarkdown();
-		streamRandomDeltas(text, 1);
-		expect(splitMarkdown(text).blocks.length).toBeGreaterThan(40);
-	});
+	test(
+		"incremental split equals fresh split on the long stream fixture",
+		{
+			timeout: 30_000,
+		},
+		() => {
+			streamCharByChar(longMarkdown(5_000), 7);
+			const text = longMarkdown();
+			streamRandomDeltas(text, 1);
+			expect(splitMarkdown(text).blocks.length).toBeGreaterThan(40);
+		},
+	);
 
 	test("stepwise extension of a long text equals one fresh split", () => {
 		const text = longMarkdown(30_000);

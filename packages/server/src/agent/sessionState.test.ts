@@ -217,18 +217,15 @@ describe("deriveSessionState", () => {
 	});
 
 	test("reconstruction reads the complete active branch instead of capping oversized transcripts", () => {
-		const filler = Array.from(
-			{ length: 20_000 },
-			(_, index): SessionEntry => ({
-				type: "custom_message",
-				id: `filler-${index}`,
-				parentId: index === 0 ? null : `filler-${index - 1}`,
-				timestamp: new Date().toISOString(),
-				customType: "filler",
-				content: "x",
-				display: false,
-			}),
-		);
+		const filler = Array.from({ length: 20_000 }, (_, index): SessionEntry => ({
+			type: "custom_message",
+			id: `filler-${index}`,
+			parentId: index === 0 ? null : `filler-${index - 1}`,
+			timestamp: new Date().toISOString(),
+			customType: "filler",
+			content: "x",
+			display: false,
+		}));
 		const state = deriveSessionState(
 			inputs({
 				entries: [...filler, user("oversized-user"), assistant("oversized-result", "stop")],
