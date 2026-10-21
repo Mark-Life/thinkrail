@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
 	componentMeasurements,
+	pinnedComponents,
 	scenarioMeasurements,
 	selectScenarios,
 	topComponents,
@@ -36,6 +37,13 @@ describe("renders suite mapping", () => {
 		expect(rows.filter((row) => row.id.includes("/NotRendered/")).map((row) => row.value)).toEqual([
 			0, 0, 0,
 		]);
+	});
+
+	test("pins a scenario's key components and none for unknown names", () => {
+		expect(pinnedComponents("review-panel")).toContain("CommentRow");
+		expect(pinnedComponents("plan-pane")).toContain("ItemBlock");
+		expect(pinnedComponents("chat-streaming")).toEqual([]);
+		expect(pinnedComponents("nope")).toEqual([]);
 	});
 
 	test("validates scenario names against the tool", () => {

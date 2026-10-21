@@ -162,12 +162,18 @@ Playwright run writes no output, so the last good file survives.
   than a handful of chrome updates). Live file edits rewrite a worktree file under an open file tab. Large
   diff opens a 3,000-line Pierre diff and wheel-scrolls it. Runs interleave scenarios; the runner reports
   medians and run-to-run spread.
-- **Heavy scenarios** (only with `--scenario`; the default set is the four above). `long-stream` replays one
+- **Heavy scenarios** (only with `--scenario`; not in the default set). `long-stream` replays one
   ~26k-char seeded markdown answer (headings, nested lists, ts/py/bash/json fences, a GFM table, mermaid) in
   10–60-char deltas every 15 ms; `long-stream-xl` is the same at ~100k chars. `parallel-agents` opens 20
   persisted chats as tabs in one workspace and interleaves 20 replays; `background-agents` streams the 19
   hidden tabs while the visible chat stays idle, so every commit it records is cost the visible UI pays for
   background work. Both then open a hidden tab and assert its streamed text arrived.
+- **Panel scenarios** (`e2e/perf/panelScenarios.ts`, in the default set). `plan-pane` seeds an 18-step
+  agent plan in 3 groups, opens the Plan page, then renames the workspace 24 times over a second wire
+  client, so each rename reaches the page as a host `workspace.updated` push; read `ItemBlock` and
+  `PlanPane` renders. `review-panel` adds 40 inline drafts over 8 files through the wire, expands every
+  file, then clicks 24 comments, each in a different file than the last; read `CommentRow` renders. Both
+  catch a panel that compiles but still re-renders every row, which `check:compiler` cannot see.
 - **Weak machine.** `--cpu N` applies CDP `Emulation.setCPUThrottlingRate` for the measured window only.
 - **Extra metrics.** Per run: long tasks (count, total, max), rAF frame gaps (p50/p95/max, dropped 60 Hz
   frames), CDP main-thread task/script/layout/style ms and heap delta, scenario counters (deltas, mounted
