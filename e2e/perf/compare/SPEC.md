@@ -52,6 +52,17 @@ identical for both sides and only the app under test differs.
   `report <compare.json>` re-renders markdown. Per-sample files live under `<out>/samples/`.
 - **Hermeticity check.** The `~/.thinkrail` mtime is compared before and after; a change is a warning,
   not an abort, because a running ThinkRail on the same machine also writes there.
+- **Renders suite.** One variant per scenario (`--scenario`, default `DEFAULT_SCENARIOS`, validated
+  against the tool's `SCENARIO_NAMES`); `rounds` schedule, 5 by default. Each sample is one fresh
+  Playwright run of the tool's `render.perf.ts` (`THINKRAIL_PERF_RUNS=1`) under `hermeticEnv`, with
+  `THINKRAIL_PERF_APP_ROOT` pointing `playwright.perf.config.ts` at the SHA worktree's `dev.ts` and
+  `dist-profile`. Always Chromium: `startMainThreadProbe` needs CDP, so `--browser` does not apply.
+  A missing `<scenario>-1.json` makes the scenario incompatible with the first Playwright error as
+  the reason; the full log stays in the sample dir. All metrics are `timed`. Per-component rows track
+  the union of the top 15 by self ms across both warmups, frozen for the measured rounds, so every
+  sample reports the same ids (absent components count as zero). `THINKRAIL_E2E_LANE`,
+  `THINKRAIL_E2E_PORT_BASE` and `PLAYWRIGHT_BROWSERS_PATH` pass through so two compares from one
+  tool checkout can use separate port blocks.
 
 ## Boundary
 
