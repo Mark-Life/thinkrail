@@ -30,9 +30,9 @@ function orderRows(record: WaterfallRecord): Row[] {
 	return [
 		{
 			key: "getMessagesWaitsForWatchReady",
-			label: "getMessages sent after watchReady reply (1 = waits)",
+			label: "getMessages sent after watchReady reply (wait rate)",
 			unit: "count",
-			kind: "exact",
+			kind: "timed",
 			better: "lower",
 			value: waited >= 0 ? 1 : 0,
 		},

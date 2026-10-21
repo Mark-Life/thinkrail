@@ -24,6 +24,10 @@ until mkdir "$lock" 2>/dev/null; do
 		rm -rf "$lock"
 		continue
 	fi
+	if [ -z "$owner" ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
+		rm -rf "$lock"
+		continue
+	fi
 	if [ "$waited" -eq 0 ]; then echo "perf:compare[$host]: waiting for another bootstrap" >&2; fi
 	waited=$((waited + 1))
 	if [ "$waited" -gt 3600 ]; then
@@ -32,8 +36,8 @@ until mkdir "$lock" 2>/dev/null; do
 	fi
 	sleep 1
 done
-echo "$$" >"$lock/pid"
 trap 'rm -rf "$lock"' EXIT
+echo "$$" >"$lock/pid"
 
 if [ -d "$cache/runs" ]; then
 	find "$cache/runs" -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +

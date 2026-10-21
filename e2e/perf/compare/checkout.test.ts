@@ -1,9 +1,9 @@
 import { afterAll, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cleanSha, prepareSha, releaseSha, resolveSha } from "./checkout";
+import { cleanSha, prepareSha, releaseSha, resolveSha, tryLock } from "./checkout";
 import type { Artifact } from "./types";
 
 const root = mkdtempSync(join(tmpdir(), "perf-checkout-test-"));
@@ -25,33 +25,30 @@ test("a failed rebuild is built again on the next run", async () => {
 	execFileSync("git", ["init", "--quiet", repo]);
 	mkdirSync(join(repo, "pkg"), { recursive: true });
 	writeFileSync(join(repo, "pkg", "package.json"), '{"name":"pkg"}\n');
-	writeFileSync(
-		join(repo, "package.json"),
-		'{"name":"fixture","private":true,"workspaces":["pkg"]}\n',
-	);
+	const broken = join(root, "broken");
+	const builds = join(root, "builds");
+	const manifest = {
+		name: "fixture",
+		private: true,
+		workspaces: ["pkg"],
+		scripts: { "build:x": `echo x >> ${builds} && test ! -e ${broken}` },
+	};
+	writeFileSync(join(repo, "package.json"), `${JSON.stringify(manifest)}\n`);
 	execFileSync(process.execPath, ["install", "--cwd", repo], { stdio: "ignore" });
 	gitIn("add", ".");
 	gitIn("-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "init");
 	const sha = resolveSha(repo, "HEAD");
-	let builds = 0;
-	let broken = false;
-	const artifact: Artifact = {
-		key: "binary",
-		inputs: ["x"],
-		build: async () => {
-			builds += 1;
-			if (broken) throw new Error("build broke");
-		},
-	};
+	const artifact: Artifact = { key: "binary", cwd: ".", command: ["build:x"] };
 	const prepare = (rebuild: boolean) =>
 		prepareSha({ toolRoot: repo, sha, artifacts: [artifact], rebuild });
 
 	expect((await prepare(false)).failed.size).toBe(0);
-	broken = true;
-	expect((await prepare(true)).failed.get("binary")).toBe("build broke");
-	broken = false;
+	writeFileSync(broken, "");
+	expect((await prepare(true)).failed.get("binary")).toBe("binary build failed (exit 1)");
+	rmSync(broken);
 	expect((await prepare(false)).failed.size).toBe(0);
-	expect(builds).toBe(3);
+	expect((await prepare(false)).failed.size).toBe(0);
+	expect(readFileSync(builds, "utf8").split("\n").filter(Boolean)).toHaveLength(3);
 
 	const users = join(root, "cache", "locks", `${sha}.users`);
 	writeFileSync(join(users, String(process.ppid)), "");
@@ -61,3 +58,23 @@ test("a failed rebuild is built again on the next run", async () => {
 	releaseSha(sha);
 	expect(await cleanSha(sha)).toBe(join(root, "cache", "wt", sha));
 }, 60_000);
+
+test("a lock is taken with its pid, and a pid-less or dead lock is reclaimed", () => {
+	const lock = join(root, "lock");
+	expect(tryLock(lock)).toBe(true);
+	expect(readFileSync(join(lock, "pid"), "utf8")).toBe(String(process.pid));
+	expect(tryLock(lock)).toBe(false);
+	expect(existsSync(lock)).toBe(true);
+	rmSync(lock, { recursive: true });
+
+	mkdirSync(lock);
+	expect(tryLock(lock)).toBe(true);
+	rmSync(lock, { recursive: true });
+
+	mkdirSync(lock);
+	writeFileSync(join(lock, "pid"), "");
+	expect(tryLock(lock)).toBe(false);
+	expect(existsSync(lock)).toBe(false);
+	expect(tryLock(lock)).toBe(true);
+	expect(existsSync(`${lock}.${process.pid}.tmp`)).toBe(false);
+});

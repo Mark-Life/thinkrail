@@ -121,3 +121,18 @@ test("auto settles a timed metric on a decided verdict or a narrow interval", ()
 	expect(noisy?.verdict).toBe("unsure");
 	expect(noisy && settled(noisy, 2)).toBe(false);
 });
+
+test("a 0/1 rate row reports partial changes and never an infinite delta", () => {
+	const rate = (base: number[], head: number[]) =>
+		summarizeMetrics({
+			base: base.map((value) => timed("w", value)),
+			head: head.map((value) => timed("w", value)),
+			threshold: 0,
+		})[0];
+	const fewerWaits = rate([1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 0, 0, 0]);
+	expect(fewerWaits?.deltaPct).toBeCloseTo(-42.857, 2);
+	expect(fewerWaits?.verdict).toBe("unsure");
+	const flipped = rate([0, 0, 0, 0, 1, 1, 1], [1, 1, 1, 1, 0, 0, 0]);
+	expect(flipped?.deltaPct).toBeCloseTo(33.333, 2);
+	expect(flipped?.verdict).toBe("unsure");
+});

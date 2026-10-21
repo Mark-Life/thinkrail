@@ -23,8 +23,8 @@ export type Schedule =
 
 export interface Artifact {
 	key: "profile-web" | "manifest-web" | "binary" | "desktop";
-	inputs: readonly string[];
-	build(appRoot: string, env: Env): Promise<void>;
+	cwd: "." | "apps/web";
+	command: readonly string[];
 	platforms?: readonly NodeJS.Platform[];
 }
 
