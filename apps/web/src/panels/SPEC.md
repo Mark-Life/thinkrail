@@ -1976,9 +1976,8 @@ own section. The kebab menu (`plan-menu`, a
   attention; deliberate keep still commits. If the destination group disappeared, the shell reroutes to
   current last focus, and if a newer local transition already placed the canonical resource, completion
   selects that placement instead of duplicating it. Preview placement and attention commit locally. Unit
-  and E2E tests pin double-click
-  coalescing, stale-read rejection, per-group isolation, local identity convergence, and
-  promote-by-keyboard/touch.
+  and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
+  convergence, and promote-by-keyboard/touch.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).

@@ -52,8 +52,9 @@ not this module; the theme-aware highlighter remains app-local.
   commit something a double click contradicts: a single click (or keyboard activation) on the active
   preview tab, so a double click is not read as two keeps, and the Changes review-tab preview),
   **`firstClickOnly()`** (wraps a browse row's preview open so it runs on a first click or keyboard
-  activation, `detail <= 1`, and skips a double click's second click), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
-  `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
+  activation, `detail <= 1`, and skips a double click's second click),
+  **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_LABEL`, `mcpStateTone` (a connected
+  server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
   (the text helpers here take the caller's translator first, so render output follows a language change),
   and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
   starting) predicates — shared by `store`'s selectors, Settings, and the props-only chat Resources rows,
