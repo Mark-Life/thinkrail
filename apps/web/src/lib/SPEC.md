@@ -49,9 +49,10 @@ not this module; the theme-aware highlighter remains app-local.
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
   **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
-  commit something a double click contradicts: a single click (or keyboard activation) on the already
-  active preview tab keeps it after the 250 ms settle window, so a double click is not read as two keeps;
-  and the Changes review-tab preview), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
+  commit something a double click contradicts: a single click (or keyboard activation) on the active
+  preview tab, so a double click is not read as two keeps, and the Changes review-tab preview),
+  **`firstClickOnly()`** (wraps a browse row's preview open so it runs on a first click or keyboard
+  activation, `detail <= 1`, and skips a double click's second click), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
   `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
   (the text helpers here take the caller's translator first, so render output follows a language change),
   and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
@@ -100,7 +101,7 @@ not this module; the theme-aware highlighter remains app-local.
   caller's translator), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
-  `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
+  `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, the `LayoutAttention`
   type, and the keyboard gate shared by the shell's chords and the panels' plain-letter review
   shortcuts: `MODAL_LAYER_SELECTOR` + `hasLayer` (an open modal/dialog/alertdialog owns the keyboard)

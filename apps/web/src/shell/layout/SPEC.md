@@ -46,11 +46,11 @@ default name at render from the tab's kind (tool, untitled chat, default termina
 plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 
 A file, spec, or diff browse click opens its preview at once, with no settle wait. A double click then
-promotes that same placement in place. A keep that arrives while the read is still in flight coalesces into
-one final keep that carries the leading preview-slot claim. Only two paths wait the shared 250 ms settle
-window: a single click (or keyboard activation) on the already active preview tab keeps it after the
-250 ms settle window, so a double click is not read as two keeps; and the Changes review-tab preview. Pointer/resize drafts
-and viewport compression remain runtime-only.
+promotes that same placement in place. A keep that arrives while the read is still in flight coalesces
+into one final keep that carries the leading preview-slot claim. Only two paths wait the shared 250 ms
+settle window: a single click (or keyboard activation) on the active preview tab, so a double click is
+not read as two keeps, and the Changes review-tab preview. Pointer/resize drafts and viewport
+compression remain runtime-only.
 
 Frame groups may remain empty in any workspace. Closing a final resource therefore leaves topology untouched. Explicit remove/merge is the only way to delete a group, and its result rehomes every resource that references it across all locally retained workspace views. At least one center leaf always remains.
 

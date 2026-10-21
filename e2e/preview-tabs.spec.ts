@@ -56,6 +56,24 @@ test("a single click previews into one reusable slot, a double click keeps the t
 	await expect(tabs.first()).toHaveAttribute("data-active", "true");
 });
 
+test("Enter and Space on a file row open its preview", async ({ page }) => {
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).focus();
+	await page.keyboard.press("Enter");
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toContainText("README.md");
+	await expect(tabs.first()).toHaveAttribute("data-preview", "true");
+	await expect(tabs.first()).toHaveAttribute("data-active", "true");
+
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).focus();
+	await page.keyboard.press("Space");
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toContainText("notes.txt");
+	await expect(tabs.first()).toHaveAttribute("data-preview", "true");
+});
+
 test("a double click claims the slot on its way to keeping the tab, at any latency", async ({
 	page,
 }) => {
