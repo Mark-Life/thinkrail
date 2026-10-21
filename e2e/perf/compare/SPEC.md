@@ -9,7 +9,7 @@ tags: [testing, performance, public-surface-checked]
 
 ## Responsibility
 
-`bun run perf:compare <base> <head>` measures two commits on one machine and reports the difference.
+`bun run perf:compare <base> <head>` measures two commits on each selected host (local by default) and reports the difference.
 It is an opt-in measurement tool, never a gate: no CI wiring, no budgets, no history store. The checkout
 running the command (the tool) drives a per-SHA app build of each side, so the measuring harness is
 identical for both sides and only the app under test differs.
@@ -30,6 +30,10 @@ identical for both sides and only the app under test differs.
   not stop the run: suites that declare that artifact are reported incompatible with the build error, and
   the other suites run. Builds get an allowlisted environment (`PATH`,
   `HOME`, `TMPDIR`, `LANG`, `TERM`, `USER`, `SHELL`), never the caller's `THINKRAIL_*`/`XDG_*`.
+- **Use marks.** A prepared SHA gets `locks/<sha>.users/<pid>` before its prepare lock is released;
+  `runCompare` removes it when sampling ends, and dead pids are pruned. `--rebuild` and `clean <ref>`
+  (both under the prepare lock) and `clean --all` refuse while another live pid uses the SHA, so nothing
+  rewrites or removes a tree that a running compare samples.
 - **Artifacts.** `profile-web` (`build:profile`, `apps/web/dist-profile`), `manifest-web`
   (`vite build --manifest`, `apps/web/dist-manifest`, a separate dir so `build:binary` cannot clobber it),
   `binary` (`build:binary`), `desktop` (`desktop:build`, darwin only). Each is built once per
@@ -86,7 +90,9 @@ identical for both sides and only the app under test differs.
   entries older than 7 days, keeps a remote cache `repo.git` (`git clone --bare` of origin, then `fetch`), checks out the tool SHA as a detached
   worktree at `<cache>/tool/<toolSha>` (staged at `.tmp`, then moved), runs `bun install` (`HUSKY=0`), and checks the Playwright
   browsers the selected suites need, installing them into the user cache if missing (never system
-  deps). The host then runs `perf:compare <baseSha> <headSha> --host local --json-only` with the same
+  deps). Both scripts need `bun` on the non-interactive ssh `PATH` (a stock Debian
+  `~/.bashrc` returns before the installer's `PATH` line); they also try `~/.bun/bin`, else exit with
+  `bun not on PATH for non-interactive ssh`. The host then runs `perf:compare <baseSha> <headSha> --host local --json-only` with the same
   measurement flags into `<cache>/runs/<id>/` under `remoteRun.sh`: the compare runs in its own process
   group (`set -m`, pgid in `compare.pid`) and a watcher kills that group when ssh's stdin closes, which
   happens when the local ssh dies, since `-T` gives no pty and so no SIGHUP. After a non-interrupt
@@ -98,7 +104,7 @@ identical for both sides and only the app under test differs.
 - **Output.** `<out>/compare.json` (`CompareResult`) and `<out>/compare.md`; `--json-only` skips the
   markdown. Base/Head cells show medians for exact rows and means for timed and offset rows, matching
   the statistic behind Δ. Rows with verdict `same` collapse into `<details>`; ▮ marks 5/10/20/50% tiers.
-  `report <compare.json>` re-renders markdown. Per-sample files live under `<out>/samples/`.
+  `report <compare.json>` re-renders markdown. A local compare where no suite produced a metric exits 1. Per-sample files live under `<out>/samples/`.
 - **Hermeticity check.** Every entry under `~/.thinkrail` is stamped (path to mtime and size) before and
   after; any added, removed or rewritten entry is a warning naming up to 3 paths, not an abort, because a running ThinkRail on the same machine also writes there.
 - **Renders suite.** One variant per scenario (`--scenario`, default `DEFAULT_SCENARIOS`, validated
@@ -110,8 +116,8 @@ identical for both sides and only the app under test differs.
   the reason; the full log stays in the sample dir. All metrics are `timed`. Per-component rows track
   the union of the top 15 by self ms across both warmups, frozen for the measured rounds, so every
   sample reports the same ids (absent components count as zero). Browser suites run on e2e lane 15
-  (`THINKRAIL_E2E_LANE`) by default, so their port block and e2e data dir never collide with a
-  lane-free `bun run e2e` in the same tool checkout. `THINKRAIL_E2E_LANE`, `THINKRAIL_E2E_PORT_BASE`
+  (`THINKRAIL_E2E_LANE`) by default, so their port block and e2e data dir never collide with
+  `bun run e2e` in the same tool checkout at 15 lanes or fewer; 16 lanes include lane 15. `THINKRAIL_E2E_LANE`, `THINKRAIL_E2E_PORT_BASE`
   and `PLAYWRIGHT_BROWSERS_PATH` pass through so two compares from one tool checkout can use separate
   lanes. Browsers are looked up in the platform's default Playwright cache (`~/.cache/ms-playwright`
   on Linux); set `PLAYWRIGHT_BROWSERS_PATH` when they live elsewhere. `--cpu` throttles renders only.

@@ -20,7 +20,9 @@ async function main(argv: readonly string[]) {
 	}
 	if (command.kind === "clean") {
 		const removed =
-			"all" in command.target ? cleanAll() : cleanSha(resolveSha(E2E_ROOT_DIR, command.target.ref));
+			"all" in command.target
+				? cleanAll()
+				: await cleanSha(resolveSha(E2E_ROOT_DIR, command.target.ref));
 		console.log(`perf:compare: removed ${removed}`);
 		return 0;
 	}
@@ -58,7 +60,9 @@ async function main(argv: readonly string[]) {
 	});
 	if (!command.options.jsonOnly) process.stdout.write(run.markdown);
 	console.error(`perf:compare: wrote ${run.markdownPath ?? run.jsonPath}`);
-	return 0;
+	if (run.result.suites.some((suite) => suite.metrics.length > 0)) return 0;
+	console.error("perf:compare: no suite produced metrics");
+	return 1;
 }
 
 try {

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { processRunnerInterruption } from "../../processRunner";
-import { prepareSha, resolveSha, toolState } from "./checkout";
+import { prepareSha, releaseSha, resolveSha, toolState } from "./checkout";
 import { hermeticWarning, userStateStamp } from "./env";
 import { renderReport } from "./report";
 import { runSuite } from "./schedule";
@@ -112,60 +112,65 @@ export async function runCompare(input: {
 		options,
 	});
 	if (!base || !head) throw new Error("expected two prepared refs");
-	const baseProtocol = readProtocolVersion(base.appRoot);
-	const headProtocol = readProtocolVersion(head.appRoot);
-	const warnings = protocolWarnings(baseProtocol, headProtocol, suites);
-	if (warnings.length > 0 && options.strictProtocol && suites.some((suite) => suite.browser)) {
-		throw new Error(`${warnings[0]} (--strict-protocol)`);
-	}
-	const stamp = userStateStamp();
-	mkdirSync(options.out, { recursive: true });
-	const results: SuiteResult[] = [];
-	for (const suite of suites) {
-		const unbuilt = buildFailure(suite, options, [base, head]);
-		if (unbuilt) {
-			results.push(failedSuite(suite, options, unbuilt));
-			warnings.push(`${suite.name} skipped: ${unbuilt}`);
-			continue;
+	try {
+		const baseProtocol = readProtocolVersion(base.appRoot);
+		const headProtocol = readProtocolVersion(head.appRoot);
+		const warnings = protocolWarnings(baseProtocol, headProtocol, suites);
+		if (warnings.length > 0 && options.strictProtocol && suites.some((suite) => suite.browser)) {
+			throw new Error(`${warnings[0]} (--strict-protocol)`);
 		}
-		let run: Awaited<ReturnType<typeof runSuite>>;
-		try {
-			run = await runSuite({ suite, sides: { base, head }, options, outDir: options.out });
-		} catch (error) {
-			if (isFatal(error)) throw error;
-			const reason = error instanceof Error ? error.message : String(error);
-			results.push(failedSuite(suite, options, reason));
-			warnings.push(`${suite.name} skipped: ${reason}`);
-			continue;
+		const stamp = userStateStamp();
+		mkdirSync(options.out, { recursive: true });
+		const results: SuiteResult[] = [];
+		for (const suite of suites) {
+			const unbuilt = buildFailure(suite, options, [base, head]);
+			if (unbuilt) {
+				results.push(failedSuite(suite, options, unbuilt));
+				warnings.push(`${suite.name} skipped: ${unbuilt}`);
+				continue;
+			}
+			let run: Awaited<ReturnType<typeof runSuite>>;
+			try {
+				run = await runSuite({ suite, sides: { base, head }, options, outDir: options.out });
+			} catch (error) {
+				if (isFatal(error)) throw error;
+				const reason = error instanceof Error ? error.message : String(error);
+				results.push(failedSuite(suite, options, reason));
+				warnings.push(`${suite.name} skipped: ${reason}`);
+				continue;
+			}
+			results.push({
+				name: suite.name,
+				schedule: suite.schedule(options),
+				variants: run.variants,
+				metrics: summarizeMetrics({ ...run.samples, threshold: options.threshold }),
+				loadavg: run.loadavg,
+			});
+			warnings.push(...run.warnings);
 		}
-		results.push({
-			name: suite.name,
-			schedule: suite.schedule(options),
-			variants: run.variants,
-			metrics: summarizeMetrics({ ...run.samples, threshold: options.threshold }),
-			loadavg: run.loadavg,
-		});
-		warnings.push(...run.warnings);
+		const hermetic = hermeticWarning(stamp);
+		const busy = results.filter((suite) => suite.loadavg.some((load) => load.load1 > load.cores));
+		if (busy.length > 0) {
+			warnings.push(`load above 1 per core during ${busy.map((suite) => suite.name).join(", ")}`);
+		}
+		const result: CompareResult = {
+			generatedAt: new Date().toISOString(),
+			host: hostname(),
+			tool: toolState(input.toolRoot),
+			base: { ref: base.ref, sha: base.sha, protocolVersion: baseProtocol },
+			head: { ref: head.ref, sha: head.sha, protocolVersion: headProtocol },
+			threshold: options.threshold,
+			warnings: hermetic ? [...warnings, hermetic] : warnings,
+			suites: results,
+		};
+		const jsonPath = join(options.out, "compare.json");
+		writeFileSync(jsonPath, `${JSON.stringify(result, null, 2)}\n`);
+		const markdown = renderReport(result);
+		const markdownPath = options.jsonOnly ? null : join(options.out, "compare.md");
+		if (markdownPath) writeFileSync(markdownPath, markdown);
+		return { result, markdown, jsonPath, markdownPath };
+	} finally {
+		releaseSha(base.sha);
+		releaseSha(head.sha);
 	}
-	const hermetic = hermeticWarning(stamp);
-	const busy = results.filter((suite) => suite.loadavg.some((load) => load.load1 > load.cores));
-	if (busy.length > 0) {
-		warnings.push(`load above 1 per core during ${busy.map((suite) => suite.name).join(", ")}`);
-	}
-	const result: CompareResult = {
-		generatedAt: new Date().toISOString(),
-		host: hostname(),
-		tool: toolState(input.toolRoot),
-		base: { ref: base.ref, sha: base.sha, protocolVersion: baseProtocol },
-		head: { ref: head.ref, sha: head.sha, protocolVersion: headProtocol },
-		threshold: options.threshold,
-		warnings: hermetic ? [...warnings, hermetic] : warnings,
-		suites: results,
-	};
-	const jsonPath = join(options.out, "compare.json");
-	writeFileSync(jsonPath, `${JSON.stringify(result, null, 2)}\n`);
-	const markdown = renderReport(result);
-	const markdownPath = options.jsonOnly ? null : join(options.out, "compare.md");
-	if (markdownPath) writeFileSync(markdownPath, markdown);
-	return { result, markdown, jsonPath, markdownPath };
 }

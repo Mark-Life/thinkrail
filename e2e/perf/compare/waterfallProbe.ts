@@ -190,14 +190,15 @@ export function wireTimeline(frames: readonly WireFrame[]): WireTimeline {
 		(frame) => frame.direction === "sent" && frame.method === "session.getMessages",
 	);
 	if (!getMessages) throw new Error("no session.getMessages request after restore");
-	const watchReady = parsed.findLast(
+	const watchReadies = parsed.filter(
 		(frame) =>
 			frame.direction === "sent" &&
 			frame.method === "workspace.watchReady" &&
-			frame.workspaceId === getMessages.workspaceId &&
-			frame.at <= getMessages.at,
+			frame.workspaceId === getMessages.workspaceId,
 	);
-	if (!watchReady) throw new Error("no workspace.watchReady request before session.getMessages");
+	const watchReady =
+		watchReadies.findLast((frame) => frame.at <= getMessages.at) ?? watchReadies[0];
+	if (!watchReady) throw new Error("no workspace.watchReady request for the session workspace");
 	const watchReadyReplyMs = replyAt(watchReady.id);
 	const getMessagesReplyMs = replyAt(getMessages.id);
 	if (watchReadyReplyMs === undefined) throw new Error("workspace.watchReady got no reply");
