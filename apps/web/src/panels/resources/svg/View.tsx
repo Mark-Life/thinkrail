@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from "react";
 import type { ResourceViewProps } from "@/resources";
-import { RegionReviewSurface } from "../RegionReviewSurface";
 import { placedRegionThreadIds } from "../regionReview";
+import { RegionReviewSurface } from "../RegionReviewSurface";
 import { contentStamp } from "../reviewComposerState";
-import { SvgFrame } from "./SvgFrame";
 import { buildSvgDocument, svgByteLength, svgIntrinsicSize } from "./svgDocument";
+import { SvgFrame } from "./SvgFrame";
 import { useSvgTheme } from "./useSvgTheme";
 
 const NO_THREADS: ReadonlySet<string> = new Set();

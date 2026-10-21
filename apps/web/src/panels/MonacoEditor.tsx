@@ -4,8 +4,8 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import type { ResourceViewProps, SurfaceReview } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
-import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
+import { MonacoReviewZones } from "./MonacoReviewZones";
 import {
 	EDITOR_THEME,
 	fileEditorOptions,

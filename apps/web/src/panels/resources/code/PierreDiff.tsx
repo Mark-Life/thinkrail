@@ -33,7 +33,6 @@ import {
 	computeActionBlocks,
 } from "./changeBlocks";
 import PierreProvider from "./PierreProvider";
-import { PierreScroller } from "./PierreScroller";
 import {
 	type BlockedSelection,
 	COLLAPSED_CONTEXT_THRESHOLD,
@@ -44,6 +43,7 @@ import {
 	threadLineRange,
 	usePierreFocus,
 } from "./pierreReview";
+import { PierreScroller } from "./PierreScroller";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
 
 type DiffAnnotationMetadata =

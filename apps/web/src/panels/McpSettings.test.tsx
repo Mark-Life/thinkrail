@@ -5,7 +5,10 @@ import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { deriveMcpServerRows, type McpServerRow } from "@/store";
 import * as transport from "@/transport";
+import { reviewMcpServer } from "./mcpEntries";
+import { MCP_PRESETS } from "./mcpPresets";
 import { McpRunReview } from "./McpServerDialogs";
+import { mcpRowView } from "./mcpServerView";
 import {
 	approveMcpServer,
 	McpConfigFileErrors,
@@ -13,9 +16,6 @@ import {
 	McpEmptyState,
 	McpServerRowView,
 } from "./McpSettings";
-import { reviewMcpServer } from "./mcpEntries";
-import { MCP_PRESETS } from "./mcpPresets";
-import { mcpRowView } from "./mcpServerView";
 
 function row(overrides: Partial<McpServerRow> = {}, summary: Partial<McpServerSummary> = {}) {
 	const value: McpServerRow = {

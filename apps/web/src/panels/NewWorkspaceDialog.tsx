@@ -77,8 +77,8 @@ import {
 } from "@/prompt";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
-import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
+import { BranchPicker } from "./BranchPicker";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 type WorkspaceTarget = "worktree" | "default";

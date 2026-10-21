@@ -1,8 +1,8 @@
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
-import { AttentionLine } from "./AttentionLine";
 import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
+import { AttentionLine } from "./AttentionLine";
 import { useChatActions } from "./ChatActions";
 import { ToolArgList, toolArgEntries } from "./ToolArgList";
 import type { ExtUiDialogRequest } from "./types";

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { Size } from "../regionReview";
 import { svgIntrinsicSize } from "../svg/svgDocument";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
-import { NotebookFrame, NotebookOutputItem, NotebookOutputs } from "./NotebookOutputView";
 import { type NotebookCell, type NotebookOutput, notebookOutputText } from "./notebookModel";
+import { NotebookFrame, NotebookOutputItem, NotebookOutputs } from "./NotebookOutputView";
 import { buildNotebookSvgDocument, notebookImageDataUrl } from "./outputDocument";
 
 export function NotebookSourceDiff({

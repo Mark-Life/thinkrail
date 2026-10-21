@@ -4,15 +4,15 @@ import type {
 	TerminalExitPush,
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
+import { onThemeSwap } from "@thinkrail/ui/theme";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebFontsAddon } from "@xterm/addon-web-fonts";
+import "@xterm/xterm/css/xterm.css";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
-import "@xterm/xterm/css/xterm.css";
-import { Button } from "@thinkrail/ui/button";
-import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
 import { SettingsSection, useAppStore } from "../store";

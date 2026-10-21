@@ -9,7 +9,6 @@ import PierreProvider from "../code/PierreProvider";
 import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { NotebookOutputsDiff, NotebookSourceDiff } from "./NotebookCellDiff";
-import { NotebookCellBody, NotebookOutputs } from "./NotebookOutputView";
 import {
 	type AlignedNotebookCell,
 	alignNotebookCells,
@@ -19,6 +18,7 @@ import {
 	parseNotebook,
 	placedNotebookThreadIds,
 } from "./notebookModel";
+import { NotebookCellBody, NotebookOutputs } from "./NotebookOutputView";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 type Side = "base" | "worktree";

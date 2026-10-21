@@ -7,8 +7,8 @@ import {
 import { cn } from "@thinkrail/ui/utils";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
-import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary, resolveProminence } from "./toolRegistry";
+import { ToolRendererBody } from "./ToolRendererBody";
 import type { ToolResultState } from "./types";
 
 export function ToolCard({

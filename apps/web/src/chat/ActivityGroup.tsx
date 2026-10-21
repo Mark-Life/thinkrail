@@ -13,8 +13,8 @@ import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { PendingExtUiContext, ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
-import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary } from "./toolRegistry";
+import { ToolRendererBody } from "./ToolRendererBody";
 
 export function ActivityGroup({
 	id,

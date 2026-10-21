@@ -6,8 +6,8 @@ import {
 import { Button } from "@thinkrail/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ResourceViewProps } from "@/resources";
-import { RegionReviewSurface } from "../RegionReviewSurface";
 import { placedRegionThreadIds, type Size } from "../regionReview";
+import { RegionReviewSurface } from "../RegionReviewSurface";
 import { contentStamp } from "../reviewComposerState";
 import {
 	clampImageZoom,

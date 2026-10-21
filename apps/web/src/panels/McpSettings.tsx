@@ -53,6 +53,14 @@ import {
 } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
+	MCP_EXPOSURE_HINT,
+	MCP_EXPOSURES,
+	type McpEditableExposure,
+	projectEntryFrom,
+	SCOPE_LABEL,
+} from "./mcpEntries";
+import { MCP_PRESETS, type McpPreset } from "./mcpPresets";
+import {
 	McpAddDialog,
 	type McpAddResult,
 	McpApproveDialog,
@@ -63,14 +71,6 @@ import {
 	McpLogDialog,
 	type McpLogRead,
 } from "./McpServerDialogs";
-import {
-	MCP_EXPOSURE_HINT,
-	MCP_EXPOSURES,
-	type McpEditableExposure,
-	projectEntryFrom,
-	SCOPE_LABEL,
-} from "./mcpEntries";
-import { MCP_PRESETS, type McpPreset } from "./mcpPresets";
 import {
 	type McpChatFailure,
 	type McpRowAction,

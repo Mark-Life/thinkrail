@@ -5,8 +5,8 @@ import {
 	mcpListingSummary,
 	mcpReadSummary,
 } from "./McpResourceCards";
-import { McpToolCard, mcpToolSummary } from "./McpToolCard";
 import { MCP_TOOL_PREFIX } from "./mcpResult";
+import { McpToolCard, mcpToolSummary } from "./McpToolCard";
 import { ToolSearchCard, toolSearchSummary } from "./ToolSearchCard";
 
 registerToolRendererPrefix(MCP_TOOL_PREFIX, McpToolCard, { summary: mcpToolSummary });

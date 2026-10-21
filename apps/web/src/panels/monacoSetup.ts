@@ -1,7 +1,7 @@
 import { loader } from "@monaco-editor/react";
 import { shikiToMonaco, textmateThemeToMonacoTheme } from "@shikijs/monaco";
-import { createHighlighterCore, type HighlighterCore, type ThemeRegistration } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { onThemeSwap } from "@thinkrail/ui/theme";
+import type { Environment, editor } from "monaco-editor/esm/vs/editor/editor.api.js";
 import "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css";
 import "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css";
 import "monaco-editor/esm/vs/editor/browser/coreCommands.js";
@@ -18,10 +18,10 @@ import "monaco-editor/esm/vs/editor/contrib/unicodeHighlighter/browser/unicodeHi
 import "monaco-editor/esm/vs/editor/contrib/wordHighlighter/browser/wordHighlighter.js";
 import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneCommandsQuickAccess.js";
 import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js";
-import { onThemeSwap } from "@thinkrail/ui/theme";
-import type { Environment, editor } from "monaco-editor/esm/vs/editor/editor.api.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import { createHighlighterCore, type HighlighterCore, type ThemeRegistration } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { cssColorToHex } from "@/lib";
 import { SHIKI_FILE_LANGUAGES } from "@/lib/highlighter";
 import { resolveThinkrailShikiTheme } from "../themes";
