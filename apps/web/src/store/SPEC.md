@@ -211,7 +211,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
   Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`
   promotes one-way. A coalesced preview→keep gesture carries `claimPreview` on its single final intent, so no
-  intermediate state persists. Arrangement-agnostic opens enter the store, but only shell layout integration
+  intermediate state persists; a keep after a landed preview promotes that existing placement one-way. Arrangement-agnostic opens enter the store, but only shell layout integration
   resolves them against that workspace's last focus and commits local placement. Reopening an existing
   canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
   repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal

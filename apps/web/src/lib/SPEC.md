@@ -48,8 +48,9 @@ not this module; the theme-aware highlighter remains app-local.
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
-  **`DOUBLE_CLICK_SETTLE_MS`** (the one click→double-click arbitration window shared by cached and
-  host-read tab opens), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
+  **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
+  commit something a double click contradicts: the tab strip's touch-path keep and the Changes review-tab
+  preview), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
   `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
   (the text helpers here take the caller's translator first, so render output follows a language change),
   and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
