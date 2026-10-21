@@ -175,6 +175,12 @@ Playwright run writes no output, so the last good file survives.
   `rootDir`, `gitHead`, `dirty` and `dirtyTreeHash` (sha256 of `git status --porcelain` plus `git diff HEAD`;
   untracked file contents are not hashed).
 
+### Compare mode
+
+`bun run perf:compare <base> <head>` measures two commits on one machine. The tool checkout builds each
+SHA in a cached detached worktree under `~/.cache/thinkrail-perf/`, interleaves samples ABBA, and writes
+markdown and JSON. See [[submodule-perf-compare]].
+
 ## Desktop-backed mode
 
 `bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged
@@ -383,7 +389,8 @@ Windows lane into the real profile (see `module-shared`).
 ## Boundary
 
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,
-  isolation and port-allocation rules, report orchestration, and the public `e2e*` package commands.
+  isolation and port-allocation rules, report orchestration, the public `e2e*` package commands, and
+  the `perf:render` / `perf:compare` measurement tools ([[submodule-perf-compare]] owns `e2e/perf/compare/`).
   `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
   `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
   depends on the developer machine's real git config. `e2e/fixtures/pierre.ts` is the one place specs
