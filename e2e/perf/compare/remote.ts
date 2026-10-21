@@ -2,17 +2,23 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { runE2eProcess } from "../../processRunner";
+import { processRunnerInterruption, runE2eProcess } from "../../processRunner";
 import { git, resolveSha, toolState } from "./checkout";
 import { runCompare, selectSuites } from "./compare";
 import { renderReport } from "./report";
 import type { CompareOptions, CompareResult, Sha } from "./types";
 
-export const HOSTS = ["local", "rs8000", "studio"] as const;
-export type Host = (typeof HOSTS)[number];
-
 const BOOTSTRAP = readFileSync(new URL("./bootstrap.sh", import.meta.url), "utf8");
+const REMOTE_RUN = readFileSync(new URL("./remoteRun.sh", import.meta.url), "utf8");
+const HOST_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._@-]*$/;
 const SSH_OPTIONS = ["-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=30"];
+
+export function parseHost(value: string | undefined) {
+	if (value === undefined || !HOST_PATTERN.test(value)) {
+		throw new Error("--host needs local or an ssh alias (letters, digits, . _ @ -)");
+	}
+	return value;
+}
 
 export function shellQuote(value: string) {
 	return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -75,7 +81,7 @@ export function requiredBrowsers(options: CompareOptions) {
 	return [...browsers];
 }
 
-export function remotePreflight(toolRoot: string, shas: Record<string, Sha>) {
+function remotePreflight(toolRoot: string, shas: Record<string, Sha>) {
 	const tool = toolState(toolRoot);
 	if (tool.dirty) {
 		throw new Error("tool checkout is dirty: commit and push the tool commit before --host");
@@ -91,10 +97,22 @@ export function remotePreflight(toolRoot: string, shas: Record<string, Sha>) {
 	return { toolSha: tool.sha as Sha, origin: git(toolRoot, "remote", "get-url", "origin") };
 }
 
-async function ssh(host: string, command: string, label: string) {
-	const result = await runE2eProcess(["ssh", ...SSH_OPTIONS, host, command], { stdout: "pipe" });
+async function ssh(
+	host: string,
+	command: string,
+	label: string,
+	stdin: "ignore" | "pipe" = "ignore",
+) {
+	const result = await runE2eProcess(["ssh", ...SSH_OPTIONS, host, command], {
+		stdin,
+		stdout: "pipe",
+	});
 	if (result.exitCode !== 0) throw new Error(`${host}: ${label} failed (exit ${result.exitCode})`);
 	return result.stdout;
+}
+
+function script(source: string, name: string, args: readonly string[]) {
+	return `bash -c ${shellQuote(source)} ${name} ${args.map(shellQuote).join(" ")}`;
 }
 
 async function runRemote(input: {
@@ -112,15 +130,12 @@ async function runRemote(input: {
 		`${input.base} ${input.head}`,
 		requiredBrowsers(options).join(" "),
 	];
-	const prepared = await ssh(
-		host,
-		`bash -c ${shellQuote(BOOTSTRAP)} perf-bootstrap ${bootstrapArgs.map(shellQuote).join(" ")}`,
-		"bootstrap",
-	);
+	const prepared = await ssh(host, script(BOOTSTRAP, "perf-bootstrap", bootstrapArgs), "bootstrap");
 	const [toolDir, cache] = prepared.trim().split("\n").slice(-2);
 	if (!toolDir || !cache) throw new Error(`${host}: bootstrap printed no tool dir`);
 	const remoteOut = `${cache}/runs/${new Date().toISOString().replaceAll(":", "-")}-${process.pid}`;
 	const compareArgs = [
+		"bun",
 		"run",
 		"perf:compare",
 		input.base,
@@ -132,12 +147,26 @@ async function runRemote(input: {
 		remoteOut,
 		...forwardArgs(options),
 	];
-	await ssh(
-		host,
-		`cd ${shellQuote(toolDir)} && bun ${compareArgs.map(shellQuote).join(" ")}`,
-		"perf:compare",
-	);
+	const pidFile = `${remoteOut}/compare.pid`;
+	try {
+		await ssh(
+			host,
+			`cd ${shellQuote(toolDir)} && ${script(REMOTE_RUN, "perf-run", [pidFile, ...compareArgs])}`,
+			"perf:compare",
+			"pipe",
+		);
+	} catch (error) {
+		if (!processRunnerInterruption()) {
+			await ssh(
+				host,
+				`kill -TERM -- "-$(cat ${shellQuote(pidFile)})" 2>/dev/null; true`,
+				"stop",
+			).catch(() => "");
+		}
+		throw error;
+	}
 	const json = await ssh(host, `cat ${shellQuote(`${remoteOut}/compare.json`)}`, "copy back");
+	await ssh(host, `rm -rf ${shellQuote(remoteOut)}`, "cleanup").catch(() => "");
 	return JSON.parse(json) as CompareResult;
 }
 
@@ -159,50 +188,55 @@ export async function runOnHosts(input: {
 	toolRoot: string;
 	baseRef: string;
 	headRef: string;
-	hosts: readonly Host[];
+	hosts: readonly string[];
 	options: CompareOptions;
 }) {
 	const { options } = input;
 	const base = resolveSha(input.toolRoot, input.baseRef);
 	const head = resolveSha(input.toolRoot, input.headRef);
 	const localName = hostname();
-	const plans = [...new Set(input.hosts)].map((host) => ({
-		host,
-		local: isLocalHost({ host, localName, sshHostname: sshHostname(host) }),
-	}));
-	const remote = plans.some((plan) => !plan.local)
-		? remotePreflight(input.toolRoot, { base, head })
-		: null;
-	const settled = await Promise.allSettled(
-		plans.map(async (plan) => {
-			const out = join(options.out, plan.host);
-			if (plan.local) {
-				const run = await runCompare({
-					toolRoot: input.toolRoot,
-					baseRef: input.baseRef,
-					headRef: input.headRef,
-					options: { ...options, out },
-				});
-				return { host: plan.host, result: run.result };
-			}
-			if (!remote) throw new Error("remote preflight missing");
-			const result = withRefs(
-				await runRemote({ host: plan.host, ...remote, base, head, options }),
-				{ base: input.baseRef, head: input.headRef },
-			);
-			writeHost(out, result, options.jsonOnly);
-			return { host: plan.host, result };
-		}),
+	const hosts = [...new Set(input.hosts)];
+	const local = (host: string) => isLocalHost({ host, localName, sshHostname: sshHostname(host) });
+	const localHosts = hosts.filter(local);
+	const remoteHosts = hosts.filter((host) => !localHosts.includes(host));
+	const remote = remoteHosts.length > 0 ? remotePreflight(input.toolRoot, { base, head }) : null;
+	const refs = { base: input.baseRef, head: input.headRef };
+	const runLocal = async ([first, ...aliases]: readonly string[]) => {
+		const run = await runCompare({
+			toolRoot: input.toolRoot,
+			baseRef: input.baseRef,
+			headRef: input.headRef,
+			options: { ...options, out: join(options.out, first ?? "local") },
+		});
+		for (const alias of aliases) writeHost(join(options.out, alias), run.result, options.jsonOnly);
+		return run.result;
+	};
+	const runHost = async (host: string) => {
+		if (!remote) throw new Error("remote preflight missing");
+		const result = withRefs(await runRemote({ host, ...remote, base, head, options }), refs);
+		writeHost(join(options.out, host), result, options.jsonOnly);
+		return result;
+	};
+	const tasks = [
+		...(localHosts.length > 0 ? [{ hosts: localHosts, run: () => runLocal(localHosts) }] : []),
+		...remoteHosts.map((host) => ({ hosts: [host], run: () => runHost(host) })),
+	];
+	const settled = await Promise.allSettled(tasks.map((task) => task.run()));
+	const results = settled.flatMap((entry, index) =>
+		entry.status === "fulfilled"
+			? (tasks[index]?.hosts ?? []).map((host) => ({ host, result: entry.value }))
+			: [],
 	);
-	const results = settled.flatMap((entry) => (entry.status === "fulfilled" ? [entry.value] : []));
 	const failures = settled.flatMap((entry, index) =>
 		entry.status === "rejected"
 			? [
-					`${plans[index]?.host}: ${entry.reason instanceof Error ? entry.reason.message : String(entry.reason)}`,
+					`${tasks[index]?.hosts.join(", ")}: ${entry.reason instanceof Error ? entry.reason.message : String(entry.reason)}`,
 				]
 			: [],
 	);
-	const markdown = results.map((entry) => renderReport(entry.result)).join("\n---\n\n");
+	const markdown = settled
+		.flatMap((entry) => (entry.status === "fulfilled" ? [renderReport(entry.value)] : []))
+		.join("\n---\n\n");
 	const markdownPath = options.jsonOnly ? null : join(options.out, "compare.md");
 	if (markdownPath && results.length > 0) writeFileSync(markdownPath, markdown);
 	return { results, failures, markdown, markdownPath, outDir: options.out };

@@ -140,7 +140,7 @@ async function sample(context: SuiteContext): Promise<SampleResult> {
 		return { ok: false, incompatible: failureReason(result.stdout, result.exitCode) };
 	}
 	const record = JSON.parse(readFileSync(file, "utf8")) as WaterfallRecord;
-	return { ok: true, measurements: waterfallMeasurements(record), raw: record };
+	return { ok: true, measurements: waterfallMeasurements(record) };
 }
 
 export const waterfallSuite: Suite<"waterfall"> = {

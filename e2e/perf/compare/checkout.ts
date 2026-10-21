@@ -65,7 +65,7 @@ export function toolState(toolRoot: string) {
 	};
 }
 
-export function ensureCacheRepo(toolRoot: string) {
+function ensureCacheRepo(toolRoot: string) {
 	const { repo } = cachePaths();
 	if (!existsSync(join(repo, "HEAD"))) {
 		mkdirSync(repo, { recursive: true });
@@ -100,8 +100,12 @@ function ensureWorktree(repo: string, sha: Sha) {
 	} catch {
 		throw new Error(`${sha}: SHA not found; fetch it`);
 	}
+	const staging = `${dir}.tmp`;
+	rmSync(dir, { recursive: true, force: true });
+	rmSync(staging, { recursive: true, force: true });
 	git(repo, "worktree", "prune");
-	git(repo, "worktree", "add", "--detach", "--quiet", dir, sha);
+	git(repo, "worktree", "add", "--detach", "--quiet", staging, sha);
+	git(repo, "worktree", "move", staging, dir);
 	return dir;
 }
 
@@ -129,7 +133,7 @@ function tryLock(dir: string) {
 	}
 }
 
-export async function withShaLock<T>(sha: Sha, task: () => Promise<T>) {
+async function withShaLock<T>(sha: Sha, task: () => Promise<T>) {
 	const { locks } = cachePaths();
 	mkdirSync(locks, { recursive: true });
 	const dir = join(locks, sha);

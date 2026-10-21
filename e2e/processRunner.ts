@@ -13,6 +13,7 @@ export interface ProcessRunResult {
 
 export interface ProcessRunOptions {
 	env?: NodeJS.ProcessEnv;
+	stdin?: "ignore" | "pipe";
 	stdout?: "inherit" | "pipe";
 	terminationGraceMs?: number;
 }
@@ -262,7 +263,7 @@ export async function runE2eProcess(
 		cwd: E2E_ROOT_DIR,
 		detached: e2eProcessDetached(process.platform),
 		env: options.env ?? process.env,
-		stdio: ["ignore", options.stdout ?? "inherit", "inherit"],
+		stdio: [options.stdin ?? "ignore", options.stdout ?? "inherit", "inherit"],
 		windowsHide: true,
 	});
 	if (!child.pid) throw new Error(`Could not start ${JSON.stringify(executable)}`);

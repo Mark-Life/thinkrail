@@ -13,7 +13,7 @@ export interface Measurement {
 }
 
 export type SampleResult =
-	| { ok: true; measurements: Measurement[]; raw?: unknown }
+	| { ok: true; measurements: Measurement[] }
 	| { ok: false; incompatible: string };
 
 export type Schedule =

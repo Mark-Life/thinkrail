@@ -6,7 +6,7 @@ import { hermeticEnv } from "./env";
 import { freePort, type Launch, prepareHome, timeToExit, timeToReady } from "./startupProcess";
 import type { CompareOptions, Env, Measurement, SampleResult, Suite, SuiteContext } from "./types";
 
-export const STARTUP_KINDS = ["cli", "server", "binary", "desktop"] as const;
+const STARTUP_KINDS = ["cli", "server", "binary", "desktop"] as const;
 type StartupKind = (typeof STARTUP_KINDS)[number];
 type Cache = "cold" | "warm";
 

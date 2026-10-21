@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { signalExitCode } from "../../processRunner";
 import type { Env } from "./types";
 
 const POLL_MS = 10;
@@ -14,13 +15,13 @@ export interface Launch {
 	cwd: string;
 }
 
-export interface ReadyProbes {
+interface ReadyProbes {
 	stdout?: RegExp;
 	health?: number;
 	file?: string;
 }
 
-export type ReadyTimes = Record<keyof ReadyProbes, number | undefined>;
+type ReadyTimes = Record<keyof ReadyProbes, number | undefined>;
 
 export function freePort() {
 	return new Promise<number>((resolve, reject) => {
@@ -49,6 +50,28 @@ function signalGroup(pid: number, signal: NodeJS.Signals) {
 	}
 }
 
+const live = new Set<number>();
+
+function killLive(signal: NodeJS.Signals) {
+	for (const pid of live) signalGroup(pid, "SIGKILL");
+	process.exit(signalExitCode(signal));
+}
+
+function track(pids: readonly number[]) {
+	if (pids.length > 0 && live.size === 0) {
+		process.on("SIGINT", killLive);
+		process.on("SIGTERM", killLive);
+	}
+	for (const pid of pids) live.add(pid);
+}
+
+function untrack(pids: readonly number[]) {
+	for (const pid of pids) live.delete(pid);
+	if (live.size > 0) return;
+	process.off("SIGINT", killLive);
+	process.off("SIGTERM", killLive);
+}
+
 function start(launch: Launch) {
 	const [executable, ...args] = launch.command;
 	if (!executable) throw new Error("empty startup command");
@@ -62,6 +85,7 @@ function start(launch: Launch) {
 	});
 	const pid = child.pid;
 	if (pid === undefined) throw new Error(`could not start ${executable}`);
+	track([pid]);
 	let stdout = "";
 	let stderr = "";
 	child.stdout.setEncoding("utf8");
@@ -88,19 +112,19 @@ function start(launch: Launch) {
 			}),
 		exitedYet: () => done,
 		output: () => ({ stdout, stderr }),
+		track,
 		async stop(extraPids: readonly number[] = []) {
 			for (const extra of extraPids) signalGroup(extra, "SIGTERM");
-			if (done) {
-				signalGroup(pid, "SIGTERM");
-				return;
-			}
 			signalGroup(pid, "SIGTERM");
-			const force = setTimeout(() => {
-				signalGroup(pid, "SIGKILL");
-				for (const extra of extraPids) signalGroup(extra, "SIGKILL");
-			}, STOP_GRACE_MS);
-			await exited.catch(() => 1);
-			clearTimeout(force);
+			if (!done) {
+				const force = setTimeout(() => {
+					signalGroup(pid, "SIGKILL");
+					for (const extra of extraPids) signalGroup(extra, "SIGKILL");
+				}, STOP_GRACE_MS);
+				await exited.catch(() => 1);
+				clearTimeout(force);
+			}
+			untrack([pid, ...extraPids]);
 		},
 	};
 }
@@ -113,9 +137,9 @@ export async function timeToExit(launch: Launch, timeoutMs: number) {
 	const proc = start(launch);
 	proc.onStdout(() => {});
 	const timer = setTimeout(() => void proc.stop(), timeoutMs);
-	const code = await proc.exited;
+	const code = await proc.exited.finally(() => clearTimeout(timer));
 	const elapsed = performance.now() - proc.startedAt;
-	clearTimeout(timer);
+	await proc.stop();
 	const { stdout, stderr } = proc.output();
 	if (code !== 0) throw new Error(`exit ${code} after ${Math.round(elapsed)} ms: ${tail(stderr)}`);
 	if (stdout.trim() === "") throw new Error("printed nothing");
@@ -154,6 +178,11 @@ export async function timeToReady(launch: Launch, probes: ReadyProbes, timeoutMs
 		const reported = Number(match[1]);
 		if (Number.isInteger(reported) && reported > 0) port = reported;
 	});
+	const extraPids = () =>
+		["pid", "launcherPid"].flatMap((key) => {
+			const value = ready?.[key];
+			return typeof value === "number" && Number.isInteger(value) && value > 0 ? [value] : [];
+		});
 	const pending = () =>
 		(probes.stdout !== undefined && times.stdout === undefined) ||
 		(probes.health !== undefined && times.health === undefined) ||
@@ -177,10 +206,6 @@ export async function timeToReady(launch: Launch, probes: ReadyProbes, timeoutMs
 		}
 		return times;
 	} finally {
-		const extra = ["pid", "launcherPid"].flatMap((key) => {
-			const value = ready?.[key];
-			return typeof value === "number" && Number.isInteger(value) && value > 0 ? [value] : [];
-		});
-		await proc.stop(extra);
+		await proc.stop(extraPids());
 	}
 }

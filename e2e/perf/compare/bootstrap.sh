@@ -8,9 +8,32 @@ browsers=$4
 cache=${THINKRAIL_PERF_CACHE:-$HOME/.cache/thinkrail-perf}
 repo=$cache/repo.git
 host=$(hostname)
+lock=$cache/locks/bootstrap
+
+mkdir -p "$cache/locks"
+waited=0
+until mkdir "$lock" 2>/dev/null; do
+	owner=$(cat "$lock/pid" 2>/dev/null || true)
+	if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+		rm -rf "$lock"
+		continue
+	fi
+	if [ "$waited" -eq 0 ]; then echo "perf:compare[$host]: waiting for another bootstrap" >&2; fi
+	waited=$((waited + 1))
+	if [ "$waited" -gt 3600 ]; then
+		echo "perf:compare[$host]: timed out waiting for $lock" >&2
+		exit 5
+	fi
+	sleep 1
+done
+echo "$$" >"$lock/pid"
+trap 'rm -rf "$lock"' EXIT
+
+if [ -d "$cache/runs" ]; then
+	find "$cache/runs" -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +
+fi
 
 if [ ! -f "$repo/HEAD" ]; then
-	mkdir -p "$cache"
 	echo "perf:compare[$host]: cloning $origin into $repo" >&2
 	git clone --bare --quiet "$origin" "$repo"
 fi
@@ -24,8 +47,10 @@ done
 
 dir=$cache/tool/$tool
 if [ ! -e "$dir/.git" ]; then
+	rm -rf "$dir" "$dir.tmp"
 	git -C "$repo" worktree prune
-	git -C "$repo" worktree add --detach --quiet "$dir" "$tool"
+	git -C "$repo" worktree add --detach --quiet "$dir.tmp" "$tool"
+	git -C "$repo" worktree move "$dir.tmp" "$dir"
 fi
 cd "$dir"
 if [ ! -f node_modules/.perf-tool-installed ]; then

@@ -21,8 +21,9 @@ identical for both sides and only the app under test differs.
   worktree registers in the shared repo (parallel agents and ThinkRail's own worktree list never see
   cache worktrees). `wt/<sha>` is a detached worktree of that bare repo. A ref the tool repo cannot
   resolve fails with "SHA not found; fetch it".
-- **Prepare.** Under an atomic `locks/<sha>` directory (a dead owner pid is reclaimed), the SHA gets
-  `bun install --frozen-lockfile` with `HUSKY=0`, then each selected `Artifact` builds inside the
+- **Prepare.** Under an atomic `locks/<sha>` directory (a dead owner pid is reclaimed), a missing
+  worktree is added at `wt/<sha>.tmp` and moved into place only after `git worktree add` succeeds, so an
+  interrupted checkout is never reused. The SHA then gets `bun install --frozen-lockfile` with `HUSKY=0`, then each selected `Artifact` builds inside the
   worktree. `wt/<sha>/.perf-built.json` records the lockfile hash, Bun version and per-artifact inputs;
   matching entries skip work, `--rebuild` ignores them. Builds get an allowlisted environment (`PATH`,
   `HOME`, `TMPDIR`, `LANG`, `TERM`, `USER`, `SHELL`), never the caller's `THINKRAIL_*`/`XDG_*`.
@@ -44,12 +45,20 @@ identical for both sides and only the app under test differs.
   `--version` and `/health` of `apps/cli/dist/thinkrail` with cold and warm `XDG_CACHE_HOME` (asset
   staging). `desktop` (macOS) times spawn of the dev launcher to `THINKRAIL_DESKTOP_READY_FILE`, written
   on webview `dom-ready`, hidden window, fresh user data. Schedule is `auto` (`--min-runs`, `--max-minutes`).
+  While a startup child (or a pid from the ready file) is alive, SIGINT/SIGTERM handlers SIGKILL its
+  process group and exit with the signal code, because a detached group never sees the terminal's
+  Ctrl-C and no `runE2eProcess` handler is installed between spawns.
 - **Schedule.** `once` takes one sample per side. `rounds` and `auto` first run one discarded warmup per
   side and variant; rounds then alternate ABBA (odd rounds base first). `auto` stops after `minRuns`
-  once no timed metric is `unsure`, re-checking every `batch` rounds, or at `maxMinutes`. `os.loadavg()`
+  once every timed metric is settled, re-checking every `batch` rounds, or at `maxMinutes`. A timed
+  metric is settled when its verdict is not `unsure` or its CI half-width is at most 2%; without the
+  width rule an unchanged metric at `--threshold 0` stays `unsure` and every run would hit the cap. `os.loadavg()`
   is recorded per round; load above one per core is a report warning.
-- **Compatibility.** A variant whose sample fails (warmup or later) on either side is excluded from
-  both sides and reported with its reason; a suite aborts only when every variant fails. The
+- **Compatibility.** A variant whose first sample on a side fails (the warmup, or round 1 of a `once`
+  suite) is excluded from both sides and reported with its reason; a suite aborts only when every
+  variant fails. A later failure is treated as transient (a slow host, a timeout): the sample is retried
+  once, then the round is skipped with a report warning and collected samples are kept; after 3 failed
+  rounds the variant stops sampling and keeps its data. `ENOSPC` aborts the run with a disk-full message. The
   `PROTOCOL_VERSION` of each side is recorded and a difference is a warning, because it changes in most
   feature PRs; `--strict-protocol` turns it into an abort when a browser suite is selected.
 - **Statistics.** Exact metrics (sizes, counts) compare medians; any change beyond `--threshold` is
@@ -57,26 +66,37 @@ identical for both sides and only the app under test differs.
   `R = mean(head)/mean(base)`, delta-method variance `R²·(s_h²/(n_h·m_h²) + s_b²/(n_b·m_b²))`,
   Welch–Satterthwaite df over those two terms, Student t (df 1–30 table, floored; 1.96 beyond). The CI
   wholly beyond `±threshold` gives `better`/`worse`; wholly inside gives `same`; otherwise `unsure`.
-  Two all-zero sides are `same`. Offset metrics (signed gaps such as "A minus B", where a ratio is
+  At `--threshold 0` (default) `same` needs an exactly zero CI, so an unchanged timed row reads `unsure`
+  with a narrow CI; pass a threshold to fold such rows. Two all-zero sides are `same`. When exactly one
+  side's mean is zero the ratio is undefined: the CI column names the zero side and the verdict comes
+  from the Welch difference CI. Offset metrics (signed gaps such as "A minus B", where a ratio is
   meaningless) report the difference of means with a Welch 95% CI in the metric's unit; the CI wholly
   below or above zero gives `better`/`worse`, the threshold does not apply.
-- **Remote hosts.** `--host` (repeatable: `local`, `rs8000`, `studio`) runs the compare on each host in
-  parallel; a host whose alias or `ssh -G` hostname matches the local hostname runs locally. Before any
+- **Remote hosts.** `--host` (repeatable: `local` or any ssh alias, `[A-Za-z0-9][A-Za-z0-9._@-]*`) runs
+  the compare on each host in parallel. Hosts whose alias or `ssh -G` hostname matches the local
+  hostname run once, locally, and that result is written under each such alias, so one machine never
+  runs two timed compares at once. Before any
   ssh, the tool tree must be clean and `git branch -r --contains` must find base, head and the tool
-  SHA on `origin`, else it fails fast. Over `ssh -T -o BatchMode=yes`, `bootstrap.sh` keeps a remote
-  cache `repo.git` (`git clone --bare` of origin, then `fetch`), checks out the tool SHA as a detached
-  worktree at `<cache>/tool/<toolSha>`, runs `bun install` (`HUSKY=0`), and checks the Playwright
+  SHA on `origin`, else it fails fast. Over `ssh -T -o BatchMode=yes`, `bootstrap.sh` holds a
+  `<cache>/locks/bootstrap` mkdir lock (dead pid reclaimed) for its whole run, prunes `<cache>/runs/`
+  entries older than 7 days, keeps a remote cache `repo.git` (`git clone --bare` of origin, then `fetch`), checks out the tool SHA as a detached
+  worktree at `<cache>/tool/<toolSha>` (staged at `.tmp`, then moved), runs `bun install` (`HUSKY=0`), and checks the Playwright
   browsers the selected suites need, installing them into the user cache if missing (never system
   deps). The host then runs `perf:compare <baseSha> <headSha> --host local --json-only` with the same
-  measurement flags into `<cache>/runs/`; its `compare.json` is read back over ssh, refs are restored
+  measurement flags into `<cache>/runs/<id>/` under `remoteRun.sh`: the compare runs in its own process
+  group (`set -m`, pgid in `compare.pid`) and a watcher kills that group when ssh's stdin closes, which
+  happens when the local ssh dies, since `-T` gives no pty and so no SIGHUP. After a non-interrupt
+  failure the tool also sends `kill -TERM -<pgid>` over a new ssh. Its `compare.json` is read back,
+  the remote run dir is removed, refs are restored
   to the local names, and `<out>/<host>/compare.{json,md}` plus a combined `<out>/compare.md` are
   written. A failed host does not stop the others; the run then exits 1. Remote runs never touch an
   existing clone on the host.
 - **Output.** `<out>/compare.json` (`CompareResult`) and `<out>/compare.md`; `--json-only` skips the
-  markdown. Rows with verdict `same` collapse into `<details>`; ▮ marks 5/10/20/50% tiers.
+  markdown. Base/Head cells show medians for exact rows and means for timed and offset rows, matching
+  the statistic behind Δ. Rows with verdict `same` collapse into `<details>`; ▮ marks 5/10/20/50% tiers.
   `report <compare.json>` re-renders markdown. Per-sample files live under `<out>/samples/`.
-- **Hermeticity check.** The `~/.thinkrail` mtime is compared before and after; a change is a warning,
-  not an abort, because a running ThinkRail on the same machine also writes there.
+- **Hermeticity check.** Every entry under `~/.thinkrail` is stamped (path to mtime and size) before and
+  after; any added, removed or rewritten entry is a warning naming up to 3 paths, not an abort, because a running ThinkRail on the same machine also writes there.
 - **Renders suite.** One variant per scenario (`--scenario`, default `DEFAULT_SCENARIOS`, validated
   against the tool's `SCENARIO_NAMES`); `rounds` schedule, 5 by default. Each sample is one fresh
   Playwright run of the tool's `render.perf.ts` (`THINKRAIL_PERF_RUNS=1`) under `hermeticEnv`, with
@@ -111,13 +131,16 @@ identical for both sides and only the app under test differs.
   `type CompareOptions`, `type CompareResult`, `type Measurement`, `type MetricSummary`,
   `type SampleResult`, `type Schedule`, `type Side`, `type Sha`, `type Suite`, `type SuiteContext`
 - **Entrypoint:** `cli.ts` backs `perf:compare` (flags parsed in `args.ts`); commands `run` (implicit), `prepare`, `report`, `clean`.
-  `bootstrap.sh` is the remote-host setup script that `remote.ts` sends over ssh.
-- **Allowed:** `../renderProfiler`, `../scenarios`, `../chatReplay`, `../../processRunner`,
+  `bootstrap.sh` (remote setup) and `remoteRun.sh` (remote compare wrapper) are scripts `remote.ts`
+  sends over ssh.
+- **Allowed:** `../renderProfiler`, `../scenarios`, `../chatReplay`, `../stats`, type-only
+  `../render.perf`, `../../processRunner`,
   `../../fixtures/*`,
   `@thinkrail/artifact-tests` (`locateDesktopLauncher`), node/bun built-ins, `@playwright/test`, the
   `ssh` and `git` binaries.
-- **Forbidden:** importing app `src`, writing outside the cache root, `--out`, and per-sample temp
-  state, and reading or writing `~/.thinkrail`.
+- **Forbidden:** importing app `src`; writing outside the cache root, `--out`, and per-sample temp
+  state; writing `~/.thinkrail` or reading file contents there (the stat walk of the hermeticity check
+  is the only access).
 - Unit tests (`*.test.ts`) run under root `bun run test`; `playwright.config.ts` ignores them. The
   module typechecks with `bunx tsc --noEmit -p e2e/perf/compare` (root `typecheck` does not cover
   `e2e/`).

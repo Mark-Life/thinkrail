@@ -14,7 +14,7 @@ const PASSTHROUGH = [
 function defaultBrowsersPath() {
 	if (process.platform === "darwin") return join(homedir(), "Library", "Caches", "ms-playwright");
 	if (process.platform === "win32") return join(homedir(), "AppData", "Local", "ms-playwright");
-	return join(homedir(), ".cache", "ms-playwright");
+	return join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "ms-playwright");
 }
 
 function passthrough(): Env {

@@ -1,4 +1,4 @@
-export interface ManifestChunk {
+interface ManifestChunk {
 	file: string;
 	src?: string;
 	name?: string;
@@ -70,7 +70,7 @@ export function chunkIds(manifest: Manifest) {
 	return names;
 }
 
-export function initialKeys(manifest: Manifest) {
+function initialKeys(manifest: Manifest) {
 	const seen = new Set<string>();
 	const visit = (key: string) => {
 		if (seen.has(key)) return;

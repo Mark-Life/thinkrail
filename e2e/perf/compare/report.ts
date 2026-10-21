@@ -25,7 +25,7 @@ export function formatValue(value: number, unit: MetricSummary["unit"]) {
 	return trim(value, 1);
 }
 
-export function formatPct(value: number | null) {
+function formatPct(value: number | null) {
 	if (value === null || !Number.isFinite(value)) return "n/a";
 	const sign = value > 0 ? "+" : "";
 	return `${sign}${trim(value, Math.abs(value) < 1 ? 2 : 1)}%`;
@@ -38,7 +38,7 @@ function signed(value: number, unit: MetricSummary["unit"]) {
 function sideValue(metric: MetricSummary, side: "base" | "head") {
 	const stats = metric[side];
 	if (stats.n === 0) return "–";
-	return formatValue(stats.median, metric.unit);
+	return formatValue(metric.kind === "exact" ? stats.median : stats.mean, metric.unit);
 }
 
 function delta(metric: MetricSummary) {
@@ -53,7 +53,10 @@ function delta(metric: MetricSummary) {
 
 function ci(metric: MetricSummary) {
 	if (metric.kind === "exact") return "exact";
-	if (!metric.ci) return "n<2";
+	if (!metric.ci) {
+		if (metric.base.n < 2 || metric.head.n < 2) return "n<2";
+		return metric.base.mean === 0 ? "base 0" : "head 0";
+	}
 	if (metric.kind === "offset") {
 		return `${signed(metric.ci.low, metric.unit)} … ${signed(metric.ci.high, metric.unit)}`;
 	}
@@ -66,7 +69,7 @@ function verdict(metric: MetricSummary) {
 	return marks ? `${marks} ${metric.verdict}` : metric.verdict;
 }
 
-export function metricRow(metric: MetricSummary) {
+function metricRow(metric: MetricSummary) {
 	const cells = [
 		metric.label,
 		sideValue(metric, "base"),
@@ -98,6 +101,7 @@ export function renderSuite(suite: SuiteResult) {
 	const runs =
 		suite.schedule.kind === "rounds" ? `${suite.schedule.rounds} rounds` : suite.schedule.kind;
 	lines.push(`Schedule: ${runs}. Variants: ${suite.variants.map((v) => v.name).join(", ")}.`);
+	lines.push("Base and head show medians for exact rows and means for timed and offset rows.");
 	const load = loadLine(suite);
 	if (load) lines.push(load);
 	for (const variant of suite.variants) {
