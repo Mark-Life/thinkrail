@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ScenarioRun as RenderRun } from "../render.perf";
 import { EMPTY_COST, MARKDOWN_SUBTREE } from "../renderProfiler";
-import { DEFAULT_SCENARIOS, isScenarioName, SCENARIO_NAMES } from "../scenarios";
+import { DEFAULT_SCENARIOS, isScenarioName, KEY_COMPONENTS, SCENARIO_NAMES } from "../scenarios";
 import { profileWeb } from "./artifacts";
 import { failureReason, runPerfSpec } from "./playwrightRun";
 import type { Measurement, SampleResult, Suite, SuiteContext } from "./types";
@@ -103,11 +103,17 @@ export function componentMeasurements(run: ScenarioRun, names: readonly string[]
 	});
 }
 
+export function pinnedComponents(scenario: string) {
+	return (isScenarioName(scenario) && KEY_COMPONENTS[scenario]) || [];
+}
+
 function componentsFor(context: SuiteContext, run: ScenarioRun) {
 	const key = `${context.options.out}\u0000${run.scenario}`;
 	const tracked = trackedComponents.get(key);
 	if (context.round === 0 || !tracked) {
-		const names = [...new Set([...(tracked ?? []), ...topComponents(run)])];
+		const names = [
+			...new Set([...pinnedComponents(run.scenario), ...(tracked ?? []), ...topComponents(run)]),
+		];
 		trackedComponents.set(key, names);
 		return names;
 	}

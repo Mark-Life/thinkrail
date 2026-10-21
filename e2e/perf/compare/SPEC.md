@@ -116,8 +116,9 @@ identical for both sides and only the app under test differs.
   `dist-profile`. Always Chromium: `startMainThreadProbe` needs CDP, so `--browser` does not apply.
   A missing `<scenario>-1.json` makes the scenario incompatible with the first Playwright error as
   the reason; the full log stays in the sample dir. All metrics are `timed`. Per-component rows track
-  the union of the top 15 by self ms across both warmups, frozen for the measured rounds, so every
-  sample reports the same ids (absent components count as zero). Browser suites run on e2e lane 15
+  the scenario's `KEY_COMPONENTS` (from `../scenarios`) plus the union of the top 15 by self ms across
+  both warmups, frozen for the measured rounds, so every sample reports the same ids (absent
+  components count as zero). Browser suites run on e2e lane 15
   (`THINKRAIL_E2E_LANE`) by default, so their port block and e2e data dir never collide with
   `bun run e2e` in the same tool checkout at 15 lanes or fewer; 16 lanes include lane 15. `THINKRAIL_E2E_LANE`, `THINKRAIL_E2E_PORT_BASE`
   and `PLAYWRIGHT_BROWSERS_PATH` pass through so two compares from one tool checkout can use separate

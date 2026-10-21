@@ -15,6 +15,7 @@ import { E2E_FIXTURE_REPO } from "../fixtures/paths";
 import { seedWorkspaceSession } from "../fixtures/sessions";
 import { buildChatReplay, buildTextReplay, type ChatReplay, chatHistory } from "./chatReplay";
 import { longMarkdown } from "./longMarkdown";
+import { planPane, reviewPanel } from "./panelScenarios";
 import {
 	assertProfilingReady,
 	attachRenderProfiler,
@@ -375,6 +376,8 @@ const SCENARIOS: Record<ScenarioName, (page: Page, run: number) => Promise<void>
 	"long-stream-xl": longStream("long-stream-xl", LONG_STREAM_XL_CHARS),
 	"parallel-agents": parallelAgents(true),
 	"background-agents": parallelAgents(false),
+	"plan-pane": (page, run) => planPane(page, run, measure),
+	"review-panel": (page, run) => reviewPanel(page, run, measure),
 };
 const HEAVY = new Set<ScenarioName>([
 	"long-stream",
