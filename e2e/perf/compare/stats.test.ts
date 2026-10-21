@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	differenceCi,
 	exactVerdict,
 	median,
 	relativeDifferenceCi,
@@ -42,10 +43,34 @@ describe("relativeDifferenceCi", () => {
 		expect(relativeDifferenceCi([1], [1, 2])).toBeNull();
 	});
 
+	test("all-zero sides are the same, one zero side has no ratio", () => {
+		expect(relativeDifferenceCi([0, 0], [0, 0])).toEqual({ low: 0, high: 0 });
+		expect(relativeDifferenceCi([0, 0], [0, 1])).toBeNull();
+	});
+
 	test("zero variance collapses to the point estimate", () => {
 		const ci = relativeDifferenceCi([10, 10], [12, 12]);
 		expect(ci?.low).toBeCloseTo(20, 9);
 		expect(ci?.high).toBeCloseTo(20, 9);
+	});
+});
+
+describe("differenceCi", () => {
+	test("matches a hand-computed Welch interval on the difference of means", () => {
+		// d = 4, se² = 3/3 + 4/3 = 7/3, df = (7/3)² / (1²/2 + (4/3)²/2) ≈ 3.92 → t(3) = 3.182
+		const ci = differenceCi([10, 12, 14], [15, 15, 18]);
+		expect(ci?.low).toBeCloseTo(4 - 3.182 * Math.sqrt(7 / 3), 9);
+		expect(ci?.high).toBeCloseTo(4 + 3.182 * Math.sqrt(7 / 3), 9);
+	});
+
+	test("signed offsets keep their sign", () => {
+		const summary = summarizeMetrics({
+			base: [0.1, 0.2, 0.1].map((value) => ({ ...timed("o", value), kind: "offset" as const })),
+			head: [-40, -50, -45].map((value) => ({ ...timed("o", value), kind: "offset" as const })),
+			threshold: 0,
+		})[0];
+		expect(summary?.verdict).toBe("better");
+		expect(summary?.ci?.high).toBeLessThan(0);
 	});
 });
 

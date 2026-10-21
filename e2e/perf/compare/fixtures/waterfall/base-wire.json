@@ -1,0 +1,272 @@
+[
+	{
+		"at": 66.10874999999987,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_1\",\"method\":\"editor.list\",\"params\":{}}"
+	},
+	{
+		"at": 66.25870799999984,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_2\",\"method\":\"provider.status\",\"params\":{}}"
+	},
+	{
+		"at": 70.94562499999984,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_3\",\"method\":\"workspace.list\",\"params\":{}}"
+	},
+	{
+		"at": 70.94891700000016,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_4\",\"method\":\"session.stateList\",\"params\":{}}"
+	},
+	{
+		"at": 70.95175000000017,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_5\",\"method\":\"provider.status\",\"params\":{}}"
+	},
+	{
+		"at": 70.98645799999986,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_6\",\"method\":\"workspace.list\",\"params\":{}}"
+	},
+	{
+		"at": 70.98991699999988,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_7\",\"method\":\"project.trustSummary\",\"params\":{}}"
+	},
+	{
+		"at": 70.99829200000022,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_8\",\"method\":\"project.hasSpecs\",\"params\":{}}"
+	},
+	{
+		"at": 73.60920799999985,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_1\",\"ok\":true}"
+	},
+	{
+		"at": 131.57770800000026,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_3\",\"ok\":true}"
+	},
+	{
+		"at": 132.60350000000017,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_9\",\"method\":\"editor.list\",\"params\":{}}"
+	},
+	{
+		"at": 132.60741700000017,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_10\",\"method\":\"editor.list\",\"params\":{}}"
+	},
+	{
+		"at": 132.60962500000005,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_11\",\"method\":\"git.status\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 132.61558300000024,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_12\",\"method\":\"git.listBranches\",\"params\":{}}"
+	},
+	{
+		"at": 132.61825,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_13\",\"method\":\"spec.graph\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 132.6204170000001,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_14\",\"method\":\"review.get\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 132.62254200000007,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_15\",\"method\":\"workspace.turns\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 132.62454200000002,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_16\",\"method\":\"session.list\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 132.62662499999988,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_17\",\"method\":\"terminal.list\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 132.62862499999983,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_18\",\"method\":\"workspace.openReview\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 164.04224999999997,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_7\",\"ok\":true}"
+	},
+	{
+		"at": 164.0880830000001,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_8\",\"ok\":true}"
+	},
+	{
+		"at": 179.169625,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_2\",\"ok\":true}"
+	},
+	{
+		"at": 182.22858300000007,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_9\",\"ok\":true}"
+	},
+	{
+		"at": 182.39412500000026,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_10\",\"ok\":true}"
+	},
+	{
+		"at": 184.07175000000007,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_13\",\"ok\":true}"
+	},
+	{
+		"at": 187.49737499999992,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_14\",\"ok\":true}"
+	},
+	{
+		"at": 187.58595800000012,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_15\",\"ok\":true}"
+	},
+	{
+		"at": 191.22304200000008,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_17\",\"ok\":true}"
+	},
+	{
+		"at": 201.17458299999998,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_5\",\"ok\":true}"
+	},
+	{
+		"at": 217.06237499999997,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_18\",\"ok\":true}"
+	},
+	{
+		"at": 251.70400000000018,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_12\",\"ok\":true}"
+	},
+	{
+		"at": 260.33787500000017,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_6\",\"ok\":true}"
+	},
+	{
+		"at": 260.349792,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_19\",\"method\":\"workspace.watchReady\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 269.06945799999994,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_4\",\"ok\":true}"
+	},
+	{
+		"at": 269.15999999999985,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_16\",\"ok\":true}"
+	},
+	{
+		"at": 269.1646249999999,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_20\",\"method\":\"workspace.watchReady\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 269.16662499999984,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_19\",\"ok\":true}"
+	},
+	{
+		"at": 278.8133750000002,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_11\",\"ok\":true}"
+	},
+	{
+		"at": 279.4714170000002,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_20\",\"ok\":true}"
+	},
+	{
+		"at": 279.4792080000002,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_21\",\"method\":\"session.getMessages\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 286.11041699999987,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_21\",\"ok\":true}"
+	},
+	{
+		"at": 287.589375,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_22\",\"method\":\"todo.list\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 291.4105420000001,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_23\",\"method\":\"terminal.attach\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 299.5406670000002,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_23\",\"ok\":true}"
+	},
+	{
+		"at": 347.6366670000002,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_22\",\"ok\":true}"
+	},
+	{
+		"at": 597.7909170000003,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_24\",\"method\":\"model.list\",\"params\":{}}"
+	},
+	{
+		"at": 597.8026250000003,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_25\",\"method\":\"session.getStats\",\"params\":{}}"
+	},
+	{
+		"at": 597.8071249999998,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_26\",\"method\":\"session.resources\",\"params\":{\"workspaceId\":\"9ecba34d-0e1e-4fca-9405-34625ec14599\"}}"
+	},
+	{
+		"at": 597.9847500000001,
+		"direction": "sent",
+		"payload": "{\"id\":\"trpi_27\",\"method\":\"session.getCommands\",\"params\":{}}"
+	},
+	{
+		"at": 623.2891250000002,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_24\",\"ok\":true}"
+	},
+	{
+		"at": 623.4483329999998,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_25\",\"ok\":false}"
+	},
+	{
+		"at": 624.1930000000002,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_26\",\"ok\":true}"
+	},
+	{
+		"at": 625.4965830000001,
+		"direction": "received",
+		"payload": "{\"id\":\"trpi_27\",\"ok\":true}"
+	}
+]

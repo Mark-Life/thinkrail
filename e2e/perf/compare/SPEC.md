@@ -32,7 +32,7 @@ identical for both sides and only the app under test differs.
   (SHA, key) from the union over selected suites.
 - **Suites.** A `Suite` declares its artifacts (a list, or a function of the options so opt-in variants
   build only when selected), whether it drives a browser, a `Schedule`, its variants,
-  and `sample()`. The core never imports a suite by name: adding one is a file plus a line in
+  and `sample()`; an `optIn` suite runs only when named in `--suite`. The core never imports a suite by name: adding one is a file plus a line in
   `suites.ts`. A sample receives a `SuiteContext` with its own `sampleDir`; `hermeticEnv(stateDir)`
   gives it fresh `HOME`, data, pi, and XDG dirs, `PI_OFFLINE=1`, analytics off, and `CI=1`.
 - **Startup suite.** Variants from `--startup` (default `cli,server`; `binary` and `desktop` opt in and
@@ -57,6 +57,9 @@ identical for both sides and only the app under test differs.
   `R = mean(head)/mean(base)`, delta-method variance `R²·(s_h²/(n_h·m_h²) + s_b²/(n_b·m_b²))`,
   Welch–Satterthwaite df over those two terms, Student t (df 1–30 table, floored; 1.96 beyond). The CI
   wholly beyond `±threshold` gives `better`/`worse`; wholly inside gives `same`; otherwise `unsure`.
+  Two all-zero sides are `same`. Offset metrics (signed gaps such as "A minus B", where a ratio is
+  meaningless) report the difference of means with a Welch 95% CI in the metric's unit; the CI wholly
+  below or above zero gives `better`/`worse`, the threshold does not apply.
 - **Output.** `<out>/compare.json` (`CompareResult`) and `<out>/compare.md`; `--json-only` skips the
   markdown. Rows with verdict `same` collapse into `<details>`; ▮ marks 5/10/20/50% tiers.
   `report <compare.json>` re-renders markdown. Per-sample files live under `<out>/samples/`.
@@ -73,6 +76,22 @@ identical for both sides and only the app under test differs.
   sample reports the same ids (absent components count as zero). `THINKRAIL_E2E_LANE`,
   `THINKRAIL_E2E_PORT_BASE` and `PLAYWRIGHT_BROWSERS_PATH` pass through so two compares from one
   tool checkout can use separate port blocks.
+- **Waterfall suite.** Opt-in (`--suite waterfall`), one variant `restore`, `rounds` schedule, 7 by
+  default. Each sample is one fresh Playwright run (fresh host) of `waterfall.perf.ts` with
+  `THINKRAIL_PERF_WATERFALL_OUT`; without it the spec skips, so `perf:render` ignores it. The spec seeds a
+  24-turn chat with the tool's `seedWorkspaceSession`, opens it, then reloads with routing on (Playwright
+  routing disables the HTTP cache, so the reload fetches every chunk) and records passively: Playwright
+  WebSocket frame events and `requestfinished`, all on one Node clock from the reload. Order rows:
+  `session.getMessages` sent minus the reply to the last `workspace.watchReady` for the same workspace
+  sent before it (offset, plus an exact 1/0 "waits" flag), and the `ChatView-*.js` chunk finish minus the
+  `getMessages` reply (offset). Timing rows are those points from the reload, plus page-side composer
+  typeable and first message painted. Layout rows count only shifts after the composer is typeable:
+  on Chromium the `layout-shift` sum, max and count, and per-region scores (nearest `data-testid` of
+  `SHIFT_REGIONS`, else `other`; a shift touching several regions splits evenly). Where `layout-shift`
+  is unsupported (WebKit) the fallback is the largest per-frame move of `chat-input`, `chat-scroll`
+  and the last `chat-row`, in scroll-compensated page coordinates so scrolling is not a move.
+  `--browser` applies (default chromium). The watcher is warm at reload, so the order gap is small;
+  its sign is what changes when a read stops waiting for readiness.
 
 ## Boundary
 
@@ -80,7 +99,8 @@ identical for both sides and only the app under test differs.
   `type CompareOptions`, `type CompareResult`, `type Measurement`, `type MetricSummary`,
   `type SampleResult`, `type Schedule`, `type Side`, `type Sha`, `type Suite`, `type SuiteContext`
 - **Entrypoint:** `cli.ts` backs `perf:compare`; commands `run` (implicit), `prepare`, `report`, `clean`.
-- **Allowed:** `../renderProfiler`, `../scenarios`, `../../processRunner`, `../../fixtures/*`,
+- **Allowed:** `../renderProfiler`, `../scenarios`, `../chatReplay`, `../../processRunner`,
+  `../../fixtures/*`,
   `@thinkrail/artifact-tests` (`locateDesktopLauncher`), node/bun built-ins, `@playwright/test`.
 - **Forbidden:** importing app `src`, writing outside the cache root, `--out`, and per-sample temp
   state, and reading or writing `~/.thinkrail`.
@@ -90,4 +110,4 @@ identical for both sides and only the app under test differs.
 
 ## Not yet built
 
-Waterfall suite; remote hosts (`--host` accepts `local` only).
+Remote hosts (`--host` accepts `local` only).

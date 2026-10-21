@@ -1,7 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { runE2eProcess } from "../../processRunner";
 import {
 	type ComponentCost,
 	MARKDOWN_SUBTREE,
@@ -10,16 +8,11 @@ import {
 } from "../renderProfiler";
 import { DEFAULT_SCENARIOS, isScenarioName, SCENARIO_NAMES } from "../scenarios";
 import { profileWeb } from "./artifacts";
-import { hermeticEnv } from "./env";
-import type { Env, Measurement, SampleResult, Suite, SuiteContext } from "./types";
+import { failureReason, runPerfSpec } from "./playwrightRun";
+import type { Measurement, SampleResult, Suite, SuiteContext } from "./types";
 
 const DEFAULT_ROUNDS = 5;
 const TOP_COMPONENTS = 15;
-const PASSTHROUGH = [
-	"THINKRAIL_E2E_LANE",
-	"THINKRAIL_E2E_PORT_BASE",
-	"PLAYWRIGHT_BROWSERS_PATH",
-] as const;
 
 const EMPTY_COST: ComponentCost = {
 	commits: 0,
@@ -38,21 +31,6 @@ interface ScenarioRun {
 }
 
 const trackedComponents = new Map<string, readonly string[]>();
-
-function defaultBrowsersPath() {
-	if (process.platform === "darwin") return join(homedir(), "Library", "Caches", "ms-playwright");
-	if (process.platform === "win32") return join(homedir(), "AppData", "Local", "ms-playwright");
-	return join(homedir(), ".cache", "ms-playwright");
-}
-
-function passthrough(): Env {
-	return Object.fromEntries(
-		PASSTHROUGH.flatMap((name) => {
-			const value = process.env[name];
-			return value ? [[name, value]] : [];
-		}),
-	);
-}
 
 export function selectScenarios(selected: readonly string[] | null): readonly string[] {
 	if (!selected) return DEFAULT_SCENARIOS;
@@ -154,39 +132,18 @@ function componentsFor(context: SuiteContext, run: ScenarioRun) {
 	return tracked;
 }
 
-function failureReason(log: string, exitCode: number) {
-	const lines = log.split("\n").map((line) => line.trim());
-	const error = lines.find((line) => /^(Error|TimeoutError|expect\()/.test(line));
-	return error
-		? `${error} (playwright exit ${exitCode})`
-		: `playwright exit ${exitCode}, no output`;
-}
-
 async function sample(context: SuiteContext, scenario: string): Promise<SampleResult> {
-	const env = hermeticEnv(join(context.sampleDir, "state"), {
-		PLAYWRIGHT_BROWSERS_PATH: defaultBrowsersPath(),
-		...passthrough(),
-		THINKRAIL_E2E_SKIP_BUILD: "1",
-		THINKRAIL_PERF_APP_ROOT: context.appRoot,
-		THINKRAIL_PERF_BROWSER: "chromium",
-		THINKRAIL_PERF_RUNS: "1",
-		THINKRAIL_PERF_OUT: context.sampleDir,
-		THINKRAIL_PERF_SCENARIOS: scenario,
-		THINKRAIL_PERF_CPU: String(context.options.cpu),
+	const result = await runPerfSpec({
+		context,
+		spec: "e2e/perf/render.perf.ts",
+		browser: "chromium",
+		env: {
+			THINKRAIL_PERF_RUNS: "1",
+			THINKRAIL_PERF_OUT: context.sampleDir,
+			THINKRAIL_PERF_SCENARIOS: scenario,
+			THINKRAIL_PERF_CPU: String(context.options.cpu),
+		},
 	});
-	const result = await runE2eProcess(
-		[
-			process.execPath,
-			"x",
-			"playwright",
-			"test",
-			"-c",
-			"playwright.perf.config.ts",
-			"e2e/perf/render.perf.ts",
-		],
-		{ env, stdout: "pipe" },
-	);
-	writeFileSync(join(context.sampleDir, "playwright.log"), result.stdout);
 	const file = join(context.sampleDir, `${scenario}-1.json`);
 	if (result.exitCode !== 0 || !existsSync(file)) {
 		return { ok: false, incompatible: failureReason(result.stdout, result.exitCode) };

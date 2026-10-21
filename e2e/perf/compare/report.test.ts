@@ -87,3 +87,17 @@ test("renderReport survives a JSON round trip of infinite deltas", () => {
 	const reloaded = JSON.parse(JSON.stringify(input)) as CompareResult;
 	expect(renderReport(reloaded)).toContain("| new.js | – | 10 B | new | exact | ▮▮▮▮ worse |");
 });
+
+test("offset rows show signed deltas and intervals in the metric unit", () => {
+	const input = result();
+	const suite = input.suites[0];
+	if (!suite) throw new Error("fixture has one suite");
+	suite.metrics = summarizeMetrics({
+		base: [0, 0, 0].map((v) => measurement("gap", "offset", v)),
+		head: [-40, -50, -45].map((v) => measurement("gap", "offset", v)),
+		threshold: 0,
+	});
+	expect(renderReport(input)).toMatch(
+		/\| gap \| 0 ms \| -45 ms \| -45 ms \| -\d+(\.\d)? ms … -\d+(\.\d)? ms \| better \|/,
+	);
+});
