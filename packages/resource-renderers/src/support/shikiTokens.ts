@@ -8,9 +8,10 @@ import {
 	type ThemeRegistration,
 } from "shiki/core";
 import { EncodedTokenMetadata, INITIAL, type StateStack } from "shiki/textmate";
-import type { ResourceCodeLanguage } from "../host";
+import type { ResourceCodeHost, ResourceCodeLanguage } from "../host";
 
 const MAX_LINE_LENGTH = 20_000;
+const EMBED_REFERENCE = /^[ \t]*(?:`{3,}|~{3,})[ \t]*\{?\.?([\w#+.-]+)|\blang=["']?([\w#+.-]+)/gm;
 const TOKENIZE_TIME_LIMIT_MS = 500;
 const FONT_STYLE_BITS = [
 	[1, "italic"],
@@ -19,7 +20,7 @@ const FONT_STYLE_BITS = [
 	[8, "strikethrough"],
 ] as const;
 
-interface ShikiTokensOptions {
+interface ShikiTokensOptions extends Pick<ResourceCodeHost, "languageId"> {
 	languages: readonly Pick<ResourceCodeLanguage, "id" | "load">[];
 	engine: () => Promise<RegexEngine>;
 }
@@ -58,24 +59,27 @@ function fontStyleName(bits: number): string {
 		.join(" ");
 }
 
-export function createShikiTokens({ languages: catalog, engine }: ShikiTokensOptions) {
+export function createShikiTokens({ languages: catalog, languageId, engine }: ShikiTokensOptions) {
 	const byId = new Map(catalog.map((language) => [language.id, language]));
 	const loads = new Map<string, Promise<readonly string[] | null>>();
+	const embedded = new Map<string, Set<string>>();
 	const scopeByStyle = new Map<string, string>();
 	let colorMap: readonly (string | undefined)[] = [];
 	let theme: ThemeRegistration | null = null;
-	let generation = 0;
+	let themeRules: readonly editor.ITokenThemeRule[] = [];
+	let selectedName = "";
 	let highlighter: HighlighterCore | null = null;
 	let creating: Promise<HighlighterCore | null> | null = null;
 
 	async function selectTheme(hl: HighlighterCore, registration: ThemeRegistration) {
-		generation += 1;
-		const name = `${registration.name ?? "theme"}#${generation}`;
+		const base = registration.name ?? "theme";
+		const name = selectedName === `${base}#a` ? `${base}#b` : `${base}#a`;
 		await hl.loadTheme({ ...registration, name });
 		if (registration !== theme) return;
 		colorMap = hl.setTheme(name).colorMap.map(normalizeColor);
+		selectedName = name;
 		scopeByStyle.clear();
-		for (const rule of monacoThemeData(registration).rules) {
+		for (const rule of themeRules) {
 			const color = normalizeColor(rule.foreground);
 			if (!color) continue;
 			const key = styleKey(color, rule.fontStyle ?? "");
@@ -119,11 +123,30 @@ export function createShikiTokens({ languages: catalog, engine }: ShikiTokensOpt
 		return (await loadGrammar(id)) !== null;
 	}
 
-	async function loadEmbeds(id: string) {
+	function referencedLanguages(text: string) {
+		const ids = new Set<string>();
+		for (const match of text.matchAll(EMBED_REFERENCE)) {
+			const id = languageId(match[1] ?? match[2] ?? "");
+			if (id) ids.add(id);
+		}
+		return ids;
+	}
+
+	async function loadEmbeds(id: string, source: () => string) {
 		const embeds = await loadGrammar(id);
 		if (!embeds?.length) return false;
-		const loaded = await Promise.all(embeds.map(loadGrammar));
-		return loaded.some((result) => result !== null);
+		const referenced = referencedLanguages(source());
+		const seen = embedded.get(id) ?? new Set<string>();
+		embedded.set(id, seen);
+		const wanted = embeds.filter((embed) => referenced.has(embed) && !seen.has(embed));
+		const loaded = await Promise.all(
+			wanted.map(async (embed) => {
+				if ((await loadGrammar(embed)) === null) return false;
+				seen.add(embed);
+				return true;
+			}),
+		);
+		return loaded.includes(true);
 	}
 
 	function scopeOf(metadata: number) {
@@ -134,16 +157,15 @@ export function createShikiTokens({ languages: catalog, engine }: ShikiTokensOpt
 	}
 
 	function provider(id: string): languages.TokensProvider {
+		const grammar = highlighter?.getLanguage(id) ?? null;
 		return {
 			getInitialState: () => new LineState(INITIAL),
 			tokenize(line, state) {
 				const current = state instanceof LineState ? state : new LineState(INITIAL);
-				if (line.length >= MAX_LINE_LENGTH || !highlighter) {
+				if (line.length >= MAX_LINE_LENGTH || !grammar) {
 					return { endState: current, tokens: [{ startIndex: 0, scopes: "" }] };
 				}
-				const result = highlighter
-					.getLanguage(id)
-					.tokenizeLine2(line, current.ruleStack, TOKENIZE_TIME_LIMIT_MS);
+				const result = grammar.tokenizeLine2(line, current.ruleStack, TOKENIZE_TIME_LIMIT_MS);
 				const tokens: languages.IToken[] = [];
 				for (let index = 0; index < result.tokens.length; index += 2) {
 					tokens.push({
@@ -156,8 +178,12 @@ export function createShikiTokens({ languages: catalog, engine }: ShikiTokensOpt
 		};
 	}
 
-	async function applyTheme(registration: ThemeRegistration) {
+	async function applyTheme(
+		registration: ThemeRegistration,
+		rules: readonly editor.ITokenThemeRule[],
+	) {
 		theme = registration;
+		themeRules = rules;
 		if (highlighter) await selectTheme(highlighter, registration);
 	}
 

@@ -127,14 +127,20 @@ export function fileEditorOptions(
 	return options;
 }
 
-function currentTheme(code: ResourceCodeHost): {
-	registration: ThemeRegistration;
-	base: editor.BuiltinTheme;
-} {
+function themeData(registration: ThemeRegistration) {
+	try {
+		const { rules, colors } = monacoThemeData(registration);
+		return { rules, colors };
+	} catch {
+		return { rules: [], colors: {} };
+	}
+}
+
+function currentTheme(code: ResourceCodeHost) {
 	const root = document.documentElement;
 	const styles = getComputedStyle(root);
 	const light = styles.colorScheme.split(/\s+/).includes("light");
-	const base =
+	const base: editor.BuiltinTheme =
 		root.dataset.themeContrast === "high"
 			? light
 				? "hc-light"
@@ -142,23 +148,17 @@ function currentTheme(code: ResourceCodeHost): {
 			: light
 				? "vs"
 				: "vs-dark";
-	return {
-		base,
-		registration: code.theme({
-			name: EDITOR_THEME,
-			type: light ? "light" : "dark",
-			readVariable: (name) => styles.getPropertyValue(name).trim(),
-		}),
-	};
+	const registration = code.theme({
+		name: EDITOR_THEME,
+		type: light ? "light" : "dark",
+		readVariable: (name) => styles.getPropertyValue(name).trim(),
+	});
+	return { base, registration, data: themeData(registration) };
 }
 
-function defineTheme(registration: ThemeRegistration, base: editor.BuiltinTheme): void {
-	try {
-		const { rules, colors } = monacoThemeData(registration);
-		monaco.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules, colors });
-	} catch {
-		monaco.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules: [], colors: {} });
-	}
+function defineTheme({ base, data }: ReturnType<typeof currentTheme>): void {
+	monaco.editor.defineTheme(EDITOR_THEME, { base, inherit: true, ...data });
+	monaco.editor.setTheme(EDITOR_THEME);
 }
 
 async function createEngine() {
@@ -177,38 +177,59 @@ interface MonacoSetup {
 
 let setup: MonacoSetup | null = null;
 
-function registerTokenProviders(code: ResourceCodeHost, tokens: MonacoSetup["tokens"]): void {
-	for (const { id } of code.languages) {
-		monaco.languages.registerTokensProviderFactory(id, {
-			create: async () => {
-				if (!(await tokens.ready(id))) return null;
-				void tokens.loadEmbeds(id).then((loaded) => {
-					if (loaded) monaco.languages.setTokensProvider(id, tokens.provider(id));
-				});
-				return tokens.provider(id);
-			},
+function registerTokenProvider(id: string, tokens: MonacoSetup["tokens"]): void {
+	monaco.languages.registerTokensProviderFactory(id, {
+		create: async () => {
+			if (await tokens.ready(id)) return tokens.provider(id);
+			registerTokenProvider(id, tokens);
+			return null;
+		},
+	});
+}
+
+function loadModelEmbeds(model: editor.ITextModel, tokens: MonacoSetup["tokens"]): void {
+	const id = model.getLanguageId();
+	void tokens
+		.loadEmbeds(id, () => (model.isDisposed() ? "" : model.getValue()))
+		.then((loaded) => {
+			if (loaded) monaco.languages.setTokensProvider(id, tokens.provider(id));
 		});
-	}
+}
+
+function watchModelEmbeds(tokens: MonacoSetup["tokens"]): void {
+	monaco.editor.onDidCreateModel((model) => {
+		loadModelEmbeds(model, tokens);
+		const subscriptions = [
+			model.onDidChangeContent(() => loadModelEmbeds(model, tokens)),
+			model.onDidChangeLanguage(() => loadModelEmbeds(model, tokens)),
+		];
+		model.onWillDispose(() => {
+			for (const subscription of subscriptions) subscription.dispose();
+		});
+	});
 }
 
 export function ensureMonaco(code: ResourceCodeHost): void {
 	if (setup) return;
-	const tokens = createShikiTokens({ languages: code.languages, engine: createEngine });
+	const tokens = createShikiTokens({
+		languages: code.languages,
+		languageId: (value) => code.languageId(value),
+		engine: createEngine,
+	});
 	registerShikiLanguages(code);
-	registerTokenProviders(code, tokens);
-	const { registration, base } = currentTheme(code);
-	void tokens.applyTheme(registration);
-	defineTheme(registration, base);
-	monaco.editor.setTheme(EDITOR_THEME);
+	for (const { id } of code.languages) registerTokenProvider(id, tokens);
+	watchModelEmbeds(tokens);
+	const theme = currentTheme(code);
+	void tokens.applyTheme(theme.registration, theme.data.rules);
+	defineTheme(theme);
 	setup = { code, tokens };
 }
 
 async function refreshTheme(): Promise<void> {
 	if (!setup) return;
-	const { registration, base } = currentTheme(setup.code);
-	await setup.tokens.applyTheme(registration);
-	defineTheme(registration, base);
-	monaco.editor.setTheme(EDITOR_THEME);
+	const theme = currentTheme(setup.code);
+	await setup.tokens.applyTheme(theme.registration, theme.data.rules);
+	defineTheme(theme);
 }
 
 export function watchThemeSwap(): () => void {

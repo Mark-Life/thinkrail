@@ -2,13 +2,27 @@ import { describe, expect, test } from "bun:test";
 import type { languages } from "monaco-editor/esm/vs/editor/editor.api.js";
 import type { LanguageRegistration, ThemeRegistration } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
-import { createShikiTokens } from "./shikiTokens";
+import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
 const CATALOG = [
 	{ id: "typescript", load: () => import("shiki/langs/typescript.mjs") },
 	{ id: "markdown", load: () => import("shiki/langs/markdown.mjs") },
 	{ id: "shellscript", load: () => import("shiki/langs/bash.mjs") },
 ];
+const ALIASES = new Map([
+	["ts", "typescript"],
+	["typescript", "typescript"],
+	["md", "markdown"],
+	["markdown", "markdown"],
+	["sh", "shellscript"],
+	["bash", "shellscript"],
+	["shellscript", "shellscript"],
+]);
+const FENCE = ["# hi", "```ts", "const x = 1", "```"];
+
+function languageId(value: string) {
+	return ALIASES.get(value.toLowerCase()) ?? null;
+}
 
 async function themeNamed(load: Promise<{ default: ThemeRegistration }>) {
 	return { ...(await load).default, name: "editor" };
@@ -33,6 +47,20 @@ function tokenize(provider: languages.TokensProvider, lines: readonly string[]) 
 	});
 }
 
+function applyTheme(tokens: ReturnType<typeof createShikiTokens>, theme: ThemeRegistration) {
+	return tokens.applyTheme(theme, monacoThemeData(theme).rules);
+}
+
+function countingCatalog(counts: Map<string, number>) {
+	return CATALOG.map((language) => ({
+		...language,
+		load: () => {
+			counts.set(language.id, (counts.get(language.id) ?? 0) + 1);
+			return language.load();
+		},
+	}));
+}
+
 function scopeOf(
 	tokens: readonly { text: string; scopes: string }[] | undefined,
 	prefix: string,
@@ -41,8 +69,8 @@ function scopeOf(
 }
 
 async function themedTokens(catalog = CATALOG) {
-	const tokens = createShikiTokens({ languages: catalog, engine });
-	await tokens.applyTheme(await light);
+	const tokens = createShikiTokens({ languages: catalog, languageId, engine });
+	await applyTheme(tokens, await light);
 	return tokens;
 }
 
@@ -66,7 +94,7 @@ describe("createShikiTokens", () => {
 	test("an unknown language resolves false without loading anything", async () => {
 		const tokens = await themedTokens();
 		expect(await tokens.ready("klingon")).toBe(false);
-		expect(await tokens.loadEmbeds("klingon")).toBe(false);
+		expect(await tokens.loadEmbeds("klingon", () => "```ts")).toBe(false);
 	});
 
 	test("a failed grammar load resolves false and the next call retries", async () => {
@@ -90,6 +118,7 @@ describe("createShikiTokens", () => {
 	test("an engine that fails leaves every language plain", async () => {
 		const tokens = createShikiTokens({
 			languages: CATALOG,
+			languageId,
 			engine: () => Promise.reject(new Error("no wasm")),
 		});
 		expect(await tokens.ready("typescript")).toBe(false);
@@ -108,23 +137,69 @@ describe("createShikiTokens", () => {
 		const [before] = tokenize(tokens.provider("typescript"), ["const x = 1"]);
 		expect(scopeOf(before, "const")).toBeTruthy();
 
-		await tokens.applyTheme(await dark);
+		await applyTheme(tokens, await dark);
 		const [after] = tokenize(tokens.provider("typescript"), ["const x = 1"]);
 		expect(scopeOf(after, "const")).toBeTruthy();
 		expect(scopeOf(after, "1")).toBeTruthy();
 	});
 
-	test("markdown fences colour once the in-catalog lazy embeds load", async () => {
+	test("swapping back to an earlier theme and racing swaps select the newest theme", async () => {
+		const marker = (scope: string, foreground: string): ThemeRegistration => ({
+			name: "editor",
+			type: "light",
+			settings: [{ scope: [scope, "storage"], settings: { foreground } }],
+		});
+		const alpha = marker("alpha", "#ff0000");
+		const beta = marker("beta", "#00ff00");
+		const tokens = await themedTokens();
+		await tokens.ready("typescript");
+		const keyword = () => scopeOf(tokenize(tokens.provider("typescript"), ["const x"])[0], "const");
+
+		await applyTheme(tokens, alpha);
+		expect(keyword()).toBe("alpha");
+		await applyTheme(tokens, beta);
+		expect(keyword()).toBe("beta");
+		await applyTheme(tokens, alpha);
+		expect(keyword()).toBe("alpha");
+		await Promise.all([applyTheme(tokens, beta), applyTheme(tokens, alpha)]);
+		expect(keyword()).toBe("alpha");
+	});
+
+	test("markdown fences colour once the referenced embeds load", async () => {
 		const tokens = await themedTokens();
 		await tokens.ready("markdown");
-		const fence = ["```ts", "const x = 1", "```"];
-		const plainFence = scopeOf(tokenize(tokens.provider("markdown"), fence)[1], "const");
+		const plainFence = scopeOf(tokenize(tokens.provider("markdown"), FENCE)[2], "const");
 
-		expect(await tokens.loadEmbeds("markdown")).toBe(true);
+		expect(await tokens.loadEmbeds("markdown", () => FENCE.join("\n"))).toBe(true);
 		const keyword = scopeOf(tokenize(tokens.provider("typescript"), ["const x = 1"])[0], "const");
-		const colouredFence = scopeOf(tokenize(tokens.provider("markdown"), fence)[1], "const");
+		const colouredFence = scopeOf(tokenize(tokens.provider("markdown"), FENCE)[2], "const");
 		expect(colouredFence).toBe(keyword);
 		expect(colouredFence).not.toBe(plainFence);
+	});
+
+	test("embeds load only for fence languages the text references, once", async () => {
+		const counts = new Map<string, number>();
+		const tokens = await themedTokens(countingCatalog(counts));
+		expect(await tokens.loadEmbeds("markdown", () => "# no fences")).toBe(false);
+		expect(counts.get("typescript")).toBeUndefined();
+		expect(counts.get("shellscript")).toBeUndefined();
+
+		const text = () => FENCE.join("\n");
+		expect(await tokens.loadEmbeds("markdown", text)).toBe(true);
+		expect(await tokens.loadEmbeds("markdown", text)).toBe(false);
+		expect(counts.get("typescript")).toBe(1);
+		expect(counts.get("shellscript")).toBeUndefined();
+	});
+
+	test("a provider keeps the grammar its line states came from after embeds rebuild it", async () => {
+		const tokens = await themedTokens();
+		await tokens.ready("markdown");
+		const provider = tokens.provider("markdown");
+		let state = provider.getInitialState();
+		for (const line of FENCE.slice(0, 2)) state = provider.tokenize(line, state).endState;
+
+		await tokens.loadEmbeds("markdown", () => FENCE.join("\n"));
+		expect(() => provider.tokenize("const x = 1", state)).not.toThrow();
 	});
 
 	test("an over-long line becomes one unscoped token", async () => {
