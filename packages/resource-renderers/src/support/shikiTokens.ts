@@ -19,7 +19,7 @@ const FONT_STYLE_BITS = [
 	[8, "strikethrough"],
 ] as const;
 
-export interface ShikiTokensOptions {
+interface ShikiTokensOptions {
 	languages: readonly Pick<ResourceCodeLanguage, "id" | "load">[];
 	engine: () => Promise<RegexEngine>;
 }
