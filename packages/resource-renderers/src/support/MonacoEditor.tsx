@@ -11,6 +11,7 @@ import {
 	ensureMonaco,
 	fileEditorOptions,
 	languageForPath,
+	revealLineNow,
 	syncFileModel,
 	warmLanguage,
 } from "./monacoSetup";
@@ -152,7 +153,7 @@ export default function MonacoEditor({
 		if (!review || !editorRef.current) return;
 		const line = focusLine(review);
 		if (line === null) return;
-		editorRef.current.revealLineInCenter(line);
+		revealLineNow(editorRef.current, line);
 		review.onFocusHandled();
 	}, [review]);
 

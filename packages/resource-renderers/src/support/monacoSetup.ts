@@ -163,6 +163,10 @@ export function syncFileModel(
 	if (input.text !== appliedText) current.setValue(input.text);
 }
 
+export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
+	codeEditor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
+}
+
 export function disposeFileEditor(codeEditor: editor.IStandaloneCodeEditor): void {
 	const model = codeEditor.getModel();
 	codeEditor.dispose();
