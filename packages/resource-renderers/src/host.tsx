@@ -110,6 +110,10 @@ export function useResourceScope(): ResourceScope | null {
 	return useContext(ResourceScopeContext);
 }
 
+export function useOptionalResourceEnvironment(): ResourceEnvironment | null {
+	return useContext(ResourceEnvironmentContext);
+}
+
 export function useResourceEnvironment(): ResourceEnvironment {
 	const environment = useContext(ResourceEnvironmentContext);
 	if (!environment) throw new Error("Resource renderers need a ResourceEnvironmentProvider");

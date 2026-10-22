@@ -6,20 +6,75 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { useResourceEnvironment } from "../host";
+import {
+	type ResourceHost,
+	useOptionalResourceEnvironment,
+	useOptionalResourceHost,
+	useResourceEnvironment,
+} from "../host";
 import {
 	type ResourceDescriptor,
 	type ResourceDiffProps,
 	type ResourceIntent,
 	type ResourceRenderer,
+	type ResourceViewModule,
 	type ResourceViewProps,
 	rendererImplementationKey,
 	resolveRenderers,
 	selectResourceRenderer,
 } from "../registry";
 
-const viewComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceViewProps>>>();
+const viewComponents = new Map<string, ComponentType<ResourceViewProps>>();
+const loadedViews = new Map<string, ComponentType<ResourceViewProps>>();
+const pendingViews = new Map<string, Promise<ResourceViewModule>>();
 const diffComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceDiffProps>>>();
+
+function loadView(renderer: ResourceRenderer, mobile: boolean): Promise<ResourceViewModule> {
+	const key = rendererImplementationKey(renderer.id, mobile);
+	const pending = pendingViews.get(key);
+	if (pending) return pending;
+	const load = renderer.loadView;
+	if (!load) throw new Error(`Resource renderer has no view loader: ${renderer.id}`);
+	const next = load({ mobile }).then(
+		(module) => {
+			loadedViews.set(key, module.default);
+			return module;
+		},
+		(error: unknown) => {
+			pendingViews.delete(key);
+			throw error;
+		},
+	);
+	pendingViews.set(key, next);
+	return next;
+}
+
+export function preloadRendererView(
+	renderer: ResourceRenderer,
+	mobile: boolean,
+	host: ResourceHost,
+	resource: ResourceDescriptor,
+): Promise<void> {
+	if (!renderer.loadView) return Promise.resolve();
+	return loadView(renderer, mobile).then(
+		(module) => module.warm?.(host, resource),
+		() => undefined,
+	);
+}
+
+export function usePreloadResourceView(): (resource: ResourceDescriptor) => void {
+	const host = useOptionalResourceHost();
+	const mobile = useOptionalResourceEnvironment()?.mobile;
+	return useCallback(
+		(resource: ResourceDescriptor) => {
+			if (!host || mobile === undefined) return;
+			const candidates = resolveRenderers(resource, "view", { mobile });
+			const renderer = selectResourceRenderer(candidates, undefined, resource.path);
+			void preloadRendererView(renderer, mobile, host, resource);
+		},
+		[host, mobile],
+	);
+}
 
 export function RendererView({
 	renderer,
@@ -29,11 +84,7 @@ export function RendererView({
 }: ResourceViewProps & { renderer: ResourceRenderer; implementationKey: string; mobile: boolean }) {
 	let Component = viewComponents.get(implementationKey);
 	if (!Component) {
-		const load = renderer.loadView;
-		if (!load) {
-			throw new Error(`Resource renderer has no view loader: ${renderer.id}`);
-		}
-		Component = lazy(() => load({ mobile }));
+		Component = loadedViews.get(implementationKey) ?? lazy(() => loadView(renderer, mobile));
 		viewComponents.set(implementationKey, Component);
 	}
 	return <Component {...props} />;
