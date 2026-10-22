@@ -1,5 +1,4 @@
 /// <reference path="../bundler.d.ts" />
-import { loader } from "@monaco-editor/react";
 import type { Translator } from "@thinkrail/locales/react";
 import type { ThemeRegistration } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
@@ -39,8 +38,6 @@ window.MonacoEnvironment = {
 		return new editorWorker();
 	},
 };
-
-loader.config({ monaco });
 
 export const EDITOR_THEME = "thinkrail-editor";
 
@@ -126,6 +123,50 @@ export function fileEditorOptions(
 	};
 	options.padding = { top: Number.isFinite(paddingTop) ? paddingTop : 0 };
 	return options;
+}
+
+interface FileModelInput {
+	modelPath: string;
+	text: string;
+	language: string;
+}
+
+function createFileModel({ modelPath, text, language }: FileModelInput) {
+	return monaco.editor.createModel(text, language, monaco.Uri.parse(modelPath));
+}
+
+export function createFileEditor(
+	container: HTMLElement,
+	{ options, ...model }: FileModelInput & { options: editor.IStandaloneEditorConstructionOptions },
+) {
+	return monaco.editor.create(container, {
+		...options,
+		model: createFileModel(model),
+		theme: EDITOR_THEME,
+	});
+}
+
+export function syncFileModel(
+	codeEditor: editor.IStandaloneCodeEditor,
+	input: FileModelInput,
+	appliedText: string,
+): void {
+	const current = codeEditor.getModel();
+	if (!current || current.uri.toString() !== monaco.Uri.parse(input.modelPath).toString()) {
+		codeEditor.setModel(createFileModel(input));
+		current?.dispose();
+		return;
+	}
+	if (current.getLanguageId() !== input.language) {
+		monaco.editor.setModelLanguage(current, input.language);
+	}
+	if (input.text !== appliedText) current.setValue(input.text);
+}
+
+export function disposeFileEditor(codeEditor: editor.IStandaloneCodeEditor): void {
+	const model = codeEditor.getModel();
+	codeEditor.dispose();
+	model?.dispose();
 }
 
 function themeData(registration: ThemeRegistration) {

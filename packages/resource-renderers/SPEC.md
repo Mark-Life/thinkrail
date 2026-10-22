@@ -123,7 +123,8 @@ reading a viewport global. The loaded module (`ResourceViewModule`, exported fro
 `warm(host, resource)`; a preload calls it after every request, one task after the module resolves, so
 the chunk's evaluation and the warm are separate long tasks. It must be cheap and idempotent. Monaco's
 `warm` runs `ensureMonaco`, starts the regex engine, and one task later loads the grammar for the
-resource's path (an empty path warms no grammar).
+resource's path (an empty path warms no grammar). Once the chunk has loaded, a Monaco mount is
+synchronous: no library loader or boot promise stands between the view's commit and the editor.
 
 **One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
 in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.
@@ -172,7 +173,7 @@ keeps it.
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
-  engines (`@monaco-editor/react`, `monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
+  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
@@ -549,9 +550,9 @@ content's own height.
   the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
-  `MonacoEditor` is a React Compiler bail-out, so it memoizes its options by hand on width, bounded and path;
-  the typography and spacing tokens the options read are static generated CSS (themes set only colours), and
-  a fresh options object would make `@monaco-editor/react` call `updateOptions` on every render.
+  The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
+  `updateOptions` only when that object changes; the typography and spacing tokens the options read are
+  static generated CSS (themes set only colours).
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
   and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
@@ -563,9 +564,14 @@ content's own height.
   messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
-  ahead of the path, because `@monaco-editor/react` shares one model per `path` and disposes it with
-  whichever editor unmounts first, which blanked the surviving view once the same file could be on screen
-  twice (a chat card and its full screen, a card and the file's tab).
+  ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
+  file's tab) never shares a model that one unmount disposes under the other.
+- **`MonacoEditor` mounts Monaco itself.** A layout effect creates the editor and its model in the commit
+  that mounts the view, with no loading state, then restores the view state and attaches review commenting
+  (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
+  and the model, in that order. A path or language change on a live editor swaps the model in place
+  (`RendererView` is keyed by implementation, not path); new text calls `setValue` only when it differs
+  from the text last applied, compared as strings, never through `getValue()`.
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
   same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
