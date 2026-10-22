@@ -101,7 +101,6 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					<RendererView
 						key={implementationKey}
 						renderer={renderer}
-						implementationKey={implementationKey}
 						mobile={mobile}
 						resource={resource}
 						content={content}

@@ -124,7 +124,9 @@ every request, so it must be cheap and idempotent. Monaco's `warm` runs `ensureM
 engine, and loads the grammar for the resource's path (an empty path warms no grammar).
 
 **One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
-in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts. React
+in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.
+`RendererView` derives that key itself from its `renderer` and `mobile` props, so a mount and a preload
+cannot disagree on it. React
 `lazy` suspends on its first render even when its promise already resolved, and a shown fallback holds for
 at least 300 ms. So a finished load stores the module's component under its key, unless a mount already
 stored a `lazy` there, and the first `RendererView` without a stored component stores a `lazy` that reuses

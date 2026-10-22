@@ -9,7 +9,6 @@ import {
 	type ResourceRenderer,
 	type ResourceViewModule,
 	registerResourceRenderer,
-	rendererImplementationKey,
 } from "../registry";
 import { codeRenderer } from "../renderers/code";
 import { preloadRendererView, RendererView, usePreloadResourceView } from "./rendererMount";
@@ -70,7 +69,6 @@ function render(renderer: ResourceRenderer, resource: ResourceDescriptor, mobile
 		<Suspense fallback={<i>loading</i>}>
 			<RendererView
 				renderer={renderer}
-				implementationKey={rendererImplementationKey(renderer.id, mobile)}
 				mobile={mobile}
 				resource={resource}
 				content={{ kind: "text", text: "", hash: "h" }}

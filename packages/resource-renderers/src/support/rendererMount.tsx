@@ -72,14 +72,14 @@ export function usePreloadResourceView(): (resource: ResourceDescriptor) => void
 
 export function RendererView({
 	renderer,
-	implementationKey,
 	mobile,
 	...props
-}: ResourceViewProps & { renderer: ResourceRenderer; implementationKey: string; mobile: boolean }) {
-	let Component = viewComponents.get(implementationKey);
+}: ResourceViewProps & { renderer: ResourceRenderer; mobile: boolean }) {
+	const key = rendererImplementationKey(renderer.id, mobile);
+	let Component = viewComponents.get(key);
 	if (!Component) {
 		Component = lazy(() => loadView(renderer, mobile));
-		viewComponents.set(implementationKey, Component);
+		viewComponents.set(key, Component);
 	}
 	return <Component {...props} />;
 }
