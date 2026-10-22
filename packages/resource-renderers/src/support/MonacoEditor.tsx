@@ -58,6 +58,7 @@ export default function MonacoEditor({
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const decorationsRef = useRef<string[]>([]);
+	const freshMountRef = useRef(false);
 	const appliedTextRef = useRef(text);
 	const latestRef = useRef({
 		scope,
@@ -93,6 +94,7 @@ export default function MonacoEditor({
 		const mount = latestRef.current;
 		const codeEditor = createFileEditor(container, mount);
 		editorRef.current = codeEditor;
+		freshMountRef.current = true;
 		appliedTextRef.current = mount.text;
 		const menuIcons = decorateEditorContextMenus(codeEditor);
 		if (isEditorViewState(mount.viewState)) codeEditor.restoreViewState(mount.viewState);
@@ -136,6 +138,8 @@ export default function MonacoEditor({
 
 	useLayoutEffect(() => {
 		const codeEditor = editorRef.current;
+		const freshMount = freshMountRef.current;
+		freshMountRef.current = false;
 		if (!review || !codeEditor) return;
 		threadsRef.current?.setThreads(review.threads);
 		decorationsRef.current = applyReviewDecorations(
@@ -143,13 +147,10 @@ export default function MonacoEditor({
 			decorationsRef.current,
 			review.threads,
 		);
-	}, [review]);
-
-	useLayoutEffect(() => {
-		if (!review || !editorRef.current) return;
 		const line = focusLine(review);
 		if (line === null) return;
-		revealLineNow(editorRef.current, line);
+		if (freshMount) revealLineNow(codeEditor, line);
+		else codeEditor.revealLineInCenter(line);
 		review.onFocusHandled();
 	}, [review]);
 
