@@ -629,3 +629,10 @@ content's own height.
   every later import of that chunk rejects without a request, and a statically split chunk has no URL to
   cache-bust. The first open then shows the error boundary's **Reload page**, which recovers; on main the
   same outage fails only if it lasts until the first open.
+- **Monaco mounts without `@monaco-editor/react`.** The wrapper awaited `loader.init()` (a promise even
+  with a bundled Monaco) and took two more React commits before `editor.create`. The owned mount creates
+  the editor in the view's own commit. Click to text, median of 7 at 1x CPU: warm open 69 to 33 ms, tab
+  switch 50 to 30 ms, first open 87 to 68 ms, a 22.9k-line file 133 to 88 ms; at 4x CPU first open 285
+  to 221 ms. Click to highlighted is no later. Cost: create and first render now run in one task, so the
+  longest task grows at 4x CPU (first open 119 to 143 ms, the 22.9k-line file 97 to 153 ms). The Monaco
+  chunk shrinks by 12 kB.
