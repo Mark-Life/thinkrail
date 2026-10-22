@@ -38,7 +38,7 @@ function testRenderer(load: (mobile: boolean) => Promise<ResourceViewModule>) {
 	const calls: boolean[] = [];
 	const renderer: ResourceRenderer = {
 		id: `test/preload-${sequence}`,
-		label: "Preload test",
+		labelKey: "viewer.renderer.preview",
 		match: { glob: [`*.${extension}`] },
 		rank: 10_000,
 		capabilities: {
