@@ -39,7 +39,7 @@ window.MonacoEnvironment = {
 	},
 };
 
-export const EDITOR_THEME = "thinkrail-editor";
+const EDITOR_THEME = "thinkrail-editor";
 
 const BRACKETS: [string, string][] = [
 	["(", ")"],
@@ -126,13 +126,17 @@ export function fileEditorOptions(
 }
 
 interface FileModelInput {
-	modelPath: string;
+	scope: string;
+	path: string;
 	text: string;
-	language: string;
 }
 
-function createFileModel({ modelPath, text, language }: FileModelInput) {
-	return monaco.editor.createModel(text, language, monaco.Uri.parse(modelPath));
+function fileModelUri({ scope, path }: FileModelInput) {
+	return monaco.Uri.parse(`${scope}/${path}`);
+}
+
+function createFileModel(input: FileModelInput) {
+	return monaco.editor.createModel(input.text, languageForPath(input.path), fileModelUri(input));
 }
 
 export function createFileEditor(
@@ -152,13 +156,10 @@ export function syncFileModel(
 	appliedText: string,
 ): void {
 	const current = codeEditor.getModel();
-	if (!current || current.uri.toString() !== monaco.Uri.parse(input.modelPath).toString()) {
+	if (!current || current.uri.toString() !== fileModelUri(input).toString()) {
 		codeEditor.setModel(createFileModel(input));
 		current?.dispose();
 		return;
-	}
-	if (current.getLanguageId() !== input.language) {
-		monaco.editor.setModelLanguage(current, input.language);
 	}
 	if (input.text !== appliedText) current.setValue(input.text);
 }

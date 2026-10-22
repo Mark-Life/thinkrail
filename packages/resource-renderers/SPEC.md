@@ -569,12 +569,12 @@ content's own height.
 - **`MonacoEditor` mounts Monaco itself.** A layout effect creates the editor and its model in the commit
   that mounts the view, with no loading state, then restores the view state and attaches review commenting
   (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
-  and the model, in that order. A path or language change on a live editor swaps the model in place
+  and the model, in that order. A path change on a live editor swaps the model in place (the language follows the path)
   (`RendererView` is keyed by implementation, not path); new text calls `setValue` only when it differs
   from the text last applied, compared as strings, never through `getValue()`.
   A review focus reveals its line with `ScrollType.Immediate`: a smooth reveal issued before the editor's
   first frame never lands (found by the far-off worktree comment e2e).
-- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
+- **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`: `createFileEditor` applies it and the theme refresh defines it.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
   same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
   it directly. Token colours come from `shikiTokens.ts`, a Monaco-free owner of one Shiki highlighter, its

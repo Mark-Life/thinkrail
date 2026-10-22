@@ -48,8 +48,8 @@ export default function MonacoEditor({
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
 	ensureMonaco(useResourceHost().code);
-	const modelPath = `${useId().replace(/[^\w-]/g, "")}/${resource.path}`;
-	const language = languageForPath(resource.path);
+	const scope = useId().replace(/[^\w-]/g, "");
+	const path = resource.path;
 	const text = content.kind === "text" ? content.text : "";
 	const commentLabel = t("review.widget.commentOnSelection");
 	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path);
@@ -59,10 +59,9 @@ export default function MonacoEditor({
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const decorationsRef = useRef<string[]>([]);
 	const appliedTextRef = useRef(text);
-	const appliedOptionsRef = useRef(options);
 	const latestRef = useRef({
-		modelPath,
-		language,
+		scope,
+		path,
 		text,
 		options,
 		commentLabel,
@@ -77,8 +76,8 @@ export default function MonacoEditor({
 
 	useLayoutEffect(() => {
 		latestRef.current = {
-			modelPath,
-			language,
+			scope,
+			path,
 			text,
 			options,
 			commentLabel,
@@ -95,7 +94,6 @@ export default function MonacoEditor({
 		const codeEditor = createFileEditor(container, mount);
 		editorRef.current = codeEditor;
 		appliedTextRef.current = mount.text;
-		appliedOptionsRef.current = mount.options;
 		const menuIcons = decorateEditorContextMenus(codeEditor);
 		if (isEditorViewState(mount.viewState)) codeEditor.restoreViewState(mount.viewState);
 		const threads = mount.review ? attachReviewThreads(codeEditor, setReviewZones) : null;
@@ -121,17 +119,15 @@ export default function MonacoEditor({
 	useLayoutEffect(() => {
 		const codeEditor = editorRef.current;
 		if (!codeEditor) return;
-		syncFileModel(codeEditor, { modelPath, language, text }, appliedTextRef.current);
+		syncFileModel(codeEditor, { scope, path, text }, appliedTextRef.current);
 		appliedTextRef.current = text;
-	}, [modelPath, language, text]);
+	}, [scope, path, text]);
 
 	useLayoutEffect(() => {
 		commentingRef.current?.setLabel(commentLabel);
 	}, [commentLabel]);
 
 	useLayoutEffect(() => {
-		if (options === appliedOptionsRef.current) return;
-		appliedOptionsRef.current = options;
 		editorRef.current?.updateOptions(options);
 	}, [options]);
 
