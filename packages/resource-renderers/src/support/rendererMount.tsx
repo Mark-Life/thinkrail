@@ -43,6 +43,10 @@ function loadView(renderer: ResourceRenderer, mobile: boolean): Promise<Resource
 	return next;
 }
 
+function nextTask(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 export function preloadRendererView(
 	renderer: ResourceRenderer,
 	mobile: boolean,
@@ -51,7 +55,10 @@ export function preloadRendererView(
 ): Promise<void> {
 	if (!renderer.loadView) return Promise.resolve();
 	return loadView(renderer, mobile)
-		.then((module) => module.warm?.(host, resource))
+		.then(async (module) => {
+			await nextTask();
+			module.warm?.(host, resource);
+		})
 		.catch((error: unknown) =>
 			console.warn(`[resource-renderers] view preload failed: ${renderer.id}`, error),
 		);

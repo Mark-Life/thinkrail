@@ -34,6 +34,7 @@ export {
 	type ResourceEnvironment,
 	type ResourceIntent,
 	type ResourceRenderer,
+	type ResourceViewModule,
 	type ResourceViewProps,
 	type ReviewThread,
 	type ReviewThreadActions,

@@ -119,9 +119,11 @@ own render and passes them to `MarkdownDocument` explicitly — a context read i
 
 `ResourceRenderer.loadView(environment)` receives the same `ResourceEnvironment` (`{ mobile }`) used for
 resolution, so the code renderer picks Pierre `File` on phone-class viewports and Monaco otherwise without
-reading a viewport global. The loaded module may export `warm(host, resource)`; a preload calls it after
-every request, so it must be cheap and idempotent. Monaco's `warm` runs `ensureMonaco`, starts the regex
-engine, and loads the grammar for the resource's path (an empty path warms no grammar).
+reading a viewport global. The loaded module (`ResourceViewModule`, exported from the root) may export
+`warm(host, resource)`; a preload calls it after every request, one task after the module resolves, so
+the chunk's evaluation and the warm are separate long tasks. It must be cheap and idempotent. Monaco's
+`warm` runs `ensureMonaco`, starts the regex engine, and one task later loads the grammar for the
+resource's path (an empty path warms no grammar).
 
 **One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
 in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.

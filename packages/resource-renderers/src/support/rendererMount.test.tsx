@@ -127,6 +127,17 @@ test("concurrent preloads import once and warm each request", async () => {
 	]);
 });
 
+test("warm runs in a later task than the loaded module", async () => {
+	const order: string[] = [];
+	const { renderer, resource } = testRenderer(async () =>
+		viewModule("yielded", () => order.push("warm")),
+	);
+	const preload = preloadRendererView(renderer, false, host, resource);
+	setTimeout(() => order.push("task"), 0);
+	await preload;
+	expect(order).toEqual(["task", "warm"]);
+});
+
 test("phone and desktop implementations load and cache separately", async () => {
 	const { renderer, calls, resource } = testRenderer(async (mobile) =>
 		viewModule(mobile ? "phone" : "desktop"),

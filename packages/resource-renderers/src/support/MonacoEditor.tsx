@@ -34,7 +34,7 @@ function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState
 
 export function warm(host: ResourceHost, resource: ResourceDescriptor): void {
 	ensureMonaco(host.code);
-	warmLanguage(languageForPath(resource.path));
+	setTimeout(() => warmLanguage(languageForPath(resource.path)), 0);
 }
 
 export default function MonacoEditor({

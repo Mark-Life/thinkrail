@@ -2,13 +2,13 @@ import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
 import { firstClickOnly } from "../lib";
 import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
-import { useEditorWarm } from "./editorWarm";
+import { holdEditorWarm, useEditorWarm } from "./editorWarm";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -49,6 +49,9 @@ export function FileTree({
 			onSwitch: () => setNodes(null),
 		},
 	);
+
+	const loading = nodes === null;
+	useEffect(() => (loading ? holdEditorWarm() : undefined), [loading]);
 
 	if (nodes === null) return <LoadingRegion rows={8} className="px-4 py-4" />;
 	if (nodes.length === 0)
