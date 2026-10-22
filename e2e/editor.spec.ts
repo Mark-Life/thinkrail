@@ -244,8 +244,14 @@ test("Monaco restores scroll across a tab switch", async ({ page }) => {
 	await expect(visibleEditor(page)).toContainText("row0");
 	await visibleEditor(page).getByText("export const row2 = 2;", { exact: true }).click();
 	for (let step = 0; step < 4; step += 1) await page.keyboard.press("PageDown");
-	await expect.poll(() => firstVisibleLine(page)).toBeGreaterThan(50);
-	const scrolledTo = await firstVisibleLine(page);
+	let scrolledTo = 0;
+	await expect
+		.poll(async () => {
+			const before = scrolledTo;
+			scrolledTo = await firstVisibleLine(page);
+			return scrolledTo > 50 && scrolledTo === before;
+		})
+		.toBe(true);
 
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
 	await expect(visibleEditor(page)).toContainText("plain-text-fixture");
