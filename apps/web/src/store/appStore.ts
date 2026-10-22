@@ -927,6 +927,8 @@ function withHostState(runtime: SessionRuntime, hostState: SessionState | null):
 	return next;
 }
 
+export type ReviewFocusSurface = { kind: "inline" } | { kind: "diff"; scope: GitDiffScope };
+
 interface AppState {
 	resourceSnapshots: ChatResourceSnapshots;
 	resourceRevision: number;
@@ -1011,7 +1013,7 @@ interface AppState {
 	reviewFocusRequest: {
 		workspaceId: string;
 		commentId: string;
-		surface: "inline" | "diff";
+		surface: ReviewFocusSurface;
 	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
@@ -1355,11 +1357,7 @@ interface AppState {
 	clearSpecRequest: () => void;
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
-	requestReviewFocus: (
-		workspaceId: string,
-		commentId: string,
-		surface: NonNullable<AppState["reviewFocusRequest"]>["surface"],
-	) => void;
+	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
@@ -3020,10 +3018,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 							: { ...tab.collapsed, [target.path]: false },
 				};
 			});
-			return target?.commentId && !s.removedWorkspaceIds[workspaceId]
+			const scope = s.tabsByWorkspace[workspaceId]?.find(
+				(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
+			)?.scope;
+			return target?.commentId && scope && !s.removedWorkspaceIds[workspaceId]
 				? {
 						...patched,
-						reviewFocusRequest: { workspaceId, commentId: target.commentId, surface: "diff" },
+						reviewFocusRequest: {
+							workspaceId,
+							commentId: target.commentId,
+							surface: { kind: "diff", scope },
+						},
 					}
 				: patched;
 		}),

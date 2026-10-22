@@ -9,6 +9,7 @@ import type {
 import { useMemo, useState } from "react";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport, supportsRichAnchors } from "../transport";
+import { scopeKey } from "./changesModel";
 import { fileThreads, sameThreads } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
 
@@ -32,7 +33,7 @@ export function useFileReview(
 		useMemo(() => fileThreads(comments, path, "base"), [comments, path]),
 	);
 	const focusRequest = useAppStore((state) => state.reviewFocusRequest);
-	const focusId = reviewFocusId(focusRequest, workspaceId, kind);
+	const focusId = reviewFocusId(focusRequest, workspaceId, kind, scope);
 	const worktreeFocus = useMemo(
 		() => resolveFocus(worktreeThreads, focusId),
 		[worktreeThreads, focusId],
@@ -114,9 +115,13 @@ export function reviewFocusId(
 	request: ReturnType<typeof useAppStore.getState>["reviewFocusRequest"],
 	workspaceId: string,
 	kind: "inline" | "diff",
+	scope?: GitDiffScope,
 ): string | null {
 	if (!request || request.workspaceId !== workspaceId) return null;
-	return request.surface === kind ? request.commentId : null;
+	const target = request.surface;
+	if (target.kind !== kind) return null;
+	if (target.kind === "diff" && (!scope || scopeKey(scope) !== scopeKey(target.scope))) return null;
+	return request.commentId;
 }
 
 function resolveFocus(

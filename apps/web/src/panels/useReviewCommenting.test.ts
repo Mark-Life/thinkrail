@@ -43,8 +43,20 @@ test("a positioned draft keeps its surface kind and a bare draft is a file comme
 });
 
 test("a surface-targeted focus is left for that surface, not a mounted sibling", () => {
-	const toFile = { workspaceId: "w1", commentId: "c1", surface: "inline" as const };
+	const toFile = { workspaceId: "w1", commentId: "c1", surface: { kind: "inline" as const } };
 	expect(reviewFocusId(toFile, "w1", "inline")).toBe("c1");
-	expect(reviewFocusId(toFile, "w1", "diff")).toBeNull();
+	expect(reviewFocusId(toFile, "w1", "diff", { kind: "branch" })).toBeNull();
 	expect(reviewFocusId(toFile, "w2", "inline")).toBeNull();
+});
+
+test("a diff focus is left for the diff of its scope, not a mounted diff of another base", () => {
+	const scope = { kind: "pinned" as const, baseRef: "abc123" };
+	const toPinned = {
+		workspaceId: "w1",
+		commentId: "c1",
+		surface: { kind: "diff" as const, scope },
+	};
+	expect(reviewFocusId(toPinned, "w1", "diff", { kind: "pinned", baseRef: "abc123" })).toBe("c1");
+	expect(reviewFocusId(toPinned, "w1", "diff", { kind: "branch" })).toBeNull();
+	expect(reviewFocusId(toPinned, "w1", "inline")).toBeNull();
 });
