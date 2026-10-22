@@ -103,6 +103,16 @@ test("a failed preload does not reject and a later mount retries the loader", as
 	expect(calls).toEqual([false, false]);
 });
 
+test("a warm that throws does not reject and the view still renders", async () => {
+	const { renderer, resource } = testRenderer(async () =>
+		viewModule("warm failed", () => {
+			throw new Error("warm failed");
+		}),
+	);
+	await expect(preloadRendererView(renderer, false, host, resource)).resolves.toBeUndefined();
+	expect(render(renderer, resource)).toBe("<span>warm failed</span>");
+});
+
 test("concurrent preloads import once and warm each request", async () => {
 	const warmed: [ResourceHost, string][] = [];
 	const { renderer, calls, resource } = testRenderer(async () =>
@@ -151,10 +161,4 @@ test("usePreloadResourceView resolves the renderer for the environment", () => {
 	));
 	preload(resource);
 	expect(calls).toEqual([true]);
-});
-
-test("usePreloadResourceView does nothing without a host", () => {
-	const { calls, resource } = testRenderer(async () => viewModule("none"));
-	capturePreload((probe) => probe)(resource);
-	expect(calls).toEqual([]);
 });

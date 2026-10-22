@@ -50,8 +50,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
     selected renderer, its implementation key (renderer id + phone class) and the placed-thread state;
   - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
-    environment's phone class, loads its implementation and runs the module's optional `warm`; without a host
-    or environment provider it does nothing;
+    environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
+    providers;
   - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
@@ -123,15 +123,16 @@ reading a viewport global. The loaded module may export `warm(host, resource)`; 
 every request, so it must be cheap and idempotent. Monaco's `warm` runs `ensureMonaco`, starts the regex
 engine, and loads the grammar for the resource's path (an empty path warms no grammar).
 
-**One loaded implementation per key, chosen once.** `rendererMount` keeps the loaded component and the
+**One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
 in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts. React
 `lazy` suspends on its first render even when its promise already resolved, and a shown fallback holds for
-at least 300 ms. So the first `RendererView` for a key renders the loaded component directly when a
-preload finished, and otherwise a `lazy` that reuses the in-flight load. That choice is stored once and
-never switched: a lazy and a direct component are different types, and swapping them would remount a live
-editor. A lazy made while a load was in flight is resolved for every later mount, so it does not suspend
-again. A failed preload logs a warning instead of rejecting and forgets its load, so the next mount
-retries and a real failure reaches the pane's error boundary.
+at least 300 ms. So a finished load stores the module's component under its key, unless a mount already
+stored a `lazy` there, and the first `RendererView` without a stored component stores a `lazy` that reuses
+the in-flight load. That choice is stored once and never switched: a lazy and a direct component are
+different types, and swapping them would remount a live editor. A lazy made while a load was in flight is
+resolved for every later mount, so it does not suspend again. A failed preload, in the load or in `warm`,
+logs a warning instead of rejecting; a failed load is forgotten, so the next mount retries and a real
+failure reaches the pane's error boundary.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,

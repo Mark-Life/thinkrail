@@ -44,14 +44,12 @@ test("an editor preload that failed while offline recovers through the boundary'
 
 	const pane = page.locator('[data-testid="editor-pane"]:visible');
 	const reload = page.getByTestId("error-reload");
-	await expect(pane.getByText("plain-text-fixture").or(reload)).toBeVisible();
-	if (await reload.isVisible()) {
-		await reload.click();
-		await expect(page.getByTestId("shell")).toBeVisible();
-		const tab = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
-		await expect(tab).toBeVisible();
-		await tab.click();
-	}
+	await expect(reload).toBeVisible();
+	await reload.click();
+	await expect(page.getByTestId("shell")).toBeVisible();
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await expect(tab).toBeVisible();
+	await tab.click();
 	await expect(pane).toContainText("plain-text-fixture");
 	await expect(page.getByTestId("error-boundary-fallback")).toHaveCount(0);
 });
