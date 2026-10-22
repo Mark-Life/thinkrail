@@ -4,10 +4,9 @@ import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } fro
 test("a failed editor chunk shows the boundary's reload fallback and keeps the shell alive", async ({
 	page,
 }) => {
+	await page.route(/MonacoEditor.*\.js(\?.*)?$/, (route) => route.abort());
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-
-	await page.route(/MonacoEditor.*\.js(\?.*)?$/, (route) => route.abort());
 
 	await revealWorkbenchTool(page, "files");
 	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });

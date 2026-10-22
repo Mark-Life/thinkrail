@@ -269,7 +269,9 @@ treatment.
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical. Both trees **compact a single-directory
+  `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` fires on
+  pointer enter and focus; `FileTree` file rows use it to preload the code view and the row's grammar
+  (`usePreloadResourceView` with the pending text metadata), except on phone-class viewports. Both trees **compact a single-directory
   run into one slash-joined row** (`apps/web/src`): the run continues only while a directory has exactly
   one child and that child is another directory, and the compact row expands/collapses the deepest
   directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
@@ -2026,7 +2028,8 @@ own section. The kebab menu (`plan-menu`, a
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
   metadata (provisionally text before it lands — and permanently text against a host that predates
   `RESOURCE_META_PROTOCOL_VERSION` and never sends `meta`, which is that host's own legacy surface, so no
-  protocol gate is needed for byte-only rendering), resolves `view`, and mounts the selected lazy candidate.
+  protocol gate is needed for byte-only rendering), resolves `view`, and mounts the selected lazy candidate. Its Suspense fallback is `file-pane-loading`; a
+  preloaded implementation never shows it.
   `thinkrail/markdown` remains the higher-ranked match for `.md`/`.mdx`, so documents open in
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
   on phone-class viewports; `thinkrail/binary` shows identity and a host-backed

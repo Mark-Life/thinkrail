@@ -21,7 +21,7 @@ import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
-const loading = <LoadingRegion rows={12} className="h-full p-12" />;
+const loading = <LoadingRegion rows={12} className="h-full p-12" testId="file-pane-loading" />;
 
 export function FilePane({ tab }: { tab: FileTab }) {
 	const t = useT();
