@@ -99,10 +99,10 @@ After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted them
 
 ## Workbench behavior
 
-`WorkspaceWorkbench` owns the idle editor preload (`useIdleEditorPreload`): on desktop, unless the
-connection asks to save data, it schedules one `whenIdle` preload of the code view (2 s idle timeout, 1.5 s
-fallback delay) so the first file open from any surface — Files, quick open, chat links, review, a restored
-tab — renders without a loading fallback. Phone-class viewports never load Monaco this way.
+`WorkspaceWorkbench` owns the idle editor preload (`useIdleEditorPreload`): when `panels/editorWarm`'s
+`useEditorWarm` allows it (not phone-class, not `saveData`), it schedules one `whenIdle` preload of the
+code view (2 s idle timeout, 1.5 s fallback delay). Once the preload has finished, the first file open from
+any surface — Files, quick open, chat links, review — renders without a loading fallback.
 
 The durable frame grammar and pure operations belong to [[submodule-web-shell-layout]]. Zustand carries one `WorkbenchFrame`, local layout preferences, and keyed `WorkspaceViewState` values; the mounted document is derived and never persisted as a second authority. Frame-plus-view transitions commit atomically through `layoutState`.
 

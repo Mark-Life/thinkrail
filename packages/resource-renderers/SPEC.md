@@ -130,8 +130,8 @@ at least 300 ms. So the first `RendererView` for a key renders the loaded compon
 preload finished, and otherwise a `lazy` that reuses the in-flight load. That choice is stored once and
 never switched: a lazy and a direct component are different types, and swapping them would remount a live
 editor. A lazy made while a load was in flight is resolved for every later mount, so it does not suspend
-again. A failed preload is swallowed and forgets its load, so the next mount retries and a real failure
-reaches the pane's error boundary.
+again. A failed preload logs a warning instead of rejecting and forgets its load, so the next mount
+retries and a real failure reaches the pane's error boundary.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,
@@ -611,4 +611,8 @@ content's own height.
   4x, where the rest is Oniguruma compiling the grammar's scanners on the first tokenize). The package
   only offers the mechanism; the host decides when to call it. Cost: every desktop session loads the
   Monaco chunk and the engine (about 3.9 MB decoded, about 7 MB more heap) and a 70 ms evaluation task at
-  4x CPU after boot. A click while the preload is still loading suspends as before.
+  4x CPU after boot. A click while the preload is still loading suspends as before. A preload that fails
+  while the network is down costs the rest of the session: Chromium caches the failed module fetch, so
+  every later import of that chunk rejects without a request, and a statically split chunk has no URL to
+  cache-bust. The first open then shows the error boundary's **Reload page**, which recovers; on main the
+  same outage fails only if it lasts until the first open.

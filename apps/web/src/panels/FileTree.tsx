@@ -1,17 +1,14 @@
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import {
-	describeResource,
-	PENDING_TEXT_META,
-	usePreloadResourceView,
-} from "@thinkrail/resource-renderers";
+import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
-import { firstClickOnly, usePhoneViewport } from "../lib";
+import { firstClickOnly } from "../lib";
 import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
+import { useEditorWarm } from "./editorWarm";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -35,10 +32,10 @@ export function FileTree({
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
 	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
-	const preload = usePreloadResourceView();
-	const warmFile: WarmFile = usePhoneViewport()
-		? undefined
-		: (path) => preload(describeResource(workspaceId, path, PENDING_TEXT_META));
+	const warm = useEditorWarm();
+	const warmFile: WarmFile = warm
+		? (path) => warm(describeResource(workspaceId, path, PENDING_TEXT_META))
+		: undefined;
 
 	const setPathsExpanded: SetPathsExpanded = (paths, next) =>
 		useAppStore.getState().setFilesTreeExpanded(workspaceId, paths, next);

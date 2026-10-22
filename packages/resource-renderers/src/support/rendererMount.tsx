@@ -58,7 +58,8 @@ export function preloadRendererView(
 	if (!renderer.loadView) return Promise.resolve();
 	return loadView(renderer, mobile).then(
 		(module) => module.warm?.(host, resource),
-		() => undefined,
+		(error: unknown) =>
+			console.warn(`[resource-renderers] view preload failed: ${renderer.id}`, error),
 	);
 }
 

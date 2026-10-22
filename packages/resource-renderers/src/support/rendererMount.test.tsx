@@ -90,7 +90,7 @@ test("a view that was not preloaded shows the Suspense fallback", () => {
 	expect(render(renderer, resource)).toContain("loading");
 });
 
-test("a failed preload is swallowed and a later mount retries the loader", async () => {
+test("a failed preload does not reject and a later mount retries the loader", async () => {
 	let attempt = 0;
 	const { renderer, calls, resource } = testRenderer(async () => {
 		attempt += 1;

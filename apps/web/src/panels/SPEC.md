@@ -271,7 +271,8 @@ treatment.
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
   `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` fires on
   pointer enter and focus; `FileTree` file rows use it to preload the code view and the row's grammar
-  (`usePreloadResourceView` with the pending text metadata), except on phone-class viewports. Both trees **compact a single-directory
+  through **`useEditorWarm`** (`editorWarm.ts`, also used by the shell's idle preload): it returns
+  `usePreloadResourceView`'s callback, or `undefined` on phone-class viewports and `saveData` connections. Both trees **compact a single-directory
   run into one slash-joined row** (`apps/web/src`): the run continues only while a directory has exactly
   one child and that child is another directory, and the compact row expands/collapses the deepest
   directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
