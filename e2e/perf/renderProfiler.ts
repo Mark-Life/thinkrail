@@ -1,6 +1,6 @@
 import type { Page, Request, Route } from "@playwright/test";
 
-export interface ComponentCost {
+interface ComponentCost {
 	commits: number;
 	renders: number;
 	selfTotalMs: number;
@@ -8,6 +8,15 @@ export interface ComponentCost {
 	inclusiveTotalMs: number;
 	inclusiveMaxMs: number;
 }
+
+export const EMPTY_COST: ComponentCost = {
+	commits: 0,
+	renders: 0,
+	selfTotalMs: 0,
+	selfMaxMs: 0,
+	inclusiveTotalMs: 0,
+	inclusiveMaxMs: 0,
+};
 
 interface SubtreeCost extends Omit<ComponentCost, "inclusiveTotalMs" | "inclusiveMaxMs"> {
 	rootRenders: number;

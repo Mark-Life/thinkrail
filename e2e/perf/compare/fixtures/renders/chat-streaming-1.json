@@ -1,0 +1,70 @@
+{
+	"scenario": "chat-streaming",
+	"wallMs": 16230.036999999998,
+	"mainThread": {
+		"taskMs": 1654.4809999999998,
+		"scriptMs": 833.763,
+		"layoutMs": 62.984,
+		"styleMs": 75.83099999999999
+	},
+	"profile": {
+		"commits": 1055,
+		"totalMs": 307.79499999061227,
+		"maxCommitMs": 1.4900000058114529,
+		"components": {
+			"ChatTranscript": {
+				"commits": 427,
+				"renders": 427,
+				"selfTotalMs": 108.28500001505017,
+				"selfMaxMs": 0.6650000028312206,
+				"inclusiveTotalMs": 121.78999999165535,
+				"inclusiveMaxMs": 0.7000000029802322
+			},
+			"Markdown$1": {
+				"commits": 341,
+				"renders": 353,
+				"selfTotalMs": 100.0700000077486,
+				"selfMaxMs": 0.7199999988079071,
+				"inclusiveTotalMs": 101.32999997213483,
+				"inclusiveMaxMs": 0.7450000010430813
+			},
+			"vr>anonymous": {
+				"commits": 647,
+				"renders": 1357,
+				"selfTotalMs": 24.589999940246344,
+				"selfMaxMs": 0.08500000461935997,
+				"inclusiveTotalMs": 164.4549999423325,
+				"inclusiveMaxMs": 1.1650000028312206
+			},
+			"BlockMarkdown": {
+				"commits": 341,
+				"renders": 341,
+				"selfTotalMs": 20.38000001758337,
+				"selfMaxMs": 0.669999998062849,
+				"inclusiveTotalMs": 123.23500001057982,
+				"inclusiveMaxMs": 1.0999999977648258
+			}
+		},
+		"subtrees": {
+			"markdown": {
+				"commits": 341,
+				"renders": 1515,
+				"rootRenders": 341,
+				"selfTotalMs": 121.97500003129244,
+				"selfMaxMs": 1.0649999976158142
+			}
+		},
+		"longTasks": {
+			"count": 0,
+			"totalMs": 0,
+			"maxMs": 0
+		},
+		"frames": {
+			"frames": 973,
+			"p50GapMs": 16.665000000000873,
+			"p95GapMs": 17.530000000000655,
+			"maxGapMs": 17.659999999999854,
+			"droppedFrames": 0
+		}
+	}
+}
