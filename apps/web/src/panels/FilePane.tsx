@@ -80,7 +80,8 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
-	const reviews = [review.worktree];
+	const reviewSurface = editing && dirty ? undefined : review.worktree;
+	const reviews = reviewSurface ? [reviewSurface] : [];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
 		const current = useAppStore
@@ -132,7 +133,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						resource={resource}
 						content={content}
 						{...(editing ? { edit: buffer.session } : {})}
-						review={review.worktree}
+						{...(reviewSurface ? { review: reviewSurface } : {})}
 						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}

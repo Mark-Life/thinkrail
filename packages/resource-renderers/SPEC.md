@@ -581,8 +581,9 @@ content's own height.
   ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
   file's tab) never shares a model that one unmount disposes under the other.
 - **`MonacoEditor` mounts Monaco itself.** A layout effect creates the editor and its model in the commit
-  that mounts the view, with no loading state, then restores the view state and attaches review commenting
-  (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
+  that mounts the view, with no loading state, then restores the view state. Review threads and commenting
+  attach while a `review` prop is present and detach (zones, decorations, the comment action) when it goes
+  away, which a host does for an unsaved buffer whose lines no longer match disk. Its layout cleanup saves the view state before it disposes the editor
   and the model, in that order. A path change on a live editor swaps the model in place, and the language
   follows the path, because `RendererView` is keyed by implementation, not path. Read-only, new text calls `setValue`
   only when it differs from the text last applied, compared as strings, never through `getValue()`.
