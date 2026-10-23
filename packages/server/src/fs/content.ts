@@ -38,6 +38,7 @@ const EXTENSION_MIME: Readonly<Record<string, string>> = {
 
 const SVG_ROOT = /^\s*<svg[\s>]/;
 const XML_PROLOG = /^\s*<\?xml(?:\s|\?>)/;
+export const LFS_POINTER_MIME = "application/vnd.git-lfs";
 const LFS_POINTER_LIMIT = 1024;
 const LFS_POINTER =
 	/^version https:\/\/git-lfs\.github\.com\/spec\/v1\noid sha256:[0-9a-f]{64}\nsize \d{1,15}\n$/;
@@ -94,7 +95,7 @@ export function classifyBytes(bytes: Uint8Array): { text: boolean; mime?: string
 	const text = isTextBytes(bytes);
 	if (!text) return { text };
 	if (isSvg(bytes)) return { text, mime: "image/svg+xml" };
-	if (isLfsPointer(bytes)) return { text, mime: "application/vnd.git-lfs" };
+	if (isLfsPointer(bytes)) return { text, mime: LFS_POINTER_MIME };
 	return { text };
 }
 

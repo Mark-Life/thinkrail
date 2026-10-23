@@ -14,7 +14,7 @@ import {
 	type WsParams,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { decodeText, resourceMeta } from "./content";
+import { decodeText, LFS_POINTER_MIME, resourceMeta } from "./content";
 import { errnoCode, statOrNull } from "./errno";
 import { resolveWorktreeFile } from "./files";
 import { replaceFile } from "./replace";
@@ -28,7 +28,6 @@ interface WriteTextFileOutcome {
 }
 
 const BYTES = new TextEncoder();
-const LFS_MIME = "application/vnd.git-lfs";
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
 
 function assertParams(params: WriteTextFileParams): void {
@@ -81,7 +80,7 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 		const text = meta.text ? decodeText(current) : "";
 		return { result: { status: "stale", current: { content: text, meta } }, changed: false };
 	}
-	if (!meta.text || meta.mime === LFS_MIME) {
+	if (!meta.text || meta.mime === LFS_POINTER_MIME) {
 		throw new CodedError("NOT_EDITABLE", `${path} is not an editable text file.`);
 	}
 	try {
