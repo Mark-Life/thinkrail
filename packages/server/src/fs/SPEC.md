@@ -100,7 +100,7 @@ text back to a text file under compare-and-swap.
   host writes a BOM before it, whatever the disk file had. `toEditorText` of the written file then
   equals the content, so a second save of the same buffer, or a replay, is a no-op.
 - **A create maps errno like an update.** A read-only folder or volume answers `readonly`; a regular
-  file where a parent folder should be is `NOT_EDITABLE`. The exclusive create writes straight to the
+  file or a dangling symlink where a parent folder should be is `NOT_EDITABLE`, never a raw errno. The exclusive create writes straight to the
   target, so a write that fails partway (`ENOSPC`) removes the file it created; a replay then creates
   again instead of reading `stale` against a partial file.
 - **Atomic unless that changes the file's identity.** Temp+rename in the target's directory, with the

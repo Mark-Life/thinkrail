@@ -36,8 +36,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
   change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)),
   plus the two `fs.writeFile` refusals: **`NOT_EDITABLE`** (not a regular UTF-8 text file: byte-only,
-  LFS pointer, directory or special file; or a create through a dangling symlink or below a file that
-  stands where a parent folder should be) and **`FILE_TOO_LARGE`**, so a client can react to one specific failure
+  LFS pointer, directory or special file; or a create through a dangling symlink, or below a file or
+  dangling symlink that stands where a parent folder should be) and **`FILE_TOO_LARGE`**, so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.

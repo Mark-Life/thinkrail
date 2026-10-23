@@ -16,7 +16,7 @@ interface WriteTextFileOutcome {
 }
 
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
-const NOT_A_FOLDER_CODES = new Set(["EEXIST", "ENOTDIR"]);
+const NOT_A_FOLDER_CODES = new Set(["EEXIST", "ENOTDIR", "ENOENT"]);
 
 function assertParams(params: WriteTextFileParams): void {
 	if (typeof params.content !== "string") throw new Error("fs.writeFile content must be a string");
@@ -52,7 +52,7 @@ function createMissing(
 		if (NOT_A_FOLDER_CODES.has(String(errnoCode(error)))) {
 			throw new CodedError(
 				"NOT_EDITABLE",
-				`${params.path} has a file where a parent folder should be.`,
+				`${params.path} has a file or a broken link where a parent folder should be.`,
 			);
 		}
 		return readonlyOrThrow(error);
