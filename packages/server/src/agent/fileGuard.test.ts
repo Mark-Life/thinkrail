@@ -3,7 +3,7 @@ import { Hash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join, win32 } from "node:path";
+import { join, relative, win32 } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
 	createEditTool,
@@ -147,6 +147,28 @@ test("agentReadPath falls back to the spelling variants pi's read tries", () => 
 	expect(agentReadPath("Shot 1.02 PM.png", root)).toBe(join(root, "Shot 1.02 PM.png"));
 	expect(agentReadPath("Shot 1.03 PM.png", root)).toBe(join(root, "Shot 1.03\u202FPM.png"));
 	expect(agentReadPath("missing.txt", root)).toBe(join(root, "missing.txt"));
+});
+
+test("agentPath and agentReadPath land on the files pi's own write and read tools use", async () => {
+	const spellings = [
+		"@at.ts",
+		`~/${relative(homedir(), join(root, "home.ts"))}`,
+		"no\u00A0break\u202Fspace.ts",
+		pathToFileURL(join(root, "url.ts")).href,
+		join(root, "abs.ts"),
+	];
+	for (const [index, path] of spellings.entries()) {
+		const content = `written ${index}\n`;
+		expect((await write(`w${index}`, path, content)).isError).toBe(false);
+		expect(readFileSync(agentPath(path, root), "utf8")).toBe(content);
+	}
+	writeFileSync(join(root, "d\u2019x.txt"), "curly\n");
+	writeFileSync(join(root, "Shot 1.03\u202FPM.txt"), "screenshot\n");
+	for (const path of [...spellings, "d'x.txt", "Shot 1.03 PM.txt"]) {
+		const fromPi = await read(path);
+		expect(fromPi.isError).toBe(false);
+		expect(fromPi.content[0]?.text).toContain(readFileSync(agentReadPath(path, root), "utf8"));
+	}
 });
 
 test("a stale write is blocked when the read went through a spelling variant", async () => {
@@ -374,6 +396,42 @@ test("a write or edit that pi aborts after writing is still recorded as the agen
 		})?.author,
 	).toMatchObject({ kind: "agent", toolName: "edit" });
 	expect(await guarded.call("write", "w3", { path: "b.ts", content: "x\n" })).toBeUndefined();
+});
+
+test("an edit that fails before writing does not take an outside change as the agent's", async () => {
+	writeFileSync(join(root, "a.ts"), "x\nx\nkeep\n");
+	const guarded = guard();
+	await guarded.result(await read("a.ts"));
+	await guarded.call("edit", "e1", { path: "a.ts" });
+	writeFileSync(join(root, "a.ts"), "x\nx\nkeep\noutside\n");
+	const failed = await edit("a.ts", "x", "y", "e1");
+	expect(failed.content[0]?.text).toStartWith("Found 2 occurrences");
+	expect(await guarded.result(failed)).toBeUndefined();
+	await guarded.end("e1");
+	const current = readFileSync(join(root, "a.ts"));
+	expect(
+		store.lastWrite({ path: join(root, "a.ts"), hash: hashBytes(current), clientKey: "c" }),
+	).toBeUndefined();
+	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "x\n" });
+	expect(blocked?.reason).toStartWith(
+		"Blocked: a.ts changed since you read it (by a program outside ThinkRail).",
+	);
+});
+
+test("an edit over a save made after its claim decodes nothing, since edits get no overwrite note", async () => {
+	writeFileSync(join(root, "a.ts"), "one\ntwo\n");
+	const guarded = guard();
+	await guarded.result(await read("a.ts"));
+	await guarded.call("edit", "e1", { path: "a.ts" });
+	userSave("a.ts", "one\ntwo\nuser\n");
+	const edited = await edit("a.ts", "two", "TWO", "e1");
+	const decode = spyOn(TextDecoder.prototype, "decode");
+	try {
+		expect(await guarded.result(edited)).toBeUndefined();
+		expect(decode).not.toHaveBeenCalled();
+	} finally {
+		decode.mockRestore();
+	}
 });
 
 test("a bash call that never gets a result is closed when pi ends the tool", async () => {
