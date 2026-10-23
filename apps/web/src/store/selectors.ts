@@ -56,6 +56,7 @@ import type {
 	TerminalTab,
 } from "./appStore";
 import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
+import type { FileBufferSummaries, FileBufferSummary } from "./fileBuffers";
 
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
@@ -943,6 +944,14 @@ export function selectWorkspaceTick(
 	workspaceId: string,
 ): number {
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+}
+
+export function selectFileBufferSummary(
+	state: { fileBuffersByWorkspace: FileBufferSummaries },
+	workspaceId: string,
+	path: string,
+): FileBufferSummary | undefined {
+	return state.fileBuffersByWorkspace[workspaceId]?.[path];
 }
 
 export function fsChangedPaths(change: {
