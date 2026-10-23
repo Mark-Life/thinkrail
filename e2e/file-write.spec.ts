@@ -1,7 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { type WorkspaceFsChangedPayload, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	FILE_WRITE_MAX_BYTES,
+	type WorkspaceFsChangedPayload,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { openFixtureProject } from "./fixtures/app";
 import { E2eWire } from "./fixtures/wire";
 
@@ -51,6 +55,26 @@ test("fs.writeFile saves under compare-and-swap and the watcher names the saved 
 				expect: { hash: before.meta.hash },
 			}),
 		).resolves.toEqual({ status: "missing" });
+	} finally {
+		wire.close();
+	}
+});
+
+test("a save at the cap fits one frame even when JSON escapes every byte", async ({ page }) => {
+	await openFixtureProject(page);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const project = (await wire.request("project.list", {}))[0];
+		if (!project) throw new Error("Missing fixture project");
+		const workspace = await wire.request("workspace.create", { projectId: project.id });
+		const written = await wire.request("fs.writeFile", {
+			workspaceId: workspace.id,
+			path: "control.txt",
+			content: "\u0001".repeat(FILE_WRITE_MAX_BYTES),
+			expect: { hash: null },
+		});
+		expect(written.status).toBe("written");
+		expect(statSync(join(workspace.worktreePath, "control.txt")).size).toBe(FILE_WRITE_MAX_BYTES);
 	} finally {
 		wire.close();
 	}

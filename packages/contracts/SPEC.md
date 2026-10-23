@@ -564,9 +564,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   readonly`. `content` is editor text (`toEditorText`: one leading BOM dropped, every `\r\n`/`\r`
   folded to `\n`), and the host restores the disk file's form. `expect.hash` is the hash the client last
   adopted, or `null` for create-only. Stale, missing and read-only are expected outcomes, so they are
-  results. `FILE_WRITE_MAX_BYTES` (4 MiB of UTF-8) is checked by the client before sending and again by
-  the host. A frame over 16 MiB closes the socket, and an unresolved request replays on every
-  reconnect) / `git.*` / **`spec.graph`**
+  results. `FILE_WRITE_MAX_BYTES` (4 MiB of UTF-8) is checked by the host. The host's frame limit is sized
+  for the worst JSON escaping of that cap (6×), because an oversized frame closes the socket and an
+  unresolved request replays on every reconnect) / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
