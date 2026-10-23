@@ -404,7 +404,7 @@ test("a mode-only change is unsupported", async () => {
 });
 
 test.skipIf(process.getuid?.() === 0)(
-	"a revert of a read-only file is refused and writes nothing, like a save",
+	"a revert of a read-only file throws its errno and writes nothing",
 	async () => {
 		write("a.ts", "MOD\n");
 		chmodSync(join(repo, "a.ts"), 0o444);
