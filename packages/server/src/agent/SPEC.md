@@ -564,7 +564,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `write` only once it passes the block check) and a bash window for `bash`/`powershell`. A successful
     `read` records the session's baseline; a failed one records the file as absent when it is gone. A successful `edit`/`write` records an agent ledger entry and
     a new baseline; a failed one is recorded only when its bytes reached the disk (a `write` whose
-    content is on disk, an `edit` that changed the file). All re-read the file inside pi's
+    content is on disk, an `edit` failing with pi's "Operation aborted" that changed the file). Every
+    other `edit` error is thrown before pi writes, so it records nothing: a change on disk then is
+    another writer's, and it must keep blocking a stale `write`. All re-read the file inside pi's
     `withFileMutationQueue`, so they never see a half-written pi edit, and settle the claim so a writer
     that slipped in before the re-read is not adopted (see the provenance spec). `tool_execution_end`,
     which pi emits on every path, drops the claim and closes the window when a block or abort skipped

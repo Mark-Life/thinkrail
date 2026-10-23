@@ -26,6 +26,7 @@ import {
 const log = logger("agent");
 
 const STALE_EDIT_ERROR = /^Could not find (?:the exact text|edits\[\d+\]) in /;
+const ABORTED_ERROR = "Operation aborted";
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 const WINDOWS_SHELL_PATH = /^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i;
 const SHELL_TOOLS = new Set(["bash", "powershell"]);
@@ -72,7 +73,7 @@ export function agentReadPath(path: string, cwd: string): string {
 	const nfd = resolved.normalize("NFD");
 	const variants = [
 		resolved,
-		resolved.replace(/ (AM|PM)\./gi, " $1."),
+		resolved.replace(/ (AM|PM)\./gi, "\u202F$1."),
 		nfd,
 		curlyQuotes(resolved),
 		curlyQuotes(nfd),
@@ -177,7 +178,7 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 					...(input.failed ? { changedOnly: true } : {}),
 					...(input.line === undefined ? {} : { line: input.line }),
 				});
-				return overwrite && { overwrite, currentText: editorText(after.bytes) };
+				return overwrite && { overwrite, after: after.bytes };
 			});
 		}
 
@@ -192,17 +193,18 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 			});
 		}
 
-		function staleHint(sessionId: string, abs: string, path: string) {
-			return withFileMutationQueue(abs, async () => {
+		async function staleHint(sessionId: string, abs: string, path: string) {
+			const found = await withFileMutationQueue(abs, async () => {
 				const current = readSnapshot(abs);
 				const stale = store.staleRead({ sessionId, path: abs, current });
-				if (!stale) return undefined;
-				return staleEditHint({
-					displayPath: path,
-					stale,
-					currentText: current ? editorText(current.bytes) : null,
-					now: store.now(),
-				});
+				return stale && { stale, current };
+			});
+			if (!found) return undefined;
+			return staleEditHint({
+				displayPath: path,
+				stale: found.stale,
+				currentText: found.current ? editorText(found.current.bytes) : null,
+				now: store.now(),
 			});
 		}
 
@@ -262,26 +264,34 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 					}),
 				);
 				if (!replaced) return undefined;
-				return withNote(event, overwriteNote({ displayPath: path, ...replaced, now: store.now() }));
+				const note = overwriteNote({
+					displayPath: path,
+					overwrite: replaced.overwrite,
+					currentText: editorText(replaced.after),
+					now: store.now(),
+				});
+				return withNote(event, note);
 			}
 			if (!isEditToolResult(event)) return undefined;
-			const stale = event.isError && isStaleEditError(firstText(event.content));
-			if (!stale) {
-				const line = event.isError ? undefined : event.details?.firstChangedLine;
-				await safely("edit record", () =>
-					recordAgentWrite({
-						sessionId,
-						toolCallId,
-						abs,
-						toolName: "edit",
-						...(event.isError ? { failed: {} } : {}),
-						...(line === undefined ? {} : { line }),
-					}),
-				);
-				return undefined;
+			const error = event.isError ? firstText(event.content) : undefined;
+			if (error !== undefined && isStaleEditError(error)) {
+				const hint = await safely("edit hint", () => staleHint(sessionId, abs, path));
+				return hint ? withNote(event, hint) : undefined;
 			}
-			const hint = await safely("edit hint", () => staleHint(sessionId, abs, path));
-			return hint ? withNote(event, hint) : undefined;
+			// Every other edit error but an abort is thrown before pi writes.
+			if (error !== undefined && error !== ABORTED_ERROR) return undefined;
+			const line = error === undefined ? event.details?.firstChangedLine : undefined;
+			await safely("edit record", () =>
+				recordAgentWrite({
+					sessionId,
+					toolCallId,
+					abs,
+					toolName: "edit",
+					...(error === undefined ? {} : { failed: {} }),
+					...(line === undefined ? {} : { line }),
+				}),
+			);
+			return undefined;
 		});
 
 		pi.on("tool_execution_end", (event, ctx) => {
