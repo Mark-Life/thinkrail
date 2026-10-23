@@ -10,12 +10,12 @@ import type { FileBufferError, FileBufferStatus, FileBufferSummary } from "../st
 const LFS_MIME = "application/vnd.git-lfs";
 
 /** A disk state the buffer adopted; `hash: null` means the file is absent. */
-export interface DiskText {
+interface DiskText {
 	text: string;
 	hash: string | null;
 }
 
-export type BufferIssue =
+type BufferIssue =
 	| { kind: "conflict"; disk: DiskText }
 	| { kind: "readonly" }
 	| { kind: "error"; error: FileBufferError };
@@ -27,7 +27,7 @@ export interface BufferState {
 	issue: BufferIssue | null;
 }
 
-export interface SaveRequest {
+interface SaveRequest {
 	content: string;
 	expect: { hash: string | null };
 }
@@ -51,9 +51,9 @@ export function isDirty(state: BufferState): boolean {
 
 export function bufferStatus(state: BufferState): FileBufferStatus {
 	if (state.issue?.kind === "conflict") return "stale";
-	if (state.base.hash === null) return "deleted";
 	if (state.issue?.kind === "readonly") return "readonly";
 	if (state.issue?.kind === "error") return "error";
+	if (state.base.hash === null) return "deleted";
 	if (state.saving) return "saving";
 	return isDirty(state) ? "dirty" : "clean";
 }
@@ -75,6 +75,9 @@ export function adoptDisk(state: BufferState, disk: DiskText): BufferState {
 	if (disk.hash === state.base.hash) {
 		const outdated = state.issue?.kind === "conflict" && state.issue.disk.hash !== disk.hash;
 		return outdated ? { ...state, issue: null } : state;
+	}
+	if (state.base.hash === null && disk.text === state.base.text) {
+		return { ...state, base: disk, issue: null };
 	}
 	if (!isDirty(state) || disk.text === state.text) {
 		return { ...state, text: disk.text, base: disk, issue: null };
@@ -130,8 +133,8 @@ export function finishSave(state: BufferState, result: FileWriteResult): BufferS
 	}
 }
 
-export function failSave(state: BufferState): BufferState {
-	return { ...state, saving: null, issue: { kind: "error", error: "failed" } };
+export function failSave(state: BufferState, error: FileBufferError): BufferState {
+	return { ...state, saving: null, issue: { kind: "error", error } };
 }
 
 export function reloadFromDisk(state: BufferState): BufferState {

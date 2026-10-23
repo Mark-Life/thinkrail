@@ -5,7 +5,8 @@ import { fileName } from "../lib";
 import { toast, useAppStore } from "../store";
 import { getTransport, supportsFileWrite } from "../transport";
 import { isEditableMeta } from "./buffer";
-import { indexedDbDrafts } from "./drafts";
+import { indexedDbDrafts, pageDraftOwner } from "./drafts";
+import { fileExists } from "./probe";
 import { type BufferRegistry, createBufferRegistry, type FileIo, fileBufferKey } from "./registry";
 
 const DRAFT_DELAY_MS = 300;
@@ -13,16 +14,8 @@ const DRAFT_DELAY_MS = 300;
 const io: FileIo = {
 	read: (workspaceId, path) => getTransport().request("fs.readFile", { workspaceId, path }),
 	write: (params) => getTransport().request("fs.writeFile", params),
-	exists: async (workspaceId, path) => {
-		const slash = path.lastIndexOf("/");
-		const dir = slash < 0 ? "." : path.slice(0, slash);
-		try {
-			const nodes = await getTransport().request("fs.readDir", { workspaceId, path: dir });
-			return nodes.some((node) => node.path === path);
-		} catch {
-			return false;
-		}
-	},
+	exists: (workspaceId, path) =>
+		fileExists((dir) => getTransport().request("fs.readDir", { workspaceId, path: dir }), path),
 };
 
 function writable(protocolVersion: number | null): boolean {
@@ -46,6 +39,7 @@ export function bufferRegistry(): BufferRegistry {
 	const created = createBufferRegistry({
 		io,
 		drafts: indexedDbDrafts(),
+		draftOwner: pageDraftOwner(),
 		publish: (workspaceId, path, summary) =>
 			useAppStore.getState().setFileBufferSummary(workspaceId, path, summary),
 		hostKey: () => getTransport().httpBase(),
@@ -53,7 +47,6 @@ export function bufferRegistry(): BufferRegistry {
 		onDraftRestored: (path) =>
 			toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
 		draftDelayMs: DRAFT_DELAY_MS,
-		now: () => Date.now(),
 	});
 	useAppStore.subscribe((state, previous) => {
 		if (state.tabsByWorkspace !== previous.tabsByWorkspace) created.prune(openFileKeys(state));
