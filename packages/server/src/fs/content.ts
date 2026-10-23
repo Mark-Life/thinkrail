@@ -11,7 +11,6 @@ const MAGIC: ReadonlyArray<{ mime: string; bytes: readonly number[] }> = [
 	{ mime: "image/jpeg", bytes: [0xff, 0xd8, 0xff] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61] },
 	{ mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] },
-	{ mime: "image/bmp", bytes: [0x42, 0x4d] },
 	{ mime: "image/x-icon", bytes: [0x00, 0x00, 0x01, 0x00] },
 	{ mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46, 0x2d] },
 	{ mime: "application/zip", bytes: [0x50, 0x4b, 0x03, 0x04] },
@@ -49,6 +48,8 @@ function startsWith(bytes: Uint8Array, magic: readonly number[], offset = 0): bo
 }
 
 const FTYP = [0x66, 0x74, 0x79, 0x70];
+const BMP = [0x42, 0x4d];
+const BMP_HEADER_BYTES = 14;
 const AVIF_BRANDS = [
 	[0x61, 0x76, 0x69, 0x66],
 	[0x61, 0x76, 0x69, 0x73],
@@ -64,10 +65,13 @@ function sniffMagic(bytes: Uint8Array): string | undefined {
 	if (startsWith(bytes, FTYP, 4) && AVIF_BRANDS.some((brand) => startsWith(bytes, brand, 8))) {
 		return "image/avif";
 	}
+	if (startsWith(bytes, BMP) && bytes.subarray(BMP.length, BMP_HEADER_BYTES).includes(0)) {
+		return "image/bmp";
+	}
 	return MAGIC.find(({ bytes: magic }) => startsWith(bytes, magic))?.mime;
 }
 
-function isTextBytes(bytes: Uint8Array): boolean {
+export function isTextBytes(bytes: Uint8Array): boolean {
 	if (bytes.subarray(0, CONTENT_SNIFF_BYTES).includes(0)) return false;
 	try {
 		STRICT_UTF8.decode(bytes);

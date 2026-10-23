@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname } from "node:path";
 import { FILE_WRITE_MAX_BYTES, type FileWriteResult, type WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { decodeText, LFS_POINTER_MIME, resourceMeta } from "./content";
+import { decodeText, isTextBytes, LFS_POINTER_MIME, resourceMeta } from "./content";
 import { errnoCode, statOrNull } from "./errno";
 import { resolveWorktreeFile } from "./files";
 import { createFile, replaceFile } from "./replace";
@@ -85,7 +85,7 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 		const text = meta.text ? decodeText(current) : "";
 		return { result: { status: "stale", current: { content: text, meta } }, changed: false };
 	}
-	if (!meta.text || meta.mime === LFS_POINTER_MIME) {
+	if (!isTextBytes(current) || meta.mime === LFS_POINTER_MIME) {
 		throw new CodedError("NOT_EDITABLE", `${path} is not an editable text file.`);
 	}
 	try {

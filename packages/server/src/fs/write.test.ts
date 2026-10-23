@@ -201,6 +201,16 @@ test.skipIf(!POSIX)("a create below a dangling symlinked folder is not editable"
 	expect(existsSync(join(root, "gone"))).toBe(false);
 });
 
+test("text the editor saved stays editable when it starts like a binary format", () => {
+	put("notes.md", "notes\n");
+	const first = save("notes.md", "%PDF- notes\n", hash("notes\n")).result;
+	if (first.status !== "written") throw new Error(`first save answered ${first.status}`);
+	expect(save("notes.md", "%PDF- notes, more\n", first.meta.hash).result).toMatchObject({
+		status: "written",
+	});
+	expect(text("notes.md")).toBe("%PDF- notes, more\n");
+});
+
 test("a create that fails partway removes its file, so a replay creates again", () => {
 	const realWrite = nodeFs.writeFileSync;
 	const spy = spyOn(nodeFs, "writeFileSync").mockImplementation((file, data, options) => {
