@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { pressPlatformShortcut, revealWorkbenchTool } from "./fixtures/app";
 import {
@@ -150,6 +151,27 @@ test("a Review panel jump on an unsaved file is dropped, not replayed after Save
 	await expect(fileTab(page, "jump.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
 	await page.waitForTimeout(800);
 	expect(await topVisibleLine(page)).toBeGreaterThan(30);
+});
+
+test("Save from the close dialog of a background tab that fails selects that tab to show why", async ({
+	page,
+}) => {
+	const path = await openFile(page, "aa.ts", "const a = 1;\n");
+	await typeAtLineEnd(page, 1, " // mine");
+	writeFileSync(join(dirname(path), "bb.ts"), "const b = 1;\n");
+	await page.getByTestId("file-node").filter({ hasText: "bb.ts" }).dblclick();
+	await expect(visibleEditor(page)).toContainText("const b = 1;");
+	writeFileSync(path, "const a = 2; // theirs\n");
+
+	const tab = fileTab(page, "aa.ts");
+	await tab.hover();
+	await tab.getByTestId("editor-tab-close").click();
+	await page.getByTestId("file-close-save").click();
+	await expect(page.getByTestId("file-close-guard")).toBeHidden();
+	await expect(tab).toHaveCount(1);
+	await expect(tab).toHaveAttribute("data-active", "true");
+	await expect(banner(page)).toHaveAttribute("data-status", "stale");
+	expect(readFileSync(path, "utf8")).toBe("const a = 2; // theirs\n");
 });
 
 test("Reload and Keep mine put keyboard focus back in the editor", async ({ page }) => {

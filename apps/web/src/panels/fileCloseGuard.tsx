@@ -19,6 +19,15 @@ interface PendingClose {
 	close: () => void;
 }
 
+function revealFile({ workspaceId, path }: PendingClose) {
+	const state = useAppStore.getState();
+	if (state.activeWorkspaceId !== workspaceId) return;
+	const tab = state.tabsByWorkspace[workspaceId]?.find(
+		(candidate) => candidate.kind === "file" && candidate.path === path,
+	);
+	if (tab) state.setActiveTab(tab.id, "keep");
+}
+
 export function useFileCloseGuard(): {
 	requestClose: (file: { workspaceId: string; path: string }, close: () => void) => void;
 	confirmation: ReactNode;
@@ -43,6 +52,7 @@ export function useFileCloseGuard(): {
 		if (pendingRef.current !== request) return;
 		setPending(null);
 		if (summary?.status === "clean") request.close();
+		else revealFile(request);
 	};
 	const discard = (request: PendingClose) => {
 		setPending(null);
