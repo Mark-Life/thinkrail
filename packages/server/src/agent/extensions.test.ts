@@ -13,6 +13,7 @@ import {
 	listSkillCommands,
 	setDisabledExtensionsResolver,
 } from "./extensions";
+import { fileGuard } from "./fileGuard";
 import { oversizedImageGuard } from "./imageGuard";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
@@ -500,8 +501,9 @@ describe("registry extensions", () => {
 		expect(children.slice(3)).toEqual(registryInlineExtensions("childExtensions"));
 	});
 
-	it("guards every child's images from the base set, not the opt-in curated set", () => {
-		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard]);
+	it("guards every child's images and file writes from the base set, not the opt-in curated set", () => {
+		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, fileGuard]);
 		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
+		expect(childExtensionFactories()).not.toContain(fileGuard);
 	});
 });
