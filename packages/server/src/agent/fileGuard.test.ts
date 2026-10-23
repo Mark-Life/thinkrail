@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { Hash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, win32 } from "node:path";
@@ -213,7 +214,7 @@ test("a whole-file write after a stale read is blocked; a file never read is not
 	const blocked = await guarded.call("write", "w1", { path: "read.ts", content: "theirs\n" });
 	expect(blocked?.block).toBe(true);
 	expect(blocked?.reason).toStartWith(
-		"Blocked: read.ts changed since this agent read it (by the user 0 s ago). Re-read before writing.",
+		"Blocked: read.ts changed since you read it (by the user 0 s ago). Re-read before writing.",
 	);
 	expect(blocked?.reason).toContain("-one\n+mine");
 	expect(await guarded.call("write", "w2", { path: "unread.ts", content: "x\n" })).toBeUndefined();
@@ -230,17 +231,22 @@ test("another session's write is not this session's own: it is reported and bloc
 	await second.result(await edit("a.ts", "one", "two"));
 	const blocked = await first.call("write", "w1", { path: "a.ts", content: "x\n" });
 	expect(blocked?.reason).toStartWith(
-		"Blocked: a.ts changed since this agent read it (by another agent 0 s ago).",
+		"Blocked: a.ts changed since you read it (by another agent 0 s ago).",
 	);
 });
 
-test("a change made by the session's own shell command does not block its write", async () => {
+test("a change during the session's own shell command still blocks, since an outside save looks the same", async () => {
 	writeFileSync(join(root, "a.ts"), "one\n");
 	const guarded = guard();
 	await guarded.result(await read("a.ts"));
-	await guarded.call("bash", "b1", { command: "sed -i '' s/one/two/ a.ts" });
-	writeFileSync(join(root, "a.ts"), "two\n");
-	expect(await guarded.call("write", "w1", { path: "a.ts", content: "x\n" })).toBeUndefined();
+	await guarded.call("bash", "b1", { command: "bun test" });
+	writeFileSync(join(root, "a.ts"), "typed in another editor\n");
+	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "x\n" });
+	expect(blocked?.reason).toStartWith(
+		"Blocked: a.ts changed since you read it (by your own shell command or a program outside ThinkRail).",
+	);
+	await guarded.result(await read("a.ts", "r2"));
+	expect(await guarded.call("write", "w2", { path: "a.ts", content: "x\n" })).toBeUndefined();
 });
 
 test("a bash result notes the files the user saved during the call", async () => {
@@ -292,7 +298,7 @@ test("two agents editing one file at once: the first one's later write over the 
 
 	const blocked = await first.call("write", "w1", { path: "a.ts", content: "ONE\ntwo\n" });
 	expect(blocked?.reason).toStartWith(
-		"Blocked: a.ts changed since this agent read it (by another agent 0 s ago).",
+		"Blocked: a.ts changed since you read it (by another agent 0 s ago).",
 	);
 	expect(
 		store.lastWrite({
@@ -312,7 +318,7 @@ test("a user save between pi's read and its result is not adopted as what the ag
 	await guarded.result(result);
 	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "x\n" });
 	expect(blocked?.reason).toStartWith(
-		"Blocked: a.ts changed since this agent read it (by the user 0 s ago).",
+		"Blocked: a.ts changed since you read it (by the user 0 s ago).",
 	);
 });
 
@@ -400,4 +406,47 @@ test("a whole-file write records the first line it changed", async () => {
 	expect(texts(failed)[1]).toStartWith(
 		"ThinkRail: a.ts was changed by another agent 0 s ago (line 3)",
 	);
+});
+
+test("a write over a file deleted since the read is blocked until a read confirms it is gone", async () => {
+	writeFileSync(join(root, "a.ts"), "one\n");
+	writeFileSync(join(root, "b.ts"), "one\n");
+	const guarded = guard();
+	await guarded.result(await read("a.ts"));
+	await guarded.result(await read("b.ts"));
+	rmSync(join(root, "a.ts"));
+	store.recordWrite({
+		path: join(root, "a.ts"),
+		author: { kind: "user", clientKey: "c" },
+		before: Buffer.from("one\n"),
+		after: null,
+	});
+	rmSync(join(root, "b.ts"));
+
+	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "x\n" });
+	expect(blocked?.reason).toBe(
+		"Blocked: a.ts was deleted since you read it (by the user 0 s ago). Read it to confirm, then write again.",
+	);
+	const outside = await guarded.call("write", "w2", { path: "b.ts", content: "x\n" });
+	expect(outside?.reason).toContain("b.ts was deleted since you read it (by a program outside");
+
+	const missing = await read("a.ts", "r2");
+	expect(missing.isError).toBe(true);
+	await guarded.result(missing);
+	expect(await guarded.call("write", "w3", { path: "a.ts", content: "x\n" })).toBeUndefined();
+	await guarded.result(await write("w3", "a.ts", "x\n"));
+	expect(existsSync(join(root, "a.ts"))).toBe(true);
+});
+
+test("the write check hashes the file once", async () => {
+	writeFileSync(join(root, "a.ts"), "one\n");
+	const guarded = guard();
+	await guarded.result(await read("a.ts"));
+	const digest = spyOn(Hash.prototype, "digest");
+	try {
+		expect(await guarded.call("write", "w1", { path: "a.ts", content: "x\n" })).toBeUndefined();
+		expect(digest).toHaveBeenCalledTimes(1);
+	} finally {
+		digest.mockRestore();
+	}
 });

@@ -1,7 +1,7 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { toEditorText } from "@thinkrail/contracts";
-import { classifyBytes, decodeText } from "../fs";
+import { classifyBytes, decodeText, hashBytes } from "../fs";
 
 const SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;
 
@@ -20,6 +20,16 @@ export function readSnapshot(abs: string): FileSnapshot | null {
 	}
 }
 
+const hashes = new WeakMap<Uint8Array, string>();
+
+export function versionHash(bytes: Uint8Array): string {
+	const known = hashes.get(bytes);
+	if (known !== undefined) return known;
+	const hash = hashBytes(bytes);
+	hashes.set(bytes, hash);
+	return hash;
+}
+
 export function fileKey(abs: string): string {
 	const lexical = resolve(abs);
 	try {
@@ -30,8 +40,8 @@ export function fileKey(abs: string): string {
 	}
 }
 
-export function editorText(bytes: Uint8Array | null): string | null {
-	if (bytes === null || !classifyBytes(bytes).text) return null;
+export function editorText(bytes: Uint8Array): string | null {
+	if (!classifyBytes(bytes).text) return null;
 	return toEditorText(decodeText(bytes));
 }
 

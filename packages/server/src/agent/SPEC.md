@@ -559,7 +559,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     It feeds [[submodule-server-provenance]] and tells an agent when someone else changed a file under it.
     It never replaces pi's tools. `tool_call` opens a provenance claim for `read`/`edit`/`write` (a
     `write` only once it passes the block check) and a bash window for `bash`/`powershell`. A successful
-    `read` records the session's baseline. A successful `edit`/`write` records an agent ledger entry and
+    `read` records the session's baseline; a failed one records the file as absent when it is gone. A successful `edit`/`write` records an agent ledger entry and
     a new baseline; a failed one is recorded only when its bytes reached the disk (a `write` whose
     content is on disk, an `edit` that changed the file). All re-read the file inside pi's
     `withFileMutationQueue`, so they never see a half-written pi edit, and settle the claim so a writer
@@ -568,8 +568,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `tool_result`. Three behaviors:
     (1) a failed `edit` whose text is pi's not-found error (both the single and the `edits[i]` variant)
     gets the provenance hint appended when the file changed since the session's read; `isError` stays.
-    (2) A `write` to an existing file is blocked when the session's last read is stale and someone other
-    than this session's own shell changed it. A file the session never read is not blocked.
+    (2) A `write` is blocked when the session's last read is stale, by any writer: the session's own
+    shell is not exempt, since an outside save during the call looks the same. A file deleted since the
+    read is blocked until a `read` confirms it is gone. A file the session never read, or one over
+    8 MiB, is not blocked. pi checks a parallel batch before running it, so a save can still land after
+    the check; a successful `write` that replaced such a save gets a note naming it, with a diff.
     (3) A `bash`/`powershell` result gets a note naming the files under its cwd the user saved during
     the call.
     The session id comes from `ctx.sessionManager`; shutdown other than `reload` forgets its baselines,

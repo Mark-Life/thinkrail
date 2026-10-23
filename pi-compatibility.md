@@ -116,16 +116,20 @@ stale edit by pi's not-found error text, both the single-edit and the `edits[i]`
 `core/tools/edit-diff.js`. It resolves a tool's `path` the way pi's `resolveToCwd` does, and a `read`
 path the way `resolveReadPath` does. It relies on `tool_execution_end` firing for every call, including
 the blocked and aborted ones that skip `tool_result`, and on pi's `write` storing its `content` as
-UTF-8 bytes. If pi rewords the error, the hint silently disappears; if the path rule drifts, the hint and
+UTF-8 bytes. pi runs every `tool_call` hook of a parallel batch before running any call, so the write
+block checks the file before the write runs; `fileGuard` reports a save that lands in that gap after
+the fact. If pi rewords the error, the hint silently disappears; if the path rule drifts, the hint and
 the write block are lost for that spelling. **Re-check:** the two error texts; `utils/paths.js`
 `normalizePath` (`@` prefix, Unicode spaces, the win32 `normalizeWindowsShellPath` and `~\` branches,
 `~`, `file://`) and `core/tools/path-utils.js` `resolveReadPath` variants; that `tool_result` fires for
 thrown tool errors and chains handler changes; that a `tool_call` block reason becomes the error result;
-that an aborted call still gets `tool_execution_end`. `agent/fileGuard.test.ts` drives the installed
+that an aborted call still gets `tool_execution_end`; that `executeToolCallsParallel` still prepares the
+whole batch before it runs any call. `agent/fileGuard.test.ts` drives the installed
 `edit`, `write` and `read` tools against a temp dir, matches both error variants and checks the path
 rules, including win32 forms through `path.win32`. `agent/fileGuard.session.test.ts` runs a real
 `createAgentSession` with a faux model: it checks the hint on a thrown edit error, the block reason as
-the write's error result, and the window closed after an abort in a parallel batch. **Removal gate:** pi
+the write's error result, the window closed after an abort in a parallel batch, and the note on a write
+that replaced a save made while a sibling hook ran. **Removal gate:** pi
 reports a structured stale-edit failure (a code, not text) and tracks per-session read versions itself.
 
 ## Other pi-sensitive host seams

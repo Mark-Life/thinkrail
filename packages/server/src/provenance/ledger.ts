@@ -1,8 +1,7 @@
 import { statSync } from "node:fs";
 import { sep } from "node:path";
 import type { FileAuthor, FileLastWrite } from "@thinkrail/contracts";
-import { hashBytes } from "../fs";
-import { editorText, type FileSnapshot, fileKey, firstChangedLine } from "./snapshot";
+import { editorText, type FileSnapshot, fileKey, firstChangedLine, versionHash } from "./snapshot";
 
 export type WriteAuthor =
 	| { kind: "user"; clientKey: string }
@@ -16,15 +15,16 @@ export interface WriteEntry {
 	hash: string | null;
 	author: WriteAuthor;
 	line?: number;
+	provisional?: boolean;
 }
 
 interface BashWindow {
 	sessionId: string;
 	toolCallId: string;
 	root: string;
-	startSeq: number;
 	start: number;
 	end?: number;
+	userWrites: Map<string, WriteEntry>;
 }
 
 export interface StaleRead {
@@ -35,15 +35,19 @@ export interface StaleRead {
 	baselineText?: string;
 }
 
+export interface Overwrite {
+	writers: WriteEntry[];
+	text?: string;
+}
+
 interface Baseline {
-	hash: string;
+	hash: string | null;
 	seq: number;
 	contested: boolean;
 }
 
 interface Claim {
 	sessionId: string;
-	toolCallId: string;
 	key: string;
 	seq: number;
 	mutates: boolean;
@@ -54,6 +58,7 @@ interface Settled {
 	seq: number;
 	hash: string | null;
 	othersOpen: boolean;
+	writers: WriteEntry[];
 	contested: boolean;
 }
 
@@ -61,11 +66,11 @@ const WRITES_PER_PATH = 32;
 const MAX_PATHS = 4096;
 const BASELINES_PER_SESSION = 1024;
 const MAX_SESSIONS = 256;
-const RECENT_WRITES = 512;
 const MAX_WINDOWS = 256;
 const MAX_CLAIMS = 1024;
 const TEXT_CACHE_CHARS = 32 * 1024 * 1024;
 const TEXT_MAX_CHARS = 512 * 1024;
+const TEXT_MAX_BYTES = 4 * TEXT_MAX_CHARS;
 const UNREAD_RECENT_MS = 10 * 60 * 1000;
 const WINDOW_SLACK_MS = 1000;
 const WINDOW_GRACE_MS = 1500;
@@ -96,9 +101,11 @@ function mtimeOf(path: string): number | undefined {
 	}
 }
 
-function changedLine(before: string | null | undefined, after: string | null) {
-	if (before === undefined || before === null || after === null) return undefined;
-	return firstChangedLine(before, after);
+function changedLine(before: () => string | null | undefined, after: () => string | null) {
+	const old = before();
+	if (old === undefined || old === null) return undefined;
+	const next = after();
+	return next === null ? undefined : firstChangedLine(old, next);
 }
 
 const textId = (key: string, hash: string) => `${key}\n${hash}`;
@@ -107,29 +114,57 @@ const callId = (sessionId: string, toolCallId: string) => `${sessionId}\n${toolC
 export function createProvenance(options: { now?: () => number } = {}) {
 	const now = options.now ?? Date.now;
 	const writes = new Map<string, WriteEntry[]>();
-	const recent: WriteEntry[] = [];
 	const reads = new Map<string, Map<string, Baseline>>();
 	const texts = new Map<string, string>();
+	const userTexts = new Map<string, string>();
 	const windows: BashWindow[] = [];
 	const claims = new Map<string, Claim>();
 	let textChars = 0;
 	let seq = 0;
 
-	function cacheText(key: string, hash: string, text: string | null): void {
+	function dropText(id: string): void {
+		const text = texts.get(id);
+		if (text === undefined) return;
+		texts.delete(id);
+		textChars -= text.length;
+	}
+
+	function cacheText(
+		key: string,
+		hash: string,
+		bytes: Uint8Array,
+		text: () => string | null = () => editorText(bytes),
+	): void {
 		const id = textId(key, hash);
 		const cached = texts.get(id);
 		if (cached !== undefined) {
 			touch(texts, id, cached, Number.POSITIVE_INFINITY);
 			return;
 		}
-		if (text === null || text.length > TEXT_MAX_CHARS) return;
-		texts.set(id, text);
-		textChars += text.length;
-		for (const [oldest, value] of texts) {
+		if (bytes.length > TEXT_MAX_BYTES) return;
+		const value = text();
+		if (value === null || value.length > TEXT_MAX_CHARS) return;
+		texts.set(id, value);
+		textChars += value.length;
+		for (const [oldest, old] of texts) {
 			if (textChars <= TEXT_CACHE_CHARS) break;
 			texts.delete(oldest);
-			textChars -= value.length;
+			textChars -= old.length;
 		}
+	}
+
+	function isBaseline(key: string, hash: string): boolean {
+		for (const session of reads.values()) if (session.get(key)?.hash === hash) return true;
+		return false;
+	}
+
+	function cacheUserText(key: string, hash: string, bytes: Uint8Array, text: () => string | null) {
+		const previous = userTexts.get(key);
+		if (previous !== undefined && previous !== hash && !isBaseline(key, previous)) {
+			dropText(textId(key, previous));
+		}
+		touch(userTexts, key, hash, MAX_PATHS);
+		cacheText(key, hash, bytes, text);
 	}
 
 	function setBaseline(sessionId: string, key: string, baseline: Baseline): void {
@@ -138,20 +173,19 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		touch(reads, sessionId, session, MAX_SESSIONS);
 	}
 
-	function baselineAfter(settled: Settled | undefined, hash: string): Baseline {
+	function baselineAfter(settled: Settled | undefined, hash: string | null): Baseline {
 		if (settled?.contested) return { hash, seq: settled.seq, contested: true };
 		return { hash, seq: ++seq, contested: false };
 	}
 
-	function windowAt(key: string, mtimeMs: number): BashWindow | undefined {
+	function windowsAt(key: string, mtimeMs: number): BashWindow[] {
 		const at = now();
-		for (let index = windows.length - 1; index >= 0; index--) {
-			const window = windows[index];
-			if (!window || !within(key, window.root)) continue;
-			const end = (window.end ?? at) + WINDOW_GRACE_MS;
-			if (mtimeMs >= window.start - WINDOW_SLACK_MS && mtimeMs <= end) return window;
-		}
-		return undefined;
+		return windows.filter(
+			(window) =>
+				within(key, window.root) &&
+				mtimeMs >= window.start - WINDOW_SLACK_MS &&
+				mtimeMs <= (window.end ?? at) + WINDOW_GRACE_MS,
+		);
 	}
 
 	function openClaim(input: {
@@ -166,11 +200,10 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			callId(input.sessionId, input.toolCallId),
 			{
 				sessionId: input.sessionId,
-				toolCallId: input.toolCallId,
 				key: fileKey(input.path),
 				seq,
 				mutates: input.mutates,
-				hash: input.bytes === null ? null : hashBytes(input.bytes),
+				hash: input.bytes === null ? null : versionHash(input.bytes),
 			},
 			MAX_CLAIMS,
 		);
@@ -185,14 +218,15 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		const othersOpen = [...claims.values()].some(
 			(other) => other.mutates && other.key === key && other.sessionId !== sessionId,
 		);
-		const othersWrote = (writes.get(key) ?? []).some(
+		const writers = (writes.get(key) ?? []).filter(
 			(entry) => entry.seq > claim.seq && !isSelf(entry, sessionId),
 		);
 		return {
 			seq: claim.seq,
 			hash: claim.hash,
 			othersOpen,
-			contested: othersOpen || othersWrote,
+			writers,
+			contested: othersOpen || writers.length > 0,
 		} satisfies Settled;
 	}
 
@@ -200,8 +234,16 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		const full = { ...entry, seq: ++seq };
 		const ring = [...(writes.get(entry.key) ?? []), full].slice(-WRITES_PER_PATH);
 		touch(writes, entry.key, ring, MAX_PATHS);
-		recent.push(full);
-		if (recent.length > RECENT_WRITES) recent.splice(0, recent.length - RECENT_WRITES);
+		if (entry.author.kind !== "user") return;
+		for (const window of windows) {
+			if (window.end !== undefined || !within(entry.key, window.root)) continue;
+			touch(window.userWrites, entry.key, full, Number.POSITIVE_INFINITY);
+		}
+	}
+
+	function takeOver(key: string, entry: WriteEntry, author: WriteAuthor): void {
+		const ring = writes.get(key);
+		if (ring?.at(-1) === entry) ring[ring.length - 1] = { ...entry, author, provisional: false };
 	}
 
 	function previousText(key: string, author: WriteAuthor): string | undefined {
@@ -219,22 +261,34 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		line?: number;
 		toolCallId?: string;
 		changedOnly?: boolean;
-	}): void {
+	}): Overwrite | undefined {
 		const key = fileKey(input.path);
-		const hash = input.after === null ? null : hashBytes(input.after);
+		const after = input.after;
+		const hash = after === null ? null : versionHash(after);
 		const agent = input.author.kind === "agent" ? input.author : undefined;
 		const settled = agent ? settle(agent.sessionId, input.toolCallId, key) : undefined;
-		if (input.changedOnly && (!settled || settled.hash === hash)) return;
+		if (input.changedOnly && (!settled || settled.hash === hash)) return undefined;
+		let decoded: string | null | undefined;
+		const afterText = () => {
+			if (decoded === undefined) decoded = after === null ? null : editorText(after);
+			return decoded;
+		};
 		const latest = writes.get(key)?.at(-1);
-		const adopt = !settled?.othersOpen && !(settled?.contested && latest?.hash === hash);
-		const afterText = input.after === null ? null : editorText(input.after);
-		if (adopt) {
-			const line =
-				input.line ??
-				changedLine(
-					input.before === null ? previousText(key, input.author) : editorText(input.before),
-					afterText,
-				);
+		const replaced =
+			agent &&
+			settled &&
+			latest &&
+			latest.seq > settled.seq &&
+			latest.hash !== hash &&
+			!isSelf(latest, agent.sessionId)
+				? { writers: settled.writers, hash: latest.hash }
+				: undefined;
+		if (settled?.contested && latest?.hash === hash) {
+			if (latest.provisional && latest.seq > settled.seq) takeOver(key, latest, input.author);
+		} else {
+			const before = () =>
+				input.before === null ? previousText(key, input.author) : editorText(input.before);
+			const line = input.line ?? changedLine(before, afterText);
 			appendWrite({
 				at: now(),
 				key,
@@ -242,24 +296,33 @@ export function createProvenance(options: { now?: () => number } = {}) {
 				hash,
 				author: input.author,
 				...(line === undefined ? {} : { line }),
+				...(settled?.othersOpen ? { provisional: true } : {}),
 			});
 		}
-		if (!agent || hash === null) return;
+		if (input.author.kind === "user" && after !== null && hash !== null) {
+			cacheUserText(key, hash, after, afterText);
+		}
+		if (!agent || after === null || hash === null) return undefined;
 		setBaseline(agent.sessionId, key, baselineAfter(settled, hash));
-		if (!settled?.contested) cacheText(key, hash, afterText);
+		if (!settled?.contested) cacheText(key, hash, after, afterText);
+		if (!replaced) return undefined;
+		const text = replaced.hash === null ? undefined : texts.get(textId(key, replaced.hash));
+		return { writers: replaced.writers, ...(text === undefined ? {} : { text }) };
 	}
 
 	function recordRead(input: {
 		sessionId: string;
 		path: string;
-		bytes: Uint8Array;
+		bytes: Uint8Array | null;
 		toolCallId?: string;
 	}): void {
 		const key = fileKey(input.path);
-		const hash = hashBytes(input.bytes);
+		const hash = input.bytes === null ? null : versionHash(input.bytes);
 		const settled = settle(input.sessionId, input.toolCallId, key);
 		setBaseline(input.sessionId, key, baselineAfter(settled, hash));
-		if (!settled?.contested) cacheText(key, hash, editorText(input.bytes));
+		if (input.bytes !== null && hash !== null && !settled?.contested) {
+			cacheText(key, hash, input.bytes);
+		}
 	}
 
 	function staleRead(input: {
@@ -279,19 +342,20 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			if (writers.length === 0) return null;
 			return { read: false, writers, untracked: false };
 		}
-		const currentHash = input.current ? hashBytes(input.current.bytes) : null;
+		const currentHash = input.current ? versionHash(input.current.bytes) : null;
 		const since = entries.filter((entry) => entry.seq > baseline.seq);
 		const writers = since.filter((entry) => !isSelf(entry, input.sessionId));
 		if (currentHash === baseline.hash && (!baseline.contested || writers.length === 0)) return null;
 		const untracked = currentHash !== baseline.hash && since.at(-1)?.hash !== currentHash;
 		if (writers.length === 0 && !untracked) return null;
-		const window = untracked && input.current ? windowAt(key, input.current.mtimeMs) : undefined;
-		const baselineText = texts.get(textId(key, baseline.hash));
+		const covering = untracked && input.current ? windowsAt(key, input.current.mtimeMs) : [];
+		const baselineText = baseline.hash === null ? undefined : texts.get(textId(key, baseline.hash));
+		const self = covering.every((window) => window.sessionId === input.sessionId);
 		return {
 			read: true,
 			writers,
 			untracked,
-			...(window ? { script: { self: window.sessionId === input.sessionId } } : {}),
+			...(covering.length > 0 ? { script: { self } } : {}),
 			...(baselineText === undefined ? {} : { baselineText }),
 		};
 	}
@@ -301,8 +365,8 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			sessionId: input.sessionId,
 			toolCallId: input.toolCallId,
 			root: fileKey(input.cwd),
-			startSeq: seq,
 			start: now(),
+			userWrites: new Map(),
 		});
 		if (windows.length > MAX_WINDOWS) windows.splice(0, windows.length - MAX_WINDOWS);
 	}
@@ -316,12 +380,9 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		);
 		if (!window) return null;
 		window.end = now();
-		return recent.filter(
-			(entry) =>
-				entry.author.kind === "user" &&
-				entry.seq > window.startSeq &&
-				within(entry.key, window.root),
-		);
+		const userWrites = [...window.userWrites.values()];
+		window.userWrites.clear();
+		return userWrites;
 	}
 
 	function endTool(input: { sessionId: string; toolCallId: string }): void {
@@ -337,20 +398,20 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		if (input.hash === null) return undefined;
 		const key = fileKey(input.path);
 		const entries = writes.get(key) ?? [];
-		const hit = entries.findLast((entry) => entry.hash === input.hash);
-		if (hit) {
+		const newest = entries.at(-1);
+		if (newest && newest.hash === input.hash) {
 			const author: FileAuthor =
-				hit.author.kind === "user"
-					? { kind: "user", thisClient: hit.author.clientKey === input.clientKey }
-					: hit.author;
-			return { author, at: hit.at };
+				newest.author.kind === "user"
+					? { kind: "user", thisClient: newest.author.clientKey === input.clientKey }
+					: newest.author;
+			return { author, at: newest.at };
 		}
 		if (entries.length === 0 && !windows.some((window) => within(key, window.root))) {
 			return undefined;
 		}
 		const mtimeMs = mtimeOf(input.path);
 		if (mtimeMs === undefined) return undefined;
-		const window = windowAt(key, mtimeMs);
+		const window = windowsAt(key, mtimeMs).at(-1);
 		if (window) {
 			return {
 				author: { kind: "agent", sessionId: window.sessionId, via: "script", inferred: true },
@@ -365,7 +426,9 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		reads.delete(sessionId);
 		for (const [id, claim] of claims) if (claim.sessionId === sessionId) claims.delete(id);
 		for (const window of windows) {
-			if (window.sessionId === sessionId && window.end === undefined) window.end = now();
+			if (window.sessionId !== sessionId || window.end !== undefined) continue;
+			window.end = now();
+			window.userWrites.clear();
 		}
 	}
 

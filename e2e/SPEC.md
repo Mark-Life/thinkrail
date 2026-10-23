@@ -110,7 +110,7 @@ publishes an unread completion and the worktree row shows running, not a dot; wi
 
 **File-edit collisions** (`file-edit-collision.live.spec.ts`) let a real agent `read` a file with a random
 token, then save a change to that line over the wire before the agent's `edit`. The edit's failed result must
-carry the `fileGuard` hint: the pointer naming You and the line, plus the diff from what the agent read. The
+carry the `fileGuard` hint: the pointer naming the user and the line, plus the diff from what the agent read. The
 token forces the agent to wait for the read, so the save always lands between the two calls.
 
 **MCP servers** coverage (`mcp-settings.spec.ts`) runs the server package's stdio fixture through the

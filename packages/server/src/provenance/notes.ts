@@ -1,13 +1,16 @@
 import { structuredPatch } from "diff";
-import type { StaleRead, WriteEntry } from "./ledger";
+import type { Overwrite, StaleRead, WriteEntry } from "./ledger";
 
-export const DIFF_MAX_LINES = 40;
-export const DIFF_LINE_MAX_CHARS = 240;
+const DIFF_MAX_LINES = 40;
+const DIFF_LINE_MAX_CHARS = 240;
 const DIFF_MAX_CHARS = 6000;
 const DIFF_MAX_EDITS = 4000;
 const NOTE_MAX_FILES = 10;
+const OUTSIDE = "a program outside ThinkRail";
+const SINCE_READ = "Changes since your last read (- what you read, + the file now)";
+const REPLACED = "What this write replaced (- before this write, + the file now)";
 
-export function formatAge(ms: number): string {
+function formatAge(ms: number): string {
 	const seconds = Math.max(0, Math.round(ms / 1000));
 	if (seconds < 60) return `${seconds} s ago`;
 	const minutes = Math.round(seconds / 60);
@@ -34,8 +37,9 @@ function writerPhrases(writers: readonly WriteEntry[], now: number, withLine: bo
 
 function untrackedPhrase(stale: StaleRead): string | null {
 	if (!stale.untracked) return null;
-	if (!stale.script) return "a program outside ThinkRail";
-	return stale.script.self ? "your own shell command" : "another agent's shell command";
+	if (!stale.script) return OUTSIDE;
+	const shell = stale.script.self ? "your own shell command" : "another agent's shell command";
+	return `${shell} or ${OUTSIDE}`;
 }
 
 function joinPhrases(phrases: readonly string[]): string {
@@ -56,12 +60,12 @@ function clip(line: string): string {
 	return `${line.slice(0, DIFF_LINE_MAX_CHARS)}… (${line.length - DIFF_LINE_MAX_CHARS} more chars)`;
 }
 
-export function renderDiff(before: string, after: string, maxLines = DIFF_MAX_LINES): string[] {
+function renderDiff(before: string, after: string): string[] | null {
 	const patch = structuredPatch("read", "now", before, after, undefined, undefined, {
 		context: 1,
 		maxEditLength: DIFF_MAX_EDITS,
 	});
-	if (!patch) return [];
+	if (!patch) return null;
 	const lines = patch.hunks.flatMap((hunk) => [
 		`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`,
 		...hunk.lines.map(clip),
@@ -69,7 +73,7 @@ export function renderDiff(before: string, after: string, maxLines = DIFF_MAX_LI
 	const shown: string[] = [];
 	let chars = 0;
 	for (const line of lines) {
-		if (shown.length >= maxLines || chars + line.length > DIFF_MAX_CHARS) break;
+		if (shown.length >= DIFF_MAX_LINES || chars + line.length > DIFF_MAX_CHARS) break;
 		shown.push(line);
 		chars += line.length + 1;
 	}
@@ -83,12 +87,13 @@ function fence(lines: readonly string[]): string {
 	return "`".repeat(Math.max(3, longest + 1));
 }
 
-function diffBlock(stale: StaleRead, currentText: string | null): string {
-	if (stale.baselineText === undefined || currentText === null) return "";
-	const lines = renderDiff(stale.baselineText, currentText);
+function diffBlock(heading: string, before: string | undefined, after: string | null): string {
+	if (before === undefined || after === null) return "";
+	const lines = renderDiff(before, after);
+	if (lines === null) return "\nThe changes are too large to show as a diff.";
 	if (lines.length === 0) return "";
 	const marker = fence(lines);
-	return `\nChanges since your last read (- what you read, + the file now):\n${marker}diff\n${lines.join("\n")}\n${marker}`;
+	return `\n${heading}:\n${marker}diff\n${lines.join("\n")}\n${marker}`;
 }
 
 interface NoteInput {
@@ -100,11 +105,36 @@ interface NoteInput {
 
 export function staleEditHint({ displayPath, stale, currentText, now }: NoteInput): string {
 	const since = stale.read ? " since you last read it" : "";
-	return `ThinkRail: ${displayPath} was changed by ${who(stale, now, true)}${since}. Re-read the file before editing.${diffBlock(stale, currentText)}`;
+	return `ThinkRail: ${displayPath} was changed by ${who(stale, now, true)}${since}. Re-read the file before editing.${diffBlock(SINCE_READ, stale.baselineText, currentText)}`;
 }
 
-export function staleWriteBlock({ displayPath, stale, currentText, now }: NoteInput): string {
-	return `Blocked: ${displayPath} changed since this agent read it (by ${who(stale, now, false)}). Re-read before writing.${diffBlock(stale, currentText)}`;
+export function staleWriteBlock({
+	displayPath,
+	stale,
+	currentText,
+	now,
+	deleted,
+}: NoteInput & { deleted: boolean }): string {
+	const by = `(by ${who(stale, now, false)})`;
+	if (deleted) {
+		return `Blocked: ${displayPath} was deleted since you read it ${by}. Read it to confirm, then write again.`;
+	}
+	return `Blocked: ${displayPath} changed since you read it ${by}. Re-read before writing.${diffBlock(SINCE_READ, stale.baselineText, currentText)}`;
+}
+
+export function overwriteNote({
+	displayPath,
+	overwrite,
+	currentText,
+	now,
+}: {
+	displayPath: string;
+	overwrite: Overwrite;
+	currentText: string | null;
+	now: number;
+}): string {
+	const by = joinPhrases(writerPhrases(overwrite.writers, now, true));
+	return `ThinkRail: ${displayPath} was changed by ${by} after this write was checked, so this write replaced that change. Re-read the file and restore it if it should stay.${diffBlock(REPLACED, overwrite.text, currentText)}`;
 }
 
 export function bashNote({
