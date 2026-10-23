@@ -17,10 +17,12 @@ export const DEFAULT_MENU_LABELS: DesktopMenuLabels = readMenuLabels({});
 export const QUIT_SHORTCUT_ACTION = "quit-shortcut";
 const CLOSE_ITEM_COMMAND: NativeCommand = "close-item";
 const OPEN_SETTINGS_COMMAND: NativeCommand = "open-settings";
-const NATIVE_COMMANDS = { "close-item": true, "open-settings": true } satisfies Record<
-	NativeCommand,
-	true
->;
+const SAVE_COMMAND: NativeCommand = "save";
+const NATIVE_COMMANDS = {
+	"close-item": true,
+	"open-settings": true,
+	save: true,
+} satisfies Record<NativeCommand, true>;
 
 type ApplicationMenuApi = {
 	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;
@@ -68,6 +70,16 @@ export function desktopApplicationMenu(
 					label: labels["desktop.menu.quit"],
 					action: QUIT_SHORTCUT_ACTION,
 					accelerator: "CommandOrControl+Q",
+				},
+			],
+		},
+		{
+			label: labels["desktop.menu.file"],
+			submenu: [
+				{
+					label: labels["desktop.menu.save"],
+					action: SAVE_COMMAND,
+					accelerator: "CommandOrControl+S",
 				},
 			],
 		},

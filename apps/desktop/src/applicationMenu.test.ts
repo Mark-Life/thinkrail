@@ -24,7 +24,7 @@ const editMenu: ApplicationMenuItemConfig = {
 	],
 };
 
-test("builds the native macOS application, edit, and window menus", () => {
+test("builds the native macOS application, file, edit, and window menus", () => {
 	expect(desktopApplicationMenu("darwin")).toEqual([
 		{
 			submenu: [
@@ -42,6 +42,10 @@ test("builds the native macOS application, edit, and window menus", () => {
 					accelerator: "CommandOrControl+Q",
 				},
 			],
+		},
+		{
+			label: "File",
+			submenu: [{ label: "Save", action: "save", accelerator: "CommandOrControl+S" }],
 		},
 		editMenu,
 		{
@@ -91,6 +95,7 @@ test("reads the action from an application-menu-clicked event", () => {
 test("recognizes forwarded native commands only", () => {
 	expect(isNativeCommand("close-item")).toBe(true);
 	expect(isNativeCommand("open-settings")).toBe(true);
+	expect(isNativeCommand("save")).toBe(true);
 	expect(isNativeCommand(QUIT_SHORTCUT_ACTION)).toBe(false);
 	expect(isNativeCommand(null)).toBe(false);
 	expect(isNativeCommand("toString")).toBe(false);
@@ -110,9 +115,11 @@ test("translated labels rename the custom items and fall back to English per lab
 		"desktop.menu.quit": "Quit ThinkRail",
 		"desktop.menu.window": "Window",
 		"desktop.menu.close": "Close",
+		"desktop.menu.file": "File",
+		"desktop.menu.save": "Save",
 	});
 	const menu = desktopApplicationMenu("darwin", labels);
-	expect(menu?.[1]).toMatchObject({ label: "Bearbeiten" });
+	expect(menu?.[2]).toMatchObject({ label: "Bearbeiten" });
 	expect(JSON.stringify(menu)).toContain("Einstellungen…");
 	expect(desktopApplicationMenu("win32", labels)?.[0]).toMatchObject({ label: "Bearbeiten" });
 });

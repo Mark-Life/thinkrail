@@ -3,6 +3,7 @@ import { type NativeQuitHint, QUIT_CONFIRMATION } from "@thinkrail/contracts";
 import {
 	createWebShortcuts,
 	hasWebShortcuts,
+	matchBrowserSave,
 	matchShortcut,
 	SHORTCUT_COMMANDS,
 	type ShortcutPlatform,
@@ -34,6 +35,7 @@ function harness(platform: ShortcutPlatform = "linux") {
 		platform,
 		closeItem: () => log.push("close-item"),
 		openSettings: () => log.push("open-settings"),
+		save: () => log.push("save"),
 		quit: () => log.push("quit"),
 		onQuitHint: (hint) => hints.push(hint),
 		isInTerminal: (target) => target === TERMINAL,
@@ -86,13 +88,46 @@ describe("shortcut platform", () => {
 	});
 });
 
+describe("browser save", () => {
+	test("takes the platform modifier + S and leaves Ctrl+S in a terminal to xterm", () => {
+		const mac = "MacIntel";
+		const linux = "Linux x86_64";
+		const outside = () => false;
+		const inside = () => true;
+		const metaS = chord("KeyS", { key: "s", ctrlKey: false, metaKey: true });
+		const ctrlS = chord("KeyS", { key: "s" });
+		expect(matchBrowserSave(metaS, outside, mac)).toBe(true);
+		expect(matchBrowserSave(metaS, inside, mac)).toBe(true);
+		expect(matchBrowserSave(ctrlS, outside, mac)).toBe(false);
+		expect(matchBrowserSave(ctrlS, outside, linux)).toBe(true);
+		expect(matchBrowserSave(ctrlS, inside, linux)).toBe(false);
+		expect(matchBrowserSave(chord("KeyS", { key: "S", shiftKey: true }), outside, linux)).toBe(
+			false,
+		);
+		expect(matchBrowserSave(chord("KeyS", { key: "s", altKey: true }), outside, linux)).toBe(false);
+		expect(matchBrowserSave(chord("KeyS", { key: "ы" }), outside, linux)).toBe(true);
+	});
+});
+
 describe("chord matching", () => {
 	test("each platform binds its table and only with a bare Ctrl", () => {
 		const table = {
-			apple: { KeyW: null, F4: null, KeyQ: null, Comma: null },
-			browser: { KeyW: null, F4: null, KeyQ: null, Comma: null },
-			windows: { KeyW: "close-item", F4: "close-item", KeyQ: null, Comma: "open-settings" },
-			linux: { KeyW: "close-item", F4: "close-item", KeyQ: "quit", Comma: "open-settings" },
+			apple: { KeyW: null, F4: null, KeyQ: null, Comma: null, KeyS: null },
+			browser: { KeyW: null, F4: null, KeyQ: null, Comma: null, KeyS: null },
+			windows: {
+				KeyW: "close-item",
+				F4: "close-item",
+				KeyQ: null,
+				Comma: "open-settings",
+				KeyS: "save",
+			},
+			linux: {
+				KeyW: "close-item",
+				F4: "close-item",
+				KeyQ: "quit",
+				Comma: "open-settings",
+				KeyS: "save",
+			},
 		} as const;
 		for (const [platform, codes] of Object.entries(table)) {
 			for (const [code, command] of Object.entries(codes)) {

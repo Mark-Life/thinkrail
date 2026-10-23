@@ -4,7 +4,7 @@ import {
 	type NativeQuitHint,
 	type QuitConfirmationDependencies,
 } from "@thinkrail/contracts";
-import { platformFamily } from "../lib";
+import { hasPlatformModifier, platformFamily } from "../lib";
 
 export type ShortcutPlatform = Exclude<ReturnType<typeof platformFamily>, "other"> | "browser";
 
@@ -27,12 +27,15 @@ const CLOSE_ITEM_CHORDS: readonly ShortcutChord[] = [
 
 const OPEN_SETTINGS_CHORDS: readonly ShortcutChord[] = [{ code: "Comma", inTerminal: true }];
 
+const SAVE_CHORDS: readonly ShortcutChord[] = [{ code: "KeyS", inTerminal: false }];
+
 const PUNCTUATION: Readonly<Record<string, string>> = { Comma: "," };
 
 export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
 	{ id: "close-item", chords: { windows: CLOSE_ITEM_CHORDS, linux: CLOSE_ITEM_CHORDS } },
 	{ id: "quit", chords: { linux: [{ code: "KeyQ", inTerminal: true }] } },
 	{ id: "open-settings", chords: { windows: OPEN_SETTINGS_CHORDS, linux: OPEN_SETTINGS_CHORDS } },
+	{ id: "save", chords: { windows: SAVE_CHORDS, linux: SAVE_CHORDS } },
 ];
 
 export function hasWebShortcuts(platform: ShortcutPlatform) {
@@ -80,6 +83,7 @@ export interface WebShortcutsOptions extends Pick<QuitConfirmationDependencies, 
 	platform: ShortcutPlatform;
 	closeItem(): void;
 	openSettings(): void;
+	save(): void;
 	quit(): void;
 	onQuitHint(hint: NativeQuitHint): void;
 	isInTerminal(target: EventTarget | null): boolean;
@@ -98,6 +102,7 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 	const handlers: Record<ShortcutCommandId, () => void> = {
 		"close-item": options.closeItem,
 		"open-settings": options.openSettings,
+		save: options.save,
 		quit: () => quitConfirmation.press(true),
 	};
 
@@ -128,4 +133,14 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 	}
 
 	return { keydown, keyup, cancel, resetQuit, run: (id: NativeCommand) => handlers[id]() };
+}
+
+export function matchBrowserSave(
+	event: ChordEvent,
+	inTerminal: () => boolean,
+	platform?: string,
+): boolean {
+	if (event.altKey || event.shiftKey || !hasPlatformModifier(event, platform)) return false;
+	if (!chordMatches({ code: "KeyS", inTerminal: false }, event)) return false;
+	return platformFamily(platform) === "apple" || !inTerminal();
 }
