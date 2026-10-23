@@ -3,7 +3,6 @@ import {
 	chmodSync,
 	chownSync,
 	mkdirSync,
-	readFileSync,
 	renameSync,
 	rmSync,
 	type Stats,
@@ -11,9 +10,14 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { errnoCode, statOrNull } from "./errno";
+import { errnoCode } from "./errno";
 
 type WriteStrategy = "atomic" | "inPlace";
+
+interface CurrentFile {
+	stat: Stats;
+	bytes: Uint8Array;
+}
 
 const IN_PLACE_FALLBACK_CODES = new Set(["EACCES", "EPERM", "EBUSY", "EXDEV"]);
 
@@ -24,14 +28,13 @@ export function writeStrategy(
 	return stat.nlink > 1 || (uid !== undefined && stat.uid !== uid) ? "inPlace" : "atomic";
 }
 
-function writeInPlace(target: string, bytes: Uint8Array, mode: number, stat: Stats): void {
-	if ((stat.mode & 0o777) !== mode) chmodSync(target, mode);
-	const previous = readFileSync(target);
+function writeInPlace(target: string, bytes: Uint8Array, mode: number, current: CurrentFile): void {
+	if ((current.stat.mode & 0o777) !== mode) chmodSync(target, mode);
 	try {
 		writeFileSync(target, bytes);
 	} catch (error) {
 		try {
-			writeFileSync(target, previous);
+			writeFileSync(target, current.bytes);
 		} catch {
 			throw error;
 		}
@@ -53,21 +56,25 @@ function writeAtomic(target: string, bytes: Uint8Array, mode: number, gid: numbe
 	}
 }
 
-export function replaceFile(target: string, bytes: Uint8Array, mode: number): void {
-	const stat = statOrNull(target, false);
-	if (stat === null) {
+export function replaceFile(
+	target: string,
+	bytes: Uint8Array,
+	mode: number,
+	current: CurrentFile | null,
+): void {
+	if (current === null) {
 		mkdirSync(dirname(target), { recursive: true });
 		writeAtomic(target, bytes, mode, null);
 		return;
 	}
-	if (writeStrategy(stat, process.getuid?.()) === "inPlace") {
-		writeInPlace(target, bytes, mode, stat);
+	if (writeStrategy(current.stat, process.getuid?.()) === "inPlace") {
+		writeInPlace(target, bytes, mode, current);
 		return;
 	}
 	try {
-		writeAtomic(target, bytes, mode, stat.gid);
+		writeAtomic(target, bytes, mode, current.stat.gid);
 	} catch (error) {
 		if (!IN_PLACE_FALLBACK_CODES.has(String(errnoCode(error)))) throw error;
-		writeInPlace(target, bytes, mode, stat);
+		writeInPlace(target, bytes, mode, current);
 	}
 }

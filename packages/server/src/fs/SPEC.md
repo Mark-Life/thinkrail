@@ -65,8 +65,11 @@ text back to a text file under compare-and-swap.
   the file → `written`, disk untouched); hash (`stale` with the current `{content, meta}`); textness
   (byte-only or LFS pointer → `NOT_EDITABLE`); writability (`readonly`). It answers the wire result plus
   `changed`, so the host stamps workspace activity only when bytes changed.
-  **`replaceFile(target, bytes, mode)`** is the one byte write both `writeTextFile` and `changes` use, so a
-  save and a revert treat the same file the same way (rules under "Atomic unless…" below).
+  **`replaceFile(target, bytes, mode, current)`** is the one byte write both `writeTextFile` and `changes`
+  use, so a save and a revert treat the same file the same way (rules under "Atomic unless…" below).
+  `current` is the caller's `{ stat, bytes }` of the target from the same pass, or `null` when it is
+  absent, so the file is not stat'ed or read twice and a failed in-place write restores the bytes the
+  caller checked.
 - **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`, `writeTextFile`,
   `replaceFile`.
