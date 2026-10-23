@@ -27,9 +27,11 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   readiness reports whether the watcher was already known ready), `stopWatch(workspaceId)` (called
   in `workspace.remove`'s fast path),
   `stopAllWatches()` (called in `server.stop()`); the ignore filter (any path segment `.git` or
-  `node_modules`, the `.DS_Store` name, and the host's own write temp files `.thinkrail-<kind>-*.tmp`;
-  the rename still reports the target, and recovery files `.thinkrail-recovery-*` are not temp files and
-  stay visible); per-workspace coalescing (deduped relative paths, flushed after
+  `node_modules`, the `.DS_Store` name, and the host's own short-lived files: the write temp file
+  `.thinkrail-write-<pid>-<hex8>.tmp` and the revert trash claim `.thinkrail-revert-<ulid>`. Only those
+  exact shapes match, so a user file such as `.thinkrail-notes.tmp` stays visible. The rename still
+  reports the target, and recovery files `.thinkrail-recovery-*` stay visible because the user must see
+  them); per-workspace coalescing (deduped relative paths, flushed after
   300ms quiet / 1s max-wait, capped at 100 paths → `truncated: true` = a generic wildcard — the ≤ ~1 frame/sec
   bound is **pinned by the e2e churn canary** in `live-refresh.spec.ts`: ~200 writes over ~3s must
   reach the client as ≤ 8 frames while a mid-storm `/health` round-trip stays fast). Skill relevance is
