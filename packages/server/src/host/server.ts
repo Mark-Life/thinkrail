@@ -196,7 +196,6 @@ interface SocketData {
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
-// JSON escapes a control character as `\u00XX`: 6 frame bytes per content byte.
 const WS_MAX_PAYLOAD_BYTES = 6 * FILE_WRITE_MAX_BYTES + 1024 * 1024;
 
 const log = logger("host");

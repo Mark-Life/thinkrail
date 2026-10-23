@@ -79,8 +79,8 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   applies the original Git mode (`100755` maps to executable permissions); a range keeps the worktree mode.
 - **Writes go through `fs.replaceFile`**, the same rule as an editor save: temp+rename with the selected
   mode and the file's group, so a crash leaves the old file or the new one. A hard-linked or foreign-owned
-  file is written in place instead, keeping its links and owner. A read-only file is refused, as a save
-  is. A deleted file is restored with `fs.createFile`, which never replaces a file that appeared after
+  file is written in place instead, keeping its links and owner. A read-only file is refused with nothing
+  written: a revert throws the errno, while a save answers `readonly`. A deleted file is restored with `fs.createFile`, which never replaces a file that appeared after
   the check ([[submodule-server-fs]]).
 
 ## Receipts
