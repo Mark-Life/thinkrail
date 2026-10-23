@@ -5,9 +5,9 @@ import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
 import {
+	claimShortcut,
 	createWebShortcuts,
 	hasWebShortcuts,
-	matchBrowserSave,
 	shortcutPlatform,
 } from "./shortcutCommands";
 import {
@@ -150,12 +150,9 @@ export function useAppShortcuts() {
 
 	useEffect(() => {
 		if (bridge) return undefined;
+		const options = { platform: "browser", isInTerminal, ownsSave: ownsSaveShortcut } as const;
 		function keydown(event: KeyboardEvent) {
-			if (ownsSaveShortcut(event.target)) return;
-			if (!matchBrowserSave(event, () => isInTerminal(event.target))) return;
-			event.preventDefault();
-			event.stopPropagation();
-			if (!event.repeat) saveFocusedFile();
+			if (claimShortcut(event, options) === "save") saveFocusedFile();
 		}
 		window.addEventListener("keydown", keydown, true);
 		return () => window.removeEventListener("keydown", keydown, true);
