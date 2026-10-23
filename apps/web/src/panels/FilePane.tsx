@@ -10,11 +10,13 @@ import {
 	useRendererSelection,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
+import { canEditFile, useFileBuffer, useFileBufferText } from "../editing";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
-import { useAppStore } from "../store";
+import { selectFileBufferSummary, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { FileEditBanner } from "./FileEditBanner";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
@@ -35,17 +37,6 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		[reviewComments, tab.path],
 	);
 
-	useLiveTabContent(tab, {
-		read: () =>
-			getTransport().request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path }),
-		applyFresh: ({ content, meta }, tick) =>
-			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, meta, tick),
-		keepCurrent: (tick) =>
-			useAppStore
-				.getState()
-				.updateFileTabContent(tab.workspaceId, tab.id, tab.content, tab.meta, tick),
-	});
-
 	const resource = useMemo(
 		() => describeResource(tab.workspaceId, tab.path, tab.meta ?? PENDING_TEXT_META),
 		[tab.workspaceId, tab.path, tab.meta],
@@ -53,7 +44,40 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
 		useRendererSelection(resource, "view", tab.rendererId);
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
-	const content = resourceContent(tab.content, tab.meta, () =>
+
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const editTarget = { mobile, renderer, meta: tab.meta, protocolVersion };
+	const buffer = useFileBuffer(tab, canEditFile({ ...editTarget, buffered: false }));
+	const editing = buffer !== null && canEditFile({ ...editTarget, buffered: true });
+	const bufferText = useFileBufferText(buffer, !editing);
+	const summary = useAppStore((state) => selectFileBufferSummary(state, tab.workspaceId, tab.path));
+	const isPreview = useAppStore((state) => state.previewTabByWorkspace[tab.workspaceId] === tab.id);
+	const dirty = summary?.dirty === true;
+	useEffect(() => {
+		if (dirty && isPreview) useAppStore.getState().setActiveTab(tab.id, "keep");
+	}, [dirty, isPreview, tab.id]);
+
+	useLiveTabContent(tab, {
+		read: () => {
+			const token = buffer?.readToken() ?? 0;
+			return getTransport()
+				.request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path })
+				.then((file) => ({ file, token }));
+		},
+		applyFresh: ({ file, token }, tick) => {
+			useAppStore
+				.getState()
+				.updateFileTabContent(tab.workspaceId, tab.id, file.content, file.meta, tick);
+			buffer?.adoptRead(file, token);
+		},
+		keepCurrent: (tick) =>
+			useAppStore
+				.getState()
+				.updateFileTabContent(tab.workspaceId, tab.id, tab.content, tab.meta, tick),
+		readFailed: () => buffer?.readFailed(),
+	});
+
+	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
 	const reviews = [review.worktree];
@@ -96,7 +120,10 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				{...(placedThreadIds ? { placedThreadIds } : {})}
 				onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
 			/>
-			<div className="min-h-0 flex-1">
+			{buffer ? (
+				<FileEditBanner summary={summary} onReload={buffer.reload} onKeepMine={buffer.keepMine} />
+			) : null}
+			<div className="min-h-0 flex-1" data-file-buffer={editing ? buffer.key : undefined}>
 				<Suspense fallback={loading}>
 					<RendererView
 						key={implementationKey}
@@ -104,6 +131,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						mobile={mobile}
 						resource={resource}
 						content={content}
+						{...(editing ? { edit: buffer.session } : {})}
 						review={review.worktree}
 						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
