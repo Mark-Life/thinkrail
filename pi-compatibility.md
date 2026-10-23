@@ -104,7 +104,8 @@ CAS. Host saves (`fs.writeFile`, [[submodule-server-fs]]) and reverts stay safe 
 inside the same `withFileMutationQueue` instance. That holds while exactly one pi copy is installed and
 every bundle resolves it once. **Re-check:** the root export exists; it keys by realpath with a lexical
 fallback for absent paths; it wraps `edit` and `write`. Run `host/fileWrite.test.ts`: it holds a pi
-`edit` and a pi `write` open against a save, a `change.revert` and a `change.undo`, and checks that every
+`edit` open against a save, a `change.revert` and a `change.undo`, holds a pi `write` open against a
+save, and checks that every
 package that depends on pi resolves the same copy. **Removal gate:**
 pi exposes a CAS write (expected hash) for in-process callers.
 
