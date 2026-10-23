@@ -1,4 +1,4 @@
-export interface TextForm {
+interface TextForm {
 	bom: boolean;
 	eol: "\n" | "\r\n";
 }
@@ -20,6 +20,7 @@ export function textForm(bytes: Uint8Array): TextForm {
 }
 
 export function applyForm(editorText: string, form: TextForm): Uint8Array {
-	const body = form.eol === "\r\n" ? editorText.replaceAll("\n", "\r\n") : editorText;
-	return BYTES.encode(form.bom ? `﻿${body}` : body);
+	const lf = editorText.replace(/\r\n?/g, "\n");
+	const body = form.eol === "\r\n" ? lf.replaceAll("\n", "\r\n") : lf;
+	return BYTES.encode(form.bom ? `\uFEFF${body}` : body);
 }

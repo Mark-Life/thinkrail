@@ -1,12 +1,11 @@
 import { expect, test } from "bun:test";
-import { toEditorText } from "@thinkrail/contracts";
 import { applyForm, textForm } from "./textForm";
 
 const BYTES = new TextEncoder();
 const TEXT = new TextDecoder("utf-8", { ignoreBOM: true });
 
 function save(disk: string, content: string): string {
-	return TEXT.decode(applyForm(toEditorText(content), textForm(BYTES.encode(disk))));
+	return TEXT.decode(applyForm(content, textForm(BYTES.encode(disk))));
 }
 
 test("an LF file stays LF, whatever endings the content carries", () => {
@@ -18,11 +17,12 @@ test("a CRLF file given LF content is written CRLF", () => {
 	expect(save("a\r\nb\r\n", "a\nb\nc\n")).toBe("a\r\nb\r\nc\r\n");
 });
 
-test("a BOM file keeps exactly one BOM, and a BOM-less file gains none", () => {
-	expect(save("﻿a\n", "b\n")).toBe("﻿b\n");
-	expect(save("﻿a\n", "﻿b\n")).toBe("﻿b\n");
-	expect(save("a\n", "﻿b\n")).toBe("b\n");
-	expect(textForm(BYTES.encode("﻿a\r\n"))).toEqual({ bom: true, eol: "\r\n" });
+test("the disk file's BOM is re-applied, and a U+FEFF that starts the content is kept", () => {
+	expect(save("\uFEFFa\n", "b\n")).toBe("\uFEFFb\n");
+	expect(save("a\n", "b\n")).toBe("b\n");
+	expect(save("\uFEFFa\n", "\uFEFFb\n")).toBe("\uFEFF\uFEFFb\n");
+	expect(save("a\n", "\uFEFFb\n")).toBe("\uFEFFb\n");
+	expect(textForm(BYTES.encode("\uFEFFa\r\n"))).toEqual({ bom: true, eol: "\r\n" });
 });
 
 test("the first line break decides a mixed file's ending", () => {

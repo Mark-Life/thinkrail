@@ -67,8 +67,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions,
-  plus `FILE_WRITE_MAX_BYTES` and **`toEditorText(raw)`**, the one disk-to-editor text normalizer both
-  sides of `fs.writeFile` apply).
+  plus `FILE_WRITE_MAX_BYTES` and **`toEditorText(raw)`**, the one disk-to-editor text normalizer; the
+  client applies it to disk text, and an `fs.writeFile` `content` is its output).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
@@ -562,7 +562,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `FileContent` = `{ content, meta: ResourceMeta }`; **`fs.writeFile`** (`FILE_WRITE_PROTOCOL_VERSION` =
   v91): `{workspaceId, path, content, expect:{hash}}` → `written{meta} | stale{current} | missing |
   readonly`. `content` is editor text (`toEditorText`: one leading BOM dropped, every `\r\n`/`\r`
-  folded to `\n`), and the host restores the disk file's form. `expect.hash` is the hash the client last
+  folded to `\n`), and the host restores the disk file's form. The host folds line breaks again but
+  never strips a leading U+FEFF: in editor text it is a character, because the disk BOM is already gone. `expect.hash` is the hash the client last
   adopted, or `null` for create-only. Stale, missing and read-only are expected outcomes, so they are
   results. `FILE_WRITE_MAX_BYTES` (4 MiB of UTF-8) is checked by the host. The host's frame limit is sized
   for the worst JSON escaping of that cap (6×), because an oversized frame closes the socket and an
