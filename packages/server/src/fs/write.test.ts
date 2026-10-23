@@ -191,6 +191,16 @@ test("a create below a regular file is not editable", () => {
 	expect(text("f")).toBe("file\n");
 });
 
+test.skipIf(!POSIX)("a create below a dangling symlinked folder is not editable", () => {
+	symlinkSync(join(root, "gone"), join(root, "lib"));
+	for (const path of ["lib/new.ts", "lib/sub/new.ts"]) {
+		expect(() => save(path, "x\n", null)).toThrow(
+			expect.objectContaining({ code: "NOT_EDITABLE" }),
+		);
+	}
+	expect(existsSync(join(root, "gone"))).toBe(false);
+});
+
 test("a create that fails partway removes its file, so a replay creates again", () => {
 	const realWrite = nodeFs.writeFileSync;
 	const spy = spyOn(nodeFs, "writeFileSync").mockImplementation((file, data, options) => {
