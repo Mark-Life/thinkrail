@@ -560,7 +560,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     It never replaces pi's tools. `tool_call` opens a provenance claim for `read`/`edit`/`write` (a
     `write` only once it passes the block check) and a bash window for `bash`/`powershell`. A successful
     `read` records the session's baseline; a failed one records the file as absent when it is gone. A successful `edit`/`write` records an agent ledger entry and
-    a new baseline; a failed one is recorded only when its bytes reached the disk (a `write` whose
+    a new baseline (an `edit` that started from a change the session never read keeps the old one); a failed one is recorded only when its bytes reached the disk (a `write` whose
     content is on disk, an `edit` failing with pi's "Operation aborted" that changed the file). Every
     other `edit` error is thrown before pi writes, so it records nothing: a change on disk then is
     another writer's, and it must keep blocking a stale `write`. All re-read the file inside pi's

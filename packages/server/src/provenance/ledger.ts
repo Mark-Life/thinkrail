@@ -44,7 +44,9 @@ export interface Overwrite {
 interface Baseline {
 	hash: string | null;
 	seq: number;
+	at: number;
 	contested: boolean;
+	unseen?: true;
 }
 
 interface Claim {
@@ -53,6 +55,7 @@ interface Claim {
 	seq: number;
 	mutates: boolean;
 	hash: string | null;
+	kept?: Baseline;
 }
 
 interface Settled {
@@ -61,6 +64,7 @@ interface Settled {
 	othersOpen: boolean;
 	writers: WriteEntry[];
 	contested: boolean;
+	kept?: Baseline;
 }
 
 const WRITES_PER_PATH = 32;
@@ -73,7 +77,7 @@ const TEXT_CACHE_CHARS = 32 * 1024 * 1024;
 const TEXT_MAX_CHARS = 512 * 1024;
 const TEXT_MAX_BYTES = 4 * TEXT_MAX_CHARS;
 const UNREAD_RECENT_MS = 10 * 60 * 1000;
-const WINDOW_SLACK_MS = 1000;
+const WINDOW_SLACK_MS = 2000;
 const WINDOW_GRACE_MS = 1500;
 
 function touch<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
@@ -175,8 +179,25 @@ export function createProvenance(options: { now?: () => number } = {}) {
 	}
 
 	function baselineAfter(settled: Settled | undefined, hash: string | null): Baseline {
-		if (settled?.contested) return { hash, seq: settled.seq, contested: true };
-		return { hash, seq: ++seq, contested: false };
+		if (settled?.kept) return settled.kept;
+		if (settled?.contested) return { hash, seq: settled.seq, at: now(), contested: true };
+		return { hash, seq: ++seq, at: now(), contested: false };
+	}
+
+	function changedSince(input: {
+		sessionId: string;
+		key: string;
+		baseline: Baseline;
+		hash: string | null;
+	}) {
+		const { baseline, hash } = input;
+		const since = (writes.get(input.key) ?? []).filter((entry) => entry.seq > baseline.seq);
+		const writers = since.filter((entry) => !isSelf(entry, input.sessionId));
+		if (hash === baseline.hash && (!baseline.contested || writers.length === 0)) return null;
+		const untracked =
+			baseline.unseen === true || (hash !== baseline.hash && since.at(-1)?.hash !== hash);
+		if (writers.length === 0 && !untracked) return null;
+		return { writers, untracked };
 	}
 
 	function windowsAt(key: string, mtimeMs: number): BashWindow[] {
@@ -189,6 +210,12 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		);
 	}
 
+	function scriptWindows(key: string, since: number, mtimeMs: number | undefined): BashWindow[] {
+		if (mtimeMs !== undefined && mtimeMs >= since - WINDOW_SLACK_MS) return windowsAt(key, mtimeMs);
+		const at = now();
+		return windows.filter((window) => within(key, window.root) && (window.end ?? at) >= since);
+	}
+
 	function openClaim(input: {
 		sessionId: string;
 		toolCallId: string;
@@ -196,15 +223,20 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		mutates: boolean;
 		hash: string | null;
 	}): void {
+		const key = fileKey(input.path);
+		const baseline = input.mutates ? reads.get(input.sessionId)?.get(key) : undefined;
+		const unseen = baseline && changedSince({ ...input, key, baseline });
+		const kept = unseen && { ...baseline, ...(unseen.untracked ? { unseen: true as const } : {}) };
 		touch(
 			claims,
 			callId(input.sessionId, input.toolCallId),
 			{
 				sessionId: input.sessionId,
-				key: fileKey(input.path),
+				key,
 				seq,
 				mutates: input.mutates,
 				hash: input.hash,
+				...(kept ? { kept } : {}),
 			},
 			MAX_CLAIMS,
 		);
@@ -228,6 +260,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			othersOpen,
 			writers,
 			contested: othersOpen || writers.length > 0,
+			...(claim.kept ? { kept: claim.kept } : {}),
 		} satisfies Settled;
 	}
 
@@ -345,13 +378,12 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			if (writers.length === 0) return null;
 			return { read: false, writers, untracked: false };
 		}
-		const currentHash = input.current?.hash ?? null;
-		const since = entries.filter((entry) => entry.seq > baseline.seq);
-		const writers = since.filter((entry) => !isSelf(entry, input.sessionId));
-		if (currentHash === baseline.hash && (!baseline.contested || writers.length === 0)) return null;
-		const untracked = currentHash !== baseline.hash && since.at(-1)?.hash !== currentHash;
-		if (writers.length === 0 && !untracked) return null;
-		const covering = untracked && input.current ? windowsAt(key, input.current.mtimeMs) : [];
+		const hash = input.current?.hash ?? null;
+		const changed = changedSince({ sessionId: input.sessionId, key, baseline, hash });
+		if (!changed) return null;
+		const { writers, untracked } = changed;
+		const mtimeMs = baseline.unseen ? undefined : input.current?.mtimeMs;
+		const covering = untracked ? scriptWindows(key, baseline.at, mtimeMs) : [];
 		const baselineText = baseline.hash === null ? undefined : texts.get(textId(key, baseline.hash));
 		const self = covering.every((window) => window.sessionId === input.sessionId);
 		return {
@@ -417,7 +449,8 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		}
 		const mtimeMs = mtimeOf(input.path);
 		if (mtimeMs === undefined) return undefined;
-		const window = windowsAt(key, mtimeMs).at(-1);
+		const since = newest?.at ?? Number.NEGATIVE_INFINITY;
+		const window = scriptWindows(key, since, mtimeMs).at(-1);
 		if (window) {
 			return {
 				author: { kind: "agent", sessionId: window.sessionId, via: "script", inferred: true },
