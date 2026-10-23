@@ -3,6 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { pressPlatformShortcut, revealWorkbenchTool } from "./fixtures/app";
 import {
 	banner,
+	editorHasFocus,
 	fileTab,
 	openFile,
 	openWorkspaceWithFile,
@@ -149,4 +150,22 @@ test("a Review panel jump on an unsaved file is dropped, not replayed after Save
 	await expect(fileTab(page, "jump.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
 	await page.waitForTimeout(800);
 	expect(await topVisibleLine(page)).toBeGreaterThan(30);
+});
+
+test("Reload and Keep mine put keyboard focus back in the editor", async ({ page }) => {
+	const path = await openFile(page, "focus.ts", "const base = 1;\n");
+	for (const [action, theirs] of [
+		["file-edit-keep-mine", "const theirs = 2;\n"],
+		["file-edit-reload", "const theirs = 3;\n"],
+	] as const) {
+		await typeAtLineEnd(page, 1, " // mine");
+		writeFileSync(path, theirs);
+		await expect(banner(page)).toHaveAttribute("data-status", "stale", { timeout: 10_000 });
+		await page.getByTestId(action).focus();
+		await page.keyboard.press("Enter");
+		await expect(banner(page)).toHaveCount(0);
+		expect(await editorHasFocus(page)).toBe(true);
+	}
+	await page.keyboard.type("// typed ");
+	await expect(visibleEditor(page)).toContainText("// typed");
 });

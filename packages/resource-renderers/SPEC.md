@@ -52,7 +52,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
     environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
     providers;
-  - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
+  - the lazy `RendererView` mount, with **`focusRendererEditor(root)`** to put keyboard focus back in the
+    editable view mounted under `root` (a caller whose control unmounts on click), and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
     (`surfaceLineCount`);

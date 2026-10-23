@@ -2061,6 +2061,8 @@ own section. The kebab menu (`plan-menu`, a
   disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text, not connected,
   or a failed save. Its live region stays mounted while
   the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
+  **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
+  (`focusRendererEditor`).
 - **Closing a dirty file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
   **Cancel**. It reads `dirty` from the store's buffer summary. Save closes only once the save leaves the

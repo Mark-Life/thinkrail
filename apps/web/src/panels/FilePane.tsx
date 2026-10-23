@@ -1,6 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
 import {
 	describeResource,
+	focusRendererEditor,
 	PENDING_TEXT_META,
 	RendererToggles,
 	RendererView,
@@ -10,7 +11,7 @@ import {
 	useRendererSelection,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { canEditFile, useFileBuffer, useFileBufferText } from "../editing";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
@@ -86,6 +87,11 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	useEffect(() => {
 		if (heldFocus) dropFocus();
 	}, [heldFocus, dropFocus]);
+	const viewRef = useRef<HTMLDivElement>(null);
+	const resolveConflict = (action: () => void) => {
+		action();
+		focusRendererEditor(viewRef.current);
+	};
 	const reviews = reviewSurface ? [reviewSurface] : [];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
@@ -127,9 +133,17 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
 			/>
 			{buffer ? (
-				<FileEditBanner summary={summary} onReload={buffer.reload} onKeepMine={buffer.keepMine} />
+				<FileEditBanner
+					summary={summary}
+					onReload={() => resolveConflict(buffer.reload)}
+					onKeepMine={() => resolveConflict(buffer.keepMine)}
+				/>
 			) : null}
-			<div className="min-h-0 flex-1" data-file-buffer={editing ? buffer.key : undefined}>
+			<div
+				ref={viewRef}
+				className="min-h-0 flex-1"
+				data-file-buffer={editing ? buffer.key : undefined}
+			>
 				<Suspense fallback={loading}>
 					<RendererView
 						key={implementationKey}

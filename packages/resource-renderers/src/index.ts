@@ -60,6 +60,7 @@ export {
 } from "./support/ResourcePreview";
 export { ReviewThreadCard } from "./support/ReviewThreadCard";
 export {
+	focusRendererEditor,
 	RendererView,
 	usePreloadResourceView,
 	useRendererSelection,
