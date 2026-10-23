@@ -23,18 +23,16 @@ export interface WriteEntry {
 	line?: number;
 }
 
-export interface BashWindow {
+interface BashWindow {
 	sessionId: string;
 	toolCallId: string;
 	startSeq: number;
 	start: number;
-	endSeq?: number;
 	end?: number;
 }
 
 export interface StaleRead {
-	path: string;
-	baseline: { hash: string; at: number } | null;
+	baseline: { at: number } | null;
 	writers: WriteEntry[];
 	untracked: boolean;
 	script?: { sessionId: string; self: boolean };
@@ -179,7 +177,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 				.slice(lastSelf + 1)
 				.filter((entry) => !isSelf(entry, input.sessionId) && entry.at >= cutoff);
 			if (writers.length === 0) return null;
-			return { path: input.path, baseline: null, writers, untracked: false };
+			return { baseline: null, writers, untracked: false };
 		}
 		const currentHash = input.current ? hashBytes(input.current.bytes) : null;
 		if (currentHash === baseline.hash) return null;
@@ -189,8 +187,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		const window = untracked && input.current ? windowAt(input.current.mtimeMs) : undefined;
 		const baselineText = texts.get(`${key}\n${baseline.hash}`);
 		return {
-			path: input.path,
-			baseline: { hash: baseline.hash, at: baseline.at },
+			baseline: { at: baseline.at },
 			writers,
 			untracked,
 			...(window
@@ -205,10 +202,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		if (windows.length > MAX_WINDOWS) windows.splice(0, windows.length - MAX_WINDOWS);
 	}
 
-	function closeBashWindow(input: {
-		sessionId: string;
-		toolCallId: string;
-	}): { window: BashWindow; userWrites: WriteEntry[] } | null {
+	function closeBashWindow(input: { sessionId: string; toolCallId: string }): WriteEntry[] | null {
 		const window = windows.find(
 			(candidate) =>
 				candidate.sessionId === input.sessionId &&
@@ -217,11 +211,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		);
 		if (!window) return null;
 		window.end = now();
-		window.endSeq = seq;
-		const userWrites = recent.filter(
-			(entry) => entry.author.kind === "user" && entry.seq > window.startSeq && entry.seq <= seq,
-		);
-		return { window, userWrites };
+		return recent.filter((entry) => entry.author.kind === "user" && entry.seq > window.startSeq);
 	}
 
 	function lastWrite(input: {

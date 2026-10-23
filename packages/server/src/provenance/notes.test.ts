@@ -25,8 +25,7 @@ function entry(overrides: Partial<WriteEntry>): WriteEntry {
 
 function stale(overrides: Partial<StaleRead>): StaleRead {
 	return {
-		path: "/w/src/auth.ts",
-		baseline: { hash: "b", at: NOW - 10_000 },
+		baseline: { at: NOW - 10_000 },
 		writers: [],
 		untracked: false,
 		...overrides,

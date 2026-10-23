@@ -45,9 +45,8 @@ uses the same data to tell an agent that someone changed a file under it.
   - **Notes**, the agent-facing text: `staleEditHint`, `staleWriteBlock`, `bashNote`. A hint is a
     one-line pointer (who, how long ago, which line) plus a diff from the baseline text to the disk,
     capped at 40 lines.
-- **Public surface (barrel):** `createProvenance`, `fileProvenance`, `Provenance`, `WriteAuthor`,
-  `WriteEntry`, `StaleRead`, `BashWindow`, `FileSnapshot`, `readSnapshot`, `editorText`,
-  `recordingQueue`, `staleEditHint`, `staleWriteBlock`, `bashNote`.
+- **Public surface (barrel):** `createProvenance`, `fileProvenance`, `Provenance`, `StaleRead`,
+  `readSnapshot`, `editorText`, `recordingQueue`, `staleEditHint`, `staleWriteBlock`, `bashNote`.
 - **Allowed deps:** `fs` (`hashBytes`, `classifyBytes`, `decodeText`); `contracts` (`FileLastWrite`, and
   at runtime `toEditorText`); `diff` (external, the line diff); Node `fs`/`path`.
 - **Forbidden:** `host`, `agent`, and any pi import. pi knowledge (tool names, error text, path rules)

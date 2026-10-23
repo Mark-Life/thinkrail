@@ -158,10 +158,10 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 		}
 
 		function shellNote(sessionId: string, event: ToolResultEvent, cwd: string) {
-			const closed = store.closeBashWindow({ sessionId, toolCallId: event.toolCallId });
-			if (!closed) return undefined;
+			const userWrites = store.closeBashWindow({ sessionId, toolCallId: event.toolCallId });
+			if (!userWrites) return undefined;
 			const note = bashNote({
-				userWrites: closed.userWrites,
+				userWrites,
 				displayPath: displayUnder(cwd),
 				now: store.now(),
 			});
