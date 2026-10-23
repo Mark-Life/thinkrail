@@ -12,6 +12,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	FILE_WRITE_MAX_BYTES,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -195,6 +196,8 @@ interface SocketData {
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
+// JSON escapes a control character as `\u00XX`: 6 frame bytes per content byte.
+const WS_MAX_PAYLOAD_BYTES = 6 * FILE_WRITE_MAX_BYTES + 1024 * 1024;
 
 const log = logger("host");
 
@@ -313,7 +316,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return new Response("not found", { status: 404 });
 		},
 		websocket: {
-			maxPayloadLength: 16 * 1024 * 1024,
+			maxPayloadLength: WS_MAX_PAYLOAD_BYTES,
 			open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);

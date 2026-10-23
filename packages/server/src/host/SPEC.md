@@ -459,8 +459,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   cwd, so even a file that does not exist yet shares one key. It takes no workspace lock. The file queue
   is the serialization, and a revert's git reads on another file must not delay a save. Workspace
   activity is stamped only when bytes changed. `change.revert`/`change.undo` pass the same queue into
-  `changes`, under `withChangeLock`. The WebSocket `maxPayloadLength` is pinned at 16 MiB, so the 4 MiB
-  write cap's headroom does not depend on a Bun default. Other host writers inside worktrees
+  `changes`, under `withChangeLock`. The WebSocket `maxPayloadLength` is 6× `FILE_WRITE_MAX_BYTES` plus 1 MiB:
+  JSON escapes a control character to 6 bytes, so any save under the cap fits in one frame. Other host writers inside worktrees
   (`agent/mcp/writers.ts`, `templates`) skip the queue; the save's CAS still catches them.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
