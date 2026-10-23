@@ -99,6 +99,7 @@ export function setup(
 		disk?: ReturnType<typeof fakeDisk>;
 		owner?: string;
 		connected?: () => boolean;
+		view?: boolean;
 	} = {},
 ) {
 	const disk = options.disk ?? fakeDisk({ [PATH]: options.text ?? "one\ntwo\n" });
@@ -121,7 +122,7 @@ export function setup(
 	const handle = registry.ensure({ workspaceId: WS, path: PATH, ...file });
 	if (!handle) throw new Error("buffer not created");
 	const received: (readonly TextChange[])[] = [];
-	handle.session.subscribe((changes) => received.push(changes));
+	if (options.view !== false) handle.session.subscribe((changes) => received.push(changes));
 	return { disk, drafts, summaries, restored, registry, handle, received };
 }
 
