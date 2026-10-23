@@ -15,6 +15,7 @@ import {
 	hasLayer,
 	isInTerminal,
 	MODAL_LAYER_SELECTOR,
+	ownsSaveShortcut,
 } from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
@@ -120,6 +121,7 @@ export function useAppShortcuts() {
 			},
 			onQuitHint: setQuitHint,
 			isInTerminal,
+			ownsSave: ownsSaveShortcut,
 			now: () => performance.now(),
 			every: intervals.every,
 		});
@@ -149,6 +151,7 @@ export function useAppShortcuts() {
 	useEffect(() => {
 		if (bridge) return undefined;
 		function keydown(event: KeyboardEvent) {
+			if (ownsSaveShortcut(event.target)) return;
 			if (!matchBrowserSave(event, () => isInTerminal(event.target))) return;
 			event.preventDefault();
 			event.stopPropagation();

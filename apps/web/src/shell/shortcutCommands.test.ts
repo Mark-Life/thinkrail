@@ -13,6 +13,7 @@ import { globalHotkeyCommand } from "./useGlobalHotkeys";
 
 const { holdMs, pollMs } = QUIT_CONFIRMATION;
 const TERMINAL = { terminal: true };
+const SAVE_OWNER = { ownsSave: true };
 
 function chord(code: string, overrides: Partial<KeyboardEvent> = {}) {
 	return {
@@ -39,6 +40,7 @@ function harness(platform: ShortcutPlatform = "linux") {
 		quit: () => log.push("quit"),
 		onQuitHint: (hint) => hints.push(hint),
 		isInTerminal: (target) => target === TERMINAL,
+		ownsSave: (target) => target === SAVE_OWNER,
 		now: () => time,
 		every: (callback) => {
 			poll = callback;
@@ -218,6 +220,14 @@ test("keydown swallows repeats and leaves terminal Ctrl+W unprevented", () => {
 	expect(h.keydown("KeyW", {}, TERMINAL)).toBe(false);
 	expect(h.keydown("F4", {}, TERMINAL)).toBe(true);
 	expect(h.log).toEqual(["close-item"]);
+});
+
+test("Ctrl+S leaves a focused field that owns it alone, unprevented", () => {
+	const h = harness("linux");
+	expect(h.keydown("KeyS", { key: "s" }, SAVE_OWNER)).toBe(false);
+	expect(h.log).toEqual([]);
+	expect(h.keydown("KeyS", { key: "s" })).toBe(true);
+	expect(h.log).toEqual(["save"]);
 });
 
 test("Ctrl+, runs open-settings once per press, inside a terminal too", () => {
