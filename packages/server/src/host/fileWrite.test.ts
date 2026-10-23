@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import * as pi from "@earendil-works/pi-coding-agent";
 import { createEditTool, createWriteTool } from "@earendil-works/pi-coding-agent";
 import type {
 	ChangeReceipt,
@@ -92,12 +93,26 @@ function gatedEdit(held: Gate) {
 	});
 }
 
-async function expectHeld<T>(pending: Promise<T>, held: Gate): Promise<T> {
+async function expectHeld<T>(start: () => Promise<T>, held: Gate): Promise<T> {
+	const realQueue = pi.withFileMutationQueue;
+	const queued = gate();
+	const spy = spyOn(pi, "withFileMutationQueue").mockImplementation((abs, run) => {
+		queued.enter();
+		return realQueue(abs, run);
+	});
 	let settled = false;
-	const tracked = pending.finally(() => {
+	const tracked = start().finally(() => {
 		settled = true;
 	});
-	tracked.catch(() => {});
+	const done = tracked.then(
+		() => {},
+		() => {},
+	);
+	try {
+		await Promise.race([queued.entered, done]);
+	} finally {
+		spy.mockRestore();
+	}
 	await Bun.sleep(50);
 	expect(settled).toBe(false);
 	held.release();
@@ -145,7 +160,7 @@ test("a save waits behind a pending pi edit of the same file, then answers stale
 	});
 	await held.entered;
 
-	const saving = expectHeld(save("a.ts", "const a = 3;\n", hash("const a = 1;\n")), held);
+	const saving = expectHeld(() => save("a.ts", "const a = 3;\n", hash("const a = 1;\n")), held);
 	await editing;
 	expect(await saving).toMatchObject({
 		status: "stale",
@@ -169,7 +184,7 @@ test("a save waits behind a pending pi write of the same file, then answers stal
 	const writing = write.execute("call-1", { path: "a.ts", content: "from pi\n" });
 	await held.entered;
 
-	const saving = expectHeld(save("a.ts", "mine\n", hash("base\n")), held);
+	const saving = expectHeld(() => save("a.ts", "mine\n", hash("base\n")), held);
 	await writing;
 	expect(await saving).toMatchObject({ status: "stale", current: { content: "from pi\n" } });
 	expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("from pi\n");
@@ -185,7 +200,7 @@ test("change.revert waits behind a pending pi edit of the same file, then is sta
 	});
 	await held.entered;
 
-	const reverting = expectHeld(revert("a.ts", hash("one\n"), hash("two\n")), held);
+	const reverting = expectHeld(() => revert("a.ts", hash("one\n"), hash("two\n")), held);
 	await editing;
 	await expect(reverting).rejects.toMatchObject({ code: "STALE_VIEW" });
 	expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("three\n");
@@ -204,11 +219,12 @@ test("change.undo waits behind a pending pi edit of the same file, then is stale
 	await held.entered;
 
 	const undoing = expectHeld(
-		handleRequest(
-			"change.undo",
-			{ workspaceId: "w1", receiptId: receipt.id, expect: { modifiedHash: hash("one\n") } },
-			CTX,
-		),
+		() =>
+			handleRequest(
+				"change.undo",
+				{ workspaceId: "w1", receiptId: receipt.id, expect: { modifiedHash: hash("one\n") } },
+				CTX,
+			),
 		held,
 	);
 	await editing;
@@ -265,9 +281,11 @@ test("a save's fsChanged frame names the target and never the temp file", async 
 });
 
 test("every package that depends on pi loads one pi copy, so they share one mutation queue", () => {
-	const dependents = [
-		...new Bun.Glob("{packages,thinkrail-extensions}/*/package.json").scanSync(REPO_ROOT),
-	]
+	const rootManifest = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+		workspaces: { packages: string[] };
+	};
+	const dependents = rootManifest.workspaces.packages
+		.flatMap((pattern) => [...new Bun.Glob(`${pattern}/package.json`).scanSync(REPO_ROOT)])
 		.map((manifest) => join(REPO_ROOT, manifest))
 		.filter((manifest) => {
 			const pkg = JSON.parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
