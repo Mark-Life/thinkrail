@@ -15,10 +15,14 @@ import { applyForm, createdBytes, textForm } from "./textForm";
 
 type WriteTextFileParams = WsParams<"fs.writeFile">;
 
-interface WriteTextFileOutcome {
-	result: FileWriteResult;
-	changed: boolean;
-}
+type WriteTextFileOutcome =
+	| { result: FileWriteResult; changed: false }
+	| {
+			result: Extract<FileWriteResult, { status: "written" }>;
+			changed: true;
+			before: Uint8Array | null;
+			after: Uint8Array;
+	  };
 
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
 const NOT_A_FOLDER_CODES = new Set(["EEXIST", "ENOTDIR", "ENOENT"]);
@@ -31,8 +35,13 @@ function assertParams(params: WriteTextFileParams): void {
 	}
 }
 
-function written(bytes: Uint8Array, path: string): WriteTextFileOutcome {
-	return { result: { status: "written", meta: resourceMeta(bytes, path) }, changed: true };
+function written(before: Uint8Array | null, after: Uint8Array, path: string): WriteTextFileOutcome {
+	return {
+		result: { status: "written", meta: resourceMeta(after, path) },
+		changed: true,
+		before,
+		after,
+	};
 }
 
 function readonlyOrThrow(error: unknown): WriteTextFileOutcome {
@@ -68,7 +77,7 @@ function createMissing(
 		if (errnoCode(error) === "EEXIST" && !retried) return writePass(params, true);
 		return readonlyOrThrow(error);
 	}
-	return written(bytes, params.path);
+	return written(null, bytes, params.path);
 }
 
 function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFileOutcome {
@@ -98,7 +107,7 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 	} catch (error) {
 		return readonlyOrThrow(error);
 	}
-	return written(out, path);
+	return written(current, out, path);
 }
 
 export function writeTextFile(params: WriteTextFileParams): WriteTextFileOutcome {

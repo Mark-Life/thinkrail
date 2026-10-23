@@ -69,7 +69,9 @@ text back to a text file under compare-and-swap.
   (bytes with a NUL in the first 8 KiB or invalid UTF-8, or an LFS pointer → `NOT_EDITABLE`);
   writability (`readonly`). Textness here ignores magic numbers: text the editor saved that starts like
   a PDF or GIF must stay saveable, and replacing bytes that decode losslessly loses nothing. It answers the wire result plus
-  `changed`, so the host stamps workspace activity only when bytes changed.
+  `changed`. A changed outcome also carries the replaced bytes (`before`, `null` for a create) and the
+  written ones (`after`), so the host stamps workspace activity and records the author only when bytes
+  changed, with no second read.
   **`replaceFile(target, bytes, mode, current)`** and **`createFile(target, bytes, mode?)`** are the byte
   writes both `writeTextFile` and `changes` use, so a save and a revert treat the same file the same way.
   `replaceFile` writes an existing file (rules under "Atomic unless…" below). `current` is the caller's

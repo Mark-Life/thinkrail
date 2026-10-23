@@ -97,7 +97,7 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { findBranchReviewOutcome, providerFromRemoteUrl } from "../branch-review";
-import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
+import { type FileMutation, forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { listExtensionCatalog } from "../extensions";
@@ -144,6 +144,7 @@ import {
 	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
+import { fileProvenance } from "../provenance";
 import {
 	addComment,
 	buildReviewFixDetails,
@@ -455,6 +456,14 @@ function sessionStateWorkspace(workspace: Workspace) {
 	return { id: workspace.id, projectId: workspace.projectId, cwd: workspace.worktreePath };
 }
 
+function userMutation(clientKey: string) {
+	return {
+		queue: withFileMutationQueue,
+		written: ({ abs, ...version }) =>
+			fileProvenance.recordWrite({ path: abs, author: { kind: "user", clientKey }, ...version }),
+	} satisfies FileMutation;
+}
+
 function resourceCwd(workspaceId: string): string {
 	try {
 		return getWorkspace(workspaceId).worktreePath;
@@ -697,16 +706,31 @@ const handlers: WsHandlers = {
 			? nodes
 			: nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 	},
-	"fs.readFile": (p) => {
+	"fs.readFile": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
-		return readFile(p.workspaceId, p.path);
+		const file = readFile(p.workspaceId, p.path);
+		const lastWrite = fileProvenance.lastWrite({
+			path: resolveWorktreeFile(p.workspaceId, p.path),
+			hash: file.meta.hash,
+			clientKey: ctx.clientKey,
+		});
+		return lastWrite ? { ...file, lastWrite } : file;
 	},
-	"fs.writeFile": async (p) => {
+	"fs.writeFile": async (p, ctx) => {
 		void ensureWatch(p.workspaceId);
 		const abs = resolveWorktreeFile(p.workspaceId, p.path);
-		const { result, changed } = await withFileMutationQueue(abs, async () => writeTextFile(p));
-		if (changed) recordWorkspaceActivity(p.workspaceId);
-		return result;
+		const mutation = userMutation(ctx.clientKey);
+		const outcome = await mutation.queue(abs, async () => {
+			const written = writeTextFile(p);
+			if (written.changed) {
+				const { before, after, result } = written;
+				const hash = result.meta.hash;
+				mutation.written({ abs, before, after, ...(hash === null ? {} : { hash }) });
+			}
+			return written;
+		});
+		if (outcome.changed) recordWorkspaceActivity(p.workspaceId);
+		return outcome.result;
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);
@@ -851,16 +875,16 @@ const handlers: WsHandlers = {
 		getWorkspace(p.workspaceId);
 		return { turns: listTurns(p.workspaceId) };
 	},
-	"change.revert": (p) => {
+	"change.revert": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
 		return withChangeLock(p.workspaceId, async () => ({
-			receipt: await revertChange(p, withFileMutationQueue),
+			receipt: await revertChange(p, userMutation(ctx.clientKey)),
 		}));
 	},
-	"change.undo": (p) => {
+	"change.undo": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
 		return withChangeLock(p.workspaceId, async () => ({
-			receipt: await undoChange(p, withFileMutationQueue),
+			receipt: await undoChange(p, userMutation(ctx.clientKey)),
 		}));
 	},
 	"terminal.reserve": (p) => {

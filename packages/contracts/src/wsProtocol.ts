@@ -12,8 +12,8 @@ import type {
 	EditorInfo,
 	ExistingWorktreeCandidate,
 	ExtensionCatalogEntry,
-	FileContent,
 	FileNode,
+	FileRead,
 	FileWriteResult,
 	GitCommit,
 	GitDiffScope,
@@ -703,7 +703,7 @@ export interface WsMethodMap {
 		result: OpenPrResult;
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
-	"fs.readFile": { params: { workspaceId: string; path: string }; result: FileContent };
+	"fs.readFile": { params: { workspaceId: string; path: string }; result: FileRead };
 	"fs.writeFile": {
 		params: {
 			workspaceId: string;

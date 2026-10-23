@@ -19,12 +19,14 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 
 - **Owns:** `revertChange(params)` and `undoChange(params)` — load awaits (scope resolution plus the
   bounded historical-byte read) followed by a **synchronous verify→write/claim pass**, like the
-  `reviews` module's snapshot passes. That pass runs inside the injected `FileMutationQueue`; the host
+  `reviews` module's snapshot passes. That pass runs inside the injected `FileMutation.queue`; the host
   passes pi's, so a revert never lands inside an agent `edit`'s read-modify-write, and trashing a claimed
-  file happens after the queue releases. Also owned: the per-workspace **receipt ring** and the
+  file happens after the queue releases. When the pass changed bytes, the optional `FileMutation.written`
+  gets the path and the bytes before and after (`null` for absent) inside the queue, before it releases;
+  its optional `hash` of the after bytes is for a caller that already has it (the host's save). Also owned: the per-workspace **receipt ring** and the
   whole-file semantics table below.
 - **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`,
-  `FileMutationQueue`, `forgetWorkspaceChanges`, `retainReceipts`.
+  `FileMutation`, `FileMutationQueue`, `forgetWorkspaceChanges`, `retainReceipts`.
 - **Allowed deps:** `contracts` (`ChangeReceipt`/`RevertTarget`/`LineSpan`/`GitDiffScope`), `git`
   (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
   `hashBytes`/`decodeText` for identity and textness, `replaceFile`/`createFile` for every byte write), `persistence` (workspace lookup), `trash`,
