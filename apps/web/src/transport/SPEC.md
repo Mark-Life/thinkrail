@@ -149,7 +149,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `runHostUpdate` is the typed empty host action
+  `supportsFileWrite`, `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
@@ -162,7 +162,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   drafts become `review.commentAdd` requests, and line/whole-file drafts are unaffected;
   `supportsTurnChanges` (`TURN_CHANGES_PROTOCOL_VERSION`, v80) is exported because `panels/useWorkspaceTurns`
   must not issue `workspace.turns` to a host that has no such method — without it the Changes scope menu
-  simply shows no agent turns. The transport also subscribes to `turn.changed` and folds each recorded run
+  simply shows no agent turns. `supportsFileWrite` (`FILE_WRITE_PROTOCOL_VERSION`, v91) is exported because
+  `editing` and `panels/FilePane` offer an editable file only to a host that serves `fs.writeFile`. The transport also subscribes to `turn.changed` and folds each recorded run
   into `store.turnsByWorkspace` through `applyTurnChanged`. The byte-only
   resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
   and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
