@@ -177,6 +177,18 @@ test("closing a bash window returns only the user writes that landed during it",
 	expect(provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" })).toBeNull();
 });
 
+test("the window cap drops closed windows first, so a long call keeps its user writes", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\n");
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "long", cwd: dir });
+	for (let index = 0; index < 300; index++) {
+		provenance.openBashWindow({ sessionId: "s2", toolCallId: `t${index}`, cwd: dir });
+		provenance.closeBashWindow({ sessionId: "s2", toolCallId: `t${index}` });
+	}
+	provenance.recordWrite({ path, author: USER, before: null, after: bytes("during\n") });
+	expect(provenance.closeBashWindow({ sessionId: "s1", toolCallId: "long" })).toHaveLength(1);
+});
+
 test("a path keeps its 32 newest writes", () => {
 	const provenance = store();
 	const path = put("a.ts", "x\n");
