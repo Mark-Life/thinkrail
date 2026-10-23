@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { createEditTool } from "@earendil-works/pi-coding-agent";
-import type { FileWriteResult, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import { dirname, join, resolve } from "node:path";
+import { createEditTool, createWriteTool } from "@earendil-works/pi-coding-agent";
+import type {
+	ChangeReceipt,
+	FileWriteResult,
+	WorkspaceFsChangedPayload,
+} from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
 import { setWatchPublisher, stopAllWatches } from "../watch";
 import { handleRequest } from "./handlers";
@@ -55,48 +59,161 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-test("a save waits behind a pending pi edit of the same file, then answers stale", async () => {
-	writeFileSync(join(root, "a.ts"), "const a = 1;\n");
-	let enterRead = (): void => {};
-	const reading = new Promise<void>((resolveRead) => {
-		enterRead = resolveRead;
+interface Gate {
+	entered: Promise<void>;
+	enter: () => void;
+	release: () => void;
+	wait: Promise<void>;
+}
+
+function gate(): Gate {
+	let enter = (): void => {};
+	let release = (): void => {};
+	const entered = new Promise<void>((resolveEnter) => {
+		enter = resolveEnter;
 	});
-	let releaseRead = (): void => {};
-	const gate = new Promise<void>((resolveGate) => {
-		releaseRead = resolveGate;
+	const wait = new Promise<void>((resolveWait) => {
+		release = resolveWait;
 	});
-	const edit = createEditTool(root, {
+	return { entered, enter, release, wait };
+}
+
+function gatedEdit(held: Gate) {
+	return createEditTool(root, {
 		operations: {
 			access: async () => {},
 			readFile: async (abs) => {
-				enterRead();
-				await gate;
+				held.enter();
+				await held.wait;
 				return readFileSync(abs);
 			},
 			writeFile: async (abs, content) => writeFileSync(abs, content),
 		},
 	});
-	const editing = edit.execute("call-1", {
+}
+
+async function expectHeld<T>(pending: Promise<T>, held: Gate): Promise<T> {
+	let settled = false;
+	const tracked = pending.finally(() => {
+		settled = true;
+	});
+	tracked.catch(() => {});
+	await Bun.sleep(50);
+	expect(settled).toBe(false);
+	held.release();
+	return tracked;
+}
+
+function git(...args: string[]): void {
+	const result = Bun.spawnSync(["git", "-C", root, ...args], {
+		stdout: "ignore",
+		stderr: "ignore",
+	});
+	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
+}
+
+function commitRepo(path: string, content: string): void {
+	git("init", "-b", "main");
+	git("config", "user.email", "t@thinkrail.test");
+	git("config", "user.name", "test");
+	git("config", "commit.gpgsign", "false");
+	writeFileSync(join(root, path), content);
+	git("add", "-A");
+	git("commit", "-m", "init");
+}
+
+function revert(path: string, originalHash: string, modifiedHash: string) {
+	return handleRequest(
+		"change.revert",
+		{
+			workspaceId: "w1",
+			path,
+			scope: { kind: "uncommitted" },
+			target: { kind: "file" },
+			expect: { originalHash, modifiedHash },
+		},
+		CTX,
+	) as Promise<{ receipt: ChangeReceipt }>;
+}
+
+test("a save waits behind a pending pi edit of the same file, then answers stale", async () => {
+	writeFileSync(join(root, "a.ts"), "const a = 1;\n");
+	const held = gate();
+	const editing = gatedEdit(held).execute("call-1", {
 		path: "a.ts",
 		edits: [{ oldText: "const a = 1;", newText: "const a = 2;" }],
 	});
-	await reading;
+	await held.entered;
 
-	let settled = false;
-	const saving = save("a.ts", "const a = 3;\n", hash("const a = 1;\n")).then((result) => {
-		settled = true;
-		return result;
-	});
-	await Bun.sleep(50);
-	expect(settled).toBe(false);
-
-	releaseRead();
+	const saving = expectHeld(save("a.ts", "const a = 3;\n", hash("const a = 1;\n")), held);
 	await editing;
 	expect(await saving).toMatchObject({
 		status: "stale",
 		current: { content: "const a = 2;\n" },
 	});
 	expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("const a = 2;\n");
+});
+
+test("a save waits behind a pending pi write of the same file, then answers stale", async () => {
+	writeFileSync(join(root, "a.ts"), "base\n");
+	const held = gate();
+	const write = createWriteTool(root, {
+		operations: {
+			mkdir: async () => {
+				held.enter();
+				await held.wait;
+			},
+			writeFile: async (abs, content) => writeFileSync(abs, content),
+		},
+	});
+	const writing = write.execute("call-1", { path: "a.ts", content: "from pi\n" });
+	await held.entered;
+
+	const saving = expectHeld(save("a.ts", "mine\n", hash("base\n")), held);
+	await writing;
+	expect(await saving).toMatchObject({ status: "stale", current: { content: "from pi\n" } });
+	expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("from pi\n");
+});
+
+test("change.revert waits behind a pending pi edit of the same file, then is stale", async () => {
+	commitRepo("a.ts", "one\n");
+	writeFileSync(join(root, "a.ts"), "two\n");
+	const held = gate();
+	const editing = gatedEdit(held).execute("call-1", {
+		path: "a.ts",
+		edits: [{ oldText: "two", newText: "three" }],
+	});
+	await held.entered;
+
+	const reverting = expectHeld(revert("a.ts", hash("one\n"), hash("two\n")), held);
+	await editing;
+	await expect(reverting).rejects.toMatchObject({ code: "STALE_VIEW" });
+	expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("three\n");
+});
+
+test("change.undo waits behind a pending pi edit of the same file, then is stale", async () => {
+	commitRepo("a.ts", "one\n");
+	writeFileSync(join(root, "a.ts"), "two\n");
+	const { receipt } = await revert("a.ts", hash("one\n"), hash("two\n"));
+	expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("one\n");
+	const held = gate();
+	const editing = gatedEdit(held).execute("call-1", {
+		path: "a.ts",
+		edits: [{ oldText: "one", newText: "pi" }],
+	});
+	await held.entered;
+
+	const undoing = expectHeld(
+		handleRequest(
+			"change.undo",
+			{ workspaceId: "w1", receiptId: receipt.id, expect: { modifiedHash: hash("one\n") } },
+			CTX,
+		),
+		held,
+	);
+	await editing;
+	await expect(undoing).rejects.toMatchObject({ code: "STALE_VIEW" });
+	expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("pi\n");
 });
 
 test("two concurrent saves from one base: the first writes, the second is stale", async () => {
@@ -147,8 +264,20 @@ test("a save's fsChanged frame names the target and never the temp file", async 
 	).toEqual([]);
 });
 
-test("the host and pi-delegation load one pi copy, so they share one mutation queue", () => {
-	const fromServer = Bun.resolveSync(PI, join(REPO_ROOT, "packages/server"));
-	const fromDelegation = Bun.resolveSync(PI, join(REPO_ROOT, "packages/pi-delegation"));
-	expect(realpathSync(fromDelegation)).toBe(realpathSync(fromServer));
+test("every package that depends on pi loads one pi copy, so they share one mutation queue", () => {
+	const dependents = [
+		...new Bun.Glob("{packages,thinkrail-extensions}/*/package.json").scanSync(REPO_ROOT),
+	]
+		.map((manifest) => join(REPO_ROOT, manifest))
+		.filter((manifest) => {
+			const pkg = JSON.parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
+			return ["dependencies", "devDependencies", "peerDependencies"].some(
+				(field) => PI in ((pkg[field] ?? {}) as Record<string, string>),
+			);
+		})
+		.map((manifest) => dirname(manifest));
+	expect(dependents).toContain(join(REPO_ROOT, "packages/server"));
+	expect(dependents.length).toBeGreaterThan(2);
+	const copies = new Set(dependents.map((dir) => realpathSync(Bun.resolveSync(PI, dir))));
+	expect([...copies]).toHaveLength(1);
 });
