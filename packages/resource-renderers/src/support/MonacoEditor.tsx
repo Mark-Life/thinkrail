@@ -39,6 +39,8 @@ export function warm(host: ResourceHost, resource: ResourceDescriptor): void {
 	setTimeout(() => warmLanguage(languageForPath(resource.path)), 0);
 }
 
+const NO_REVIEW_ZONES: MonacoReviewZoneState = { threads: [], composer: null };
+
 export default function MonacoEditor({
 	resource,
 	content,
@@ -82,13 +84,22 @@ export default function MonacoEditor({
 		options,
 		commentLabel,
 		viewState,
-		review,
 		onViewState,
 	});
-	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>({
-		threads: [],
-		composer: null,
-	});
+	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>(NO_REVIEW_ZONES);
+	const hasReview = review !== undefined;
+
+	const detachReview = () => {
+		const codeEditor = editorRef.current;
+		const threads = threadsRef.current;
+		if (!codeEditor || !threads) return;
+		commentingRef.current?.dispose();
+		threads.dispose();
+		threadsRef.current = null;
+		commentingRef.current = null;
+		decorationsRef.current = codeEditor.deltaDecorations(decorationsRef.current, []);
+		setReviewZones(NO_REVIEW_ZONES);
+	};
 
 	useLayoutEffect(() => {
 		latestRef.current = {
@@ -99,7 +110,6 @@ export default function MonacoEditor({
 			options,
 			commentLabel,
 			viewState,
-			review,
 			onViewState,
 		};
 	});
@@ -122,25 +132,28 @@ export default function MonacoEditor({
 		};
 		const menuIcons = decorateEditorContextMenus(codeEditor);
 		if (isEditorViewState(mount.viewState)) codeEditor.restoreViewState(mount.viewState);
-		const threads = mount.review ? attachReviewThreads(codeEditor, setReviewZones) : null;
-		const commenting = threads
-			? attachReviewCommenting(codeEditor, threads, mount.commentLabel)
-			: null;
-		threadsRef.current = threads;
-		commentingRef.current = commenting;
 		return () => {
 			const saved = codeEditor.saveViewState();
 			if (saved) latestRef.current.onViewState?.(saved);
 			menuIcons.dispose();
-			commenting?.dispose();
-			threads?.dispose();
-			threadsRef.current = null;
-			commentingRef.current = null;
+			detachReview();
 			editorRef.current = null;
-			decorationsRef.current = [];
 			disposeFileEditor(codeEditor);
 		};
 	}, []);
+
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		if (!codeEditor || !hasReview) return;
+		const threads = attachReviewThreads(codeEditor, setReviewZones);
+		threadsRef.current = threads;
+		commentingRef.current = attachReviewCommenting(
+			codeEditor,
+			threads,
+			latestRef.current.commentLabel,
+		);
+		return detachReview;
+	}, [hasReview]);
 
 	useLayoutEffect(() => {
 		const codeEditor = editorRef.current;

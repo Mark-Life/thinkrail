@@ -2070,7 +2070,9 @@ own section. The kebab menu (`plan-menu`, a
   rich CSV/JSON views) show the buffer text through `useFileBufferText`, not the disk text. The pane
   routes each live-refresh read to the buffer with a read token, and a failed read to its deleted-on-disk
   probe; the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
-  the focused file, and its first edit keeps a preview tab. **`FileEditBanner`** shows one strip per
+  the focused file, and its first edit keeps a preview tab. While the buffer is dirty the pane passes no
+  `review`, so review threads and commenting hide until a save or Reload: the host anchors a comment
+  against disk lines, which no longer match the buffer. **`FileEditBanner`** shows one strip per
   issue: a conflict (**Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
   disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text, not connected,
   or a failed save. Its live region stays mounted while
