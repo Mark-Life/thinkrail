@@ -143,7 +143,7 @@ test("in a real pi session the edit hint reaches the thrown edit error and a wri
 		"ThinkRail: a.ts was changed by the user 0 s ago (line 1) since you last read it.",
 	);
 	expect(written).toMatchObject({ toolName: "write", isError: true });
-	expect(written?.text).toStartWith("Blocked: a.ts changed since this agent read it (by the user");
+	expect(written?.text).toStartWith("Blocked: a.ts changed since you read it (by the user");
 	expect(readFileSync(path, "utf8")).toBe("const ttl = 3600;\n");
 });
 
@@ -208,4 +208,53 @@ test("in a real pi session a bash call aborted before it runs leaves no open win
 		kind: "external",
 		inferred: true,
 	});
+});
+
+test("in a real pi session a save made while a checked write waits on a sibling hook is named in the write result", async () => {
+	const store = createProvenance();
+	const path = join(root, "a.ts");
+	writeFileSync(path, "one\n");
+	const slow: ExtensionFactory = (pi) => {
+		pi.registerTool({
+			name: "slow_tool",
+			label: "slow",
+			description: "slow",
+			parameters: Type.Object({}),
+			execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
+		});
+		pi.on("tool_call", async (event) => {
+			if (event.toolName !== "slow_tool") return undefined;
+			const before = readFileSync(path);
+			writeFileSync(path, "user work\n");
+			store.recordWrite({
+				path,
+				author: { kind: "user", clientKey: "c" },
+				before,
+				after: readFileSync(path),
+			});
+			return undefined;
+		});
+	};
+	const { faux, session: agent, ends } = await session({ store, extensions: [slow] });
+	faux.setResponses([
+		call("read", { path: "a.ts" }, "r1"),
+		fauxAssistantMessage(
+			[
+				fauxToolCall("write", { path: "a.ts", content: "agent\n" }, { id: "w1" }),
+				fauxToolCall("slow_tool", {}, { id: "s1" }),
+			],
+			{ stopReason: "toolUse" },
+		),
+		fauxAssistantMessage("done"),
+	]);
+	await agent.prompt("go");
+	agent.dispose();
+
+	const written = ends.find((end) => end.toolName === "write");
+	expect(written?.isError).toBe(false);
+	expect(written?.text).toContain(
+		"ThinkRail: a.ts was changed by the user 0 s ago (line 1) after this write was checked, so this write replaced that change.",
+	);
+	expect(written?.text).toContain("-user work\n+agent");
+	expect(readFileSync(path, "utf8")).toBe("agent\n");
 });

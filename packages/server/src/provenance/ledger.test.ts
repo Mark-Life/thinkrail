@@ -268,9 +268,9 @@ test("another session's write that lands between a tool call and its record cont
 		after: bytes("two\n"),
 		toolCallId: "e1",
 	});
-	expect(provenance.lastWrite({ path, hash: hashBytes(bytes("two\n")), clientKey: "c" })).toBe(
-		undefined,
-	);
+	expect(
+		provenance.lastWrite({ path, hash: hashBytes(bytes("two\n")), clientKey: "c" })?.author,
+	).toEqual(agent("s1"));
 	provenance.recordWrite({
 		path,
 		author: agent("s2"),
@@ -295,4 +295,119 @@ test("another session's write that lands between a tool call and its record cont
 	call("s1", "r2", false);
 	provenance.recordRead({ sessionId: "s1", toolCallId: "r2", path, bytes: snapshot(path).bytes });
 	expect(provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) })).toBeNull();
+});
+
+test("a write made while another session's claim is open stays recorded as that agent's", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\n");
+	const s = { ...AGENT, sessionId: "s" };
+	for (const sessionId of ["s", "t"]) {
+		provenance.recordRead({ sessionId, path, bytes: snapshot(path).bytes });
+	}
+	provenance.openClaim({ sessionId: "t", toolCallId: "e", path, mutates: true, bytes: null });
+	provenance.openClaim({ sessionId: "s", toolCallId: "w", path, mutates: true, bytes: null });
+	put("a.ts", "s wrote\n");
+	provenance.recordWrite({
+		path,
+		author: s,
+		before: null,
+		after: bytes("s wrote\n"),
+		toolCallId: "w",
+	});
+	provenance.endTool({ sessionId: "s", toolCallId: "w" });
+	const stale = provenance.staleRead({ sessionId: "t", path, current: snapshot(path) });
+	expect(stale).toMatchObject({ writers: [{ author: s }], untracked: false });
+	provenance.endTool({ sessionId: "t", toolCallId: "e" });
+	const hash = hashBytes(bytes("s wrote\n"));
+	expect(provenance.lastWrite({ path, hash, clientKey: "c" })?.author).toEqual(s);
+});
+
+test("a change inside overlapping bash windows is self only when no other session's window covers it", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\n");
+	clock = Date.now();
+	provenance.recordRead({ sessionId: "s", path, bytes: snapshot(path).bytes });
+	provenance.openBashWindow({ sessionId: "t", toolCallId: "bt", cwd: dir });
+	provenance.openBashWindow({ sessionId: "s", toolCallId: "bs", cwd: dir });
+	put("a.ts", "two\n");
+	expect(provenance.staleRead({ sessionId: "s", path, current: snapshot(path) })?.script).toEqual({
+		self: false,
+	});
+	provenance.closeBashWindow({ sessionId: "t", toolCallId: "bt" });
+	clock += 60_000;
+	put("a.ts", "three\n");
+	utimesSync(path, new Date(clock), new Date(clock));
+	expect(provenance.staleRead({ sessionId: "s", path, current: snapshot(path) })?.script).toEqual({
+		self: true,
+	});
+});
+
+test("a long bash call reports every file the user saved, however many saves followed", () => {
+	const provenance = store();
+	const early = put("early.ts", "one\n");
+	const typing = put("typing.ts", "one\n");
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
+	provenance.recordWrite({ path: early, author: USER, before: null, after: bytes("early\n") });
+	for (let index = 0; index < 600; index++) {
+		clock += 1000;
+		provenance.recordWrite({
+			path: typing,
+			author: USER,
+			before: null,
+			after: bytes(`${index}\n`),
+		});
+	}
+	const closed = provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" });
+	expect(closed?.map((entry) => entry.path)).toEqual([early, typing]);
+	expect(closed?.at(-1)?.hash).toBe(hashBytes(bytes("599\n")));
+});
+
+test("an older version restored by a script is not credited to its first author", () => {
+	const provenance = store();
+	const path = put("a.ts", "A\n");
+	clock = Date.now();
+	provenance.recordWrite({ path, author: USER, before: null, after: bytes("A\n") });
+	clock += 60_000;
+	provenance.recordWrite({ path, author: AGENT, before: null, after: bytes("B\n") });
+	clock += 60_000;
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
+	put("a.ts", "A\n");
+	utimesSync(path, new Date(clock + 1000), new Date(clock + 1000));
+	expect(provenance.lastWrite({ path, hash: hashBytes(bytes("A\n")), clientKey: "c" })).toEqual({
+		author: { kind: "agent", sessionId: "s1", via: "script", inferred: true },
+		at: clock + 1000,
+	});
+});
+
+test("an agent write over a save made after its claim returns what it replaced", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	provenance.openClaim({ sessionId: "s1", toolCallId: "w1", path, mutates: true, bytes: null });
+	provenance.recordWrite({ path, author: USER, before: bytes("one\n"), after: bytes("user\n") });
+	const overwrite = provenance.recordWrite({
+		path,
+		author: { ...AGENT, toolName: "write" },
+		before: null,
+		after: bytes("agent\n"),
+		toolCallId: "w1",
+	});
+	expect(overwrite).toMatchObject({ writers: [{ author: USER }], text: "user\n" });
+
+	provenance.openClaim({ sessionId: "s1", toolCallId: "w2", path, mutates: true, bytes: null });
+	const write = { path, author: AGENT, before: null, toolCallId: "w2" };
+	provenance.recordWrite({ path, author: USER, before: null, after: bytes("after\n") });
+	expect(provenance.recordWrite({ ...write, after: bytes("after\n") })).toBeUndefined();
+});
+
+test("a read that found the file absent is a baseline, so only a later creation is stale", () => {
+	const provenance = store();
+	const path = join(dir, "gone.ts");
+	provenance.recordRead({ sessionId: "s1", path, bytes: null });
+	expect(provenance.staleRead({ sessionId: "s1", path, current: null })).toBeNull();
+	put("gone.ts", "back\n");
+	expect(provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) })).toMatchObject({
+		read: true,
+		untracked: true,
+	});
 });

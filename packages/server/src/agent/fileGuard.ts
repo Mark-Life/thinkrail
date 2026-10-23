@@ -16,9 +16,9 @@ import {
 	bashNote,
 	editorText,
 	fileProvenance,
+	overwriteNote,
 	type Provenance,
 	readSnapshot,
-	type StaleRead,
 	staleEditHint,
 	staleWriteBlock,
 } from "../provenance";
@@ -26,7 +26,7 @@ import {
 const log = logger("agent");
 
 const STALE_EDIT_ERROR = /^Could not find (?:the exact text|edits\[\d+\]) in /;
-const UNICODE_SPACES = /[  -   　]/g;
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 const WINDOWS_SHELL_PATH = /^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i;
 const SHELL_TOOLS = new Set(["bash", "powershell"]);
 const FILE_TOOLS = new Set(["read", "edit", "write"]);
@@ -106,11 +106,6 @@ function withNote(event: ToolResultEvent, text: string): ToolResultEventResult {
 	};
 }
 
-function blocksWrite(stale: StaleRead): boolean {
-	if (!stale.read) return false;
-	return stale.writers.length > 0 || (stale.untracked && stale.script?.self !== true);
-}
-
 async function safely<T>(label: string, run: () => Promise<T> | T): Promise<T | undefined> {
 	try {
 		return await run();
@@ -129,15 +124,17 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 			abs: string;
 		}) {
 			const current = readSnapshot(input.abs);
-			const stale = current
-				? store.staleRead({ sessionId: input.sessionId, path: input.abs, current })
-				: null;
-			if (current && stale && blocksWrite(stale)) {
+			const stale =
+				current || !existsSync(input.abs)
+					? store.staleRead({ sessionId: input.sessionId, path: input.abs, current })
+					: null;
+			if (stale?.read) {
 				const reason = staleWriteBlock({
 					displayPath: input.path,
 					stale,
-					currentText: editorText(current.bytes),
+					currentText: current ? editorText(current.bytes) : null,
 					now: store.now(),
+					deleted: current === null,
 				});
 				return { block: true, reason } satisfies ToolCallEventResult;
 			}
@@ -161,10 +158,12 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 		}) {
 			return withFileMutationQueue(input.abs, async () => {
 				const after = readSnapshot(input.abs);
-				if (!after) return;
+				if (!after) return undefined;
 				const content = input.failed?.content;
-				if (content !== undefined && !Buffer.from(content, "utf8").equals(after.bytes)) return;
-				store.recordWrite({
+				if (content !== undefined && !Buffer.from(content, "utf8").equals(after.bytes)) {
+					return undefined;
+				}
+				const overwrite = store.recordWrite({
 					path: input.abs,
 					author: {
 						kind: "agent",
@@ -178,11 +177,16 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 					...(input.failed ? { changedOnly: true } : {}),
 					...(input.line === undefined ? {} : { line: input.line }),
 				});
+				return overwrite && { overwrite, currentText: editorText(after.bytes) };
 			});
 		}
 
-		function recordRead(sessionId: string, toolCallId: string, abs: string) {
+		function recordRead(sessionId: string, toolCallId: string, abs: string, failed: boolean) {
 			return withFileMutationQueue(abs, async () => {
+				if (failed) {
+					if (!existsSync(abs)) store.recordRead({ sessionId, toolCallId, path: abs, bytes: null });
+					return;
+				}
 				const current = readSnapshot(abs);
 				if (current) store.recordRead({ sessionId, toolCallId, path: abs, bytes: current.bytes });
 			});
@@ -242,14 +246,13 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 			if (!path) return undefined;
 			if (event.toolName === "read") {
 				const abs = agentReadPath(path, ctx.cwd);
-				if (!event.isError)
-					await safely("read record", () => recordRead(sessionId, toolCallId, abs));
+				await safely("read record", () => recordRead(sessionId, toolCallId, abs, event.isError));
 				return undefined;
 			}
 			const abs = agentPath(path, ctx.cwd);
 			if (event.toolName === "write") {
 				const content = typeof event.input.content === "string" ? event.input.content : "";
-				await safely("write record", () =>
+				const replaced = await safely("write record", () =>
 					recordAgentWrite({
 						sessionId,
 						toolCallId,
@@ -258,7 +261,8 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 						...(event.isError ? { failed: { content } } : {}),
 					}),
 				);
-				return undefined;
+				if (!replaced) return undefined;
+				return withNote(event, overwriteNote({ displayPath: path, ...replaced, now: store.now() }));
 			}
 			if (!isEditToolResult(event)) return undefined;
 			const stale = event.isError && isStaleEditError(firstText(event.content));

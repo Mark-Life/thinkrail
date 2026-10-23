@@ -1,14 +1,6 @@
 import { expect, test } from "bun:test";
 import type { StaleRead, WriteEntry } from "./ledger";
-import {
-	bashNote,
-	DIFF_LINE_MAX_CHARS,
-	DIFF_MAX_LINES,
-	formatAge,
-	renderDiff,
-	staleEditHint,
-	staleWriteBlock,
-} from "./notes";
+import { bashNote, overwriteNote, staleEditHint, staleWriteBlock } from "./notes";
 import { firstChangedLine } from "./snapshot";
 
 const NOW = 100_000;
@@ -34,11 +26,30 @@ function stale(overrides: Partial<StaleRead>): StaleRead {
 	};
 }
 
-test("formatAge rounds to seconds, minutes and hours", () => {
-	expect(formatAge(4200)).toBe("4 s ago");
-	expect(formatAge(-50)).toBe("0 s ago");
-	expect(formatAge(3 * 60_000)).toBe("3 min ago");
-	expect(formatAge(2 * 3_600_000)).toBe("2 h ago");
+function diffLines(before: string, after: string): string[] {
+	const text = staleEditHint({
+		displayPath: "a.ts",
+		stale: stale({ writers: [entry({})], baselineText: before }),
+		currentText: after,
+		now: NOW,
+	});
+	return text.split("\n").slice(3, -1);
+}
+
+function age(ms: number): string {
+	const note = bashNote({
+		userWrites: [entry({ at: NOW - ms })],
+		displayPath: () => "a.ts",
+		now: NOW,
+	});
+	return note?.match(/a\.ts (.+) during/)?.[1] ?? "";
+}
+
+test("ages round to seconds, minutes and hours", () => {
+	expect(age(4200)).toBe("4 s ago");
+	expect(age(-50)).toBe("0 s ago");
+	expect(age(3 * 60_000)).toBe("3 min ago");
+	expect(age(2 * 3_600_000)).toBe("2 h ago");
 });
 
 test("firstChangedLine is 1-based and points at the first differing line", () => {
@@ -104,32 +115,77 @@ test("a hint without a baseline has no since clause and no diff", () => {
 	);
 });
 
-test("the write block names the writers and the agent's own shell", () => {
-	expect(
+test("the write block calls the agent you and names the writers and shells it may be", () => {
+	const block = (overrides: Partial<StaleRead>, deleted = false) =>
 		staleWriteBlock({
 			displayPath: "src/auth.ts",
-			stale: stale({ writers: [entry({ line: 4 })] }),
+			stale: stale(overrides),
 			currentText: null,
 			now: NOW,
-		}),
-	).toBe(
-		"Blocked: src/auth.ts changed since this agent read it (by the user 4 s ago). Re-read before writing.",
+			deleted,
+		});
+	expect(block({ writers: [entry({ line: 4 })] })).toBe(
+		"Blocked: src/auth.ts changed since you read it (by the user 4 s ago). Re-read before writing.",
+	);
+	expect(block({ untracked: true, script: { self: false } })).toContain(
+		"(by another agent's shell command or a program outside ThinkRail)",
+	);
+	expect(block({ untracked: true, script: { self: true } })).toContain(
+		"(by your own shell command or a program outside ThinkRail)",
+	);
+	expect(block({ writers: [entry({ hash: null })] }, true)).toBe(
+		"Blocked: src/auth.ts was deleted since you read it (by the user 4 s ago). Read it to confirm, then write again.",
+	);
+});
+
+test("the overwrite note names who was replaced and diffs their version against the file now", () => {
+	const note = overwriteNote({
+		displayPath: "a.ts",
+		overwrite: { writers: [entry({ line: 2 })], text: "a\nuser\n" },
+		currentText: "a\nagent\n",
+		now: NOW,
+	});
+	expect(note).toBe(
+		[
+			"ThinkRail: a.ts was changed by the user 4 s ago (line 2) after this write was checked, so this write replaced that change. Re-read the file and restore it if it should stay.",
+			"What this write replaced (- before this write, + the file now):",
+			"```diff",
+			"@@ -1,2 +1,2 @@",
+			" a",
+			"-user",
+			"+agent",
+			"```",
+		].join("\n"),
 	);
 	expect(
-		staleWriteBlock({
+		overwriteNote({
 			displayPath: "a.ts",
-			stale: stale({ untracked: true, script: { self: false } }),
-			currentText: null,
+			overwrite: { writers: [entry({})] },
+			currentText: "x",
 			now: NOW,
 		}),
-	).toContain("(by another agent's shell command)");
+	).toEndWith("restore it if it should stay.");
+});
+
+test("a rewrite too large to diff says so instead of dropping the diff", () => {
+	const before = Array.from({ length: 6000 }, (_, index) => `a${index}\n`).join("");
+	const after = Array.from({ length: 6000 }, (_, index) => `b${index}\n`).join("");
+	const text = staleEditHint({
+		displayPath: "a.ts",
+		stale: stale({ writers: [entry({})], baselineText: before }),
+		currentText: after,
+		now: NOW,
+	});
+	expect(text).toEndWith(
+		"Re-read the file before editing.\nThe changes are too large to show as a diff.",
+	);
 });
 
 test("the diff is capped at 40 lines with a count of the rest", () => {
 	const before = Array.from({ length: 60 }, (_, index) => `line ${index}\n`).join("");
 	const after = Array.from({ length: 60 }, (_, index) => `LINE ${index}\n`).join("");
-	const lines = renderDiff(before, after);
-	expect(lines).toHaveLength(DIFF_MAX_LINES + 1);
+	const lines = diffLines(before, after);
+	expect(lines).toHaveLength(41);
 	expect(lines.at(-1)).toBe("… 81 more diff lines not shown.");
 });
 
@@ -154,10 +210,10 @@ test("the bash note lists each file the user saved during the call once", () => 
 
 test("a minified line is clipped and the whole diff stays under its character budget", () => {
 	const line = "x".repeat(400_000);
-	const lines = renderDiff(`${line}\n`, `${line}y\n`);
-	expect(lines.every((diffLine) => diffLine.length < DIFF_LINE_MAX_CHARS + 40)).toBe(true);
+	const lines = diffLines(`${line}\n`, `${line}y\n`);
+	expect(lines.every((diffLine) => diffLine.length < 240 + 40)).toBe(true);
 	expect(lines[1]).toEndWith("… (399761 more chars)");
-	const many = renderDiff(
+	const many = diffLines(
 		Array.from({ length: 30 }, (_, index) => `${"a".repeat(300)}${index}\n`).join(""),
 		Array.from({ length: 30 }, (_, index) => `${"b".repeat(300)}${index}\n`).join(""),
 	);
