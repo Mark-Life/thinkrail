@@ -68,7 +68,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions,
-  plus `FILE_WRITE_MAX_BYTES` and **`toEditorText(raw)`**, the one disk-to-editor text normalizer. It
+  plus `FILE_WRITE_MAX_BYTES`, `LFS_POINTER_MIME` (the host never writes an LFS pointer, and a client
+  never offers editing one) and **`toEditorText(raw)`**, the one disk-to-editor text normalizer. It
   defines the form an `fs.writeFile` `content` takes: a client derives editor text from disk text with it).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
