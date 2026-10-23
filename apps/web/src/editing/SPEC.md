@@ -36,13 +36,14 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 - **Status is derived, by precedence:** `stale` (conflict) › `deleted` (`base.hash` null) › `readonly`
   › `error` › `saving` › `dirty` › `clean`. Dirty means `text !== base.text` and is reported apart from
   the status, so a deleted or stale buffer can still be clean or dirty. Only the summary
-  (`{status, dirty, issue}`) reaches the store (`fileBuffersByWorkspace`), never the text.
+  (`{status, dirty, error}`) reaches the store (`fileBuffersByWorkspace`), never the text.
 - **Disk text is adopted only through `toEditorText`,** and only when `meta.text` is true and the mime
   is not an LFS pointer. The client sends LF text and never handles a BOM; the host restores the form.
-- **Lifetime.** `useFileBuffer` gets or creates the buffer during render (an idempotent cache insert)
-  and retains it while the editable view is mounted. On the last release a clean buffer with no write in
-  flight and no issue is dropped; anything else lives on so the tab keeps its dot and its text. When the
-  file tab leaves the store, the buffer is dropped.
+- **Lifetime.** `useFileBuffer` reads the registry through `useSyncExternalStore` and creates the buffer
+  in a layout effect once the file is editable, so the editor mounts read-only for one synchronous
+  commit and binds before paint; nothing is created during render. The buffer then lives as long as its
+  file tab: it survives tab switches and unmounts, so a background tab keeps its dot and its text. When the tab leaves the store the buffer is dropped (its draft stays), and
+  **Don't save** drops it with its draft.
 
 ## Disk to buffer
 
@@ -96,3 +97,5 @@ never asks the page.
 - **One write in flight.** A replayed save after a host restart is safe: the host answers `written`
   with no write when the bytes already match.
 - **The store slice is status only.** Views read text from the buffer (`useFileBufferText`).
+- **Cost.** `FilePane` is eager, so this module and jsdiff's `diffArrays` ship in the entry chunk:
+  1,602 to 1,619 kB (503 to 509 kB gzip).
