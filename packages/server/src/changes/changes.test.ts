@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
 	chmodSync,
 	existsSync,
+	linkSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -16,10 +17,27 @@ import { basename, dirname, join } from "node:path";
 import type { ChangeReceipt, GitDiffScope, LineSpan, RevertTarget } from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
 import { setTrashImplementationForTests } from "../trash";
-import { forgetWorkspaceChanges, retainReceipts, revertChange, undoChange } from "./changes";
+import {
+	type FileMutationQueue,
+	forgetWorkspaceChanges,
+	type RevertChangeParams,
+	retainReceipts,
+	revertChange as revertQueued,
+	type UndoChangeParams,
+	undoChange as undoQueued,
+} from "./changes";
 import { splitLines } from "./textSplice";
 
 const BYTES = new TextEncoder();
+const UNQUEUED: FileMutationQueue = (_abs, run) => run();
+
+function revertChange(params: RevertChangeParams): Promise<ChangeReceipt> {
+	return revertQueued(params, UNQUEUED);
+}
+
+function undoChange(params: UndoChangeParams): Promise<ChangeReceipt> {
+	return undoQueued(params, UNQUEUED);
+}
 const UNCOMMITTED: GitDiffScope = { kind: "uncommitted" };
 
 let dataDir: string;
@@ -304,6 +322,36 @@ test("line splitting matches jsdiff for CR-only and mixed CRLF/LF content", asyn
 	expect(text("mixed.txt")).toBe("one\r\ntwo\nthree\r\n");
 });
 
+test("a revert verifies and writes only once the file's mutation queue releases it", async () => {
+	write("a.ts", "rewritten\n");
+	const keys: string[] = [];
+	let release = (): void => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const held: FileMutationQueue = async (abs, run) => {
+		keys.push(abs);
+		await gate;
+		return run();
+	};
+	const pending = revertQueued(
+		{
+			workspaceId,
+			path: "a.ts",
+			scope: UNCOMMITTED,
+			target: { kind: "file" },
+			expect: { originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("rewritten\n") },
+		},
+		held,
+	);
+	while (keys.length === 0) await Bun.sleep(5);
+	expect(keys).toEqual([join(repo, "a.ts")]);
+	write("a.ts", "agent edit\n");
+	release();
+	await expect(pending).rejects.toMatchObject({ code: "STALE_VIEW" });
+	expect(text("a.ts")).toBe("agent edit\n");
+});
+
 test("a whole-file revert rewrites a modified file and restores a deleted one", async () => {
 	write("a.ts", "rewritten\n");
 	chmodSync(join(repo, "a.ts"), 0o755);
@@ -355,6 +403,27 @@ test("a mode-only change is unsupported", async () => {
 	expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o755);
 });
 
+test.skipIf(process.getuid?.() === 0)(
+	"a revert of a read-only file throws its errno and writes nothing",
+	async () => {
+		write("a.ts", "MOD\n");
+		chmodSync(join(repo, "a.ts"), 0o444);
+		try {
+			await expect(
+				revert(
+					"a.ts",
+					{ kind: "file" },
+					{ originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("MOD\n") },
+				),
+			).rejects.toMatchObject({ code: expect.stringMatching(/^(EACCES|EPERM)$/) });
+			expect(text("a.ts")).toBe("MOD\n");
+			expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o444);
+		} finally {
+			chmodSync(join(repo, "a.ts"), 0o644);
+		}
+	},
+);
+
 test("a deleted executable is restored with its Git mode", async () => {
 	write("run.sh", "#!/bin/sh\necho ready\n");
 	chmodSync(join(repo, "run.sh"), 0o755);
@@ -369,6 +438,26 @@ test("a deleted executable is restored with its Git mode", async () => {
 	expect(statSync(join(repo, "run.sh")).mode & 0o777).toBe(0o755);
 	expect(receipt.after.mode).toBe(0o755);
 });
+
+test.skipIf(process.platform === "win32")(
+	"a whole-file revert of a hard-linked file writes in place, like a save",
+	async () => {
+		write("a.ts", "MOD\n");
+		chmodSync(join(repo, "a.ts"), 0o755);
+		linkSync(join(repo, "a.ts"), join(repo, "b.ts"));
+		const before = statSync(join(repo, "a.ts"));
+		await revert(
+			"a.ts",
+			{ kind: "file" },
+			{ originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("MOD\n") },
+		);
+		const after = statSync(join(repo, "a.ts"));
+		expect(after.ino).toBe(before.ino);
+		expect(after.nlink).toBe(2);
+		expect(after.mode & 0o777).toBe(0o644);
+		expect(text("b.ts")).toBe("one\ntwo\nthree\n");
+	},
+);
 
 test("symbolic links on either side are unsupported", async () => {
 	write("target.txt", "target\n");

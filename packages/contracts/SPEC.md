@@ -34,7 +34,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   being described), **`RANGE_INVALID`** (a span lies outside the side it names, or a range revert was
   asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
-  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
+  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)),
+  plus the two `fs.writeFile` refusals: **`NOT_EDITABLE`** (not a regular UTF-8 text file: byte-only,
+  LFS pointer, directory or special file; or a create through a dangling symlink, or below a file or
+  dangling symlink that stands where a parent folder should be) and **`FILE_TOO_LARGE`**, so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
@@ -64,7 +67,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions,
+  plus `FILE_WRITE_MAX_BYTES` and **`toEditorText(raw)`**, the one disk-to-editor text normalizer. It
+  defines the form an `fs.writeFile` `content` takes: a client derives editor text from disk text with it).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
@@ -555,7 +560,16 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   includeDiffStats? }`**, where omitted/true preserves the existing full rows with computed aggregates and
   `false` returns the same authoritative membership/order without the synchronous per-workspace diff-stat
   fan-out used nowhere by navigation restoration / `fs.*` (**`fs.readFile`** answers
-  `{ content, meta: ResourceMeta }`) / `git.*` / **`spec.graph`**
+  `FileContent` = `{ content, meta: ResourceMeta }`; **`fs.writeFile`** (`FILE_WRITE_PROTOCOL_VERSION` =
+  v91): `{workspaceId, path, content, expect:{hash}}` → `written{meta} | stale{current} | missing |
+  readonly`. `content` is editor text (`toEditorText`: one leading BOM dropped, every `\r\n`/`\r`
+  folded to `\n`), and the host restores the disk file's form. The host folds line breaks again but
+  never strips a leading U+FEFF: in editor text it is a character, because the disk BOM is already gone,
+  so the host writes a BOM before it. `expect.hash` is the hash the client last
+  adopted, or `null` for create-only. Stale, missing and read-only are expected outcomes, so they are
+  results. `FILE_WRITE_MAX_BYTES` (4 MiB of UTF-8) is checked by the host. The host's frame limit is sized
+  for the worst JSON escaping of that cap (6×), because an oversized frame closes the socket and an
+  unresolved request replays on every reconnect) / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha

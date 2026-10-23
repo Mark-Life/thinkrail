@@ -321,10 +321,19 @@ dependency. This keeps test process drivers outside both launchers and the serve
     its own geometry and reports back as placed or unplaced — the host's anchors are the only authority.
     `@pierre/diffs` renders every source diff and every phone-class code surface; rich formats render
     through their own renderers' diffs. Monaco renders files on
-    desktop and never loads on a phone. Write-paths are host-derived and compare-and-swap guarded
-    (`change.revert`/`change.undo`, [[submodule-server-changes]]); the client never sends bytes to
-    write. ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is
-    imported as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
+    desktop and never loads on a phone. Review mutations (`change.revert`/`change.undo`,
+    [[submodule-server-changes]]) and the editor save `fs.writeFile` ([[submodule-server-fs]]) are
+    compare-and-swap guarded on the sha-256 `ResourceMeta.hash` the client last read. Each runs in pi's
+    per-file `withFileMutationQueue`, so it waits behind a pi `edit`/`write` of the same file. One
+    window is open: under a symlinked worktree path, keys can differ while the file is absent
+    ([[submodule-server-host]]). Review mutations
+    are host-derived: the client names a scope, spans and hashes, never bytes. The editor save is the
+    one write that carries content: the full text of a UTF-8 text file. The file on disk keeps its
+    BOM, line-ending style and mode. A stale, missing or read-only target is a typed result, and the
+    host writes nothing. Byte-only files and LFS pointers are not editable, and a save whose content
+    is over the cap is refused.
+    ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is imported
+    as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
     network-denying frames. The renderers, registry and review surfaces are one package
     ([[module-resource-renderers]]) behind a host seam (markdown, code highlighting, byte URLs, link
     navigation), so every surface that shows a file uses the same stack. Detail:

@@ -50,6 +50,7 @@ test("magic bytes name the media type before any filename is consulted", () => {
 	expect(classifyBytes(BYTES.encode("wOF2\u0000\u0000")).mime).toBe("font/woff2");
 	expect(classifyBytes(new Uint8Array([0x00, 0x00, 0x01, 0x00, 0x01])).mime).toBe("image/x-icon");
 	expect(classifyBytes(new Uint8Array([0x42, 0x4d, 0x00, 0x01])).mime).toBe("image/bmp");
+	expect(classifyBytes(BYTES.encode("BM25 ranking notes\n"))).toEqual({ text: true });
 	expect(classifyBytes(BYTES.encode("PK\u0003\u0004\u0000")).mime).toBe("application/zip");
 	expect(classifyBytes(BYTES.encode("PK\u0005\u0006\u0000")).mime).toBe("application/zip");
 });
