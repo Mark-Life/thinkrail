@@ -2054,13 +2054,15 @@ own section. The kebab menu (`plan-menu`, a
   probe; the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
   the focused file, and its first edit keeps a preview tab. **`FileEditBanner`** shows one strip per
   issue: a conflict (**Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
-  disk, too large to save, no longer editable text, or a failed save. Its live region stays mounted while
+  disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text, not connected,
+  or a failed save. Its live region stays mounted while
   the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
 - **Closing a dirty file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
-  **Cancel**. Save closes only once the save leaves the buffer clean; Don't save discards the buffer and its
-  draft. A clean file, and every other tab kind, closes at once. A workspace removal closes tabs without
-  asking; their drafts restore when the file opens again.
+  **Cancel**. It reads `dirty` from the store's buffer summary. Save closes only once the save leaves the
+  buffer clean; Don't save discards the buffer and its draft. While a save runs, Save shows "Saving…" and
+  Cancel and Escape still close the dialog; the tab then stays open. A clean file, and every other tab kind,
+  closes at once. A workspace removal closes tabs without asking and deletes their drafts.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

@@ -44,11 +44,17 @@ export function bufferRegistry(): BufferRegistry {
 			useAppStore.getState().setFileBufferSummary(workspaceId, path, summary),
 		hostKey: () => getTransport().httpBase(),
 		canWrite: () => writable(useAppStore.getState().protocolVersion),
+		isConnected: () => useAppStore.getState().status === "connected",
 		onDraftRestored: (path) =>
 			toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
 		draftDelayMs: DRAFT_DELAY_MS,
 	});
 	useAppStore.subscribe((state, previous) => {
+		if (state.removedWorkspaceIds !== previous.removedWorkspaceIds) {
+			for (const workspaceId of Object.keys(state.removedWorkspaceIds)) {
+				if (!previous.removedWorkspaceIds[workspaceId]) created.forgetWorkspace(workspaceId);
+			}
+		}
 		if (state.tabsByWorkspace !== previous.tabsByWorkspace) created.prune(openFileKeys(state));
 		if (state.connectionGeneration !== previous.connectionGeneration) {
 			void created.reconcileAll();
@@ -78,10 +84,6 @@ export function canEditFile({
 	if (mobile || renderer.capabilities.edit !== true || !meta || !isEditableMeta(meta)) return false;
 	if (meta.byteLength !== null && meta.byteLength > FILE_WRITE_MAX_BYTES) return false;
 	return protocolVersion === null ? buffered : supportsFileWrite(protocolVersion);
-}
-
-export function isFileDirty(workspaceId: string, path: string): boolean {
-	return registry?.isDirty(fileBufferKey(workspaceId, path)) ?? false;
 }
 
 export function saveFile(workspaceId: string, path: string) {

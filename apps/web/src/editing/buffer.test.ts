@@ -1,15 +1,18 @@
 import { expect, test } from "bun:test";
-import { FILE_WRITE_MAX_BYTES, type FileContent } from "@thinkrail/contracts";
+import { FILE_WRITE_MAX_BYTES, type FileContent, LFS_POINTER_MIME } from "@thinkrail/contracts";
 import {
 	adoptDisk,
 	beginSave,
 	bufferStatus,
 	bufferSummary,
 	createBuffer,
+	draftBaseHash,
 	editorDisk,
+	failSave,
 	finishSave,
 	keepMine,
 	localEdit,
+	markError,
 	markMissing,
 	reloadFromDisk,
 	restoreDraft,
@@ -23,7 +26,7 @@ const file = (content: string, hash: string, mime?: string): FileContent => ({
 
 test("disk text is adopted in editor form, and never from non-text or LFS metadata", () => {
 	expect(editorDisk(file("﻿a\r\nb", "h1"))).toEqual({ text: "a\nb", hash: "h1" });
-	expect(editorDisk(file("oid", "h2", "application/vnd.git-lfs"))).toBeNull();
+	expect(editorDisk(file("oid", "h2", LFS_POINTER_MIME))).toBeNull();
 	expect(editorDisk({ content: "", meta: { hash: "h3", byteLength: 3, text: false } })).toBeNull();
 });
 
@@ -45,7 +48,7 @@ test("a disk change replaces a clean buffer and holds back from a dirty one", ()
 	const dirty = localEdit(clean, "mine");
 	const stale = adoptDisk(dirty, disk("theirs"));
 	expect(stale.text).toBe("mine");
-	expect(stale.issue).toEqual({ kind: "conflict", disk: disk("theirs") });
+	expect(stale.issue).toEqual({ kind: "conflict", disk: disk("theirs"), typedOn: "h:a" });
 	expect(adoptDisk(dirty, disk("mine"))).toMatchObject({ base: disk("mine"), issue: null });
 });
 
@@ -109,7 +112,11 @@ test("a written save moves the base to the sent text and keeps later typing dirt
 test("a stale save becomes a conflict unless disk already holds the same text", () => {
 	const saving = beginSave(localEdit(createBuffer(disk("a")), "mine")).state;
 	const conflict = finishSave(saving, { status: "stale", current: file("theirs\r\n", "h9") });
-	expect(conflict.issue).toEqual({ kind: "conflict", disk: { text: "theirs\n", hash: "h9" } });
+	expect(conflict.issue).toEqual({
+		kind: "conflict",
+		disk: { text: "theirs\n", hash: "h9" },
+		typedOn: "h:a",
+	});
 	const same = finishSave(saving, { status: "stale", current: file("mine", "h8") });
 	expect(bufferSummary(same)).toEqual({ status: "clean", dirty: false });
 	const binary = finishSave(saving, {
@@ -158,4 +165,37 @@ test("a deleted file that comes back with the base text keeps the edits, with no
 	expect(bufferSummary(back)).toEqual({ status: "dirty", dirty: true });
 	expect(back.base).toEqual({ text: "base", hash: "h2" });
 	expect(bufferStatus(adoptDisk(deleted, disk("other", "h3")))).toBe("stale");
+});
+
+test("a draft restored as a conflict keeps the hash it was typed on until the user decides", () => {
+	const moved = restoreDraft(createBuffer(disk("theirs")), { text: "mine", baseHash: "h:old" });
+	expect(draftBaseHash(moved)).toBe("h:old");
+	expect(draftBaseHash(localEdit(moved, "mine!"))).toBe("h:old");
+	const newer = adoptDisk(moved, disk("newer"));
+	expect(bufferStatus(newer)).toBe("stale");
+	expect(draftBaseHash(newer)).toBe("h:old");
+	expect(draftBaseHash(keepMine(moved))).toBe("h:theirs");
+});
+
+test("this page's own write that landed without a reply is adopted, not shown as a conflict", () => {
+	const saving = beginSave(localEdit(createBuffer(disk("one")), "Aone")).state;
+	const lost = failSave(localEdit(saving, "BAone"), "failed");
+	expect(bufferSummary(lost)).toEqual({ status: "error", dirty: true, error: "failed" });
+	const echoed = adoptDisk(lost, disk("Aone", "h1"));
+	expect(echoed).toMatchObject({ text: "BAone", base: disk("Aone", "h1"), issue: null });
+	const retry = beginSave(lost);
+	expect(retry.request).toEqual({ content: "BAone", expect: { hash: "h:one" } });
+	const stale = finishSave(retry.state, { status: "stale", current: file("Aone", "h1") });
+	expect(stale).toMatchObject({ base: disk("Aone", "h1"), issue: null, unconfirmed: null });
+	expect(bufferStatus(adoptDisk(stale, disk("other", "h2")))).toBe("stale");
+});
+
+test("a fresh text read clears 'not editable' and 'offline', even on the same hash", () => {
+	const dirty = localEdit(createBuffer(disk("a")), "b");
+	expect(adoptDisk(markError(dirty, "notEditable"), disk("a")).issue).toBeNull();
+	expect(adoptDisk(markError(dirty, "offline"), disk("a")).issue).toBeNull();
+	expect(adoptDisk(markError(dirty, "tooLarge"), disk("a")).issue).toEqual({
+		kind: "error",
+		error: "tooLarge",
+	});
 });

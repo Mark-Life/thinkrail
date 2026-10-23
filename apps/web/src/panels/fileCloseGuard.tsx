@@ -8,9 +8,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { type ReactNode, useState } from "react";
-import { discardFile, isFileDirty, saveFile } from "../editing";
+import { type ReactNode, useRef, useState } from "react";
+import { discardFile, saveFile } from "../editing";
 import { fileName } from "../lib";
+import { selectFileBufferSummary, useAppStore } from "../store";
 
 interface PendingClose {
 	workspaceId: string;
@@ -23,16 +24,23 @@ export function useFileCloseGuard(): {
 	confirmation: ReactNode;
 } {
 	const t = useT();
-	const [pending, setPending] = useState<PendingClose | null>(null);
-	const [saving, setSaving] = useState(false);
+	const [pending, setPendingState] = useState<PendingClose | null>(null);
+	const pendingRef = useRef<PendingClose | null>(null);
+	const [savingRequest, setSavingRequest] = useState<PendingClose | null>(null);
+	const setPending = (next: PendingClose | null) => {
+		pendingRef.current = next;
+		setPendingState(next);
+	};
 	const requestClose = (file: { workspaceId: string; path: string }, close: () => void) => {
-		if (isFileDirty(file.workspaceId, file.path)) setPending({ ...file, close });
+		const summary = selectFileBufferSummary(useAppStore.getState(), file.workspaceId, file.path);
+		if (summary?.dirty === true) setPending({ ...file, close });
 		else close();
 	};
 	const save = async (request: PendingClose) => {
-		setSaving(true);
+		setSavingRequest(request);
 		const summary = await saveFile(request.workspaceId, request.path).catch(() => null);
-		setSaving(false);
+		setSavingRequest((current) => (current === request ? null : current));
+		if (pendingRef.current !== request) return;
 		setPending(null);
 		if (summary?.status === "clean") request.close();
 	};
@@ -41,13 +49,14 @@ export function useFileCloseGuard(): {
 		discardFile(request.workspaceId, request.path);
 		request.close();
 	};
+	const saving = pending !== null && savingRequest === pending;
 	return {
 		requestClose,
 		confirmation: (
 			<Dialog
 				open={pending !== null}
 				onOpenChange={(open) => {
-					if (!open && !saving) setPending(null);
+					if (!open) setPending(null);
 				}}
 			>
 				<DialogContent
@@ -63,7 +72,7 @@ export function useFileCloseGuard(): {
 						<DialogDescription>{t("panels.fileCloseGuard.description")}</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
-						<Button variant="outline" disabled={saving} onClick={() => setPending(null)}>
+						<Button variant="outline" onClick={() => setPending(null)}>
 							{t("common.cancel")}
 						</Button>
 						<Button
@@ -79,7 +88,7 @@ export function useFileCloseGuard(): {
 							data-testid="file-close-save"
 							onClick={() => pending && void save(pending)}
 						>
-							{t("panels.fileCloseGuard.save")}
+							{t(saving ? "panels.fileCloseGuard.saving" : "panels.fileCloseGuard.save")}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

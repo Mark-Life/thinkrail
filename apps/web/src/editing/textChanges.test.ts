@@ -48,3 +48,20 @@ test("applyChanges reads every offset against the original text", () => {
 		]),
 	).toBe("Xbcd");
 });
+
+test("a large rewrite that keeps the line count stays per-line and returns quickly", () => {
+	const previous = Array.from({ length: 60_000 }, (_, index) => `line ${index} of the file\n`).join(
+		"",
+	);
+	const next = previous
+		.split("\n")
+		.map((line, index) => (index % 20 === 0 && line !== "" ? `${line} // changed` : line))
+		.join("\n");
+	const started = performance.now();
+	const changes = textChanges(previous, next);
+	expect(performance.now() - started).toBeLessThan(150);
+	expect(changes).toHaveLength(3000);
+	const lineEnd = previous.indexOf("line 20 ") + "line 20 of the file".length;
+	expect(changes[1]).toEqual({ from: lineEnd, to: lineEnd, insert: " // changed" });
+	expect(applyChanges(previous, changes)).toBe(next);
+});

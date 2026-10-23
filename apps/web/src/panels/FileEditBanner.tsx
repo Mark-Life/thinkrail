@@ -1,9 +1,12 @@
 import { RiAlertLine as Alert } from "@remixicon/react";
+import { FILE_WRITE_MAX_BYTES } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { platformShortcutLabel } from "../lib";
 import type { FileBufferSummary } from "../store";
+
+const MEBIBYTE = 1024 * 1024;
 
 function bannerMessage(summary: FileBufferSummary): MessageKey | null {
 	switch (summary.status) {
@@ -16,6 +19,7 @@ function bannerMessage(summary: FileBufferSummary): MessageKey | null {
 		case "error":
 			if (summary.error === "tooLarge") return "panels.fileEdit.tooLarge";
 			if (summary.error === "notEditable") return "panels.fileEdit.notEditable";
+			if (summary.error === "offline") return "panels.fileEdit.offline";
 			return "panels.fileEdit.failed";
 		default:
 			return null;
@@ -33,7 +37,9 @@ export function FileEditBanner({
 }) {
 	const t = useT();
 	const message = summary ? bannerMessage(summary) : null;
-	const text = message ? t(message, { shortcut: platformShortcutLabel("S") }) : "";
+	const text = message
+		? t(message, { shortcut: platformShortcutLabel("S"), limit: FILE_WRITE_MAX_BYTES / MEBIBYTE })
+		: "";
 	const urgent = summary?.status === "stale" || summary?.status === "error";
 	return (
 		<>
