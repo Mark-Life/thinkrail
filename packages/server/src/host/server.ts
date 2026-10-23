@@ -310,6 +310,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return new Response("not found", { status: 404 });
 		},
 		websocket: {
+			maxPayloadLength: 16 * 1024 * 1024,
 			open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);

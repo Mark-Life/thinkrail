@@ -102,7 +102,7 @@ import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { listExtensionCatalog } from "../extensions";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile } from "../fs";
+import { readDir, readFile, resolveWorktreeFile, writeTextFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -700,6 +700,13 @@ const handlers: WsHandlers = {
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
 		return readFile(p.workspaceId, p.path);
+	},
+	"fs.writeFile": async (p) => {
+		void ensureWatch(p.workspaceId);
+		const abs = resolveWorktreeFile(p.workspaceId, p.path);
+		const { result, changed } = await withFileMutationQueue(abs, async () => writeTextFile(p));
+		if (changed) recordWorkspaceActivity(p.workspaceId);
+		return result;
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);

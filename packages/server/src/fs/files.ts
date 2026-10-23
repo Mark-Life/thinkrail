@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
+import type { FileContent, FileNode } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
 
@@ -76,10 +76,7 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
-export function readFile(
-	workspaceId: string,
-	path: string,
-): { content: string; meta: ResourceMeta } {
+export function readFile(workspaceId: string, path: string): FileContent {
 	const { abs } = resolveInWorktree(workspaceId, path, true);
 	const bytes = readFileSync(abs);
 	const meta = resourceMeta(bytes, path);

@@ -19,6 +19,8 @@ import {
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	FILE_WRITE_MAX_BYTES,
+	FILE_WRITE_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
@@ -45,6 +47,7 @@ import {
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TURN_CHANGES_PROTOCOL_VERSION,
+	toEditorText,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -217,9 +220,25 @@ test("local language files and the locale setting are pinned to v89", () => {
 });
 
 test("client error reports are pinned to v90", () => {
-	expect(PROTOCOL_VERSION).toBe(90);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CLIENT_ERROR_REPORT_PROTOCOL_VERSION);
 	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
 	expect(WS_METHODS.clientReportError).toBe("client.reportError");
+});
+
+test("editor file writes are pinned to v91 with a 4 MiB cap", () => {
+	expect(PROTOCOL_VERSION).toBe(91);
+	expect(FILE_WRITE_PROTOCOL_VERSION).toBe(91);
+	expect(FILE_WRITE_MAX_BYTES).toBe(4 * 1024 * 1024);
+	expect(WS_METHODS.fsWriteFile).toBe("fs.writeFile");
+});
+
+test("toEditorText drops one leading BOM and folds every line break to LF", () => {
+	expect(toEditorText("a\nb\n")).toBe("a\nb\n");
+	expect(toEditorText("\uFEFFa\r\nb")).toBe("a\nb");
+	expect(toEditorText("\uFEFF\uFEFFa")).toBe("\uFEFFa");
+	expect(toEditorText("a\rb\r\n\r")).toBe("a\nb\n\n");
+	expect(toEditorText("x\uFEFF")).toBe("x\uFEFF");
+	expect(toEditorText("")).toBe("");
 });
 
 test("project rename is pinned to v85", () => {
