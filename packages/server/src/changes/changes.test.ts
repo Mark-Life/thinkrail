@@ -16,10 +16,27 @@ import { basename, dirname, join } from "node:path";
 import type { ChangeReceipt, GitDiffScope, LineSpan, RevertTarget } from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
 import { setTrashImplementationForTests } from "../trash";
-import { forgetWorkspaceChanges, retainReceipts, revertChange, undoChange } from "./changes";
+import {
+	type FileMutationQueue,
+	forgetWorkspaceChanges,
+	type RevertChangeParams,
+	retainReceipts,
+	revertChange as revertQueued,
+	type UndoChangeParams,
+	undoChange as undoQueued,
+} from "./changes";
 import { splitLines } from "./textSplice";
 
 const BYTES = new TextEncoder();
+const UNQUEUED: FileMutationQueue = (_abs, run) => run();
+
+function revertChange(params: RevertChangeParams): Promise<ChangeReceipt> {
+	return revertQueued(params, UNQUEUED);
+}
+
+function undoChange(params: UndoChangeParams): Promise<ChangeReceipt> {
+	return undoQueued(params, UNQUEUED);
+}
 const UNCOMMITTED: GitDiffScope = { kind: "uncommitted" };
 
 let dataDir: string;
@@ -302,6 +319,36 @@ test("line splitting matches jsdiff for CR-only and mixed CRLF/LF content", asyn
 
 	expect(text("cr-only.txt")).toBe("one\rtwo\rthree");
 	expect(text("mixed.txt")).toBe("one\r\ntwo\nthree\r\n");
+});
+
+test("a revert verifies and writes only once the file's mutation queue releases it", async () => {
+	write("a.ts", "rewritten\n");
+	const keys: string[] = [];
+	let release = (): void => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const held: FileMutationQueue = async (abs, run) => {
+		keys.push(abs);
+		await gate;
+		return run();
+	};
+	const pending = revertQueued(
+		{
+			workspaceId,
+			path: "a.ts",
+			scope: UNCOMMITTED,
+			target: { kind: "file" },
+			expect: { originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("rewritten\n") },
+		},
+		held,
+	);
+	while (keys.length === 0) await Bun.sleep(5);
+	expect(keys).toEqual([join(repo, "a.ts")]);
+	write("a.ts", "agent edit\n");
+	release();
+	await expect(pending).rejects.toMatchObject({ code: "STALE_VIEW" });
+	expect(text("a.ts")).toBe("agent edit\n");
 });
 
 test("a whole-file revert rewrites a modified file and restores a deleted one", async () => {

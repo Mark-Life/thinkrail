@@ -1,4 +1,5 @@
 export {
+	type FileMutationQueue,
 	forgetWorkspaceChanges,
 	type RevertChangeParams,
 	retainReceipts,
