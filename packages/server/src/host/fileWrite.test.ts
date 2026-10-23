@@ -286,7 +286,6 @@ test("a save is recorded as the user, and readFile reports it to the saving clie
 	writeFileSync(join(root, "a.ts"), "outside\n");
 	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite?.author).toEqual({
 		kind: "external",
-		inferred: true,
 	});
 });
 

@@ -264,8 +264,8 @@ export interface FileContent {
 export type FileAuthor =
 	| { kind: "user"; thisClient: boolean }
 	| { kind: "agent"; sessionId: string; via: "tool"; toolName: string }
-	| { kind: "agent"; sessionId: string; via: "script"; inferred: true }
-	| { kind: "external"; inferred: true };
+	| { kind: "agent"; sessionId: string; via: "script" }
+	| { kind: "external" };
 
 export interface FileLastWrite {
 	author: FileAuthor;

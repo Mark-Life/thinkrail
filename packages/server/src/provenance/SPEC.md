@@ -77,7 +77,7 @@ uses the same data to tell an agent that someone changed a file under it.
 - **Exact versus inferred.** Only the host's own saves, reverts and undos and pi's `edit`/`write` are
   recorded. A shell command's writes and every outside writer are inferred at read time from the mtime
   and never stored, so a terminal formatter running in the same worktree during an agent's bash call is
-  blamed on that agent. The wire marks those authors `inferred`. A command the user types in ThinkRail's
+  blamed on that agent. On the wire those are the `agent` via `script` and `external` authors. A command the user types in ThinkRail's
   terminal goes to a raw PTY, so it is untracked too and the wire calls it `external`. An outside save
   during the call looks the same as the agent's shell, so a note names it "your own shell command, a
   terminal command or a program outside ThinkRail", and the write block does not exempt it. With no

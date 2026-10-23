@@ -206,7 +206,6 @@ test("in a real pi session a bash call aborted before it runs leaves no open win
 	utimesSync(path, later, later);
 	expect(store.lastWrite({ path, hash: "other", clientKey: "c" })?.author).toEqual({
 		kind: "external",
-		inferred: true,
 	});
 });
 
