@@ -73,7 +73,8 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `TextChange[]` from a line diff (`textChanges`, jsdiff `diffArrays` capped at 2,000 edits and 50 ms),
   so cursors and scroll stay. Past a cap, texts with the same line count change line by line in place
   (a formatter or an agent rewrite); others fall back to one prefix/suffix-trimmed change. No editor
-  attached, no diff.
+  attached, no diff. A change never starts or ends inside a UTF-16 surrogate pair: Monaco widens such a
+  range to the whole pair, and its model would drift from the buffer.
 
 ## Save pipeline
 

@@ -22,10 +22,14 @@ function lines(text: string): string[] {
 	return text === "" ? [] : text.split(/(?<=\n)/);
 }
 
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
 function trimmedChange(previous: string, next: string): TextChange {
 	const limit = Math.min(previous.length, next.length);
 	let start = 0;
 	while (start < limit && previous[start] === next[start]) start += 1;
+	if (start > 0 && isHighSurrogate(previous.charCodeAt(start - 1))) start -= 1;
 	let end = 0;
 	while (
 		end < limit - start &&
@@ -33,6 +37,7 @@ function trimmedChange(previous: string, next: string): TextChange {
 	) {
 		end += 1;
 	}
+	if (end > 0 && isLowSurrogate(previous.charCodeAt(previous.length - end))) end -= 1;
 	return {
 		from: start,
 		to: previous.length - end,

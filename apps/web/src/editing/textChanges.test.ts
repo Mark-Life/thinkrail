@@ -65,3 +65,26 @@ test("a large rewrite that keeps the line count stays per-line and returns quick
 	expect(changes[1]).toEqual({ from: lineEnd, to: lineEnd, insert: " // changed" });
 	expect(applyChanges(previous, changes)).toBe(next);
 });
+
+test("a change never starts or ends inside a surrogate pair", () => {
+	const splitsPair = (text: string, offset: number) =>
+		offset > 0 &&
+		offset < text.length &&
+		/[\ud800-\udbff]/.test(text.charAt(offset - 1)) &&
+		/[\udc00-\udfff]/.test(text.charAt(offset));
+	const cases: [string, string][] = [
+		["x 😀\n", "x 😃\n"],
+		["😀", "🈀"],
+		["a😀b\nline2\n", "a😃b\nline2\n"],
+		["😀😀", "😀😃😀"],
+		["x", "x😀"],
+	];
+	for (const [previous, next] of cases) {
+		for (const change of roundTrip(previous, next)) {
+			expect(splitsPair(previous, change.from)).toBe(false);
+			expect(splitsPair(previous, change.to)).toBe(false);
+			expect(/^[\udc00-\udfff]|[\ud800-\udbff]$/.test(change.insert)).toBe(false);
+		}
+	}
+	expect(textChanges("x 😀\n", "x 😃\n")).toEqual([{ from: 2, to: 4, insert: "😃" }]);
+});
