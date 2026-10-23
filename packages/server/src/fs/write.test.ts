@@ -163,6 +163,36 @@ test("a U+FEFF that starts the content of a BOM-less file is written, not droppe
 	expect(readFileSync(join(root, "plain.ts"))).toEqual(disk);
 });
 
+test("a create below a regular file is not editable", () => {
+	put("f", "file\n");
+	expect(() => save("f/new.txt", "x", null)).toThrow(
+		expect.objectContaining({ code: "NOT_EDITABLE" }),
+	);
+	expect(() => save("f/sub/new.txt", "x", null)).toThrow(
+		expect.objectContaining({ code: "NOT_EDITABLE" }),
+	);
+	expect(text("f")).toBe("file\n");
+});
+
+test("a create that fails partway removes its file, so a replay creates again", () => {
+	const realWrite = nodeFs.writeFileSync;
+	const spy = spyOn(nodeFs, "writeFileSync").mockImplementation((file, data, options) => {
+		if (typeof file !== "number") return realWrite(file, data, options);
+		realWrite(file, "par");
+		throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
+	});
+	try {
+		expect(() => save("new.txt", "whole\n", null)).toThrow(
+			expect.objectContaining({ code: "ENOSPC" }),
+		);
+	} finally {
+		spy.mockRestore();
+	}
+	expect(existsSync(join(root, "new.txt"))).toBe(false);
+	expect(save("new.txt", "whole\n", null).result).toMatchObject({ status: "written" });
+	expect(text("new.txt")).toBe("whole\n");
+});
+
 test.skipIf(!POSIX)("a save reads the file once, even when it is written in place", () => {
 	const abs = put("a.ts", "one\n");
 	linkSync(abs, join(root, "b.ts"));
@@ -313,6 +343,24 @@ test.skipIf(!POSIX || ROOT_USER)("a read-only file is readonly even in a writabl
 	});
 	expect(text("locked.ts")).toBe("one\n");
 	expect(statSync(abs).mode & 0o777).toBe(0o444);
+});
+
+test.skipIf(!POSIX || ROOT_USER)("a create in a read-only folder is readonly", () => {
+	mkdirSync(join(root, "ro"));
+	chmodSync(join(root, "ro"), 0o555);
+	try {
+		expect(save("ro/new.ts", "x", null)).toEqual({
+			result: { status: "readonly" },
+			changed: false,
+		});
+		expect(save("ro/sub/new.ts", "x", null)).toEqual({
+			result: { status: "readonly" },
+			changed: false,
+		});
+		expect(readdirSync(join(root, "ro"))).toEqual([]);
+	} finally {
+		chmodSync(join(root, "ro"), 0o755);
+	}
 });
 
 test.skipIf(!POSIX || ROOT_USER)(

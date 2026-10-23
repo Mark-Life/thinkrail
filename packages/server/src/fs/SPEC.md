@@ -95,6 +95,10 @@ text back to a text file under compare-and-swap.
   save, and a lone `\r` does not survive, the same as under a pi `edit`. The final newline is the
   editor's. A created file is written exactly as sent. A U+FEFF that starts the content of a BOM-less
   file is written as bytes, so the file reads back with a BOM; the host never drops it silently.
+- **A create maps errno like an update.** A read-only folder or volume answers `readonly`; a regular
+  file where a parent folder should be is `NOT_EDITABLE`. The exclusive create writes straight to the
+  target, so a write that fails partway (`ENOSPC`) removes the file it created; a replay then creates
+  again instead of reading `stale` against a partial file.
 - **Atomic unless that changes the file's identity.** Temp+rename in the target's directory, with the
   mode and group copied. A hard-linked file, a file owned by another user, and a target whose temp
   create, `chown` to the file's group, or rename fails with `EACCES`/`EPERM`/`EBUSY`/`EXDEV` are written
