@@ -1,7 +1,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
-import { pressPlatformShortcut } from "./fixtures/app";
-import { banner, openWorkspaceWithFile, typeAtLineEnd, visibleEditor } from "./fixtures/fileEdit";
+import { expect, type Page, test } from "@playwright/test";
+import { pressPlatformShortcut, revealWorkbenchTool } from "./fixtures/app";
+import {
+	banner,
+	fileTab,
+	openFile,
+	openWorkspaceWithFile,
+	typeAtLineEnd,
+	visibleEditor,
+} from "./fixtures/fileEdit";
 
 function parseFrame(message: string | Buffer): Record<string, unknown> | null {
 	try {
@@ -10,6 +17,20 @@ function parseFrame(message: string | Buffer): Record<string, unknown> | null {
 	} catch {
 		return null;
 	}
+}
+
+async function commentOnFirstLine(page: Page, body: string) {
+	await visibleEditor(page).locator(".view-line").nth(1).click();
+	const box = await visibleEditor(page).locator(".view-line").first().boundingBox();
+	if (!box) throw new Error("line 1 has no box");
+	await page.mouse.move(box.x + 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + 120, box.y + box.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await page.locator('[data-testid="review-add-icon"]:visible').click();
+	await page.getByTestId("review-composer-input").fill(body);
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
 }
 
 test("a file that changes on disk while it opens shows the new text and saves without a conflict", async ({
@@ -61,4 +82,71 @@ test("a file that changes on disk while it opens shows the new text and saves wi
 	await pressPlatformShortcut(page, "s");
 	await expect.poll(() => readFileSync(path, "utf8")).toBe("const agent = 2; // mine\n");
 	await expect(banner(page)).toHaveCount(0);
+});
+
+test("an unsaved buffer hides review threads in Preview too", async ({ page }) => {
+	const path = await openWorkspaceWithFile(page, "notes.md", "# Notes\n\nFirst paragraph.\n");
+	await page.getByTestId("file-node").filter({ hasText: "notes.md" }).dblclick();
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.locator("[data-file-buffer]")).toHaveCount(1);
+	await commentOnFirstLine(page, "Rename the title");
+
+	await page.getByTestId("view-toggle-markdown").click();
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+	await page.getByTestId("view-toggle-code").click();
+	await typeAtLineEnd(page, 1, "\n\nNew line");
+	await page.getByTestId("view-toggle-markdown").click();
+	await expect(page.getByTestId("editor-pane").filter({ visible: true })).toContainText("New line");
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(0);
+
+	await pressPlatformShortcut(page, "s");
+	await expect.poll(() => readFileSync(path, "utf8")).toContain("New line");
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+});
+
+function topVisibleLine(page: Page) {
+	return visibleEditor(page).evaluate((node) => {
+		const host = node.getBoundingClientRect();
+		const numbers = [...node.querySelectorAll(".line-numbers")]
+			.filter((line) => {
+				const box = line.getBoundingClientRect();
+				return box.bottom > host.top && box.top < host.bottom;
+			})
+			.map((line) => Number(line.textContent));
+		return Math.min(...numbers);
+	});
+}
+
+test("a Review panel jump on an unsaved file is dropped, not replayed after Save", async ({
+	page,
+}) => {
+	const text = Array.from({ length: 400 }, (_, index) => `const row${index + 1} = 1;\n`).join("");
+	await openFile(page, "jump.ts", text);
+	await commentOnFirstLine(page, "Look here");
+
+	await visibleEditor(page).locator(".view-line").nth(2).click();
+	for (let press = 0; press < 20; press += 1) await page.keyboard.press("PageDown");
+	await page.keyboard.press("End");
+	await page.keyboard.type(" // dirty");
+	await expect(fileTab(page, "jump.ts").getByTestId("file-dirty-dot")).toBeVisible();
+	await page.waitForTimeout(400);
+	const scrolled = await topVisibleLine(page);
+	expect(scrolled).toBeGreaterThan(30);
+
+	await revealWorkbenchTool(page, "review");
+	const section = page
+		.getByTestId("review-file-section")
+		.filter({ has: page.getByTestId("review-file-row").filter({ hasText: "jump.ts" }) });
+	if ((await section.getAttribute("data-expanded")) !== "true") {
+		await section.getByTestId("review-file-row").click();
+	}
+	await section.getByTestId("review-comment-open").first().click();
+	await page.waitForTimeout(500);
+	expect(await topVisibleLine(page)).toBe(scrolled);
+
+	await visibleEditor(page).locator(".view-line").nth(3).click();
+	await pressPlatformShortcut(page, "s");
+	await expect(fileTab(page, "jump.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
+	await page.waitForTimeout(800);
+	expect(await topVisibleLine(page)).toBeGreaterThan(30);
 });
