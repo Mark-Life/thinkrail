@@ -181,6 +181,22 @@ test("a rewrite too large to diff says so instead of dropping the diff", () => {
 	);
 });
 
+test("a formatter run over a large file gives up on the diff fast", () => {
+	const lines = Array.from({ length: 15_000 }, (_, index) => `const value${index} = ${index};`);
+	const before = `${lines.join("\n")}\n`;
+	const after = `${lines.map((line, index) => (index % 3 === 0 ? `${line} // x` : line)).join("\n")}\n`;
+	const started = performance.now();
+	const text = staleWriteBlock({
+		displayPath: "a.ts",
+		stale: stale({ untracked: true, baselineText: before }),
+		currentText: after,
+		now: NOW,
+		deleted: false,
+	});
+	expect(performance.now() - started).toBeLessThan(250);
+	expect(text).toEndWith("\nThe changes are too large to show as a diff.");
+});
+
 test("the diff is capped at 40 lines with a count of the rest", () => {
 	const before = Array.from({ length: 60 }, (_, index) => `line ${index}\n`).join("");
 	const after = Array.from({ length: 60 }, (_, index) => `LINE ${index}\n`).join("");
