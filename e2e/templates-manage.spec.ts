@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, revealWorkbenchTool } from "./fixtures/app";
+import { openWorkspaceChat, pressPlatformShortcut, revealWorkbenchTool } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
 import {
@@ -255,7 +255,8 @@ test.describe("templates management", () => {
 		await promptRow.hover();
 		await expect(promptRow.getByTestId("history-save-template")).toBeVisible();
 
-		await query.press("Control+s");
+		await query.focus();
+		await pressPlatformShortcut(page, "s");
 		await expect(overlay).toBeHidden();
 		const editor = page.getByTestId("template-editor-dialog");
 		await expect(editor).toBeVisible();

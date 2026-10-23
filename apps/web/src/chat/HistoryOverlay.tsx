@@ -568,6 +568,7 @@ function HistoryPicker({
 				<input
 					ref={inputRef}
 					data-testid="history-query"
+					data-save-shortcut="template"
 					value={query}
 					onChange={(e) => onQueryChange(e.target.value)}
 					onKeyDown={onKeyDown}

@@ -87,6 +87,7 @@ export interface WebShortcutsOptions extends Pick<QuitConfirmationDependencies, 
 	quit(): void;
 	onQuitHint(hint: NativeQuitHint): void;
 	isInTerminal(target: EventTarget | null): boolean;
+	ownsSave(target: EventTarget | null): boolean;
 }
 
 export function createWebShortcuts(options: WebShortcutsOptions) {
@@ -108,7 +109,7 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 
 	function keydown(event: ShortcutKeyEvent) {
 		const id = matchShortcut(event, options.platform, () => options.isInTerminal(event.target));
-		if (!id) return;
+		if (!id || (id === "save" && options.ownsSave(event.target))) return;
 		event.preventDefault();
 		event.stopPropagation();
 		if (event.repeat) return;
