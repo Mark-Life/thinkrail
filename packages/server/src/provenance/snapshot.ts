@@ -7,6 +7,7 @@ const SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;
 
 export interface FileSnapshot {
 	bytes: Uint8Array;
+	hash: string;
 	mtimeMs: number;
 }
 
@@ -14,20 +15,11 @@ export function readSnapshot(abs: string): FileSnapshot | null {
 	try {
 		const stat = statSync(abs);
 		if (!stat.isFile() || stat.size > SNAPSHOT_MAX_BYTES) return null;
-		return { bytes: readFileSync(abs), mtimeMs: stat.mtimeMs };
+		const bytes = readFileSync(abs);
+		return { bytes, hash: hashBytes(bytes), mtimeMs: stat.mtimeMs };
 	} catch {
 		return null;
 	}
-}
-
-const hashes = new WeakMap<Uint8Array, string>();
-
-export function versionHash(bytes: Uint8Array): string {
-	const known = hashes.get(bytes);
-	if (known !== undefined) return known;
-	const hash = hashBytes(bytes);
-	hashes.set(bytes, hash);
-	return hash;
 }
 
 export function fileKey(abs: string): string {

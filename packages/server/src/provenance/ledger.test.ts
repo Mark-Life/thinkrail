@@ -267,7 +267,7 @@ test("another session's write that lands between a tool call and its record cont
 	const provenance = store();
 	const path = put("a.ts", "one\n");
 	const call = (sessionId: string, toolCallId: string, mutates: boolean) =>
-		provenance.openClaim({ sessionId, toolCallId, path, mutates, bytes: snapshot(path).bytes });
+		provenance.openClaim({ sessionId, toolCallId, path, mutates, hash: snapshot(path).hash });
 	const agent = (sessionId: string) => ({ ...AGENT, sessionId });
 
 	call("s1", "e1", true);
@@ -316,8 +316,8 @@ test("a write made while another session's claim is open stays recorded as that 
 	for (const sessionId of ["s", "t"]) {
 		provenance.recordRead({ sessionId, path, bytes: snapshot(path).bytes });
 	}
-	provenance.openClaim({ sessionId: "t", toolCallId: "e", path, mutates: true, bytes: null });
-	provenance.openClaim({ sessionId: "s", toolCallId: "w", path, mutates: true, bytes: null });
+	provenance.openClaim({ sessionId: "t", toolCallId: "e", path, mutates: true, hash: null });
+	provenance.openClaim({ sessionId: "s", toolCallId: "w", path, mutates: true, hash: null });
 	put("a.ts", "s wrote\n");
 	provenance.recordWrite({
 		path,
@@ -395,7 +395,7 @@ test("an agent write over a save made after its claim returns what it replaced",
 	const provenance = store();
 	const path = put("a.ts", "one\n");
 	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
-	provenance.openClaim({ sessionId: "s1", toolCallId: "w1", path, mutates: true, bytes: null });
+	provenance.openClaim({ sessionId: "s1", toolCallId: "w1", path, mutates: true, hash: null });
 	provenance.recordWrite({ path, author: USER, before: bytes("one\n"), after: bytes("user\n") });
 	const overwrite = provenance.recordWrite({
 		path,
@@ -406,7 +406,7 @@ test("an agent write over a save made after its claim returns what it replaced",
 	});
 	expect(overwrite).toMatchObject({ writers: [{ author: USER }], text: "user\n" });
 
-	provenance.openClaim({ sessionId: "s1", toolCallId: "w2", path, mutates: true, bytes: null });
+	provenance.openClaim({ sessionId: "s1", toolCallId: "w2", path, mutates: true, hash: null });
 	const write = { path, author: AGENT, before: null, toolCallId: "w2" };
 	provenance.recordWrite({ path, author: USER, before: null, after: bytes("after\n") });
 	expect(provenance.recordWrite({ ...write, after: bytes("after\n") })).toBeUndefined();
@@ -421,5 +421,29 @@ test("a read that found the file absent is a baseline, so only a later creation 
 	expect(provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) })).toMatchObject({
 		read: true,
 		untracked: true,
+	});
+});
+
+test("a hash the caller already has is used as is, so the ledger does not hash those bytes again", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: bytes("one\n"), hash: "read-hash" });
+	expect(
+		provenance.staleRead({
+			sessionId: "s1",
+			path,
+			current: { ...snapshot(path), hash: "read-hash" },
+		}),
+	).toBeNull();
+	provenance.recordWrite({
+		path,
+		author: USER,
+		before: null,
+		after: bytes("two\n"),
+		hash: "given",
+	});
+	expect(provenance.lastWrite({ path, hash: "given", clientKey: "client-a" })?.author).toEqual({
+		kind: "user",
+		thisClient: true,
 	});
 });

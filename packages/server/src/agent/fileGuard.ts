@@ -144,7 +144,7 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 				toolCallId: input.toolCallId,
 				path: input.abs,
 				mutates: true,
-				bytes: current?.bytes ?? null,
+				hash: current?.hash ?? null,
 			});
 			return undefined;
 		}
@@ -174,6 +174,7 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 					},
 					before: null,
 					after: after.bytes,
+					hash: after.hash,
 					toolCallId: input.toolCallId,
 					...(input.failed ? { changedOnly: true } : {}),
 					...(input.line === undefined ? {} : { line: input.line }),
@@ -189,7 +190,9 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 					return;
 				}
 				const current = readSnapshot(abs);
-				if (current) store.recordRead({ sessionId, toolCallId, path: abs, bytes: current.bytes });
+				if (!current) return;
+				const { bytes, hash } = current;
+				store.recordRead({ sessionId, toolCallId, path: abs, bytes, hash });
 			});
 		}
 
@@ -233,8 +236,8 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 				return safely("write check", () => guardWrite({ sessionId, toolCallId, path, abs }));
 			}
 			const abs = toolName === "read" ? agentReadPath(path, ctx.cwd) : agentPath(path, ctx.cwd);
-			const bytes = toolName === "edit" ? (readSnapshot(abs)?.bytes ?? null) : null;
-			store.openClaim({ sessionId, toolCallId, path: abs, mutates: toolName === "edit", bytes });
+			const hash = toolName === "edit" ? (readSnapshot(abs)?.hash ?? null) : null;
+			store.openClaim({ sessionId, toolCallId, path: abs, mutates: toolName === "edit", hash });
 			return undefined;
 		});
 

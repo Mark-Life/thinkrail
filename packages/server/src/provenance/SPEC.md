@@ -22,7 +22,7 @@ uses the same data to tell an agent that someone changed a file under it.
   ancestor's realpath plus the rest, so a delete lands on the same key. Nothing persists, so a host
   restart forgets everything.
   - **Write ledger.** Per path, a ring of `WriteEntry {seq, at, key, path, hash, author, line?, provisional?}`; `hash`
-    is `null` for a delete. `recordWrite({path, author, before, after, line?, toolCallId?, changedOnly?})`
+    is `null` for a delete. `recordWrite({path, author, before, after, hash?, line?, toolCallId?, changedOnly?})`
     takes the bytes before and after (`null` for absent). `line` is the first changed line: given, derived
     from `before`, or, when `before` is `null`, from the cached text of the version it replaced. A
     recorded author is exact: `user{clientKey}` (an editor save, a review revert or undo) or
@@ -31,10 +31,10 @@ uses the same data to tell an agent that someone changed a file under it.
     over another author's entry made after its claim, `recordWrite` returns those writers and the
     replaced text, so `fileGuard` can tell the agent what it overwrote.
   - **Read baselines.** Per session and path, `{hash, seq, contested}` from the agent's last read or its
-    own write. `recordRead({sessionId, path, bytes, toolCallId?})` also caches the text by (path, hash),
+    own write. `recordRead({sessionId, path, bytes, hash?, toolCallId?})` also caches the text by (path, hash),
     shared across sessions, so a later hint can diff the baseline against the disk. `bytes: null` records
     that the agent found the file absent.
-  - **Tool claims.** `openClaim({sessionId, toolCallId, path, mutates, bytes})` at pi's `tool_call`
+  - **Tool claims.** `openClaim({sessionId, toolCallId, path, mutates, hash})` at pi's `tool_call`
     marks the version the tool started from; `recordRead`/`recordWrite` with that `toolCallId` settle it,
     and `endTool` drops it. See *Concurrent writers*.
   - **Bash windows.** `openBashWindow({sessionId, toolCallId, cwd})` / `closeBashWindow` per tool call.
@@ -54,9 +54,10 @@ uses the same data to tell an agent that someone changed a file under it.
     asking client, never as the clientKey, because the clientKey is a reconnect identity another client
     could take over.
   - `forgetSession` drops one session's baselines and claims and closes its windows.
-  - `readSnapshot(abs)`: bytes plus mtime, `null` when absent, not a file, or over 8 MiB, so files over
-    8 MiB are not guarded (the wire caps a user save at 4 MiB). Each snapshot's bytes are hashed once,
-    however many ledger calls use them. `editorText(bytes)`: the text a diff compares (`toEditorText`),
+  - `readSnapshot(abs)`: bytes, hash and mtime, `null` when absent, not a file, or over 8 MiB, so files
+    over 8 MiB are not guarded (the wire caps a user save at 4 MiB). Ledger calls take that hash, and
+    `recordWrite`/`recordRead` take an optional `hash` of their bytes, so a save or a guarded tool call
+    hashes its bytes once. `editorText(bytes)`: the text a diff compares (`toEditorText`),
     `null` for byte-only content.
   - **Notes**, the agent-facing text: `staleEditHint`, `staleWriteBlock`, `overwriteNote`, `bashNote`.
     A hint is a one-line pointer (who, how long ago, which line) plus a diff from the baseline text to

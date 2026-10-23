@@ -17,7 +17,12 @@ type WriteTextFileParams = WsParams<"fs.writeFile">;
 
 type WriteTextFileOutcome =
 	| { result: FileWriteResult; changed: false }
-	| { result: FileWriteResult; changed: true; before: Uint8Array | null; after: Uint8Array };
+	| {
+			result: Extract<FileWriteResult, { status: "written" }>;
+			changed: true;
+			before: Uint8Array | null;
+			after: Uint8Array;
+	  };
 
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
 const NOT_A_FOLDER_CODES = new Set(["EEXIST", "ENOTDIR", "ENOENT"]);

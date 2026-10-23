@@ -22,7 +22,8 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   `reviews` module's snapshot passes. That pass runs inside the injected `FileMutation.queue`; the host
   passes pi's, so a revert never lands inside an agent `edit`'s read-modify-write, and trashing a claimed
   file happens after the queue releases. When the pass changed bytes, the optional `FileMutation.written`
-  gets the path and the bytes before and after (`null` for absent) inside the queue, before it releases. Also owned: the per-workspace **receipt ring** and the
+  gets the path and the bytes before and after (`null` for absent) inside the queue, before it releases;
+  its optional `hash` of the after bytes is for a caller that already has it (the host's save). Also owned: the per-workspace **receipt ring** and the
   whole-file semantics table below.
 - **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`,
   `FileMutation`, `FileMutationQueue`, `forgetWorkspaceChanges`, `retainReceipts`.
