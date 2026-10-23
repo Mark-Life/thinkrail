@@ -4,8 +4,8 @@ type: submodule-design
 status: active
 title: provenance — who wrote each file version
 parent: module-server
-depends-on: [module-contracts]
-references: [submodule-server-fs, submodule-server-agent, submodule-server-host]
+depends-on: [module-contracts, submodule-server-fs]
+references: [submodule-server-agent, submodule-server-host]
 tags: [public-surface-checked]
 ---
 
@@ -21,7 +21,7 @@ uses the same data to tell an agent that someone changed a file under it.
   one instance. Entries are keyed by the file's realpath; an absent file by its nearest existing
   ancestor's realpath plus the rest, so a delete lands on the same key. Nothing persists, so a host
   restart forgets everything.
-  - **Write ledger.** Per path, a ring of `WriteEntry {seq, at, key, path, hash, author, line?}`; `hash`
+  - **Write ledger.** Per path, a ring of `WriteEntry {seq, at, key, path, hash, author, line?, provisional?}`; `hash`
     is `null` for a delete. `recordWrite({path, author, before, after, line?, toolCallId?, changedOnly?})`
     takes the bytes before and after (`null` for absent). `line` is the first changed line: given, derived
     from `before`, or, when `before` is `null`, from the cached text of the version it replaced. A
@@ -91,10 +91,15 @@ uses the same data to tell an agent that someone changed a file under it.
   user). That write cannot be stopped; its result gets `overwriteNote` instead.
 - **Failed tools.** pi throws "Operation aborted" after `writeFile` when Stop lands in that gap.
   `changedOnly` records such a write only when the disk differs from the claim's starting version.
+  `fileGuard` passes it only for that error: pi throws every other `edit` error before writing, so a
+  change on disk then belongs to another writer. An abort before the write that coincides with an
+  outside change is still taken as the agent's.
 - **A net diff, not per-write hunks.** Autosave writes about once a second, so joining every write's
   hunks would show typing noise with shifting line numbers. The hint diffs the cached baseline text
   against the current text. When that text was evicted or is over 512K characters, the hint is a
-  pointer only. When the diff needs more than 4000 edits, the hint says it is too large to show.
+  pointer only. When the diff needs more than 200 edits or 50 ms, the hint says it is too large to
+  show. The diff runs on the host event loop, so the caps keep a formatter run over a large file from
+  freezing every client; `fileGuard` builds it after the mutation queue releases.
   The diff is capped at 40 lines, 240 characters per line and 6000 characters in all, so a minified
   file cannot flood the context. Its fence is longer than any backtick run in the lines.
 - **Order is `seq`, not time.** Two writes in the same millisecond still order correctly against a
@@ -102,7 +107,8 @@ uses the same data to tell an agent that someone changed a file under it.
 - **Bounds.** Per path 32 writes, 4096 paths; per session 1024 baselines, 256 sessions; 1024 open
   claims; a text cache of 32M characters (UTF-16 units, so up to 64 MiB of heap); 256 bash windows.
   The oldest goes first: paths by their last write, baselines by their last set, cached text by its last
-  write or read, windows and claims by when they opened. Lookups do not refresh order. A dropped ring
+  write or read, claims by when they opened, windows closed ones first and then by when they opened,
+  so many short shell calls cannot evict a long one still running. Lookups do not refresh order. A dropped ring
   entry only loses a hint. An evicted path loses its history: its
   writer then reads as untracked ("a program outside ThinkRail") and `lastWrite` as `external` or
   nothing.
