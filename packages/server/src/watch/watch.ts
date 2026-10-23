@@ -19,6 +19,7 @@ const MAX_PREWARM_ONLY_WATCHES = 8;
 
 const IGNORED_SEGMENTS = new Set([".git", "node_modules"]);
 const IGNORED_NAMES = new Set([".DS_Store"]);
+const HOST_TEMP_FILE = /^\.thinkrail-[a-z]+-.+\.tmp$/;
 const REPO_META_DEBOUNCE_MS = 300;
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
@@ -110,7 +111,7 @@ export function isIgnoredPath(relPath: string): boolean {
 	const segments = relPath.split(/[\\/]/);
 	if (segments.some((s) => IGNORED_SEGMENTS.has(s))) return true;
 	const name = segments[segments.length - 1];
-	return name !== undefined && IGNORED_NAMES.has(name);
+	return name !== undefined && (IGNORED_NAMES.has(name) || HOST_TEMP_FILE.test(name));
 }
 
 interface WatchEntry {
