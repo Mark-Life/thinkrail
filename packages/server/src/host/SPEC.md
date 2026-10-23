@@ -464,6 +464,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `changes`, under `withChangeLock`. The WebSocket `maxPayloadLength` is 6× `FILE_WRITE_MAX_BYTES` plus 1 MiB:
   JSON escapes a control character to 6 bytes, so any save under the cap fits in one frame. Other host writers inside worktrees
   (`agent/mcp/writers.ts`, `templates`) skip the queue; the save's CAS still catches them.
+- **Authorship is recorded inside the queue.** A save that changed bytes is recorded in
+  [[submodule-server-provenance]] as `user{ctx.clientKey}` in the same queue callback, from the bytes
+  `writeTextFile` replaced and wrote. `change.revert`/`change.undo` get `recordingQueue(withFileMutationQueue,
+  user)`, so a revert is the user's write too. `fs.readFile` adds `lastWrite` from `fileProvenance.lastWrite`
+  with the asking client's key; an unknown author leaves the field out.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.
