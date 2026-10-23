@@ -68,6 +68,7 @@ import {
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
 import { subscribeCloseRequest } from "./closeRequestChannel";
+import { FileDirtyDot } from "./FileDirtyDot";
 import {
 	collectAllGroups,
 	findPlacedResource,
@@ -339,7 +340,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const fileClose = useFileCloseGuard();
-	const fileBuffers = useAppStore((state) => state.fileBuffersByWorkspace[workspaceId]);
 	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
 	useLoadWorkspaceTurns(workspaceId);
@@ -716,14 +716,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (tab.kind !== "file" && tab.kind !== "diff") return null;
 			const flag = reviewFlagForPaths(reviewFlagByPath, tabReviewPaths(tab));
 			const unsaved =
-				tab.kind === "file" && fileBuffers?.[tab.path]?.dirty === true ? (
-					<span
-						role="img"
-						data-testid="file-dirty-dot"
-						aria-label={t("shell.workbench.unsaved")}
-						className="mr-4 size-8 shrink-0 rounded-full bg-text-default"
-					/>
-				) : null;
+				tab.kind === "file" ? <FileDirtyDot workspaceId={workspaceId} path={tab.path} /> : null;
 			const review = flag ? (
 				<span
 					data-testid="review-tab-flag"
@@ -744,7 +737,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</>
 			) : null;
 		},
-		[fileBuffers, reviewDraftCount, reviewFlagByPath, t],
+		[reviewDraftCount, reviewFlagByPath, t, workspaceId],
 	);
 
 	const renderEmptyCenter = useCallback(

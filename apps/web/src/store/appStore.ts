@@ -3205,9 +3205,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setFileBufferSummary: (workspaceId, path, summary) =>
 		set((s) => {
-			if (summary !== null && s.removedWorkspaceIds[workspaceId]) return {};
+			if (summary !== null && s.removedWorkspaceIds[workspaceId]) return s;
 			const next = withFileBufferSummary(s.fileBuffersByWorkspace, workspaceId, path, summary);
-			return next === s.fileBuffersByWorkspace ? {} : { fileBuffersByWorkspace: next };
+			return next === s.fileBuffersByWorkspace ? s : { fileBuffersByWorkspace: next };
 		}),
 	markSkillsSynced: (sessionId, syncedTick) =>
 		set((s) => {
