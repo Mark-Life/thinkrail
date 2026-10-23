@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
-import { readDir, workspaceRelativePath } from "./files";
+import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { readDir, readFile, workspaceRelativePath } from "./files";
 
 let dataDir: string;
 let root: string;
@@ -46,4 +47,20 @@ test("workspaceRelativePath names a contained path worktree-relative with / sepa
 test("workspaceRelativePath rejects a path outside the worktree", () => {
 	expect(workspaceRelativePath(root, "../worktree-sibling/a.ts")).toBeNull();
 	expect(workspaceRelativePath(root, join(dataDir, "elsewhere"))).toBeNull();
+});
+
+test("readFile names a missing file, or a file under a missing folder, FILE_NOT_FOUND", () => {
+	const codeOf = (path: string) => {
+		try {
+			readFile("w1", path);
+		} catch (error) {
+			return errorCodeOf(error);
+		}
+		return "read";
+	};
+	expect(codeOf("src/auth/login.ts")).toBe("read");
+	expect(codeOf("src/auth/gone.ts")).toBe("FILE_NOT_FOUND");
+	expect(codeOf("src/gone/deep.ts")).toBe("FILE_NOT_FOUND");
+	expect(codeOf("src/auth/login.ts/below.ts")).toBe("FILE_NOT_FOUND");
+	expect(codeOf("../outside.ts")).toBeUndefined();
 });

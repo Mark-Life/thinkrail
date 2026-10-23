@@ -6,7 +6,6 @@ import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "
 import { getTransport, supportsFileWrite } from "../transport";
 import { isEditableMeta } from "./buffer";
 import { indexedDbDrafts, pageDraftOwner } from "./drafts";
-import { fileExists } from "./probe";
 import { type BufferRegistry, createBufferRegistry, type FileIo, fileBufferKey } from "./registry";
 
 const DRAFT_DELAY_MS = 300;
@@ -31,8 +30,6 @@ const io: FileIo = {
 			});
 	},
 	write: (params) => getTransport().request("fs.writeFile", params),
-	exists: (workspaceId, path) =>
-		fileExists((dir) => getTransport().request("fs.readDir", { workspaceId, path: dir }), path),
 };
 
 function writable(protocolVersion: number | null): boolean {

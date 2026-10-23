@@ -27,7 +27,6 @@ import { applyChanges, textChanges } from "./textChanges";
 export interface FileIo {
 	read(workspaceId: string, path: string): Promise<FileContent>;
 	write(params: WsParams<"fs.writeFile">): Promise<FileWriteResult>;
-	exists(workspaceId: string, path: string): Promise<boolean>;
 }
 
 interface RegistryDeps {
@@ -48,7 +47,7 @@ export interface FileBufferHandle {
 	subscribeText(listener: () => void): () => void;
 	readToken(): number;
 	adoptRead(file: FileContent, token: number): void;
-	readFailed(): void;
+	readFailed(error: unknown): void;
 	reload(): void;
 	keepMine(): void;
 }
@@ -151,20 +150,13 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		notifyEntries();
 	};
 
-	const readFailed = (entry: Entry) => {
+	const readFailed = (entry: Entry, error: unknown) => {
+		if (wsErrorCode(error) !== "FILE_NOT_FOUND" || entry.dropped) return;
 		if (entry.state.saving) {
 			entry.rereadAfterSave = true;
 			return;
 		}
-		const seq = entry.saveSeq;
-		void deps.io
-			.exists(entry.workspaceId, entry.path)
-			.then((exists) => {
-				if (!exists && seq === entry.saveSeq && !entry.state.saving) {
-					commit(entry, markMissing(entry.state), false);
-				}
-			})
-			.catch(() => {});
+		commit(entry, markMissing(entry.state), false);
 	};
 
 	const readToken = (entry: Entry) => (entry.state.saving ? SAVING_TOKEN : entry.saveSeq);
@@ -173,7 +165,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		const token = readToken(entry);
 		return deps.io.read(entry.workspaceId, entry.path).then(
 			(file) => adoptRead(entry, file, token),
-			() => readFailed(entry),
+			(error: unknown) => readFailed(entry, error),
 		);
 	};
 
@@ -291,7 +283,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				},
 				readToken: () => readToken(entry),
 				adoptRead: (file, token) => adoptRead(entry, file, token),
-				readFailed: () => readFailed(entry),
+				readFailed: (error) => readFailed(entry, error),
 				reload: () => commit(entry, reloadFromDisk(entry.state), false),
 				keepMine: () => commit(entry, keepMine(entry.state), false),
 			},

@@ -2068,8 +2068,8 @@ own section. The kebab menu (`plan-menu`, a
   `supportsFileWrite` (v91). Every other mount stays read-only, and so do the phone view, chat cards,
   `ResourcePreview` and every diff. While a buffer exists, the other renderers of the tab (Preview, the
   rich CSV/JSON views) show the buffer text through `useFileBufferText`, not the disk text. The pane
-  routes each live-refresh read to the buffer with a read token, and a failed read to its deleted-on-disk
-  probe; the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
+  routes each live-refresh read to the buffer with a read token, and a failed read's error to it
+  (`FILE_NOT_FOUND` marks it deleted); the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
   the focused file, and its first edit keeps a preview tab. While the buffer is dirty the pane passes no
   `review` to any renderer (code, Preview, the rich views), so review threads and commenting hide until a
   save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A

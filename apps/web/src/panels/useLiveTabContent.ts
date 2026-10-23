@@ -8,7 +8,7 @@ export function useLiveTabContent<T>(
 		read: () => Promise<T>;
 		applyFresh: (fresh: T, tick: number) => void;
 		keepCurrent: (tick: number) => void;
-		readFailed?: () => void;
+		readFailed?: (error: unknown) => void;
 	},
 	reloadKey?: string,
 	loadedKey?: string,
@@ -39,10 +39,10 @@ export function useLiveTabContent<T>(
 			.then((fresh) => {
 				if (!cancelled && isCurrent()) opsRef.current.applyFresh(fresh, change.tick);
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
 				if (cancelled || !isCurrent()) return;
 				opsRef.current.keepCurrent(change.tick);
-				opsRef.current.readFailed?.();
+				opsRef.current.readFailed?.(error);
 			});
 		return () => {
 			cancelled = true;

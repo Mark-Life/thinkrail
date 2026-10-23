@@ -5,6 +5,7 @@ import {
 	fakeDisk,
 	live,
 	memoryDrafts,
+	notFound,
 	PATH,
 	settle,
 	setup,
@@ -94,7 +95,7 @@ test("a read that started before a save and lands after it is re-read, not adopt
 test("a failed read of a deleted file marks it deleted, and Save creates it again", async () => {
 	const { disk, registry, handle, summaries } = setup();
 	disk.remove(PATH);
-	handle.readFailed();
+	handle.readFailed(notFound());
 	await settle();
 	expect(summaries.at(-1)).toEqual({ status: "deleted", dirty: false });
 	await registry.save(handle.key);
@@ -204,7 +205,7 @@ test("a buffer dropped while its save is in flight leaves no draft that resurrec
 test("a failed re-create of a deleted file shows why instead of 'deleted'", async () => {
 	const { disk, registry, handle } = setup();
 	disk.remove(PATH);
-	handle.readFailed();
+	handle.readFailed(notFound());
 	await settle();
 	type(handle, 0, "x");
 	const write = disk.io.write;
@@ -234,30 +235,28 @@ test("a NOT_EDITABLE save says so instead of asking for a retry", async () => {
 	});
 });
 
-test("a failed probe leaves the buffer alone instead of marking it deleted", async () => {
+test("a read that fails for another reason leaves the buffer alone instead of marking it deleted", async () => {
 	const { disk, handle, summaries, registry } = setup();
 	type(handle, 0, "// ");
-	disk.io.exists = () => Promise.reject(new Error("Request timed out"));
-	handle.readFailed();
+	handle.readFailed(new Error("Request timed out"));
 	await settle();
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
+	disk.io.read = () => Promise.reject(new Error("Request timed out"));
 	await registry.reconcileAll();
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
 });
 
-test("an existence probe sent before a re-creating save cannot mark the file deleted again", async () => {
+test("a not-found read during a re-creating save waits for one fresh read after it", async () => {
 	const { disk, registry, handle, summaries } = setup();
 	disk.remove(PATH);
-	handle.readFailed();
+	handle.readFailed(notFound());
 	await settle();
-	let answer = (_exists: boolean) => {};
-	disk.io.exists = () =>
-		new Promise<boolean>((resolve) => {
-			answer = resolve;
-		});
-	handle.readFailed();
-	expect(await registry.save(handle.key)).toEqual({ status: "clean", dirty: false });
-	answer(false);
+	expect(summaries.at(-1)).toEqual({ status: "deleted", dirty: false });
+	const release = disk.hold();
+	const saving = registry.save(handle.key);
+	handle.readFailed(notFound());
+	release();
+	expect(await saving).toEqual({ status: "clean", dirty: false });
 	await settle();
 	expect(summaries.at(-1)).toEqual({ status: "clean", dirty: false });
 });
