@@ -26,6 +26,7 @@ import {
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { askUserQuestionExtension } from "./askUserQuestion";
+import { fileGuard } from "./fileGuard";
 import { oversizedImageGuard } from "./imageGuard";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
@@ -210,7 +211,7 @@ export function disabledExtensions(): ReadonlySet<string> {
 const isExtensionDisabled = (name: string): boolean => disabledExtensions().has(name);
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard];
+	return [oversizedImageGuard, fileGuard];
 }
 
 export function childExtensionFactories(): InlineExtension[] {
@@ -239,6 +240,7 @@ export async function buildResourceLoader(
 		requestReviewExtension,
 		setTitleExtension,
 		oversizedImageGuard,
+		fileGuard,
 		...extraFactories,
 	];
 	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
