@@ -109,7 +109,7 @@ function texts(result: ToolResultEventResult | undefined): string[] {
 	return (result?.content ?? []).flatMap((part) => (part.type === "text" ? [part.text] : []));
 }
 
-test("pi's not-found edit errors, single and multi, are the ones recognized", async () => {
+test("pi's not-found and duplicate-match edit errors, single and multi, are the ones recognized", async () => {
 	writeFileSync(join(root, "a.ts"), "alpha\nbeta\nalpha\n");
 	const single = await edit("a.ts", "missing", "x");
 	const multi = await run(createEditTool(root) as PiTool, "m", {
@@ -120,10 +120,22 @@ test("pi's not-found edit errors, single and multi, are the ones recognized", as
 		],
 	});
 	const duplicate = await edit("a.ts", "alpha", "x");
-	expect(single.isError && isStaleEditError(single.content[0]?.text ?? "")).toBe(true);
-	expect(multi.isError && isStaleEditError(multi.content[0]?.text ?? "")).toBe(true);
-	expect(duplicate.isError).toBe(true);
-	expect(isStaleEditError(duplicate.content[0]?.text ?? "")).toBe(false);
+	const multiDuplicate = await run(createEditTool(root) as PiTool, "d", {
+		path: "a.ts",
+		edits: [
+			{ oldText: "beta", newText: "b" },
+			{ oldText: "alpha", newText: "x" },
+		],
+	});
+	const outcomes = [single, multi, duplicate, multiDuplicate];
+	expect(outcomes.map((outcome) => outcome.isError)).toEqual([true, true, true, true]);
+	expect(outcomes.map((outcome) => isStaleEditError(outcome.content[0]?.text ?? ""))).toEqual([
+		true,
+		true,
+		true,
+		true,
+	]);
+	expect(isStaleEditError("Operation aborted")).toBe(false);
 });
 
 test("agentPath resolves like pi's tools: @, ~, Unicode spaces, file:// and Windows shell paths", () => {
@@ -406,7 +418,9 @@ test("an edit that fails before writing does not take an outside change as the a
 	writeFileSync(join(root, "a.ts"), "x\nx\nkeep\noutside\n");
 	const failed = await edit("a.ts", "x", "y", "e1");
 	expect(failed.content[0]?.text).toStartWith("Found 2 occurrences");
-	expect(await guarded.result(failed)).toBeUndefined();
+	expect(texts(await guarded.result(failed))[1]).toStartWith(
+		"ThinkRail: a.ts was changed by a terminal command or a program outside ThinkRail since you last read it.",
+	);
 	await guarded.end("e1");
 	const current = readFileSync(join(root, "a.ts"));
 	expect(
@@ -521,4 +535,18 @@ test("a command typed in the terminal is named as one, not only as a program out
 		"Blocked: a.ts changed since you read it (by a terminal command or a program outside ThinkRail).",
 	);
 	expect(blocked?.reason).toContain("+x");
+});
+
+test("an edit that a save made ambiguous gets the hint naming that save", async () => {
+	writeFileSync(join(root, "a.ts"), "const ttl = 60;\n");
+	const guarded = guard();
+	await guarded.result(await read("a.ts"));
+	userSave("a.ts", "const ttl = 60;\nconst ttl = 60;\n");
+	const failed = await edit("a.ts", "ttl = 60", "ttl = 1");
+	expect(failed.content[0]?.text).toStartWith("Found 2 occurrences of the text in a.ts.");
+	const hinted = texts(await guarded.result(failed));
+	expect(hinted[1]).toStartWith(
+		"ThinkRail: a.ts was changed by the user 0 s ago (line 2) since you last read it.",
+	);
+	expect(hinted[1]).toContain("+const ttl = 60;");
 });
