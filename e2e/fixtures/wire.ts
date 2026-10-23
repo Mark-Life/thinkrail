@@ -46,10 +46,46 @@ export class E2eWire {
 	): Promise<WsResult<M>> {
 		const id = `e2e_setup_${++this.sequence}`;
 		const request: WsRequest<M> = { id, method, params };
-		return new Promise<WsResult<M>>((resolve, reject) => {
+		return this.waitForFrame(
+			method,
+			(frame) => {
+				const response = readResponse(frame, id);
+				return response && { value: response };
+			},
+			timeoutMs,
+			() => this.socket.send(JSON.stringify(request)),
+		).then((response) => {
+			if (!response.ok) throw new Error(`${method} failed on the isolated host wire`);
+			return response.result as WsResult<M>;
+		});
+	}
+
+	push(
+		channel: WsChannel,
+		accept: (data: unknown) => boolean,
+		timeoutMs = 10_000,
+	): Promise<unknown> {
+		return this.waitForFrame(
+			`a ${channel} push`,
+			(frame) => {
+				if (typeof frame !== "object" || frame === null) return null;
+				const push = frame as { channel?: unknown; data?: unknown };
+				return push.channel === channel && accept(push.data) ? { value: push.data } : null;
+			},
+			timeoutMs,
+		);
+	}
+
+	private waitForFrame<T>(
+		label: string,
+		match: (frame: unknown) => { value: T } | null,
+		timeoutMs: number,
+		start?: () => void,
+	): Promise<T> {
+		return new Promise<T>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				cleanup();
-				reject(new E2eWireTransientError(`Timed out waiting for ${method}`));
+				reject(new E2eWireTransientError(`Timed out waiting for ${label}`));
 			}, timeoutMs);
 			const cleanup = () => {
 				clearTimeout(timer);
@@ -65,11 +101,10 @@ export class E2eWire {
 				} catch {
 					return;
 				}
-				const response = readResponse(parsed, id);
-				if (!response) return;
+				const matched = match(parsed);
+				if (!matched) return;
 				cleanup();
-				if (response.ok) resolve(response.result as WsResult<M>);
-				else reject(new Error(`${method} failed on the isolated host wire`));
+				resolve(matched.value);
 			};
 			const onClose = () => {
 				cleanup();
@@ -82,36 +117,12 @@ export class E2eWire {
 			this.socket.addEventListener("message", onMessage);
 			this.socket.addEventListener("close", onClose, { once: true });
 			this.socket.addEventListener("error", onError, { once: true });
-			this.socket.send(JSON.stringify(request));
-		});
-	}
-
-	push(
-		channel: WsChannel,
-		accept: (data: unknown) => boolean,
-		timeoutMs = 10_000,
-	): Promise<unknown> {
-		return new Promise<unknown>((resolve, reject) => {
-			const timer = setTimeout(() => {
-				this.socket.removeEventListener("message", onMessage);
-				reject(new Error(`Timed out waiting for a ${channel} push`));
-			}, timeoutMs);
-			const onMessage = (event: MessageEvent) => {
-				if (typeof event.data !== "string") return;
-				let frame: unknown;
-				try {
-					frame = JSON.parse(event.data);
-				} catch {
-					return;
-				}
-				if (typeof frame !== "object" || frame === null) return;
-				const push = frame as { channel?: unknown; data?: unknown };
-				if (push.channel !== channel || !accept(push.data)) return;
-				clearTimeout(timer);
-				this.socket.removeEventListener("message", onMessage);
-				resolve(push.data);
-			};
-			this.socket.addEventListener("message", onMessage);
+			try {
+				start?.();
+			} catch (error) {
+				cleanup();
+				reject(error);
+			}
 		});
 	}
 
