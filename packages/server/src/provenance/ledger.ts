@@ -1,7 +1,8 @@
 import { statSync } from "node:fs";
 import { sep } from "node:path";
 import type { FileAuthor, FileLastWrite } from "@thinkrail/contracts";
-import { editorText, type FileSnapshot, fileKey, firstChangedLine, versionHash } from "./snapshot";
+import { hashBytes } from "../fs";
+import { editorText, type FileSnapshot, fileKey, firstChangedLine } from "./snapshot";
 
 export type WriteAuthor =
 	| { kind: "user"; clientKey: string }
@@ -193,7 +194,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		toolCallId: string;
 		path: string;
 		mutates: boolean;
-		bytes: Uint8Array | null;
+		hash: string | null;
 	}): void {
 		touch(
 			claims,
@@ -203,7 +204,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 				key: fileKey(input.path),
 				seq,
 				mutates: input.mutates,
-				hash: input.bytes === null ? null : versionHash(input.bytes),
+				hash: input.hash,
 			},
 			MAX_CLAIMS,
 		);
@@ -258,13 +259,14 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		author: WriteAuthor;
 		before: Uint8Array | null;
 		after: Uint8Array | null;
+		hash?: string;
 		line?: number;
 		toolCallId?: string;
 		changedOnly?: boolean;
 	}): Overwrite | undefined {
 		const key = fileKey(input.path);
 		const after = input.after;
-		const hash = after === null ? null : versionHash(after);
+		const hash = after === null ? null : (input.hash ?? hashBytes(after));
 		const agent = input.author.kind === "agent" ? input.author : undefined;
 		const settled = agent ? settle(agent.sessionId, input.toolCallId, key) : undefined;
 		if (input.changedOnly && (!settled || settled.hash === hash)) return undefined;
@@ -314,10 +316,11 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		sessionId: string;
 		path: string;
 		bytes: Uint8Array | null;
+		hash?: string;
 		toolCallId?: string;
 	}): void {
 		const key = fileKey(input.path);
-		const hash = input.bytes === null ? null : versionHash(input.bytes);
+		const hash = input.bytes === null ? null : (input.hash ?? hashBytes(input.bytes));
 		const settled = settle(input.sessionId, input.toolCallId, key);
 		setBaseline(input.sessionId, key, baselineAfter(settled, hash));
 		if (input.bytes !== null && hash !== null && !settled?.contested) {
@@ -342,7 +345,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			if (writers.length === 0) return null;
 			return { read: false, writers, untracked: false };
 		}
-		const currentHash = input.current ? versionHash(input.current.bytes) : null;
+		const currentHash = input.current?.hash ?? null;
 		const since = entries.filter((entry) => entry.seq > baseline.seq);
 		const writers = since.filter((entry) => !isSelf(entry, input.sessionId));
 		if (currentHash === baseline.hash && (!baseline.contested || writers.length === 0)) return null;

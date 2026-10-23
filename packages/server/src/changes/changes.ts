@@ -43,7 +43,12 @@ export type FileMutationQueue = <T>(abs: string, run: () => Promise<T>) => Promi
 
 export interface FileMutation {
 	queue: FileMutationQueue;
-	written?: (write: { abs: string; before: Uint8Array | null; after: Uint8Array | null }) => void;
+	written?: (write: {
+		abs: string;
+		before: Uint8Array | null;
+		after: Uint8Array | null;
+		hash?: string;
+	}) => void;
 }
 
 export interface UndoChangeParams {

@@ -459,8 +459,8 @@ function sessionStateWorkspace(workspace: Workspace) {
 function userMutation(clientKey: string) {
 	return {
 		queue: withFileMutationQueue,
-		written: ({ abs, before, after }) =>
-			fileProvenance.recordWrite({ path: abs, author: { kind: "user", clientKey }, before, after }),
+		written: ({ abs, ...version }) =>
+			fileProvenance.recordWrite({ path: abs, author: { kind: "user", clientKey }, ...version }),
 	} satisfies FileMutation;
 }
 
@@ -722,7 +722,11 @@ const handlers: WsHandlers = {
 		const mutation = userMutation(ctx.clientKey);
 		const outcome = await mutation.queue(abs, async () => {
 			const written = writeTextFile(p);
-			if (written.changed) mutation.written({ abs, before: written.before, after: written.after });
+			if (written.changed) {
+				const { before, after, result } = written;
+				const hash = result.meta.hash;
+				mutation.written({ abs, before, after, ...(hash === null ? {} : { hash }) });
+			}
 			return written;
 		});
 		if (outcome.changed) recordWorkspaceActivity(p.workspaceId);
