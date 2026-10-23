@@ -1,3 +1,4 @@
+export { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
 export {

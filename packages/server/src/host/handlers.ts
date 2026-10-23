@@ -74,6 +74,7 @@ import {
 	stopAllSubagents,
 	stopBackgroundCommand,
 	stopSubagent,
+	withFileMutationQueue,
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
@@ -845,11 +846,15 @@ const handlers: WsHandlers = {
 	},
 	"change.revert": (p) => {
 		void ensureWatch(p.workspaceId);
-		return withChangeLock(p.workspaceId, async () => ({ receipt: await revertChange(p) }));
+		return withChangeLock(p.workspaceId, async () => ({
+			receipt: await revertChange(p, withFileMutationQueue),
+		}));
 	},
 	"change.undo": (p) => {
 		void ensureWatch(p.workspaceId);
-		return withChangeLock(p.workspaceId, async () => ({ receipt: await undoChange(p) }));
+		return withChangeLock(p.workspaceId, async () => ({
+			receipt: await undoChange(p, withFileMutationQueue),
+		}));
 	},
 	"terminal.reserve": (p) => {
 		getWorkspace(p.workspaceId);

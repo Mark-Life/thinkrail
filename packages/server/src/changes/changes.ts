@@ -32,6 +32,8 @@ export interface RevertChangeParams {
 	expect: { originalHash: string | null; modifiedHash: string | null };
 }
 
+export type FileMutationQueue = <T>(abs: string, run: () => Promise<T>) => Promise<T>;
+
 export interface UndoChangeParams {
 	workspaceId: string;
 	receiptId: string;
@@ -299,23 +301,24 @@ function revertedRange(
 	return BYTES.encode(revertedText(originalLines, modifiedLines, target));
 }
 
-export async function revertChange(params: RevertChangeParams): Promise<ChangeReceipt> {
-	const original = await originalSide(params);
-	const abs = resolveWorktreeFile(params.workspaceId, params.path, { followLeaf: false });
+interface Applied {
+	before: FileState;
+	after: FileState;
+	claimed?: string;
+}
+
+const ABSENT: FileState = { bytes: null, mode: null };
+
+function applyRevert(params: RevertChangeParams, abs: string, original: FileState): Applied {
 	const modified = worktreeState(abs, params.path);
 	assertSameView(params, original, modified);
 	assertNotModeOnly(params.path, original, modified);
-	const change = {
-		kind: "revert" as const,
-		workspaceId: params.workspaceId,
-		path: params.path,
-	};
 
 	if (params.target.kind === "range") {
 		const bytes = revertedRange(params.path, original.bytes, modified.bytes, params.target);
 		const next = { bytes, mode: modified.mode };
 		writeAtomic(abs, next);
-		return record({ ...change, before: modified, after: next });
+		return { before: modified, after: next };
 	}
 	if (params.target.kind !== "file") {
 		throw new CodedError("RANGE_INVALID", `Unknown revert target for ${params.path}.`);
@@ -327,30 +330,13 @@ export async function revertChange(params: RevertChangeParams): Promise<ChangeRe
 				`There is no change to revert for ${params.path} in this scope.`,
 			);
 		}
-		const claimed = claimForTrash(abs);
-		await trashClaim(claimed, abs);
-		return record({
-			...change,
-			before: modified,
-			after: { bytes: null, mode: null },
-			trashed: claimed,
-		});
+		return { before: modified, after: ABSENT, claimed: claimForTrash(abs) };
 	}
 	writeAtomic(abs, original);
-	return record({ ...change, before: modified, after: original });
+	return { before: modified, after: original };
 }
 
-export async function undoChange(params: UndoChangeParams): Promise<ChangeReceipt> {
-	const ring = rings.get(params.workspaceId) ?? [];
-	const index = ring.findIndex((held) => held.receipt.id === params.receiptId);
-	const held = index === -1 ? undefined : ring[index];
-	if (held === undefined) {
-		throw new CodedError(
-			"RECEIPT_UNKNOWN",
-			`This change can no longer be undone (receipt ${params.receiptId} is not held by the host).`,
-		);
-	}
-	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path, { followLeaf: false });
+function applyUndo(params: UndoChangeParams, abs: string, held: ReceiptRecord): Applied {
 	const current = worktreeState(abs, held.receipt.path);
 	const modeMoved =
 		held.receipt.after.mode !== null &&
@@ -362,23 +348,55 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 			`${held.receipt.path} changed since the change was applied — nothing was undone.`,
 		);
 	}
-	let trashed: string | undefined;
-	if (held.before.bytes === null) {
-		if (current.bytes !== null) {
-			const claimed = claimForTrash(abs);
-			await trashClaim(claimed, abs);
-			trashed = claimed;
-		}
-	} else {
+	if (held.before.bytes !== null) {
 		writeAtomic(abs, held.before);
+		return { before: current, after: held.before };
 	}
+	if (current.bytes === null) return { before: current, after: held.before };
+	return { before: current, after: held.before, claimed: claimForTrash(abs) };
+}
+
+export async function revertChange(
+	params: RevertChangeParams,
+	queue: FileMutationQueue,
+): Promise<ChangeReceipt> {
+	const original = await originalSide(params);
+	const abs = resolveWorktreeFile(params.workspaceId, params.path, { followLeaf: false });
+	const applied = await queue(abs, async () => applyRevert(params, abs, original));
+	if (applied.claimed !== undefined) await trashClaim(applied.claimed, abs);
+	return record({
+		kind: "revert",
+		workspaceId: params.workspaceId,
+		path: params.path,
+		before: applied.before,
+		after: applied.after,
+		...(applied.claimed === undefined ? {} : { trashed: applied.claimed }),
+	});
+}
+
+export async function undoChange(
+	params: UndoChangeParams,
+	queue: FileMutationQueue,
+): Promise<ChangeReceipt> {
+	const ring = rings.get(params.workspaceId) ?? [];
+	const index = ring.findIndex((held) => held.receipt.id === params.receiptId);
+	const held = index === -1 ? undefined : ring[index];
+	if (held === undefined) {
+		throw new CodedError(
+			"RECEIPT_UNKNOWN",
+			`This change can no longer be undone (receipt ${params.receiptId} is not held by the host).`,
+		);
+	}
+	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path, { followLeaf: false });
+	const applied = await queue(abs, async () => applyUndo(params, abs, held));
+	if (applied.claimed !== undefined) await trashClaim(applied.claimed, abs);
 	ring.splice(index, 1);
 	return record({
 		kind: "undo",
 		workspaceId: params.workspaceId,
 		path: held.receipt.path,
-		before: current,
-		after: held.before,
-		...(trashed === undefined ? {} : { trashed }),
+		before: applied.before,
+		after: applied.after,
+		...(applied.claimed === undefined ? {} : { trashed: applied.claimed }),
 	});
 }
