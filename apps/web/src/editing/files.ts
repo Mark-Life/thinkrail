@@ -2,7 +2,7 @@ import { FILE_WRITE_MAX_BYTES, type ResourceMeta } from "@thinkrail/contracts";
 import { i18n } from "@thinkrail/locales/react";
 import type { ResourceRenderer } from "@thinkrail/resource-renderers";
 import { fileName } from "../lib";
-import { toast, useAppStore } from "../store";
+import { selectActiveEditorTab, toast, useAppStore } from "../store";
 import { getTransport, supportsFileWrite } from "../transport";
 import { isEditableMeta } from "./buffer";
 import { indexedDbDrafts, pageDraftOwner } from "./drafts";
@@ -97,8 +97,7 @@ export function discardFile(workspaceId: string, path: string): void {
 function activeFileKey(state: AppState): string | null {
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return null;
-	const activeId = state.activeTabByWorkspace[workspaceId];
-	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === activeId);
+	const tab = selectActiveEditorTab(state, workspaceId);
 	return tab?.kind === "file" ? fileBufferKey(workspaceId, tab.path) : null;
 }
 
