@@ -256,6 +256,17 @@ export interface ResourceMeta {
 	mime?: string;
 }
 
+export interface FileContent {
+	content: string;
+	meta: ResourceMeta;
+}
+
+export type FileWriteResult =
+	| { status: "written"; meta: ResourceMeta }
+	| { status: "stale"; current: FileContent }
+	| { status: "missing" }
+	| { status: "readonly" };
+
 export interface SpecGraphNode {
 	id: string;
 	type: string;
