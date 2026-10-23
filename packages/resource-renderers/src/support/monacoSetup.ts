@@ -7,15 +7,21 @@ import "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.
 import "monaco-editor/esm/vs/editor/browser/coreCommands.js";
 import "monaco-editor/esm/vs/editor/contrib/bracketMatching/browser/bracketMatching.js";
 import "monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js";
+import "monaco-editor/esm/vs/editor/contrib/comment/browser/comment.js";
 import "monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu.js";
+import "monaco-editor/esm/vs/editor/contrib/cursorUndo/browser/cursorUndo.js";
 import "monaco-editor/esm/vs/editor/contrib/find/browser/findController.js";
 import "monaco-editor/esm/vs/editor/contrib/folding/browser/folding.js";
 import "monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution.js";
+import "monaco-editor/esm/vs/editor/contrib/linesOperations/browser/linesOperations.js";
 import "monaco-editor/esm/vs/editor/contrib/links/browser/links.js";
+import "monaco-editor/esm/vs/editor/contrib/multicursor/browser/multicursor.js";
 import "monaco-editor/esm/vs/editor/contrib/readOnlyMessage/browser/contribution.js";
 import "monaco-editor/esm/vs/editor/contrib/stickyScroll/browser/stickyScrollContribution.js";
+import "monaco-editor/esm/vs/editor/contrib/toggleTabFocusMode/browser/toggleTabFocusMode.js";
 import "monaco-editor/esm/vs/editor/contrib/unicodeHighlighter/browser/unicodeHighlighter.js";
 import "monaco-editor/esm/vs/editor/contrib/wordHighlighter/browser/wordHighlighter.js";
+import "monaco-editor/esm/vs/editor/contrib/wordOperations/browser/wordOperations.js";
 import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneCommandsQuickAccess.js";
 import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js";
 import { onThemeSwap } from "@thinkrail/ui/theme";
@@ -24,6 +30,7 @@ import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import onigWasmUrl from "shiki/onig.wasm?url";
 import type { ResourceCodeHost } from "../host";
+import type { ResourceEditSession, TextChange } from "../registry";
 import { editorWrappingOptions } from "./editorWrapping";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
@@ -59,9 +66,14 @@ function registerShikiLanguages(code: ResourceCodeHost): void {
 			});
 			registered.add(language.id);
 		}
+		const { line, block } = language.comments ?? {};
 		monaco.languages.setLanguageConfiguration(language.id, {
 			brackets: BRACKETS,
 			colorizedBracketPairs: BRACKETS,
+			comments: {
+				...(line ? { lineComment: line } : {}),
+				...(block ? { blockComment: [block[0], block[1]] } : {}),
+			},
 		});
 	}
 }
@@ -89,13 +101,14 @@ export function fileEditorOptions(
 	lineWidth: number,
 	bounded: boolean,
 	path: string,
+	editable: boolean,
 ) {
 	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
-		readOnly: true,
-		readOnlyMessage: { value: t("panels.monacoSetup.readOnly") },
+		readOnly: !editable,
+		...(editable ? {} : { readOnlyMessage: { value: t("panels.monacoSetup.readOnly") } }),
 		ariaLabel: path,
 		unicodeHighlight: { ambiguousCharacters: false },
 		lineNumbersMinChars: 3,
@@ -131,7 +144,7 @@ interface FileModelInput {
 	text: string;
 }
 
-function fileModelUri({ scope, path }: FileModelInput) {
+function fileModelUri({ scope, path }: Pick<FileModelInput, "scope" | "path">) {
 	return monaco.Uri.parse(`${scope}/${path}`);
 }
 
@@ -153,7 +166,7 @@ export function createFileEditor(
 export function syncFileModel(
 	codeEditor: editor.IStandaloneCodeEditor,
 	input: FileModelInput,
-	appliedText: string,
+	appliedText: string | null,
 ): void {
 	const current = codeEditor.getModel();
 	if (!current || current.uri.toString() !== fileModelUri(input).toString()) {
@@ -162,6 +175,65 @@ export function syncFileModel(
 		return;
 	}
 	if (input.text !== appliedText) current.setValue(input.text);
+}
+
+function editOperation(model: editor.ITextModel, change: TextChange) {
+	const start = model.getPositionAt(change.from);
+	const end = model.getPositionAt(change.to);
+	return {
+		range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+		text: change.insert,
+	};
+}
+
+export function bindEditSession(
+	codeEditor: editor.IStandaloneCodeEditor,
+	input: Omit<FileModelInput, "text"> & { session: ResourceEditSession },
+) {
+	const text = input.session.snapshot();
+	let model = codeEditor.getModel();
+	if (!model || model.uri.toString() !== fileModelUri(input).toString()) {
+		const previous = model;
+		model = createFileModel({ ...input, text });
+		codeEditor.setModel(model);
+		previous?.dispose();
+	} else if (model.getValue(monaco.editor.EndOfLinePreference.LF) !== text) {
+		model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+	}
+	if (model.getEOL() !== "\n") model.setEOL(monaco.editor.EndOfLineSequence.LF);
+	const bound = model;
+	let applying = false;
+	const local = bound.onDidChangeContent((event) => {
+		if (applying || event.isEolChange) return;
+		input.session.applyLocal(
+			event.changes.map((change) => ({
+				from: change.rangeOffset,
+				to: change.rangeOffset + change.rangeLength,
+				insert: change.text,
+			})),
+		);
+	});
+	const unsubscribe = input.session.subscribe((changes) => {
+		if (changes.length === 0 || bound.isDisposed()) return;
+		applying = true;
+		try {
+			bound.pushStackElement();
+			bound.pushEditOperations(
+				[],
+				changes.map((change) => editOperation(bound, change)),
+				() => null,
+			);
+			bound.pushStackElement();
+		} finally {
+			applying = false;
+		}
+	});
+	return {
+		dispose() {
+			local.dispose();
+			unsubscribe();
+		},
+	};
 }
 
 export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {

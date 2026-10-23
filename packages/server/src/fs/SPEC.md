@@ -23,7 +23,9 @@ text back to a text file under compare-and-swap.
   other dir, so future host-managed content there stays visible; its ephemeral `context/` is kept out of
   git, not out of the tree.) `readFile` answers **`{ content, meta }`**: a file is read as bytes and
   decoded only when it is text, so `content` is `""` for a byte-only resource and the client fetches
-  those bytes over the host's `/files` route instead of receiving mojibake.
+  those bytes over the host's `/files` route instead of receiving mojibake. A missing file, or one below a
+  missing folder or a file, throws `FILE_NOT_FOUND` (`isMissing`: `ENOENT`/`ENOTDIR`); a containment
+  refusal stays a plain error.
   **`resolveWorktreeFile(workspaceId, path)`** returns the
   contained absolute path for the host to stream a file's raw bytes over HTTP (the `/files/…` route
   serving relative images in the markdown viewer, the `/blob` route's containment check) and for the

@@ -26,6 +26,7 @@ import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
+import { useFileCloseGuard } from "../panels/fileCloseGuard";
 import { startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
@@ -66,6 +67,7 @@ import {
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
 import { subscribeCloseRequest } from "./closeRequestChannel";
+import { FileDirtyDot } from "./FileDirtyDot";
 import {
 	collectAllGroups,
 	findPlacedResource,
@@ -335,6 +337,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
+	const fileClose = useFileCloseGuard();
 	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
 	useLoadWorkspaceTurns(workspaceId);
@@ -707,7 +710,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			}
 			if (tab.kind !== "file" && tab.kind !== "diff") return null;
 			const flag = reviewFlagForPaths(reviewFlagByPath, tabReviewPaths(tab));
-			return flag ? (
+			const unsaved =
+				tab.kind === "file" ? <FileDirtyDot workspaceId={workspaceId} path={tab.path} /> : null;
+			const review = flag ? (
 				<span
 					data-testid="review-tab-flag"
 					data-flag={flag}
@@ -720,8 +725,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					{t("shell.workbench.reviewFlag")}
 				</span>
 			) : null;
+			return unsaved || review ? (
+				<>
+					{review}
+					{unsaved}
+				</>
+			) : null;
 		},
-		[reviewDraftCount, reviewFlagByPath, t],
+		[reviewDraftCount, reviewFlagByPath, t, workspaceId],
 	);
 
 	const renderEmptyCenter = useCallback(
@@ -877,47 +888,54 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						else close();
 						return;
 					}
-					const prepared = prepare();
-					const closedIdentity = layoutResourceIdentity(tab);
-					void commitWorkspaceLayout(
-						workspaceId,
-						prepared.document,
-						document ? { baseDocument: document } : {},
-					)
-						.then(() => {
-							const state = useAppStore.getState();
-							const current = state.layoutDocumentsByWorkspace[workspaceId];
-							if (
-								current &&
-								collectAllGroups(current)
-									.flatMap((group) => group.tabs)
-									.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
-							) {
-								return;
-							}
-							const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
-							prepared.onAccepted(
-								current && currentAttention
-									? { document: current, attention: currentAttention }
-									: undefined,
-							);
-							if (tab.kind === "chat") {
-								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (
-								tab.kind === "file" ||
-								tab.kind === "diff" ||
-								tab.kind === "changes" ||
-								tab.kind === "document"
-							) {
-								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
-									const resource = toLayoutTab(cache);
-									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
-										state.closeTab(cache.id, false, false, workspaceId);
+					const closeResource = () => {
+						const prepared = prepare();
+						const closedIdentity = layoutResourceIdentity(tab);
+						void commitWorkspaceLayout(
+							workspaceId,
+							prepared.document,
+							document ? { baseDocument: document } : {},
+						)
+							.then(() => {
+								const state = useAppStore.getState();
+								const current = state.layoutDocumentsByWorkspace[workspaceId];
+								if (
+									current &&
+									collectAllGroups(current)
+										.flatMap((group) => group.tabs)
+										.some((candidate) => layoutResourceIdentity(candidate) === closedIdentity)
+								) {
+									return;
+								}
+								const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
+								prepared.onAccepted(
+									current && currentAttention
+										? { document: current, attention: currentAttention }
+										: undefined,
+								);
+								if (tab.kind === "chat") {
+									state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
+								} else if (
+									tab.kind === "file" ||
+									tab.kind === "diff" ||
+									tab.kind === "changes" ||
+									tab.kind === "document"
+								) {
+									for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
+										const resource = toLayoutTab(cache);
+										if (resource && layoutResourceIdentity(resource) === closedIdentity) {
+											state.closeTab(cache.id, false, false, workspaceId);
+										}
 									}
 								}
-							}
-						})
-						.catch(() => {});
+							})
+							.catch(() => {});
+					};
+					if (tab.kind === "file") {
+						fileClose.requestClose({ workspaceId, path: tab.path }, closeResource);
+					} else {
+						closeResource();
+					}
 				}}
 				onNewChat={startChat}
 				onNewTerminal={(groupId, area, options) =>
@@ -936,6 +954,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onGestureCanceled={() => toast.info(t("shell.workbench.gestureCanceled"))}
 			/>
 			{terminalClose.confirmation}
+			{fileClose.confirmation}
 		</div>
 	);
 }

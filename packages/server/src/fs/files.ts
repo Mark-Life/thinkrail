@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileContent, FileNode } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
 import { isMissing } from "./errno";
@@ -75,9 +76,18 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
+function readBytes(abs: string, path: string) {
+	try {
+		return readFileSync(abs);
+	} catch (error) {
+		if (isMissing(error)) throw new CodedError("FILE_NOT_FOUND", `${path} does not exist.`);
+		throw error;
+	}
+}
+
 export function readFile(workspaceId: string, path: string): FileContent {
 	const { abs } = resolveInWorktree(workspaceId, path, true);
-	const bytes = readFileSync(abs);
+	const bytes = readBytes(abs, path);
 	const meta = resourceMeta(bytes, path);
 	return { content: meta.text ? decodeText(bytes) : "", meta };
 }

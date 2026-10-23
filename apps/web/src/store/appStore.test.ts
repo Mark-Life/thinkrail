@@ -4845,3 +4845,18 @@ test("authority can be given up without replacing the list (a consumer activatin
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);
 });
+
+test("an unchanged file buffer summary wakes no store subscriber", () => {
+	const summary = { status: "dirty", dirty: true } as const;
+	useAppStore.getState().setFileBufferSummary("ws-buffers", "a.ts", summary);
+	let notified = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		notified += 1;
+	});
+	useAppStore.getState().setFileBufferSummary("ws-buffers", "a.ts", { ...summary });
+	useAppStore.getState().setFileBufferSummary("ws-buffers", "a.ts", { ...summary });
+	expect(notified).toBe(0);
+	useAppStore.getState().setFileBufferSummary("ws-buffers", "a.ts", null);
+	expect(notified).toBe(1);
+	unsubscribe();
+});

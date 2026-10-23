@@ -31,6 +31,7 @@ export {
 	type ResourceContent,
 	type ResourceDescriptor,
 	type ResourceDiffProps,
+	type ResourceEditSession,
 	type ResourceEnvironment,
 	type ResourceIntent,
 	type ResourceRenderer,
@@ -43,6 +44,7 @@ export {
 	resolveRenderers,
 	resourceContent,
 	type SurfaceReview,
+	type TextChange,
 	threadLabel,
 } from "./registry";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
@@ -58,6 +60,7 @@ export {
 } from "./support/ResourcePreview";
 export { ReviewThreadCard } from "./support/ReviewThreadCard";
 export {
+	focusRendererEditor,
 	RendererView,
 	usePreloadResourceView,
 	useRendererSelection,

@@ -1673,7 +1673,7 @@ own section. The kebab menu (`plan-menu`, a
   deleted — keeps the last content, no auto-close; a diff tab whose file left the change set likewise
   keeps its last contents — the Changes list is where the disappearance shows). `FilePane` and `DiffPane`
   run the **one** tab-content live-refresh contract — the shared **`useLiveTabContent(tab, {read, applyFresh,
-  keepCurrent}, reloadKey?)`** hook — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
+  keepCurrent, readFailed?}, reloadKey?)`** hook (`readFailed` runs after a failed tick re-read keeps the current content; every callback is taken from the latest render when its read lands, so a file buffer created after the read started still adopts it) — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
   workspace-qualified write (`updateFileTabContent` vs `updateDiffTabContent`, each receiving the captured
   workspace because opaque cache ids may repeat across workspaces). Its one-batch skip ("this file isn't in it—just
   advance the tick") requires the batch to have **named** files: a **pathless** frame (`paths: []`, the host's
@@ -1692,7 +1692,7 @@ own section. The kebab menu (`plan-menu`, a
   target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
   the one the user is waiting for. Panels are mounted only for the active workspace,
   so scoping is natural. A degraded host watcher pauses automatic invalidations until the next workspace
-  read re-establishes it; editable-file conflict handling arrives with the editor (the viewer is read-only today).
+  read re-establishes it. An editable file's disk changes go to its buffer instead of overwriting it ([[submodule-web-editing]]).
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
   the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
   needs the same answer to route its chips. It is called by **the workbench tool integration**, not by `SpecsPanel` — the
@@ -2044,6 +2044,33 @@ own section. The kebab menu (`plan-menu`, a
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer
   behavior, not dispatch policy.
+- **A file tab edits on desktop.** `FilePane` passes the `edit` session from [[submodule-web-editing]]'s
+  `useFileBuffer` only when `canEditFile` holds: a desktop viewport, a renderer with `capabilities.edit`
+  (today only `code`), text metadata that is not an LFS pointer, a size within `FILE_WRITE_MAX_BYTES`, and
+  `supportsFileWrite` (v91). Every other mount stays read-only, and so do the phone view, chat cards,
+  `ResourcePreview` and every diff. While a buffer exists, the other renderers of the tab (Preview, the
+  rich CSV/JSON views) show the buffer text through `useFileBufferText`, not the disk text. The pane
+  routes each live-refresh read to the buffer with a read token, and a failed read's error to it
+  (`FILE_NOT_FOUND` marks it deleted); the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
+  the focused file, and its first edit keeps a preview tab. While the buffer is dirty the pane passes no
+  `review` to any renderer (code, Preview, the rich views), so review threads and commenting hide until a
+  save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A
+  Review panel "go to comment" request that arrives meanwhile is dropped, not held for a scroll jump after
+  the save. **`FileEditBanner`** shows one strip per
+  issue: a conflict (**Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
+  disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text, not connected,
+  or a failed save. Its live region stays mounted while
+  the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
+  **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
+  (`focusRendererEditor`).
+- **Closing a dirty file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
+  confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
+  **Cancel**. It reads `dirty` from the store's buffer summary. Save closes only once the save leaves the
+  buffer clean; any other result (a conflict, offline, read-only, too large, a failure) closes the dialog
+  and selects that tab, so its banner says why, even when the tab was in the background. Don't save
+  discards the buffer and its draft. While a save runs, Save shows "Saving…" and
+  Cancel and Escape still close the dialog; the tab then stays open. A clean file, and every other tab kind,
+  closes at once. A workspace removal closes tabs without asking and deletes their drafts.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

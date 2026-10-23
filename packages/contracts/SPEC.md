@@ -37,7 +37,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)),
   plus the two `fs.writeFile` refusals: **`NOT_EDITABLE`** (not a regular UTF-8 text file: byte-only,
   LFS pointer, directory or special file; or a create through a dangling symlink, or below a file or
-  dangling symlink that stands where a parent folder should be) and **`FILE_TOO_LARGE`**, so a client can react to one specific failure
+  dangling symlink that stands where a parent folder should be) and **`FILE_TOO_LARGE`**, and `fs.readFile`'s
+  **`FILE_NOT_FOUND`** (the file, or a folder above it, is gone; the editor marks its buffer deleted), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
@@ -68,7 +69,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions,
-  plus `FILE_WRITE_MAX_BYTES` and **`toEditorText(raw)`**, the one disk-to-editor text normalizer. It
+  plus `FILE_WRITE_MAX_BYTES`, `LFS_POINTER_MIME` (the host never writes an LFS pointer, and a client
+  never offers editing one) and **`toEditorText(raw)`**, the one disk-to-editor text normalizer. It
   defines the form an `fs.writeFile` `content` takes: a client derives editor text from disk text with it).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
@@ -530,7 +532,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `dismissInstallResult()` clears it. The window-controls bridge exposes the same
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
   (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
-  focused in-app item, and `open-settings`, open Settings unless a modal is open), and its one action `quit()` asks the host for an ordinary coordinated quit. The
+  focused in-app item, `open-settings`, open Settings unless a modal is open, and `save`, save the focused file), and its one action `quit()` asks the host for an ordinary coordinated quit. The
   notification bridge exposes `show({ title, subtitle?, body, silent? })` (fire-and-forget OS notification,
   no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
   when DevTools has renderer focus, unlike `document.hasFocus()`. A browser

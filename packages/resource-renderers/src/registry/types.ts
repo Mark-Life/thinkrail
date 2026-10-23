@@ -56,9 +56,23 @@ export interface SurfaceReview {
 	onFocusHandled(): void;
 }
 
+/** Offsets point into the document before the change set; ranges never overlap. */
+export interface TextChange {
+	from: number;
+	to: number;
+	insert: string;
+}
+
+export interface ResourceEditSession {
+	snapshot(): string;
+	applyLocal(changes: readonly TextChange[]): void;
+	subscribe(listener: (changes: readonly TextChange[]) => void): () => void;
+}
+
 export interface ResourceViewProps {
 	resource: ResourceDescriptor;
 	content: ResourceContent;
+	edit?: ResourceEditSession;
 	review?: SurfaceReview;
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
@@ -122,6 +136,7 @@ export interface ResourceRenderer {
 		layout: boolean;
 		whitespace: boolean;
 		boundedDiff?: "always" | "large";
+		edit?: boolean;
 	};
 	loadView?(environment: ResourceEnvironment): Promise<ResourceViewModule>;
 	loadDiff?(): Promise<{ default: ComponentType<ResourceDiffProps> }>;
