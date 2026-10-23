@@ -2084,7 +2084,9 @@ own section. The kebab menu (`plan-menu`, a
 - **Closing a dirty file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
   **Cancel**. It reads `dirty` from the store's buffer summary. Save closes only once the save leaves the
-  buffer clean; Don't save discards the buffer and its draft. While a save runs, Save shows "Saving…" and
+  buffer clean; any other result (a conflict, offline, read-only, too large, a failure) closes the dialog
+  and selects that tab, so its banner says why, even when the tab was in the background. Don't save
+  discards the buffer and its draft. While a save runs, Save shows "Saving…" and
   Cancel and Escape still close the dialog; the tab then stays open. A clean file, and every other tab kind,
   closes at once. A workspace removal closes tabs without asking and deletes their drafts.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
