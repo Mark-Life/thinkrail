@@ -7,4 +7,5 @@ export {
 	resourceMeta,
 } from "./content";
 export * from "./files";
+export { replaceFile } from "./replace";
 export { writeTextFile } from "./write";

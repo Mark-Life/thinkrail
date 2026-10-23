@@ -1,19 +1,12 @@
-import { randomBytes } from "node:crypto";
 import {
 	accessSync,
-	chmodSync,
 	constants,
-	lstatSync,
 	mkdirSync,
 	readFileSync,
 	realpathSync,
-	renameSync,
-	rmSync,
-	type Stats,
-	statSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import {
 	FILE_WRITE_MAX_BYTES,
 	type FileWriteResult,
@@ -22,40 +15,21 @@ import {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { decodeText, resourceMeta } from "./content";
+import { errnoCode, statOrNull } from "./errno";
 import { resolveWorktreeFile } from "./files";
+import { replaceFile } from "./replace";
 import { applyForm, textForm } from "./textForm";
 
-export type WriteTextFileParams = WsParams<"fs.writeFile">;
+type WriteTextFileParams = WsParams<"fs.writeFile">;
 
-export interface WriteTextFileOutcome {
+interface WriteTextFileOutcome {
 	result: FileWriteResult;
 	changed: boolean;
 }
 
-type WriteStrategy = "atomic" | "inPlace";
-
 const BYTES = new TextEncoder();
 const LFS_MIME = "application/vnd.git-lfs";
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
-const IN_PLACE_FALLBACK_CODES = new Set(["EACCES", "EPERM", "EBUSY", "EXDEV"]);
-
-function errnoCode(error: unknown): unknown {
-	return typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-}
-
-function isMissing(error: unknown): boolean {
-	const code = errnoCode(error);
-	return code === "ENOENT" || code === "ENOTDIR";
-}
-
-function statOrNull(abs: string, follow: boolean): Stats | null {
-	try {
-		return follow ? statSync(abs) : lstatSync(abs);
-	} catch (error) {
-		if (isMissing(error)) return null;
-		throw error;
-	}
-}
 
 function assertParams(params: WriteTextFileParams): void {
 	if (typeof params.content !== "string") throw new Error("fs.writeFile content must be a string");
@@ -65,49 +39,8 @@ function assertParams(params: WriteTextFileParams): void {
 	}
 }
 
-export function writeStrategy(
-	stat: Pick<Stats, "nlink" | "uid">,
-	uid: number | undefined,
-): WriteStrategy {
-	return stat.nlink > 1 || (uid !== undefined && stat.uid !== uid) ? "inPlace" : "atomic";
-}
-
 function written(bytes: Uint8Array, path: string): WriteTextFileOutcome {
 	return { result: { status: "written", meta: resourceMeta(bytes, path) }, changed: true };
-}
-
-function writeInPlace(target: string, out: Uint8Array, path: string): WriteTextFileOutcome {
-	try {
-		writeFileSync(target, out);
-	} catch (error) {
-		if (READONLY_CODES.has(String(errnoCode(error)))) {
-			return { result: { status: "readonly" }, changed: false };
-		}
-		throw error;
-	}
-	return written(out, path);
-}
-
-function writeAtomic(
-	target: string,
-	out: Uint8Array,
-	mode: number,
-	path: string,
-): WriteTextFileOutcome {
-	const tmp = join(
-		dirname(target),
-		`.thinkrail-write-${process.pid}-${randomBytes(4).toString("hex")}.tmp`,
-	);
-	try {
-		writeFileSync(tmp, out, { flag: "wx" });
-		chmodSync(tmp, mode);
-		renameSync(tmp, target);
-		return written(out, path);
-	} catch (error) {
-		rmSync(tmp, { force: true });
-		if (!IN_PLACE_FALLBACK_CODES.has(String(errnoCode(error)))) throw error;
-	}
-	return writeInPlace(target, out, path);
 }
 
 function createFile(
@@ -153,15 +86,14 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 	}
 	try {
 		accessSync(target, constants.W_OK);
+		replaceFile(target, out, stat.mode & 0o777);
 	} catch (error) {
 		if (READONLY_CODES.has(String(errnoCode(error)))) {
 			return { result: { status: "readonly" }, changed: false };
 		}
 		throw error;
 	}
-	return writeStrategy(stat, process.getuid?.()) === "atomic"
-		? writeAtomic(target, out, stat.mode & 0o777, path)
-		: writeInPlace(target, out, path);
+	return written(out, path);
 }
 
 export function writeTextFile(params: WriteTextFileParams): WriteTextFileOutcome {

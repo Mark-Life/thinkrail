@@ -1,14 +1,5 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import {
-	chmodSync,
-	linkSync,
-	lstatSync,
-	mkdirSync,
-	readFileSync,
-	renameSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { randomBytes } from "node:crypto";
+import { linkSync, lstatSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type {
 	ChangeReceipt,
@@ -18,7 +9,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { classifyBytes, decodeText, hashBytes, resolveWorktreeFile } from "../fs";
+import { classifyBytes, decodeText, hashBytes, replaceFile, resolveWorktreeFile } from "../fs";
 import { readBlobBytesAtAsync, readPathModeAtAsync, resolveDiffRange } from "../git";
 import { loadWorkspaces } from "../persistence";
 import { trashFile } from "../trash";
@@ -132,20 +123,10 @@ function identity(state: FileState): ChangeReceipt["before"] {
 		: { hash: hashBytes(state.bytes), byteLength: state.bytes.byteLength, mode: state.mode };
 }
 
-function writeAtomic(abs: string, state: FileState): void {
+function writeState(abs: string, state: FileState): void {
 	if (state.bytes === null || state.mode === null)
 		throw new Error("Cannot write an absent file state");
-	const dir = dirname(abs);
-	mkdirSync(dir, { recursive: true });
-	const tmp = join(dir, `.thinkrail-revert-${process.pid}-${randomUUID().slice(0, 8)}.tmp`);
-	try {
-		writeFileSync(tmp, state.bytes);
-		chmodSync(tmp, state.mode);
-		renameSync(tmp, abs);
-	} catch (error) {
-		rmSync(tmp, { force: true });
-		throw error;
-	}
+	replaceFile(abs, state.bytes, state.mode);
 }
 
 function claimForTrash(abs: string): string {
@@ -317,7 +298,7 @@ function applyRevert(params: RevertChangeParams, abs: string, original: FileStat
 	if (params.target.kind === "range") {
 		const bytes = revertedRange(params.path, original.bytes, modified.bytes, params.target);
 		const next = { bytes, mode: modified.mode };
-		writeAtomic(abs, next);
+		writeState(abs, next);
 		return { before: modified, after: next };
 	}
 	if (params.target.kind !== "file") {
@@ -332,7 +313,7 @@ function applyRevert(params: RevertChangeParams, abs: string, original: FileStat
 		}
 		return { before: modified, after: ABSENT, claimed: claimForTrash(abs) };
 	}
-	writeAtomic(abs, original);
+	writeState(abs, original);
 	return { before: modified, after: original };
 }
 
@@ -349,7 +330,7 @@ function applyUndo(params: UndoChangeParams, abs: string, held: ReceiptRecord): 
 		);
 	}
 	if (held.before.bytes !== null) {
-		writeAtomic(abs, held.before);
+		writeState(abs, held.before);
 		return { before: current, after: held.before };
 	}
 	if (current.bytes === null) return { before: current, after: held.before };

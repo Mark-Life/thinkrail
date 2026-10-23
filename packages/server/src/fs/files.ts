@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileContent, FileNode } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
+import { isMissing } from "./errno";
 
 function isContained(root: string, candidate: string): boolean {
 	const rel = relative(root, candidate);
@@ -31,9 +32,7 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 		try {
 			real = realpathSync(cursor);
 		} catch (error) {
-			const code =
-				typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+			if (!isMissing(error)) throw error;
 			const parent = dirname(cursor);
 			if (parent === cursor) throw error;
 			cursor = parent;

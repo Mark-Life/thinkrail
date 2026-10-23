@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
 	chmodSync,
 	existsSync,
+	linkSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -416,6 +417,26 @@ test("a deleted executable is restored with its Git mode", async () => {
 	expect(statSync(join(repo, "run.sh")).mode & 0o777).toBe(0o755);
 	expect(receipt.after.mode).toBe(0o755);
 });
+
+test.skipIf(process.platform === "win32")(
+	"a whole-file revert of a hard-linked file writes in place, like a save",
+	async () => {
+		write("a.ts", "MOD\n");
+		chmodSync(join(repo, "a.ts"), 0o755);
+		linkSync(join(repo, "a.ts"), join(repo, "b.ts"));
+		const before = statSync(join(repo, "a.ts"));
+		await revert(
+			"a.ts",
+			{ kind: "file" },
+			{ originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("MOD\n") },
+		);
+		const after = statSync(join(repo, "a.ts"));
+		expect(after.ino).toBe(before.ino);
+		expect(after.nlink).toBe(2);
+		expect(after.mode & 0o777).toBe(0o644);
+		expect(text("b.ts")).toBe("one\ntwo\nthree\n");
+	},
+);
 
 test("symbolic links on either side are unsupported", async () => {
 	write("target.txt", "target\n");
