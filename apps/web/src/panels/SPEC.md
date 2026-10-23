@@ -1704,7 +1704,7 @@ own section. The kebab menu (`plan-menu`, a
   target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
   the one the user is waiting for. Panels are mounted only for the active workspace,
   so scoping is natural. A degraded host watcher pauses automatic invalidations until the next workspace
-  read re-establishes it; editable-file conflict handling waits for `fs.writeFile` (the viewer is read-only today).
+  read re-establishes it; editable-file conflict handling arrives with the editor (the viewer is read-only today).
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
   the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
   needs the same answer to route its chips. It is called by **the workbench tool integration**, not by `SpecsPanel` — the
