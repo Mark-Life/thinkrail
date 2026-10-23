@@ -192,6 +192,22 @@ test("unsaved edits come back after a reload", async ({ page }) => {
 	await visibleEditor(page).locator(".view-line").first().click();
 	await pressPlatformShortcut(page, "s");
 	await expect.poll(() => readFileSync(path, "utf8")).toBe("const draft = 1; // survives\n");
+	await expect.poll(() => draftCount(page)).toBe(0);
+});
+
+test("Tab can leave an editable file through Monaco's tab-focus toggle", async ({ page }) => {
+	await openFile(page, "focus.ts", "const focus = 1;\n");
+	await typeAtLineEnd(page, 1, " // x");
+	const inEditor = () =>
+		page.evaluate(() => document.activeElement?.closest(".monaco-editor") !== null);
+	expect(await inEditor()).toBe(true);
+	const mac = await page.evaluate(() => navigator.userAgent.includes("Macintosh"));
+	await page.keyboard.press(mac ? "Control+Shift+M" : "Control+M");
+	await page.keyboard.press("Shift+Tab");
+	expect(await inEditor()).toBe(false);
+	await expect(visibleEditor(page).locator(".view-line").first()).toHaveText(
+		"const focus = 1; // x",
+	);
 });
 
 test("a phone-class viewport stays read-only", async ({ page }) => {

@@ -228,11 +228,12 @@ renderer whose desktop view can edit text; only `code` (Monaco) sets it today. A
 editable mount passes `ResourceViewProps.edit`, a `ResourceEditSession`; without it every view is
 read-only, so chat cards, phones and diffs stay read-only by construction. The session is
 editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes)` reports the view's own edits,
-`subscribe(listener)` delivers every other change, and `save()` asks the host to write. A change set is
-`TextChange[]` (`{from, to, insert}`), all offsets into the document before the set, never overlapping:
-the CodeMirror convention, so a CodeMirror- or CRDT-backed session needs no new contract. A view mounts
-from `snapshot()`, never from `content`, and applies subscribed changes as deltas. The package owns no
-buffer, save or conflict state.
+and `subscribe(listener)` delivers every other change. Saving is the host's (its shortcut and menu),
+not the view's. A change set is `TextChange[]` (`{from, to, insert}`), all offsets into the document
+before the set, never overlapping: the CodeMirror convention, so a CodeMirror- or CRDT-backed session
+needs no new contract. A view mounts from `snapshot()`, never from `content`, and applies subscribed
+changes as deltas. The package owns no buffer, save or conflict state. An editable Monaco keeps Monaco's
+tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor for keyboard users.
 
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
 and opaque per-tab view state. `anchorLabel` prefers a structural locator over its mandatory text fallback:

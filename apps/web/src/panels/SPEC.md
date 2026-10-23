@@ -2053,8 +2053,9 @@ own section. The kebab menu (`plan-menu`, a
   routes each live-refresh read to the buffer with a read token, and a failed read to its deleted-on-disk
   probe; the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
   the focused file, and its first edit keeps a preview tab. **`FileEditBanner`** shows one strip per
-  issue: a conflict (**Reload** / **Keep mine**; live merge comes later), deleted on disk (Save creates it
-  again), read-only on disk, too large to save, no longer editable text, or a failed save.
+  issue: a conflict (**Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
+  disk, too large to save, no longer editable text, or a failed save. Its live region stays mounted while
+  the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
 - **Closing a dirty file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
   **Cancel**. Save closes only once the save leaves the buffer clean; Don't save discards the buffer and its
