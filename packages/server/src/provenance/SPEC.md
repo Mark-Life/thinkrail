@@ -39,14 +39,15 @@ uses the same data to tell an agent that someone changed a file under it.
     as `thisClient` relative to the asking client, never as the clientKey, because the clientKey is a
     reconnect identity another client could take over.
   - `readSnapshot(abs)`: bytes plus mtime, `null` when absent, not a file, or over 8 MiB.
+    `editorText(bytes)`: the text a diff compares (`toEditorText`), `null` for byte-only content.
     `recordingQueue(queue, author)` wraps a per-file mutation queue, so a write it runs is recorded as
     that author by reading the file before and after.
   - **Notes**, the agent-facing text: `staleEditHint`, `staleWriteBlock`, `bashNote`. A hint is a
     one-line pointer (who, how long ago, which line) plus a diff from the baseline text to the disk,
     capped at 40 lines.
 - **Public surface (barrel):** `createProvenance`, `fileProvenance`, `Provenance`, `WriteAuthor`,
-  `WriteEntry`, `StaleRead`, `BashWindow`, `FileSnapshot`, `readSnapshot`, `recordingQueue`,
-  `staleEditHint`, `staleWriteBlock`, `bashNote`.
+  `WriteEntry`, `StaleRead`, `BashWindow`, `FileSnapshot`, `readSnapshot`, `editorText`,
+  `recordingQueue`, `staleEditHint`, `staleWriteBlock`, `bashNote`.
 - **Allowed deps:** `fs` (`hashBytes`, `classifyBytes`, `decodeText`); `contracts` (`FileLastWrite`, and
   at runtime `toEditorText`); `diff` (external, the line diff); Node `fs`/`path`.
 - **Forbidden:** `host`, `agent`, and any pi import. pi knowledge (tool names, error text, path rules)
