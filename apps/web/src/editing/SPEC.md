@@ -19,8 +19,9 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 
 - **Public surface:** `useFileBuffer`, `useFileBufferText`, `canEditFile`, `saveFile`,
   `saveFocusedFile`, `discardFile`.
-- **Allowed deps:** `store` (tabs, connection status and generation, removed workspace ids, the buffer
-  summary slice, `toast`), `transport`
+- **Allowed deps:** `store` (tabs and their content writes, the active tab and workspace tick
+  selectors, connection status and generation, removed workspace ids, the buffer summary slice, `toast`),
+  `transport`
   (`getTransport`, `supportsFileWrite`, `wsErrorCode`), `lib` (`tupleKey`, `fileName`, `randomId`),
   `contracts` (`toEditorText`,
   `FILE_WRITE_MAX_BYTES`, `LFS_POINTER_MIME`, wire types), `@thinkrail/resource-renderers` (edit-session types only),
@@ -69,6 +70,10 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   delete; the watcher has no rename events.
 - **Reconnect.** Frames missed while offline are never replayed, so on each new connection generation
   every buffer re-reads once.
+- **The tab follows the buffer's own reads.** A read the registry makes itself (reconnect, after a save,
+  a superseded token) also updates every file tab on that path through `updateFileTabContent`, stamped
+  with the workspace tick taken before the read, so `tab.content` and `tab.meta` never lag the buffer. A
+  tab that already holds a newer tick keeps it.
 - **Deltas, never a reset.** A text change that did not come from the attached editor is sent to it as
   `TextChange[]` from a line diff (`textChanges`, jsdiff `diffArrays` capped at 2,000 edits and 50 ms),
   so cursors and scroll stay. Past a cap, texts with the same line count change line by line in place

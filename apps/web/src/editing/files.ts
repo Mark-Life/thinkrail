@@ -1,8 +1,8 @@
-import { FILE_WRITE_MAX_BYTES, type ResourceMeta } from "@thinkrail/contracts";
+import { FILE_WRITE_MAX_BYTES, type FileContent, type ResourceMeta } from "@thinkrail/contracts";
 import { i18n } from "@thinkrail/locales/react";
 import type { ResourceRenderer } from "@thinkrail/resource-renderers";
 import { fileName } from "../lib";
-import { selectActiveEditorTab, toast, useAppStore } from "../store";
+import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "../store";
 import { getTransport, supportsFileWrite } from "../transport";
 import { isEditableMeta } from "./buffer";
 import { indexedDbDrafts, pageDraftOwner } from "./drafts";
@@ -11,8 +11,25 @@ import { type BufferRegistry, createBufferRegistry, type FileIo, fileBufferKey }
 
 const DRAFT_DELAY_MS = 300;
 
+export function syncFileTabs(workspaceId: string, path: string, file: FileContent, tick: number) {
+	const state = useAppStore.getState();
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if (tab.kind === "file" && tab.path === path && (tab.loadedTick ?? 0) <= tick) {
+			state.updateFileTabContent(workspaceId, tab.id, file.content, file.meta, tick);
+		}
+	}
+}
+
 const io: FileIo = {
-	read: (workspaceId, path) => getTransport().request("fs.readFile", { workspaceId, path }),
+	read: (workspaceId, path) => {
+		const tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
+		return getTransport()
+			.request("fs.readFile", { workspaceId, path })
+			.then((file) => {
+				syncFileTabs(workspaceId, path, file, tick);
+				return file;
+			});
+	},
 	write: (params) => getTransport().request("fs.writeFile", params),
 	exists: (workspaceId, path) =>
 		fileExists((dir) => getTransport().request("fs.readDir", { workspaceId, path: dir }), path),
