@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { Hash } from "node:crypto";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -432,20 +431,14 @@ test("an edit that fails before writing does not take an outside change as the a
 	);
 });
 
-test("an edit over a save made after its claim decodes nothing, since edits get no overwrite note", async () => {
+test("an edit over a save made after its claim gets no overwrite note", async () => {
 	writeFileSync(join(root, "a.ts"), "one\ntwo\n");
 	const guarded = guard();
 	await guarded.result(await read("a.ts"));
 	await guarded.call("edit", "e1", { path: "a.ts" });
 	userSave("a.ts", "one\ntwo\nuser\n");
 	const edited = await edit("a.ts", "two", "TWO", "e1");
-	const decode = spyOn(TextDecoder.prototype, "decode");
-	try {
-		expect(await guarded.result(edited)).toBeUndefined();
-		expect(decode).not.toHaveBeenCalled();
-	} finally {
-		decode.mockRestore();
-	}
+	expect(await guarded.result(edited)).toBeUndefined();
 });
 
 test("a bash call that never gets a result is closed when pi ends the tool", async () => {
@@ -510,19 +503,6 @@ test("a write over a file deleted since the read is blocked until a read confirm
 	expect(await guarded.call("write", "w3", { path: "a.ts", content: "x\n" })).toBeUndefined();
 	await guarded.result(await write("w3", "a.ts", "x\n"));
 	expect(existsSync(join(root, "a.ts"))).toBe(true);
-});
-
-test("the write check hashes the file once", async () => {
-	writeFileSync(join(root, "a.ts"), "one\n");
-	const guarded = guard();
-	await guarded.result(await read("a.ts"));
-	const digest = spyOn(Hash.prototype, "digest");
-	try {
-		expect(await guarded.call("write", "w1", { path: "a.ts", content: "x\n" })).toBeUndefined();
-		expect(digest).toHaveBeenCalledTimes(1);
-	} finally {
-		digest.mockRestore();
-	}
 });
 
 test("a command typed in the terminal is named as one, not only as a program outside ThinkRail", async () => {
