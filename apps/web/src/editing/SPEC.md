@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: editing — file buffers and the save pipeline
 parent: module-web
-depends-on: [module-contracts, module-resource-renderers]
+depends-on: [module-contracts, module-locales, module-resource-renderers]
 tags: [ui, public-surface-checked]
 ---
 
@@ -101,13 +101,16 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
    sends the newer text once more.
 
 `saveFocusedFile` saves the buffer of the focused editor (`[data-file-buffer]` on the pane), else the
-active file tab's buffer. Gated on `supportsFileWrite` (v91).
+active file tab's buffer (`selectActiveEditorTab`). The registry sends no write when the host's protocol
+is known and below `supportsFileWrite` (v91); before the first welcome the version is unknown and the
+save goes ahead, but the `offline` check stops it until a connection exists.
 
 ## Drafts
 
 IndexedDB database `thinkrail-drafts`, one record per `[host, workspaceId, path]` key holding the text,
 the base hash it was typed against, and its owner page. The host is `getTransport().httpBase()`. A record
-is written about 300 ms after a change and on `pagehide`, and deleted once the buffer is clean. When a
+is written about 300 ms after a change, and at once on `pagehide` and when the page becomes hidden
+(`visibilitychange`); it is deleted once the buffer is clean. When a
 buffer is created, a draft with the same base hash restores as a dirty buffer; a draft typed against
 another hash restores as a conflict, so Reload / Keep mine decides. Until that choice the conflict keeps
 the hash the draft was typed on (`typedOn`), and every draft write stores it, so a second reload shows the
