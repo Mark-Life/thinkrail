@@ -4,6 +4,7 @@ import { isAbsolute, posix, relative, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	type ExtensionAPI,
+	type ExtensionContext,
 	type ExtensionFactory,
 	isEditToolResult,
 	type ToolCallEventResult,
@@ -119,6 +120,13 @@ async function safely<T>(label: string, run: () => Promise<T> | T): Promise<T | 
 
 export function fileGuardExtension(store: Provenance = fileProvenance): ExtensionFactory {
 	return (pi: ExtensionAPI) => {
+		// Shutdown can run after dispose() made ctx stale, so it uses the id seen earlier.
+		let boundSessionId: string | undefined;
+		function sessionOf(ctx: ExtensionContext) {
+			boundSessionId = ctx.sessionManager.getSessionId();
+			return boundSessionId;
+		}
+
 		function guardWrite(input: {
 			sessionId: string;
 			toolCallId: string;
@@ -223,8 +231,12 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 			return note ? withNote(event, note) : undefined;
 		}
 
+		pi.on("session_start", (_event, ctx) => {
+			sessionOf(ctx);
+		});
+
 		pi.on("tool_call", (event, ctx) => {
-			const sessionId = ctx.sessionManager.getSessionId();
+			const sessionId = sessionOf(ctx);
 			const { toolCallId, toolName } = event;
 			if (SHELL_TOOLS.has(toolName)) {
 				store.openBashWindow({ sessionId, toolCallId, cwd: ctx.cwd });
@@ -243,7 +255,7 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 		});
 
 		pi.on("tool_result", async (event, ctx) => {
-			const sessionId = ctx.sessionManager.getSessionId();
+			const sessionId = sessionOf(ctx);
 			const { toolCallId } = event;
 			if (SHELL_TOOLS.has(event.toolName)) {
 				return safely("shell note", () => shellNote(sessionId, event, ctx.cwd));
@@ -299,11 +311,11 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 		});
 
 		pi.on("tool_execution_end", (event, ctx) => {
-			store.endTool({ sessionId: ctx.sessionManager.getSessionId(), toolCallId: event.toolCallId });
+			store.endTool({ sessionId: sessionOf(ctx), toolCallId: event.toolCallId });
 		});
 
-		pi.on("session_shutdown", (event, ctx) => {
-			if (event.reason !== "reload") store.forgetSession(ctx.sessionManager.getSessionId());
+		pi.on("session_shutdown", (event) => {
+			if (event.reason !== "reload" && boundSessionId) store.forgetSession(boundSessionId);
 		});
 	};
 }

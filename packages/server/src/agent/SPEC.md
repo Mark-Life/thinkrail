@@ -581,7 +581,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (3) A `bash`/`powershell` result gets a note naming the files under its cwd the user saved during
     the call.
     The session id comes from `ctx.sessionManager`; shutdown other than `reload` forgets its baselines,
-    claims and windows. `agentPath` resolves a path as pi's `resolveToCwd` does (strip `@`, fold Unicode
+    claims and windows, using the id cached from `session_start` or a tool event, since the shutdown
+    budget can expire and `dispose()` make the ctx stale before the handler runs. `agentPath` resolves a path as pi's `resolveToCwd` does (strip `@`, fold Unicode
     spaces, the win32 Git Bash/WSL/Cygwin drive forms, expand `~`, `file://`, resolve against `ctx.cwd`);
     `agentReadPath` adds the spelling variants pi's `read` tries. A mismatch keys the read or write
     under another path, so it loses the hint and also the write block for that spelling. The error-text
