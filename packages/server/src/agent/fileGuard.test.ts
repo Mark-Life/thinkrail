@@ -66,6 +66,18 @@ function guard(sessionId = "s1") {
 		end: (toolCallId: string) =>
 			emit("tool_execution_end", { type: "tool_execution_end", toolCallId, isError: true }),
 		shutdown: (reason: string) => emit("session_shutdown", { type: "session_shutdown", reason }),
+		staleShutdown: () =>
+			handlers.get("session_shutdown")?.(
+				{ type: "session_shutdown", reason: "quit" },
+				{
+					cwd: root,
+					sessionManager: {
+						getSessionId: () => {
+							throw new Error("stale ctx");
+						},
+					},
+				},
+			),
 	};
 }
 
@@ -313,6 +325,15 @@ test("shutdown forgets the session's reads, except across a reload", async () =>
 	expect((await guarded.call("write", "w1", { path: "a.ts", content: "x\n" }))?.block).toBe(true);
 	await guarded.shutdown("quit");
 	expect(await guarded.call("write", "w2", { path: "a.ts", content: "x\n" })).toBeUndefined();
+});
+
+test("shutdown still forgets the session when its ctx is already stale", async () => {
+	writeFileSync(join(root, "a.ts"), "one\n");
+	const guarded = guard();
+	await guarded.result(await read("a.ts"));
+	userSave("a.ts", "two\n");
+	await guarded.staleShutdown();
+	expect(await guarded.call("write", "w1", { path: "a.ts", content: "x\n" })).toBeUndefined();
 });
 
 test("two agents editing one file at once: the first one's later write over the other's edit is blocked", async () => {
