@@ -7,12 +7,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import {
-	FILE_WRITE_MAX_BYTES,
-	type FileWriteResult,
-	toEditorText,
-	type WsParams,
-} from "@thinkrail/contracts";
+import { FILE_WRITE_MAX_BYTES, type FileWriteResult, type WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { decodeText, LFS_POINTER_MIME, resourceMeta } from "./content";
 import { errnoCode, statOrNull } from "./errno";
@@ -74,7 +69,7 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 	const target = realpathSync(abs);
 	const current = readFileSync(target);
 	const meta = resourceMeta(current, path);
-	const out = applyForm(toEditorText(content), textForm(current));
+	const out = applyForm(content, textForm(current));
 	if (current.equals(out)) return { result: { status: "written", meta }, changed: false };
 	if (meta.hash !== expect.hash) {
 		const text = meta.text ? decodeText(current) : "";

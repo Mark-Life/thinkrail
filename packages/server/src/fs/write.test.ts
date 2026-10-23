@@ -17,8 +17,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FILE_WRITE_MAX_BYTES } from "@thinkrail/contracts";
-import { hashBytes } from "./content";
+import { FILE_WRITE_MAX_BYTES, toEditorText } from "@thinkrail/contracts";
+import { decodeText, hashBytes } from "./content";
 import { writeTextFile } from "./write";
 
 const BYTES = new TextEncoder();
@@ -138,6 +138,29 @@ test("the disk file's line endings and BOM survive a save", () => {
 	put("crlf.txt", "\uFEFFa\r\nb\r\n");
 	save("crlf.txt", "a\nb\nc\n", hash("\uFEFFa\r\nb\r\n"));
 	expect(text("crlf.txt")).toBe("\uFEFFa\r\nb\r\nc\r\n");
+});
+
+test("an unchanged save of a file that starts with two BOMs is a no-op", () => {
+	const disk = Buffer.from([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf, 0x61, 0x0a]);
+	put("two-bom.ts", disk);
+	const editorText = toEditorText(decodeText(disk));
+	expect(editorText).toBe("\uFEFFa\n");
+	expect(save("two-bom.ts", editorText, hash(disk))).toEqual({
+		result: { status: "written", meta: { hash: hash(disk), byteLength: 8, text: true } },
+		changed: false,
+	});
+	expect(readFileSync(join(root, "two-bom.ts"))).toEqual(disk);
+});
+
+test("a U+FEFF that starts the content of a BOM-less file is written, not dropped", () => {
+	put("plain.ts", "x\n");
+	const outcome = save("plain.ts", "\uFEFFx\n", hash("x\n"));
+	const disk = Buffer.from([0xef, 0xbb, 0xbf, 0x78, 0x0a]);
+	expect(outcome).toEqual({
+		result: { status: "written", meta: { hash: hash(disk), byteLength: 5, text: true } },
+		changed: true,
+	});
+	expect(readFileSync(join(root, "plain.ts"))).toEqual(disk);
 });
 
 test.skipIf(!POSIX)("a save reads the file once, even when it is written in place", () => {

@@ -74,8 +74,7 @@ text back to a text file under compare-and-swap.
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`, `writeTextFile`,
   `replaceFile`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `FileContent`,
-  `ResourceMeta`, `FileWriteResult`, `WsParams`, and at runtime `toEditorText` and
-  `FILE_WRITE_MAX_BYTES`);
+  `ResourceMeta`, `FileWriteResult`, `WsParams`, and at runtime `FILE_WRITE_MAX_BYTES`);
   `@thinkrail/shared/codedError`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
@@ -88,11 +87,14 @@ text back to a text file under compare-and-swap.
 - **Extension never beats the bytes.** A `.md` file whose content is a PNG reports `image/png`; the
   filename is consulted only when the bytes say nothing, so a mislabelled resource cannot talk a
   renderer into parsing it as text.
-- **The file keeps its form.** `content` is editor text (`toEditorText`). The written bytes re-apply the
-  disk file's BOM, and its line ending by pi `edit`'s rule: the first line break decides. That way an
+- **The file keeps its form.** `content` is editor text (`toEditorText`), so the host does not run
+  `toEditorText` again: a second pass would strip a leading U+FEFF the editor holds as text, and an
+  unchanged save of a two-BOM file would rewrite it. The host only folds `\r\n`/`\r` to `\n`. The
+  written bytes re-apply the disk file's BOM, and its line ending by pi `edit`'s rule: the first line break decides. That way an
   agent edit and a user save never flip a file's endings. A mixed-ending file is flattened on its first
   save, and a lone `\r` does not survive, the same as under a pi `edit`. The final newline is the
-  editor's. A created file is written exactly as sent.
+  editor's. A created file is written exactly as sent. A U+FEFF that starts the content of a BOM-less
+  file is written as bytes, so the file reads back with a BOM; the host never drops it silently.
 - **Atomic unless that changes the file's identity.** Temp+rename in the target's directory, with the
   mode and group copied. A hard-linked file, a file owned by another user, and a target whose temp
   create, `chown` to the file's group, or rename fails with `EACCES`/`EPERM`/`EBUSY`/`EXDEV` are written
