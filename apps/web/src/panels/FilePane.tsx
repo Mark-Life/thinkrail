@@ -75,7 +75,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			useAppStore
 				.getState()
 				.updateFileTabContent(tab.workspaceId, tab.id, tab.content, tab.meta, tick),
-		readFailed: () => buffer?.readFailed(),
+		readFailed: (error) => buffer?.readFailed(error),
 	});
 
 	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>

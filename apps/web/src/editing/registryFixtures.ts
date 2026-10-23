@@ -1,6 +1,7 @@
 import type { FileContent, FileWriteResult, WsParams } from "@thinkrail/contracts";
 import type { TextChange } from "@thinkrail/resource-renderers";
 import type { FileBufferSummary } from "../store";
+import { RequestError } from "../transport";
 import type { Draft, DraftKey, DraftStore } from "./drafts";
 import { createBufferRegistry, type FileIo } from "./registry";
 
@@ -22,7 +23,7 @@ export function fakeDisk(initial: Record<string, string>) {
 	for (const [path, text] of Object.entries(initial)) put(path, text);
 	const content = (path: string): FileContent => {
 		const current = files.get(path);
-		if (!current) throw new Error(`ENOENT: ${path}`);
+		if (!current) throw new RequestError("FILE_NOT_FOUND", `${path} does not exist.`);
 		return {
 			content: current.text,
 			meta: { hash: current.hash, byteLength: current.text.length, text: true },
@@ -48,7 +49,6 @@ export function fakeDisk(initial: Record<string, string>) {
 			put(params.path, params.content);
 			return { status: "written", meta: content(params.path).meta };
 		},
-		exists: async (_workspaceId, path) => files.has(path),
 	};
 	return {
 		io,
@@ -87,6 +87,8 @@ export function memoryDrafts(seed: Record<string, Draft> = {}) {
 	};
 	return { store, records };
 }
+
+export const notFound = () => new RequestError("FILE_NOT_FOUND", `${PATH} does not exist.`);
 
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
 

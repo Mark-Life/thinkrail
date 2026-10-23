@@ -63,11 +63,10 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 - **No read lands across a save.** A read carries a token from before it started. A read that started
   before, or arrived during, a write is dropped, and one fresh read runs after the write answers.
   Otherwise the echo of an older save would look like an external change.
-- **Deleted on disk.** A failed read probes the parent folder with `fs.readDir` (`probe.ts`). When the
-  name is gone, `base.hash` becomes `null`: status `deleted`, text kept. When the listing itself fails,
-  the probe asks the grandparent whether the folder is gone; any other failure (timeout, host error)
-  leaves the buffer as it was. A probe answer that lands after a save started is dropped. A rename is a
-  delete; the watcher has no rename events.
+- **Deleted on disk.** A read that fails with `FILE_NOT_FOUND` sets `base.hash` to `null`: status
+  `deleted`, text kept. Any other failure (timeout, host error) leaves the buffer as it was. One that
+  arrives during a save waits for the fresh read after it. A rename is a delete; the watcher has no
+  rename events.
 - **Reconnect.** Frames missed while offline are never replayed, so on each new connection generation
   every buffer re-reads once.
 - **The tab follows the buffer's own reads.** A read the registry makes itself (reconnect, after a save,
