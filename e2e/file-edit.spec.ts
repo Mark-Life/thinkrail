@@ -1,37 +1,14 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
+import { PHONE_VIEWPORT, pressPlatformShortcut } from "./fixtures/app";
 import {
-	createWorkspaceViaDialog,
-	openFixtureProject,
-	PHONE_VIEWPORT,
-	pressPlatformShortcut,
-	revealWorkbenchTool,
-} from "./fixtures/app";
-
-function visibleEditor(page: Page) {
-	return page.locator('[data-testid="editor-pane"]:visible .monaco-editor');
-}
-
-function fileTab(page: Page, name: string) {
-	return page.getByTestId("editor-tab").filter({ hasText: name });
-}
-
-function banner(page: Page) {
-	return page.getByTestId("file-edit-banner");
-}
-
-async function openFile(page: Page, name: string, text: string) {
-	await openFixtureProject(page);
-	const workspace = await createWorkspaceViaDialog(page);
-	const path = join(workspace.worktreePath, name);
-	writeFileSync(path, text);
-	await revealWorkbenchTool(page, "files");
-	await page.getByTestId("file-node").filter({ hasText: name }).dblclick();
-	await expect(visibleEditor(page)).toBeVisible();
-	await expect(page.locator("[data-file-buffer]")).toHaveCount(1);
-	return path;
-}
+	banner,
+	editorHasFocus,
+	fileTab,
+	openFile,
+	typeAtLineEnd,
+	visibleEditor,
+} from "./fixtures/fileEdit";
 
 function draftCount(page: Page) {
 	return page.evaluate(async () => {
@@ -50,15 +27,6 @@ function draftCount(page: Page) {
 			};
 		});
 	});
-}
-
-async function typeAtLineEnd(page: Page, line: number, text: string) {
-	await visibleEditor(page)
-		.locator(".view-line")
-		.nth(line - 1)
-		.click();
-	await page.keyboard.press("End");
-	await page.keyboard.type(text);
 }
 
 test("typing marks the tab unsaved and Cmd/Ctrl+S writes it, keeping the file's line endings", async ({
@@ -198,13 +166,11 @@ test("unsaved edits come back after a reload", async ({ page }) => {
 test("Tab can leave an editable file through Monaco's tab-focus toggle", async ({ page }) => {
 	await openFile(page, "focus.ts", "const focus = 1;\n");
 	await typeAtLineEnd(page, 1, " // x");
-	const inEditor = () =>
-		page.evaluate(() => document.activeElement?.closest(".monaco-editor") !== null);
-	expect(await inEditor()).toBe(true);
+	expect(await editorHasFocus(page)).toBe(true);
 	const mac = await page.evaluate(() => navigator.userAgent.includes("Macintosh"));
 	await page.keyboard.press(mac ? "Control+Shift+M" : "Control+M");
 	await page.keyboard.press("Shift+Tab");
-	expect(await inEditor()).toBe(false);
+	expect(await editorHasFocus(page)).toBe(false);
 	await expect(visibleEditor(page).locator(".view-line").first()).toHaveText(
 		"const focus = 1; // x",
 	);
