@@ -605,8 +605,8 @@ content's own height.
   Monaco is imported from `editor.api` with the reading contributions (find and replace, folding, bracket matching,
   context menu/clipboard, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
   messaging and Unicode highlighting) plus the basic editing ones (line operations, comment toggle, word
-  operations, multi-cursor, cursor undo); undo/redo and typing are core. Editing contributions cost
-  about 63 kB of the Monaco chunk. Keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
+  operations, multi-cursor, cursor undo); undo/redo and typing are core. Editing contributions grow the
+  Monaco chunk from 3,087 to 3,154 kB (792 to 807 kB gzip). Keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
   ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the

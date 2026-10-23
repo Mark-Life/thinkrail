@@ -852,7 +852,7 @@
 	"panels.mergePr.methodLabel": "Merge method",
 	"panels.mergePr.title": "Merge PR #{{number}}?",
 	"panels.mergePr.titleInto": "Merge PR #{{number}} into {{base}}?",
-	"panels.monacoSetup.readOnly": "Files open read-only here — ask the agent to change them.",
+	"panels.monacoSetup.readOnly": "This view is read-only.",
 	"panels.newWorkspace.baseLabel": "From",
 	"panels.newWorkspace.chatStartFailed": "Couldn't start the chat",
 	"panels.newWorkspace.create": "Create",
