@@ -65,14 +65,17 @@ text back to a text file under compare-and-swap.
   the file → `written`, disk untouched); hash (`stale` with the current `{content, meta}`); textness
   (byte-only or LFS pointer → `NOT_EDITABLE`); writability (`readonly`). It answers the wire result plus
   `changed`, so the host stamps workspace activity only when bytes changed.
-  **`replaceFile(target, bytes, mode, current)`** is the one byte write both `writeTextFile` and `changes`
-  use, so a save and a revert treat the same file the same way (rules under "Atomic unless…" below).
-  `current` is the caller's `{ stat, bytes }` of the target from the same pass, or `null` when it is
-  absent, so the file is not stat'ed or read twice and a failed in-place write restores the bytes the
-  caller checked.
+  **`replaceFile(target, bytes, mode, current)`** and **`createFile(target, bytes, mode?)`** are the byte
+  writes both `writeTextFile` and `changes` use, so a save and a revert treat the same file the same way.
+  `replaceFile` writes an existing file (rules under "Atomic unless…" below). `current` is the caller's
+  `{ stat, bytes }` (**`CurrentFile`**) of the target from the same pass, so the file is not stat'ed or
+  read twice and a failed in-place write restores the bytes the caller checked. `createFile` is an
+  exclusive create: it never replaces a file that appeared since the caller's check. A given `mode` is
+  set exactly (a revert restores Git's mode); without one the umask applies, as for any new file. The
+  caller makes the parent folder, so a save can map that failure on its own.
 - **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`, `writeTextFile`,
-  `replaceFile`.
+  `replaceFile`, `createFile`, `CurrentFile`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `FileContent`,
   `ResourceMeta`, `FileWriteResult`, `WsParams`, and at runtime `FILE_WRITE_MAX_BYTES`);
   `@thinkrail/shared/codedError`; Node `fs`/`path`/`crypto`.
@@ -102,11 +105,14 @@ text back to a text file under compare-and-swap.
 - **Atomic unless that changes the file's identity.** Temp+rename in the target's directory, with the
   mode and group copied. A hard-linked file, a file owned by another user, and a target whose temp
   create, `chown` to the file's group, or rename fails with `EACCES`/`EPERM`/`EBUSY`/`EXDEV` are written
-  in place. Rename loses xattrs, ACLs and Finder tags; this is accepted. No fsync, the same as pi. A
+  in place. A file owned by another user whose mode must change is the exception and renames: only the
+  owner may `chmod`, so in place it could never succeed. Rename loses xattrs, ACLs and Finder tags; this is accepted. No fsync, the same as pi. A
   crash can leave a `.thinkrail-write-*.tmp` file; nothing sweeps it.
-- **An in-place write can tear.** It truncates, then writes. When the write throws (`ENOSPC`, `EIO`), the
-  old bytes are written back before the error is rethrown. A host crash mid-write still leaves a partial
+- **An in-place write can tear.** It truncates, writes, then sets a changed mode. When the write or the
+  `chmod` throws (`ENOSPC`, `EIO`, `EPERM`), the old bytes are written back before the error is
+  rethrown, and the old mode is still in place. A host crash mid-write still leaves a partial
   file; only the atomic path is crash-safe.
-- **A rename never bypasses a read-only file.** Writability is checked on the target first.
+- **A rename never bypasses a read-only file.** `replaceFile` checks writability on the target first, so
+  a save answers `readonly` and a revert or undo throws, on every platform, with nothing written.
 - **No-op before CAS.** A replayed save (request-id dedupe dies with the host) and two windows saving the
   same text succeed with no write and no `fsChanged`.

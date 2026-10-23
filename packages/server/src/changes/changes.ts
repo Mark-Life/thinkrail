@@ -1,5 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { linkSync, lstatSync, readFileSync, renameSync, rmSync, type Stats } from "node:fs";
+import {
+	linkSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	type Stats,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import type {
 	ChangeReceipt,
@@ -9,7 +17,15 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { classifyBytes, decodeText, hashBytes, replaceFile, resolveWorktreeFile } from "../fs";
+import {
+	type CurrentFile,
+	classifyBytes,
+	createFile,
+	decodeText,
+	hashBytes,
+	replaceFile,
+	resolveWorktreeFile,
+} from "../fs";
 import { readBlobBytesAtAsync, readPathModeAtAsync, resolveDiffRange } from "../git";
 import { loadWorkspaces } from "../persistence";
 import { trashFile } from "../trash";
@@ -34,11 +50,6 @@ export interface UndoChangeParams {
 interface FileState {
 	bytes: Uint8Array | null;
 	mode: number | null;
-}
-
-interface WorktreeFile {
-	state: FileState;
-	disk: Parameters<typeof replaceFile>[3];
 }
 
 const RECEIPT_RING = 20;
@@ -103,20 +114,25 @@ function unsupported(path: string, reason: string): never {
 	throw new CodedError("UNSUPPORTED_CHANGE", `${path} ${reason}`);
 }
 
-function worktreeFile(abs: string, path: string): WorktreeFile {
+function worktreeFile(abs: string, path: string): CurrentFile | null {
 	let stat: Stats;
 	try {
 		stat = lstatSync(abs);
 	} catch (error) {
 		const code =
 			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-		if (code === "ENOENT") return { state: { bytes: null, mode: null }, disk: null };
+		if (code === "ENOENT") return null;
 		throw error;
 	}
 	if (stat.isSymbolicLink())
 		unsupported(path, "is a symbolic link, which change mutations do not support.");
-	const bytes = readFileSync(abs);
-	return { state: { bytes, mode: stat.mode & 0o777 }, disk: { stat, bytes } };
+	return { stat, bytes: readFileSync(abs) };
+}
+
+function stateOf(disk: CurrentFile | null): FileState {
+	return disk === null
+		? { bytes: null, mode: null }
+		: { bytes: disk.bytes, mode: disk.stat.mode & 0o777 };
 }
 
 function hashOf(state: FileState): string | null {
@@ -129,10 +145,15 @@ function identity(state: FileState): ChangeReceipt["before"] {
 		: { hash: hashBytes(state.bytes), byteLength: state.bytes.byteLength, mode: state.mode };
 }
 
-function writeState(abs: string, state: FileState, disk: WorktreeFile["disk"]): void {
+function writeState(abs: string, state: FileState, disk: CurrentFile | null): void {
 	if (state.bytes === null || state.mode === null)
 		throw new Error("Cannot write an absent file state");
-	replaceFile(abs, state.bytes, state.mode, disk);
+	if (disk !== null) {
+		replaceFile(abs, state.bytes, state.mode, disk);
+		return;
+	}
+	mkdirSync(dirname(abs), { recursive: true });
+	createFile(abs, state.bytes, state.mode);
 }
 
 function claimForTrash(abs: string): string {
@@ -297,7 +318,8 @@ interface Applied {
 const ABSENT: FileState = { bytes: null, mode: null };
 
 function applyRevert(params: RevertChangeParams, abs: string, original: FileState): Applied {
-	const { state: modified, disk } = worktreeFile(abs, params.path);
+	const disk = worktreeFile(abs, params.path);
+	const modified = stateOf(disk);
 	assertSameView(params, original, modified);
 	assertNotModeOnly(params.path, original, modified);
 
@@ -324,7 +346,8 @@ function applyRevert(params: RevertChangeParams, abs: string, original: FileStat
 }
 
 function applyUndo(params: UndoChangeParams, abs: string, held: ReceiptRecord): Applied {
-	const { state: current, disk } = worktreeFile(abs, held.receipt.path);
+	const disk = worktreeFile(abs, held.receipt.path);
+	const current = stateOf(disk);
 	const modeMoved =
 		held.receipt.after.mode !== null &&
 		current.mode !== null &&

@@ -1,21 +1,11 @@
-import {
-	accessSync,
-	closeSync,
-	constants,
-	mkdirSync,
-	openSync,
-	readFileSync,
-	realpathSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname } from "node:path";
 import { FILE_WRITE_MAX_BYTES, type FileWriteResult, type WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { decodeText, LFS_POINTER_MIME, resourceMeta } from "./content";
 import { errnoCode, statOrNull } from "./errno";
 import { resolveWorktreeFile } from "./files";
-import { replaceFile } from "./replace";
+import { createFile, replaceFile } from "./replace";
 import { applyForm, textForm } from "./textForm";
 
 type WriteTextFileParams = WsParams<"fs.writeFile">;
@@ -48,19 +38,7 @@ function readonlyOrThrow(error: unknown): WriteTextFileOutcome {
 	throw error;
 }
 
-function createExclusive(abs: string, bytes: Uint8Array): void {
-	const fd = openSync(abs, "wx");
-	let complete = false;
-	try {
-		writeFileSync(fd, bytes);
-		complete = true;
-	} finally {
-		closeSync(fd);
-		if (!complete) rmSync(abs, { force: true });
-	}
-}
-
-function createFile(
+function createMissing(
 	abs: string,
 	params: WriteTextFileParams,
 	retried: boolean,
@@ -81,7 +59,7 @@ function createFile(
 		return readonlyOrThrow(error);
 	}
 	try {
-		createExclusive(abs, bytes);
+		createFile(abs, bytes);
 	} catch (error) {
 		if (errnoCode(error) === "EEXIST" && !retried) return writePass(params, true);
 		return readonlyOrThrow(error);
@@ -95,7 +73,7 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 	const stat = statOrNull(abs, true);
 	if (stat === null) {
 		if (expect.hash !== null) return { result: { status: "missing" }, changed: false };
-		return createFile(abs, params, retried);
+		return createMissing(abs, params, retried);
 	}
 	if (!stat.isFile()) throw new CodedError("NOT_EDITABLE", `${path} is not a regular file.`);
 
@@ -112,7 +90,6 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 		throw new CodedError("NOT_EDITABLE", `${path} is not an editable text file.`);
 	}
 	try {
-		accessSync(target, constants.W_OK);
 		replaceFile(target, out, stat.mode & 0o777, { stat, bytes: current });
 	} catch (error) {
 		return readonlyOrThrow(error);

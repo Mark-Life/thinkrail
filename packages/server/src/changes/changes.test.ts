@@ -403,6 +403,27 @@ test("a mode-only change is unsupported", async () => {
 	expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o755);
 });
 
+test.skipIf(process.getuid?.() === 0)(
+	"a revert of a read-only file is refused and writes nothing, like a save",
+	async () => {
+		write("a.ts", "MOD\n");
+		chmodSync(join(repo, "a.ts"), 0o444);
+		try {
+			await expect(
+				revert(
+					"a.ts",
+					{ kind: "file" },
+					{ originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("MOD\n") },
+				),
+			).rejects.toMatchObject({ code: expect.stringMatching(/^(EACCES|EPERM)$/) });
+			expect(text("a.ts")).toBe("MOD\n");
+			expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o444);
+		} finally {
+			chmodSync(join(repo, "a.ts"), 0o644);
+		}
+	},
+);
+
 test("a deleted executable is restored with its Git mode", async () => {
 	write("run.sh", "#!/bin/sh\necho ready\n");
 	chmodSync(join(repo, "run.sh"), 0o755);
