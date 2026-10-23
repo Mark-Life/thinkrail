@@ -557,6 +557,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
+  - `fileGuard` — the collision guard: an inline extension (`fileGuard`, one of `buildResourceLoader`'s
+    shared factories and the delegated-child base set) over pi's public `tool_call` / `tool_result` hooks.
+    It feeds [[submodule-server-provenance]] and tells an agent when someone else changed a file under it.
+    It never replaces pi's tools. A successful `read` records the session's baseline. A successful
+    `edit`/`write` records an agent ledger entry and a new baseline. Both re-read the file inside pi's
+    `withFileMutationQueue`, so they never see a half-written pi edit. Three behaviors:
+    (1) a failed `edit` whose text is pi's not-found error (both the single and the `edits[i]` variant)
+    gets the provenance hint appended when the file changed since the session's read; `isError` stays.
+    (2) A `write` to an existing file is blocked when the session's last read is stale and someone other
+    than this session's own shell changed it. A file the session never read is not blocked.
+    (3) A `bash`/`powershell` result gets a note naming the files the user saved during the call.
+    The session id comes from `ctx.sessionManager`; shutdown other than `reload` forgets its baselines.
+    Paths resolve as pi's `resolveToCwd` does (strip `@`, fold Unicode spaces, expand `~`, resolve
+    against `ctx.cwd`). A mismatch only loses a hint. The error-text match and the path rule are
+    pi-sensitive seams, listed in `pi-compatibility.md`.
   - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
     **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
     the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
@@ -660,9 +675,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `pi-web-access` + `pi-spec-graph` + every registry extension's `childExtensions` (named inline,
     from [[submodule-server-extensions]]; none today) — deliberately not the parent's full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
-    also loads the core's base set (`childBaseExtensionFactories`, same decision): just
-    `oversizedImageGuard`, since a child's `read` returns raw images under the shared settings (see the
-    `buildSessionSettings` bullet). Web-access reaches the child set via a **named bundled-seam
+    also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
+    since a child's `read` returns raw images under the shared settings (see the
+    `buildSessionSettings` bullet), and `fileGuard`, so a subagent's writes are attributed and guarded
+    like its parent's. Web-access reaches the child set via a **named bundled-seam
     field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its raw
     third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
@@ -781,7 +797,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (normalizes ask-only assistant batches),
-    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), `fileGuard`
+    (see the `fileGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
     (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
@@ -872,8 +889,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
-  receipt stores); `trash` (the recoverable-delete primitive); Node.
-- **Forbidden:** `host`; sibling features other than `log`, `trash` and those narrow persistence surfaces (session
+  receipt stores); `trash` (the recoverable-delete primitive); `provenance` (the store `fileGuard` feeds and
+  its note text); Node.
+- **Forbidden:** `host`; sibling features other than `log`, `trash`, `provenance` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
