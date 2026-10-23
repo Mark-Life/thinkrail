@@ -2053,8 +2053,10 @@ own section. The kebab menu (`plan-menu`, a
   routes each live-refresh read to the buffer with a read token, and a failed read to its deleted-on-disk
   probe; the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
   the focused file, and its first edit keeps a preview tab. While the buffer is dirty the pane passes no
-  `review`, so review threads and commenting hide until a save or Reload: the host anchors a comment
-  against disk lines, which no longer match the buffer. **`FileEditBanner`** shows one strip per
+  `review` to any renderer (code, Preview, the rich views), so review threads and commenting hide until a
+  save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A
+  Review panel "go to comment" request that arrives meanwhile is dropped, not held for a scroll jump after
+  the save. **`FileEditBanner`** shows one strip per
   issue: a conflict (**Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
   disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text, not connected,
   or a failed save. Its live region stays mounted while

@@ -80,7 +80,12 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
-	const reviewSurface = editing && dirty ? undefined : review.worktree;
+	const reviewSurface = dirty ? undefined : review.worktree;
+	const heldFocus = dirty ? review.worktree.focus : null;
+	const dropFocus = review.worktree.onFocusHandled;
+	useEffect(() => {
+		if (heldFocus) dropFocus();
+	}, [heldFocus, dropFocus]);
 	const reviews = reviewSurface ? [reviewSurface] : [];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
