@@ -80,7 +80,7 @@ test("an unknown version infers a script inside a bash window, then external, el
 	const mtime = new Date(clock - 60_000);
 	utimesSync(tracked, mtime, mtime);
 	expect(provenance.lastWrite({ path: tracked, hash: "other", clientKey: "c" })).toEqual({
-		author: { kind: "external", inferred: true },
+		author: { kind: "external" },
 		at: mtime.getTime(),
 	});
 
@@ -91,7 +91,6 @@ test("an unknown version infers a script inside a bash window, then external, el
 		kind: "agent",
 		sessionId: "s2",
 		via: "script",
-		inferred: true,
 	});
 });
 
@@ -239,7 +238,6 @@ test("an ended tool closes its bash window, so later outside writes are not the 
 	utimesSync(path, new Date(clock), new Date(clock));
 	expect(provenance.lastWrite({ path, hash: "other", clientKey: "c" })?.author).toEqual({
 		kind: "external",
-		inferred: true,
 	});
 	expect(provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" })).toBeNull();
 });
@@ -386,7 +384,7 @@ test("an older version restored by a script is not credited to its first author"
 	put("a.ts", "A\n");
 	utimesSync(path, new Date(clock + 1000), new Date(clock + 1000));
 	expect(provenance.lastWrite({ path, hash: hashBytes(bytes("A\n")), clientKey: "c" })).toEqual({
-		author: { kind: "agent", sessionId: "s1", via: "script", inferred: true },
+		author: { kind: "agent", sessionId: "s1", via: "script" },
 		at: clock + 1000,
 	});
 });

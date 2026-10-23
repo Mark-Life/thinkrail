@@ -453,11 +453,11 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		const window = scriptWindows(key, since, mtimeMs).at(-1);
 		if (window) {
 			return {
-				author: { kind: "agent", sessionId: window.sessionId, via: "script", inferred: true },
+				author: { kind: "agent", sessionId: window.sessionId, via: "script" },
 				at: mtimeMs,
 			};
 		}
-		if (entries.length > 0) return { author: { kind: "external", inferred: true }, at: mtimeMs };
+		if (entries.length > 0) return { author: { kind: "external" }, at: mtimeMs };
 		return undefined;
 	}
 
