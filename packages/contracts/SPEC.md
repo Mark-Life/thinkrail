@@ -564,7 +564,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   v91): `{workspaceId, path, content, expect:{hash}}` → `written{meta} | stale{current} | missing |
   readonly`. `content` is editor text (`toEditorText`: one leading BOM dropped, every `\r\n`/`\r`
   folded to `\n`), and the host restores the disk file's form. The host folds line breaks again but
-  never strips a leading U+FEFF: in editor text it is a character, because the disk BOM is already gone. `expect.hash` is the hash the client last
+  never strips a leading U+FEFF: in editor text it is a character, because the disk BOM is already gone,
+  so the host writes a BOM before it. `expect.hash` is the hash the client last
   adopted, or `null` for create-only. Stale, missing and read-only are expected outcomes, so they are
   results. `FILE_WRITE_MAX_BYTES` (4 MiB of UTF-8) is checked by the host. The host's frame limit is sized
   for the worst JSON escaping of that cap (6×), because an oversized frame closes the socket and an

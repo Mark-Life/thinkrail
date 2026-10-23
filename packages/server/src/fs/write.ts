@@ -6,7 +6,7 @@ import { decodeText, LFS_POINTER_MIME, resourceMeta } from "./content";
 import { errnoCode, statOrNull } from "./errno";
 import { resolveWorktreeFile } from "./files";
 import { createFile, replaceFile } from "./replace";
-import { applyForm, textForm } from "./textForm";
+import { applyForm, createdBytes, textForm } from "./textForm";
 
 type WriteTextFileParams = WsParams<"fs.writeFile">;
 
@@ -15,7 +15,6 @@ interface WriteTextFileOutcome {
 	changed: boolean;
 }
 
-const BYTES = new TextEncoder();
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
 const NOT_A_FOLDER_CODES = new Set(["EEXIST", "ENOTDIR"]);
 
@@ -46,7 +45,7 @@ function createMissing(
 	if (statOrNull(abs, false) !== null) {
 		throw new CodedError("NOT_EDITABLE", `${params.path} is a symbolic link to a missing file.`);
 	}
-	const bytes = BYTES.encode(params.content);
+	const bytes = createdBytes(params.content);
 	try {
 		mkdirSync(dirname(abs), { recursive: true });
 	} catch (error) {

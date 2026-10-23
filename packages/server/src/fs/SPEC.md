@@ -96,8 +96,9 @@ text back to a text file under compare-and-swap.
   written bytes re-apply the disk file's BOM, and its line ending by pi `edit`'s rule: the first line break decides. That way an
   agent edit and a user save never flip a file's endings. A mixed-ending file is flattened on its first
   save, and a lone `\r` does not survive, the same as under a pi `edit`. The final newline is the
-  editor's. A created file is written exactly as sent. A U+FEFF that starts the content of a BOM-less
-  file is written as bytes, so the file reads back with a BOM; the host never drops it silently.
+  editor's. A created file is written as sent. A U+FEFF that starts the content is a character, so the
+  host writes a BOM before it, whatever the disk file had. `toEditorText` of the written file then
+  equals the content, so a second save of the same buffer, or a replay, is a no-op.
 - **A create maps errno like an update.** A read-only folder or volume answers `readonly`; a regular
   file where a parent folder should be is `NOT_EDITABLE`. The exclusive create writes straight to the
   target, so a write that fails partway (`ENOSPC`) removes the file it created; a replay then creates

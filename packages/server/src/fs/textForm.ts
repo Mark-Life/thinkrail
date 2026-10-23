@@ -19,8 +19,15 @@ export function textForm(bytes: Uint8Array): TextForm {
 	};
 }
 
+function encode(body: string, bom: boolean): Uint8Array {
+	return BYTES.encode(bom || body.startsWith("\uFEFF") ? `\uFEFF${body}` : body);
+}
+
 export function applyForm(editorText: string, form: TextForm): Uint8Array {
 	const lf = editorText.replace(/\r\n?/g, "\n");
-	const body = form.eol === "\r\n" ? lf.replaceAll("\n", "\r\n") : lf;
-	return BYTES.encode(form.bom ? `\uFEFF${body}` : body);
+	return encode(form.eol === "\r\n" ? lf.replaceAll("\n", "\r\n") : lf, form.bom);
+}
+
+export function createdBytes(editorText: string): Uint8Array {
+	return encode(editorText, false);
 }

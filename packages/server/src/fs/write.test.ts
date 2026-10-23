@@ -128,10 +128,10 @@ test("a missing file is missing unless the save is create-only", () => {
 	});
 	expect(existsSync(join(root, "gone.ts"))).toBe(false);
 
-	expect(save("new/dir/file.ts", "\uFEFFx\r\n", null).result).toMatchObject({ status: "written" });
-	expect(readFileSync(join(root, "new/dir/file.ts"), "utf8")).toBe("\uFEFFx\r\n");
+	expect(save("new/dir/file.ts", "x\r\n", null).result).toMatchObject({ status: "written" });
+	expect(text("new/dir/file.ts")).toBe("x\r\n");
 	expect(save("new/dir/file.ts", "y\n", null).result).toMatchObject({ status: "stale" });
-	expect(readFileSync(join(root, "new/dir/file.ts"), "utf8")).toBe("\uFEFFx\r\n");
+	expect(text("new/dir/file.ts")).toBe("x\r\n");
 });
 
 test("the disk file's line endings and BOM survive a save", () => {
@@ -152,15 +152,32 @@ test("an unchanged save of a file that starts with two BOMs is a no-op", () => {
 	expect(readFileSync(join(root, "two-bom.ts"))).toEqual(disk);
 });
 
-test("a U+FEFF that starts the content of a BOM-less file is written, not dropped", () => {
+test("a U+FEFF that starts the content of a BOM-less file is kept behind a BOM", () => {
 	put("plain.ts", "x\n");
-	const outcome = save("plain.ts", "\uFEFFx\n", hash("x\n"));
-	const disk = Buffer.from([0xef, 0xbb, 0xbf, 0x78, 0x0a]);
-	expect(outcome).toEqual({
-		result: { status: "written", meta: { hash: hash(disk), byteLength: 5, text: true } },
-		changed: true,
-	});
+	const params = {
+		workspaceId: "w1",
+		path: "plain.ts",
+		content: "\uFEFFx\n",
+		expect: { hash: hash("x\n") },
+	};
+	const disk = Buffer.from([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf, 0x78, 0x0a]);
+	const meta = { hash: hash(disk), byteLength: 8, text: true };
+	expect(writeTextFile(params)).toEqual({ result: { status: "written", meta }, changed: true });
 	expect(readFileSync(join(root, "plain.ts"))).toEqual(disk);
+	expect(toEditorText(decodeText(disk))).toBe(params.content);
+	expect(save("plain.ts", params.content, meta.hash).changed).toBe(false);
+	expect(writeTextFile(params)).toEqual({ result: { status: "written", meta }, changed: false });
+	expect(readFileSync(join(root, "plain.ts"))).toEqual(disk);
+});
+
+test("a create-only save of text that starts with U+FEFF replays as written", () => {
+	const disk = Buffer.from([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf, 0x78]);
+	expect(save("new.ts", "\uFEFFx", null).result).toMatchObject({ status: "written" });
+	expect(readFileSync(join(root, "new.ts"))).toEqual(disk);
+	expect(save("new.ts", "\uFEFFx", null)).toMatchObject({
+		result: { status: "written" },
+		changed: false,
+	});
 });
 
 test("a create below a regular file is not editable", () => {

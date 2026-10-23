@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { applyForm, textForm } from "./textForm";
+import { applyForm, createdBytes, textForm } from "./textForm";
 
 const BYTES = new TextEncoder();
 const TEXT = new TextDecoder("utf-8", { ignoreBOM: true });
@@ -17,11 +17,13 @@ test("a CRLF file given LF content is written CRLF", () => {
 	expect(save("a\r\nb\r\n", "a\nb\nc\n")).toBe("a\r\nb\r\nc\r\n");
 });
 
-test("the disk file's BOM is re-applied, and a U+FEFF that starts the content is kept", () => {
+test("the disk file's BOM is re-applied, and a U+FEFF that starts the content is kept behind one", () => {
 	expect(save("\uFEFFa\n", "b\n")).toBe("\uFEFFb\n");
 	expect(save("a\n", "b\n")).toBe("b\n");
 	expect(save("\uFEFFa\n", "\uFEFFb\n")).toBe("\uFEFF\uFEFFb\n");
-	expect(save("a\n", "\uFEFFb\n")).toBe("\uFEFFb\n");
+	expect(save("a\n", "\uFEFFb\n")).toBe("\uFEFF\uFEFFb\n");
+	expect(TEXT.decode(createdBytes("\uFEFFb\r\n"))).toBe("\uFEFF\uFEFFb\r\n");
+	expect(TEXT.decode(createdBytes("b\r\n"))).toBe("b\r\n");
 	expect(textForm(BYTES.encode("\uFEFFa\r\n"))).toEqual({ bom: true, eol: "\r\n" });
 });
 
