@@ -466,8 +466,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`agent/mcp/writers.ts`, `templates`) skip the queue; the save's CAS still catches them.
 - **Authorship is recorded inside the queue.** A save that changed bytes is recorded in
   [[submodule-server-provenance]] as `user{ctx.clientKey}` in the same queue callback, from the bytes
-  `writeTextFile` replaced and wrote. `change.revert`/`change.undo` get `recordingQueue(withFileMutationQueue,
-  user)`, so a revert is the user's write too. `fs.readFile` adds `lastWrite` from `fileProvenance.lastWrite`
+  `writeTextFile` replaced and wrote. `change.revert`/`change.undo` pass a `written` callback with the
+  queue, so a revert or undo is the user's write too, a delete included, from the bytes `changes` replaced. `fs.readFile` adds `lastWrite` from `fileProvenance.lastWrite`
   with the asking client's key; an unknown author leaves the field out.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a

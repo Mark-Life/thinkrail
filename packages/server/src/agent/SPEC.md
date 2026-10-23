@@ -557,18 +557,27 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   - `fileGuard` — the collision guard: an inline extension (`fileGuard`, one of `buildResourceLoader`'s
     shared factories and the delegated-child base set) over pi's public `tool_call` / `tool_result` hooks.
     It feeds [[submodule-server-provenance]] and tells an agent when someone else changed a file under it.
-    It never replaces pi's tools. A successful `read` records the session's baseline. A successful
-    `edit`/`write` records an agent ledger entry and a new baseline. Both re-read the file inside pi's
-    `withFileMutationQueue`, so they never see a half-written pi edit. Three behaviors:
+    It never replaces pi's tools. `tool_call` opens a provenance claim for `read`/`edit`/`write` (a
+    `write` only once it passes the block check) and a bash window for `bash`/`powershell`. A successful
+    `read` records the session's baseline. A successful `edit`/`write` records an agent ledger entry and
+    a new baseline; a failed one is recorded only when its bytes reached the disk (a `write` whose
+    content is on disk, an `edit` that changed the file). All re-read the file inside pi's
+    `withFileMutationQueue`, so they never see a half-written pi edit, and settle the claim so a writer
+    that slipped in before the re-read is not adopted (see the provenance spec). `tool_execution_end`,
+    which pi emits on every path, drops the claim and closes the window when a block or abort skipped
+    `tool_result`. Three behaviors:
     (1) a failed `edit` whose text is pi's not-found error (both the single and the `edits[i]` variant)
     gets the provenance hint appended when the file changed since the session's read; `isError` stays.
     (2) A `write` to an existing file is blocked when the session's last read is stale and someone other
     than this session's own shell changed it. A file the session never read is not blocked.
-    (3) A `bash`/`powershell` result gets a note naming the files the user saved during the call.
-    The session id comes from `ctx.sessionManager`; shutdown other than `reload` forgets its baselines.
-    Paths resolve as pi's `resolveToCwd` does (strip `@`, fold Unicode spaces, expand `~`, resolve
-    against `ctx.cwd`). A mismatch only loses a hint. The error-text match and the path rule are
-    pi-sensitive seams, listed in `pi-compatibility.md`.
+    (3) A `bash`/`powershell` result gets a note naming the files under its cwd the user saved during
+    the call.
+    The session id comes from `ctx.sessionManager`; shutdown other than `reload` forgets its baselines,
+    claims and windows. `agentPath` resolves a path as pi's `resolveToCwd` does (strip `@`, fold Unicode
+    spaces, the win32 Git Bash/WSL/Cygwin drive forms, expand `~`, `file://`, resolve against `ctx.cwd`);
+    `agentReadPath` adds the spelling variants pi's `read` tries. A mismatch keys the read or write
+    under another path, so it loses the hint and also the write block for that spelling. The error-text
+    match and the path rule are pi-sensitive seams, listed in `pi-compatibility.md`.
   - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
     **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
     the host knows — the delegation root under the data dir (`<dataDir>/delegation`),

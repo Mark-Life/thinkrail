@@ -1,11 +1,11 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isAbsolute, posix, relative, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	type ExtensionAPI,
 	type ExtensionFactory,
 	isEditToolResult,
-	isToolCallEventType,
 	type ToolCallEventResult,
 	type ToolResultEvent,
 	type ToolResultEventResult,
@@ -27,20 +27,57 @@ const log = logger("agent");
 
 const STALE_EDIT_ERROR = /^Could not find (?:the exact text|edits\[\d+\]) in /;
 const UNICODE_SPACES = /[  -   　]/g;
+const WINDOWS_SHELL_PATH = /^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i;
 const SHELL_TOOLS = new Set(["bash", "powershell"]);
-const PENDING_WRITES_MAX = 64;
+const FILE_TOOLS = new Set(["read", "edit", "write"]);
 
 export function isStaleEditError(text: string): boolean {
 	return STALE_EDIT_ERROR.test(text);
 }
 
-export function agentPath(path: string, cwd: string): string {
-	let normalized = path.replace(UNICODE_SPACES, " ");
-	if (normalized.startsWith("@")) normalized = normalized.slice(1);
-	if (normalized === "~") return homedir();
-	if (normalized.startsWith("~/")) normalized = join(homedir(), normalized.slice(2));
-	else if (normalized.startsWith("file://")) normalized = fileURLToPath(normalized);
-	return resolve(cwd, normalized);
+function windowsShellPath(path: string): string {
+	if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) return path;
+	const match = path.match(WINDOWS_SHELL_PATH);
+	if (!match?.[1]) return path;
+	return `${match[1].toUpperCase()}:\\${match[2]?.replaceAll("/", "\\") ?? ""}`;
+}
+
+function normalized(path: string, platform: NodeJS.Platform): string {
+	const native = platform === "win32" ? windowsShellPath(path) : path;
+	const paths = platform === "win32" ? win32 : posix;
+	if (native === "~") return homedir();
+	if (native.startsWith("~/") || (platform === "win32" && native.startsWith("~\\"))) {
+		return paths.join(homedir(), native.slice(2));
+	}
+	return native.startsWith("file://") ? fileURLToPath(native) : native;
+}
+
+export function agentPath(
+	path: string,
+	cwd: string,
+	platform: NodeJS.Platform = process.platform,
+): string {
+	const spaced = path.replace(UNICODE_SPACES, " ");
+	const target = normalized(spaced.startsWith("@") ? spaced.slice(1) : spaced, platform);
+	const paths = platform === "win32" ? win32 : posix;
+	return paths.isAbsolute(target)
+		? paths.resolve(target)
+		: paths.resolve(normalized(cwd, platform), target);
+}
+
+const curlyQuotes = (path: string) => path.replace(/'/g, "’");
+
+export function agentReadPath(path: string, cwd: string): string {
+	const resolved = agentPath(path, cwd);
+	const nfd = resolved.normalize("NFD");
+	const variants = [
+		resolved,
+		resolved.replace(/ (AM|PM)\./gi, " $1."),
+		nfd,
+		curlyQuotes(resolved),
+		curlyQuotes(nfd),
+	];
+	return variants.find((variant) => existsSync(variant)) ?? resolved;
 }
 
 function displayUnder(cwd: string): (abs: string) => string {
@@ -70,7 +107,7 @@ function withNote(event: ToolResultEvent, text: string): ToolResultEventResult {
 }
 
 function blocksWrite(stale: StaleRead): boolean {
-	if (!stale.baseline) return false;
+	if (!stale.read) return false;
 	return stale.writers.length > 0 || (stale.untracked && stale.script?.self !== true);
 }
 
@@ -85,42 +122,48 @@ async function safely<T>(label: string, run: () => Promise<T> | T): Promise<T | 
 
 export function fileGuardExtension(store: Provenance = fileProvenance): ExtensionFactory {
 	return (pi: ExtensionAPI) => {
-		const pendingWrites = new Map<string, Uint8Array | null>();
-
-		function rememberWrite(toolCallId: string, bytes: Uint8Array | null): void {
-			pendingWrites.set(toolCallId, bytes);
-			for (const oldest of pendingWrites.keys()) {
-				if (pendingWrites.size <= PENDING_WRITES_MAX) break;
-				pendingWrites.delete(oldest);
+		function guardWrite(input: {
+			sessionId: string;
+			toolCallId: string;
+			path: string;
+			abs: string;
+		}) {
+			const current = readSnapshot(input.abs);
+			const stale = current
+				? store.staleRead({ sessionId: input.sessionId, path: input.abs, current })
+				: null;
+			if (current && stale && blocksWrite(stale)) {
+				const reason = staleWriteBlock({
+					displayPath: input.path,
+					stale,
+					currentText: editorText(current.bytes),
+					now: store.now(),
+				});
+				return { block: true, reason } satisfies ToolCallEventResult;
 			}
-		}
-
-		function guardWrite(sessionId: string, toolCallId: string, path: string, cwd: string) {
-			const abs = agentPath(path, cwd);
-			const current = readSnapshot(abs);
-			rememberWrite(toolCallId, current?.bytes ?? null);
-			if (!current) return undefined;
-			const stale = store.staleRead({ sessionId, path: abs, current });
-			if (!stale || !blocksWrite(stale)) return undefined;
-			const reason = staleWriteBlock({
-				displayPath: path,
-				stale,
-				currentText: editorText(current.bytes),
-				now: store.now(),
+			store.openClaim({
+				sessionId: input.sessionId,
+				toolCallId: input.toolCallId,
+				path: input.abs,
+				mutates: true,
+				bytes: current?.bytes ?? null,
 			});
-			return { block: true, reason } satisfies ToolCallEventResult;
+			return undefined;
 		}
 
 		function recordAgentWrite(input: {
 			sessionId: string;
+			toolCallId: string;
 			abs: string;
 			toolName: string;
-			before: Uint8Array | null;
 			line?: number;
+			failed?: { content?: string };
 		}) {
 			return withFileMutationQueue(input.abs, async () => {
 				const after = readSnapshot(input.abs);
 				if (!after) return;
+				const content = input.failed?.content;
+				if (content !== undefined && !Buffer.from(content, "utf8").equals(after.bytes)) return;
 				store.recordWrite({
 					path: input.abs,
 					author: {
@@ -129,17 +172,19 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 						via: "tool",
 						toolName: input.toolName,
 					},
-					before: input.before,
+					before: null,
 					after: after.bytes,
+					toolCallId: input.toolCallId,
+					...(input.failed ? { changedOnly: true } : {}),
 					...(input.line === undefined ? {} : { line: input.line }),
 				});
 			});
 		}
 
-		function recordRead(sessionId: string, abs: string) {
+		function recordRead(sessionId: string, toolCallId: string, abs: string) {
 			return withFileMutationQueue(abs, async () => {
 				const current = readSnapshot(abs);
-				if (current) store.recordRead({ sessionId, path: abs, bytes: current.bytes });
+				if (current) store.recordRead({ sessionId, toolCallId, path: abs, bytes: current.bytes });
 			});
 		}
 
@@ -170,55 +215,73 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 
 		pi.on("tool_call", (event, ctx) => {
 			const sessionId = ctx.sessionManager.getSessionId();
-			if (SHELL_TOOLS.has(event.toolName)) {
-				store.openBashWindow({ sessionId, toolCallId: event.toolCallId });
+			const { toolCallId, toolName } = event;
+			if (SHELL_TOOLS.has(toolName)) {
+				store.openBashWindow({ sessionId, toolCallId, cwd: ctx.cwd });
 				return undefined;
 			}
-			if (!isToolCallEventType("write", event)) return undefined;
-			const path = pathInput(event.input);
+			const path = FILE_TOOLS.has(toolName) ? pathInput(event.input) : undefined;
 			if (!path) return undefined;
-			return safely("write check", () => guardWrite(sessionId, event.toolCallId, path, ctx.cwd));
+			if (toolName === "write") {
+				const abs = agentPath(path, ctx.cwd);
+				return safely("write check", () => guardWrite({ sessionId, toolCallId, path, abs }));
+			}
+			const abs = toolName === "read" ? agentReadPath(path, ctx.cwd) : agentPath(path, ctx.cwd);
+			const bytes = toolName === "edit" ? (readSnapshot(abs)?.bytes ?? null) : null;
+			store.openClaim({ sessionId, toolCallId, path: abs, mutates: toolName === "edit", bytes });
+			return undefined;
 		});
 
 		pi.on("tool_result", async (event, ctx) => {
 			const sessionId = ctx.sessionManager.getSessionId();
+			const { toolCallId } = event;
 			if (SHELL_TOOLS.has(event.toolName)) {
 				return safely("shell note", () => shellNote(sessionId, event, ctx.cwd));
 			}
-			const before = pendingWrites.get(event.toolCallId) ?? null;
-			pendingWrites.delete(event.toolCallId);
 			const path = pathInput(event.input);
 			if (!path) return undefined;
-			const abs = agentPath(path, ctx.cwd);
 			if (event.toolName === "read") {
-				if (!event.isError) await safely("read record", () => recordRead(sessionId, abs));
+				const abs = agentReadPath(path, ctx.cwd);
+				if (!event.isError)
+					await safely("read record", () => recordRead(sessionId, toolCallId, abs));
 				return undefined;
 			}
+			const abs = agentPath(path, ctx.cwd);
 			if (event.toolName === "write") {
-				if (!event.isError) {
-					await safely("write record", () =>
-						recordAgentWrite({ sessionId, abs, toolName: "write", before }),
-					);
-				}
+				const content = typeof event.input.content === "string" ? event.input.content : "";
+				await safely("write record", () =>
+					recordAgentWrite({
+						sessionId,
+						toolCallId,
+						abs,
+						toolName: "write",
+						...(event.isError ? { failed: { content } } : {}),
+					}),
+				);
 				return undefined;
 			}
 			if (!isEditToolResult(event)) return undefined;
-			if (!event.isError) {
-				const line = event.details?.firstChangedLine;
+			const stale = event.isError && isStaleEditError(firstText(event.content));
+			if (!stale) {
+				const line = event.isError ? undefined : event.details?.firstChangedLine;
 				await safely("edit record", () =>
 					recordAgentWrite({
 						sessionId,
+						toolCallId,
 						abs,
 						toolName: "edit",
-						before: null,
+						...(event.isError ? { failed: {} } : {}),
 						...(line === undefined ? {} : { line }),
 					}),
 				);
 				return undefined;
 			}
-			if (!isStaleEditError(firstText(event.content))) return undefined;
 			const hint = await safely("edit hint", () => staleHint(sessionId, abs, path));
 			return hint ? withNote(event, hint) : undefined;
+		});
+
+		pi.on("tool_execution_end", (event, ctx) => {
+			store.endTool({ sessionId: ctx.sessionManager.getSessionId(), toolCallId: event.toolCallId });
 		});
 
 		pi.on("session_shutdown", (event, ctx) => {

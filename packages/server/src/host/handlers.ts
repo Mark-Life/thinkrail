@@ -97,7 +97,7 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { findBranchReviewOutcome, providerFromRemoteUrl } from "../branch-review";
-import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
+import { type FileMutation, forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { listExtensionCatalog } from "../extensions";
@@ -144,7 +144,7 @@ import {
 	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
-import { fileProvenance, recordingQueue } from "../provenance";
+import { fileProvenance } from "../provenance";
 import {
 	addComment,
 	buildReviewFixDetails,
@@ -454,6 +454,14 @@ async function sendToFileChat(
 
 function sessionStateWorkspace(workspace: Workspace) {
 	return { id: workspace.id, projectId: workspace.projectId, cwd: workspace.worktreePath };
+}
+
+function userMutation(clientKey: string): FileMutation {
+	return {
+		queue: withFileMutationQueue,
+		written: ({ abs, before, after }) =>
+			fileProvenance.recordWrite({ path: abs, author: { kind: "user", clientKey }, before, after }),
+	};
 }
 
 function resourceCwd(workspaceId: string): string {
@@ -871,16 +879,14 @@ const handlers: WsHandlers = {
 	},
 	"change.revert": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
-		const queue = recordingQueue(withFileMutationQueue, { kind: "user", clientKey: ctx.clientKey });
 		return withChangeLock(p.workspaceId, async () => ({
-			receipt: await revertChange(p, queue),
+			receipt: await revertChange(p, userMutation(ctx.clientKey)),
 		}));
 	},
 	"change.undo": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
-		const queue = recordingQueue(withFileMutationQueue, { kind: "user", clientKey: ctx.clientKey });
 		return withChangeLock(p.workspaceId, async () => ({
-			receipt: await undoChange(p, queue),
+			receipt: await undoChange(p, userMutation(ctx.clientKey)),
 		}));
 	},
 	"terminal.reserve": (p) => {

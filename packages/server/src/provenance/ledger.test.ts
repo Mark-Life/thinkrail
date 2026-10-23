@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBytes } from "../fs";
-import { createProvenance, recordingQueue, type WriteAuthor } from "./ledger";
+import { createProvenance, type WriteAuthor } from "./ledger";
 import { readSnapshot } from "./snapshot";
 
 const BYTES = new TextEncoder();
@@ -85,7 +85,7 @@ test("an unknown version infers a script inside a bash window, then external, el
 	});
 
 	clock = Date.now();
-	provenance.openBashWindow({ sessionId: "s2", toolCallId: "t1" });
+	provenance.openBashWindow({ sessionId: "s2", toolCallId: "t1", cwd: dir });
 	writeFileSync(fresh, "by script\n");
 	expect(provenance.lastWrite({ path: fresh, hash: "h", clientKey: "c" })?.author).toEqual({
 		kind: "agent",
@@ -108,13 +108,13 @@ test("a write since the session's read is stale and carries the cached baseline 
 
 	const stale = provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) });
 	expect(stale).toMatchObject({
-		baseline: { at: 1_000_000 },
+		read: true,
 		untracked: false,
 		baselineText: "one\ntwo\nthree\n",
 	});
 	expect(stale?.writers.map((entry) => [entry.author.kind, entry.line])).toEqual([["user", 2]]);
-	expect(provenance.staleRead({ sessionId: "s9", path, current: snapshot(path) })?.baseline).toBe(
-		null,
+	expect(provenance.staleRead({ sessionId: "s9", path, current: snapshot(path) })?.read).toBe(
+		false,
 	);
 });
 
@@ -128,10 +128,10 @@ test("an untracked change is stale, and one made during the session's own bash i
 	expect(outside?.script).toBeUndefined();
 
 	clock = Date.now();
-	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1" });
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
 	put("a.ts", "sed\n");
 	const own = provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) });
-	expect(own?.script).toEqual({ sessionId: "s1", self: true });
+	expect(own?.script).toEqual({ self: true });
 });
 
 test("the agent's own write moves its baseline, so only other writers are reported", () => {
@@ -168,7 +168,7 @@ test("closing a bash window returns only the user writes that landed during it",
 	const provenance = store();
 	const path = put("a.ts", "one\n");
 	provenance.recordWrite({ path, author: USER, before: null, after: bytes("before\n") });
-	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1" });
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
 	provenance.recordWrite({ path, author: AGENT, before: null, after: bytes("agent\n") });
 	provenance.recordWrite({ path, author: USER, before: bytes("x\n"), after: bytes("during\n") });
 	const closed = provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" });
@@ -192,19 +192,107 @@ test("a path keeps its 32 newest writes", () => {
 	);
 });
 
-test("recordingQueue records a write the queued run made, and nothing for a no-op", async () => {
+test("a user delete is recorded, so the agent is told the user removed the file", () => {
 	const provenance = store();
 	const path = put("a.ts", "one\n");
-	const direct = <T>(_abs: string, run: () => Promise<T>) => run();
-	const queue = recordingQueue(direct, USER, provenance);
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
+	rmSync(path);
+	provenance.recordWrite({ path, author: USER, before: bytes("one\n"), after: null });
+	expect(provenance.staleRead({ sessionId: "s1", path, current: null })).toMatchObject({
+		writers: [{ author: USER, hash: null }],
+		untracked: false,
+	});
+	expect(provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" })).toHaveLength(1);
+});
 
-	await queue(path, async () => undefined);
-	expect(provenance.lastWrite({ path, hash: hashBytes(bytes("one\n")), clientKey: "c" })).toBe(
+test("an agent write with no before bytes takes its line from the cached text it replaced", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\ntwo\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	provenance.recordWrite({ path, author: AGENT, before: null, after: bytes("one\nTWO\n") });
+	const other = provenance.staleRead({ sessionId: "s2", path, current: snapshot(path) });
+	expect(other?.writers.map((entry) => entry.line)).toEqual([2]);
+});
+
+test("an ended tool closes its bash window, so later outside writes are not the agent's script", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\n");
+	provenance.recordWrite({ path, author: USER, before: null, after: bytes("one\n") });
+	clock = Date.now();
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
+	provenance.endTool({ sessionId: "s1", toolCallId: "b1" });
+	clock += 60 * 60 * 1000;
+	writeFileSync(path, "outside\n");
+	utimesSync(path, new Date(clock), new Date(clock));
+	expect(provenance.lastWrite({ path, hash: "other", clientKey: "c" })?.author).toEqual({
+		kind: "external",
+		inferred: true,
+	});
+	expect(provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" })).toBeNull();
+});
+
+test("a bash window covers only its own workspace", () => {
+	const provenance = store();
+	const elsewhere = mkdtempSync(join(tmpdir(), "trpi-provenance-other-"));
+	try {
+		const path = join(elsewhere, "b.ts");
+		writeFileSync(path, "one\n");
+		clock = Date.now();
+		provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
+		provenance.recordWrite({ path, author: USER, before: bytes("x\n"), after: bytes("one\n") });
+		writeFileSync(path, "outside\n");
+		expect(provenance.lastWrite({ path, hash: "other", clientKey: "c" })?.author.kind).toBe(
+			"external",
+		);
+		expect(provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" })).toEqual([]);
+	} finally {
+		rmSync(elsewhere, { recursive: true, force: true });
+	}
+});
+
+test("another session's write that lands between a tool call and its record contests the baseline", () => {
+	const provenance = store();
+	const path = put("a.ts", "one\n");
+	const call = (sessionId: string, toolCallId: string, mutates: boolean) =>
+		provenance.openClaim({ sessionId, toolCallId, path, mutates, bytes: snapshot(path).bytes });
+	const agent = (sessionId: string) => ({ ...AGENT, sessionId });
+
+	call("s1", "e1", true);
+	call("s2", "e2", true);
+	put("a.ts", "two\n");
+	provenance.recordWrite({
+		path,
+		author: agent("s1"),
+		before: null,
+		after: bytes("two\n"),
+		toolCallId: "e1",
+	});
+	expect(provenance.lastWrite({ path, hash: hashBytes(bytes("two\n")), clientKey: "c" })).toBe(
 		undefined,
 	);
-
-	await queue(path, async () => writeFileSync(path, "two\n"));
+	provenance.recordWrite({
+		path,
+		author: agent("s2"),
+		before: null,
+		after: bytes("two\n"),
+		toolCallId: "e2",
+	});
 	expect(
-		provenance.lastWrite({ path, hash: hashBytes(bytes("two\n")), clientKey: "client-a" }),
-	).toEqual({ author: { kind: "user", thisClient: true }, at: clock });
+		provenance.lastWrite({ path, hash: hashBytes(bytes("two\n")), clientKey: "c" })?.author,
+	).toEqual(agent("s2"));
+	const stale = provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) });
+	expect(stale?.writers.map((entry) => entry.author)).toEqual([agent("s2")]);
+	expect(provenance.staleRead({ sessionId: "s2", path, current: snapshot(path) })).toBeNull();
+
+	call("s1", "r1", false);
+	put("a.ts", "saved\n");
+	provenance.recordWrite({ path, author: USER, before: bytes("two\n"), after: bytes("saved\n") });
+	provenance.recordRead({ sessionId: "s1", toolCallId: "r1", path, bytes: snapshot(path).bytes });
+	const afterRead = provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) });
+	expect(afterRead?.writers.map((entry) => entry.author)).toEqual([USER]);
+
+	call("s1", "r2", false);
+	provenance.recordRead({ sessionId: "s1", toolCallId: "r2", path, bytes: snapshot(path).bytes });
+	expect(provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) })).toBeNull();
 });

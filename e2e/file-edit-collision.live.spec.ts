@@ -67,7 +67,7 @@ test("a user save between the agent's read and edit reaches the agent as a Think
 		const edit = toolEnd(await editDone);
 		expect(edit?.isError).toBe(true);
 		expect(edit?.text).toMatch(
-			/ThinkRail: \S*collision\.txt was changed by You \d+ s ago \(line 2\)/,
+			/ThinkRail: \S*collision\.txt was changed by the user \d+ s ago \(line 2\)/,
 		);
 		expect(edit?.text).toContain(`-token = ${token}`);
 		expect(edit?.text).toContain("+token = changed-by-user");

@@ -1,9 +1,9 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { toEditorText } from "@thinkrail/contracts";
 import { classifyBytes, decodeText } from "../fs";
 
-export const SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;
+const SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;
 
 export interface FileSnapshot {
 	bytes: Uint8Array;
@@ -25,18 +25,14 @@ export function fileKey(abs: string): string {
 	try {
 		return realpathSync(lexical);
 	} catch {
-		return lexical;
+		const parent = dirname(lexical);
+		return parent === lexical ? lexical : join(fileKey(parent), basename(lexical));
 	}
 }
 
 export function editorText(bytes: Uint8Array | null): string | null {
 	if (bytes === null || !classifyBytes(bytes).text) return null;
 	return toEditorText(decodeText(bytes));
-}
-
-export function sameBytes(a: Uint8Array | null, b: Uint8Array | null): boolean {
-	if (a === null || b === null) return a === b;
-	return Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(b);
 }
 
 export function firstChangedLine(before: string, after: string): number | undefined {
