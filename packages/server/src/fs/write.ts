@@ -86,7 +86,7 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 	}
 	try {
 		accessSync(target, constants.W_OK);
-		replaceFile(target, out, stat.mode & 0o777);
+		replaceFile(target, out, stat.mode & 0o777, { stat, bytes: current });
 	} catch (error) {
 		if (READONLY_CODES.has(String(errnoCode(error)))) {
 			return { result: { status: "readonly" }, changed: false };

@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import * as nodeFs from "node:fs";
 import {
 	chmodSync,
 	chownSync,
@@ -137,6 +138,23 @@ test("the disk file's line endings and BOM survive a save", () => {
 	put("crlf.txt", "\uFEFFa\r\nb\r\n");
 	save("crlf.txt", "a\nb\nc\n", hash("\uFEFFa\r\nb\r\n"));
 	expect(text("crlf.txt")).toBe("\uFEFFa\r\nb\r\nc\r\n");
+});
+
+test.skipIf(!POSIX)("a save reads the file once, even when it is written in place", () => {
+	const abs = put("a.ts", "one\n");
+	linkSync(abs, join(root, "b.ts"));
+	const target = nodeFs.realpathSync(abs);
+	const reads = spyOn(nodeFs, "readFileSync");
+	const lstats = spyOn(nodeFs, "lstatSync");
+	try {
+		expect(save("a.ts", "two\n", hash("one\n")).result).toMatchObject({ status: "written" });
+		expect(reads.mock.calls.filter(([path]) => path === target)).toHaveLength(1);
+		expect(lstats.mock.calls.filter(([path]) => path === target)).toHaveLength(0);
+	} finally {
+		reads.mockRestore();
+		lstats.mockRestore();
+	}
+	expect(text("b.ts")).toBe("two\n");
 });
 
 test("byte-only files and LFS pointers are not editable even with a matching hash", () => {

@@ -27,12 +27,12 @@ test("the strategy is in-place for hard links and other users' files", () => {
 
 test("a missing file is created with its parent folders and the mode", () => {
 	const target = join(dir, "a/b/new.txt");
-	replaceFile(target, new TextEncoder().encode("x\n"), 0o640);
+	replaceFile(target, new TextEncoder().encode("x\n"), 0o640, null);
 	expect(readFileSync(target, "utf8")).toBe("x\n");
 	if (POSIX) expect(statSync(target).mode & 0o777).toBe(0o640);
 });
 
-test.skipIf(!POSIX)("an in-place write that fails mid-way puts the old bytes back", () => {
+test.skipIf(!POSIX)("an in-place write that fails mid-way puts the caller's bytes back", () => {
 	const target = join(dir, "a.txt");
 	writeFileSync(target, "original\n");
 	linkSync(target, join(dir, "b.txt"));
@@ -45,9 +45,10 @@ test.skipIf(!POSIX)("an in-place write that fails mid-way puts the old bytes bac
 		throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
 	});
 	try {
-		expect(() => replaceFile(target, new TextEncoder().encode("new content\n"), 0o644)).toThrow(
-			expect.objectContaining({ code: "ENOSPC" }),
-		);
+		const current = { stat: statSync(target), bytes: readFileSync(target) };
+		expect(() =>
+			replaceFile(target, new TextEncoder().encode("new content\n"), 0o644, current),
+		).toThrow(expect.objectContaining({ code: "ENOSPC" }));
 	} finally {
 		spy.mockRestore();
 	}
