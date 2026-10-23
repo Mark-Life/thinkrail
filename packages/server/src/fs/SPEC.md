@@ -2,7 +2,7 @@
 id: submodule-server-fs
 type: submodule-design
 status: active
-title: fs — worktree file reads
+title: fs — worktree file reads and editor writes
 parent: module-server
 depends-on: [module-contracts]
 tags: [public-surface-checked]
@@ -11,7 +11,8 @@ tags: [public-surface-checked]
 ## Responsibility
 
 Read directories and files inside a workspace's worktree, path-contained, and decide **what a resource's
-bytes are** — the one byte-level classification every content read in the host shares.
+bytes are** — the one byte-level classification every content read in the host shares — and write editor
+text back to a text file under compare-and-swap.
 
 ## Boundary
 
@@ -26,7 +27,8 @@ bytes are** — the one byte-level classification every content read in the host
   **`resolveWorktreeFile(workspaceId, path)`** returns the
   contained absolute path for the host to stream a file's raw bytes over HTTP (the `/files/…` route
   serving relative images in the markdown viewer, the `/blob` route's containment check) and for the
-  `changes` module's atomic writes. Lexical escapes, `.git`, and an existing symlink chain whose resolved
+  `changes` module's atomic writes, and as the lexical per-file queue key the host's `fs.writeFile`
+  shares with pi. Lexical escapes, `.git`, and an existing symlink chain whose resolved
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
   restored. `changes` passes `{ followLeaf: false }` so containment validates through the parent and its
   own `lstat` can reject even an escaping leaf symlink without following it. This module owns the path
@@ -54,10 +56,20 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
+  **`writeTextFile({ workspaceId, path, content, expect })`** is the editor save behind `fs.writeFile`.
+  It is one synchronous pass, and the caller runs it inside the per-file mutation queue it shares with
+  pi. Containment is `readFile`'s: a symlink inside the worktree is written through to its real target,
+  and an escaping one is refused. The pass checks, in order: size (`FILE_TOO_LARGE`); presence
+  (`missing`, or an exclusive create when `expect.hash` is `null`; a dangling symlink is never created
+  through, `NOT_EDITABLE`); regular file (`NOT_EDITABLE`); no-op (the bytes it would write are already
+  the file → `written`, disk untouched); hash (`stale` with the current `{content, meta}`); textness
+  (byte-only or LFS pointer → `NOT_EDITABLE`); writability (`readonly`). It answers the wire result plus
+  `changed`, so the host stamps workspace activity only when bytes changed.
 - **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
-  `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
-  `fs`/`path`/`crypto`.
+  `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`, `writeTextFile`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`,
+  `FileWriteResult`, and at runtime `toEditorText` and `FILE_WRITE_MAX_BYTES`);
+  `@thinkrail/shared/codedError`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
 ## Get right
@@ -69,3 +81,16 @@ bytes are** — the one byte-level classification every content read in the host
 - **Extension never beats the bytes.** A `.md` file whose content is a PNG reports `image/png`; the
   filename is consulted only when the bytes say nothing, so a mislabelled resource cannot talk a
   renderer into parsing it as text.
+- **The file keeps its form.** `content` is editor text (`toEditorText`). The written bytes re-apply the
+  disk file's BOM, and its line ending by pi `edit`'s rule: the first line break decides. That way an
+  agent edit and a user save never flip a file's endings. A mixed-ending file is flattened on its first
+  save, and a lone `\r` does not survive, the same as under a pi `edit`. The final newline is the
+  editor's. A created file is written exactly as sent.
+- **Atomic unless that changes the file's identity.** Temp+rename in the target's directory, with the
+  mode copied. A hard-linked file, a file owned by another user, and a target whose temp create or rename
+  fails with `EACCES`/`EPERM`/`EBUSY`/`EXDEV` are written in place. Rename loses xattrs, ACLs and Finder
+  tags; this is accepted. No fsync, the same as pi and `changes`. A crash can leave a
+  `.thinkrail-write-*.tmp` file; nothing sweeps it.
+- **A rename never bypasses a read-only file.** Writability is checked on the target first.
+- **No-op before CAS.** A replayed save (request-id dedupe dies with the host) and two windows saving the
+  same text succeed with no write and no `fsChanged`.

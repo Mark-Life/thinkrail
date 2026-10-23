@@ -19,10 +19,12 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 
 - **Owns:** `revertChange(params)` and `undoChange(params)` — load awaits (scope resolution plus the
   bounded historical-byte read) followed by a **synchronous verify→write/claim pass**, like the
-  `reviews` module's snapshot passes; the per-workspace **receipt ring**; the whole-file semantics table
+  `reviews` module's snapshot passes. That pass runs inside the injected `FileMutationQueue`; the host
+  passes pi's, so a revert never lands inside an agent `edit`'s read-modify-write. Trashing a claimed
+  file happens after the queue releases; the per-workspace **receipt ring**; the whole-file semantics table
   below.
 - **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`,
-  `forgetWorkspaceChanges`, `retainReceipts`.
+  `FileMutationQueue`, `forgetWorkspaceChanges`, `retainReceipts`.
 - **Allowed deps:** `contracts` (`ChangeReceipt`/`RevertTarget`/`LineSpan`/`GitDiffScope`), `git`
   (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
   `hashBytes`/`decodeText` for identity and textness), `persistence` (workspace lookup), `trash`,
@@ -113,9 +115,10 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 
 ## Get right
 
-- **The client never sends content.** Params carry a scope, spans and hashes; every byte written comes
+- **`change.*` never sends content.** Params carry a scope, spans and hashes; every byte written comes
   from this module's own reads. That is what keeps a stale tab from clobbering the agent's work, and it
-  is why the expectation hashes are mandatory rather than advisory.
+  is why the expectation hashes are mandatory rather than advisory. (The editor save `fs.writeFile` is
+  the one write that carries content, under the same CAS rule: [[submodule-server-fs]].)
 - **A failed original read is never absence.** `git.readBlobBytesAtAsync` returns `null` only for Git's
   explicit path-absent diagnostic and throws every other failure, matching `git.diffFile`. That
   distinction is load-bearing because an absent original is exactly the input that makes a whole-file
