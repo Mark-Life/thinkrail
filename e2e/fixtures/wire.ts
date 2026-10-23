@@ -1,4 +1,4 @@
-import type { WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
+import type { WsChannel, WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
 import { E2E_PORT } from "./paths";
 
 export class E2eWireTransientError extends Error {}
@@ -83,6 +83,35 @@ export class E2eWire {
 			this.socket.addEventListener("close", onClose, { once: true });
 			this.socket.addEventListener("error", onError, { once: true });
 			this.socket.send(JSON.stringify(request));
+		});
+	}
+
+	push(
+		channel: WsChannel,
+		accept: (data: unknown) => boolean,
+		timeoutMs = 10_000,
+	): Promise<unknown> {
+		return new Promise<unknown>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.socket.removeEventListener("message", onMessage);
+				reject(new Error(`Timed out waiting for a ${channel} push`));
+			}, timeoutMs);
+			const onMessage = (event: MessageEvent) => {
+				if (typeof event.data !== "string") return;
+				let frame: unknown;
+				try {
+					frame = JSON.parse(event.data);
+				} catch {
+					return;
+				}
+				if (typeof frame !== "object" || frame === null) return;
+				const push = frame as { channel?: unknown; data?: unknown };
+				if (push.channel !== channel || !accept(push.data)) return;
+				clearTimeout(timer);
+				this.socket.removeEventListener("message", onMessage);
+				resolve(push.data);
+			};
+			this.socket.addEventListener("message", onMessage);
 		});
 	}
 
