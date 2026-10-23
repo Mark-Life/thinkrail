@@ -18,6 +18,7 @@ import "monaco-editor/esm/vs/editor/contrib/links/browser/links.js";
 import "monaco-editor/esm/vs/editor/contrib/multicursor/browser/multicursor.js";
 import "monaco-editor/esm/vs/editor/contrib/readOnlyMessage/browser/contribution.js";
 import "monaco-editor/esm/vs/editor/contrib/stickyScroll/browser/stickyScrollContribution.js";
+import "monaco-editor/esm/vs/editor/contrib/toggleTabFocusMode/browser/toggleTabFocusMode.js";
 import "monaco-editor/esm/vs/editor/contrib/unicodeHighlighter/browser/unicodeHighlighter.js";
 import "monaco-editor/esm/vs/editor/contrib/wordHighlighter/browser/wordHighlighter.js";
 import "monaco-editor/esm/vs/editor/contrib/wordOperations/browser/wordOperations.js";
