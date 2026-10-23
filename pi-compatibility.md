@@ -110,17 +110,23 @@ package that depends on pi resolves the same copy. **Removal gate:**
 pi exposes a CAS write (expected hash) for in-process callers.
 
 The `fileGuard` extension ([[submodule-server-agent]], feeding [[submodule-server-provenance]]) leans on
-the same queue and on three more pi details. It re-reads a file inside the queue after pi's `read`,
-`edit` and `write` return, so the recorded author and baseline never see a half-written pi edit. It
-recognizes a stale edit by pi's not-found error text, both the single-edit and the `edits[i]` variant in
-`core/tools/edit-diff.js`. It resolves a tool's `path` the way pi's `resolveToCwd` does. If pi rewords
-the error, the hint silently disappears; if the path rule drifts, a hint is lost for that spelling.
-**Re-check:** the two error texts; `resolveToCwd` (`@` prefix, Unicode spaces, `~`, `file://`); that
-`tool_result` fires for thrown tool errors and chains handler changes; that a `tool_call` block reason
-becomes the error result. Run `agent/fileGuard.test.ts`: it drives the installed `edit`, `write` and
-`read` tools against a temp dir, matches both error variants, and checks the hint, the block and the
-bash note end to end. **Removal gate:** pi reports a structured stale-edit failure (a code, not text)
-and tracks per-session read versions itself.
+the same queue and on more pi details. It re-reads a file inside the queue after pi's `read`, `edit` and
+`write` return, so the recorded author and baseline never see a half-written pi edit. It recognizes a
+stale edit by pi's not-found error text, both the single-edit and the `edits[i]` variant in
+`core/tools/edit-diff.js`. It resolves a tool's `path` the way pi's `resolveToCwd` does, and a `read`
+path the way `resolveReadPath` does. It relies on `tool_execution_end` firing for every call, including
+the blocked and aborted ones that skip `tool_result`, and on pi's `write` storing its `content` as
+UTF-8 bytes. If pi rewords the error, the hint silently disappears; if the path rule drifts, the hint and
+the write block are lost for that spelling. **Re-check:** the two error texts; `utils/paths.js`
+`normalizePath` (`@` prefix, Unicode spaces, the win32 `normalizeWindowsShellPath` and `~\` branches,
+`~`, `file://`) and `core/tools/path-utils.js` `resolveReadPath` variants; that `tool_result` fires for
+thrown tool errors and chains handler changes; that a `tool_call` block reason becomes the error result;
+that an aborted call still gets `tool_execution_end`. `agent/fileGuard.test.ts` drives the installed
+`edit`, `write` and `read` tools against a temp dir, matches both error variants and checks the path
+rules, including win32 forms through `path.win32`. `agent/fileGuard.session.test.ts` runs a real
+`createAgentSession` with a faux model: it checks the hint on a thrown edit error, the block reason as
+the write's error result, and the window closed after an abort in a parallel batch. **Removal gate:** pi
+reports a structured stale-edit failure (a code, not text) and tracks per-session read versions itself.
 
 ## Other pi-sensitive host seams
 

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { StaleRead, WriteEntry } from "./ledger";
 import {
 	bashNote,
+	DIFF_LINE_MAX_CHARS,
 	DIFF_MAX_LINES,
 	formatAge,
 	renderDiff,
@@ -16,6 +17,7 @@ function entry(overrides: Partial<WriteEntry>): WriteEntry {
 	return {
 		seq: 1,
 		at: NOW - 4000,
+		key: "/w/src/auth.ts",
 		path: "/w/src/auth.ts",
 		hash: "h",
 		author: { kind: "user", clientKey: "c" },
@@ -25,7 +27,7 @@ function entry(overrides: Partial<WriteEntry>): WriteEntry {
 
 function stale(overrides: Partial<StaleRead>): StaleRead {
 	return {
-		baseline: { at: NOW - 10_000 },
+		read: true,
 		writers: [],
 		untracked: false,
 		...overrides,
@@ -58,7 +60,7 @@ test("the edit hint is the pointer, then the diff from what the agent read", () 
 	});
 	expect(text).toBe(
 		[
-			"ThinkRail: src/auth.ts was changed by You 4 s ago (line 10) since you last read it. Re-read the file before editing.",
+			"ThinkRail: src/auth.ts was changed by the user 4 s ago (line 10) since you last read it. Re-read the file before editing.",
 			"Changes since your last read (- what you read, + the file now):",
 			"```diff",
 			"@@ -1,3 +1,3 @@",
@@ -86,19 +88,19 @@ test("repeated saves by one author collapse into its latest, and untracked write
 		now: NOW,
 	});
 	expect(text).toBe(
-		"ThinkRail: a.ts was changed by You 2 s ago (line 3), another agent 4 s ago and a program outside ThinkRail since you last read it. Re-read the file before editing.",
+		"ThinkRail: a.ts was changed by the user 2 s ago (line 3), another agent 4 s ago and a program outside ThinkRail since you last read it. Re-read the file before editing.",
 	);
 });
 
 test("a hint without a baseline has no since clause and no diff", () => {
 	const text = staleEditHint({
 		displayPath: "a.ts",
-		stale: stale({ baseline: null, writers: [entry({ line: 2 })] }),
+		stale: stale({ read: false, writers: [entry({ line: 2 })] }),
 		currentText: "x\n",
 		now: NOW,
 	});
 	expect(text).toBe(
-		"ThinkRail: a.ts was changed by You 4 s ago (line 2). Re-read the file before editing.",
+		"ThinkRail: a.ts was changed by the user 4 s ago (line 2). Re-read the file before editing.",
 	);
 });
 
@@ -111,12 +113,12 @@ test("the write block names the writers and the agent's own shell", () => {
 			now: NOW,
 		}),
 	).toBe(
-		"Blocked: src/auth.ts changed since this agent read it (by You 4 s ago). Re-read before writing.",
+		"Blocked: src/auth.ts changed since this agent read it (by the user 4 s ago). Re-read before writing.",
 	);
 	expect(
 		staleWriteBlock({
 			displayPath: "a.ts",
-			stale: stale({ untracked: true, script: { sessionId: "s2", self: false } }),
+			stale: stale({ untracked: true, script: { self: false } }),
 			currentText: null,
 			now: NOW,
 		}),
@@ -143,9 +145,43 @@ test("the bash note lists each file the user saved during the call once", () => 
 	});
 	expect(note).toBe(
 		[
-			"Note: You edited src/auth.ts 3 s ago during this call (line 12).",
-			"Note: You edited README.md 1 s ago during this call.",
+			"Note: the user edited src/auth.ts 3 s ago during this call (line 12).",
+			"Note: the user edited README.md 1 s ago during this call.",
 		].join("\n"),
 	);
 	expect(bashNote({ userWrites: [], displayPath: String, now: NOW })).toBeNull();
+});
+
+test("a minified line is clipped and the whole diff stays under its character budget", () => {
+	const line = "x".repeat(400_000);
+	const lines = renderDiff(`${line}\n`, `${line}y\n`);
+	expect(lines.every((diffLine) => diffLine.length < DIFF_LINE_MAX_CHARS + 40)).toBe(true);
+	expect(lines[1]).toEndWith("… (399761 more chars)");
+	const many = renderDiff(
+		Array.from({ length: 30 }, (_, index) => `${"a".repeat(300)}${index}\n`).join(""),
+		Array.from({ length: 30 }, (_, index) => `${"b".repeat(300)}${index}\n`).join(""),
+	);
+	expect(many.join("\n").length).toBeLessThan(7000);
+	expect(many.at(-1)).toMatch(/^… \d+ more diff lines not shown\.$/);
+});
+
+test("the diff fence is longer than any backtick run in the file", () => {
+	const text = staleEditHint({
+		displayPath: "README.md",
+		stale: stale({ writers: [entry({})], baselineText: "a\n```\nb\n" }),
+		currentText: "a\n```\nc\n",
+		now: NOW,
+	});
+	expect(text).toContain("\n````diff\n");
+	expect(text).toEndWith("+c\n````");
+});
+
+test("the bash note says when the user deleted a file", () => {
+	expect(
+		bashNote({
+			userWrites: [entry({ path: "/w/old.ts", hash: null, at: NOW })],
+			displayPath: (path) => path.replace("/w/", ""),
+			now: NOW,
+		}),
+	).toBe("Note: the user deleted old.ts 0 s ago during this call.");
 });

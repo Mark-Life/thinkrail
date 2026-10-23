@@ -32,11 +32,11 @@ const BYTES = new TextEncoder();
 const UNQUEUED: FileMutationQueue = (_abs, run) => run();
 
 function revertChange(params: RevertChangeParams): Promise<ChangeReceipt> {
-	return revertQueued(params, UNQUEUED);
+	return revertQueued(params, { queue: UNQUEUED });
 }
 
 function undoChange(params: UndoChangeParams): Promise<ChangeReceipt> {
-	return undoQueued(params, UNQUEUED);
+	return undoQueued(params, { queue: UNQUEUED });
 }
 const UNCOMMITTED: GitDiffScope = { kind: "uncommitted" };
 
@@ -342,7 +342,7 @@ test("a revert verifies and writes only once the file's mutation queue releases 
 			target: { kind: "file" },
 			expect: { originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("rewritten\n") },
 		},
-		held,
+		{ queue: held },
 	);
 	while (keys.length === 0) await Bun.sleep(5);
 	expect(keys).toEqual([join(repo, "a.ts")]);
@@ -350,6 +350,46 @@ test("a revert verifies and writes only once the file's mutation queue releases 
 	release();
 	await expect(pending).rejects.toMatchObject({ code: "STALE_VIEW" });
 	expect(text("a.ts")).toBe("agent edit\n");
+});
+
+test("a revert and an undo report the bytes they replaced and wrote, inside the queue", async () => {
+	write("untracked.txt", "fresh\n");
+	const events: string[] = [];
+	const writes: { abs: string; before: string | null; after: string | null }[] = [];
+	const decode = (bytes: Uint8Array | null) =>
+		bytes === null ? null : new TextDecoder().decode(bytes);
+	const mutation = {
+		queue: (async (_abs, run) => {
+			events.push("enter");
+			const result = await run();
+			events.push("leave");
+			return result;
+		}) satisfies FileMutationQueue,
+		written: (write: { abs: string; before: Uint8Array | null; after: Uint8Array | null }) => {
+			events.push("written");
+			writes.push({ abs: write.abs, before: decode(write.before), after: decode(write.after) });
+		},
+	};
+	const receipt = await revertQueued(
+		{
+			workspaceId,
+			path: "untracked.txt",
+			scope: UNCOMMITTED,
+			target: { kind: "file" },
+			expect: { originalHash: null, modifiedHash: hash("fresh\n") },
+		},
+		mutation,
+	);
+	await undoQueued(
+		{ workspaceId, receiptId: receipt.id, expect: { modifiedHash: null } },
+		mutation,
+	);
+	expect(events).toEqual(["enter", "written", "leave", "enter", "written", "leave"]);
+	const abs = join(repo, "untracked.txt");
+	expect(writes).toEqual([
+		{ abs, before: "fresh\n", after: null },
+		{ abs, before: null, after: "fresh\n" },
+	]);
 });
 
 test("a whole-file revert rewrites a modified file and restores a deleted one", async () => {
