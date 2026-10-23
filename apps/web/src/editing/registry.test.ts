@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { FileContent, FileWriteResult, WsParams } from "@thinkrail/contracts";
 import type { TextChange } from "@thinkrail/resource-renderers";
 import type { FileBufferSummary } from "../store";
+import { RequestError } from "../transport";
 import type { Draft, DraftStore } from "./drafts";
 import { draftId } from "./drafts";
 import { createBufferRegistry, type FileIo } from "./registry";
@@ -74,8 +75,8 @@ function memoryDrafts(seed: Record<string, Draft> = {}) {
 		put: async (key, draft) => {
 			records.set(draftId(key), draft);
 		},
-		remove: async (key) => {
-			records.delete(draftId(key));
+		remove: async (key, owner) => {
+			if (records.get(draftId(key))?.owner === owner) records.delete(draftId(key));
 		},
 	};
 	return { store, records };
@@ -83,20 +84,30 @@ function memoryDrafts(seed: Record<string, Draft> = {}) {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
 
-function setup(options: { text?: string; drafts?: ReturnType<typeof memoryDrafts> } = {}) {
-	const disk = fakeDisk({ [PATH]: options.text ?? "one\ntwo\n" });
+const live = new Set<string>();
+
+function setup(
+	options: {
+		text?: string;
+		drafts?: ReturnType<typeof memoryDrafts>;
+		disk?: ReturnType<typeof fakeDisk>;
+		owner?: string;
+	} = {},
+) {
+	const disk = options.disk ?? fakeDisk({ [PATH]: options.text ?? "one\ntwo\n" });
 	const drafts = options.drafts ?? memoryDrafts();
+	const owner = options.owner ?? "page-a";
 	const summaries: (FileBufferSummary | null)[] = [];
 	const restored: string[] = [];
 	const registry = createBufferRegistry({
 		io: disk.io,
 		drafts: drafts.store,
+		draftOwner: { id: owner, isAlive: async (id) => id === owner || live.has(id) },
 		publish: (_workspaceId, _path, summary) => summaries.push(summary),
 		hostKey: () => "http://host",
 		canWrite: () => true,
 		onDraftRestored: (path) => restored.push(path),
 		draftDelayMs: 5,
-		now: () => 1,
 	});
 	const file = disk.content(PATH);
 	const handle = registry.ensure({ workspaceId: WS, path: PATH, ...file });
@@ -217,7 +228,7 @@ test("a draft is written after a pause and removed once the buffer is clean", as
 	expect(drafts.records.size).toBe(0);
 	await settle();
 	expect([...drafts.records.values()]).toEqual([
-		{ text: "xone\ntwo\n", baseHash: "rev-1", savedAt: 1 },
+		{ text: "xone\ntwo\n", baseHash: "rev-1", owner: "page-a" },
 	]);
 	await registry.save(handle.key);
 	await settle();
@@ -226,7 +237,7 @@ test("a draft is written after a pause and removed once the buffer is clean", as
 
 test("a buffer created again restores its draft and says so", async () => {
 	const key = draftId({ host: "http://host", workspaceId: WS, path: PATH });
-	const drafts = memoryDrafts({ [key]: { text: "draft\n", baseHash: "rev-1", savedAt: 1 } });
+	const drafts = memoryDrafts({ [key]: { text: "draft\n", baseHash: "rev-1", owner: "page-a" } });
 	const { handle, restored, summaries, received } = setup({ drafts });
 	await settle();
 	expect(handle.session.snapshot()).toBe("draft\n");
@@ -244,7 +255,7 @@ test("closing the tab drops the buffer but keeps its draft; Don't save drops bot
 	await settle();
 	expect(drafts.records.size).toBe(1);
 
-	const second = setup({ drafts });
+	const second = setup({ drafts, owner: "page-b" });
 	await settle();
 	second.registry.discard(second.handle.key);
 	await settle();
@@ -256,4 +267,134 @@ test("a reconnect re-reads every buffer once", async () => {
 	disk.put(PATH, "changed while offline\n");
 	await registry.reconcileAll();
 	expect(handle.session.snapshot()).toBe("changed while offline\n");
+});
+
+const draftKeyId = draftId({ host: "http://host", workspaceId: WS, path: PATH });
+
+test("a draft equal to the buffer text is deleted, so it never comes back as a fake conflict", async () => {
+	const drafts = memoryDrafts({
+		[draftKeyId]: { text: "saved\n", baseHash: "rev-0", owner: "page-old" },
+	});
+	const disk = fakeDisk({ [PATH]: "saved\n" });
+	const first = setup({ disk, drafts, owner: "page-b" });
+	await settle();
+	expect(first.restored).toEqual([]);
+	expect(drafts.records.size).toBe(0);
+
+	first.registry.discard(first.handle.key);
+	disk.put(PATH, "agent\n");
+	const second = setup({ disk, drafts, owner: "page-c" });
+	await settle();
+	expect(second.restored).toEqual([]);
+	expect(second.summaries.at(-1)).toEqual({ status: "clean", dirty: false });
+});
+
+test("a buffer dropped while its save is in flight leaves no draft that resurrects", async () => {
+	const disk = fakeDisk({ [PATH]: "one\n" });
+	const drafts = memoryDrafts();
+	const first = setup({ disk, drafts, owner: "page-a" });
+	type(first.handle, 0, "saved ");
+	const release = disk.hold();
+	const saving = first.registry.save(first.handle.key);
+	first.registry.prune(new Set());
+	release();
+	await saving;
+	expect(drafts.records.size).toBe(1);
+
+	const second = setup({ disk, drafts, owner: "page-b" });
+	await settle();
+	expect(drafts.records.size).toBe(0);
+	second.registry.discard(second.handle.key);
+	disk.put(PATH, "agent\n");
+	const third = setup({ disk, drafts, owner: "page-c" });
+	await settle();
+	expect(third.restored).toEqual([]);
+	expect(third.handle.session.snapshot()).toBe("agent\n");
+});
+
+test("a failed re-create of a deleted file shows why instead of 'deleted'", async () => {
+	const { disk, registry, handle } = setup();
+	disk.remove(PATH);
+	handle.readFailed();
+	await settle();
+	type(handle, 0, "x");
+	const write = disk.io.write;
+	disk.io.write = async () => ({ status: "readonly" });
+	expect(await registry.save(handle.key)).toEqual({ status: "readonly", dirty: true });
+	disk.io.write = async () => {
+		throw new Error("socket closed");
+	};
+	expect(await registry.save(handle.key)).toEqual({
+		status: "error",
+		dirty: true,
+		error: "failed",
+	});
+	disk.io.write = write;
+});
+
+test("a NOT_EDITABLE save says so instead of asking for a retry", async () => {
+	const { disk, registry, handle } = setup();
+	type(handle, 0, "x");
+	disk.io.write = async () => {
+		throw new RequestError("NOT_EDITABLE", "src/a.ts is not a regular file");
+	};
+	expect(await registry.save(handle.key)).toEqual({
+		status: "error",
+		dirty: true,
+		error: "notEditable",
+	});
+});
+
+test("a failed probe leaves the buffer alone instead of marking it deleted", async () => {
+	const { disk, handle, summaries, registry } = setup();
+	type(handle, 0, "// ");
+	disk.io.exists = () => Promise.reject(new Error("Request timed out"));
+	handle.readFailed();
+	await settle();
+	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
+	await registry.reconcileAll();
+	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
+});
+
+test("an existence probe sent before a re-creating save cannot mark the file deleted again", async () => {
+	const { disk, registry, handle, summaries } = setup();
+	disk.remove(PATH);
+	handle.readFailed();
+	await settle();
+	let answer = (_exists: boolean) => {};
+	disk.io.exists = () =>
+		new Promise<boolean>((resolve) => {
+			answer = resolve;
+		});
+	handle.readFailed();
+	expect(await registry.save(handle.key)).toEqual({ status: "clean", dirty: false });
+	answer(false);
+	await settle();
+	expect(summaries.at(-1)).toEqual({ status: "clean", dirty: false });
+});
+
+test("a second window neither restores nor deletes the draft of a window still open", async () => {
+	const disk = fakeDisk({ [PATH]: "one\ntwo\n" });
+	const drafts = memoryDrafts();
+	live.add("page-a");
+	try {
+		const a = setup({ disk, drafts, owner: "page-a" });
+		type(a.handle, 0, "A ");
+		await settle();
+		const b = setup({ disk, drafts, owner: "page-b" });
+		await settle();
+		expect(b.restored).toEqual([]);
+		expect(b.handle.session.snapshot()).toBe("one\ntwo\n");
+		b.registry.discard(b.handle.key);
+		await settle();
+		expect([...drafts.records.values()]).toEqual([
+			{ text: "A one\ntwo\n", baseHash: "rev-1", owner: "page-a" },
+		]);
+	} finally {
+		live.delete("page-a");
+	}
+	const c = setup({ disk, drafts, owner: "page-c" });
+	await settle();
+	expect(c.restored).toEqual([PATH]);
+	expect([...drafts.records.values()].map((draft) => draft.owner)).toEqual(["page-c"]);
 });

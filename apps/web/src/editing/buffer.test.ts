@@ -140,3 +140,22 @@ test("a draft on the same base restores dirty; on another base it restores as a 
 	const typed = localEdit(clean, "typed first");
 	expect(restoreDraft(typed, { text: "draft", baseHash: "h:a" })).toBe(typed);
 });
+
+test("a deleted buffer reports a too-large save instead of 'deleted'", () => {
+	const deleted = markMissing(
+		localEdit(createBuffer(disk("a")), "x".repeat(FILE_WRITE_MAX_BYTES + 1)),
+	);
+	expect(bufferSummary(beginSave(deleted).state)).toEqual({
+		status: "error",
+		dirty: true,
+		error: "tooLarge",
+	});
+});
+
+test("a deleted file that comes back with the base text keeps the edits, with no conflict", () => {
+	const deleted = markMissing(localEdit(createBuffer(disk("base")), "mine"));
+	const back = adoptDisk(deleted, disk("base", "h2"));
+	expect(bufferSummary(back)).toEqual({ status: "dirty", dirty: true });
+	expect(back.base).toEqual({ text: "base", hash: "h2" });
+	expect(bufferStatus(adoptDisk(deleted, disk("other", "h3")))).toBe("stale");
+});

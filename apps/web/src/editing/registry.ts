@@ -1,7 +1,8 @@
 import type { FileContent, FileWriteResult, ResourceMeta, WsParams } from "@thinkrail/contracts";
 import type { ResourceEditSession, TextChange } from "@thinkrail/resource-renderers";
 import { tupleKey } from "../lib";
-import type { FileBufferSummary } from "../store";
+import type { FileBufferError, FileBufferSummary } from "../store";
+import { wsErrorCode } from "../transport";
 import {
 	adoptDisk,
 	type BufferState,
@@ -19,7 +20,7 @@ import {
 	reloadFromDisk,
 	restoreDraft,
 } from "./buffer";
-import type { DraftKey, DraftStore } from "./drafts";
+import type { DraftKey, DraftOwner, DraftStore } from "./drafts";
 import { applyChanges, textChanges } from "./textChanges";
 
 export interface FileIo {
@@ -28,15 +29,15 @@ export interface FileIo {
 	exists(workspaceId: string, path: string): Promise<boolean>;
 }
 
-export interface RegistryDeps {
+interface RegistryDeps {
 	io: FileIo;
 	drafts: DraftStore;
+	draftOwner: DraftOwner;
 	publish(workspaceId: string, path: string, summary: FileBufferSummary | null): void;
 	hostKey(): string;
 	canWrite(): boolean;
 	onDraftRestored(path: string): void;
 	draftDelayMs: number;
-	now(): number;
 }
 
 export interface FileBufferHandle {
@@ -71,6 +72,13 @@ export function fileBufferKey(workspaceId: string, path: string): string {
 
 const SAVING_TOKEN = -1;
 
+function saveError(error: unknown): FileBufferError {
+	const code = wsErrorCode(error);
+	if (code === "NOT_EDITABLE") return "notEditable";
+	if (code === "FILE_TOO_LARGE") return "tooLarge";
+	return "failed";
+}
+
 export function createBufferRegistry(deps: RegistryDeps) {
 	const entries = new Map<string, Entry>();
 	const entryListeners = new Set<() => void>();
@@ -85,13 +93,13 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (entry.draftTimer !== null) clearTimeout(entry.draftTimer);
 		entry.draftTimer = null;
 		if (!isDirty(entry.state)) {
-			void deps.drafts.remove(draftKey(entry));
+			void deps.drafts.remove(draftKey(entry), deps.draftOwner.id);
 			return;
 		}
 		void deps.drafts.put(draftKey(entry), {
 			text: entry.state.text,
 			baseHash: entry.state.base.hash,
-			savedAt: deps.now(),
+			owner: deps.draftOwner.id,
 		});
 	};
 
@@ -109,7 +117,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (next === previous || entry.dropped) return;
 		entry.state = next;
 		if (next.text !== previous.text) {
-			if (!fromView) {
+			if (!fromView && entry.views.size > 0) {
 				const changes = textChanges(previous.text, next.text);
 				for (const view of entry.views) view(changes);
 			}
@@ -130,7 +138,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (discard) {
 			if (entry.draftTimer !== null) clearTimeout(entry.draftTimer);
 			entry.draftTimer = null;
-			void deps.drafts.remove(draftKey(entry));
+			void deps.drafts.remove(draftKey(entry), deps.draftOwner.id);
 		} else if (entry.draftTimer !== null) {
 			writeDraft(entry);
 		}
@@ -145,10 +153,13 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			entry.rereadAfterSave = true;
 			return;
 		}
+		const seq = entry.saveSeq;
 		void deps.io
 			.exists(entry.workspaceId, entry.path)
 			.then((exists) => {
-				if (!exists) commit(entry, markMissing(entry.state), false);
+				if (!exists && seq === entry.saveSeq && !entry.state.saving) {
+					commit(entry, markMissing(entry.state), false);
+				}
 			})
 			.catch(() => {});
 	};
@@ -190,8 +201,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				expect: request.expect,
 			});
 			commit(entry, finishSave(entry.state, result), false);
-		} catch {
-			commit(entry, failSave(entry.state), false);
+		} catch (error) {
+			commit(entry, failSave(entry.state, saveError(error)), false);
 		}
 		if (entry.rereadAfterSave && !entry.dropped) {
 			entry.rereadAfterSave = false;
@@ -209,14 +220,21 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		return pending;
 	};
 
-	const loadDraft = (entry: Entry) => {
-		void deps.drafts.get(draftKey(entry)).then((draft) => {
-			if (!draft || entry.dropped) return;
-			const next = restoreDraft(entry.state, draft);
-			if (next === entry.state) return;
-			commit(entry, next, false);
-			deps.onDraftRestored(entry.path);
-		});
+	const loadDraft = async (entry: Entry) => {
+		const draft = await deps.drafts.get(draftKey(entry));
+		if (!draft || entry.dropped) return;
+		const { draftOwner } = deps;
+		if (draft.owner !== draftOwner.id && (await draftOwner.isAlive(draft.owner))) return;
+		if (entry.dropped) return;
+		if (draft.text === entry.state.text) {
+			void deps.drafts.remove(draftKey(entry), draft.owner);
+			return;
+		}
+		const next = restoreDraft(entry.state, draft);
+		if (next === entry.state) return;
+		commit(entry, next, false);
+		writeDraft(entry);
+		deps.onDraftRestored(entry.path);
 	};
 
 	const createEntry = (workspaceId: string, path: string, state: BufferState): Entry => {
@@ -243,7 +261,6 @@ export function createBufferRegistry(deps: RegistryDeps) {
 						entry.views.add(listener);
 						return () => entry.views.delete(listener);
 					},
-					save: () => void save(entry),
 				},
 				subscribeText: (listener) => {
 					entry.watchers.add(listener);
@@ -275,7 +292,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			entries.set(key, entry);
 			deps.publish(entry.workspaceId, entry.path, bufferSummary(entry.state));
 			notifyEntries();
-			loadDraft(entry);
+			void loadDraft(entry);
 			return entry.handle;
 		},
 		isDirty: (key: string) => {

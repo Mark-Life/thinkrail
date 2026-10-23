@@ -67,7 +67,6 @@ export interface ResourceEditSession {
 	snapshot(): string;
 	applyLocal(changes: readonly TextChange[]): void;
 	subscribe(listener: (changes: readonly TextChange[]) => void): () => void;
-	save(): void;
 }
 
 export interface ResourceViewProps {

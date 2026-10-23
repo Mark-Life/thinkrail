@@ -11,16 +11,17 @@ tags: [ui, public-surface-checked]
 ## Responsibility
 
 Own the client side of file editing: one buffer per open file, kept outside any editor; the save
-pipeline over `fs.writeFile`; disk reconcile; and drafts that survive a reload or a quit. Editors
+pipeline over `fs.writeFile`; disk reconcile; and drafts that survive a reload. Editors
 attach to a buffer through the renderer-neutral `ResourceEditSession` ([[module-resource-renderers]]).
 The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-server-fs]]).
 
 ## Boundary
 
 - **Public surface:** `useFileBuffer`, `useFileBufferText`, `canEditFile`, `isFileDirty`, `saveFile`,
-  `saveFocusedFile`, `discardFile`, `FileBufferHandle`.
-- **Allowed deps:** `store` (tabs, connection generation, the buffer summary slice), `transport`
-  (`getTransport`, `supportsFileWrite`), `lib` (`tupleKey`, `fileName`), `contracts` (`toEditorText`,
+  `saveFocusedFile`, `discardFile`.
+- **Allowed deps:** `store` (tabs, connection generation, the buffer summary slice, `toast`), `transport`
+  (`getTransport`, `supportsFileWrite`, `wsErrorCode`), `lib` (`tupleKey`, `fileName`, `randomId`),
+  `contracts` (`toEditorText`,
   `FILE_WRITE_MAX_BYTES`, wire types), `@thinkrail/resource-renderers` (edit-session types only),
   `@thinkrail/locales` (the restore toast), `diff` (`diffArrays`), React.
 - **Forbidden:** UI components (banners and the close dialog belong to `panels`), Monaco or any
@@ -33,8 +34,9 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `base {text, hash}` (the last disk state it adopted; `hash: null` means the file is absent), one
   write in flight, and at most one issue (`conflict`, `readonly`, `error`). The pure transitions live in
   `buffer.ts`; the registry (`registry.ts`) owns side effects.
-- **Status is derived, by precedence:** `stale` (conflict) › `deleted` (`base.hash` null) › `readonly`
-  › `error` › `saving` › `dirty` › `clean`. Dirty means `text !== base.text` and is reported apart from
+- **Status is derived, by precedence:** `stale` (conflict) › `readonly` › `error` › `deleted`
+  (`base.hash` null) › `saving` › `dirty` › `clean`. A failed save of a deleted file shows its reason,
+  not `deleted` again. Dirty means `text !== base.text` and is reported apart from
   the status, so a deleted or stale buffer can still be clean or dirty. Only the summary
   (`{status, dirty, error}`) reaches the store (`fileBuffersByWorkspace`), never the text.
 - **Disk text is adopted only through `toEditorText`,** and only when `meta.text` is true and the mime
@@ -50,22 +52,25 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 - **Reconcile rules.** Same hash as `base`: nothing happens (this also hides the echo of our own save).
   Clean buffer: adopt the disk text. Dirty buffer with the same text as disk: adopt silently. Otherwise a
   `conflict` issue holds the disk version for the banner: **Reload** adopts it, **Keep mine** takes its
-  hash as the new base and keeps the text dirty, so the next save overwrites. Live merge is not here yet.
+  hash as the new base and keeps the text dirty, so the next save overwrites. A deleted buffer whose file
+comes back with the base text adopts it as the base and keeps its edits, with no conflict.
 - **No read lands across a save.** A read carries a token from before it started. A read that started
   before, or arrived during, a write is dropped, and one fresh read runs after the write answers.
   Otherwise the echo of an older save would look like an external change.
-- **Deleted on disk.** A failed read probes the parent folder with `fs.readDir`. When the name is gone
-  (or the folder is), `base.hash` becomes `null`: status `deleted`, text kept. A rename is a delete; the
-  watcher has no rename events.
+- **Deleted on disk.** A failed read probes the parent folder with `fs.readDir` (`probe.ts`). When the
+  name is gone, `base.hash` becomes `null`: status `deleted`, text kept. When the listing itself fails,
+  the probe asks the grandparent whether the folder is gone; any other failure (timeout, host error)
+  leaves the buffer as it was. A probe answer that lands after a save started is dropped. A rename is a
+  delete; the watcher has no rename events.
 - **Reconnect.** Frames missed while offline are never replayed, so on each new connection generation
   every buffer re-reads once.
 - **Deltas, never a reset.** A text change that did not come from the attached editor is sent to it as
   `TextChange[]` from a line diff (`textChanges`, jsdiff `diffArrays` with an edit-length cap and a
-  prefix/suffix fallback), so cursors, scroll and review decorations stay.
+  prefix/suffix fallback), so cursors, scroll and review decorations stay. No editor attached, no diff.
 
 ## Save pipeline
 
-One pipeline, one trigger today: `save()`. Autosave adds a timer that calls the same `save()`.
+`save()` is the single entry point of the pipeline.
 
 1. Nothing to do while a write is in flight, while a conflict is open, or when the buffer is clean and
    on disk. A deleted buffer always saves; it re-creates the file with `expect.hash: null`, as sent.
@@ -76,26 +81,37 @@ One pipeline, one trigger today: `save()`. Autosave adds a timer that calls the 
    `stale`: the current disk version becomes a conflict, unless it equals the buffer text (adopt) or is
    no longer editable text (issue `notEditable`). `missing`: status `deleted`; nothing is re-created
    until the user saves again. `readonly`: issue `readonly`, shown with its reason; the next save retries.
-   A thrown error: issue `failed`.
+   A thrown error: `NOT_EDITABLE` gives issue `notEditable`, `FILE_TOO_LARGE` gives `tooLarge`, any
+   other error `failed`; a retry cannot fix the first two.
 
 `saveFocusedFile` saves the buffer of the focused editor (`[data-file-buffer]` on the pane), else the
 active file tab's buffer. Gated on `supportsFileWrite` (v91).
 
 ## Drafts
 
-IndexedDB database `thinkrail-drafts`, one record per (host, workspace, path) holding the text and the
-base hash it was typed against. The host is `getTransport().httpBase()`. A record is written about
-300 ms after a change and on `pagehide`, and deleted once the buffer is clean. When a buffer is created,
-a draft with the same base hash restores as a dirty buffer; a draft typed against another hash restores
-as a conflict, so Reload / Keep mine decides. Typing before the lookup answers wins over the draft. No
-IndexedDB (private mode, tests) means no drafts. The webview's storage survives a desktop quit, so quit
-never asks the page.
+IndexedDB database `thinkrail-drafts`, one record per (host, workspace, path) holding the text, the
+base hash it was typed against, and its owner page. The host is `getTransport().httpBase()`. A record
+is written about 300 ms after a change and on `pagehide`, and deleted once the buffer is clean. When a
+buffer is created, a draft with the same base hash restores as a dirty buffer; a draft typed against
+another hash restores as a conflict, so Reload / Keep mine decides. A draft whose text equals the
+buffer is deleted, never restored later. Typing before the lookup answers wins over the draft. No
+IndexedDB (private mode, tests) means no drafts.
+
+- **Owner page.** Each page load takes a random id and holds the Web Lock
+  `thinkrail-draft-owner:<id>` while open. A draft owned by another open page (a second tab) is not
+  restored, and a page deletes only records it wrote, so two windows never take over each other's
+  edits. A restored draft is rewritten under the new owner at once. Two pages editing one file share the
+  record: the last writer wins. Without Web Locks (an insecure origin) every other owner counts as gone.
+- **Desktop quit loses drafts.** The desktop window origin carries the host's per-launch loopback port,
+  and IndexedDB is per origin, so drafts survive a reload but not a quit, crash or update restart. Quit
+  does not ask about dirty buffers.
 
 ## Get right
 
 - **Only a user edit makes a buffer dirty.** Disk adoption, reload and draft restore are not user edits.
 - **One write in flight.** A replayed save after a host restart is safe: the host answers `written`
   with no write when the bytes already match.
-- **The store slice is status only.** Views read text from the buffer (`useFileBufferText`).
+- **The store slice is status only.** Views read text from the buffer (`useFileBufferText`). An unchanged
+  summary is a no-op in the store, so typing wakes no store subscriber.
 - **Cost.** `FilePane` is eager, so this module and jsdiff's `diffArrays` ship in the entry chunk:
   1,602 to 1,619 kB (503 to 509 kB gzip).

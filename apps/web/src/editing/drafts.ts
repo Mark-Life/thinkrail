@@ -1,4 +1,4 @@
-import { tupleKey } from "../lib";
+import { randomId, tupleKey } from "../lib";
 
 export interface DraftKey {
 	host: string;
@@ -9,13 +9,20 @@ export interface DraftKey {
 export interface Draft {
 	text: string;
 	baseHash: string | null;
-	savedAt: number;
+	/** The page that wrote it; a draft whose page is still open is not restored elsewhere. */
+	owner: string;
 }
 
 export interface DraftStore {
 	get(key: DraftKey): Promise<Draft | null>;
 	put(key: DraftKey, draft: Draft): Promise<void>;
-	remove(key: DraftKey): Promise<void>;
+	/** Deletes the record only while `owner` still wrote it. */
+	remove(key: DraftKey, owner: string): Promise<void>;
+}
+
+export interface DraftOwner {
+	id: string;
+	isAlive(owner: string): Promise<boolean>;
 }
 
 const DATABASE = "thinkrail-drafts";
@@ -29,11 +36,11 @@ function isDraft(value: unknown): value is Draft {
 	if (typeof value !== "object" || value === null) return false;
 	const text: unknown = Reflect.get(value, "text");
 	const baseHash: unknown = Reflect.get(value, "baseHash");
-	const savedAt: unknown = Reflect.get(value, "savedAt");
+	const owner: unknown = Reflect.get(value, "owner");
 	return (
 		typeof text === "string" &&
 		(typeof baseHash === "string" || baseHash === null) &&
-		typeof savedAt === "number"
+		typeof owner === "string"
 	);
 }
 
@@ -42,6 +49,25 @@ function settle<T>(request: IDBRequest<T>): Promise<T> {
 		request.onsuccess = () => resolve(request.result);
 		request.onerror = () => reject(request.error);
 	});
+}
+
+const OWNER_LOCK = "thinkrail-draft-owner:";
+
+/** One id per page load, held as a Web Lock so other pages can tell whether it is still open. */
+export function pageDraftOwner(
+	locks: LockManager | undefined = globalThis.navigator?.locks,
+): DraftOwner {
+	const id = randomId("page");
+	if (!locks) return { id, isAlive: (owner) => Promise.resolve(owner === id) };
+	void locks.request(`${OWNER_LOCK}${id}`, () => new Promise<never>(() => {})).catch(() => {});
+	return {
+		id,
+		isAlive: async (owner) => {
+			if (owner === id) return true;
+			const { held = [] } = await locks.query().catch(() => ({ held: [] }));
+			return held.some((lock) => lock.name === `${OWNER_LOCK}${owner}`);
+		},
+	};
 }
 
 const NO_DRAFTS: DraftStore = {
@@ -87,8 +113,15 @@ export function indexedDbDrafts(
 		put: async (key, draft) => {
 			await run("readwrite", (store) => store.put(draft, draftId(key)));
 		},
-		remove: async (key) => {
-			await run("readwrite", (store) => store.delete(draftId(key)));
+		remove: async (key, owner) => {
+			await run("readwrite", (store) => {
+				const id = draftId(key);
+				const request = store.get(id);
+				request.addEventListener("success", () => {
+					if (isDraft(request.result) && request.result.owner === owner) store.delete(id);
+				});
+				return request;
+			});
 		},
 	};
 }
