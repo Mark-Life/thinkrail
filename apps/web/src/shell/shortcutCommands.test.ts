@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { type NativeQuitHint, QUIT_CONFIRMATION } from "@thinkrail/contracts";
 import {
+	claimShortcut,
 	createWebShortcuts,
 	hasWebShortcuts,
-	matchBrowserSave,
 	matchShortcut,
 	SHORTCUT_COMMANDS,
 	type ShortcutPlatform,
@@ -91,6 +91,9 @@ describe("shortcut platform", () => {
 });
 
 describe("browser save", () => {
+	const save = (event: ReturnType<typeof chord>, inTerminal: () => boolean, os: string) =>
+		matchShortcut(event, "browser", inTerminal, os) === "save";
+
 	test("takes the platform modifier + S and leaves Ctrl+S in a terminal to xterm", () => {
 		const mac = "MacIntel";
 		const linux = "Linux x86_64";
@@ -98,16 +101,45 @@ describe("browser save", () => {
 		const inside = () => true;
 		const metaS = chord("KeyS", { key: "s", ctrlKey: false, metaKey: true });
 		const ctrlS = chord("KeyS", { key: "s" });
-		expect(matchBrowserSave(metaS, outside, mac)).toBe(true);
-		expect(matchBrowserSave(metaS, inside, mac)).toBe(true);
-		expect(matchBrowserSave(ctrlS, outside, mac)).toBe(false);
-		expect(matchBrowserSave(ctrlS, outside, linux)).toBe(true);
-		expect(matchBrowserSave(ctrlS, inside, linux)).toBe(false);
-		expect(matchBrowserSave(chord("KeyS", { key: "S", shiftKey: true }), outside, linux)).toBe(
-			false,
-		);
-		expect(matchBrowserSave(chord("KeyS", { key: "s", altKey: true }), outside, linux)).toBe(false);
-		expect(matchBrowserSave(chord("KeyS", { key: "ы" }), outside, linux)).toBe(true);
+		expect(save(metaS, outside, mac)).toBe(true);
+		expect(save(metaS, inside, mac)).toBe(true);
+		expect(save(ctrlS, outside, mac)).toBe(false);
+		expect(save(ctrlS, outside, linux)).toBe(true);
+		expect(save(ctrlS, inside, linux)).toBe(false);
+		expect(save(chord("KeyS", { key: "S", shiftKey: true }), outside, linux)).toBe(false);
+		expect(save(chord("KeyS", { key: "s", altKey: true }), outside, linux)).toBe(false);
+		expect(save(chord("KeyS", { key: "ы" }), outside, linux)).toBe(true);
+		expect(matchShortcut(chord("KeyW", { key: "w" }), "browser", outside, linux)).toBeNull();
+	});
+
+	test("runs through the same gate as the desktop table: owner, repeat and prevention", () => {
+		const options = {
+			platform: "browser" as const,
+			isInTerminal: () => false,
+			ownsSave: (target: EventTarget | null) => target === SAVE_OWNER,
+		};
+		const event = (target: unknown, repeat = false) => {
+			const state = { prevented: 0 };
+			return {
+				...chord("KeyS", { key: "s" }),
+				repeat,
+				target: target as EventTarget | null,
+				preventDefault: () => {
+					state.prevented += 1;
+				},
+				stopPropagation: () => {},
+				state,
+			};
+		};
+		const plain = event(null);
+		expect(claimShortcut(plain, options, "Linux x86_64")).toBe("save");
+		expect(plain.state.prevented).toBe(1);
+		const repeat = event(null, true);
+		expect(claimShortcut(repeat, options, "Linux x86_64")).toBeNull();
+		expect(repeat.state.prevented).toBe(1);
+		const owned = event(SAVE_OWNER);
+		expect(claimShortcut(owned, options, "Linux x86_64")).toBeNull();
+		expect(owned.state.prevented).toBe(0);
 	});
 });
 
@@ -115,7 +147,6 @@ describe("chord matching", () => {
 	test("each platform binds its table and only with a bare Ctrl", () => {
 		const table = {
 			apple: { KeyW: null, F4: null, KeyQ: null, Comma: null, KeyS: null },
-			browser: { KeyW: null, F4: null, KeyQ: null, Comma: null, KeyS: null },
 			windows: {
 				KeyW: "close-item",
 				F4: "close-item",
@@ -195,9 +226,11 @@ describe("chord matching", () => {
 	});
 });
 
-test("only windows and linux bind web chords", () => {
+test("apple binds no web chords and a browser binds only save", () => {
 	expect(hasWebShortcuts("apple")).toBe(false);
-	expect(hasWebShortcuts("browser")).toBe(false);
+	expect(
+		SHORTCUT_COMMANDS.filter((command) => command.chords.browser).map((command) => command.id),
+	).toEqual(["save"]);
 	expect(hasWebShortcuts("windows")).toBe(true);
 	expect(hasWebShortcuts("linux")).toBe(true);
 });
