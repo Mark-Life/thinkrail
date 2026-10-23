@@ -77,9 +77,12 @@ uses the same data to tell an agent that someone changed a file under it.
 - **Exact versus inferred.** Only the host's own saves, reverts and undos and pi's `edit`/`write` are
   recorded. A shell command's writes and every outside writer are inferred at read time from the mtime
   and never stored, so a terminal formatter running in the same worktree during an agent's bash call is
-  blamed on that agent. The wire marks those authors `inferred`. An outside save during the call looks
-  the same, so a note names it "your own shell command or a program outside ThinkRail", and the write
-  block does not exempt it.
+  blamed on that agent. The wire marks those authors `inferred`. A command the user types in ThinkRail's
+  terminal goes to a raw PTY, so it is untracked too and the wire calls it `external`. An outside save
+  during the call looks the same as the agent's shell, so a note names it "your own shell command, a
+  terminal command or a program outside ThinkRail", and the write block does not exempt it. With no
+  window, a note says "a terminal command or a program outside ThinkRail". A bash note leaves out
+  terminal edits made during the call.
 - **Concurrent writers.** An agent's read or write is recorded by re-reading the file after pi's tool
   returns, inside the same mutation queue. Another writer queued behind the tool runs before that
   re-read, so the re-read may hold bytes the agent never saw. The claim catches the writers ThinkRail
@@ -121,7 +124,7 @@ uses the same data to tell an agent that someone changed a file under it.
   write or read, claims by when they opened, windows closed ones first and then by when they opened,
   so many short shell calls cannot evict a long one still running. Lookups do not refresh order. A dropped ring
   entry only loses a hint. An evicted path loses its history: its
-  writer then reads as untracked ("a program outside ThinkRail") and `lastWrite` as `external` or
+  writer then reads as untracked ("a terminal command or a program outside ThinkRail") and `lastWrite` as `external` or
   nothing.
 
 ## Later

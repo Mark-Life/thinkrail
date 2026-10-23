@@ -7,7 +7,7 @@ const DIFF_MAX_CHARS = 6000;
 const DIFF_MAX_EDITS = 200;
 const DIFF_TIMEOUT_MS = 50;
 const NOTE_MAX_FILES = 10;
-const OUTSIDE = "a program outside ThinkRail";
+const OUTSIDE = "a terminal command or a program outside ThinkRail";
 const SINCE_READ = "Changes since your last read (- what you read, + the file now)";
 const REPLACED = "What this write replaced (- before this write, + the file now)";
 
@@ -40,7 +40,7 @@ function untrackedPhrase(stale: StaleRead): string | null {
 	if (!stale.untracked) return null;
 	if (!stale.script) return OUTSIDE;
 	const shell = stale.script.self ? "your own shell command" : "another agent's shell command";
-	return `${shell} or ${OUTSIDE}`;
+	return `${shell}, ${OUTSIDE}`;
 }
 
 function joinPhrases(phrases: readonly string[]): string {
