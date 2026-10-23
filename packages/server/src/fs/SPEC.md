@@ -65,10 +65,14 @@ text back to a text file under compare-and-swap.
   the file → `written`, disk untouched); hash (`stale` with the current `{content, meta}`); textness
   (byte-only or LFS pointer → `NOT_EDITABLE`); writability (`readonly`). It answers the wire result plus
   `changed`, so the host stamps workspace activity only when bytes changed.
+  **`replaceFile(target, bytes, mode)`** is the one byte write both `writeTextFile` and `changes` use, so a
+  save and a revert treat the same file the same way (rules under "Atomic unless…" below).
 - **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
-  `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`, `writeTextFile`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`,
-  `FileWriteResult`, and at runtime `toEditorText` and `FILE_WRITE_MAX_BYTES`);
+  `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`, `writeTextFile`,
+  `replaceFile`.
+- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `FileContent`,
+  `ResourceMeta`, `FileWriteResult`, `WsParams`, and at runtime `toEditorText` and
+  `FILE_WRITE_MAX_BYTES`);
   `@thinkrail/shared/codedError`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
@@ -87,10 +91,13 @@ text back to a text file under compare-and-swap.
   save, and a lone `\r` does not survive, the same as under a pi `edit`. The final newline is the
   editor's. A created file is written exactly as sent.
 - **Atomic unless that changes the file's identity.** Temp+rename in the target's directory, with the
-  mode copied. A hard-linked file, a file owned by another user, and a target whose temp create or rename
-  fails with `EACCES`/`EPERM`/`EBUSY`/`EXDEV` are written in place. Rename loses xattrs, ACLs and Finder
-  tags; this is accepted. No fsync, the same as pi and `changes`. A crash can leave a
-  `.thinkrail-write-*.tmp` file; nothing sweeps it.
+  mode and group copied. A hard-linked file, a file owned by another user, and a target whose temp
+  create, `chown` to the file's group, or rename fails with `EACCES`/`EPERM`/`EBUSY`/`EXDEV` are written
+  in place. Rename loses xattrs, ACLs and Finder tags; this is accepted. No fsync, the same as pi. A
+  crash can leave a `.thinkrail-write-*.tmp` file; nothing sweeps it.
+- **An in-place write can tear.** It truncates, then writes. When the write throws (`ENOSPC`, `EIO`), the
+  old bytes are written back before the error is rethrown. A host crash mid-write still leaves a partial
+  file; only the atomic path is crash-safe.
 - **A rename never bypasses a read-only file.** Writability is checked on the target first.
 - **No-op before CAS.** A replayed save (request-id dedupe dies with the host) and two windows saving the
   same text succeed with no write and no `fsChanged`.

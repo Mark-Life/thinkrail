@@ -20,14 +20,14 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 - **Owns:** `revertChange(params)` and `undoChange(params)` — load awaits (scope resolution plus the
   bounded historical-byte read) followed by a **synchronous verify→write/claim pass**, like the
   `reviews` module's snapshot passes. That pass runs inside the injected `FileMutationQueue`; the host
-  passes pi's, so a revert never lands inside an agent `edit`'s read-modify-write. Trashing a claimed
-  file happens after the queue releases; the per-workspace **receipt ring**; the whole-file semantics table
-  below.
+  passes pi's, so a revert never lands inside an agent `edit`'s read-modify-write, and trashing a claimed
+  file happens after the queue releases. Also owned: the per-workspace **receipt ring** and the
+  whole-file semantics table below.
 - **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`,
   `FileMutationQueue`, `forgetWorkspaceChanges`, `retainReceipts`.
 - **Allowed deps:** `contracts` (`ChangeReceipt`/`RevertTarget`/`LineSpan`/`GitDiffScope`), `git`
   (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
-  `hashBytes`/`decodeText` for identity and textness), `persistence` (workspace lookup), `trash`,
+  `hashBytes`/`decodeText` for identity and textness, `replaceFile` for every byte write), `persistence` (workspace lookup), `trash`,
   `@thinkrail/shared/codedError`, Node `fs`/`crypto`/`path`.
 - **Forbidden:** `host`, `agent`, `reviews`; any write outside `fs`'s contained path; `unlink`.
 
@@ -77,8 +77,9 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   `lstat`, and the original tree mode comes from `git ls-tree`; a symlink on either side is never followed.
   Equal bytes with a different mode are not a content revert and are refused. A whole-file restore
   applies the original Git mode (`100755` maps to executable permissions); a range keeps the worktree mode.
-- **Writes are atomic**: a temp file in the same directory, the selected mode applied, then `rename`.
-  A crash mid-write leaves either the old file or the new one, never a truncated one.
+- **Writes go through `fs.replaceFile`**, the same rule as an editor save: temp+rename with the selected
+  mode and the file's group, so a crash leaves the old file or the new one. A hard-linked or foreign-owned
+  file is written in place instead, keeping its links and owner ([[submodule-server-fs]]).
 
 ## Receipts
 
@@ -115,7 +116,7 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 
 ## Get right
 
-- **`change.*` never sends content.** Params carry a scope, spans and hashes; every byte written comes
+- **A `change.*` request never carries content.** Params carry a scope, spans and hashes; every byte written comes
   from this module's own reads. That is what keeps a stale tab from clobbering the agent's work, and it
   is why the expectation hashes are mandatory rather than advisory. (The editor save `fs.writeFile` is
   the one write that carries content, under the same CAS rule: [[submodule-server-fs]].)

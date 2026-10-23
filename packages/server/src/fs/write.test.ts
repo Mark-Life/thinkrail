@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
 	chmodSync,
+	chownSync,
 	existsSync,
 	linkSync,
 	lstatSync,
@@ -17,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FILE_WRITE_MAX_BYTES } from "@thinkrail/contracts";
 import { hashBytes } from "./content";
-import { writeStrategy, writeTextFile } from "./write";
+import { writeTextFile } from "./write";
 
 const BYTES = new TextEncoder();
 const POSIX = process.platform !== "win32";
@@ -126,16 +127,16 @@ test("a missing file is missing unless the save is create-only", () => {
 	});
 	expect(existsSync(join(root, "gone.ts"))).toBe(false);
 
-	expect(save("new/dir/file.ts", "﻿x\r\n", null).result).toMatchObject({ status: "written" });
-	expect(readFileSync(join(root, "new/dir/file.ts"), "utf8")).toBe("﻿x\r\n");
+	expect(save("new/dir/file.ts", "\uFEFFx\r\n", null).result).toMatchObject({ status: "written" });
+	expect(readFileSync(join(root, "new/dir/file.ts"), "utf8")).toBe("\uFEFFx\r\n");
 	expect(save("new/dir/file.ts", "y\n", null).result).toMatchObject({ status: "stale" });
-	expect(readFileSync(join(root, "new/dir/file.ts"), "utf8")).toBe("﻿x\r\n");
+	expect(readFileSync(join(root, "new/dir/file.ts"), "utf8")).toBe("\uFEFFx\r\n");
 });
 
 test("the disk file's line endings and BOM survive a save", () => {
-	put("crlf.txt", "﻿a\r\nb\r\n");
-	save("crlf.txt", "a\nb\nc\n", hash("﻿a\r\nb\r\n"));
-	expect(text("crlf.txt")).toBe("﻿a\r\nb\r\nc\r\n");
+	put("crlf.txt", "\uFEFFa\r\nb\r\n");
+	save("crlf.txt", "a\nb\nc\n", hash("\uFEFFa\r\nb\r\n"));
+	expect(text("crlf.txt")).toBe("\uFEFFa\r\nb\r\nc\r\n");
 });
 
 test("byte-only files and LFS pointers are not editable even with a matching hash", () => {
@@ -186,14 +187,6 @@ test("malformed params are refused before any read", () => {
 	);
 });
 
-test("the strategy is in-place for hard links and other users' files", () => {
-	expect(writeStrategy({ nlink: 1, uid: 501 }, 501)).toBe("atomic");
-	expect(writeStrategy({ nlink: 2, uid: 501 }, 501)).toBe("inPlace");
-	expect(writeStrategy({ nlink: 1, uid: 0 }, 501)).toBe("inPlace");
-	expect(writeStrategy({ nlink: 1, uid: 0 }, undefined)).toBe("atomic");
-	expect(writeStrategy({ nlink: 3, uid: 0 }, undefined)).toBe("inPlace");
-});
-
 test.skipIf(!POSIX)("an atomic save replaces the inode and keeps the mode", () => {
 	const abs = put("run.sh", "echo one\n");
 	chmodSync(abs, 0o755);
@@ -203,6 +196,27 @@ test.skipIf(!POSIX)("an atomic save replaces the inode and keeps the mode", () =
 	expect(after.ino).not.toBe(before.ino);
 	expect(after.mode & 0o777).toBe(0o755);
 	expect(text("run.sh")).toBe("echo two\n");
+});
+
+function otherGroup(): number | undefined {
+	if (!POSIX) return undefined;
+	const taken = new Set([statSync(tmpdir()).gid, process.getgid?.()]);
+	return process.getgroups?.().find((gid) => !taken.has(gid));
+}
+
+const OTHER_GID = otherGroup();
+
+test.skipIf(OTHER_GID === undefined)("an atomic save keeps the file's group", () => {
+	const gid = OTHER_GID ?? -1;
+	const abs = put("shared.txt", "one\n");
+	chmodSync(abs, 0o664);
+	chownSync(abs, -1, gid);
+	const before = statSync(abs);
+	save("shared.txt", "two\n", hash("one\n"));
+	const after = statSync(abs);
+	expect(after.ino).not.toBe(before.ino);
+	expect(after.gid).toBe(gid);
+	expect(after.mode & 0o777).toBe(0o664);
 });
 
 test.skipIf(!POSIX)("a hard-linked file is written in place, so both names see the text", () => {
