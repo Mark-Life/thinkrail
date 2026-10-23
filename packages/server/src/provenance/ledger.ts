@@ -368,7 +368,10 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			start: now(),
 			userWrites: new Map(),
 		});
-		if (windows.length > MAX_WINDOWS) windows.splice(0, windows.length - MAX_WINDOWS);
+		while (windows.length > MAX_WINDOWS) {
+			const closed = windows.findIndex((window) => window.end !== undefined);
+			windows.splice(Math.max(closed, 0), 1);
+		}
 	}
 
 	function closeBashWindow(input: { sessionId: string; toolCallId: string }): WriteEntry[] | null {
