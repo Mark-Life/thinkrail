@@ -1,9 +1,12 @@
 import {
 	accessSync,
+	closeSync,
 	constants,
 	mkdirSync,
+	openSync,
 	readFileSync,
 	realpathSync,
+	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
@@ -24,6 +27,7 @@ interface WriteTextFileOutcome {
 
 const BYTES = new TextEncoder();
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
+const NOT_A_FOLDER_CODES = new Set(["EEXIST", "ENOTDIR"]);
 
 function assertParams(params: WriteTextFileParams): void {
 	if (typeof params.content !== "string") throw new Error("fs.writeFile content must be a string");
@@ -37,6 +41,25 @@ function written(bytes: Uint8Array, path: string): WriteTextFileOutcome {
 	return { result: { status: "written", meta: resourceMeta(bytes, path) }, changed: true };
 }
 
+function readonlyOrThrow(error: unknown): WriteTextFileOutcome {
+	if (READONLY_CODES.has(String(errnoCode(error)))) {
+		return { result: { status: "readonly" }, changed: false };
+	}
+	throw error;
+}
+
+function createExclusive(abs: string, bytes: Uint8Array): void {
+	const fd = openSync(abs, "wx");
+	let complete = false;
+	try {
+		writeFileSync(fd, bytes);
+		complete = true;
+	} finally {
+		closeSync(fd);
+		if (!complete) rmSync(abs, { force: true });
+	}
+}
+
 function createFile(
 	abs: string,
 	params: WriteTextFileParams,
@@ -46,12 +69,22 @@ function createFile(
 		throw new CodedError("NOT_EDITABLE", `${params.path} is a symbolic link to a missing file.`);
 	}
 	const bytes = BYTES.encode(params.content);
-	mkdirSync(dirname(abs), { recursive: true });
 	try {
-		writeFileSync(abs, bytes, { flag: "wx" });
+		mkdirSync(dirname(abs), { recursive: true });
+	} catch (error) {
+		if (NOT_A_FOLDER_CODES.has(String(errnoCode(error)))) {
+			throw new CodedError(
+				"NOT_EDITABLE",
+				`${params.path} has a file where a parent folder should be.`,
+			);
+		}
+		return readonlyOrThrow(error);
+	}
+	try {
+		createExclusive(abs, bytes);
 	} catch (error) {
 		if (errnoCode(error) === "EEXIST" && !retried) return writePass(params, true);
-		throw error;
+		return readonlyOrThrow(error);
 	}
 	return written(bytes, params.path);
 }
@@ -82,10 +115,7 @@ function writePass(params: WriteTextFileParams, retried: boolean): WriteTextFile
 		accessSync(target, constants.W_OK);
 		replaceFile(target, out, stat.mode & 0o777, { stat, bytes: current });
 	} catch (error) {
-		if (READONLY_CODES.has(String(errnoCode(error)))) {
-			return { result: { status: "readonly" }, changed: false };
-		}
-		throw error;
+		return readonlyOrThrow(error);
 	}
 	return written(out, path);
 }
