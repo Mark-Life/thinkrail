@@ -173,7 +173,7 @@ test("closing a bash window returns only the user writes that landed during it",
 	provenance.recordWrite({ path, author: USER, before: bytes("x\n"), after: bytes("during\n") });
 	const closed = provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" });
 	provenance.recordWrite({ path, author: USER, before: null, after: bytes("after\n") });
-	expect(closed?.userWrites.map((entry) => entry.hash)).toEqual([hashBytes(bytes("during\n"))]);
+	expect(closed?.map((entry) => entry.hash)).toEqual([hashBytes(bytes("during\n"))]);
 	expect(provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" })).toBeNull();
 });
 
