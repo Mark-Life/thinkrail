@@ -571,8 +571,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     that slipped in before the re-read is not adopted (see the provenance spec). `tool_execution_end`,
     which pi emits on every path, drops the claim and closes the window when a block or abort skipped
     `tool_result`. Three behaviors:
-    (1) a failed `edit` whose text is pi's not-found error (both the single and the `edits[i]` variant)
-    gets the provenance hint appended when the file changed since the session's read; `isError` stays.
+    (1) a failed `edit` whose text is pi's not-found or duplicate-match error (each in its single and
+    `edits[i]` variant; a save can make old text appear twice) gets the provenance hint appended when the file changed since the session's read; `isError` stays.
     (2) A `write` is blocked when the session's last read is stale, by any writer: the session's own
     shell is not exempt, since an outside save during the call looks the same. A file deleted since the
     read is blocked until a `read` confirms it is gone. A file the session never read, or one over

@@ -25,7 +25,8 @@ import {
 
 const log = logger("agent");
 
-const STALE_EDIT_ERROR = /^Could not find (?:the exact text|edits\[\d+\]) in /;
+const STALE_EDIT_ERROR =
+	/^(?:Could not find (?:the exact text|edits\[\d+\])|Found \d+ occurrences of (?:the text|edits\[\d+\])) in /;
 const ABORTED_ERROR = "Operation aborted";
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 const WINDOWS_SHELL_PATH = /^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i;
