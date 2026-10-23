@@ -334,7 +334,7 @@ test.skipIf(!POSIX)("a FIFO is not editable and is never opened", () => {
 	);
 });
 
-test.skipIf(!POSIX || ROOT_USER)("a read-only file is readonly even in a writable folder", () => {
+test.skipIf(ROOT_USER)("a read-only file is readonly even in a writable folder", () => {
 	const abs = put("locked.ts", "one\n");
 	chmodSync(abs, 0o444);
 	expect(save("locked.ts", "two\n", hash("one\n"))).toEqual({
@@ -343,6 +343,8 @@ test.skipIf(!POSIX || ROOT_USER)("a read-only file is readonly even in a writabl
 	});
 	expect(text("locked.ts")).toBe("one\n");
 	expect(statSync(abs).mode & 0o777).toBe(0o444);
+	expect(leftovers()).toEqual([]);
+	chmodSync(abs, 0o644);
 });
 
 test.skipIf(!POSIX || ROOT_USER)("a create in a read-only folder is readonly", () => {
