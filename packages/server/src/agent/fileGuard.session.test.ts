@@ -258,3 +258,39 @@ test("in a real pi session a save made while a checked write waits on a sibling 
 	expect(written?.text).toContain("-user work\n+agent");
 	expect(readFileSync(path, "utf8")).toBe("agent\n");
 });
+
+test("in a real pi session an edit over a save the agent never read does not clear the way for a stale write", async () => {
+	const store = createProvenance();
+	const path = join(root, "a.ts");
+	writeFileSync(path, "const a = 1;\nconst b = 2;\nconst c = 3;\n");
+	const { faux, session: agent, ends } = await session({ store });
+	const userSave: FauxResponseStep = () => {
+		const before = readFileSync(path);
+		writeFileSync(path, "const a = 1;\nconst b = 999;\nconst c = 3;\n");
+		store.recordWrite({
+			path,
+			author: { kind: "user", clientKey: "c" },
+			before,
+			after: readFileSync(path),
+		});
+		const edits = [{ oldText: "a = 1", newText: "a = 10" }];
+		return fauxAssistantMessage([fauxToolCall("edit", { path: "a.ts", edits }, { id: "e1" })], {
+			stopReason: "toolUse",
+		});
+	};
+	faux.setResponses([
+		call("read", { path: "a.ts" }, "r1"),
+		userSave,
+		call("write", { path: "a.ts", content: "const a = 10;\nconst b = 2;\nconst c = 3;\n" }, "w1"),
+		fauxAssistantMessage("done"),
+	]);
+	await agent.prompt("go");
+	agent.dispose();
+
+	const [, edited, written] = ends;
+	expect(edited?.isError).toBe(false);
+	expect(written).toMatchObject({ toolName: "write", isError: true });
+	expect(written?.text).toStartWith("Blocked: a.ts changed since you read it (by the user");
+	expect(written?.text).toContain("-const b = 2;\n+const a = 10;\n+const b = 999;");
+	expect(readFileSync(path, "utf8")).toBe("const a = 10;\nconst b = 999;\nconst c = 3;\n");
+});

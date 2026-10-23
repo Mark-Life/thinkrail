@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBytes } from "../fs";
@@ -446,4 +446,89 @@ test("a hash the caller already has is used as is, so the ledger does not hash t
 		kind: "user",
 		thisClient: true,
 	});
+});
+
+function agentEdit(provenance: ReturnType<typeof store>, path: string, content: string) {
+	provenance.openClaim({
+		sessionId: "s1",
+		toolCallId: "e1",
+		path,
+		mutates: true,
+		hash: snapshot(path).hash,
+	});
+	put("a.ts", content);
+	provenance.recordWrite({
+		path,
+		author: AGENT,
+		before: null,
+		after: snapshot(path).bytes,
+		toolCallId: "e1",
+	});
+}
+
+test("an edit that starts from a save the agent never read keeps that save reported", () => {
+	const provenance = store();
+	const path = put("a.ts", "a = 1\nb = 2\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	const before = readFileSync(path);
+	put("a.ts", "a = 1\nb = 999\n");
+	provenance.recordWrite({ path, author: USER, before, after: snapshot(path).bytes });
+	agentEdit(provenance, path, "a = 10\nb = 999\n");
+
+	const stale = provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) });
+	expect(stale).toMatchObject({ read: true, untracked: false, baselineText: "a = 1\nb = 2\n" });
+	expect(stale?.writers.map((entry) => [entry.author.kind, entry.line])).toEqual([["user", 2]]);
+});
+
+test("an edit that starts from an outside change keeps it reported as untracked", () => {
+	const provenance = store();
+	const path = put("a.ts", "a = 1\nb = 2\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	put("a.ts", "a = 1\nb = 999\n");
+	agentEdit(provenance, path, "a = 10\nb = 999\n");
+	agentEdit(provenance, path, "a = 11\nb = 999\n");
+	expect(provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) })).toMatchObject({
+		read: true,
+		writers: [],
+		untracked: true,
+	});
+
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	agentEdit(provenance, path, "a = 12\nb = 999\n");
+	expect(provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) })).toBeNull();
+});
+
+test("a delete during the session's own bash call is put down to that call", () => {
+	const provenance = store();
+	clock = Date.now();
+	const path = put("a.ts", "one\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
+	rmSync(path);
+	provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" });
+	expect(provenance.staleRead({ sessionId: "s1", path, current: null })).toMatchObject({
+		untracked: true,
+		script: { self: true },
+	});
+});
+
+test("a move that keeps an old mtime during the session's own bash call is put down to that call", () => {
+	const provenance = store();
+	clock = Date.now();
+	const path = put("a.ts", "one\n");
+	provenance.recordWrite({ path, author: USER, before: null, after: bytes("one\n") });
+	provenance.recordRead({ sessionId: "s1", path, bytes: snapshot(path).bytes });
+	const backup = put("a.ts.bak", "backup\n");
+	const old = new Date(clock - 60 * 60 * 1000);
+	utimesSync(backup, old, old);
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "b1", cwd: dir });
+	renameSync(backup, path);
+	provenance.closeBashWindow({ sessionId: "s1", toolCallId: "b1" });
+
+	expect(provenance.staleRead({ sessionId: "s1", path, current: snapshot(path) })?.script).toEqual({
+		self: true,
+	});
+	expect(
+		provenance.lastWrite({ path, hash: snapshot(path).hash, clientKey: "c" })?.author,
+	).toMatchObject({ kind: "agent", sessionId: "s1", via: "script" });
 });

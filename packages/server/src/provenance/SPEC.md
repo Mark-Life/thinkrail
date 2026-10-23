@@ -30,8 +30,8 @@ uses the same data to tell an agent that someone changed a file under it.
     only the newest per path is kept, unless it is some session's baseline. When an agent write lands
     over another author's entry made after its claim, `recordWrite` returns those writers and the
     replaced text, so `fileGuard` can tell the agent what it overwrote.
-  - **Read baselines.** Per session and path, `{hash, seq, contested}` from the agent's last read or its
-    own write. `recordRead({sessionId, path, bytes, hash?, toolCallId?})` also caches the text by (path, hash),
+  - **Read baselines.** Per session and path, `{hash, seq, at, contested, unseen?}` from the agent's last
+    read or its own write. `recordRead({sessionId, path, bytes, hash?, toolCallId?})` also caches the text by (path, hash),
     shared across sessions, so a later hint can diff the baseline against the disk. `bytes: null` records
     that the agent found the file absent.
   - **Tool claims.** `openClaim({sessionId, toolCallId, path, mutates, hash})` at pi's `tool_call`
@@ -45,11 +45,14 @@ uses the same data to tell an agent that someone changed a file under it.
     disk and no other writer is pending against a contested baseline. Otherwise it returns `read`, the
     other writers since the baseline, whether an untracked write happened, `script` when a bash window
     under the file covers its mtime (`self` only when no other session's window covers it too), and the
-    baseline text when it is cached. With no baseline it
+    baseline text when it is cached. When the mtime says nothing (the file is gone, its mtime is older
+    than the baseline as after `mv` or `cp -p`, or the baseline is `unseen`), `script` comes from every
+    window under the file open since the baseline was set. With no baseline it
     returns only other writers from the last 10 minutes, and never a diff.
   - **`lastWrite({path, hash, clientKey})`** answers the wire's `FileLastWrite` and stats the file only
     when it needs the mtime. The order is: the path's newest ledger entry when its hash matches (an older
-    match is a restore, so it falls through); else an mtime inside a bash window under the file → `agent` via `script`, inferred; else a path with ledger history →
+    match is a restore, so it falls through); else a bash window under the file that covers the mtime, or, when the mtime is older than
+    the newest entry, any window open since that entry → `agent` via `script`, inferred; else a path with ledger history →
     `external`, inferred; else nothing. A `user` author goes on the wire as `thisClient` relative to the
     asking client, never as the clientKey, because the clientKey is a reconnect identity another client
     could take over.
@@ -87,6 +90,13 @@ uses the same data to tell an agent that someone changed a file under it.
   the same bytes, it takes the entry over; otherwise the entry stays, so the other agent is told which
   agent wrote. A contested write whose bytes equal the newest entry is not recorded, so the other
   writer keeps its bytes. A bash or outside write in that gap is still adopted unseen.
+- **An edit starts from what it finds.** pi's `edit` re-reads the file and matches its old text, so an
+  edit that succeeds over a change the session never read folds that change into its result unseen.
+  `openClaim` for a mutating tool compares the starting version with the session's baseline the way
+  `staleRead` does; when they differ, the claim keeps that baseline and the edit's record leaves it in
+  place, so the writers in between stay reported. An untracked change marks the kept baseline `unseen`,
+  which keeps it untracked until the next read. A `write` reaches its claim only once its check found the
+  baseline current, so it keeps none.
 - **Checked before it runs.** pi runs every `tool_call` hook of a parallel batch before any call runs,
   so a save can land between a `write`'s block check and its execution (a sibling hook may wait on the
   user). That write cannot be stopped; its result gets `overwriteNote` instead.
