@@ -1673,7 +1673,7 @@ own section. The kebab menu (`plan-menu`, a
   deleted — keeps the last content, no auto-close; a diff tab whose file left the change set likewise
   keeps its last contents — the Changes list is where the disappearance shows). `FilePane` and `DiffPane`
   run the **one** tab-content live-refresh contract — the shared **`useLiveTabContent(tab, {read, applyFresh,
-  keepCurrent, readFailed?}, reloadKey?)`** hook (`readFailed` runs after a failed tick re-read keeps the current content) — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
+  keepCurrent, readFailed?}, reloadKey?)`** hook (`readFailed` runs after a failed tick re-read keeps the current content; every callback is taken from the latest render when its read lands, so a file buffer created after the read started still adopts it) — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
   workspace-qualified write (`updateFileTabContent` vs `updateDiffTabContent`, each receiving the captured
   workspace because opaque cache ids may repeat across workspaces). Its one-batch skip ("this file isn't in it—just
   advance the tick") requires the batch to have **named** files: a **pathless** frame (`paths: []`, the host's
