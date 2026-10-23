@@ -223,6 +223,17 @@ CAS-protected actions. The pane owns wire calls, scope and expectation hashes, u
 refresh, and error UI. An immutable scope omits `hunkActions`; renderers must then omit every mutation
 control rather than emulate one.
 
+**Editing is a capability plus an optional prop, never a third intent.** `capabilities.edit` marks a
+renderer whose desktop view can edit text; only `code` (Monaco) sets it today. A host that wants an
+editable mount passes `ResourceViewProps.edit`, a `ResourceEditSession`; without it every view is
+read-only, so chat cards, phones and diffs stay read-only by construction. The session is
+editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes)` reports the view's own edits,
+`subscribe(listener)` delivers every other change, and `save()` asks the host to write. A change set is
+`TextChange[]` (`{from, to, insert}`), all offsets into the document before the set, never overlapping:
+the CodeMirror convention, so a CodeMirror- or CRDT-backed session needs no new contract. A view mounts
+from `snapshot()`, never from `content`, and applies subscribed changes as deltas. The package owns no
+buffer, save or conflict state.
+
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
 and opaque per-tab view state. `anchorLabel` prefers a structural locator over its mandatory text fallback:
 `table-cell` is `R<row>C<column>`, `json-pointer` is the pointer itself, and unknown schemes retain
@@ -553,15 +564,17 @@ content's own height.
   The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
   `updateOptions` only when that object changes; the typography and spacing tokens the options read are
   static generated CSS (themes set only colours).
-- **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
+- **The desktop Monaco surface is a text editor, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
-  and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
+  and add read-only messaging (only without an edit session), the path as its accessible label, an 8px top inset, three-character line-number
   gutter, full active-line paint, smooth scrolling, active bracket-pair + indentation guides, single-file
   occurrence highlighting, and ambiguous-Unicode suppression. Opaque `viewState` is restored only after its
   editor-state shape is validated and is saved on unmount, so tab switches round-trip scroll and folding.
-  Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
-  context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
-  messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
+  Monaco is imported from `editor.api` with the reading contributions (find and replace, folding, bracket matching,
+  context menu/clipboard, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
+  messaging and Unicode highlighting) plus the basic editing ones (line operations, comment toggle, word
+  operations, multi-cursor, cursor undo); undo/redo and typing are core. Editing contributions cost
+  about 63 kB of the Monaco chunk. Keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
   ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
@@ -570,8 +583,12 @@ content's own height.
   that mounts the view, with no loading state, then restores the view state and attaches review commenting
   (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
   and the model, in that order. A path change on a live editor swaps the model in place, and the language
-  follows the path, because `RendererView` is keyed by implementation, not path. New text calls `setValue`
+  follows the path, because `RendererView` is keyed by implementation, not path. Read-only, new text calls `setValue`
   only when it differs from the text last applied, compared as strings, never through `getValue()`.
+  With an edit session, `bindEditSession` owns the model instead: it is created from `snapshot()` with LF
+  line endings, its content events go to `applyLocal` (except the ones it applied), and subscribed changes
+  land through `pushEditOperations` between undo stops, so cursors, decorations and Monaco's own undo stay
+  coherent. `setValue` never runs on an editable model. A path or session change rebinds in place.
   A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
   before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
   a live editor scrolls smoothly.
