@@ -144,6 +144,7 @@ import {
 	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
+import { fileProvenance, recordingQueue } from "../provenance";
 import {
 	addComment,
 	buildReviewFixDetails,
@@ -697,16 +698,33 @@ const handlers: WsHandlers = {
 			? nodes
 			: nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 	},
-	"fs.readFile": (p) => {
+	"fs.readFile": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
-		return readFile(p.workspaceId, p.path);
+		const file = readFile(p.workspaceId, p.path);
+		const lastWrite = fileProvenance.lastWrite({
+			path: resolveWorktreeFile(p.workspaceId, p.path),
+			hash: file.meta.hash,
+			clientKey: ctx.clientKey,
+		});
+		return lastWrite ? { ...file, lastWrite } : file;
 	},
-	"fs.writeFile": async (p) => {
+	"fs.writeFile": async (p, ctx) => {
 		void ensureWatch(p.workspaceId);
 		const abs = resolveWorktreeFile(p.workspaceId, p.path);
-		const { result, changed } = await withFileMutationQueue(abs, async () => writeTextFile(p));
-		if (changed) recordWorkspaceActivity(p.workspaceId);
-		return result;
+		const outcome = await withFileMutationQueue(abs, async () => {
+			const written = writeTextFile(p);
+			if (written.changed) {
+				fileProvenance.recordWrite({
+					path: abs,
+					author: { kind: "user", clientKey: ctx.clientKey },
+					before: written.before,
+					after: written.after,
+				});
+			}
+			return written;
+		});
+		if (outcome.changed) recordWorkspaceActivity(p.workspaceId);
+		return outcome.result;
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);
@@ -851,16 +869,18 @@ const handlers: WsHandlers = {
 		getWorkspace(p.workspaceId);
 		return { turns: listTurns(p.workspaceId) };
 	},
-	"change.revert": (p) => {
+	"change.revert": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
+		const queue = recordingQueue(withFileMutationQueue, { kind: "user", clientKey: ctx.clientKey });
 		return withChangeLock(p.workspaceId, async () => ({
-			receipt: await revertChange(p, withFileMutationQueue),
+			receipt: await revertChange(p, queue),
 		}));
 	},
-	"change.undo": (p) => {
+	"change.undo": (p, ctx) => {
 		void ensureWatch(p.workspaceId);
+		const queue = recordingQueue(withFileMutationQueue, { kind: "user", clientKey: ctx.clientKey });
 		return withChangeLock(p.workspaceId, async () => ({
-			receipt: await undoChange(p, withFileMutationQueue),
+			receipt: await undoChange(p, queue),
 		}));
 	},
 	"terminal.reserve": (p) => {

@@ -6,6 +6,7 @@ import * as pi from "@earendil-works/pi-coding-agent";
 import { createEditTool, createWriteTool } from "@earendil-works/pi-coding-agent";
 import type {
 	ChangeReceipt,
+	FileRead,
 	FileWriteResult,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
@@ -260,6 +261,43 @@ test("workspace activity is stamped only when a save changes bytes", async () =>
 	expect(lastActiveAt()).toBeUndefined();
 	await save("a.ts", "next\n", hash("base\n"));
 	expect(lastActiveAt()).toBeNumber();
+});
+
+function readAs(clientKey: string, path: string) {
+	return handleRequest(
+		"fs.readFile",
+		{ workspaceId: "w1", path },
+		{ clientKey },
+	) as Promise<FileRead>;
+}
+
+test("a save is recorded as the user, and readFile reports it to the saving client only as this client", async () => {
+	writeFileSync(join(root, "a.ts"), "base\n");
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite).toBeUndefined();
+	await save("a.ts", "mine\n", hash("base\n"));
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite).toEqual({
+		author: { kind: "user", thisClient: true },
+		at: expect.any(Number),
+	});
+	expect((await readAs("other-client", "a.ts")).lastWrite?.author).toEqual({
+		kind: "user",
+		thisClient: false,
+	});
+	writeFileSync(join(root, "a.ts"), "outside\n");
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite?.author).toEqual({
+		kind: "external",
+		inferred: true,
+	});
+});
+
+test("a change.revert is recorded as the user's write", async () => {
+	commitRepo("a.ts", "one\n");
+	writeFileSync(join(root, "a.ts"), "two\n");
+	await revert("a.ts", hash("one\n"), hash("two\n"));
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite?.author).toEqual({
+		kind: "user",
+		thisClient: true,
+	});
 });
 
 test("a save's fsChanged frame names the target and never the temp file", async () => {
