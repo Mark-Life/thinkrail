@@ -27,8 +27,8 @@ text back to a text file under compare-and-swap.
   **`resolveWorktreeFile(workspaceId, path)`** returns the
   contained absolute path for the host to stream a file's raw bytes over HTTP (the `/files/…` route
   serving relative images in the markdown viewer, the `/blob` route's containment check) and for the
-  `changes` module's atomic writes, and as the lexical per-file queue key the host's `fs.writeFile`
-  shares with pi. Lexical escapes, `.git`, and an existing symlink chain whose resolved
+  `changes` module's atomic writes, and as the path the host's `fs.writeFile` hands pi's per-file
+  queue (pi keys it by realpath, lexical only while the file is absent). Lexical escapes, `.git`, and an existing symlink chain whose resolved
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
   restored. `changes` passes `{ followLeaf: false }` so containment validates through the parent and its
   own `lstat` can reject even an escaping leaf symlink without following it. This module owns the path
