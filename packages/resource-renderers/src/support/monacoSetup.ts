@@ -66,9 +66,14 @@ function registerShikiLanguages(code: ResourceCodeHost): void {
 			});
 			registered.add(language.id);
 		}
+		const { line, block } = language.comments ?? {};
 		monaco.languages.setLanguageConfiguration(language.id, {
 			brackets: BRACKETS,
 			colorizedBracketPairs: BRACKETS,
+			comments: {
+				...(line ? { lineComment: line } : {}),
+				...(block ? { blockComment: [block[0], block[1]] } : {}),
+			},
 		});
 	}
 }

@@ -80,8 +80,9 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 
 - `markdown` — the component that renders markdown (`ResourceMarkdownProps`); the document preview, rendered
   diff and notebook cells pass their plugins and components through it.
-- `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
-  the code `theme` resolved from CSS variables). Monaco is page-global: the first preload `warm` or
+- `code` — the code-highlighting host (`languages` with grammar loaders and optional `comments` tokens,
+  `languageId` canonicalization, and the code `theme` resolved from CSS variables). Shiki grammars carry
+  no comment tokens, so Monaco's comment toggle works only for languages whose host entry sets them. Monaco is page-global: the first preload `warm` or
   `MonacoEditor` initializes it from its host's `code` once (`ensureMonaco`, synchronous after the Monaco
   chunk loads), and every later editor reuses that setup. `ensureMonaco` owns the one page-lifetime theme
   watch, so a swap between a preload and the first editor still re-themes, and N open editors cost one
