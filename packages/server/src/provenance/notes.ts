@@ -4,7 +4,8 @@ import type { Overwrite, StaleRead, WriteEntry } from "./ledger";
 const DIFF_MAX_LINES = 40;
 const DIFF_LINE_MAX_CHARS = 240;
 const DIFF_MAX_CHARS = 6000;
-const DIFF_MAX_EDITS = 4000;
+const DIFF_MAX_EDITS = 200;
+const DIFF_TIMEOUT_MS = 50;
 const NOTE_MAX_FILES = 10;
 const OUTSIDE = "a program outside ThinkRail";
 const SINCE_READ = "Changes since your last read (- what you read, + the file now)";
@@ -64,6 +65,7 @@ function renderDiff(before: string, after: string): string[] | null {
 	const patch = structuredPatch("read", "now", before, after, undefined, undefined, {
 		context: 1,
 		maxEditLength: DIFF_MAX_EDITS,
+		timeout: DIFF_TIMEOUT_MS,
 	});
 	if (!patch) return null;
 	const lines = patch.hunks.flatMap((hunk) => [
