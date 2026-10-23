@@ -99,7 +99,7 @@ test("repeated saves by one author collapse into its latest, and untracked write
 		now: NOW,
 	});
 	expect(text).toBe(
-		"ThinkRail: a.ts was changed by the user 2 s ago (line 3), another agent 4 s ago and a program outside ThinkRail since you last read it. Re-read the file before editing.",
+		"ThinkRail: a.ts was changed by the user 2 s ago (line 3), another agent 4 s ago and a terminal command or a program outside ThinkRail since you last read it. Re-read the file before editing.",
 	);
 });
 
@@ -128,10 +128,10 @@ test("the write block calls the agent you and names the writers and shells it ma
 		"Blocked: src/auth.ts changed since you read it (by the user 4 s ago). Re-read before writing.",
 	);
 	expect(block({ untracked: true, script: { self: false } })).toContain(
-		"(by another agent's shell command or a program outside ThinkRail)",
+		"(by another agent's shell command, a terminal command or a program outside ThinkRail)",
 	);
 	expect(block({ untracked: true, script: { self: true } })).toContain(
-		"(by your own shell command or a program outside ThinkRail)",
+		"(by your own shell command, a terminal command or a program outside ThinkRail)",
 	);
 	expect(block({ writers: [entry({ hash: null })] }, true)).toBe(
 		"Blocked: src/auth.ts was deleted since you read it (by the user 4 s ago). Read it to confirm, then write again.",

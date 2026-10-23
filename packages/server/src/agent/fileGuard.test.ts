@@ -265,7 +265,7 @@ test("a change during the session's own shell command still blocks, since an out
 	writeFileSync(join(root, "a.ts"), "typed in another editor\n");
 	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "x\n" });
 	expect(blocked?.reason).toStartWith(
-		"Blocked: a.ts changed since you read it (by your own shell command or a program outside ThinkRail).",
+		"Blocked: a.ts changed since you read it (by your own shell command, a terminal command or a program outside ThinkRail).",
 	);
 	await guarded.result(await read("a.ts", "r2"));
 	expect(await guarded.call("write", "w2", { path: "a.ts", content: "x\n" })).toBeUndefined();
@@ -414,7 +414,7 @@ test("an edit that fails before writing does not take an outside change as the a
 	).toBeUndefined();
 	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "x\n" });
 	expect(blocked?.reason).toStartWith(
-		"Blocked: a.ts changed since you read it (by a program outside ThinkRail).",
+		"Blocked: a.ts changed since you read it (by a terminal command or a program outside ThinkRail).",
 	);
 });
 
@@ -447,7 +447,7 @@ test("a bash call that never gets a result is closed when pi ends the tool", asy
 	const later = new Date(Date.now() + offset);
 	utimesSync(join(root, "a.ts"), later, later);
 	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "x\n" });
-	expect(blocked?.reason).toContain("(by a program outside ThinkRail)");
+	expect(blocked?.reason).toContain("(by a terminal command or a program outside ThinkRail)");
 });
 
 test("a whole-file write records the first line it changed", async () => {
@@ -486,7 +486,9 @@ test("a write over a file deleted since the read is blocked until a read confirm
 		"Blocked: a.ts was deleted since you read it (by the user 0 s ago). Read it to confirm, then write again.",
 	);
 	const outside = await guarded.call("write", "w2", { path: "b.ts", content: "x\n" });
-	expect(outside?.reason).toContain("b.ts was deleted since you read it (by a program outside");
+	expect(outside?.reason).toContain(
+		"b.ts was deleted since you read it (by a terminal command or a program outside",
+	);
 
 	const missing = await read("a.ts", "r2");
 	expect(missing.isError).toBe(true);
@@ -507,4 +509,16 @@ test("the write check hashes the file once", async () => {
 	} finally {
 		digest.mockRestore();
 	}
+});
+
+test("a command typed in the terminal is named as one, not only as a program outside ThinkRail", async () => {
+	writeFileSync(join(root, "a.ts"), "one\n");
+	const guarded = guard();
+	await guarded.result(await read("a.ts"));
+	Bun.spawnSync(["sh", "-c", "echo x >> a.ts"], { cwd: root });
+	const blocked = await guarded.call("write", "w1", { path: "a.ts", content: "two\n" });
+	expect(blocked?.reason).toStartWith(
+		"Blocked: a.ts changed since you read it (by a terminal command or a program outside ThinkRail).",
+	);
+	expect(blocked?.reason).toContain("+x");
 });
