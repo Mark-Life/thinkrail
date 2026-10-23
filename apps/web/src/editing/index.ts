@@ -1,7 +1,6 @@
 export {
 	canEditFile,
 	discardFile,
-	isFileDirty,
 	saveFile,
 	saveFocusedFile,
 } from "./files";

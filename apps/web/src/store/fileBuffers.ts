@@ -7,7 +7,7 @@ export type FileBufferStatus =
 	| "readonly"
 	| "error";
 
-export type FileBufferError = "tooLarge" | "notEditable" | "failed";
+export type FileBufferError = "tooLarge" | "notEditable" | "offline" | "failed";
 
 export interface FileBufferSummary {
 	status: FileBufferStatus;

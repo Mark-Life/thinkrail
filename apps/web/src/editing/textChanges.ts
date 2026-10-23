@@ -2,6 +2,13 @@ import type { TextChange } from "@thinkrail/resource-renderers";
 import { diffArrays } from "diff";
 
 const MAX_EDIT_LENGTH = 2000;
+const DIFF_TIMEOUT_MS = 50;
+
+interface LinePart {
+	value: string[];
+	added: boolean;
+	removed: boolean;
+}
 
 export function applyChanges(text: string, changes: readonly TextChange[]): string {
 	let next = text;
@@ -38,9 +45,26 @@ function refined(previous: string, change: TextChange): TextChange {
 	return { from: change.from + inner.from, to: change.from + inner.to, insert: inner.insert };
 }
 
+function alignedParts(before: string[], after: string[]): LinePart[] | null {
+	if (before.length !== after.length) return null;
+	return before.flatMap<LinePart>((line, index) => {
+		const other = after[index] ?? "";
+		return line === other
+			? [{ value: [line], added: false, removed: false }]
+			: [
+					{ value: [line], added: false, removed: true },
+					{ value: [other], added: true, removed: false },
+				];
+	});
+}
+
 export function textChanges(previous: string, next: string): TextChange[] {
 	if (previous === next) return [];
-	const parts = diffArrays(lines(previous), lines(next), { maxEditLength: MAX_EDIT_LENGTH });
+	const before = lines(previous);
+	const after = lines(next);
+	const parts =
+		diffArrays(before, after, { maxEditLength: MAX_EDIT_LENGTH, timeout: DIFF_TIMEOUT_MS }) ??
+		alignedParts(before, after);
 	if (!parts) return [trimmedChange(previous, next)];
 	const changes: TextChange[] = [];
 	let offset = 0;

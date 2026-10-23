@@ -2,21 +2,19 @@ import {
 	FILE_WRITE_MAX_BYTES,
 	type FileContent,
 	type FileWriteResult,
+	LFS_POINTER_MIME,
 	type ResourceMeta,
 	toEditorText,
 } from "@thinkrail/contracts";
 import type { FileBufferError, FileBufferStatus, FileBufferSummary } from "../store";
 
-const LFS_MIME = "application/vnd.git-lfs";
-
-/** A disk state the buffer adopted; `hash: null` means the file is absent. */
 interface DiskText {
 	text: string;
 	hash: string | null;
 }
 
 type BufferIssue =
-	| { kind: "conflict"; disk: DiskText }
+	| { kind: "conflict"; disk: DiskText; typedOn: string | null }
 	| { kind: "readonly" }
 	| { kind: "error"; error: FileBufferError };
 
@@ -24,6 +22,7 @@ export interface BufferState {
 	text: string;
 	base: DiskText;
 	saving: { text: string } | null;
+	unconfirmed: string | null;
 	issue: BufferIssue | null;
 }
 
@@ -33,7 +32,7 @@ interface SaveRequest {
 }
 
 export function isEditableMeta(meta: Pick<ResourceMeta, "text" | "mime">): boolean {
-	return meta.text && meta.mime !== LFS_MIME;
+	return meta.text && meta.mime !== LFS_POINTER_MIME;
 }
 
 export function editorDisk(file: FileContent): DiskText | null {
@@ -42,7 +41,7 @@ export function editorDisk(file: FileContent): DiskText | null {
 }
 
 export function createBuffer(disk: DiskText): BufferState {
-	return { text: disk.text, base: disk, saving: null, issue: null };
+	return { text: disk.text, base: disk, saving: null, unconfirmed: null, issue: null };
 }
 
 export function isDirty(state: BufferState): boolean {
@@ -71,27 +70,42 @@ export function localEdit(state: BufferState, text: string): BufferState {
 	return text === state.text ? state : { ...state, text };
 }
 
-export function adoptDisk(state: BufferState, disk: DiskText): BufferState {
-	if (disk.hash === state.base.hash) {
-		const outdated = state.issue?.kind === "conflict" && state.issue.disk.hash !== disk.hash;
-		return outdated ? { ...state, issue: null } : state;
-	}
-	if (state.base.hash === null && disk.text === state.base.text) {
-		return { ...state, base: disk, issue: null };
-	}
-	if (!isDirty(state) || disk.text === state.text) {
-		return { ...state, text: disk.text, base: disk, issue: null };
-	}
-	return { ...state, issue: { kind: "conflict", disk } };
+export function draftBaseHash(state: BufferState): string | null {
+	return state.issue?.kind === "conflict" ? state.issue.typedOn : state.base.hash;
 }
 
-export function markNotEditable(state: BufferState): BufferState {
-	return { ...state, issue: { kind: "error", error: "notEditable" } };
+function conflict(state: BufferState, disk: DiskText): BufferIssue {
+	return { kind: "conflict", disk, typedOn: draftBaseHash(state) };
+}
+
+function settledOn(state: BufferState, base: DiskText): BufferState {
+	return { ...state, base, unconfirmed: null, issue: null };
+}
+
+function clearedByRead(issue: BufferIssue | null, disk: DiskText): boolean {
+	if (issue?.kind === "conflict") return issue.disk.hash !== disk.hash;
+	return issue?.kind === "error" && (issue.error === "notEditable" || issue.error === "offline");
+}
+
+export function adoptDisk(state: BufferState, disk: DiskText): BufferState {
+	if (disk.hash === state.base.hash) {
+		return clearedByRead(state.issue, disk) ? { ...state, issue: null } : state;
+	}
+	if (state.unconfirmed !== null && disk.text === state.unconfirmed) return settledOn(state, disk);
+	if (state.base.hash === null && disk.text === state.base.text) return settledOn(state, disk);
+	if (!isDirty(state) || disk.text === state.text) {
+		return settledOn({ ...state, text: disk.text }, disk);
+	}
+	return { ...state, issue: conflict(state, disk) };
+}
+
+export function markError(state: BufferState, error: FileBufferError): BufferState {
+	return { ...state, issue: { kind: "error", error } };
 }
 
 export function markMissing(state: BufferState): BufferState {
 	if (state.base.hash === null && state.issue === null) return state;
-	return { ...state, base: { text: state.base.text, hash: null }, issue: null };
+	return settledOn(state, { text: state.base.text, hash: null });
 }
 
 function utf8Length(text: string): number {
@@ -119,12 +133,14 @@ export function finishSave(state: BufferState, result: FileWriteResult): BufferS
 		case "written":
 			return result.meta.hash === null
 				? settled
-				: { ...settled, base: { text: sent, hash: result.meta.hash }, issue: null };
+				: settledOn(settled, { text: sent, hash: result.meta.hash });
 		case "stale": {
 			const disk = editorDisk(result.current);
-			if (!disk) return markNotEditable(settled);
-			if (disk.text === state.text) return { ...settled, base: disk, issue: null };
-			return { ...settled, issue: { kind: "conflict", disk } };
+			if (!disk) return markError(settled, "notEditable");
+			if (disk.text === state.text || disk.text === state.unconfirmed) {
+				return settledOn(settled, disk);
+			}
+			return { ...settled, unconfirmed: null, issue: conflict(settled, disk) };
 		}
 		case "missing":
 			return markMissing(settled);
@@ -134,18 +150,19 @@ export function finishSave(state: BufferState, result: FileWriteResult): BufferS
 }
 
 export function failSave(state: BufferState, error: FileBufferError): BufferState {
-	return { ...state, saving: null, issue: { kind: "error", error } };
+	const unconfirmed = state.saving?.text ?? state.unconfirmed;
+	return markError({ ...state, saving: null, unconfirmed }, error);
 }
 
 export function reloadFromDisk(state: BufferState): BufferState {
 	if (state.issue?.kind !== "conflict") return state;
 	const { disk } = state.issue;
-	return { ...state, text: disk.text, base: disk, issue: null };
+	return settledOn({ ...state, text: disk.text }, disk);
 }
 
 export function keepMine(state: BufferState): BufferState {
 	if (state.issue?.kind !== "conflict") return state;
-	return { ...state, base: state.issue.disk, issue: null };
+	return settledOn(state, state.issue.disk);
 }
 
 export function restoreDraft(
@@ -154,5 +171,9 @@ export function restoreDraft(
 ): BufferState {
 	if (isDirty(state) || state.saving || draft.text === state.text) return state;
 	if (draft.baseHash === state.base.hash) return { ...state, text: draft.text };
-	return { ...state, text: draft.text, issue: { kind: "conflict", disk: state.base } };
+	return {
+		...state,
+		text: draft.text,
+		issue: { kind: "conflict", disk: state.base, typedOn: draft.baseHash },
+	};
 }

@@ -9,14 +9,15 @@ import {
 	beginSave,
 	bufferSummary,
 	createBuffer,
+	draftBaseHash,
 	editorDisk,
 	failSave,
 	finishSave,
 	isDirty,
 	keepMine,
 	localEdit,
+	markError,
 	markMissing,
-	markNotEditable,
 	reloadFromDisk,
 	restoreDraft,
 } from "./buffer";
@@ -36,6 +37,7 @@ interface RegistryDeps {
 	publish(workspaceId: string, path: string, summary: FileBufferSummary | null): void;
 	hostKey(): string;
 	canWrite(): boolean;
+	isConnected(): boolean;
 	onDraftRestored(path: string): void;
 	draftDelayMs: number;
 }
@@ -63,6 +65,7 @@ interface Entry {
 	draftTimer: ReturnType<typeof setTimeout> | null;
 	dropped: boolean;
 	pendingSave: Promise<void> | null;
+	nextSave: Promise<void> | null;
 	handle: FileBufferHandle;
 }
 
@@ -98,7 +101,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		}
 		void deps.drafts.put(draftKey(entry), {
 			text: entry.state.text,
-			baseHash: entry.state.base.hash,
+			baseHash: draftBaseHash(entry.state),
 			owner: deps.draftOwner.id,
 		});
 	};
@@ -123,7 +126,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			}
 			for (const watcher of entry.watchers) watcher();
 		}
-		if (next.text !== previous.text || next.base.hash !== previous.base.hash) {
+		if (next.text !== previous.text || draftBaseHash(next) !== draftBaseHash(previous)) {
 			scheduleDraft(entry);
 		}
 		deps.publish(entry.workspaceId, entry.path, bufferSummary(next));
@@ -185,14 +188,24 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			return;
 		}
 		const disk = editorDisk(file);
-		commit(entry, disk ? adoptDisk(entry.state, disk) : markNotEditable(entry.state), false);
+		commit(
+			entry,
+			disk ? adoptDisk(entry.state, disk) : markError(entry.state, "notEditable"),
+			false,
+		);
 	};
 
-	const runSave = async (entry: Entry) => {
+	const runSave = async (entry: Entry): Promise<void> => {
+		if (entry.dropped) return;
 		const { state, request } = beginSave(entry.state);
+		if (request && !deps.isConnected()) {
+			commit(entry, markError(entry.state, "offline"), false);
+			return;
+		}
 		commit(entry, state, false);
 		if (!request) return;
 		entry.saveSeq += 1;
+		let ownEcho = false;
 		try {
 			const result = await deps.io.write({
 				workspaceId: entry.workspaceId,
@@ -200,19 +213,28 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				content: request.content,
 				expect: request.expect,
 			});
-			commit(entry, finishSave(entry.state, result), false);
+			const next = finishSave(entry.state, result);
+			ownEcho = result.status === "stale" && next.issue === null && isDirty(next);
+			commit(entry, next, false);
 		} catch (error) {
 			commit(entry, failSave(entry.state, saveError(error)), false);
 		}
+		if (ownEcho && !entry.dropped) return runSave(entry);
 		if (entry.rereadAfterSave && !entry.dropped) {
 			entry.rereadAfterSave = false;
 			await reread(entry);
 		}
 	};
 
-	const save = (entry: Entry) => {
+	const save = (entry: Entry): Promise<void> => {
 		if (!deps.canWrite()) return Promise.resolve();
-		if (entry.pendingSave) return entry.pendingSave;
+		if (entry.pendingSave) {
+			entry.nextSave ??= entry.pendingSave.then(() => {
+				entry.nextSave = null;
+				return save(entry);
+			});
+			return entry.nextSave;
+		}
 		const pending = runSave(entry).finally(() => {
 			if (entry.pendingSave === pending) entry.pendingSave = null;
 		});
@@ -251,6 +273,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			draftTimer: null,
 			dropped: false,
 			pendingSave: null,
+			nextSave: null,
 			handle: {
 				key,
 				session: {
@@ -295,10 +318,6 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			void loadDraft(entry);
 			return entry.handle;
 		},
-		isDirty: (key: string) => {
-			const entry = entries.get(key);
-			return entry ? isDirty(entry.state) : false;
-		},
 		async save(key: string): Promise<FileBufferSummary | null> {
 			const entry = entries.get(key);
 			if (!entry) return null;
@@ -308,6 +327,12 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		discard(key: string) {
 			const entry = entries.get(key);
 			if (entry) drop(entry, true);
+		},
+		forgetWorkspace(workspaceId: string) {
+			for (const entry of [...entries.values()]) {
+				if (entry.workspaceId === workspaceId) drop(entry, true);
+			}
+			void deps.drafts.removeWorkspace({ host: deps.hostKey(), workspaceId });
 		},
 		prune(openKeys: ReadonlySet<string>) {
 			for (const entry of [...entries.values()]) {

@@ -1,4 +1,4 @@
-import { randomId, tupleKey } from "../lib";
+import { randomId } from "../lib";
 
 export interface DraftKey {
 	host: string;
@@ -9,15 +9,14 @@ export interface DraftKey {
 export interface Draft {
 	text: string;
 	baseHash: string | null;
-	/** The page that wrote it; a draft whose page is still open is not restored elsewhere. */
 	owner: string;
 }
 
 export interface DraftStore {
 	get(key: DraftKey): Promise<Draft | null>;
 	put(key: DraftKey, draft: Draft): Promise<void>;
-	/** Deletes the record only while `owner` still wrote it. */
 	remove(key: DraftKey, owner: string): Promise<void>;
+	removeWorkspace(key: Omit<DraftKey, "path">): Promise<void>;
 }
 
 export interface DraftOwner {
@@ -28,8 +27,12 @@ export interface DraftOwner {
 const DATABASE = "thinkrail-drafts";
 const STORE = "drafts";
 
-export function draftId({ host, workspaceId, path }: DraftKey): string {
-	return tupleKey("draft", host, workspaceId, path);
+function draftId({ host, workspaceId, path }: DraftKey): IDBValidKey {
+	return [host, workspaceId, path];
+}
+
+function workspaceRange({ host, workspaceId }: Omit<DraftKey, "path">): IDBKeyRange {
+	return IDBKeyRange.bound([host, workspaceId], [host, workspaceId, []]);
 }
 
 function isDraft(value: unknown): value is Draft {
@@ -53,7 +56,6 @@ function settle<T>(request: IDBRequest<T>): Promise<T> {
 
 const OWNER_LOCK = "thinkrail-draft-owner:";
 
-/** One id per page load, held as a Web Lock so other pages can tell whether it is still open. */
 export function pageDraftOwner(
 	locks: LockManager | undefined = globalThis.navigator?.locks,
 ): DraftOwner {
@@ -74,6 +76,7 @@ const NO_DRAFTS: DraftStore = {
 	get: () => Promise.resolve(null),
 	put: () => Promise.resolve(),
 	remove: () => Promise.resolve(),
+	removeWorkspace: () => Promise.resolve(),
 };
 
 export function indexedDbDrafts(
@@ -122,6 +125,9 @@ export function indexedDbDrafts(
 				});
 				return request;
 			});
+		},
+		removeWorkspace: async (key) => {
+			await run("readwrite", (store) => store.delete(workspaceRange(key)));
 		},
 	};
 }
