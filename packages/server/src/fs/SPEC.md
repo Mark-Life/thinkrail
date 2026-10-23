@@ -40,7 +40,8 @@ text back to a text file under compare-and-swap.
   `\` into `/` themselves.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
-  prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2, plus `image/svg+xml` for
+  prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2; bmp also needs a
+  NUL in its 14-byte header, because `BM` alone starts ordinary prose, plus `image/svg+xml` for
   text whose root element is `<svg>`, directly or behind an XML prolog — a prolog alone is not an
   image, and `application/vnd.git-lfs` for a text file of at most 1 KiB that is exactly the three-line pointer
   `git lfs` itself writes — `version`, `oid sha256:`, `size`, in that order, nothing else, so no prose
@@ -63,7 +64,9 @@ text back to a text file under compare-and-swap.
   (`missing`, or an exclusive create when `expect.hash` is `null`; a dangling symlink is never created
   through, `NOT_EDITABLE`); regular file (`NOT_EDITABLE`); no-op (the bytes it would write are already
   the file → `written`, disk untouched); hash (`stale` with the current `{content, meta}`); textness
-  (byte-only or LFS pointer → `NOT_EDITABLE`); writability (`readonly`). It answers the wire result plus
+  (bytes with a NUL in the first 8 KiB or invalid UTF-8, or an LFS pointer → `NOT_EDITABLE`);
+  writability (`readonly`). Textness here ignores magic numbers: text the editor saved that starts like
+  a PDF or GIF must stay saveable, and replacing bytes that decode losslessly loses nothing. It answers the wire result plus
   `changed`, so the host stamps workspace activity only when bytes changed.
   **`replaceFile(target, bytes, mode, current)`** and **`createFile(target, bytes, mode?)`** are the byte
   writes both `writeTextFile` and `changes` use, so a save and a revert treat the same file the same way.
