@@ -108,6 +108,11 @@ while a real background command or detached subagent runs after the parent settl
 publishes an unread completion and the worktree row shows running, not a dot; with the window unfocused
 (a seen result is read at once), the dot lights only after the woken turn and the running badge clears.
 
+**File-edit collisions** (`file-edit-collision.live.spec.ts`) let a real agent `read` a file with a random
+token, then save a change to that line over the wire before the agent's `edit`. The edit's failed result must
+carry the `fileGuard` hint: the pointer naming You and the line, plus the diff from what the agent read. The
+token forces the agent to wait for the read, so the save always lands between the two calls.
+
 **MCP servers** coverage (`mcp-settings.spec.ts`) runs the server package's stdio fixture through the
 absolute path of the runner's `bun`, since the host's hermetic `PATH` has none. It adds a user server
 through the Settings form while the workspace's persisted chat is open (entering a workspace auto-opens
