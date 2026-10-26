@@ -58,6 +58,14 @@ import type {
 } from "./appStore";
 import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
 import {
+	type FileActivity,
+	type FileWrite,
+	type FileWriterTone,
+	lastWriterTone,
+	NO_FILE_WRITES,
+	workspaceWriterCount,
+} from "./fileActivity";
+import {
 	type FileBufferSummaries,
 	type FileBufferSummary,
 	type FileSaveIndicator,
@@ -958,6 +966,38 @@ export function selectFileBufferSummary(
 	path: string,
 ): FileBufferSummary | undefined {
 	return state.fileBuffersByWorkspace[workspaceId]?.[path];
+}
+
+export function selectFileWrites(
+	state: { fileActivityByWorkspace: FileActivity },
+	workspaceId: string,
+	path: string,
+): readonly FileWrite[] {
+	return state.fileActivityByWorkspace[workspaceId]?.paths[path] ?? NO_FILE_WRITES;
+}
+
+const NO_AGENT_SLOTS: readonly string[] = [];
+
+export function selectFileAgentSlots(
+	state: { fileActivityByWorkspace: FileActivity },
+	workspaceId: string,
+): readonly string[] {
+	return state.fileActivityByWorkspace[workspaceId]?.agents ?? NO_AGENT_SLOTS;
+}
+
+export function selectFileLastWriterTone(
+	state: { fileActivityByWorkspace: FileActivity },
+	workspaceId: string,
+	path: string,
+): FileWriterTone | null {
+	return lastWriterTone(state.fileActivityByWorkspace[workspaceId], path);
+}
+
+export function selectWorkspaceWriterCount(
+	state: { fileActivityByWorkspace: FileActivity },
+	workspaceId: string,
+): number {
+	return workspaceWriterCount(state.fileActivityByWorkspace[workspaceId]);
 }
 
 export function selectFileSaveIndicator(

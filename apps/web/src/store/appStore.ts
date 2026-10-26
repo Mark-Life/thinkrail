@@ -101,6 +101,7 @@ import {
 	type ChatResourceSnapshots,
 	staleChatResources,
 } from "./chatResources";
+import { type FileActivity, pruneFileActivity, withFsChangeActivity } from "./fileActivity";
 import {
 	type FileBufferSummaries,
 	type FileBufferSummary,
@@ -1024,6 +1025,8 @@ interface AppState {
 	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	fileBuffersByWorkspace: FileBufferSummaries;
+	fileActivityByWorkspace: FileActivity;
+	pruneFileActivity: (now: number) => void;
 	setFileBufferSummary: (
 		workspaceId: string,
 		path: string,
@@ -2268,6 +2271,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
 	fileBuffersByWorkspace: {},
+	fileActivityByWorkspace: {},
 	turnsByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
@@ -2570,6 +2574,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				fileBuffersByWorkspace: omitKey(state.fileBuffersByWorkspace, workspaceId),
+				fileActivityByWorkspace: omitKey(state.fileActivityByWorkspace, workspaceId),
 				turnsByWorkspace: omitKey(state.turnsByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				mcpByWorkspace: omitKey(state.mcpByWorkspace, workspaceId),
@@ -3193,11 +3198,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
 			const tick = (prev?.tick ?? 0) + 1;
 			const skillChanged = payload.skillChange !== "none";
+			const activity = withFsChangeActivity(s.fileActivityByWorkspace, payload, Date.now());
 			return {
 				fsChangesByWorkspace: {
 					...s.fsChangesByWorkspace,
 					[payload.workspaceId]: { tick, paths: payload.paths, truncated: payload.truncated },
 				},
+				...(activity === s.fileActivityByWorkspace ? {} : { fileActivityByWorkspace: activity }),
 				...(skillChanged
 					? {
 							skillChangeTickByWorkspace: {
@@ -3207,6 +3214,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}
 					: {}),
 			};
+		}),
+	pruneFileActivity: (now) =>
+		set((s) => {
+			const next = pruneFileActivity(s.fileActivityByWorkspace, now);
+			return next === s.fileActivityByWorkspace ? s : { fileActivityByWorkspace: next };
 		}),
 	setFileBufferSummary: (workspaceId, path, summary) =>
 		set((s) => {
