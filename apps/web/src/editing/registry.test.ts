@@ -296,7 +296,7 @@ test("a draft equal to the buffer text is deleted, so it never comes back as a f
 	expect(second.summaries.at(-1)).toEqual({ status: "clean", dirty: false });
 });
 
-test("a buffer dropped while its save is in flight leaves no draft that resurrects", async () => {
+test("a tab closed while its save is in flight drops the buffer once the save lands", async () => {
 	const disk = fakeDisk({ [PATH]: "one\n" });
 	const drafts = memoryDrafts();
 	const first = setup({ disk, drafts, owner: "page-a" });
@@ -304,19 +304,33 @@ test("a buffer dropped while its save is in flight leaves no draft that resurrec
 	const release = disk.hold();
 	const saving = first.registry.save(first.handle.key);
 	first.registry.prune(new Set());
+	expect(first.registry.get(first.handle.key)).not.toBeNull();
 	release();
 	await saving;
-	expect(drafts.records.size).toBe(1);
+	await settle();
+	expect(first.registry.get(first.handle.key)).toBeNull();
+	expect(first.summaries.at(-1)).toBeNull();
+	expect(disk.text(PATH)).toBe("saved one\n");
+	expect(drafts.records.size).toBe(0);
 
+	disk.put(PATH, "agent\n");
 	const second = setup({ disk, drafts, owner: "page-b" });
 	await settle();
-	expect(drafts.records.size).toBe(0);
-	second.registry.discard(second.handle.key);
-	disk.put(PATH, "agent\n");
-	const third = setup({ disk, drafts, owner: "page-c" });
+	expect(second.restored).toEqual([]);
+	expect(second.handle.session.snapshot()).toBe("agent\n");
+});
+
+test("a tab that reopens while its closing save runs keeps the buffer", async () => {
+	const { disk, registry, handle } = setup();
+	type(handle, 0, "x");
+	const release = disk.hold();
+	const saving = registry.save(handle.key);
+	registry.prune(new Set());
+	registry.prune(new Set([handle.key]));
+	release();
+	await saving;
 	await settle();
-	expect(third.restored).toEqual([]);
-	expect(third.handle.session.snapshot()).toBe("agent\n");
+	expect(registry.get(handle.key)).toBe(handle);
 });
 
 test("a failed re-create of a deleted file shows why instead of 'deleted'", async () => {

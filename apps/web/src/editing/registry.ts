@@ -1,13 +1,21 @@
-import type { FileContent, FileWriteResult, ResourceMeta, WsParams } from "@thinkrail/contracts";
+import type {
+	FileContent,
+	FileSaveMode,
+	FileWriteResult,
+	ResourceMeta,
+	WsParams,
+} from "@thinkrail/contracts";
 import type { EditUpdate, ResourceEditSession } from "@thinkrail/resource-renderers";
 import type { FileBufferError, FileBufferSummary } from "../store";
 import { wsErrorCode } from "../transport";
+import { createAutosave, type Schedule, timerSchedule } from "./autosave";
 import {
 	adoptDisk,
 	type BufferState,
 	beginSave,
 	bufferSummary,
 	bufferText,
+	canAutosave,
 	createBuffer,
 	draftBaseHash,
 	draftConflicts,
@@ -52,6 +60,9 @@ interface RegistryDeps {
 	isConnected(): boolean;
 	onDraftRestored(path: string): void;
 	draftDelayMs: number;
+	saveMode(): FileSaveMode;
+	autosaveDelayMs: number;
+	schedule?: Schedule;
 }
 
 export interface FileBufferHandle {
@@ -82,6 +93,7 @@ interface Entry {
 	nextSave: Promise<void> | null;
 	composing: boolean;
 	afterCompose: "read" | "save" | null;
+	leaving: boolean;
 	handle: FileBufferHandle;
 }
 
@@ -97,6 +109,40 @@ function saveError(error: unknown): FileBufferError {
 export function createBufferRegistry(deps: RegistryDeps) {
 	const entries = new Map<string, Entry>();
 	const entryListeners = new Set<() => void>();
+	let openKeys: ReadonlySet<string> | null = null;
+
+	const publish = (entry: Entry) =>
+		deps.publish(entry.workspaceId, entry.path, {
+			...bufferSummary(entry.state),
+			...(autosave.isArmed(entry.key) ? { pending: true as const } : {}),
+		});
+
+	const autosave = createAutosave({
+		delayMs: deps.autosaveDelayMs,
+		schedule: deps.schedule ?? timerSchedule,
+		fire: (key) => {
+			const entry = entries.get(key);
+			if (!entry) return;
+			if (entry.composing) autosave.arm(key);
+			else if (canAutosave(entry.state)) void save(entry);
+		},
+		changed: (key) => {
+			const entry = entries.get(key);
+			if (entry && !entry.dropped) publish(entry);
+		},
+	});
+
+	const autosaving = () => deps.saveMode() === "auto";
+
+	const armIfReady = (entry: Entry) => {
+		if (
+			autosaving() &&
+			canAutosave(entry.state) &&
+			entry.state.issue === null &&
+			isDirty(entry.state)
+		)
+			autosave.arm(entry.key);
+	};
 
 	const draftKey = (entry: Entry): DraftKey => ({
 		host: deps.hostKey(),
@@ -139,7 +185,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 
 	const commit = (entry: Entry, next: BufferState, origin: CommitOrigin) => {
 		const previous = entry.state;
-		if (next === previous || entry.dropped) return;
+		if (next === previous || entry.dropped) return false;
 		entry.state = next;
 		broadcast(entry, previous, origin);
 		if (bufferText(next) !== bufferText(previous)) {
@@ -152,7 +198,12 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		) {
 			scheduleDraft(entry);
 		}
-		deps.publish(entry.workspaceId, entry.path, bufferSummary(next));
+		publish(entry);
+		return true;
+	};
+
+	const userStep = (entry: Entry, next: BufferState, origin: CommitOrigin) => {
+		if (commit(entry, next, origin) && autosaving()) autosave.arm(entry.key);
 	};
 
 	const notifyEntries = () => {
@@ -161,6 +212,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 
 	const drop = (entry: Entry, discard: boolean) => {
 		if (entry.dropped) return;
+		autosave.cancel(entry.key);
 		if (discard) {
 			if (entry.draftTimer !== null) clearTimeout(entry.draftTimer);
 			entry.draftTimer = null;
@@ -302,6 +354,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (next === entry.state) return;
 		commit(entry, next, "other");
 		void writeDraft(entry);
+		armIfReady(entry);
 		deps.onDraftRestored(entry.path);
 	};
 
@@ -324,12 +377,13 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			nextSave: null,
 			composing: false,
 			afterCompose: null,
+			leaving: false,
 			handle: {
 				key,
 				session: {
 					snapshot: () => bufferText(entry.state),
 					applyLocal: (changes, kind) =>
-						commit(entry, localEdit(entry.state, changes, kind), "view"),
+						userStep(entry, localEdit(entry.state, changes, kind), "view"),
 					select: (ranges) => {
 						if (!entry.dropped)
 							entry.state = withDoc(entry.state, selectDoc(entry.state.doc, ranges));
@@ -338,14 +392,14 @@ export function createBufferRegistry(deps: RegistryDeps) {
 						entry.views.add(listener);
 						return () => entry.views.delete(listener);
 					},
-					undo: () => commit(entry, withDoc(entry.state, undoDoc(entry.state.doc)), "history"),
-					redo: () => commit(entry, withDoc(entry.state, redoDoc(entry.state.doc)), "history"),
+					undo: () => userStep(entry, withDoc(entry.state, undoDoc(entry.state.doc)), "history"),
+					redo: () => userStep(entry, withDoc(entry.state, redoDoc(entry.state.doc)), "history"),
 					canUndo: () => canUndoDoc(entry.state.doc),
 					canRedo: () => canRedoDoc(entry.state.doc),
 					setComposing: (composing) => setComposing(entry, composing),
 					conflicts: () => conflictsOf(entry.state.doc),
 					resolveConflict: (id, choice) =>
-						commit(entry, resolveConflict(entry.state, id, choice), "other"),
+						userStep(entry, resolveConflict(entry.state, id, choice), "other"),
 				},
 				subscribeText: (listener) => {
 					entry.watchers.add(listener);
@@ -355,7 +409,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				adoptRead: (file, token) => adoptRead(entry, file, token),
 				readFailed: (error, token) => readFailed(entry, error, token),
 				reload: () => commit(entry, reloadFromDisk(entry.state), "other"),
-				keepMine: () => commit(entry, keepMine(entry.state), "other"),
+				keepMine: () => userStep(entry, keepMine(entry.state), "other"),
 			},
 		};
 		return entry;
@@ -375,7 +429,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			if (!disk) return null;
 			const entry = createEntry(input.workspaceId, input.path, createBuffer(disk));
 			entries.set(key, entry);
-			deps.publish(entry.workspaceId, entry.path, bufferSummary(entry.state));
+			publish(entry);
 			notifyEntries();
 			void loadDraft(entry);
 			return entry.handle;
@@ -383,6 +437,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		async save(key: string): Promise<FileBufferSummary | null> {
 			const entry = entries.get(key);
 			if (!entry) return null;
+			autosave.cancel(key);
 			await save(entry);
 			return bufferSummary(entry.state);
 		},
@@ -396,12 +451,41 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			}
 			void deps.drafts.removeWorkspace({ host: deps.hostKey(), workspaceId });
 		},
-		prune(openKeys: ReadonlySet<string>) {
+		prune(open: ReadonlySet<string>) {
+			openKeys = open;
 			for (const entry of [...entries.values()]) {
-				if (!openKeys.has(entry.key)) drop(entry, false);
+				if (open.has(entry.key) || entry.leaving) continue;
+				autosave.flush(entry.key);
+				const saving = entry.nextSave ?? entry.pendingSave;
+				if (!saving) {
+					drop(entry, false);
+					continue;
+				}
+				entry.leaving = true;
+				void saving.finally(() => {
+					entry.leaving = false;
+					if (!openKeys?.has(entry.key)) drop(entry, false);
+				});
 			}
 		},
-		reconcileAll: () => Promise.all([...entries.values()].map(reread)).then(() => {}),
+		reconcileAll: () =>
+			Promise.all(
+				[...entries.values()].map((entry) => {
+					const owed = entry.state.issue?.kind === "error" && entry.state.issue.error === "offline";
+					return reread(entry).then(() => {
+						if (owed) armIfReady(entry);
+					});
+				}),
+			).then(() => {}),
+		flush: (key: string) => autosave.flush(key),
+		flushAll: () => autosave.flushAll(),
+		saveModeChanged() {
+			if (!autosaving()) {
+				autosave.cancelAll();
+				return;
+			}
+			for (const entry of entries.values()) armIfReady(entry);
+		},
 		async flushDrafts() {
 			const pending = [...entries.values()].filter((entry) => entry.draftTimer !== null);
 			await Promise.all(pending.map(writeDraft));

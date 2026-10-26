@@ -1,7 +1,7 @@
 import { FILE_WRITE_MAX_BYTES, type FileContent, type ResourceMeta } from "@thinkrail/contracts";
 import { i18n } from "@thinkrail/locales/react";
 import type { ResourceRenderer } from "@thinkrail/resource-renderers";
-import { fileName } from "../lib";
+import { fileName, tupleKey } from "../lib";
 import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "../store";
 import {
 	clientErrorReport,
@@ -14,6 +14,7 @@ import { fileBufferKey, isEditableMeta } from "./keys";
 import type { BufferRegistry, FileIo } from "./registry";
 
 const DRAFT_DELAY_MS = 300;
+const AUTOSAVE_DELAY_MS = 1000;
 
 export function syncFileTabs(workspaceId: string, path: string, file: FileContent, tick: number) {
 	const state = useAppStore.getState();
@@ -58,6 +59,12 @@ export function hasUnsavedEdits(state: Pick<AppState, "fileBuffersByWorkspace">)
 	);
 }
 
+function activeTabId(state: AppState): string | null {
+	const workspaceId = state.activeWorkspaceId;
+	if (!workspaceId) return null;
+	return tupleKey("active-tab", workspaceId, state.activeTabByWorkspace[workspaceId] ?? "");
+}
+
 let registry: BufferRegistry | null = null;
 let loading: Promise<BufferRegistry> | null = null;
 let watching = false;
@@ -83,18 +90,33 @@ function watchStore() {
 			}
 		}
 		if (!registry) return;
+		if (activeTabId(state) !== activeTabId(previous)) registry.flushAll();
 		if (state.tabsByWorkspace !== previous.tabsByWorkspace) registry.prune(openFileKeys(state));
+		if (state.fileSaveMode !== previous.fileSaveMode) registry.saveModeChanged();
 		if (state.connectionGeneration !== previous.connectionGeneration) {
 			void registry.reconcileAll();
 		}
 	});
-	native?.onQuitFlush(async () => {
+	const leavePage = async () => {
+		registry?.flushAll();
 		await registry?.flushDrafts();
-	});
-	globalThis.addEventListener?.("pagehide", () => void registry?.flushDrafts());
+	};
+	native?.onQuitFlush(leavePage);
+	globalThis.addEventListener?.("pagehide", () => void leavePage());
 	globalThis.document?.addEventListener("visibilitychange", () => {
-		if (globalThis.document.visibilityState === "hidden") void registry?.flushDrafts();
+		if (globalThis.document.visibilityState === "hidden") void leavePage();
 	});
+	globalThis.document?.addEventListener("focusout", (event) => {
+		const pane = bufferPane(event.target);
+		if (!pane || (event.relatedTarget instanceof Node && pane.contains(event.relatedTarget)))
+			return;
+		const key = pane.getAttribute("data-file-buffer");
+		if (key) registry?.flush(key);
+	});
+}
+
+function bufferPane(target: EventTarget | null): Element | null {
+	return target instanceof Element ? target.closest("[data-file-buffer]") : null;
 }
 
 export function loadedBufferRegistry(): BufferRegistry | null {
@@ -125,6 +147,8 @@ export function loadBufferRegistry(
 				onDraftRestored: (path) =>
 					toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
 				draftDelayMs: DRAFT_DELAY_MS,
+				saveMode: () => useAppStore.getState().fileSaveMode,
+				autosaveDelayMs: AUTOSAVE_DELAY_MS,
 			});
 			watchStore();
 			for (const listener of loadListeners) listener();
@@ -173,9 +197,9 @@ function activeFileKey(state: AppState): string | null {
 
 export function saveFocusedFile(): void {
 	if (!registry) return;
-	const focused = globalThis.document?.activeElement
-		?.closest("[data-file-buffer]")
-		?.getAttribute("data-file-buffer");
+	const focused = bufferPane(globalThis.document?.activeElement ?? null)?.getAttribute(
+		"data-file-buffer",
+	);
 	const key = focused ?? activeFileKey(useAppStore.getState());
 	if (key) void registry.save(key);
 }

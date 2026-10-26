@@ -1,7 +1,8 @@
-import type { FileContent, FileWriteResult, WsParams } from "@thinkrail/contracts";
+import type { FileContent, FileSaveMode, FileWriteResult, WsParams } from "@thinkrail/contracts";
 import type { ResourceEditSession, TextChange } from "@thinkrail/resource-renderers";
 import type { FileBufferSummary } from "../store";
 import { RequestError } from "../transport";
+import type { Schedule } from "./autosave";
 import type { Draft, DraftKey, DraftStore } from "./drafts";
 import { createBufferRegistry, type FileIo } from "./registry";
 
@@ -94,6 +95,27 @@ export const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
 
 export const live = new Set<string>();
 
+export function fakeClock() {
+	let now = 0;
+	const timers = new Set<{ at: number; run: () => void }>();
+	const schedule: Schedule = (run, ms) => {
+		const timer = { at: now + ms, run };
+		timers.add(timer);
+		return () => timers.delete(timer);
+	};
+	const advance = (ms: number) => {
+		now += ms;
+		for (const timer of [...timers].sort((a, b) => a.at - b.at)) {
+			if (timer.at > now || !timers.has(timer)) continue;
+			timers.delete(timer);
+			timer.run();
+		}
+	};
+	return { schedule, advance, timers: () => timers.size };
+}
+
+export const AUTOSAVE_MS = 1000;
+
 export function setup(
 	options: {
 		text?: string;
@@ -102,6 +124,8 @@ export function setup(
 		owner?: string;
 		connected?: () => boolean;
 		view?: boolean;
+		mode?: () => FileSaveMode;
+		clock?: ReturnType<typeof fakeClock>;
 	} = {},
 ) {
 	const disk = options.disk ?? fakeDisk({ [PATH]: options.text ?? "one\ntwo\n" });
@@ -109,6 +133,7 @@ export function setup(
 	const owner = options.owner ?? "page-a";
 	const summaries: (FileBufferSummary | null)[] = [];
 	const restored: string[] = [];
+	const clock = options.clock ?? fakeClock();
 	const registry = createBufferRegistry({
 		io: disk.io,
 		drafts: drafts.store,
@@ -119,13 +144,16 @@ export function setup(
 		isConnected: options.connected ?? (() => true),
 		onDraftRestored: (path) => restored.push(path),
 		draftDelayMs: 5,
+		saveMode: options.mode ?? (() => "manual"),
+		autosaveDelayMs: AUTOSAVE_MS,
+		schedule: clock.schedule,
 	});
 	const file = disk.content(PATH);
 	const handle = registry.ensure({ workspaceId: WS, path: PATH, ...file });
 	if (!handle) throw new Error("buffer not created");
 	const received: (readonly TextChange[])[] = [];
 	if (options.view !== false) handle.session.subscribe((update) => received.push(update.changes));
-	return { disk, drafts, summaries, restored, registry, handle, received };
+	return { disk, drafts, summaries, restored, registry, handle, received, clock };
 }
 
 export const type = (
