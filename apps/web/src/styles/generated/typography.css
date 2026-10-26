@@ -285,7 +285,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat h1 {
+.tr-prose-chat :is(h1, .md-h1) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s18);
 	font-weight: var(--tr-font-weight-semibold);
@@ -294,7 +294,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat h2 {
+.tr-prose-chat :is(h2, .md-h2) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-semibold);
@@ -303,7 +303,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat h3 {
+.tr-prose-chat :is(h3, .md-h3) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-semibold);
@@ -312,7 +312,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat h4 {
+.tr-prose-chat :is(h4, .md-h4) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-medium);
@@ -321,7 +321,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat h5 {
+.tr-prose-chat :is(h5, .md-h5) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-medium);
@@ -330,7 +330,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat h6 {
+.tr-prose-chat :is(h6, .md-h6) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s10);
 	font-weight: var(--tr-font-weight-medium);
@@ -339,7 +339,7 @@
 	text-transform: uppercase;
 	font-style: normal;
 }
-.tr-prose-chat :not(pre) > code {
+.tr-prose-chat :is(:not(pre) > code, .md-code) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -348,7 +348,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(pre, pre code) {
+.tr-prose-chat :is(pre, pre code, .md-codeblock) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -357,7 +357,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat blockquote {
+.tr-prose-chat :is(blockquote, .md-quote) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
@@ -403,7 +403,7 @@
 	font-style: normal;
 }
 /* Bold: weight only — every other property inherits from the parent element. */
-.tr-prose-chat :is(strong, b) {
+.tr-prose-chat :is(strong, b, .md-strong) {
 	font-weight: var(--tr-font-weight-medium);
 }
 
@@ -417,7 +417,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc h1 {
+.tr-prose-doc :is(h1, .md-h1) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s24);
 	font-weight: var(--tr-font-weight-semibold);
@@ -426,7 +426,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc h2 {
+.tr-prose-doc :is(h2, .md-h2) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s20);
 	font-weight: var(--tr-font-weight-semibold);
@@ -435,7 +435,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc h3 {
+.tr-prose-doc :is(h3, .md-h3) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s18);
 	font-weight: var(--tr-font-weight-semibold);
@@ -444,7 +444,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc h4 {
+.tr-prose-doc :is(h4, .md-h4) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s16);
 	font-weight: var(--tr-font-weight-semibold);
@@ -453,7 +453,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc h5 {
+.tr-prose-doc :is(h5, .md-h5) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-semibold);
@@ -462,7 +462,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc h6 {
+.tr-prose-doc :is(h6, .md-h6) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-semibold);
@@ -471,7 +471,7 @@
 	text-transform: uppercase;
 	font-style: normal;
 }
-.tr-prose-doc :not(pre) > code {
+.tr-prose-doc :is(:not(pre) > code, .md-code) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -480,7 +480,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(pre, pre code) {
+.tr-prose-doc :is(pre, pre code, .md-codeblock) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -489,7 +489,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc blockquote {
+.tr-prose-doc :is(blockquote, .md-quote) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
@@ -535,7 +535,7 @@
 	font-style: normal;
 }
 /* Bold: weight only — every other property inherits from the parent element. */
-.tr-prose-doc :is(strong, b) {
+.tr-prose-doc :is(strong, b, .md-strong) {
 	font-weight: var(--tr-font-weight-medium);
 }
 }

@@ -142,15 +142,15 @@ export const PROSE_STRONG_WEIGHT = "medium";
 
 export const PROSE_SELECTORS: Record<string, string> = {
 	body: "",
-	h1: " h1",
-	h2: " h2",
-	h3: " h3",
-	h4: " h4",
-	h5: " h5",
-	h6: " h6",
-	inlineCode: " :not(pre) > code",
-	codeBlock: " :is(pre, pre code)",
-	blockquote: " blockquote",
+	h1: " :is(h1, .md-h1)",
+	h2: " :is(h2, .md-h2)",
+	h3: " :is(h3, .md-h3)",
+	h4: " :is(h4, .md-h4)",
+	h5: " :is(h5, .md-h5)",
+	h6: " :is(h6, .md-h6)",
+	inlineCode: " :is(:not(pre) > code, .md-code)",
+	codeBlock: " :is(pre, pre code, .md-codeblock)",
+	blockquote: " :is(blockquote, .md-quote)",
 	list: " :is(ul, ol, li)",
 	tableBody: " :is(table, td)",
 	tableHeader: " th",
@@ -501,7 +501,7 @@ export function renderCss(t: Typography): string {
 			out.push("}");
 		}
 		out.push(`/* Bold: weight only — every other property inherits from the parent element. */`);
-		out.push(`.${root} :is(strong, b) {`);
+		out.push(`.${root} :is(strong, b, .md-strong) {`);
 		out.push(`\tfont-weight: var(${cssVarName(t, "font-weight", PROSE_STRONG_WEIGHT)});`);
 		out.push("}");
 	}

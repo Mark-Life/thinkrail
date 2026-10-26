@@ -208,7 +208,7 @@ and colour inherit from the enclosing element, so bold in a heading keeps the he
 a cell keeps the table's.
 
 Each element selector also matches one class (`md-h1`…`md-h6`, `md-code`, `md-codeblock`,
-`md-quote`, `md-list`, `md-strong`): the markdown live preview is a CodeMirror editor whose lines are
+`md-quote`, `md-strong`): the markdown live preview is a CodeMirror editor whose lines are
 `div`s, so its heading and code lines wear those classes inside `.tr-prose-doc` and get the document's
 type from the same generated rules.
 
