@@ -2086,9 +2086,11 @@ own section. The kebab menu (`plan-menu`, a
   the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
   **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
   (`focusRendererEditor`).
-- **Closing a dirty file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
+- **Closing an unsaved file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
-  **Cancel**. It reads `dirty` from the store's buffer summary. Save closes only once the save leaves the
+  **Cancel**. It reads the store's `selectFileSaveIndicator`. In auto mode a file autosave is about to
+  write (`pending`) saves first and closes when that leaves it clean; only a paused file, or one that save
+  did not clean, gets the dialog. Save closes only once the save leaves the
   buffer clean; any other result (a conflict, offline, read-only, too large, a failure) closes the dialog
   and selects that tab, so its banner says why, even when the tab was in the background. Don't save
   discards the buffer and its draft. While a save runs, Save shows "Saving…" and

@@ -11,7 +11,7 @@ tags: [ui, public-surface-checked]
 ## Responsibility
 
 Own the client side of file editing: one buffer per open file, kept outside any editor; the save
-pipeline over `fs.writeFile`; disk reconcile through a live 3-way merge; the user's own undo history;
+pipeline over `fs.writeFile` and the autosave that drives it; disk reconcile through a live 3-way merge; the user's own undo history;
 and drafts that survive a reload. Editors
 attach to a buffer through the renderer-neutral `ResourceEditSession` ([[module-resource-renderers]]).
 The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-server-fs]]).
@@ -21,7 +21,7 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 - **Public surface:** `useFileBuffer`, `useFileBufferText`, `canEditFile`, `saveFile`,
   `saveFocusedFile`, `discardFile`.
 - **Allowed deps:** `store` (tabs and their content writes, the active tab and workspace tick
-  selectors, connection status and generation, removed workspace ids, the buffer summary slice, `toast`),
+  selectors, `activeWorkspaceId` / `activeTabByWorkspace` and `fileSaveMode` as flush and mode signals, connection status and generation, removed workspace ids, the buffer summary slice, `toast`),
   `transport`
   (`getTransport`, `supportsFileWrite`, `wsErrorCode`, `reportClientError`, `clientErrorReport`), `lib` (`tupleKey`, `fileName`, `randomId`),
   `contracts` (`toEditorText`,
@@ -46,11 +46,14 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   sent while a conflict is open. A failed save of a deleted file shows its reason,
   not `deleted` again. Dirty means `text !== base.text` and is reported apart from
   the status, so a deleted or stale buffer can still be clean or dirty. Only the summary
-  (`{status, dirty, error, conflicts, merges}`) reaches the store (`fileBuffersByWorkspace`), never the text.
+  (`{status, dirty, error, conflicts, merges, pending}`) reaches the store (`fileBuffersByWorkspace`), never the text.
+  `pending` means an autosave timer is armed.
   `merges` counts disk changes merged into the buffer with no conflict; while the buffer is dirty the
-  banner's polite live region announces each one, since the merged lines land with no other notice. The tab dot
-  shows `dirty`, pulses while `saving`, and paints `CanvasText` in forced colors. The tab dot, the banner and the
-  close guard all read dirtiness from that summary.
+  banner's polite live region announces each one, since the merged lines land with no other notice. The tab
+  indicator comes from one store selector, `selectFileSaveIndicator`: in manual mode a dot for `dirty`
+  that pulses while `saving`; in auto mode a pulsing ring while a dirty buffer is `pending` or `saving`,
+  and the dot only for a dirty buffer autosave will not write (paused). Both paint `CanvasText` in forced
+  colors. The tab indicator, the banner and the close guard all read from that summary.
 - **Disk text is adopted only through `toEditorText`,** and only when `meta.text` is true and the mime
   is not an LFS pointer. The client sends LF text and never handles a BOM; the host restores the form.
 - **Lifetime.** The registry, the buffer core, the merge, jsdiff and CodeMirror form one lazy chunk
@@ -193,6 +196,35 @@ active file tab's buffer (`selectActiveEditorTab`). The registry sends no write 
 is known and below `supportsFileWrite` (v91); before the first welcome the version is unknown and the
 save goes ahead, but the `offline` check stops it until a connection exists.
 
+## Autosave
+
+`AppConfig.fileSaveMode` (host setting, default `"auto"`) picks the mode. `"manual"` is the save pipeline
+alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` the registry's scheduler
+(`autosave.ts`, one debounce timer per buffer) calls the same `save()`; it never writes by itself.
+
+- **Only a user step arms the timer:** an editor edit, undo, redo, a conflict choice, Keep mine, and a
+  draft restored with no issue (the user's own unsaved text). A merge, a disk adoption and Reload never
+  do, so two dirty windows cannot bounce writes. Each arm restarts the 1,000 ms delay.
+- **When the timer fires** it saves, except for a deleted file (only Cmd/Ctrl+S or the guard re-creates
+  one) or an open conflict of either kind. While the editor composes it re-arms instead, so a
+  half-composed IME text is never written.
+- **Flush** fires every armed timer at once. Triggers: focus leaving a `[data-file-buffer]` pane, the pane
+  unmounting, a change of `activeTabByWorkspace` or `activeWorkspaceId` (hidden panes stay mounted, so a
+  tab switch is not an unmount), `visibilitychange` to hidden, and `pagehide`. A flush with nothing armed
+  does nothing, and a save of bytes already on disk is a host no-op, so extra flushes cost nothing.
+- **Paused** is a dirty buffer autosave will not write: status `stale`, `conflict`, `deleted`,
+  `readonly` or `error`, or a dirty buffer with no armed timer and no save running (a second `stale`
+  answer). A thrown save error pauses that file until the next user step; nothing retries on its own,
+  since every failed request goes to PostHog. Resolving the last conflict is a user step, so it resumes.
+  On reconnect a buffer whose save failed `offline` re-arms once its read clears the issue.
+- **Cmd/Ctrl+S** cancels the timer and saves at once, in both modes.
+- **Mode switch.** To manual: every timer is cancelled. To auto: every dirty buffer with no issue, no open
+  conflict and a file on disk arms.
+- **A tab leaving the store** with an armed timer or a save running is dropped only after that save
+  settles, and only if no tab reopened it meanwhile.
+- **The own-save echo does nothing:** the `fsChanged` for our write re-reads the same hash (see Disk to
+  buffer), and a merge never arms the timer.
+
 ## Drafts
 
 IndexedDB database `thinkrail-drafts`, one record per `[host, workspaceId, path]` key holding the text,
@@ -228,6 +260,7 @@ IndexedDB (private mode, tests) means no drafts.
 
 - **Only a user edit, a restored draft or a merge into a dirty buffer makes a buffer dirty.** Adopting
   disk text and Reload never do.
+- **`save()` is the only write trigger.** Autosave, Cmd/Ctrl+S and the close guard all call it.
 - **One write in flight.** A save asked for meanwhile queues once behind it. A replayed save after a host restart is safe: the host answers `written`
   with no write when the bytes already match.
 - **The store slice is status only.** Views read text from the buffer (`useFileBufferText`). An unchanged

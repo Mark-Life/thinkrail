@@ -560,8 +560,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   resource host's `subscribeFileChanges` uses it, so a mounted `ResourcePreview` re-reads after a reconnect. The **file buffer summary** —
   **`fileBuffersByWorkspace: Record<workspaceId, Record<path, FileBufferSummary>>`** with
   **`setFileBufferSummary(workspaceId, path, summary | null)`** and **`selectFileBufferSummary`** — is the
-  status of each open editor buffer (`status`, `dirty`, and the `error` reason) for the tab dot, the banner and the close
-  guard. [[submodule-web-editing]] owns the buffers and is its only writer; it never carries text, and
+  status of each open editor buffer (`status`, `dirty`, the `error` reason, and `pending` for an armed
+  autosave) for the tab indicator, the banner and the close guard. **`selectFileSaveIndicator`** derives
+  the tab's `unsaved` / `saving` / `pending` / none from that summary and **`fileSaveMode`**, so the
+  indicator and the close guard never disagree. [[submodule-web-editing]] owns the buffers and is its only writer; it never carries text, and
   `applyWorkspaceRemoved` drops a removed workspace's entry. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
 ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
