@@ -11,6 +11,11 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@codemirror/language": "catalog:",
+		"@codemirror/state": "catalog:",
+		"@codemirror/view": "catalog:",
+		"@lezer/common": "catalog:",
+		"@lezer/markdown": "catalog:",
 		"@pierre/diffs": "1.5.1",
 		"@remixicon/react": "catalog:",
 		"@shikijs/monaco": "4.2.0",
