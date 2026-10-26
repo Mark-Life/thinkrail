@@ -79,3 +79,19 @@ test("a conflict choice leaves the selection where the edit mapped it", () => {
 	state = resolveConflict(state, firstId(state), "theirs");
 	expect(state.doc.selection.main.head).toBe(Math.min(before, bufferText(state).length));
 });
+
+test("typing at the end of the line before a deleted last line stays out of its conflict", () => {
+	let state = adoptDisk(edit(createBuffer(disk("a\nb")), "a\nB"), disk("a"));
+	state = localEdit(state, [{ from: 1, to: 1, insert: "!" }], "other");
+	expect(bufferText(resolveConflict(state, firstId(state), "theirs"))).toBe("a!");
+});
+
+test("undoing an unrelated delete next to a deleted-lines conflict leaves the conflict empty", () => {
+	let state = createBuffer(disk("a\nb\nc\n"));
+	state = localEdit(state, [{ from: 2, to: 4, insert: "" }], "delete");
+	state = adoptDisk(state, disk("a\nbY\nc\n"));
+	state = localEdit(state, [{ from: 2, to: 4, insert: "" }], "other");
+	state = undo(state);
+	expect(bufferText(state)).toBe("a\nc\n");
+	expect(conflictsOf(state.doc)).toMatchObject([{ from: 2, to: 2, theirs: "bY\n" }]);
+});

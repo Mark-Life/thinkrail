@@ -59,13 +59,29 @@ function mapConflict<T extends EditConflict>(
 	mapping: ChangeDesc,
 	mode: MapMode = "remote",
 	startDoc?: Text,
+	restored = false,
 ): T {
-	const from = mapping.mapPos(conflict.from, mode === "remote" ? 1 : -1);
+	const startsMidLine =
+		startDoc !== undefined &&
+		conflict.from > 0 &&
+		startDoc.sliceString(conflict.from - 1, conflict.from) !== "\n";
+	const from = mapping.mapPos(conflict.from, mode === "remote" || startsMidLine ? 1 : -1);
 	const grows =
-		(mode === "history" && conflict.from === conflict.to) ||
+		restored ||
 		(mode !== "remote" && startDoc !== undefined && endsOnOpenLastLine(conflict, startDoc));
 	const to = Math.max(from, mapping.mapPos(conflict.to, grows ? 1 : -1));
 	return from === conflict.from && to === conflict.to ? conflict : { ...conflict, from, to };
+}
+
+function restoresBase(conflict: OpenConflict, changes: ChangeSet): boolean {
+	if (conflict.from !== conflict.to || !conflict.base) return false;
+	let restored = false;
+	changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+		if (fromA === conflict.from && toA === fromA && inserted.toString() === conflict.base) {
+			restored = true;
+		}
+	});
+	return restored;
 }
 
 function mapConflicts(
@@ -75,7 +91,13 @@ function mapConflicts(
 ): readonly OpenConflict[] {
 	if (!tr.docChanged || conflicts.length === 0) return conflicts;
 	const mapped = conflicts.map((conflict) =>
-		mapConflict(conflict, tr.changes, mode, tr.startState.doc),
+		mapConflict(
+			conflict,
+			tr.changes,
+			mode,
+			tr.startState.doc,
+			mode === "history" && restoresBase(conflict, tr.changes),
+		),
 	);
 	return mapped.every((conflict, index) => conflict === conflicts[index]) ? conflicts : mapped;
 }

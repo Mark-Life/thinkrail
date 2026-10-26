@@ -103,8 +103,9 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   a conflict's text equal its `theirs` closes it in the same transaction, so undoing that edit reopens
   it. An undo or redo that brings a conflict's text back to its `base` takes `theirs` there, as a
   3-way merge would, in a remote step composed into the same change set; a redo after that lands the
-  user's edit on the disk text with no conflict. Undo maps an empty conflict (mine deleted the lines)
-  over the text it brings back.
+  user's edit on the disk text with no conflict. An empty conflict (mine deleted the lines) grows over
+  an undo or redo only when that inserts exactly its `base` lines at its point. A conflict that starts
+  at a line break (the deleted last line) keeps typing at that line's end outside.
 - **IME.** While the editor composes, disk reads and a stale save answer wait; the end of the
   composition re-reads once (and retries that save). A merge never lands inside a composition.
 - **No read lands across a save.** Every read, by the registry or a file tab, takes a per-buffer

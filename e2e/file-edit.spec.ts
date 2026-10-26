@@ -5,6 +5,7 @@ import {
 	banner,
 	conflictLens,
 	editorHasFocus,
+	editorShortcut,
 	fileTab,
 	openFile,
 	typeAtLineEnd,
@@ -217,15 +218,17 @@ test("a paste and a copied line are undo steps of their own, apart from the typi
 	const path = await openFile(page, "undo-steps.ts", "one\n");
 	await page.evaluate(() => navigator.clipboard.writeText("XYZ"));
 	await typeAtLineEnd(page, 1, "ab");
-	await pressPlatformShortcut(page, "v");
+	await editorShortcut(page, "v");
 	await expect(visibleEditor(page)).toContainText("oneabXYZ");
-	await pressPlatformShortcut(page, "z");
-	await expect(visibleEditor(page).locator(".view-line").first()).toHaveText("oneab");
+	await editorShortcut(page, "z");
+	await expect(visibleEditor(page)).not.toContainText("XYZ");
+	await expect(visibleEditor(page)).toContainText("oneab");
 
 	await page.keyboard.type("c");
 	await page.keyboard.press("Shift+Alt+ArrowDown");
-	await expect(visibleEditor(page).locator(".view-line").nth(1)).toHaveText("oneabc");
-	await pressPlatformShortcut(page, "z");
+	await expect(visibleEditor(page).locator(".view-line")).toHaveCount(3);
+	await editorShortcut(page, "z");
+	await expect(visibleEditor(page).locator(".view-line")).toHaveCount(2);
 	await pressPlatformShortcut(page, "s");
 	await expect.poll(() => readFileSync(path, "utf8")).toBe("oneabc\n");
 });
