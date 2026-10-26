@@ -74,6 +74,10 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 	await expect(marks(page, ".presence-bar.presence-tone-agent1")).toHaveCount(1);
 	await expect(marks(page, '[data-presence="flag"]')).toHaveText(["Agent"]);
 	await expect(marks(page, ".presence-bar.presence-inferred")).toHaveCount(0);
+	await expect(marks(page, ".presence-bar.presence-tone-agent1")).toHaveAttribute(
+		"title",
+		"Changed by Agent",
+	);
 
 	authors.agentWrites(null);
 	writeFileSync(path, withLine(readFileSync(path, "utf8"), 9, "const v9 = 90;"));

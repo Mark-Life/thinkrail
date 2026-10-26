@@ -1,5 +1,5 @@
 import type { FsChangeAuthor } from "@thinkrail/contracts";
-import { type Translator, useT } from "@thinkrail/locales/react";
+import { useT } from "@thinkrail/locales/react";
 import type { SurfacePresence } from "@thinkrail/resource-renderers";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo } from "react";
@@ -18,6 +18,7 @@ import {
 	writerId,
 	writerTone,
 } from "../store";
+import { writerInitial, writerLabel } from "./fileWriterLabels";
 
 const TONE_FILL: Record<FileWriterTone, string> = {
 	user: "bg-primary",
@@ -46,25 +47,6 @@ function chatTitle(state: Parameters<typeof selectKnownChatLocation>[0], author:
 	return author.kind === "agent"
 		? (selectKnownChatLocation(state, author.sessionId)?.title ?? "")
 		: "";
-}
-
-function writerLabel(t: Translator, author: FsChangeAuthor, title: string): string {
-	if (author.kind === "user") return t("presence.you");
-	if (author.kind === "external") return t("presence.external");
-	const name = title ? t("presence.agentNamed", { name: title }) : t("presence.agent");
-	return author.via === "script" ? t("presence.viaScript", { name }) : name;
-}
-
-function writerInitial(t: Translator, author: FsChangeAuthor, title: string): string {
-	const source =
-		author.kind === "agent" && title
-			? title
-			: author.kind === "external"
-				? t("presence.external")
-				: author.kind === "user"
-					? t("presence.you")
-					: t("presence.agent");
-	return Array.from(source.trim())[0]?.toUpperCase() ?? "";
 }
 
 function useLabeledWriters(workspaceId: string, path: string): readonly LabeledWriter[] {
@@ -167,7 +149,7 @@ export function FileWritersChip({ workspaceId, path }: { workspaceId: string; pa
 			className="flex h-24 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 		>
 			<span
-				role="status"
+				role="img"
 				aria-label={t("presence.writersList", { names })}
 				title={names}
 				className="inline-flex items-center gap-4 rounded-full border border-border-default px-8 tr-text-metadata text-text-muted"
