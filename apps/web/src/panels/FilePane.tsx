@@ -150,6 +150,9 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					onReload={() => resolveConflict(buffer.reload)}
 					onKeepMine={() => resolveConflict(buffer.keepMine)}
 					onResolveFirst={(choice) => resolveFirstConflict(buffer.session, choice)}
+					onHistory={(command) =>
+						command === "undo" ? buffer.session.undo() : buffer.session.redo()
+					}
 				/>
 			) : null}
 			<div

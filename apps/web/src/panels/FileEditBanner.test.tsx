@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { CONFLICT_CHOICES } from "@thinkrail/resource-renderers";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { FileBufferSummary } from "../store";
-import { FileEditBanner } from "./FileEditBanner";
+import { FileEditBanner, historyCommand } from "./FileEditBanner";
 
 const render = (summary: FileBufferSummary | undefined) =>
 	renderToStaticMarkup(
@@ -11,6 +11,7 @@ const render = (summary: FileBufferSummary | undefined) =>
 			onReload={() => {}}
 			onKeepMine={() => {}}
 			onResolveFirst={() => {}}
+			onHistory={() => {}}
 		/>,
 	);
 
@@ -39,4 +40,21 @@ test("an open conflict offers Mine, Theirs and Both outside the editor", () => {
 	);
 	expect(offered).toEqual([...CONFLICT_CHOICES]);
 	expect(render({ status: "stale", dirty: true })).not.toContain("file-edit-resolve-");
+});
+
+test("Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z in the banner map to the file's undo and redo", () => {
+	const key = (key: string, mods: Partial<KeyboardEvent> = {}) => ({
+		key,
+		ctrlKey: false,
+		metaKey: false,
+		shiftKey: false,
+		altKey: false,
+		...mods,
+	});
+	expect(historyCommand(key("z", { metaKey: true }), "MacIntel")).toBe("undo");
+	expect(historyCommand(key("Z", { metaKey: true, shiftKey: true }), "MacIntel")).toBe("redo");
+	expect(historyCommand(key("z", { ctrlKey: true }), "Win32")).toBe("undo");
+	expect(historyCommand(key("z", { ctrlKey: true }), "MacIntel")).toBeNull();
+	expect(historyCommand(key("z", { ctrlKey: true, altKey: true }), "Win32")).toBeNull();
+	expect(historyCommand(key("y", { ctrlKey: true }), "Win32")).toBeNull();
 });
