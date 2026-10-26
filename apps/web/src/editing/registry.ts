@@ -181,7 +181,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 
 	const commit = (entry: Entry, next: BufferState, origin: CommitOrigin, arm = false) => {
 		const previous = entry.state;
-		if (next === previous || entry.dropped) return false;
+		if (next === previous || entry.dropped) return;
 		entry.state = next;
 		if (arm && autosaving()) autosave.arm(entry.key, { notify: false });
 		broadcast(entry, previous, origin);
@@ -196,7 +196,6 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			scheduleDraft(entry);
 		}
 		publish(entry);
-		return true;
 	};
 
 	const userStep = (entry: Entry, next: BufferState, origin: CommitOrigin) =>
