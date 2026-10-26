@@ -13,7 +13,7 @@ const WHOLE_FILE_MIN_LINES = 10;
 const DIFF_MAX_LINES = 12;
 const DIFF_MAX_CHARS = 160;
 
-interface PresenceSpan {
+export interface PresenceSpan {
 	startLine: number;
 	endLine: number;
 }

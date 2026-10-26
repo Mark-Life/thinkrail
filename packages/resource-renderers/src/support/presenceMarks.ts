@@ -8,12 +8,13 @@ import {
 	markdownText,
 	PRESENCE_TIMING,
 	type PresencePaint,
+	type PresenceSpan,
 	presencePaint,
 } from "./presenceDecorations";
 
 export interface PresenceText {
 	hover(writer: PresenceWriter): string;
-	lines(writer: PresenceWriter, startLine: number, endLine: number): string;
+	lines(writer: PresenceWriter, spans: readonly PresenceSpan[]): string;
 	file(writer: PresenceWriter): string;
 }
 
@@ -173,13 +174,15 @@ export function attachPresence(
 			mark.timers = [setTimeout(() => drop(mark), PRESENCE_TIMING.chipMs)];
 			return;
 		}
-		const first = mark.ranges.getRange(0);
+		const spans = mark.ranges
+			.getRanges()
+			.map((range) => ({ startLine: range.startLineNumber, endLine: range.endLineNumber }));
 		absorb(mark, writer);
 		render(mark);
 		showFlag(mark, writer);
-		if (first && now - mark.announcedAt >= PRESENCE_TIMING.flagMs) {
+		if (spans.length > 0 && now - mark.announcedAt >= PRESENCE_TIMING.flagMs) {
 			mark.announcedAt = now;
-			options.announce(text.lines(writer, first.startLineNumber, first.endLineNumber));
+			options.announce(text.lines(writer, spans));
 		}
 		mark.timers = [
 			setTimeout(() => render(mark), PRESENCE_TIMING.washMs),

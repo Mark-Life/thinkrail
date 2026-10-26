@@ -73,7 +73,8 @@ const attach = () =>
 	attachPresence(fakeEditor() as never, {
 		text: () => ({
 			hover: (writer) => `Changed by ${writer.label}`,
-			lines: (writer, start, end) => `${writer.label} changed ${start}-${end}`,
+			lines: (writer, spans) =>
+				`${writer.label} changed ${spans.map((span) => `${span.startLine}-${span.endLine}`).join(", ")}`,
 			file: (writer) => `${writer.label} rewrote this file`,
 		}),
 		announce: (message) => announced.push(message),
@@ -162,6 +163,22 @@ describe("attachPresence", () => {
 			"presence-bar presence-tone-agent1",
 			"presence-bar presence-tone-agent2",
 		]);
+		marks.dispose();
+	});
+
+	test("one write that changed two places announces both", () => {
+		const marks = attach();
+		marks.setLatest({ hash: "h1", writer: AGENT });
+		const at = (line: number) => lineOffset(line);
+		marks.land({
+			hash: "h1",
+			before: TEXT,
+			changes: [
+				{ from: at(4), to: at(4) + "line 4".length, insert: "four" },
+				{ from: at(15), to: at(15) + "line 15".length, insert: "fifteen" },
+			],
+		});
+		expect(announced).toEqual(["Agent changed 4-4, 15-15"]);
 		marks.dispose();
 	});
 });

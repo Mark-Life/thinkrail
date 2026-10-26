@@ -70,10 +70,24 @@ export default function MonacoEditor({
 			t(writer.inferred ? "presence.changedByInferred" : "presence.changedBy", {
 				name: writer.label,
 			}),
-		lines: (writer, start, end) =>
-			start === end
-				? t("presence.changedLine", { name: writer.label, line: start })
-				: t("presence.changedLines", { name: writer.label, start, end }),
+		lines: (writer, spans) => {
+			const [only] = spans;
+			if (only && spans.length === 1) {
+				return only.startLine === only.endLine
+					? t("presence.changedLine", { name: writer.label, line: only.startLine })
+					: t("presence.changedLines", {
+							name: writer.label,
+							start: only.startLine,
+							end: only.endLine,
+						});
+			}
+			const lines = spans.map((span) =>
+				span.startLine === span.endLine
+					? String(span.startLine)
+					: t("presence.lineRange", { start: span.startLine, end: span.endLine }),
+			);
+			return t("presence.changedSpans", { name: writer.label, lines: lines.join(", ") });
+		},
 		file: (writer) => t("presence.rewrote", { name: writer.label }),
 	};
 	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
