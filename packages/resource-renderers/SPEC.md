@@ -691,7 +691,7 @@ content's own height.
   timers. One flag shows per line. An update whose hash has no writer yet waits 3 s for the next
   `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame. Flags
   and chips are `aria-hidden`. A polite live region announces a chip, and a writer's line changes (every span the landing
-  changed) at most once per flag time, so a burst of saves is one message. Reduced motion drops the fades. The tones are
+  changed, or only their count past five spans) at most once per flag time, so a burst of saves is one message. Reduced motion drops the fades. The tones are
   CSS classes the host styles (`presence-tone-*`); in forced colors the host draws the bar as a
   `CanvasText` border, dashed when inferred, because forced colors erase backgrounds.
 - **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`:

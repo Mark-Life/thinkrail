@@ -14,6 +14,7 @@ import {
 export interface PresenceText {
 	hover(writer: PresenceWriter): string;
 	lines(writer: PresenceWriter, spans: readonly PresenceSpan[]): string;
+	places(writer: PresenceWriter, count: number): string;
 	file(writer: PresenceWriter): string;
 }
 
@@ -27,6 +28,8 @@ interface Mark {
 	chip: monaco.editor.IOverlayWidget | null;
 	timers: ReturnType<typeof setTimeout>[];
 }
+
+const ANNOUNCED_SPANS_MAX = 5;
 
 let widgetSeq = 0;
 
@@ -181,7 +184,11 @@ export function attachPresence(
 		showFlag(mark, writer);
 		if (spans.length > 0 && now - mark.announcedAt >= PRESENCE_TIMING.flagMs) {
 			mark.announcedAt = now;
-			options.announce(text.lines(writer, spans));
+			options.announce(
+				spans.length > ANNOUNCED_SPANS_MAX
+					? text.places(writer, spans.length)
+					: text.lines(writer, spans),
+			);
 		}
 		const washStep = PRESENCE_TIMING.washMs / PRESENCE_TIMING.washSteps;
 		mark.timers = [

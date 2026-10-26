@@ -79,6 +79,7 @@ const attach = () =>
 			hover: (writer) => `Changed by ${writer.label}`,
 			lines: (writer, spans) =>
 				`${writer.label} changed ${spans.map((span) => `${span.startLine}-${span.endLine}`).join(", ")}`,
+			places: (writer, count) => `${writer.label} changed ${count} places`,
 			file: (writer) => `${writer.label} rewrote this file`,
 		}),
 		announce: (message) => announced.push(message),
@@ -192,6 +193,23 @@ describe("attachPresence", () => {
 			],
 		});
 		expect(announced).toEqual(["Agent changed 4-4, 15-15"]);
+		marks.dispose();
+	});
+
+	test("a write that changed many separate lines announces how many, not every line", () => {
+		const marks = attach();
+		marks.setLatest({ hash: "h1", writer: AGENT });
+		const lines = [1, 4, 7, 10, 13, 16];
+		marks.land({
+			hash: "h1",
+			before: TEXT,
+			changes: lines.map((line) => ({
+				from: lineOffset(line),
+				to: lineOffset(line) + `line ${line}`.length,
+				insert: `LINE ${line}`,
+			})),
+		});
+		expect(announced).toEqual(["Agent changed 6 places"]);
 		marks.dispose();
 	});
 

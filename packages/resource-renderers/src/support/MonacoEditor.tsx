@@ -88,6 +88,7 @@ export default function MonacoEditor({
 			);
 			return t("presence.changedSpans", { name: writer.label, lines: lines.join(", ") });
 		},
+		places: (writer, count) => t("presence.changedPlaces", { name: writer.label, count }),
 		file: (writer) => t("presence.rewrote", { name: writer.label }),
 	};
 	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
