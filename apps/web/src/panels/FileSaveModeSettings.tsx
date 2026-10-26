@@ -1,9 +1,9 @@
-import type { FileSaveMode } from "@thinkrail/contracts";
+import { FILE_SAVE_MODE_PROTOCOL_VERSION, type FileSaveMode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { platformShortcutLabel } from "@/lib";
 import { toast, useAppStore } from "@/store";
-import { errorText, getTransport, supportsFileWrite } from "@/transport";
+import { errorText, getTransport } from "@/transport";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 
@@ -17,7 +17,7 @@ export function FileSaveModeSwitch({
 	onSelect: (mode: FileSaveMode) => void;
 }) {
 	const t = useT();
-	if (protocolVersion === null || !supportsFileWrite(protocolVersion)) return null;
+	if (protocolVersion === null || protocolVersion < FILE_SAVE_MODE_PROTOCOL_VERSION) return null;
 	return (
 		<div
 			data-testid="file-save-mode-control"

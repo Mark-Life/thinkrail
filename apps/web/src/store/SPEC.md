@@ -509,7 +509,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
   `DEFAULT_CONFIG.terminalWindowsShell`, and `fileSaveMode` narrows through `isFileSaveMode` and otherwise
-  uses `DEFAULT_CONFIG.fileSaveMode`; `TerminalSettings` consumes both terminal fields, while terminal
+  is `"manual"`, since only a host older than v92 omits it; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated

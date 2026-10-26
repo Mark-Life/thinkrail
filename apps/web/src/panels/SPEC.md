@@ -739,7 +739,7 @@ a project picker, the prompt hero, and the reused
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
   the family/contrast counterpart the two controls move to. An **Editor** group hosts the
   **Autosave** switch (`FileSaveModeControl`, `FileSaveModeSettings.tsx`: host `fileSaveMode`, hidden
-  until the host speaks `FILE_WRITE_PROTOCOL_VERSION` (v91), converges on `settings.changed`, a rejected
+  until the host speaks `FILE_SAVE_MODE_PROTOCOL_VERSION` (v92), converges on `settings.changed`, a rejected
   update raises a toast) and the file `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch

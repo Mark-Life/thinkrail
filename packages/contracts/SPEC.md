@@ -392,8 +392,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   live catalog by the client before rendering; a model that left the catalog is simply not offered.
   **`FileSaveMode`** (`"auto" | "manual"`, `isFileSaveMode`) is `fileSaveMode`, default `"auto"`: the
   web client autosaves edited files about 1 s after the last edit, or only on Cmd/Ctrl+S. It joins the
-  wire with `fs.writeFile` at `FILE_WRITE_PROTOCOL_VERSION` (v91), so a client hides the control from an
-  older host, which cannot edit files and rejects the key. `terminalWindowsShell`
+  wire at **`FILE_SAVE_MODE_PROTOCOL_VERSION`** (v92), one version after `fs.writeFile`, so a client
+  hides the control from an older host, which rejects the key. A v91 host can write files but sends no
+  `fileSaveMode`; the client then saves manually, as that host's own UI did. `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.

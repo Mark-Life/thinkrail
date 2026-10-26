@@ -1434,9 +1434,7 @@ function configPatch(config: AppConfig) {
 			typeof config.fileLineWidthBounded === "boolean"
 				? config.fileLineWidthBounded
 				: DEFAULT_CONFIG.fileLineWidthBounded,
-		fileSaveMode: isFileSaveMode(config.fileSaveMode)
-			? config.fileSaveMode
-			: DEFAULT_CONFIG.fileSaveMode,
+		fileSaveMode: isFileSaveMode(config.fileSaveMode) ? config.fileSaveMode : "manual",
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
