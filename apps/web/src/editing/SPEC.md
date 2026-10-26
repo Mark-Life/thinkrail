@@ -12,8 +12,9 @@ tags: [ui, public-surface-checked]
 
 Own the client side of file editing: one buffer per open file, kept outside any editor; the save
 pipeline over `fs.writeFile` and the autosave that drives it; disk reconcile through a live 3-way merge; the user's own undo history;
-and drafts that survive a reload. Editors
-attach to a buffer through the renderer-neutral `ResourceEditSession` ([[module-resource-renderers]]).
+and drafts that survive a reload. Editors (Monaco Source and the CodeMirror markdown live preview)
+attach to a buffer through the renderer-neutral `ResourceEditSession` ([[module-resource-renderers]]),
+so the two views of a markdown file share its text, undo and save state.
 The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-server-fs]]).
 
 ## Boundary

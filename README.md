@@ -41,7 +41,8 @@ create the tools it needs based on how you actually work.
   decision, and lets you mark it ready, hand failing checks or a diverged branch to the agent, merge it
   with the repository's last-used method, reopen it, or delete the remote branch.
 - **A real IDE around the agent.** A splittable workbench of Monaco editor tabs where you edit files.
-  Edits autosave a second after you stop typing, and Cmd/Ctrl+S saves at once; turn Autosave off to save
+  Markdown edits in place in its Preview, Obsidian style: the page stays rendered and only the markers
+  under the cursor show; lock it to review without typing. Edits autosave a second after you stop typing, and Cmd/Ctrl+S saves at once; turn Autosave off to save
   only by hand. Unsaved edits survive a reload. An agent's change on disk merges into yours live: a line
   you both changed waits for you to pick Mine, Theirs or Both, and Cmd/Ctrl+Z undoes only your own edits.
   Each landed change shows who made it: a colored bar and a name flag on the lines an agent, its script

@@ -207,6 +207,11 @@ definitions of their own.
 and colour inherit from the enclosing element, so bold in a heading keeps the heading's size and bold in
 a cell keeps the table's.
 
+Each element selector also matches one class (`md-h1`…`md-h6`, `md-code`, `md-codeblock`,
+`md-quote`, `md-list`, `md-strong`): the markdown live preview is a CodeMirror editor whose lines are
+`div`s, so its heading and code lines wear those classes inside `.tr-prose-doc` and get the document's
+type from the same generated rules.
+
 A "prose skin" at a call site carries only spacing, measure and chrome (`chat/Markdown.tsx` = bubble
 rhythm, `resource-renderers/support/MarkdownPreview.tsx` = document rhythm, heading rules, table chrome). Never add a
 typography class or value to a skin; change `proseSystems` instead. Adding a third surface means adding a

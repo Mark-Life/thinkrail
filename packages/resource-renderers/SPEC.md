@@ -188,7 +188,8 @@ keeps it.
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
   engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
-  `node-htmldiff`).
+  `node-htmldiff`, and for the markdown live preview `@codemirror/state`, `@codemirror/view`,
+  `@codemirror/language`, `@codemirror/commands`, `@lezer/markdown`, `@lezer/common`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
   pi packages. `scripts/check-module-boundaries.ts` enforces it; only `apps/web` consumes the package today.
 - UI text follows [[architecture]] Decision 23: renderer chrome renders through `useT()`'s translator
@@ -238,7 +239,8 @@ refresh, and error UI. An immutable scope omits `hunkActions`; renderers must th
 control rather than emulate one.
 
 **Editing is a capability plus an optional prop, never a third intent.** `capabilities.edit` marks a
-renderer whose desktop view can edit text; only `code` (Monaco) sets it today. A host that wants an
+renderer whose desktop view can edit text: `code` (Monaco) and `markdown` (the CodeMirror live preview)
+set it. A host that wants an
 editable mount passes `ResourceViewProps.edit`, a `ResourceEditSession`; without it every view is
 read-only, so chat cards, phones and diffs stay read-only by construction. The session is
 editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes, kind)` reports the view's own
@@ -575,6 +577,53 @@ against a stale offset. Natural-height stacked sections run the same structure w
 the viewport's height is read back from the scroller after the sizer is set, so it never feeds the
 content's own height.
 
+- **Markdown edits in place (live preview).** With an `edit` session the markdown view is a
+  CodeMirror 6 editor over the raw text (`livePreview/`), so Preview and Source are two views of one
+  buffer and an autosave can never reformat the file: the doc is the session's LF text, mounted from
+  `snapshot()`, and the host owns line endings and the BOM (no `lineSeparator`). Without a session
+  (chat cards, phones, a buffer still loading) and while the view is **locked**, it is the read-only
+  reading view below, with its review commenting; the lock is the view's own toggle (`markdown-lock`,
+  `aria-pressed`), kept in the tab's view state with the scroll offset, so a review pass cannot type
+  into the file. The editor lives in its own lazy chunk (`LiveMarkdownEditor`) behind a Suspense whose
+  fallback is the reading view, so a surface without a session never loads CodeMirror and the first
+  editable open shows the document, not a skeleton. The language is `@lezer/markdown` with GFM, built
+  directly on `@codemirror/language`: `@codemirror/lang-markdown` pulls HTML, CSS and JavaScript
+  parsers in for embedded code.
+  - **Binding (`binding.ts`).** One view per session, like the Monaco mirror: the view's own
+    transactions go to `applyLocal` with their `LocalEditKind` and the selection to `select`; subscribed
+    updates land as one `remote`, `addToHistory: false` transaction, so the view has no history of its
+    own: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y and a `beforeinput` `historyUndo`/`historyRedo` (the
+    desktop Edit menu) call the session. Composition start and end go to `setComposing`. Open conflicts
+    render as block widgets: the lens above the user's lines (the same **Mine** / **Theirs** / **Both**
+    as Monaco, through `ConflictZones`) and the disk lines below, with the user's lines washed.
+  - **Markers (`markers.ts`, pure).** Syntax markers hide unless the selection touches their node,
+    and only while the editor has focus, so an unfocused page reads like the reading view: inline
+    nodes (emphasis, strong, strikethrough, inline code, links, autolinks, escapes) reveal when the
+    selection touches the node, line markers (heading `#`, quote `>`, list bullets, task boxes, rules)
+    when it touches the line. A shown marker is muted mono. Off the caret a bullet draws as `•`, a task
+    box as a checkbox that toggles the source, a rule as a line. Link targets hide with their brackets;
+    Cmd/Ctrl+click follows a link the way the reading view does. Decorations are built only over the
+    visible ranges.
+  - **Blocks (`blocks.ts`, pure).** Tables, GitHub alerts, fenced code (Mermaid included), HTML
+    blocks, a paragraph that is only an image, and the front matter render as block widgets while the
+    selection is outside them, reusing the host markdown through `MarkdownDocument` (same sanitizing,
+    links, Shiki and Mermaid) in React portals; the front matter shows as a one-line summary. Clicking
+    a widget away from its controls puts the caret in the block and shows its source. A block nested in
+    a list renders dedented; one inside a quote stays source. A widget keeps its DOM while its source is
+    unchanged, and every widget's size change asks CodeMirror to measure again.
+  - **Review threads** render as block widgets after their end line (`ReviewThreadCard`). Authoring a
+    comment needs the lock (the reading view's commenting) or Source. A review focus scrolls its line
+    into view.
+  - **Presence** uses the shared rules (`presenceCore.ts`) through a CodeMirror surface: a bar and a
+    wash on the changed lines, the flag after the first line, the chip at the top right, the writer and
+    diff on hover.
+  - **Typography** is the `doc` prose system: the editor content carries `tr-prose-doc`, heading and
+    code lines carry the classes the generator maps next to the elements (`md-h1`…`md-h6`,
+    `md-code`, `md-codeblock`), and spacing is line padding, since CodeMirror measures line boxes and
+    margins between lines break its height map. The measure is the reading view's 78ch.
+  - **Access.** The content is a labelled multi-line textbox; Tab leaves the editor (no tab binding);
+    heading lines carry `role="heading"` and their level. Widget controls stay keyboard reachable.
+    Reduced motion drops the presence fades.
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
   (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
@@ -675,7 +724,8 @@ content's own height.
   A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
   before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
   a live editor scrolls smoothly.
-- **Presence marks (`presenceMarks.ts`, pure rules in `presenceDecorations.ts`).** The mirror hands each
+- **Presence marks (`presenceCore.ts` over an engine surface, pure rules in `presenceDecorations.ts`;
+  Monaco's surface is `presenceMarks.ts`).** The mirror hands each
   disk update to `attachPresence` with the text before it. `presencePaint` turns the change set into
   joined post-change line spans plus a capped diff (12 lines, 160 characters a line). When more than half
   of a file of 10 or more lines changed, it paints one whole-file chip (an overlay widget at the top right)
