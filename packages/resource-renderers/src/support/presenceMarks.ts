@@ -3,6 +3,7 @@ import type { PresenceWrite, PresenceWriter } from "../registry";
 import type { DiskLanding } from "./monacoMirror";
 import {
 	diffFence,
+	htmlAttribute,
 	markdownText,
 	PRESENCE_TIMING,
 	type PresencePaint,
@@ -67,8 +68,9 @@ export function attachPresence(
 		if (!writer || mark.paint.kind !== "lines") return;
 		const phase = presencePhase(mark.paintedAt, Date.now());
 		const bar = `presence-bar presence-tone-${writer.tone}${writer.inferred ? " presence-inferred" : ""}`;
+		const label = options.text().hover(writer);
 		const hover = [
-			{ value: markdownText(options.text().hover(writer)) },
+			{ value: markdownText(label) },
 			...(mark.paint.diff.length > 0 ? [{ value: diffFence(mark.paint.diff) }] : []),
 		];
 		mark.ranges.set(
@@ -79,6 +81,7 @@ export function attachPresence(
 					isWholeLine: true,
 					stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 					linesDecorationsClassName: bar,
+					linesDecorationsTooltip: htmlAttribute(label),
 					hoverMessage: hover,
 					...(phase.wash ? { className: `presence-wash presence-tone-${writer.tone}` } : {}),
 				},

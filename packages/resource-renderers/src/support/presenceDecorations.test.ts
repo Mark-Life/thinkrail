@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	diffFence,
+	htmlAttribute,
 	markdownText,
 	PRESENCE_TIMING,
 	presencePaint,
@@ -113,5 +114,6 @@ describe("hover text", () => {
 		expect(markdownText("Agent · *fix* [x]")).toBe("Agent · \\*fix\\* \\[x\\]");
 		expect(diffFence(["+ a ```` b"])).toBe("`````diff\n+ a ```` b\n`````");
 		expect(diffFence(["- a"])).toBe("```diff\n- a\n```");
+		expect(htmlAttribute('Agent · "<b>" & co')).toBe("Agent · &quot;&lt;b&gt;&quot; &amp; co");
 	});
 });

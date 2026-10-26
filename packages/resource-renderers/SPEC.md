@@ -672,7 +672,8 @@ content's own height.
   instead of line marks. Line marks are tracked decorations (`NeverGrowsWhenTypingAtEdges`): a bar on the
   right edge of the line-decoration lane, drawn over the review and conflict rails and dashed for an
   inferred writer; a wash that fades in 2.4 s; a name flag (a content widget at the end of the first
-  line, non-user writers only) that fades in 5 s; a hover with the writer and the diff. The bar and hover
+  line, non-user writers only) that fades in 5 s; a hover with the writer and the diff over the lines,
+  and the writer as the bar's own tooltip (`linesDecorationsTooltip`, HTML-escaped: Monaco writes it raw). The bar and hover
   stay 60 s, the chip 10 s (`PRESENCE_TIMING`). An update whose hash has no writer yet waits 3 s for the
   next `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame.
   Flags and chips are `aria-hidden`; each mark is announced once in a polite live region. Reduced motion
