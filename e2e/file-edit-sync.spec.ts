@@ -42,15 +42,23 @@ test("a file that changes on disk while it opens shows the new text and saves wi
 	let holdRead = false;
 	let heldId: unknown;
 	let releaseRead: (() => void) | null = null;
+	let workspaceId: string | undefined;
+	let written = false;
 	let fsChangeSeen = false;
+	const isWriteChange = (frame: Record<string, unknown> | null) => {
+		if (!written || frame?.channel !== "workspace.fsChanged") return false;
+		const data = frame.data as { workspaceId?: string; paths?: string[] } | undefined;
+		return data?.workspaceId === workspaceId && data?.paths?.includes(name) === true;
+	};
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
 		socket.onMessage((message) => {
 			const frame = parseFrame(message);
-			const params = frame?.params as { path?: string } | undefined;
+			const params = frame?.params as { path?: string; workspaceId?: string } | undefined;
 			if (holdRead && frame?.method === "fs.readFile" && params?.path === name) {
 				holdRead = false;
 				heldId = frame.id;
+				workspaceId = params.workspaceId;
 			}
 			server.send(message);
 		});
@@ -61,7 +69,7 @@ test("a file that changes on disk while it opens shows the new text and saves wi
 				releaseRead = () => socket.send(message);
 				return;
 			}
-			if (frame?.channel === "workspace.fsChanged" && String(message).includes(name)) {
+			if (isWriteChange(frame)) {
 				if (fsChangeSeen) return;
 				fsChangeSeen = true;
 			}
@@ -73,6 +81,7 @@ test("a file that changes on disk while it opens shows the new text and saves wi
 	holdRead = true;
 	await page.getByTestId("file-node").filter({ hasText: name }).dblclick();
 	await expect.poll(() => releaseRead !== null).toBe(true);
+	written = true;
 	writeFileSync(path, "const agent = 2;\n");
 	await expect.poll(() => fsChangeSeen, { timeout: 10_000 }).toBe(true);
 	releaseRead?.();
