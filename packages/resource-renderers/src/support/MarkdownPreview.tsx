@@ -1,4 +1,7 @@
-import { useMemo } from "react";
+import { RiLockLine, RiLockUnlockLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
 import type { ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
@@ -110,13 +113,62 @@ function splicedSegments(
 	return segments;
 }
 
-export default function MarkdownPreview({
-	resource,
-	content,
-	review,
-	viewState,
-	onViewState,
-}: ResourceViewProps) {
+const LiveMarkdownEditor = lazy(() => import("./LiveMarkdownEditor"));
+
+function lockedIn(viewState: unknown): boolean {
+	return (
+		typeof viewState === "object" && viewState !== null && Reflect.get(viewState, "locked") === true
+	);
+}
+
+export default function MarkdownPreview(props: ResourceViewProps) {
+	const { edit, onViewState } = props;
+	const t = useT();
+	const [locked, setLocked] = useState(() => lockedIn(props.viewState));
+	const lockedRef = useRef(locked);
+	useLayoutEffect(() => {
+		lockedRef.current = locked;
+	});
+	if (!edit) return <ReadingView {...props} />;
+	const viewProps: ResourceViewProps = {
+		...props,
+		...(onViewState
+			? {
+					onViewState: (state: unknown) =>
+						onViewState({
+							...(typeof state === "object" && state !== null ? state : {}),
+							locked: lockedRef.current,
+						}),
+				}
+			: {}),
+	};
+	const reading = <ReadingView {...viewProps} />;
+	return (
+		<div className="relative h-full">
+			{locked ? (
+				reading
+			) : (
+				<Suspense fallback={reading}>
+					<LiveMarkdownEditor {...viewProps} edit={edit} />
+				</Suspense>
+			)}
+			<Button
+				variant="ghost"
+				size="icon"
+				data-testid="markdown-lock"
+				aria-pressed={locked}
+				aria-label={t("viewer.markdown.lock")}
+				title={t("viewer.markdown.lock")}
+				onClick={() => setLocked((value) => !value)}
+				className="absolute top-8 right-12 z-10 bg-container-workspace-bg aria-pressed:text-primary"
+			>
+				{locked ? <RiLockLine className="size-16" /> : <RiLockUnlockLine className="size-16" />}
+			</Button>
+		</div>
+	);
+}
+
+function ReadingView({ resource, content, review, viewState, onViewState }: ResourceViewProps) {
 	const { workspaceId, path } = resource;
 	const text = content.kind === "text" ? content.text : "";
 	const { markdown: Markdown, bytesUrl, openFile } = useResourceHost();

@@ -13,6 +13,7 @@ export const markdownRenderer: ResourceRenderer = {
 		copy: false,
 		layout: false,
 		whitespace: false,
+		edit: true,
 	},
 	loadView: () => import("../../support/MarkdownPreview"),
 	loadDiff: () => import("../../support/RenderedDiff"),

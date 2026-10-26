@@ -134,6 +134,7 @@ describe("line markers", () => {
 		const source = "- [x] done\n- [ ] todo";
 		const list = marks(source, source.length);
 		expect(list).toContainEqual({ kind: "task", from: 2, to: 5, checked: true });
+		expect(cut(source, list)).toEqual(["- "]);
 		expect(styled(source, list, "marker")).toEqual(["-", "[ ]"]);
 	});
 	test("a quote marker hides with its space and styles every line", () => {

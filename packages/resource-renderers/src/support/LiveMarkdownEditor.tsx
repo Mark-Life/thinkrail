@@ -1,0 +1,263 @@
+import { standardKeymap } from "@codemirror/commands";
+import { EditorState, Prec } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
+import { useT } from "@thinkrail/locales/react";
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { useResourceHost } from "../host";
+import type { ConflictChoice, ResourceEditSession, ResourceViewProps } from "../registry";
+import { bindSession, type SessionBinding } from "./livePreview/binding";
+import {
+	livePreview,
+	liveText,
+	portalHost,
+	setConflicts,
+	setFocused,
+	setThreads,
+	type ThreadAnchor,
+} from "./livePreview/decorations";
+import { markdownLanguage } from "./livePreview/language";
+import { linkTarget } from "./livePreview/links";
+import { continueList } from "./livePreview/lists";
+import { createPortalHost, type PortalEntry } from "./livePreview/portals";
+import { livePresence, livePresenceSurface } from "./livePreview/presence";
+import { MarkdownDocument } from "./MarkdownPreview";
+import { ConflictLens, ConflictTheirs } from "./MonacoConflictZones";
+import { createPresenceMarks } from "./presenceCore";
+import { presenceKindIcon } from "./presenceIcons";
+import { usePresenceText } from "./presenceText";
+import { ReviewThreadCard } from "./ReviewThreadCard";
+import { useScrollViewState } from "./useScrollViewState";
+
+type LiveProps = Omit<ResourceViewProps, "content" | "edit"> & { edit: ResourceEditSession };
+
+function threadAnchors(review: ResourceViewProps["review"]): ThreadAnchor[] {
+	return (review?.threads ?? []).flatMap((thread) => {
+		const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
+		return range?.kind === "lineRange" ? [{ id: thread.id, line: range.endLine }] : [];
+	});
+}
+
+function LivePortal({
+	entry,
+	props,
+	onResolve,
+}: {
+	entry: PortalEntry;
+	props: LiveProps;
+	onResolve(id: number, choice: ConflictChoice): void;
+}) {
+	const t = useT();
+	const { markdown, bytesUrl, openFile } = useResourceHost();
+	const links = useMemo(() => ({ bytesUrl, openFile }), [bytesUrl, openFile]);
+	const { content } = entry;
+	switch (content.kind) {
+		case "block":
+			return content.block.kind === "frontmatter" ? (
+				<div className="md-frontmatter tr-text-metadata text-text-subtle">
+					{t("viewer.markdown.frontmatter", { count: content.block.source.split("\n").length })}
+				</div>
+			) : (
+				<MarkdownDocument
+					content={content.block.source}
+					workspaceId={props.resource.workspaceId}
+					path={props.resource.path}
+					Markdown={markdown}
+					links={links}
+				/>
+			);
+		case "thread": {
+			const thread = props.review?.threads.find((candidate) => candidate.id === content.id);
+			return thread && props.review ? (
+				<ReviewThreadCard thread={thread} actions={props.review.actions} />
+			) : null;
+		}
+		case "lens":
+			return <ConflictLens conflict={content.conflict} focusable onResolve={onResolve} />;
+		case "theirs":
+			return <ConflictTheirs conflict={content.conflict} theirsText={content.theirsText} />;
+	}
+}
+
+export default function LiveMarkdownEditor(props: LiveProps) {
+	const { resource, edit, review, presence, viewState, onViewState } = props;
+	const t = useT();
+	const { openFile } = useResourceHost();
+	const presenceText = usePresenceText();
+	const hostRef = useRef<HTMLDivElement>(null);
+	const chipRef = useRef<HTMLDivElement>(null);
+	const viewRef = useRef<EditorView | null>(null);
+	const presenceRef = useRef<ReturnType<typeof createPresenceMarks> | null>(null);
+	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
+	const [portals] = useState(() => createPortalHost(() => viewRef.current?.requestMeasure()));
+	const entries = useSyncExternalStore(portals.subscribe, portals.snapshot);
+	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
+	const latestRef = useRef({ presenceText, presence, review, openFile, t });
+	useLayoutEffect(() => {
+		latestRef.current = { presenceText, presence, review, openFile, t };
+	});
+
+	const { workspaceId, path } = resource;
+	useLayoutEffect(() => {
+		const parent = hostRef.current;
+		const chipHost = chipRef.current;
+		if (!parent || !chipHost) return;
+		let binding: SessionBinding | null = null;
+		const follow = (href: string, view: EditorView) => {
+			const target = linkTarget(view.state.doc, path, href);
+			if (target?.kind === "line") {
+				const at = view.state.doc.line(target.line).from;
+				view.dispatch({ effects: EditorView.scrollIntoView(at, { y: "start" }) });
+			} else if (target?.kind === "file") latestRef.current.openFile(workspaceId, target.path);
+			else if (target?.kind === "external")
+				window.open(target.href, "_blank", "noopener,noreferrer");
+		};
+		const history = (run: (binding: SessionBinding) => void) => () => {
+			if (binding) run(binding);
+			return true;
+		};
+		const { t: translate } = latestRef.current;
+		const view = new EditorView({
+			parent,
+			state: EditorState.create({
+				doc: edit.snapshot(),
+				extensions: [
+					markdownLanguage,
+					livePreview,
+					livePresence,
+					portalHost.of(portals),
+					liveText.of({
+						task: translate("viewer.markdown.task"),
+						followLink: translate("viewer.markdown.followLink"),
+					}),
+					EditorView.lineWrapping,
+					EditorView.editorAttributes.of({ class: "md-live" }),
+					EditorView.contentAttributes.of({
+						class: "tr-prose-doc text-text-default",
+						"aria-label": path,
+					}),
+					EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing)),
+					Prec.highest(
+						keymap.of([
+							{ key: "Mod-z", run: history((bound) => bound.undo()), preventDefault: true },
+							{ key: "Mod-Shift-z", run: history((bound) => bound.redo()), preventDefault: true },
+							{ key: "Mod-y", run: history((bound) => bound.redo()), preventDefault: true },
+							{
+								key: "Enter",
+								run: (target) => {
+									const spec = continueList(target.state);
+									if (spec) target.dispatch(spec);
+									return spec !== null;
+								},
+							},
+						]),
+					),
+					keymap.of(standardKeymap),
+					EditorView.domEventHandlers({
+						compositionstart: () => {
+							binding?.compositionStart();
+							return false;
+						},
+						compositionend: () => {
+							binding?.compositionEnd();
+							return false;
+						},
+						beforeinput: (event) => {
+							if (event.inputType !== "historyUndo" && event.inputType !== "historyRedo") {
+								return false;
+							}
+							event.preventDefault();
+							if (event.inputType === "historyUndo") binding?.undo();
+							else binding?.redo();
+							return true;
+						},
+						mousedown: (event, target) => {
+							if (!event.metaKey && !event.ctrlKey) return false;
+							const link =
+								event.target instanceof Element ? event.target.closest("[data-href]") : null;
+							const href = link?.getAttribute("data-href");
+							if (!href) return false;
+							event.preventDefault();
+							follow(href, target);
+							return true;
+						},
+					}),
+				],
+			}),
+			dispatchTransactions: (transactions, target) => {
+				if (binding) binding.dispatch(transactions);
+				else target.update(transactions);
+			},
+		});
+		viewRef.current = view;
+		const marks = createPresenceMarks(livePresenceSurface(view, chipHost), {
+			text: () => latestRef.current.presenceText,
+			announce: (text) => setAnnouncement((previous) => ({ seq: previous.seq + 1, text })),
+			icon: presenceKindIcon,
+		});
+		marks.setLatest(latestRef.current.presence?.latest);
+		presenceRef.current = marks;
+		binding = bindSession(view, edit, {
+			onConflicts: (conflicts) => view.dispatch({ effects: setConflicts.of(conflicts) }),
+			onDisk: marks.land,
+		});
+		view.dispatch({ effects: setThreads.of(threadAnchors(latestRef.current.review)) });
+		return () => {
+			binding?.dispose();
+			binding = null;
+			marks.dispose();
+			presenceRef.current = null;
+			viewRef.current = null;
+			view.destroy();
+		};
+	}, [edit, portals, path, workspaceId]);
+
+	useLayoutEffect(() => {
+		presenceRef.current?.setLatest(presence?.latest);
+	}, [presence]);
+
+	useLayoutEffect(() => {
+		const view = viewRef.current;
+		if (!view) return;
+		view.dispatch({ effects: setThreads.of(threadAnchors(review)) });
+		const focus = review?.focus;
+		if (!focus) return;
+		const range = focus.anchor.selectors.find((selector) => selector.kind === "lineRange");
+		if (range?.kind === "lineRange") {
+			const line = view.state.doc.line(Math.min(Math.max(range.endLine, 1), view.state.doc.lines));
+			view.dispatch({ effects: EditorView.scrollIntoView(line.to, { y: "center" }) });
+		}
+		review.onFocusHandled();
+	}, [review]);
+
+	const resolve = (id: number, choice: ConflictChoice) => {
+		edit.resolveConflict(id, choice);
+		viewRef.current?.focus();
+	};
+
+	return (
+		<div className="relative h-full">
+			<div
+				ref={attachScroller}
+				data-testid="markdown-preview"
+				data-mode="live"
+				className="h-full overflow-auto bg-container-workspace-bg"
+			>
+				<article className="mx-auto max-w-[78ch] px-24 py-16">
+					<div ref={hostRef} />
+				</article>
+			</div>
+			<div ref={chipRef} className="pointer-events-none absolute top-40 right-12 z-10" />
+			<span role="status" aria-live="polite" className="sr-only">
+				<span key={announcement.seq}>{announcement.text}</span>
+			</span>
+			{entries.map((entry) =>
+				createPortal(
+					<LivePortal entry={entry} props={props} onResolve={resolve} />,
+					entry.node,
+					String(entry.key),
+				),
+			)}
+		</div>
+	);
+}

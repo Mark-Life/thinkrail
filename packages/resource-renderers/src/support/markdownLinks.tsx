@@ -40,7 +40,7 @@ export function slugify(text: string): string {
 		.replace(/\s+/g, "-");
 }
 
-function relativePathname(href: string): string {
+export function relativePathname(href: string): string {
 	const i = href.search(/[?#]/);
 	return i < 0 ? href : href.slice(0, i);
 }

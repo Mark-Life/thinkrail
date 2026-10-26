@@ -498,6 +498,102 @@
 		border-left-style: dashed;
 	}
 }
+/* Markdown live preview (resource-renderers livePreview/): CodeMirror's base theme is unlayered, so
+   the rules that replace it carry a stronger selector. Lines take padding, never margins: CodeMirror
+   measures line boxes for its height map. */
+.md-live.cm-editor.cm-focused {
+	outline: none;
+}
+.md-live.cm-editor .cm-scroller .cm-content {
+	padding: 0;
+	caret-color: var(--text-default);
+}
+.md-live .cm-content .cm-line {
+	padding: 0;
+}
+.md-live .cm-content .cm-line.md-h1 {
+	padding-bottom: var(--space-4);
+	border-bottom: 1px solid var(--border-default);
+}
+.md-live .cm-content .cm-line.md-h2 {
+	padding-top: var(--space-24);
+	padding-bottom: var(--space-4);
+	border-bottom: 1px solid var(--border-default);
+}
+.md-live .cm-content .cm-line.md-h3,
+.md-live .cm-content .cm-line.md-h4 {
+	padding-top: var(--space-16);
+	padding-bottom: var(--space-4);
+}
+.md-live .cm-content .cm-line.md-h5 {
+	padding-top: var(--space-12);
+}
+.md-live .cm-content .cm-line.md-h6 {
+	padding-top: var(--space-12);
+	color: var(--text-muted);
+}
+.md-live .cm-content .cm-line.md-quote {
+	padding-left: var(--space-12);
+	border-left: 2px solid var(--primary-muted);
+	color: var(--text-muted);
+}
+.md-live .cm-content .cm-line.md-codeblock {
+	padding: 0 var(--space-8);
+	background: var(--sunken);
+}
+.md-live .md-code {
+	padding: 0 var(--space-2);
+}
+.md-live .md-link[data-href] {
+	cursor: text;
+}
+.md-live .md-bullet {
+	display: inline-block;
+	color: var(--text-muted);
+}
+.md-live .md-task {
+	margin: 0;
+	vertical-align: middle;
+	accent-color: var(--primary);
+}
+.md-live .md-rule {
+	display: inline-block;
+	width: 100%;
+	vertical-align: middle;
+	border-top: 1px solid var(--border-default);
+}
+.md-live .md-widget {
+	white-space: normal;
+}
+.md-live .md-widget-block {
+	padding: var(--space-4) 0;
+	cursor: text;
+}
+.md-live .md-widget-thread {
+	padding: var(--space-8) 0;
+}
+.md-live .cm-line.presence-bar {
+	position: relative;
+}
+.md-live .cm-line.presence-bar::after {
+	right: auto;
+	left: calc(-1 * (var(--space-12) + var(--presence-slot, 0px)));
+}
+.md-live .cm-line .presence-flag {
+	display: inline-block;
+}
+.md-live .cm-tooltip.cm-tooltip-hover {
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-sm);
+	background: var(--container-elevated-bg);
+}
+.md-live .presence-hover {
+	padding: var(--space-4) var(--space-8);
+}
+.md-live .presence-hover pre {
+	margin: 0;
+	white-space: pre-wrap;
+}
 /* The zone node spans Monaco's content (scroll) width — it stays a transparent, click-through holder;
    the visible composer is the bounded card inside it (width capped in reviewWidgets.ts). */
 .review-composer-zone {

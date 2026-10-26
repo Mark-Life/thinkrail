@@ -1,0 +1,156 @@
+import {
+	Annotation,
+	EditorSelection,
+	type EditorState,
+	Transaction,
+	type TransactionSpec,
+} from "@codemirror/state";
+import type {
+	EditConflict,
+	EditUpdate,
+	LocalEditKind,
+	ResourceEditSession,
+	TextChange,
+	TextRange,
+} from "../../registry";
+import type { DiskLanding } from "../presenceCore";
+
+export const remoteEdit = Annotation.define<boolean>();
+
+type Composition = "idle" | "start" | "active";
+
+export interface BindableView {
+	readonly state: EditorState;
+	update(transactions: readonly Transaction[]): void;
+	dispatch(spec: TransactionSpec): void;
+}
+
+export function localChanges(tr: Transaction): TextChange[] {
+	const changes: TextChange[] = [];
+	tr.changes.iterChanges((from, to, _fromB, _toB, inserted) => {
+		changes.push({ from, to, insert: inserted.toString() });
+	});
+	return changes;
+}
+
+export function localEditKind(
+	tr: Transaction,
+	changes: readonly TextChange[],
+	composition: Composition,
+): LocalEditKind {
+	if (tr.isUserEvent("input.type.compose")) {
+		return composition === "active" ? "compose" : "composeStart";
+	}
+	if (tr.isUserEvent("input.paste")) return "paste";
+	if (changes.every((change) => change.insert === "")) return "delete";
+	const typed =
+		tr.isUserEvent("input.type") &&
+		changes.every(
+			(change) =>
+				change.insert !== "" &&
+				!change.insert.includes("\n") &&
+				(change.to === change.from || change.insert.length === 1),
+		);
+	return typed ? "type" : "other";
+}
+
+export function selectionRanges(state: EditorState): TextRange[] {
+	return state.selection.ranges.map((range) => ({ anchor: range.anchor, head: range.head }));
+}
+
+export function remoteSpec(update: EditUpdate): TransactionSpec {
+	const [first, ...rest] = update.selection ?? [];
+	return {
+		changes: update.changes.map((change) => ({ ...change })),
+		...(first
+			? {
+					selection: EditorSelection.create(
+						[first, ...rest].map((range) => EditorSelection.range(range.anchor, range.head)),
+					),
+					scrollIntoView: true,
+				}
+			: {}),
+		annotations: [
+			remoteEdit.of(true),
+			Transaction.remote.of(true),
+			Transaction.addToHistory.of(false),
+		],
+	};
+}
+
+export function bindSession(
+	view: BindableView,
+	session: ResourceEditSession,
+	hooks: {
+		onConflicts(conflicts: readonly EditConflict[]): void;
+		onDisk(landing: DiskLanding): void;
+	},
+) {
+	let composition: Composition = "idle";
+	let conflicts: readonly EditConflict[] | null = null;
+	let disposed = false;
+
+	const reportConflicts = () => {
+		const next = session.conflicts();
+		if (next === conflicts) return;
+		conflicts = next;
+		hooks.onConflicts(next);
+	};
+
+	const apply = (update: EditUpdate) => {
+		if (disposed) return;
+		const before = update.disk ? view.state.doc.toString() : null;
+		view.dispatch(remoteSpec(update));
+		if (update.disk && before !== null) {
+			hooks.onDisk({ hash: update.disk.hash, before, changes: update.changes });
+		}
+		reportConflicts();
+	};
+
+	const unsubscribe = session.subscribe(apply);
+	reportConflicts();
+
+	return {
+		dispatch(transactions: readonly Transaction[]) {
+			view.update(transactions);
+			if (disposed) return;
+			let local = false;
+			for (const tr of transactions) {
+				if (tr.annotation(remoteEdit)) continue;
+				if (!tr.changes.empty) {
+					const changes = localChanges(tr);
+					session.applyLocal(changes, localEditKind(tr, changes, composition));
+					if (composition === "start") composition = "active";
+					local = true;
+				} else if (tr.selection) local = true;
+			}
+			if (!local) return;
+			session.select(selectionRanges(view.state));
+			reportConflicts();
+		},
+		compositionStart() {
+			composition = "start";
+			session.setComposing(true);
+		},
+		compositionEnd() {
+			if (composition === "idle") return;
+			composition = "idle";
+			session.setComposing(false);
+		},
+		undo() {
+			session.undo();
+		},
+		redo() {
+			session.redo();
+		},
+		dispose() {
+			if (disposed) return;
+			disposed = true;
+			unsubscribe();
+			if (composition !== "idle") session.setComposing(false);
+			hooks.onConflicts([]);
+		},
+	};
+}
+
+export type SessionBinding = ReturnType<typeof bindSession>;

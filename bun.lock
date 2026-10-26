@@ -305,6 +305,7 @@
       "name": "@thinkrail/resource-renderers",
       "version": "0.0.0",
       "dependencies": {
+        "@codemirror/commands": "catalog:",
         "@codemirror/language": "catalog:",
         "@codemirror/state": "catalog:",
         "@codemirror/view": "catalog:",

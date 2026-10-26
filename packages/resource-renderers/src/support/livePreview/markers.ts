@@ -161,7 +161,9 @@ export function liveMarks({
 				if (name === "ListMark") {
 					if (parent?.parent?.name !== "BulletList") return false;
 					if (lineTouched(ref.from)) style(ref.from, ref.to, "marker");
-					else marks.push({ kind: "bullet", from: ref.from, to: ref.to });
+					else if (parent.getChild("Task")) {
+						marks.push({ kind: "hide", from: ref.from, to: blankAfter(ref.to, parent.to) });
+					} else marks.push({ kind: "bullet", from: ref.from, to: ref.to });
 					return false;
 				}
 				if (name === "TaskMarker") {
