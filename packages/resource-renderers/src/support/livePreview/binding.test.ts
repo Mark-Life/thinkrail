@@ -9,7 +9,7 @@ import type {
 	TextRange,
 } from "../../registry";
 import type { DiskLanding } from "../presenceCore";
-import { bindSession, localEditKind, remoteEdit, remoteSpec, type SessionBinding } from "./binding";
+import { bindSession, localEditKind, remoteSpec, type SessionBinding } from "./binding";
 
 function applyChanges(text: string, changes: readonly TextChange[]) {
 	let out = "";
@@ -137,7 +137,6 @@ describe("remoteSpec", () => {
 			}),
 		);
 		expect(tr.state.doc.toString()).toBe("one\nTWO\n");
-		expect(tr.annotation(remoteEdit)).toBe(true);
 		expect(tr.annotation(Transaction.remote)).toBe(true);
 		expect(tr.annotation(Transaction.addToHistory)).toBe(false);
 		expect(tr.state.selection.main).toMatchObject({ anchor: 1, head: 2 });

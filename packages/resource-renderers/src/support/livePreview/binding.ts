@@ -1,5 +1,4 @@
 import {
-	Annotation,
 	EditorSelection,
 	type EditorState,
 	Transaction,
@@ -15,17 +14,15 @@ import type {
 } from "../../registry";
 import type { DiskLanding } from "../presenceCore";
 
-export const remoteEdit = Annotation.define<boolean>();
-
 type Composition = "idle" | "start" | "active";
 
-export interface BindableView {
+interface BindableView {
 	readonly state: EditorState;
 	update(transactions: readonly Transaction[]): void;
 	dispatch(spec: TransactionSpec): void;
 }
 
-export function localChanges(tr: Transaction): TextChange[] {
+function localChanges(tr: Transaction): TextChange[] {
 	const changes: TextChange[] = [];
 	tr.changes.iterChanges((from, to, _fromB, _toB, inserted) => {
 		changes.push({ from, to, insert: inserted.toString() });
@@ -70,11 +67,7 @@ export function remoteSpec(update: EditUpdate): TransactionSpec {
 					scrollIntoView: true,
 				}
 			: {}),
-		annotations: [
-			remoteEdit.of(true),
-			Transaction.remote.of(true),
-			Transaction.addToHistory.of(false),
-		],
+		annotations: [Transaction.remote.of(true), Transaction.addToHistory.of(false)],
 	};
 }
 
@@ -116,7 +109,7 @@ export function bindSession(
 			if (disposed) return;
 			let local = false;
 			for (const tr of transactions) {
-				if (tr.annotation(remoteEdit)) continue;
+				if (tr.annotation(Transaction.remote)) continue;
 				if (!tr.changes.empty) {
 					const changes = localChanges(tr);
 					session.applyLocal(changes, localEditKind(tr, changes, composition));
