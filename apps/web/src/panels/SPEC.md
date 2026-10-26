@@ -2100,10 +2100,11 @@ own section. The kebab menu (`plan-menu`, a
   labeled the same way (`fileWriterLabels.ts`): "You", "Agent · <chat title>" (plain "Agent" for a session with no known chat),
   "<agent> via script", "External". `useFilePresence` turns the file's newest write into the renderer's
   `presence` prop (hash plus writer and tone), so an older write never claims a landing; `FilePane` passes it only with `edit`, so a phone or a
-  read-only view gets none. `FileWritersChip` is the pane's status chip, a strip above the editor while
-  the file has writers in the last minute: up to three avatars and "N writers", with every name in its
-  accessible label; it shows on phones too. `FileWriterAvatars` is the same avatars in the file tab's
-  adornment (`renderTabAdornment`), and `FileWriterDot` is a `FileTree` row dot in the last writer's tone (the first of the same writers),
+  read-only view gets none. `FileWritersChip` is the pane's status chip, a pill floating over the editor's bottom right
+  corner while the file has writers in the last minute, so it never moves the text: up to three avatars,
+  "+N" for the rest and "N writers". It is a button with every name in its accessible label and a tooltip,
+  so a keyboard user can read them; it shows on phones too. `FileWriterAvatars` is the same avatars and
+  "+N" in the file tab's adornment (`renderTabAdornment`), never focusable inside the tab, and `FileWriterDot` is a `FileTree` row dot in the last writer's tone (the first of the same writers),
   named for screen readers. Avatars are rings in the writer's tone around its initial, dashed when
   inferred. Tones map to roles once: user `primary`, agents `feedback-info` / `feedback-success` /
   `feedback-warning`, external `text-subtle`; identity is in the label, not the color alone. This

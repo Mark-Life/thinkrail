@@ -1303,6 +1303,7 @@
 	"presence.external": "External",
 	"presence.lastWriter": "Changed by {{name}} in the last minute",
 	"presence.lineRange": "{{start}} to {{end}}",
+	"presence.moreWriters": "+{{extra}}",
 	"presence.rewrote": "{{name}} rewrote this file",
 	"presence.viaScript": "{{name}} via script",
 	"presence.writersList": "Changed in the last minute by {{names}}",

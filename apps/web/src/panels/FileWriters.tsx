@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import type { PresenceTone, SurfacePresence } from "@thinkrail/resource-renderers";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -112,6 +113,21 @@ function WriterAvatar({ writer }: { writer: LabeledWriter }) {
 	);
 }
 
+function Overflow({ writers }: { writers: readonly LabeledWriter[] }) {
+	const t = useT();
+	const extra = writers.length - MAX_AVATARS;
+	if (extra <= 0) return null;
+	return (
+		<span
+			data-testid="file-writer-overflow"
+			aria-hidden
+			className="ml-2 tr-text-label-pill text-text-muted"
+		>
+			{t("presence.moreWriters", { extra })}
+		</span>
+	);
+}
+
 export function FileWriterAvatars({ workspaceId, path }: { workspaceId: string; path: string }) {
 	const t = useT();
 	const writers = useLabeledWriters(workspaceId, path);
@@ -128,34 +144,47 @@ export function FileWriterAvatars({ workspaceId, path }: { workspaceId: string; 
 			{writers.slice(0, MAX_AVATARS).map((writer) => (
 				<WriterAvatar key={writer.id} writer={writer} />
 			))}
+			<Overflow writers={writers} />
 		</span>
 	);
 }
 
-export function FileWritersChip({ workspaceId, path }: { workspaceId: string; path: string }) {
+export function FileWritersChip({
+	workspaceId,
+	path,
+	className,
+}: {
+	workspaceId: string;
+	path: string;
+	className?: string;
+}) {
 	const t = useT();
 	const writers = useLabeledWriters(workspaceId, path);
 	if (writers.length === 0) return null;
 	const names = writers.map((writer) => writer.label).join(", ");
 	return (
-		<div
-			data-testid="file-writers"
-			className="flex h-24 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
-		>
-			<span
-				role="img"
-				aria-label={t("presence.writersList", { names })}
-				title={names}
-				className="inline-flex items-center gap-4 rounded-full border border-border-default px-8 tr-text-metadata text-text-muted"
-			>
-				<span className="inline-flex items-center" aria-hidden>
-					{writers.slice(0, MAX_AVATARS).map((writer) => (
-						<WriterAvatar key={writer.id} writer={writer} />
-					))}
-				</span>
-				<span aria-hidden>{t("presence.writers", { count: writers.length })}</span>
-			</span>
-		</div>
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<button
+					type="button"
+					data-testid="file-writers"
+					aria-label={t("presence.writersList", { names })}
+					className={cn(
+						"inline-flex items-center gap-4 rounded-full border border-border-default bg-container-elevated-bg px-8 py-2 tr-text-metadata text-text-muted shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+						className,
+					)}
+				>
+					<span className="inline-flex items-center" aria-hidden>
+						{writers.slice(0, MAX_AVATARS).map((writer) => (
+							<WriterAvatar key={writer.id} writer={writer} />
+						))}
+						<Overflow writers={writers} />
+					</span>
+					<span aria-hidden>{t("presence.writers", { count: writers.length })}</span>
+				</button>
+			</TooltipTrigger>
+			<TooltipContent>{names}</TooltipContent>
+		</Tooltip>
 	);
 }
 

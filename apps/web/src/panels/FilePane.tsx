@@ -157,7 +157,6 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					/>
 				</div>
 			) : null}
-			<FileWritersChip workspaceId={tab.workspaceId} path={tab.path} />
 			<UnplacedReviewStrip
 				reviews={reviews}
 				renderer={renderer}
@@ -180,9 +179,14 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			) : null}
 			<div
 				ref={viewRef}
-				className="min-h-0 flex-1"
+				className="relative min-h-0 flex-1"
 				data-file-buffer={editing ? buffer.key : undefined}
 			>
+				<FileWritersChip
+					workspaceId={tab.workspaceId}
+					path={tab.path}
+					className="absolute right-16 bottom-8 z-10"
+				/>
 				<Suspense fallback={loading}>
 					<RendererView
 						key={implementationKey}

@@ -68,9 +68,13 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 	await expect(fileTab(page, NAME).getByTestId("file-writer-avatars")).toHaveCount(0);
 	await expect(page.getByTestId("file-writers")).toHaveCount(0);
 
+	const editorTop = async () => (await visibleEditor(page).boundingBox())?.y;
+	const topBefore = await editorTop();
 	authors.agentWrites(path);
 	writeFileSync(path, withLine(readFileSync(path, "utf8"), 4, "const v4 = 40;"));
 	await expect(visibleEditor(page)).toContainText("const v4 = 40;", { timeout: 10_000 });
+	await expect(page.getByTestId("file-writers")).toBeVisible();
+	expect(await editorTop()).toBe(topBefore);
 	await expect(marks(page, ".presence-bar.presence-tone-agent1")).toHaveCount(1);
 	await expect(marks(page, '[data-presence="flag"]')).toHaveText(["Agent"]);
 	await expect(marks(page, ".presence-bar.presence-inferred")).toHaveCount(0);
@@ -110,4 +114,10 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 	await expect(page.getByRole("status").filter({ hasText: "External changed line 9" })).toHaveCount(
 		1,
 	);
+
+	await page.emulateMedia({ forcedColors: "active" });
+	const barStyle = (selector: string) =>
+		marks(page, selector).evaluate((node) => getComputedStyle(node, "::after").borderLeftStyle);
+	expect(await barStyle(".presence-bar.presence-tone-agent1")).toBe("solid");
+	expect(await barStyle(".presence-bar.presence-tone-external")).toBe("dashed");
 });
