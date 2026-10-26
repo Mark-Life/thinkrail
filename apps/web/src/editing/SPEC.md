@@ -47,7 +47,7 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   not `deleted` again. Dirty means `text !== base.text` and is reported apart from
   the status, so a deleted or stale buffer can still be clean or dirty. Only the summary
   (`{status, dirty, error, conflicts, merges, pending}`) reaches the store (`fileBuffersByWorkspace`), never the text.
-  `pending` means an autosave timer is armed.
+  `pending` means an autosave timer is armed or a save waits behind the running one.
   `merges` counts disk changes merged into the buffer with no conflict; while the buffer is dirty the
   banner's polite live region announces each one, since the merged lines land with no other notice. The tab
   indicator comes from the store selectors `selectFileSaveIndicator` and `selectFileAutosaving`: in manual mode a dot for `dirty`
@@ -222,8 +222,8 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
   correct `expect` hash until the first answers. If the page unloads first, the draft written on the
   same `pagehide` keeps that edit and restores it on the next load.
 - **Paused** is a dirty buffer autosave will not write: status `stale`, `conflict`, `deleted`,
-  `readonly` or `error`, or a dirty buffer with no armed timer and no save running (a second `stale`
-  answer). A thrown save error pauses that file until the next user step; nothing retries on its own,
+  `readonly` or `error`, or a dirty buffer with no armed timer and no save running or queued (a second
+  `stale` answer). A thrown save error pauses that file until the next user step; nothing retries on its own,
   since every failed request goes to PostHog. Resolving the last conflict is a user step, so it resumes.
   A save that throws while the host is disconnected (a request that timed out during a long outage)
   fails `offline`, not `failed`. On reconnect a buffer whose save failed `offline` re-arms once its read

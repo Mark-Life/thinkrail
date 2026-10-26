@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { FileSaveMode } from "@thinkrail/contracts";
+import { selectFileSaveIndicator } from "../store";
 import {
 	AUTOSAVE_MS,
 	DRAFT_ID,
@@ -9,6 +10,7 @@ import {
 	settle,
 	setup,
 	type,
+	WS,
 } from "./registryFixtures";
 
 function autoSetup(options: Parameters<typeof setup>[0] = {}) {
@@ -337,4 +339,36 @@ test("a flush while a save runs queues the newer edit behind it", async () => {
 	release();
 	await settle();
 	expect(disk.writes.map((write) => write.content)).toEqual(["aone\ntwo\n", "abone\ntwo\n"]);
+});
+
+test("a save queued behind a running one keeps the file autosaving through the echo re-read", async () => {
+	const { disk, registry, handle, clock, summaries } = autoSetup();
+	type(handle, 0, "a");
+	const release = disk.hold();
+	clock.advance(AUTOSAVE_MS);
+	await settle();
+	type(handle, 1, "b");
+	registry.flush(handle.key);
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	const read = disk.io.read;
+	let releaseRead = () => {};
+	disk.io.read = (workspaceId, path) =>
+		new Promise((resolve) => {
+			releaseRead = () => resolve(read(workspaceId, path));
+		});
+	const from = summaries.length;
+	release();
+	await settle();
+	expect(disk.writes).toHaveLength(1);
+	disk.io.read = read;
+	releaseRead();
+	await settle();
+	expect(disk.writes.map((write) => write.content)).toEqual(["aone\ntwo\n", "abone\ntwo\n"]);
+	const during = summaries.slice(from, -1);
+	expect(during.length).toBeGreaterThan(0);
+	for (const summary of during) {
+		const state = { fileBuffersByWorkspace: summary ? { [WS]: { [PATH]: summary } } : {} };
+		expect(selectFileSaveIndicator(state, WS, PATH)).not.toBe("unsaved");
+	}
+	expect(summaries.at(-1)).toEqual({ status: "clean", dirty: false });
 });

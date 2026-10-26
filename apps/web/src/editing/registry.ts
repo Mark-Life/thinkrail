@@ -116,7 +116,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 	const publish = (entry: Entry) =>
 		deps.publish(entry.workspaceId, entry.path, {
 			...bufferSummary(entry.state),
-			...(autosave.isArmed(entry.key) ? { pending: true as const } : {}),
+			...(autosave.isArmed(entry.key) || entry.nextSave ? { pending: true as const } : {}),
 		});
 
 	const autosave = createAutosave({
@@ -326,10 +326,14 @@ export function createBufferRegistry(deps: RegistryDeps) {
 	const save = (entry: Entry): Promise<void> => {
 		if (!deps.canWrite()) return Promise.resolve();
 		if (entry.pendingSave) {
-			entry.nextSave ??= entry.pendingSave.then(() => {
+			if (entry.nextSave) return entry.nextSave;
+			entry.nextSave = entry.pendingSave.then(() => {
 				entry.nextSave = null;
-				return save(entry);
+				const queued = save(entry);
+				if (!entry.dropped) publish(entry);
+				return queued;
 			});
+			if (!entry.dropped) publish(entry);
 			return entry.nextSave;
 		}
 		const pending = runSave(entry).finally(() => {
