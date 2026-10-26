@@ -405,7 +405,7 @@ describe("generated CSS", () => {
 	it("styles prose <strong> with weight ALONE in every system, so bold inherits its parent", () => {
 		for (const system of Object.keys(typography.proseSystems)) {
 			const root = proseRootClassName(typography, system);
-			const block = new RegExp(`\\.${root} :is\\(strong, b\\) \\{([^}]*)\\}`).exec(GENERATED);
+			const block = new RegExp(`\\.${root} :is\\(strong, b, \\.md-strong\\) \\{([^}]*)\\}`).exec(GENERATED);
 			expect(block, `${system}: the weight-only strong rule is missing`).not.toBeNull();
 			const declarations = (block?.[1] ?? "")
 				.split(";")

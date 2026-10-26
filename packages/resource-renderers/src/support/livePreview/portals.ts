@@ -36,11 +36,12 @@ function sameContent(a: PortalContent, b: PortalContent): boolean {
 	}
 }
 
-export function createPortalHost(onResize: () => void) {
+export function createPortalHost() {
 	let entries: readonly PortalEntry[] = [];
 	let seq = 0;
+	let onResize = () => {};
 	const listeners = new Set<() => void>();
-	const sizes = new ResizeObserver(onResize);
+	const sizes = new ResizeObserver(() => onResize());
 	const emit = () => {
 		for (const listener of listeners) listener();
 	};
@@ -67,10 +68,8 @@ export function createPortalHost(onResize: () => void) {
 			};
 		},
 		snapshot: () => entries,
-		dispose() {
-			sizes.disconnect();
-			entries = [];
-			emit();
+		onResize(handler: () => void) {
+			onResize = handler;
 		},
 	};
 }

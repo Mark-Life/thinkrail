@@ -89,7 +89,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 	const viewRef = useRef<EditorView | null>(null);
 	const presenceRef = useRef<ReturnType<typeof createPresenceMarks> | null>(null);
 	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
-	const [portals] = useState(() => createPortalHost(() => viewRef.current?.requestMeasure()));
+	const [portals] = useState(createPortalHost);
 	const entries = useSyncExternalStore(portals.subscribe, portals.snapshot);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
 	const latestRef = useRef({ presenceText, presence, review, openFile, t });
@@ -190,6 +190,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			},
 		});
 		viewRef.current = view;
+		portals.onResize(() => view.requestMeasure());
 		const marks = createPresenceMarks(livePresenceSurface(view, chipHost), {
 			text: () => latestRef.current.presenceText,
 			announce: (text) => setAnnouncement((previous) => ({ seq: previous.seq + 1, text })),
@@ -208,6 +209,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			marks.dispose();
 			presenceRef.current = null;
 			viewRef.current = null;
+			portals.onResize(() => {});
 			view.destroy();
 		};
 	}, [edit, portals, path, workspaceId]);
