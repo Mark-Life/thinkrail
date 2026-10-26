@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	ComposerGrowthLimit,
 	ExtUiRequest,
+	FileSaveMode,
 	GitDiffScope,
 	HostPlatform,
 	HostUpdateNotice,
@@ -46,6 +47,7 @@ import {
 	isAskUserAnswersMessage,
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
+	isFileSaveMode,
 	isLineWidth,
 	isLocalePreference,
 	isSettleIdleDays,
@@ -1054,6 +1056,7 @@ interface AppState {
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
+	fileSaveMode: FileSaveMode;
 	chatMessageOrder: ChatMessageOrder;
 	streamingResponseMovement: StreamingResponseMovement;
 	defaultModel: WireModel | undefined;
@@ -1431,6 +1434,9 @@ function configPatch(config: AppConfig) {
 			typeof config.fileLineWidthBounded === "boolean"
 				? config.fileLineWidthBounded
 				: DEFAULT_CONFIG.fileLineWidthBounded,
+		fileSaveMode: isFileSaveMode(config.fileSaveMode)
+			? config.fileSaveMode
+			: DEFAULT_CONFIG.fileSaveMode,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
@@ -2292,6 +2298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
+	fileSaveMode: DEFAULT_CONFIG.fileSaveMode,
 	chatMessageOrder: "oldest-first",
 	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
