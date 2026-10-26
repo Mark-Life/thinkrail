@@ -2075,8 +2075,10 @@ own section. The kebab menu (`plan-menu`, a
   save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A
   Review panel "go to comment" request that arrives meanwhile is dropped, not held for a scroll jump after
   the save. **`FileEditBanner`** shows one strip per
-  issue: open same-line conflicts (status `conflict`, with their count: pick a side in the editor to save
-  again), a disk version that could not merge (status `stale`, **Reload** / **Keep mine**: a change past
+  issue: open same-line conflicts (status `conflict`, with their count and **Mine** / **Theirs** /
+  **Both** for the first one: Monaco hides its view zones, and so the editor's lens, from screen
+  readers, so the banner is the keyboard and screen-reader path; focus goes back to the editor once
+  none is left), a disk version that could not merge (status `stale`, **Reload** / **Keep mine**: a change past
   the merge budget or a draft typed on another version), deleted on disk (Save creates it again),
   read-only on disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text,
   not connected, or a failed save. A disk change on other lines merges with no banner. Its live region stays mounted while

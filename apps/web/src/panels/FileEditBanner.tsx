@@ -2,11 +2,20 @@ import { RiAlertLine as Alert } from "@remixicon/react";
 import { FILE_WRITE_MAX_BYTES } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import type { ConflictChoice } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { platformShortcutLabel } from "../lib";
 import type { FileBufferSummary } from "../store";
 
 const MEBIBYTE = 1024 * 1024;
+
+const CHOICES: readonly ConflictChoice[] = ["mine", "theirs", "both"];
+
+const CHOICE_LABELS = {
+	mine: "panels.editConflict.mine",
+	theirs: "panels.editConflict.theirs",
+	both: "panels.editConflict.both",
+} as const satisfies Record<ConflictChoice, MessageKey>;
 
 function bannerMessage(summary: FileBufferSummary): MessageKey | null {
 	switch (summary.status) {
@@ -32,10 +41,12 @@ export function FileEditBanner({
 	summary,
 	onReload,
 	onKeepMine,
+	onResolveFirst,
 }: {
 	summary: FileBufferSummary | undefined;
 	onReload(): void;
 	onKeepMine(): void;
+	onResolveFirst(choice: ConflictChoice): void;
 }) {
 	const t = useT();
 	const message = summary ? bannerMessage(summary) : null;
@@ -77,6 +88,24 @@ export function FileEditBanner({
 								{t("panels.fileEdit.reload")}
 							</Button>
 						</>
+					) : null}
+					{summary.status === "conflict" ? (
+						<fieldset
+							aria-label={t("panels.fileEdit.firstConflict")}
+							className="flex shrink-0 items-center gap-8"
+						>
+							{CHOICES.map((choice) => (
+								<Button
+									key={choice}
+									size="sm"
+									variant="outline"
+									data-testid={`file-edit-resolve-${choice}`}
+									onClick={() => onResolveFirst(choice)}
+								>
+									{t(CHOICE_LABELS[choice])}
+								</Button>
+							))}
+						</fieldset>
 					) : null}
 				</div>
 			) : null}

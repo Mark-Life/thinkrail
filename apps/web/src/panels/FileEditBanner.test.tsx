@@ -5,7 +5,12 @@ import { FileEditBanner } from "./FileEditBanner";
 
 const render = (summary: FileBufferSummary | undefined) =>
 	renderToStaticMarkup(
-		<FileEditBanner summary={summary} onReload={() => {}} onKeepMine={() => {}} />,
+		<FileEditBanner
+			summary={summary}
+			onReload={() => {}}
+			onKeepMine={() => {}}
+			onResolveFirst={() => {}}
+		/>,
 	);
 
 test("the live region is mounted before any issue, so its text change is announced", () => {
@@ -23,4 +28,13 @@ test("a conflict or a failed save is announced assertively", () => {
 	expect(render({ status: "error", dirty: true, error: "failed" })).toContain(
 		'aria-live="assertive"',
 	);
+});
+
+test("an open conflict offers Mine, Theirs and Both outside the editor", () => {
+	const html = render({ status: "conflict", dirty: true, conflicts: 2 });
+	expect(html).toContain('aria-label="First change that also changed on disk"');
+	for (const choice of ["mine", "theirs", "both"]) {
+		expect(html).toContain(`data-testid="file-edit-resolve-${choice}"`);
+	}
+	expect(render({ status: "stale", dirty: true })).not.toContain("file-edit-resolve-");
 });

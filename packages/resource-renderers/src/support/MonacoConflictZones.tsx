@@ -35,6 +35,7 @@ export function MonacoConflictZones({
 						key={choice}
 						size="sm"
 						variant="outline"
+						tabIndex={-1}
 						data-testid={`edit-conflict-${choice}`}
 						onClick={() => onResolve(conflict.id, choice)}
 					>

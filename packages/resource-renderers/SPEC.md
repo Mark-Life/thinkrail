@@ -640,7 +640,9 @@ content's own height.
   disposes the mirror and restores the four methods. Open conflicts render as two view zones each
   (`conflictWidgets.ts`, React portals in `MonacoConflictZones`): a lens above the user's lines with
   **Mine** / **Theirs** / **Both**, and the disk lines below them; the user's lines get a whole-line
-  wash. A choice puts focus back in the editor. A path or session change rebinds in place.
+  wash. A choice puts focus back in the editor. Monaco marks view zones `aria-hidden`, so the lens
+  buttons stay out of the tab order (`tabIndex -1`) and the host offers the same choices outside the
+  editor. A path or session change rebinds in place.
   The model and options effects skip their first run, because the mount just created the editor with exactly those inputs. The
   editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
   open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
