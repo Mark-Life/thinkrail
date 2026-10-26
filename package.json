@@ -11,10 +11,10 @@
 		],
 		"catalog": {
 			"@astrojs/check": "0.9.10",
-			"@codemirror/commands": "6.11.1",
-			"@codemirror/state": "6.7.6",
 			"@changesets/changelog-github": "1.0.1",
 			"@changesets/cli": "3.0.3",
+			"@codemirror/commands": "6.11.1",
+			"@codemirror/state": "6.7.6",
 			"@earendil-works/pi-agent-core": "1.2.0",
 			"@earendil-works/pi-ai": "1.2.0",
 			"@earendil-works/pi-coding-agent": "1.2.0",
