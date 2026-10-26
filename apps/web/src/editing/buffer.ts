@@ -85,7 +85,12 @@ export function isDirty(state: BufferState): boolean {
 }
 
 export function canAutosave(state: BufferState): boolean {
-	return state.base.hash !== null && state.issue?.kind !== "conflict" && openConflicts(state) === 0;
+	return (
+		state.base.hash !== null &&
+		state.issue?.kind !== "conflict" &&
+		state.issue?.kind !== "readonly" &&
+		openConflicts(state) === 0
+	);
 }
 
 export function bufferStatus(state: BufferState): FileBufferStatus {

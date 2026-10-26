@@ -211,3 +211,74 @@ test("a draft restored on the same base autosaves; one typed on another version 
 	expect(other.disk.writes).toHaveLength(0);
 	expect(other.summaries.at(-1)).toMatchObject({ status: "stale", dirty: true });
 });
+
+test("an edit made after reopening a closing tab is written when the tab closes again", async () => {
+	const { disk, registry, handle, clock } = autoSetup();
+	type(handle, 0, "a");
+	const release = disk.hold();
+	registry.flush(handle.key);
+	registry.prune(new Set());
+	registry.prune(new Set([handle.key]));
+	type(handle, 0, "b");
+	registry.prune(new Set());
+	release();
+	await settle();
+	await settle();
+	expect(disk.text(PATH)).toBe("baone\ntwo\n");
+	expect(registry.get(handle.key)).toBeNull();
+	expect(clock.timers()).toBe(0);
+});
+
+test("a read-only file is not retried by autosave, only by an explicit save", async () => {
+	const { disk, registry, handle, clock, summaries } = autoSetup();
+	const write = disk.io.write;
+	disk.io.write = async (params) => {
+		disk.writes.push(params);
+		return { status: "readonly" };
+	};
+	for (const at of [0, 1, 2]) {
+		type(handle, at, "a");
+		clock.advance(AUTOSAVE_MS);
+		await settle();
+	}
+	expect(disk.writes).toHaveLength(1);
+	expect(clock.timers()).toBe(0);
+	expect(summaries.at(-1)).toEqual({ status: "readonly", dirty: true });
+	disk.io.write = write;
+	await registry.save(handle.key);
+	expect(disk.text(PATH)).toBe("aaaone\ntwo\n");
+});
+
+test("an edit in a file autosave cannot write arms no timer", async () => {
+	const { disk, handle, clock, summaries } = autoSetup();
+	type(handle, 0, "mine ");
+	disk.put(PATH, "theirs\ntwo\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	clock.advance(AUTOSAVE_MS);
+	await settle();
+	const before = summaries.length;
+	type(handle, 0, "x");
+	expect(clock.timers()).toBe(0);
+	expect(summaries.slice(before).some((summary) => summary?.pending)).toBe(false);
+	expect(disk.writes).toHaveLength(0);
+});
+
+test("a save that throws while disconnected resumes on reconnect", async () => {
+	let connected = true;
+	const { disk, registry, handle, clock, summaries } = autoSetup({ connected: () => connected });
+	const write = disk.io.write;
+	disk.io.write = async () => {
+		connected = false;
+		throw new Error("fs.writeFile timed out");
+	};
+	type(handle, 0, "a");
+	clock.advance(AUTOSAVE_MS);
+	await settle();
+	expect(summaries.at(-1)).toMatchObject({ status: "error", error: "offline" });
+	disk.io.write = write;
+	connected = true;
+	await registry.reconcileAll();
+	clock.advance(AUTOSAVE_MS);
+	await settle();
+	expect(disk.text(PATH)).toBe("aone\ntwo\n");
+});

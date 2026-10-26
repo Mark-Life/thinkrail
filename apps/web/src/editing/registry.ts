@@ -203,7 +203,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 	};
 
 	const userStep = (entry: Entry, next: BufferState, origin: CommitOrigin) => {
-		if (commit(entry, next, origin) && autosaving()) autosave.arm(entry.key);
+		if (commit(entry, next, origin) && autosaving() && canAutosave(entry.state))
+			autosave.arm(entry.key);
 	};
 
 	const notifyEntries = () => {
@@ -224,6 +225,20 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		entries.delete(entry.key);
 		deps.publish(entry.workspaceId, entry.path, null);
 		notifyEntries();
+	};
+
+	const leave = (entry: Entry) => {
+		autosave.flush(entry.key);
+		const saving = entry.nextSave ?? entry.pendingSave;
+		if (!saving) {
+			drop(entry, false);
+			return;
+		}
+		entry.leaving = true;
+		void saving.finally(() => {
+			entry.leaving = false;
+			if (!openKeys?.has(entry.key)) leave(entry);
+		});
 	};
 
 	const readToken = (entry: Entry) => {
@@ -305,7 +320,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				isDirty(next);
 			commit(entry, next, "other");
 		} catch (error) {
-			commit(entry, failSave(entry.state, saveError(error)), "other");
+			const reason = deps.isConnected() ? saveError(error) : "offline";
+			commit(entry, failSave(entry.state, reason), "other");
 		} finally {
 			entry.writeFloor = entry.readSeq + 1;
 		}
@@ -454,18 +470,9 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		prune(open: ReadonlySet<string>) {
 			openKeys = open;
 			for (const entry of [...entries.values()]) {
-				if (open.has(entry.key) || entry.leaving) continue;
-				autosave.flush(entry.key);
-				const saving = entry.nextSave ?? entry.pendingSave;
-				if (!saving) {
-					drop(entry, false);
-					continue;
-				}
-				entry.leaving = true;
-				void saving.finally(() => {
-					entry.leaving = false;
-					if (!openKeys?.has(entry.key)) drop(entry, false);
-				});
+				if (open.has(entry.key)) continue;
+				if (entry.leaving) autosave.flush(entry.key);
+				else leave(entry);
 			}
 		},
 		reconcileAll: () =>

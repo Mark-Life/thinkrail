@@ -61,5 +61,3 @@ export function createAutosave({
 		},
 	};
 }
-
-export type Autosave = ReturnType<typeof createAutosave>;

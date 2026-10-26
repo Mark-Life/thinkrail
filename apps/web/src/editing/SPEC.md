@@ -51,8 +51,8 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `merges` counts disk changes merged into the buffer with no conflict; while the buffer is dirty the
   banner's polite live region announces each one, since the merged lines land with no other notice. The tab
   indicator comes from one store selector, `selectFileSaveIndicator`: in manual mode a dot for `dirty`
-  that pulses while `saving`; in auto mode a pulsing ring while a dirty buffer is `pending` or `saving`,
-  and the dot only for a dirty buffer autosave will not write (paused). Both paint `CanvasText` in forced
+  that pulses while `saving`; in auto mode a pulsing ring while a dirty buffer is `pending` ("Saving
+  soon") or `saving` ("Saving"), and the dot only for a dirty buffer autosave will not write (paused). Both paint `CanvasText` in forced
   colors. The tab indicator, the banner and the close guard all read from that summary.
 - **Disk text is adopted only through `toEditorText`,** and only when `meta.text` is true and the mime
   is not an LFS pointer. The client sends LF text and never handles a BOM; the host restores the form.
@@ -185,7 +185,7 @@ visible step is taken with it, so every Cmd/Ctrl+Z shows a change. A cursor move
    into the latest text (typing during the write included) as above, and a merge with no open conflict
    saves once more at once; a second `stale` answer merges again and stops there. A read dropped during
    the write still runs once after it, retry or not. `missing`: status `deleted`; nothing is re-created
-   until the user saves again. `readonly`: issue `readonly`, shown with its reason; the next save retries.
+   until the user saves again. `readonly`: issue `readonly`, shown with its reason; the next explicit save retries.
    A thrown error: `NOT_EDITABLE` gives issue `notEditable`, `FILE_TOO_LARGE` gives `tooLarge`, any
    other error `failed`; a retry cannot fix the first two. The write may still have landed, so its text
    stays `unconfirmed`; a later `stale` answer that holds exactly that text adopts it as the base and
@@ -204,10 +204,12 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
 
 - **Only a user step arms the timer:** an editor edit, undo, redo, a conflict choice, Keep mine, and a
   draft restored with no issue (the user's own unsaved text). A merge, a disk adoption and Reload never
-  do, so two dirty windows cannot bounce writes. Each arm restarts the 1,000 ms delay.
-- **When the timer fires** it saves, except for a deleted file (only Cmd/Ctrl+S or the guard re-creates
-  one) or an open conflict of either kind. While the editor composes it re-arms instead, so a
-  half-composed IME text is never written.
+  do, so two dirty windows cannot bounce writes. Each arm restarts the 1,000 ms delay. A step arms only
+  when autosave may write the file (`canAutosave`): not for a deleted file, a `readonly` refusal or an
+  open conflict of either kind, so `pending` always means a write will follow.
+- **When the timer fires** it checks `canAutosave` again, since a merge may have opened a conflict
+  meanwhile. Only Cmd/Ctrl+S or the guard re-creates a deleted file or retries a `readonly` one. While
+  the editor composes it re-arms instead, so a half-composed IME text is never written.
 - **Flush** fires every armed timer at once. Triggers: focus leaving a `[data-file-buffer]` pane, the pane
   unmounting, a change of `activeTabByWorkspace` or `activeWorkspaceId` (hidden panes stay mounted, so a
   tab switch is not an unmount), `visibilitychange` to hidden, and `pagehide`. A flush with nothing armed
@@ -216,12 +218,15 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
   `readonly` or `error`, or a dirty buffer with no armed timer and no save running (a second `stale`
   answer). A thrown save error pauses that file until the next user step; nothing retries on its own,
   since every failed request goes to PostHog. Resolving the last conflict is a user step, so it resumes.
-  On reconnect a buffer whose save failed `offline` re-arms once its read clears the issue.
+  A save that throws while the host is disconnected (a request that timed out during a long outage)
+  fails `offline`, not `failed`. On reconnect a buffer whose save failed `offline` re-arms once its read
+  clears the issue.
 - **Cmd/Ctrl+S** cancels the timer and saves at once, in both modes.
 - **Mode switch.** To manual: every timer is cancelled. To auto: every dirty buffer with no issue, no open
   conflict and a file on disk arms.
-- **A tab leaving the store** with an armed timer or a save running (in either mode) is dropped only
-  after that save settles, and only if no tab reopened it meanwhile.
+- **A tab leaving the store** flushes its timer. With a save running or queued (in either mode) it is
+  dropped only after every such save settles, and only if no tab reopened it meanwhile. A tab reopened
+  and closed again while the first save runs flushes its new edit too; the buffer waits for that save.
 - **The own-save echo does nothing:** the `fsChanged` for our write re-reads the same hash (see Disk to
   buffer), and a merge never arms the timer.
 
