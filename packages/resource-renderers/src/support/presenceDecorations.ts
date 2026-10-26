@@ -138,14 +138,6 @@ function longestBacktickRun(line: string): number {
 	return Math.max(0, ...(line.match(/`+/g) ?? []).map((run) => run.length));
 }
 
-export function htmlAttribute(text: string): string {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/"/g, "&quot;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
-}
-
 export function diffFence(lines: readonly string[]): string {
 	const fence = "`".repeat(Math.max(2, ...lines.map(longestBacktickRun)) + 1);
 	return `${fence}diff\n${lines.join("\n")}\n${fence}`;

@@ -17,7 +17,11 @@ interface Range {
 }
 interface Decoration {
 	range: Range;
-	options: { linesDecorationsClassName?: string; className?: string };
+	options: {
+		linesDecorationsClassName?: string;
+		linesDecorationsTooltip?: string;
+		className?: string;
+	};
 }
 interface Collection {
 	decorations: Decoration[];
@@ -163,6 +167,15 @@ describe("attachPresence", () => {
 			"presence-bar presence-tone-agent1",
 			"presence-bar presence-tone-agent2",
 		]);
+		marks.dispose();
+	});
+
+	test("the bar's tooltip is the plain label, since Monaco escapes it", () => {
+		const marks = attach();
+		marks.setLatest({ hash: "h1", writer: { ...AGENT, label: 'Agent · "<A> & B"' } });
+		marks.land(editLine(4, "h1"));
+		const [bar] = collections.flatMap((collection) => collection.decorations);
+		expect(bar?.options.linesDecorationsTooltip).toBe('Changed by Agent · "<A> & B"');
 		marks.dispose();
 	});
 

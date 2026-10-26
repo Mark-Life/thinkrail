@@ -3,7 +3,6 @@ import type { PresenceWrite, PresenceWriter } from "../registry";
 import type { DiskLanding } from "./monacoMirror";
 import {
 	diffFence,
-	htmlAttribute,
 	joinDiffs,
 	markdownText,
 	PRESENCE_TIMING,
@@ -92,7 +91,7 @@ export function attachPresence(
 					isWholeLine: true,
 					stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 					linesDecorationsClassName: bar,
-					linesDecorationsTooltip: htmlAttribute(label),
+					linesDecorationsTooltip: label,
 					hoverMessage: hover,
 					...(washing
 						? { className: `presence-wash presence-wash-${step} presence-tone-${writer.tone}` }

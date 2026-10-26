@@ -686,7 +686,7 @@ content's own height.
   Monaco rebuilds a line's overlay node when the cursor, a selection or a scroll redraws it, which would
   restart an animation); a name flag (a content widget at the end of the first line) that fades in 5 s; a hover with the
   writer and the diff over the lines, and the writer as the bar's own tooltip (`linesDecorationsTooltip`,
-  HTML-escaped: Monaco writes it raw). The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
+  passed as plain text: Monaco escapes it). The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
   writer has one line mark: a new landing takes over the writer's earlier ranges and diff and restarts the
   timers. One flag shows per line. An update whose hash has no writer yet waits 3 s for the next
   `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame. Flags
