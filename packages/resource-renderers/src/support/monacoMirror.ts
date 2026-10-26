@@ -8,14 +8,9 @@ import type {
 	TextChange,
 	TextRange,
 } from "../registry";
+import type { DiskLanding } from "./presenceCore";
 
 type Composition = "idle" | "start" | "active";
-
-export interface DiskLanding {
-	hash: string;
-	before: string;
-	changes: readonly TextChange[];
-}
 
 function editKind(
 	changes: readonly editor.IModelContentChange[],

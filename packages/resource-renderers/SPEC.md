@@ -735,7 +735,7 @@ content's own height.
   tone so two writers on one line both show, and dashed for an inferred writer; a wash that fades in
   four steps over 2.4 s (static `presence-wash-0..3` classes the mark sets on a timer, never a CSS animation:
   Monaco rebuilds a line's overlay node when the cursor, a selection or a scroll redraws it, which would
-  restart an animation); a name flag (a content widget at the end of the first line: the writer kind's Remix icon, chat for an agent, person for the user, login box for an outside writer, rendered once to static SVG markup, then the label, on the tone's wash with no border, the same for an inferred writer) that fades in 5 s; a hover with the
+  restart an animation); a name flag (a content widget at the end of the first line: the writer kind's Remix icon, chat for an agent, person for the user, login box for an outside writer, rendered once to static SVG markup in `presenceIcons.ts` and handed to the core, so `presenceCore` stays React-free, then the label, on the tone's wash with no border, the same for an inferred writer) that fades in 5 s; a hover with the
   writer and the diff over the lines, and the writer as the bar's own tooltip (`linesDecorationsTooltip`,
   passed as plain text: Monaco escapes it). By keyboard the hover opens through F1, "Show or Focus Hover": the host's Cmd/Ctrl+K session switcher takes Monaco's Cmd/Ctrl+K Cmd/Ctrl+I chord first. The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
   writer has one line mark per style: a new landing takes over the writer's earlier ranges and diff and restarts the

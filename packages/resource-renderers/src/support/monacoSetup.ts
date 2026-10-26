@@ -32,7 +32,8 @@ import onigWasmUrl from "shiki/onig.wasm?url";
 import type { ResourceCodeHost } from "../host";
 import type { EditConflict, ResourceEditSession } from "../registry";
 import { editorWrappingOptions } from "./editorWrapping";
-import { type DiskLanding, mirrorEditSession } from "./monacoMirror";
+import { mirrorEditSession } from "./monacoMirror";
+import type { DiskLanding } from "./presenceCore";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
 declare global {
