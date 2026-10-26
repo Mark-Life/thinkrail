@@ -6,6 +6,7 @@ import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	isComposerGrowthLimit,
+	isFileSaveMode,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
@@ -406,6 +407,9 @@ export function loadConfig(): AppConfig {
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
 		disabledExtensions: storedExtensionNames(value.disabledExtensions),
+		fileSaveMode: isFileSaveMode(value.fileSaveMode)
+			? value.fileSaveMode
+			: DEFAULT_CONFIG.fileSaveMode,
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 	};
 }

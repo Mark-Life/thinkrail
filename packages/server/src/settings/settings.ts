@@ -2,7 +2,9 @@ import {
 	type AppConfig,
 	type AppConfigUpdate,
 	COMPOSER_GROWTH_LIMITS,
+	FILE_SAVE_MODES,
 	isComposerGrowthLimit,
+	isFileSaveMode,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
@@ -54,6 +56,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
 	disabledExtensions: true,
+	fileSaveMode: true,
 	locale: true,
 	chatMessageOrder: true,
 	layout: true,
@@ -195,6 +198,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
 	) {
 		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
+	}
+	if (runtimeUpdate.fileSaveMode !== undefined && !isFileSaveMode(runtimeUpdate.fileSaveMode)) {
+		throw new Error(`fileSaveMode must be one of ${FILE_SAVE_MODES.join(", ")}`);
 	}
 	if (
 		runtimeUpdate.terminalReplayKb !== undefined &&

@@ -970,6 +970,8 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** `"auto"` saves an edited file about 1 s after the last edit; `"manual"` waits for Cmd/Ctrl+S. */
+	fileSaveMode: FileSaveMode;
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
 	locale: string;
 }
@@ -1008,6 +1010,13 @@ export type TerminalWindowsShell = (typeof TERMINAL_WINDOWS_SHELLS)[number];
 
 export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
 	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
+}
+
+export const FILE_SAVE_MODES = ["auto", "manual"] as const;
+export type FileSaveMode = (typeof FILE_SAVE_MODES)[number];
+
+export function isFileSaveMode(value: unknown): value is FileSaveMode {
+	return FILE_SAVE_MODES.some((mode) => mode === value);
 }
 
 export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
@@ -1113,6 +1122,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	fileSaveMode: "auto",
 	locale: SYSTEM_LOCALE_PREFERENCE,
 };
 
