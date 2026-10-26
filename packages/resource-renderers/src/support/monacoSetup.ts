@@ -196,17 +196,7 @@ export function bindEditSession(
 		model.applyEdits([{ range: model.getFullModelRange(), text }]);
 	}
 	if (model.getEOL() !== "\n") model.setEOL(monaco.editor.EndOfLineSequence.LF);
-	const bound = model;
-	const mirror = mirrorEditSession(codeEditor, bound, input.session, input.onConflicts);
-	const swap = codeEditor.onDidChangeModel(() => {
-		if (codeEditor.getModel() !== bound) mirror.dispose();
-	});
-	return {
-		dispose() {
-			swap.dispose();
-			mirror.dispose();
-		},
-	};
+	return mirrorEditSession(codeEditor, model, input.session, input.onConflicts);
 }
 
 export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {

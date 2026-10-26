@@ -642,7 +642,7 @@ content's own height.
   typed way to drop them. The bundle loads no Monaco contribution that calls `model.undo()` itself. Content events go to `applyLocal` with their kind (except the
   ones the mirror applied), cursor moves to `select`, and composition start and end to
   `setComposing`. Subscribed changes, undo and conflict choices land only through `model.applyEdits`,
-  never `setValue` or `pushEditOperations`, so cursors and decorations stay. A model swap or unmount
+  never `setValue` or `pushEditOperations`, so cursors and decorations stay. A rebind (new path or session) or unmount
   disposes the mirror and restores the four methods. Open conflicts render as two view zones each
   (`conflictWidgets.ts`, React portals in `MonacoConflictZones`): a lens above the user's lines with
   **Mine** / **Theirs** / **Both**, and the disk lines below them; the user's lines get a whole-line
