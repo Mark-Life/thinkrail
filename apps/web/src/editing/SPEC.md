@@ -184,7 +184,7 @@ save goes ahead, but the `offline` check stops it until a connection exists.
 ## Drafts
 
 IndexedDB database `thinkrail-drafts`, one record per `[host, workspaceId, path]` key holding the text,
-the base hash it was typed against, its open conflicts (`{from, to, theirs}`), and its owner page. The host is `getTransport().httpBase()`. A record
+the base hash it was typed against, its open conflicts (`{from, to, theirs, base?}`), and its owner page. The host is `getTransport().httpBase()`. A record
 is written about 300 ms after a change, and at once on `pagehide` and when the page becomes hidden
 (`visibilitychange`); it is deleted once the buffer is clean. When a
 buffer is created, a draft with the same base hash restores as a dirty buffer with its open
