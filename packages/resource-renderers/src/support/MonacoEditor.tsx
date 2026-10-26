@@ -23,6 +23,7 @@ import {
 	syncFileModel,
 	warmLanguage,
 } from "./monacoSetup";
+import { attachPresence, type PresenceText } from "./presenceMarks";
 import {
 	applyReviewDecorations,
 	attachReviewCommenting,
@@ -53,6 +54,7 @@ export default function MonacoEditor({
 	content,
 	edit,
 	review,
+	presence,
 	viewState,
 	onViewState,
 }: ResourceViewProps) {
@@ -63,6 +65,18 @@ export default function MonacoEditor({
 	const path = resource.path;
 	const text = content.kind === "text" ? content.text : "";
 	const commentLabel = t("review.widget.commentOnSelection");
+	const presenceText: PresenceText = {
+		hover: (writer) =>
+			t(writer.inferred ? "presence.changedByInferred" : "presence.changedBy", {
+				name: writer.label,
+			}),
+		lines: (writer, start, end) =>
+			start === end
+				? t("presence.changedLine", { name: writer.label, line: start })
+				: t("presence.changedLines", { name: writer.label, start, end }),
+		file: (writer) => t("presence.rewrote", { name: writer.label }),
+	};
+	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
 	const editable = edit !== undefined;
 	const options = fileEditorOptions(
 		t,
@@ -75,6 +89,7 @@ export default function MonacoEditor({
 	const commentingRef = useRef<ReviewCommenting | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
+	const presenceRef = useRef<ReturnType<typeof attachPresence> | null>(null);
 	const decorationsRef = useRef<string[]>([]);
 	const freshMountRef = useRef(false);
 	const appliedRef = useRef<{
@@ -90,6 +105,8 @@ export default function MonacoEditor({
 		edit,
 		options,
 		commentLabel,
+		presence,
+		presenceText,
 		viewState,
 		onViewState,
 	});
@@ -117,6 +134,8 @@ export default function MonacoEditor({
 			edit,
 			options,
 			commentLabel,
+			presence,
+			presenceText,
 			viewState,
 			onViewState,
 		};
@@ -181,14 +200,23 @@ export default function MonacoEditor({
 		const codeEditor = editorRef.current;
 		if (!codeEditor || !edit) return;
 		const zones = attachConflictZones(codeEditor, setConflictZones);
+		const marks = attachPresence(codeEditor, {
+			text: () => latestRef.current.presenceText,
+			announce: (text) => setAnnouncement((previous) => ({ seq: previous.seq + 1, text })),
+		});
+		marks.setWrites(latestRef.current.presence?.writes ?? []);
+		presenceRef.current = marks;
 		const binding = bindEditSession(codeEditor, {
 			scope,
 			path,
 			session: edit,
 			onConflicts: zones.setConflicts,
+			onDisk: marks.land,
 		});
 		return () => {
 			binding.dispose();
+			marks.dispose();
+			presenceRef.current = null;
 			zones.dispose();
 			appliedRef.current = { ...appliedRef.current, text: null };
 		};
@@ -197,6 +225,10 @@ export default function MonacoEditor({
 	useLayoutEffect(() => {
 		commentingRef.current?.setLabel(commentLabel);
 	}, [commentLabel]);
+
+	useLayoutEffect(() => {
+		presenceRef.current?.setWrites(presence?.writes ?? []);
+	}, [presence]);
 
 	useLayoutEffect(() => {
 		const codeEditor = editorRef.current;
@@ -233,6 +265,9 @@ export default function MonacoEditor({
 	return (
 		<>
 			<div ref={containerRef} className="h-full w-full text-left" />
+			<span role="status" aria-live="polite" className="sr-only">
+				<span key={announcement.seq}>{announcement.text}</span>
+			</span>
 			<MonacoConflictZones zones={conflictZones} onResolve={resolveConflict} />
 			<MonacoReviewZones
 				zones={reviewZones}

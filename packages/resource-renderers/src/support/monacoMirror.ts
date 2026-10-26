@@ -11,6 +11,12 @@ import type {
 
 type Composition = "idle" | "start" | "active";
 
+export interface DiskLanding {
+	hash: string;
+	before: string;
+	changes: readonly TextChange[];
+}
+
 function editKind(
 	changes: readonly editor.IModelContentChange[],
 	composition: Composition,
@@ -57,7 +63,10 @@ export function mirrorEditSession(
 	codeEditor: editor.IStandaloneCodeEditor,
 	model: editor.ITextModel,
 	session: ResourceEditSession,
-	onConflicts: (conflicts: readonly EditConflict[]) => void,
+	hooks: {
+		onConflicts(conflicts: readonly EditConflict[]): void;
+		onDisk?(landing: DiskLanding): void;
+	},
 ) {
 	let applying = false;
 	let composition: Composition = "idle";
@@ -70,7 +79,7 @@ export function mirrorEditSession(
 		const next = session.conflicts();
 		if (next === conflicts) return;
 		conflicts = next;
-		onConflicts(next);
+		hooks.onConflicts(next);
 	};
 
 	const original = {
@@ -87,6 +96,8 @@ export function mirrorEditSession(
 	const apply = (update: EditUpdate) => {
 		if (model.isDisposed()) return;
 		applying = true;
+		const before =
+			update.disk && hooks.onDisk ? model.getValue(monaco.editor.EndOfLinePreference.LF) : null;
 		try {
 			if (update.changes.length > 0) {
 				model.applyEdits(
@@ -103,6 +114,9 @@ export function mirrorEditSession(
 			}
 		} finally {
 			applying = false;
+		}
+		if (update.disk && before !== null) {
+			hooks.onDisk?.({ hash: update.disk.hash, before, changes: update.changes });
 		}
 		reportConflicts();
 	};
@@ -169,7 +183,7 @@ export function mirrorEditSession(
 			domNode?.removeEventListener("beforeinput", onBeforeInput, true);
 			if (composition !== "idle") session.setComposing(false);
 			Object.assign(model, original);
-			onConflicts([]);
+			hooks.onConflicts([]);
 		},
 	};
 }

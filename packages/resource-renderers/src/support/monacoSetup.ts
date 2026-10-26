@@ -32,7 +32,7 @@ import onigWasmUrl from "shiki/onig.wasm?url";
 import type { ResourceCodeHost } from "../host";
 import type { EditConflict, ResourceEditSession } from "../registry";
 import { editorWrappingOptions } from "./editorWrapping";
-import { mirrorEditSession } from "./monacoMirror";
+import { type DiskLanding, mirrorEditSession } from "./monacoMirror";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
 declare global {
@@ -183,6 +183,7 @@ export function bindEditSession(
 	input: Omit<FileModelInput, "text"> & {
 		session: ResourceEditSession;
 		onConflicts(conflicts: readonly EditConflict[]): void;
+		onDisk?(landing: DiskLanding): void;
 	},
 ) {
 	const text = input.session.snapshot();
@@ -196,7 +197,10 @@ export function bindEditSession(
 		model.applyEdits([{ range: model.getFullModelRange(), text }]);
 	}
 	if (model.getEOL() !== "\n") model.setEOL(monaco.editor.EndOfLineSequence.LF);
-	return mirrorEditSession(codeEditor, model, input.session, input.onConflicts);
+	return mirrorEditSession(codeEditor, model, input.session, {
+		onConflicts: input.onConflicts,
+		...(input.onDisk ? { onDisk: input.onDisk } : {}),
+	});
 }
 
 export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
