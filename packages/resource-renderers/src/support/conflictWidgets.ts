@@ -1,5 +1,6 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import type { EditConflict } from "../registry";
+import { type ConflictSpan, sameConflictLayout } from "./conflictLayout";
 
 const LENS_HEIGHT_PX = 36;
 
@@ -9,9 +10,7 @@ export interface ConflictZone {
 	theirs: HTMLElement;
 }
 
-interface PlacedConflict extends ConflictZone {
-	startLine: number;
-	endLine: number | null;
+interface PlacedConflict extends ConflictZone, ConflictSpan {
 	lensId: string;
 	theirsId: string;
 }
@@ -78,6 +77,13 @@ export function attachConflictZones(
 			const next = model
 				? conflicts.map((conflict) => ({ conflict, span: lineSpan(model, conflict) }))
 				: [];
+			if (sameConflictLayout(placed, next)) {
+				placed = placed.map((entry, index) => ({
+					...entry,
+					conflict: next[index]?.conflict ?? entry.conflict,
+				}));
+				return;
+			}
 			codeEditor.changeViewZones((accessor) => {
 				const kept = new Map<number, PlacedConflict>();
 				for (const entry of placed) {

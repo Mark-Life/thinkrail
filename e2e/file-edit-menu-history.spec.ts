@@ -33,7 +33,7 @@ test("Edit menu undo outside an editor falls back to the browser's own undo", as
 	});
 	const input = page.getByTestId("plain-field");
 	await input.focus();
-	await page.keyboard.type("hello");
+	await page.keyboard.insertText("hello");
 	await expect(input).toHaveValue("hello");
 	await nativeCommand(page, "undo");
 	await expect(input).toHaveValue("");
