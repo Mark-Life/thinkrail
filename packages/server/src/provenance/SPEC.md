@@ -50,7 +50,8 @@ uses the same data to tell an agent that someone changed a file under it.
     window under the file open since the baseline was set. With no baseline it
     returns only other writers from the last 10 minutes, and never a diff.
   - **`lastWrite({path, hash, clientKey})`** answers the wire's `FileLastWrite` and stats the file only
-    when it needs the mtime. The order is: the path's newest ledger entry when its hash matches (an older
+    when it needs the change time: the later of mtime and ctime, so a file an agent's `mv` or `cp -p`
+    moved, which keeps its old mtime, still counts as changed now. The order is: the path's newest ledger entry when its hash matches (an older
     match is a restore, so it falls through); else a bash window under the file that covers the mtime, or, when the mtime is older than
     the newest entry, any window open since that entry → `agent` via `script`, inferred; else a path with ledger history →
     `external`, inferred; else nothing. A `user` author goes on the wire as `thisClient` relative to the
@@ -70,7 +71,8 @@ uses the same data to tell an agent that someone changed a file under it.
     no one on an untracked one. A close from `endTool` or `forgetSession` never names the agent, and a
     version with no author calls `late` not at all. It also answers nothing for a version older than 10 s or
     a file it cannot read. Otherwise it is `lastWrite` with the user's client dropped, plus the hash; a
-    recorded delete answers its author with `hash: null`.
+    recorded delete answers its author with `hash: null`, and an unrecorded one under a bash window open
+    now answers that agent via `script`.
   - `forgetSession` drops one session's baselines and claims and closes its windows.
   - `readSnapshot(abs)`: bytes, hash and mtime, `null` when absent, not a file, or over 8 MiB, so files
     over 8 MiB are not guarded (the wire caps a user save at 4 MiB). Ledger calls take that hash, and

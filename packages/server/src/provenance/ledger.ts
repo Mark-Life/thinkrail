@@ -105,9 +105,10 @@ function within(key: string, root: string): boolean {
 	return key === root || key.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
 }
 
-function mtimeOf(path: string): number | undefined {
+function changedAt(path: string): number | undefined {
 	try {
-		return statSync(path).mtimeMs;
+		const stat = statSync(path);
+		return Math.max(stat.mtimeMs, stat.ctimeMs);
 	} catch {
 		return undefined;
 	}
@@ -123,6 +124,12 @@ function changedLine(before: () => string | null | undefined, after: () => strin
 function wireChangeAuthor(author: WriteAuthor | FileAuthor): FsChangeWrite["author"] {
 	return author.kind === "user" ? { kind: "user" } : author;
 }
+
+const scriptAuthor = (window: BashWindow): FileAuthor => ({
+	kind: "agent",
+	sessionId: window.sessionId,
+	via: "script",
+});
 
 const textId = (key: string, hash: string) => `${key}\n${hash}`;
 const callId = (sessionId: string, toolCallId: string) => `${sessionId}\n${toolCallId}`;
@@ -496,15 +503,12 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		if (entries.length === 0 && !windows.some((window) => within(key, window.root))) {
 			return undefined;
 		}
-		const mtimeMs = mtimeOf(input.path);
+		const mtimeMs = changedAt(input.path);
 		if (mtimeMs === undefined) return undefined;
 		const since = newest?.at ?? Number.NEGATIVE_INFINITY;
 		const window = scriptWindows(key, since, mtimeMs).at(-1);
 		if (window) {
-			return {
-				author: { kind: "agent", sessionId: window.sessionId, via: "script" },
-				at: mtimeMs,
-			};
+			return { author: scriptAuthor(window), at: mtimeMs };
 		}
 		if (entries.length > 0) return { author: { kind: "external" }, at: mtimeMs };
 		return undefined;
@@ -525,11 +529,14 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		}
 		const newest = writes.get(key)?.at(-1);
 		const fresh = (at: number) => now() - at <= CHANGE_FRESH_MS;
-		const deleted = () =>
-			newest && newest.hash === null && fresh(newest.at)
-				? { author: wireChangeAuthor(newest.author), hash: null }
-				: undefined;
-		const mtimeMs = mtimeOf(path);
+		const deleted = () => {
+			if (newest && newest.hash === null && fresh(newest.at)) {
+				return { author: wireChangeAuthor(newest.author), hash: null };
+			}
+			const window = windowsAt(key, now()).at(-1);
+			return window && { author: scriptAuthor(window), hash: null };
+		};
+		const mtimeMs = changedAt(path);
 		if (mtimeMs === undefined) return deleted();
 		const answerable = newest
 			? fresh(newest.at) || fresh(mtimeMs)

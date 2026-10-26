@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+	mkdtempSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBytes } from "../fs";
@@ -79,9 +87,10 @@ test("an unknown version infers a script inside a bash window, then external, el
 	writeFileSync(tracked, "b\n");
 	const mtime = new Date(clock - 60_000);
 	utimesSync(tracked, mtime, mtime);
+	const stat = statSync(tracked);
 	expect(provenance.lastWrite({ path: tracked, hash: "other", clientKey: "c" })).toEqual({
 		author: { kind: "external" },
-		at: mtime.getTime(),
+		at: Math.max(stat.mtimeMs, stat.ctimeMs),
 	});
 
 	clock = Date.now();

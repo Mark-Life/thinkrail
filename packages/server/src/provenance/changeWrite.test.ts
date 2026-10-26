@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdtempSync, renameSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBytes } from "../fs";
@@ -234,4 +234,20 @@ test("an outside write during an agent's claim on an untracked path names no one
 	const late = heldOutsideWrite(provenance, path);
 	await Promise.resolve();
 	expect(late).toEqual([]);
+});
+
+test("a file an agent script renames or deletes is credited to that script", () => {
+	const provenance = store();
+	const from = put("from.ts", "a\n");
+	const to = join(dir, "to.ts");
+	const old = new Date(clock - 60_000);
+	utimesSync(from, old, old);
+	const gone = put("gone.ts", "x\n");
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "t1", cwd: dir });
+	renameSync(from, to);
+	unlinkSync(gone);
+	const script = { kind: "agent", sessionId: "s1", via: "script" } as const;
+	expect(provenance.changeWrite(to)).toEqual({ author: script, hash: hashBytes(bytes("a\n")) });
+	expect(provenance.changeWrite(from)).toEqual({ author: script, hash: null });
+	expect(provenance.changeWrite(gone)).toEqual({ author: script, hash: null });
 });
