@@ -259,10 +259,12 @@ changes as deltas. The package owns no buffer, save, history or conflict state. 
 tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor for keyboard users.
 
 **Presence is an optional prop, like review.** `ResourceViewProps.presence` (`SurfacePresence`) lists the
-recent writes the host knows for the file: each a disk `hash` and a `PresenceWriter` (`id`, `label`,
+recent writes the host knows for the file, newest first: each a disk `hash` and a `PresenceWriter` (`id`, `label`,
 `tone`: `user` | `agent1..3` | `external`, `inferred`). The host owns who wrote what; the view owns where.
-A view marks the changes of an `EditUpdate` whose `disk.hash` matches a write, so the ranges come from the
-host's own merge diff and only the author from the host. Without `edit` there is no disk update, so a
+A view marks the changes of an `EditUpdate` whose `disk.hash` matches the newest write, so the ranges come from the
+host's own merge diff and only the author from the host. A match with an older write stays unknown: the
+same content can come back from another writer, and a path the host sent no author for must not inherit
+an old one. A `user` write marks nothing, but it still claims its hash. Without `edit` there is no disk update, so a
 read-only view shows no marks.
 
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
@@ -664,27 +666,30 @@ content's own height.
   after a last line with no newline) sits below that line, and its disk text drops the joining line
   break. It also decides which zones stay: a conflict on the same lines with the same disk text keeps its zones, and an edit
   that keeps every conflict that way touches no zone, decoration or React state. A path or session change rebinds in place.
-  The model and options effects skip their first run, because the mount just created the editor with exactly those inputs.
-- **Presence marks (`presenceMarks.ts`, pure rules in `presenceDecorations.ts`).** The mirror hands each
-  disk update to `attachPresence` with the text before it. `presencePaint` turns the change set into
-  joined post-change line spans plus a capped diff (12 lines, 160 characters a line); when more than half
-  of a file of 10 or more lines changed it paints one whole-file chip (an overlay widget at the top right)
-  instead of line marks. Line marks are tracked decorations (`NeverGrowsWhenTypingAtEdges`): a bar on the
-  right edge of the line-decoration lane, drawn over the review and conflict rails and dashed for an
-  inferred writer; a wash that fades in 2.4 s; a name flag (a content widget at the end of the first
-  line, non-user writers only) that fades in 5 s; a hover with the writer and the diff over the lines,
-  and the writer as the bar's own tooltip (`linesDecorationsTooltip`, HTML-escaped: Monaco writes it raw). The bar and hover
-  stay 60 s, the chip 10 s (`PRESENCE_TIMING`). An update whose hash has no writer yet waits 3 s for the
-  next `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame.
-  Flags and chips are `aria-hidden`; each mark is announced once in a polite live region. Reduced motion
-  drops the fades. The tones are CSS classes the host styles (`presence-tone-*`).
-  The
+  The model and options effects skip their first run, because the mount just created the editor with exactly those inputs. The
   editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
   open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
   and its loaded component is cached.
   A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
   before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
   a live editor scrolls smoothly.
+- **Presence marks (`presenceMarks.ts`, pure rules in `presenceDecorations.ts`).** The mirror hands each
+  disk update to `attachPresence` with the text before it. `presencePaint` turns the change set into
+  joined post-change line spans plus a capped diff (12 lines, 160 characters a line). When more than half
+  of a file of 10 or more lines changed, it paints one whole-file chip (an overlay widget at the top right)
+  instead of line marks. Removed lines count, against the longer of the two versions, so a mass deletion
+  gets the chip too. Line marks are tracked decorations (`NeverGrowsWhenTypingAtEdges`): a thin bar in the
+  line-decoration lane, set off from the review and conflict rails by an editor-colored gap, at a slot per
+  tone so two writers on one line both show, and dashed for an inferred writer; a wash that fades in
+  2.4 s; a name flag (a content widget at the end of the first line) that fades in 5 s; a hover with the
+  writer and the diff over the lines, and the writer as the bar's own tooltip (`linesDecorationsTooltip`,
+  HTML-escaped: Monaco writes it raw). The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
+  writer has one line mark: a new landing takes over the writer's earlier ranges and diff and restarts the
+  timers. One flag shows per line. An update whose hash has no writer yet waits 3 s for the next
+  `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame. Flags
+  and chips are `aria-hidden`. A polite live region announces a chip, and a writer's line changes at most
+  once per flag time, so a burst of saves is one message. Reduced motion drops the fades. The tones are
+  CSS classes the host styles (`presence-tone-*`).
 - **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`:
   `createFileEditor` applies it and the theme refresh defines it.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that

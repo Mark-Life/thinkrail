@@ -368,35 +368,48 @@
 	overflow-wrap: anywhere;
 }
 /* Presence marks (resource-renderers presenceMarks.ts): who wrote the lines that just landed from disk.
-   A bar on the right edge of the line-decoration lane (over the review rail), a short wash, a name flag
-   and a whole-file chip, each in its writer's tone. Inferred writers get a dashed bar. */
+   A thin bar in the line-decoration lane at a slot per tone, ringed in the editor background so it stays
+   distinct on the review and conflict rails; a short wash, a name flag and a whole-file chip, each in its
+   writer's tone. Inferred writers get a dashed bar. */
 .presence-tone-user {
 	--presence-tone: var(--primary);
 	--presence-wash: var(--primary-subtle);
 }
 .presence-tone-agent1 {
+	--presence-slot: 0px;
 	--presence-tone: var(--feedback-info);
 	--presence-wash: var(--feedback-info-subtle);
 }
 .presence-tone-agent2 {
+	--presence-slot: 3px;
 	--presence-tone: var(--feedback-success);
 	--presence-wash: var(--feedback-success-subtle);
 }
 .presence-tone-agent3 {
+	--presence-slot: 6px;
 	--presence-tone: var(--feedback-warning);
 	--presence-wash: var(--feedback-warning-subtle);
 }
 .presence-tone-external {
+	--presence-slot: 9px;
 	--presence-tone: var(--text-subtle);
 	--presence-wash: var(--control-bg-hovered);
 }
 .presence-bar {
-	box-sizing: border-box;
-	border-right: 3px solid var(--presence-tone);
 	z-index: 1;
 }
-.presence-bar.presence-inferred {
-	border-right-style: dashed;
+.presence-bar::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: var(--presence-slot, 0px);
+	width: 2px;
+	background: var(--presence-tone);
+	box-shadow: 0 0 0 1px var(--container-workspace-bg);
+}
+.presence-bar.presence-inferred::after {
+	background: repeating-linear-gradient(to bottom, var(--presence-tone) 0 3px, transparent 3px 5px);
 }
 .presence-wash {
 	animation: presence-wash 2.4s ease-out forwards;

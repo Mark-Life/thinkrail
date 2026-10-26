@@ -67,6 +67,10 @@ function joinSpans(spans: PresenceSpan[]): PresenceSpan[] {
 	return joined;
 }
 
+function spanLines(spans: readonly PresenceSpan[]): number {
+	return spans.reduce((sum, span) => sum + span.endLine - span.startLine + 1, 0);
+}
+
 function clip(line: string): string {
 	return line.length > DIFF_MAX_CHARS ? `${line.slice(0, DIFF_MAX_CHARS)}…` : line;
 }
@@ -95,6 +99,7 @@ export function presencePaint(input: {
 	const afterStarts = lineStarts(after);
 	const beforeStarts = lineStarts(input.before);
 	const spans: PresenceSpan[] = [];
+	const removedSpans: PresenceSpan[] = [];
 	const diff: string[] = [];
 	let shift = 0;
 	for (const change of changes) {
@@ -102,33 +107,26 @@ export function presencePaint(input: {
 		shift += change.insert.length - (change.to - change.from);
 		const span = spanOf(afterStarts, start, change.insert);
 		spans.push(span);
-		if (diff.length >= DIFF_MAX_LINES) continue;
 		const removedText = input.before.slice(change.from, change.to);
-		const removed =
-			removedText === ""
-				? []
-				: spanText(input.before, beforeStarts, spanOf(beforeStarts, change.from, removedText));
+		const removedSpan = removedText === "" ? null : spanOf(beforeStarts, change.from, removedText);
+		if (removedSpan) removedSpans.push(removedSpan);
+		if (diff.length >= DIFF_MAX_LINES) continue;
+		const removed = removedSpan ? spanText(input.before, beforeStarts, removedSpan) : [];
 		const added = change.insert === "" ? [] : spanText(after, afterStarts, span);
 		for (const line of removed) diff.push(`- ${clip(line)}`);
 		for (const line of added) diff.push(`+ ${clip(line)}`);
 	}
 	const joined = joinSpans(spans);
-	const changedLines = joined.reduce((sum, span) => sum + span.endLine - span.startLine + 1, 0);
-	const totalLines = lineCount(after);
+	const changedLines = Math.max(spanLines(joined), spanLines(joinSpans(removedSpans)));
+	const totalLines = Math.max(lineCount(input.before), lineCount(after));
 	if (totalLines >= WHOLE_FILE_MIN_LINES && changedLines > totalLines * WHOLE_FILE_SHARE) {
 		return { kind: "file", changedLines, totalLines };
 	}
 	return { kind: "lines", spans: joined, diff: diff.slice(0, DIFF_MAX_LINES) };
 }
 
-export function presencePhase(paintedAt: number, now: number) {
-	const age = now - paintedAt;
-	return {
-		wash: age < PRESENCE_TIMING.washMs,
-		flag: age < PRESENCE_TIMING.flagMs,
-		chip: age < PRESENCE_TIMING.chipMs,
-		bar: age < PRESENCE_TIMING.holdMs,
-	};
+export function joinDiffs(newer: readonly string[], older: readonly string[]): string[] {
+	return [...newer, ...older].slice(0, DIFF_MAX_LINES);
 }
 
 export function markdownText(text: string): string {

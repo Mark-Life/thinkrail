@@ -35,8 +35,6 @@ export {
 	outdatedReason,
 	PENDING_TEXT_META,
 	type PresenceTone,
-	type PresenceWrite,
-	type PresenceWriter,
 	type ResourceAnchorCapability,
 	type ResourceContent,
 	type ResourceDescriptor,

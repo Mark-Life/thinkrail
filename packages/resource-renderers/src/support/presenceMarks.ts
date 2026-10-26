@@ -4,11 +4,11 @@ import type { DiskLanding } from "./monacoMirror";
 import {
 	diffFence,
 	htmlAttribute,
+	joinDiffs,
 	markdownText,
 	PRESENCE_TIMING,
 	type PresencePaint,
 	presencePaint,
-	presencePhase,
 } from "./presenceDecorations";
 
 export interface PresenceText {
@@ -23,12 +23,22 @@ interface Mark {
 	ranges: monaco.editor.IEditorDecorationsCollection;
 	writer: PresenceWriter | null;
 	paintedAt: number;
+	announcedAt: number;
 	flag: monaco.editor.IContentWidget | null;
 	chip: monaco.editor.IOverlayWidget | null;
 	timers: ReturnType<typeof setTimeout>[];
 }
 
 let widgetSeq = 0;
+
+const pending = (range: monaco.IRange) => ({
+	range,
+	options: {
+		description: "presence-pending",
+		isWholeLine: true,
+		stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+	},
+});
 
 function badge(kind: "flag" | "chip", writer: PresenceWriter, text: string): HTMLElement {
 	const node = document.createElement("div");
@@ -44,8 +54,9 @@ export function attachPresence(
 	codeEditor: monaco.editor.ICodeEditor,
 	options: { text: () => PresenceText; announce(message: string): void },
 ) {
-	let writes = new Map<string, PresenceWriter>();
+	let latest: PresenceWrite | undefined;
 	const marks = new Set<Mark>();
+	const writerOf = (hash: string) => (latest?.hash === hash ? latest.writer : undefined);
 
 	const clearFlag = (mark: Mark) => {
 		if (mark.flag) codeEditor.removeContentWidget(mark.flag);
@@ -66,7 +77,7 @@ export function attachPresence(
 	const render = (mark: Mark) => {
 		const writer = mark.writer;
 		if (!writer || mark.paint.kind !== "lines") return;
-		const phase = presencePhase(mark.paintedAt, Date.now());
+		const washing = Date.now() - mark.paintedAt < PRESENCE_TIMING.washMs;
 		const bar = `presence-bar presence-tone-${writer.tone}${writer.inferred ? " presence-inferred" : ""}`;
 		const label = options.text().hover(writer);
 		const hover = [
@@ -83,14 +94,17 @@ export function attachPresence(
 					linesDecorationsClassName: bar,
 					linesDecorationsTooltip: htmlAttribute(label),
 					hoverMessage: hover,
-					...(phase.wash ? { className: `presence-wash presence-tone-${writer.tone}` } : {}),
+					...(washing ? { className: `presence-wash presence-tone-${writer.tone}` } : {}),
 				},
 			})),
 		);
 	};
 
 	const showFlag = (mark: Mark, writer: PresenceWriter) => {
-		if (writer.tone === "user" || mark.paint.kind !== "lines") return;
+		const at = mark.ranges.getRange(0)?.startLineNumber;
+		for (const other of marks) {
+			if (other !== mark && other.ranges.getRange(0)?.startLineNumber === at) clearFlag(other);
+		}
 		const node = badge("flag", writer, writer.label);
 		const id = `presence-flag-${++widgetSeq}`;
 		mark.flag = {
@@ -123,10 +137,39 @@ export function attachPresence(
 		codeEditor.addOverlayWidget(mark.chip);
 	};
 
+	const absorb = (mark: Mark, writer: PresenceWriter) => {
+		if (mark.paint.kind !== "lines") return;
+		for (const other of [...marks]) {
+			if (other === mark || other.writer?.id !== writer.id || other.paint.kind !== "lines")
+				continue;
+			const own = mark.ranges.getRanges();
+			const covered = (range: monaco.IRange) =>
+				own.some(
+					(mine) =>
+						mine.startLineNumber <= range.startLineNumber &&
+						mine.endLineNumber >= range.endLineNumber,
+				);
+			mark.ranges.append(
+				other.ranges
+					.getRanges()
+					.filter((range) => !covered(range))
+					.map(pending),
+			);
+			mark.paint = { ...mark.paint, diff: joinDiffs(mark.paint.diff, other.paint.diff) };
+			mark.announcedAt = Math.max(mark.announcedAt, other.announcedAt);
+			drop(other);
+		}
+	};
+
 	const paint = (mark: Mark, writer: PresenceWriter) => {
-		mark.writer = writer;
-		mark.paintedAt = Date.now();
 		for (const timer of mark.timers) clearTimeout(timer);
+		if (writer.tone === "user") {
+			drop(mark);
+			return;
+		}
+		const now = Date.now();
+		mark.writer = writer;
+		mark.paintedAt = now;
 		const text = options.text();
 		if (mark.paint.kind === "file") {
 			showChip(mark, writer);
@@ -134,10 +177,14 @@ export function attachPresence(
 			mark.timers = [setTimeout(() => drop(mark), PRESENCE_TIMING.chipMs)];
 			return;
 		}
+		const first = mark.ranges.getRange(0);
+		absorb(mark, writer);
 		render(mark);
 		showFlag(mark, writer);
-		const first = mark.ranges.getRange(0);
-		if (first) options.announce(text.lines(writer, first.startLineNumber, first.endLineNumber));
+		if (first && now - mark.announcedAt >= PRESENCE_TIMING.flagMs) {
+			mark.announcedAt = now;
+			options.announce(text.lines(writer, first.startLineNumber, first.endLineNumber));
+		}
 		mark.timers = [
 			setTimeout(() => render(mark), PRESENCE_TIMING.washMs),
 			setTimeout(() => clearFlag(mark), PRESENCE_TIMING.flagMs),
@@ -155,35 +202,32 @@ export function attachPresence(
 				hash: landing.hash,
 				paint: result,
 				ranges: codeEditor.createDecorationsCollection(
-					spans.map((span) => ({
-						range: {
+					spans.map((span) =>
+						pending({
 							startLineNumber: span.startLine,
 							startColumn: 1,
 							endLineNumber: span.endLine,
 							endColumn: model.getLineMaxColumn(Math.min(span.endLine, model.getLineCount())),
-						},
-						options: {
-							description: "presence-pending",
-							isWholeLine: true,
-							stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-						},
-					})),
+						}),
+					),
 				),
 				writer: null,
 				paintedAt: 0,
+				announcedAt: Number.NEGATIVE_INFINITY,
 				flag: null,
 				chip: null,
 				timers: [],
 			};
 			marks.add(mark);
-			const writer = writes.get(landing.hash);
+			const writer = writerOf(landing.hash);
 			if (writer) paint(mark, writer);
 			else mark.timers = [setTimeout(() => drop(mark), PRESENCE_TIMING.pendingMs)];
 		},
 		setWrites(next: readonly PresenceWrite[]) {
-			writes = new Map(next.map((write) => [write.hash, write.writer]));
-			for (const mark of marks) {
-				const writer = mark.writer ? null : writes.get(mark.hash);
+			latest = next[0];
+			for (const mark of [...marks]) {
+				if (!marks.has(mark)) continue;
+				const writer = mark.writer ? undefined : writerOf(mark.hash);
 				if (writer) paint(mark, writer);
 			}
 		},

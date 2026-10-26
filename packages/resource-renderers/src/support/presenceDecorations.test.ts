@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-	diffFence,
-	htmlAttribute,
-	markdownText,
-	PRESENCE_TIMING,
-	presencePaint,
-	presencePhase,
-} from "./presenceDecorations";
+import { diffFence, htmlAttribute, markdownText, presencePaint } from "./presenceDecorations";
 
 const LINES = Array.from({ length: 20 }, (_, index) => `line ${index + 1}`);
 const TEXT = `${LINES.join("\n")}\n`;
@@ -73,6 +66,14 @@ describe("presencePaint", () => {
 		expect(paint).toEqual({ kind: "file", changedLines: 11, totalLines: 20 });
 	});
 
+	test("a mass deletion counts the removed lines, so it is one file mark", () => {
+		const paint = presencePaint({
+			before: TEXT,
+			changes: [{ from: offsetOf(5), to: TEXT.length, insert: "" }],
+		});
+		expect(paint).toEqual({ kind: "file", changedLines: 16, totalLines: 20 });
+	});
+
 	test("a small file keeps line marks even when most of it changed", () => {
 		const paint = presencePaint({
 			before: "a\nb\n",
@@ -96,16 +97,6 @@ describe("presencePaint", () => {
 		expect(paint.diff).toHaveLength(12);
 		expect(paint.diff[0]).toBe("- line 1");
 		expect(paint.diff.every((line) => line.length <= 163)).toBe(true);
-	});
-});
-
-describe("presencePhase", () => {
-	test("the wash fades first, then the flag, then the chip, then the bar", () => {
-		expect(presencePhase(0, 0)).toEqual({ wash: true, flag: true, chip: true, bar: true });
-		expect(presencePhase(0, PRESENCE_TIMING.washMs)).toMatchObject({ wash: false, flag: true });
-		expect(presencePhase(0, PRESENCE_TIMING.flagMs)).toMatchObject({ flag: false, chip: true });
-		expect(presencePhase(0, PRESENCE_TIMING.chipMs)).toMatchObject({ chip: false, bar: true });
-		expect(presencePhase(0, PRESENCE_TIMING.holdMs).bar).toBe(false);
 	});
 });
 
