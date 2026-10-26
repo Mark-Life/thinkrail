@@ -1,9 +1,17 @@
 import { RiLockLine, RiLockUnlockLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+	lazy,
+	Suspense,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
-import type { ResourceViewProps } from "../registry";
+import type { ResourceEditSession, ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentRehypePlugins } from "./markdownHtml";
@@ -142,7 +150,7 @@ export default function MarkdownPreview(props: ResourceViewProps) {
 				}
 			: {}),
 	};
-	const reading = <ReadingView {...viewProps} />;
+	const reading = <BufferReadingView {...viewProps} edit={edit} />;
 	return (
 		<div className="relative h-full">
 			{locked ? (
@@ -165,6 +173,17 @@ export default function MarkdownPreview(props: ResourceViewProps) {
 				{locked ? <RiLockLine className="size-16" /> : <RiLockUnlockLine className="size-16" />}
 			</Button>
 		</div>
+	);
+}
+
+function BufferReadingView(props: ResourceViewProps & { edit: ResourceEditSession }) {
+	const { edit, content } = props;
+	const text = useSyncExternalStore(
+		(listener) => edit.subscribe(listener),
+		() => edit.snapshot(),
+	);
+	return (
+		<ReadingView {...props} content={content.kind === "text" ? { ...content, text } : content} />
 	);
 }
 

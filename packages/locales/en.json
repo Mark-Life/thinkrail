@@ -2250,7 +2250,7 @@
 	"viewer.lfs.pullHint": "This checkout holds the pointer, not the content. Run <0>git lfs pull</0> to fetch it.",
 	"viewer.lfs.title": "Stored in Git LFS",
 	"viewer.lfs.unreadablePointer": "Unreadable pointer",
-	"viewer.markdown.followLink": "Cmd or Ctrl + click to open",
+	"viewer.markdown.followLink": "Cmd or Ctrl + click, or Cmd or Ctrl + Enter, to open",
 	"viewer.markdown.frontmatter_one": "Front matter · {{count}} line",
 	"viewer.markdown.frontmatter_other": "Front matter · {{count}} lines",
 	"viewer.markdown.lock": "Lock editing",

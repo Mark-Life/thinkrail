@@ -8,11 +8,14 @@ export function continueList(state: EditorState): TransactionSpec | null {
 	if (state.selection.ranges.length > 1) return null;
 	const line = state.doc.lineAt(main.from);
 	if (state.doc.lineAt(main.to).number !== line.number) return null;
-	for (let node = syntaxTree(state).resolveInner(main.from, -1); node.parent; node = node.parent) {
+	const tree = syntaxTree(state);
+	for (let node = tree.resolveInner(main.from, -1); node.parent; node = node.parent) {
 		if (node.name === "FencedCode" || node.name === "CodeBlock") return null;
 	}
 	const match = LIST_ITEM.exec(line.text);
 	if (!match) return null;
+	const markAt = line.from + (match[1]?.length ?? 0);
+	if (tree.resolveInner(markAt, 1).name !== "ListMark") return null;
 	const prefix = match[0];
 	if (main.from - line.from < prefix.length) return null;
 	if (line.text.slice(prefix.length).trim() === "") {

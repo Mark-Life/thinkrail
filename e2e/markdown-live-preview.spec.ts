@@ -144,6 +144,17 @@ test("Cmd/Ctrl+click follows a link; a plain click edits it", async ({ page }) =
 	await expect(fileTab(page, "other.md")).toBeVisible();
 });
 
+test("a link whose title spans lines opens, and Cmd/Ctrl+Enter follows it", async ({ page }) => {
+	const source = 'Intro\n\nSee [the target](other.md "line one\nline two") here.\n';
+	const path = await openLive(page, "titled.md", source);
+	writeFileSync(path.replace(/titled\.md$/, "other.md"), "# Other target\n");
+	await expect(live(page).locator(".md-link", { hasText: "the target" })).toBeVisible();
+	await expect(live(page).locator(".cm-content")).not.toContainText("(other.md");
+	await liveLine(page, "See").getByText("target").click();
+	await pressPlatformShortcut(page, "Enter");
+	await expect(fileTab(page, "other.md")).toBeVisible();
+});
+
 test.describe("manual save", () => {
 	pinFileSaveMode("manual");
 
@@ -163,6 +174,35 @@ test.describe("manual save", () => {
 		await expect
 			.poll(() => readFileSync(path).toString("utf8"))
 			.toBe(`\uFEFF${NOTES.replace("- second", "- second!").replaceAll("\n", "\r\n")}`);
+	});
+
+	test("the locked view shows the unsaved buffer", async ({ page }) => {
+		await openLive(page, "unsaved.md", NOTES);
+		await caretAtLineEnd(page, "first");
+		await page.keyboard.type(" XYZ");
+		await page.getByTestId("markdown-lock").click();
+		const reading = page.locator('[data-testid="markdown-preview"]:visible');
+		await expect(live(page)).toHaveCount(0);
+		await expect(reading).toContainText("first XYZ");
+		await expect(fileTab(page, "unsaved.md").getByTestId("file-dirty-dot")).toBeVisible();
+	});
+
+	test("a conflict inside a code fence shows its lens while the caret is outside the fence", async ({
+		page,
+	}) => {
+		const source = "# Code\n\n```sh\none\ntwo\nthree\n```\n\nafter\n";
+		const path = await openLive(page, "fence.md", source);
+		await expect(live(page).locator(".md-widget-block")).toHaveCount(1);
+		await live(page).locator(".md-widget-block").click();
+		await caretAtLineEnd(page, "two");
+		await page.keyboard.type(" mine");
+		await liveLine(page, "after").click();
+		await expect(liveLine(page, "two mine")).toHaveCount(0);
+		writeFileSync(path, source.replace("two", "two theirs"));
+		const lens = live(page).getByTestId("edit-conflict-lens");
+		await expect(lens).toBeVisible({ timeout: 10_000 });
+		await expect(live(page).locator(".cm-line.edit-conflict-mine")).toHaveText("two mine");
+		await expect(live(page).getByTestId("edit-conflict-disk")).toHaveText("two theirs");
 	});
 
 	test("a same-line disk change opens the conflict lens in the live preview, and Mine keeps your text", async ({

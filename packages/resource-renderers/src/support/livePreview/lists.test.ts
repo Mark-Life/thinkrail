@@ -34,4 +34,9 @@ describe("continueList", () => {
 		expect(enter("plain")).toBeNull();
 		expect(enter("```\n- not a list")).toBeNull();
 	});
+	test("Enter after a thematic break written with spaced markers starts no list", () => {
+		expect(enter("* * *")).toBeNull();
+		expect(enter("- - -")).toBeNull();
+		expect(enter("text\n\n- - -")).toBeNull();
+	});
 });

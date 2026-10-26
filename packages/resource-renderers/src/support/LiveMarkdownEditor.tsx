@@ -1,5 +1,5 @@
 import { standardKeymap } from "@codemirror/commands";
-import { EditorState, Prec } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useT } from "@thinkrail/locales/react";
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -17,7 +17,7 @@ import {
 	type ThreadAnchor,
 } from "./livePreview/decorations";
 import { markdownLanguage } from "./livePreview/language";
-import { linkTarget } from "./livePreview/links";
+import { linkHrefAt, linkTarget } from "./livePreview/links";
 import { continueList } from "./livePreview/lists";
 import { createPortalHost, type PortalEntry } from "./livePreview/portals";
 import { livePresence, livePresenceSurface } from "./livePreview/presence";
@@ -28,6 +28,15 @@ import { presenceKindIcon } from "./presenceIcons";
 import { usePresenceText } from "./presenceText";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import { useScrollViewState } from "./useScrollViewState";
+
+const textCompartment = new Compartment();
+
+function liveTextOf(t: ReturnType<typeof useT>) {
+	return liveText.of({
+		task: t("viewer.markdown.task"),
+		followLink: t("viewer.markdown.followLink"),
+	});
+}
 
 type LiveProps = Omit<ResourceViewProps, "content" | "edit"> & { edit: ResourceEditSession };
 
@@ -54,7 +63,7 @@ function LivePortal({
 	switch (content.kind) {
 		case "block":
 			return content.block.kind === "frontmatter" ? (
-				<div className="md-frontmatter tr-text-metadata text-text-subtle">
+				<div className="tr-text-metadata text-text-subtle">
 					{t("viewer.markdown.frontmatter", { count: content.block.source.split("\n").length })}
 				</div>
 			) : (
@@ -104,7 +113,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 		if (!parent || !chipHost) return;
 		let binding: SessionBinding | null = null;
 		const follow = (href: string, view: EditorView) => {
-			const target = linkTarget(view.state.doc, path, href);
+			const target = linkTarget(view.state, path, href);
 			if (target?.kind === "line") {
 				const at = view.state.doc.line(target.line).from;
 				view.dispatch({ effects: EditorView.scrollIntoView(at, { y: "start" }) });
@@ -116,7 +125,6 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			if (binding) run(binding);
 			return true;
 		};
-		const { t: translate } = latestRef.current;
 		const view = new EditorView({
 			parent,
 			state: EditorState.create({
@@ -126,10 +134,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 					livePreview,
 					livePresence,
 					portalHost.of(portals),
-					liveText.of({
-						task: translate("viewer.markdown.task"),
-						followLink: translate("viewer.markdown.followLink"),
-					}),
+					textCompartment.of(liveTextOf(latestRef.current.t)),
 					EditorView.lineWrapping,
 					EditorView.editorAttributes.of({ class: "md-live" }),
 					EditorView.contentAttributes.of({
@@ -142,6 +147,15 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 							{ key: "Mod-z", run: history((bound) => bound.undo()), preventDefault: true },
 							{ key: "Mod-Shift-z", run: history((bound) => bound.redo()), preventDefault: true },
 							{ key: "Mod-y", run: history((bound) => bound.redo()), preventDefault: true },
+							{
+								key: "Mod-Enter",
+								run: (target) => {
+									const href = linkHrefAt(target.state, target.state.selection.main.head);
+									if (href === null) return false;
+									follow(href, target);
+									return true;
+								},
+							},
 							{
 								key: "Enter",
 								run: (target) => {
@@ -219,6 +233,10 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 	}, [presence]);
 
 	useLayoutEffect(() => {
+		viewRef.current?.dispatch({ effects: textCompartment.reconfigure(liveTextOf(t)) });
+	}, [t]);
+
+	useLayoutEffect(() => {
 		const view = viewRef.current;
 		if (!view) return;
 		view.dispatch({ effects: setThreads.of(threadAnchors(review)) });
@@ -243,7 +261,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 				ref={attachScroller}
 				data-testid="markdown-preview"
 				data-mode="live"
-				className="h-full overflow-auto bg-container-workspace-bg"
+				className="h-full overflow-auto bg-container-workspace-bg ring-control-border-active ring-inset has-[.cm-focused]:ring-1"
 			>
 				<article className="mx-auto max-w-[78ch] px-24 py-16">
 					<div ref={hostRef} />
