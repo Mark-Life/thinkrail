@@ -253,12 +253,24 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		);
 	}
 
+	function heldAuthor(claim: Claim, hash: string | null, closer: WriteAuthor | undefined) {
+		const entries = writes.get(claim.key) ?? [];
+		const entry = entries.findLast(
+			(candidate) => candidate.seq > claim.seq && candidate.hash === hash,
+		);
+		if (entry) return wireChangeAuthor(entry.author);
+		if (hash === claim.hash || !closer) return undefined;
+		const userSaved = entries.some(
+			(candidate) => candidate.seq > claim.seq && candidate.author.kind === "user",
+		);
+		if (userSaved) return wireChangeAuthor(closer);
+		const tracked = entries.some((candidate) => candidate.seq <= claim.seq);
+		return tracked ? ({ kind: "external" } as const) : undefined;
+	}
+
 	function heldWrite(claim: Claim, hash: string | null, closer: WriteAuthor | undefined) {
-		const entry = writes
-			.get(claim.key)
-			?.findLast((candidate) => candidate.seq > claim.seq && candidate.hash === hash);
-		const author = entry?.author ?? (hash === claim.hash ? undefined : closer);
-		return author && { author: wireChangeAuthor(author), hash };
+		const author = heldAuthor(claim, hash, closer);
+		return author && { author, hash };
 	}
 
 	function closeClaim(id: string, closer?: WriteAuthor): void {

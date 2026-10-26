@@ -192,3 +192,46 @@ test("a held path the closing tool never recorded calls back nothing", async () 
 	await Promise.resolve();
 	expect(late).toEqual([]);
 });
+
+function heldOutsideWrite(provenance: ReturnType<typeof store>, path: string) {
+	provenance.openClaim({
+		sessionId: "s1",
+		toolCallId: "t1",
+		path,
+		mutates: true,
+		hash: hashBytes(bytes("a\n")),
+	});
+	writeFileSync(path, "a\nformatter\n");
+	const late: unknown[] = [];
+	expect(provenance.changeWrite(path, (write) => late.push(write))).toBeUndefined();
+	writeFileSync(path, "a\nformatter\nagent\n");
+	provenance.recordWrite({
+		path,
+		author: AGENT,
+		before: bytes("a\nformatter\n"),
+		after: bytes("a\nformatter\nagent\n"),
+		toolCallId: "t1",
+	});
+	return late;
+}
+
+test("an outside write during an agent's claim on a tracked path is external, not the agent", async () => {
+	const provenance = store();
+	const path = put("formatted.ts", "a\n");
+	provenance.recordWrite({ path, author: USER, before: null, after: bytes("a\n") });
+	provenance.recordRead({ sessionId: "s1", path, bytes: bytes("a\n") });
+	const late = heldOutsideWrite(provenance, path);
+	await Promise.resolve();
+	expect(late).toEqual([
+		{ author: { kind: "external" }, hash: hashBytes(bytes("a\nformatter\n")) },
+	]);
+});
+
+test("an outside write during an agent's claim on an untracked path names no one", async () => {
+	const provenance = store();
+	const path = put("untracked.ts", "a\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: bytes("a\n") });
+	const late = heldOutsideWrite(provenance, path);
+	await Promise.resolve();
+	expect(late).toEqual([]);
+});
