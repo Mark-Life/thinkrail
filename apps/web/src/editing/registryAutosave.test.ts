@@ -372,3 +372,22 @@ test("a save queued behind a running one keeps the file autosaving through the e
 	}
 	expect(summaries.at(-1)).toEqual({ status: "clean", dirty: false });
 });
+
+test("in manual mode a save queued behind a running one marks the file pending", async () => {
+	const { disk, registry, handle, summaries } = setup();
+	type(handle, 0, "a");
+	const release = disk.hold();
+	void registry.save(handle.key);
+	type(handle, 1, "b");
+	void registry.save(handle.key);
+	expect(summaries.at(-1)).toMatchObject({ dirty: true, pending: true });
+	release();
+	await settle();
+	const queued = summaries.find((summary) => summary?.status === "dirty" && summary.pending);
+	if (!queued) throw new Error("no dirty summary while the second save waited");
+	const state = { fileBuffersByWorkspace: { [WS]: { [PATH]: queued } } };
+	expect(selectFileSaveIndicator(state, WS, PATH)).toBe("pending");
+	await settle();
+	expect(disk.text(PATH)).toBe("abone\ntwo\n");
+	expect(summaries.at(-1)).not.toHaveProperty("pending");
+});

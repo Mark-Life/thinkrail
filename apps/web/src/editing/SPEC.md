@@ -53,7 +53,7 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   indicator comes from the store selectors `selectFileSaveIndicator` and `selectFileAutosaving`: in manual mode a dot for `dirty`
   that pulses while `saving`; in auto mode a pulsing ring while a dirty buffer is `pending` ("Saving
   soon") or `saving` ("Saving"), and the dot only for a dirty buffer autosave will not write (paused). Both paint `CanvasText` in forced
-  colors. The tab indicator, the banner and the close guard all read from that summary.
+  colors. Both marks carry that indicator (`unsaved` / `saving` / `pending`) as `data-status`, in either mode. The tab indicator, the banner and the close guard all read from that summary.
 - **Disk text is adopted only through `toEditorText`,** and only when `meta.text` is true and the mime
   is not an LFS pointer. The client sends LF text and never handles a BOM; the host restores the form.
 - **Lifetime.** The registry, the buffer core, the merge, jsdiff and CodeMirror form one lazy chunk
