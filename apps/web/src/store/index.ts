@@ -1,8 +1,6 @@
 export * from "./appStore";
 export type { ChatResourceScope } from "./chatResources";
 export {
-	FILE_ACTIVITY_WINDOW_MS,
-	type FileWrite,
 	type FileWriter,
 	type FileWriterTone,
 	fileWriters,

@@ -1,17 +1,15 @@
 import type { FsChangeAuthor } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import type { SurfacePresence } from "@thinkrail/resource-renderers";
+import type { PresenceTone, SurfacePresence } from "@thinkrail/resource-renderers";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
 	type FileWriter,
-	type FileWriterTone,
 	fileWriters,
 	isInferredAuthor,
 	nextFileActivityExpiry,
 	selectFileAgentSlots,
-	selectFileLastWriterTone,
 	selectFileWrites,
 	selectKnownChatLocation,
 	useAppStore,
@@ -20,7 +18,7 @@ import {
 } from "../store";
 import { writerInitial, writerLabel } from "./fileWriterLabels";
 
-const TONE_FILL: Record<FileWriterTone, string> = {
+const TONE_FILL: Record<PresenceTone, string> = {
 	user: "bg-primary",
 	agent1: "bg-feedback-info",
 	agent2: "bg-feedback-success",
@@ -28,7 +26,7 @@ const TONE_FILL: Record<FileWriterTone, string> = {
 	external: "bg-text-subtle",
 };
 
-const TONE_RING: Record<FileWriterTone, string> = {
+const TONE_RING: Record<PresenceTone, string> = {
 	user: "border-primary",
 	agent1: "border-feedback-info",
 	agent2: "border-feedback-success",
@@ -70,30 +68,27 @@ function useLabeledWriters(workspaceId: string, path: string): readonly LabeledW
 
 export function useFilePresence(workspaceId: string, path: string): SurfacePresence {
 	const t = useT();
-	const writes = useAppStore((state) => selectFileWrites(state, workspaceId, path));
+	const latest = useAppStore((state) => selectFileWrites(state, workspaceId, path)[0]);
 	const agents = useAppStore((state) => selectFileAgentSlots(state, workspaceId));
-	const titles = useAppStore(
-		useShallow((state) => writes.map((write) => chatTitle(state, write.author))),
-	);
+	const title = useAppStore((state) => (latest ? chatTitle(state, latest.author) : ""));
 	return useMemo(
 		() => ({
-			writes: writes.flatMap((write, index) => {
-				if (write.hash === null) return [];
-				const title = titles[index] ?? "";
-				return [
-					{
-						hash: write.hash,
-						writer: {
-							id: writerId(write.author),
-							label: writerLabel(t, write.author, title),
-							tone: writerTone(write.author, agents),
-							inferred: isInferredAuthor(write.author),
-						},
-					},
-				];
-			}),
+			writes:
+				latest?.hash == null
+					? []
+					: [
+							{
+								hash: latest.hash,
+								writer: {
+									id: writerId(latest.author),
+									label: writerLabel(t, latest.author, title),
+									tone: writerTone(latest.author, agents),
+									inferred: isInferredAuthor(latest.author),
+								},
+							},
+						],
 		}),
-		[writes, agents, titles, t],
+		[latest, agents, title, t],
 	);
 }
 
@@ -167,27 +162,26 @@ export function FileWritersChip({ workspaceId, path }: { workspaceId: string; pa
 
 export function FileWriterDot({ workspaceId, path }: { workspaceId: string; path: string }) {
 	const t = useT();
-	const tone = useAppStore((state) => selectFileLastWriterTone(state, workspaceId, path));
-	const writers = useLabeledWriters(workspaceId, tone === null ? "" : path);
-	const last = writers[0];
-	if (tone === null || !last) return null;
+	const [last] = useLabeledWriters(workspaceId, path);
+	if (!last) return null;
 	return (
 		<span
 			role="img"
 			data-testid="file-writer-dot"
-			data-tone={tone}
+			data-tone={last.tone}
 			aria-label={t("presence.lastWriter", { name: last.label })}
 			title={last.label}
 			className={cn(
 				"mr-4 size-6 shrink-0 rounded-full forced-colors:bg-[CanvasText]",
-				TONE_FILL[tone],
+				TONE_FILL[last.tone],
 			)}
 		/>
 	);
 }
 
 export function useFileActivityPrune() {
-	const expiry = useAppStore((state) => nextFileActivityExpiry(state.fileActivityByWorkspace));
+	const activity = useAppStore((state) => state.fileActivityByWorkspace);
+	const expiry = useMemo(() => nextFileActivityExpiry(activity), [activity]);
 	useEffect(() => {
 		if (expiry === null) return;
 		const timer = setTimeout(

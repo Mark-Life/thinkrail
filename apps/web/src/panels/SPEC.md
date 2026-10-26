@@ -2098,17 +2098,19 @@ own section. The kebab menu (`plan-menu`, a
   (`focusRendererEditor`).
 - **Who changes what (`FileWriters.tsx`).** The store's file activity slice feeds four surfaces, all
   labeled the same way (`fileWriterLabels.ts`): "You", "Agent · <chat title>" (plain "Agent" for a session with no known chat),
-  "<agent> via script", "External". `useFilePresence` turns the file's writes into the renderer's
-  `presence` prop (hash plus writer and tone); `FilePane` passes it only with `edit`, so a phone or a
+  "<agent> via script", "External". `useFilePresence` turns the file's newest write into the renderer's
+  `presence` prop (hash plus writer and tone), so an older write never claims a landing; `FilePane` passes it only with `edit`, so a phone or a
   read-only view gets none. `FileWritersChip` is the pane's status chip, a strip above the editor while
   the file has writers in the last minute: up to three avatars and "N writers", with every name in its
   accessible label; it shows on phones too. `FileWriterAvatars` is the same avatars in the file tab's
-  adornment (`renderTabAdornment`), and `FileWriterDot` is a `FileTree` row dot in the last writer's tone,
+  adornment (`renderTabAdornment`), and `FileWriterDot` is a `FileTree` row dot in the last writer's tone (the first of the same writers),
   named for screen readers. Avatars are rings in the writer's tone around its initial, dashed when
   inferred. Tones map to roles once: user `primary`, agents `feedback-info` / `feedback-success` /
   `feedback-warning`, external `text-subtle`; identity is in the label, not the color alone. Your own
-  saves show nothing: user writes never count as writers. `useFileActivityPrune` is the one timer that
-  fades writers after 60 s.
+  writes show nothing: user writes never count as writers, and the editor paints no mark for them (a
+  revert from the Review panel included). There is no workspace-wide writer count: the per-file chip
+  is the status chip. `useFileActivityPrune` is the one timer that fades writers after 60 s; it derives
+  the next expiry only when the slice changes.
 - **Closing an unsaved file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
   **Cancel**. It reads the store's `selectFileSaveIndicator` and `selectFileAutosaving`. In auto mode a

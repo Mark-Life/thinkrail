@@ -18,12 +18,12 @@ export interface FileWriter {
 	author: Exclude<FsChangeAuthor, { kind: "user" }>;
 	tone: FileWriterTone;
 	inferred: boolean;
-	seen: number;
 }
 
 export interface WorkspaceFileActivity {
 	paths: Record<string, readonly FileWrite[]>;
-	agents: readonly string[];
+	agents: Readonly<Record<string, number>>;
+	nextAgent: number;
 }
 
 export type FileActivity = Record<string, WorkspaceFileActivity>;
@@ -37,10 +37,12 @@ export const isInferredAuthor = (author: FsChangeAuthor) =>
 export const writerId = (author: FsChangeAuthor) =>
 	author.kind === "agent" ? `agent:${author.sessionId}` : author.kind;
 
-export function writerTone(author: FsChangeAuthor, agents: readonly string[]): FileWriterTone {
+export type AgentSlots = WorkspaceFileActivity["agents"];
+
+export function writerTone(author: FsChangeAuthor, agents: AgentSlots): FileWriterTone {
 	if (author.kind === "user") return "user";
 	if (author.kind === "external") return "external";
-	const slot = Math.max(agents.indexOf(author.sessionId), 0) % AGENT_SLOTS;
+	const slot = (agents[author.sessionId] ?? 0) % AGENT_SLOTS;
 	return slot === 0 ? "agent1" : slot === 1 ? "agent2" : "agent3";
 }
 
@@ -53,9 +55,9 @@ export function withFsChangeActivity(
 	if (!authors) return activity;
 	const entries = Object.entries(authors);
 	if (entries.length === 0) return activity;
-	const current = activity[payload.workspaceId] ?? { paths: {}, agents: [] };
+	const current = activity[payload.workspaceId] ?? { paths: {}, agents: {}, nextAgent: 0 };
 	const paths = { ...current.paths };
-	let agents = current.agents;
+	let { agents, nextAgent } = current;
 	for (const [path, write] of entries) {
 		const kept = (paths[path] ?? []).filter(
 			(previous) =>
@@ -66,11 +68,29 @@ export function withFsChangeActivity(
 			0,
 			WRITES_PER_PATH,
 		);
-		if (write.author.kind === "agent" && !agents.includes(write.author.sessionId)) {
-			agents = [...agents, write.author.sessionId].slice(-SLOTS_PER_WORKSPACE);
+		if (write.author.kind === "agent" && agents[write.author.sessionId] === undefined) {
+			agents = withAgent(agents, paths, write.author.sessionId, nextAgent++);
 		}
 	}
-	return { ...activity, [payload.workspaceId]: { paths, agents } };
+	return { ...activity, [payload.workspaceId]: { paths, agents, nextAgent } };
+}
+
+function withAgent(
+	agents: AgentSlots,
+	paths: WorkspaceFileActivity["paths"],
+	sessionId: string,
+	slot: number,
+): AgentSlots {
+	const next = { ...agents, [sessionId]: slot };
+	const ids = Object.keys(next);
+	if (ids.length <= SLOTS_PER_WORKSPACE) return next;
+	const live = new Set<string>();
+	for (const writes of Object.values(paths)) {
+		for (const { author } of writes) if (author.kind === "agent") live.add(author.sessionId);
+	}
+	const byAge = ids.sort((a, b) => (next[a] ?? 0) - (next[b] ?? 0));
+	const evicted = byAge.find((id) => !live.has(id)) ?? byAge[0];
+	return Object.fromEntries(Object.entries(next).filter(([id]) => id !== evicted));
 }
 
 export function pruneFileActivity(activity: FileActivity, now: number): FileActivity {
@@ -109,7 +129,7 @@ export function nextFileActivityExpiry(activity: FileActivity): number | null {
 
 export function fileWriters(
 	writes: readonly FileWrite[],
-	agents: readonly string[],
+	agents: AgentSlots,
 ): readonly FileWriter[] {
 	const writers: FileWriter[] = [];
 	for (const write of writes) {
@@ -122,25 +142,7 @@ export function fileWriters(
 			author,
 			tone: writerTone(author, agents),
 			inferred: isInferredAuthor(author),
-			seen: write.seen,
 		});
 	}
 	return writers.length > 0 ? writers : NO_FILE_WRITERS;
-}
-
-export function workspaceWriterCount(workspace: WorkspaceFileActivity | undefined): number {
-	if (!workspace) return 0;
-	const ids = new Set<string>();
-	for (const writes of Object.values(workspace.paths)) {
-		for (const write of writes) if (write.author.kind !== "user") ids.add(writerId(write.author));
-	}
-	return ids.size;
-}
-
-export function lastWriterTone(
-	workspace: WorkspaceFileActivity | undefined,
-	path: string,
-): FileWriterTone | null {
-	const last = workspace?.paths[path]?.find((write) => write.author.kind !== "user");
-	return last && workspace ? writerTone(last.author, workspace.agents) : null;
 }
