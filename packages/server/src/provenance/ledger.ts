@@ -543,7 +543,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 			: fresh(mtimeMs) && windowsAt(key, mtimeMs).length > 0;
 		if (!answerable) return undefined;
 		const snapshot = readSnapshot(path);
-		if (!snapshot) return deleted();
+		if (!snapshot) return changedAt(path) === undefined ? deleted() : undefined;
 		const last = lastWrite({ path, hash: snapshot.hash, clientKey: "" });
 		if (!last || !fresh(last.at)) return undefined;
 		return { author: wireChangeAuthor(last.author), hash: snapshot.hash };

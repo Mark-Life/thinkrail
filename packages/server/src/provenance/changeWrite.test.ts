@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, renameSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	renameSync,
+	rmSync,
+	unlinkSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBytes } from "../fs";
@@ -250,4 +258,15 @@ test("a file an agent script renames or deletes is credited to that script", () 
 	expect(provenance.changeWrite(to)).toEqual({ author: script, hash: hashBytes(bytes("a\n")) });
 	expect(provenance.changeWrite(from)).toEqual({ author: script, hash: null });
 	expect(provenance.changeWrite(gone)).toEqual({ author: script, hash: null });
+});
+
+test("a directory or a file too large to read inside a bash window names no one", () => {
+	const provenance = store();
+	provenance.openBashWindow({ sessionId: "s1", toolCallId: "t1", cwd: dir });
+	const folder = join(dir, "newdir");
+	mkdirSync(folder);
+	const big = join(dir, "big.bin");
+	writeFileSync(big, new Uint8Array(9 * 1024 * 1024));
+	expect(provenance.changeWrite(folder)).toBeUndefined();
+	expect(provenance.changeWrite(big)).toBeUndefined();
 });

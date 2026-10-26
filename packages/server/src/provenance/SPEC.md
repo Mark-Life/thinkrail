@@ -70,7 +70,7 @@ uses the same data to tell an agent that someone changed a file under it.
     Otherwise it is `external` on a tracked path (a formatter or a terminal wrote during the tool call), and
     no one on an untracked one. A close from `endTool` or `forgetSession` never names the agent, and a
     version with no author calls `late` not at all. It also answers nothing for a version older than 10 s or
-    a file it cannot read. Otherwise it is `lastWrite` with the user's client dropped, plus the hash; a
+    a path it cannot read (a directory or a file over 8 MiB), even under a bash window. Otherwise it is `lastWrite` with the user's client dropped, plus the hash; a
     recorded delete answers its author with `hash: null`, and an unrecorded one under a bash window open
     now answers that agent via `script`.
   - `forgetSession` drops one session's baselines and claims and closes its windows.
