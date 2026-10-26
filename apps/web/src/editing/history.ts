@@ -151,8 +151,15 @@ export function createDoc(text: string): EditorState {
 	});
 }
 
+const docStrings = new WeakMap<Text, string>();
+
 export function docText(doc: EditorState): string {
-	return doc.doc.toString();
+	let text = docStrings.get(doc.doc);
+	if (text === undefined) {
+		text = doc.doc.toString();
+		docStrings.set(doc.doc, text);
+	}
+	return text;
 }
 
 export function docChanges(from: EditorState, to: EditorState): TextChange[] | null {

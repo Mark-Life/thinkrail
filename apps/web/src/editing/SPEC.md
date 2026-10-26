@@ -35,8 +35,8 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 
 - **One buffer per (workspace, path).** The key is `tupleKey("file-buffer", workspaceId, path)`, the
   same identity as the file tab, so one tab owns one buffer. A buffer holds `doc`, a headless CodeMirror
-  `EditorState` (`history.ts`) with its undo history and the open merge conflicts; `text` (LF editor text) is
-  always `doc`'s text,
+  `EditorState` (`history.ts`) with its undo history and the open merge conflicts; its LF editor text is
+  derived from `doc` (`bufferText`, one string per doc text, cached by `docText`),
   `base {text, hash}` (the last disk state it adopted; `hash: null` means the file is absent), one
   write in flight, and at most one issue (`conflict`, `readonly`, `error`). The pure transitions live in
   `buffer.ts`; the registry (`registry.ts`) owns side effects.

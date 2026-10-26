@@ -6,6 +6,7 @@ import {
 	beginSave,
 	bufferStatus,
 	bufferSummary,
+	bufferText,
 	createBuffer,
 	draftBaseHash,
 	editorDisk,
@@ -21,9 +22,10 @@ import {
 import { docText, undoDoc } from "./history";
 import { textChanges } from "./textChanges";
 
+const withText = (state: BufferState) => ({ ...state, text: bufferText(state) });
 const disk = (text: string, hash = `h:${text}`) => ({ text, hash });
 const edit = (state: BufferState, text: string) =>
-	localEdit(state, textChanges(state.text, text), "type");
+	localEdit(state, textChanges(bufferText(state), text), "type");
 const file = (content: string, hash: string, mime?: string): FileContent => ({
 	content,
 	meta: { hash, byteLength: content.length, text: true, ...(mime ? { mime } : {}) },
@@ -50,13 +52,21 @@ test("status follows dirtiness, a write in flight and the issue precedence", () 
 
 test("a disk change replaces a clean buffer and merges into a dirty one", () => {
 	const clean = createBuffer(disk("a"));
-	expect(adoptDisk(clean, disk("b"))).toMatchObject({ text: "b", base: disk("b"), issue: null });
+	expect(withText(adoptDisk(clean, disk("b")))).toMatchObject({
+		text: "b",
+		base: disk("b"),
+		issue: null,
+	});
 	const dirty = edit(createBuffer(disk("one\ntwo\n")), "ONE\ntwo\n");
 	const merged = adoptDisk(dirty, disk("one\nTWO\n"));
-	expect(merged).toMatchObject({ text: "ONE\nTWO\n", base: disk("one\nTWO\n"), issue: null });
+	expect(withText(merged)).toMatchObject({
+		text: "ONE\nTWO\n",
+		base: disk("one\nTWO\n"),
+		issue: null,
+	});
 	expect(bufferSummary(merged)).toEqual({ status: "dirty", dirty: true });
 	const clash = adoptDisk(dirty, disk("uno\ntwo\n"));
-	expect(clash.text).toBe("ONE\ntwo\n");
+	expect(bufferText(clash)).toBe("ONE\ntwo\n");
 	expect(clash.base).toEqual(disk("uno\ntwo\n"));
 	expect(bufferSummary(clash)).toEqual({ status: "conflict", dirty: true, conflicts: 1 });
 	expect(adoptDisk(dirty, disk("ONE\ntwo\n"))).toMatchObject({
@@ -81,10 +91,10 @@ test("Reload takes the disk version as an undoable step and Keep mine keeps the 
 	const draft = restoreDraft(createBuffer(disk("a")), { text: "mine", baseHash: "h:old" });
 	const stale = adoptDisk(draft, disk("theirs"));
 	const reloaded = reloadFromDisk(stale);
-	expect(reloaded).toMatchObject({ text: "theirs", base: disk("theirs"), issue: null });
+	expect(withText(reloaded)).toMatchObject({ text: "theirs", base: disk("theirs"), issue: null });
 	expect(docText(undoDoc(reloaded.doc))).toBe("mine");
 	const kept = keepMine(stale);
-	expect(kept).toMatchObject({ text: "mine", base: disk("theirs"), issue: null });
+	expect(withText(kept)).toMatchObject({ text: "mine", base: disk("theirs"), issue: null });
 	expect(beginSave(kept).request).toEqual({ content: "mine", expect: { hash: "h:theirs" } });
 });
 
@@ -119,14 +129,14 @@ test("a written save moves the base to the sent text and keeps later typing dirt
 		status: "written",
 		meta: { hash: "h:b", byteLength: 1, text: true },
 	});
-	expect(written).toMatchObject({ text: "bc", base: disk("b"), saving: null });
+	expect(withText(written)).toMatchObject({ text: "bc", base: disk("b"), saving: null });
 	expect(bufferStatus(written)).toBe("dirty");
 });
 
 test("a stale save merges the disk version, and a binary one is not editable", () => {
 	const saving = beginSave(edit(createBuffer(disk("one\ntwo\n")), "ONE\ntwo\n")).state;
 	const merged = finishSave(saving, { status: "stale", current: file("one\r\nTWO\r\n", "h9") });
-	expect(merged).toMatchObject({
+	expect(withText(merged)).toMatchObject({
 		text: "ONE\nTWO\n",
 		base: { text: "one\nTWO\n", hash: "h9" },
 		issue: null,
@@ -142,7 +152,7 @@ test("a stale save merges the disk version, and a binary one is not editable", (
 		current: { content: "", meta: { hash: "h6", byteLength: 4, text: false } },
 	});
 	expect(bufferSummary(binary)).toEqual({ status: "error", dirty: true, error: "notEditable" });
-	expect(binary.text).toBe("ONE\ntwo\n");
+	expect(bufferText(binary)).toBe("ONE\ntwo\n");
 });
 
 test("a missing result never re-creates the file: the buffer shows deleted", () => {
@@ -155,14 +165,14 @@ test("a missing result never re-creates the file: the buffer shows deleted", () 
 
 test("a draft on the same base restores dirty; on another base it restores as a conflict", () => {
 	const clean = createBuffer(disk("a"));
-	expect(restoreDraft(clean, { text: "draft", baseHash: "h:a" })).toMatchObject({
+	expect(withText(restoreDraft(clean, { text: "draft", baseHash: "h:a" }))).toMatchObject({
 		text: "draft",
 		issue: null,
 	});
 	const moved = restoreDraft(clean, { text: "draft", baseHash: "h:old" });
-	expect(moved.text).toBe("draft");
+	expect(bufferText(moved)).toBe("draft");
 	expect(bufferStatus(moved)).toBe("stale");
-	expect(reloadFromDisk(moved).text).toBe("a");
+	expect(bufferText(reloadFromDisk(moved))).toBe("a");
 	const typed = edit(clean, "typed first");
 	expect(restoreDraft(typed, { text: "draft", baseHash: "h:a" })).toBe(typed);
 });
@@ -199,7 +209,7 @@ test("this page's own write that landed without a reply is adopted, not shown as
 	const lost = failSave(edit(saving, "BAone"), "failed");
 	expect(bufferSummary(lost)).toEqual({ status: "error", dirty: true, error: "failed" });
 	const echoed = adoptDisk(lost, disk("Aone", "h1"));
-	expect(echoed).toMatchObject({ text: "BAone", base: disk("Aone", "h1"), issue: null });
+	expect(withText(echoed)).toMatchObject({ text: "BAone", base: disk("Aone", "h1"), issue: null });
 	const retry = beginSave(lost);
 	expect(retry.request).toEqual({ content: "BAone", expect: { hash: "h:one" } });
 	const stale = finishSave(retry.state, { status: "stale", current: file("Aone", "h1") });

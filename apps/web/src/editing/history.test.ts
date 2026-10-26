@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createDoc, docChanges, localChange, selectDoc } from "./history";
+import { createDoc, docChanges, docText, localChange, selectDoc } from "./history";
 
 function typeAndSelect(steps: number) {
 	let doc = createDoc("one\n");
@@ -29,4 +29,12 @@ test("docChanges gives one step's changes, also past a selection, and null acros
 	expect(docChanges(typed, selected)).toEqual([]);
 	const again = localChange(selected, [{ from: 0, to: 0, insert: "y" }], "type");
 	expect(docChanges(start, again)).toBeNull();
+});
+
+test("docText builds a doc's string once and follows every edit", () => {
+	const doc = createDoc("one\n");
+	const moved = selectDoc(doc, [{ anchor: 2, head: 2 }]);
+	expect(docText(moved)).toBe(docText(doc));
+	const typed = localChange(moved, [{ from: 0, to: 0, insert: "x" }], "type");
+	expect(docText(typed)).toBe("xone\n");
 });

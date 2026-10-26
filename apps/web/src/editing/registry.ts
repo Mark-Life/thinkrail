@@ -7,6 +7,7 @@ import {
 	type BufferState,
 	beginSave,
 	bufferSummary,
+	bufferText,
 	createBuffer,
 	draftBaseHash,
 	draftConflicts,
@@ -110,7 +111,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (!isDirty(entry.state)) return deps.drafts.remove(draftKey(entry), deps.draftOwner.id);
 		const conflicts = draftConflicts(entry.state);
 		return deps.drafts.put(draftKey(entry), {
-			text: entry.state.text,
+			text: bufferText(entry.state),
 			baseHash: draftBaseHash(entry.state),
 			owner: deps.draftOwner.id,
 			...(conflicts.length > 0 ? { conflicts } : {}),
@@ -128,11 +129,11 @@ export function createBufferRegistry(deps: RegistryDeps) {
 
 	const broadcast = (entry: Entry, previous: BufferState, origin: CommitOrigin) => {
 		const next = entry.state;
-		const textChanged = next.text !== previous.text;
+		const textChanged = bufferText(next) !== bufferText(previous);
 		if (origin === "view" || entry.views.size === 0) return;
 		if (!textChanged && conflictsOf(next.doc) === conflictsOf(previous.doc)) return;
 		const changes = textChanged
-			? (docChanges(previous.doc, next.doc) ?? textChanges(previous.text, next.text))
+			? (docChanges(previous.doc, next.doc) ?? textChanges(bufferText(previous), bufferText(next)))
 			: [];
 		const update: EditUpdate =
 			origin === "history" ? { changes, selection: docSelection(next.doc) } : { changes };
@@ -144,11 +145,11 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (next === previous || entry.dropped) return;
 		entry.state = next;
 		broadcast(entry, previous, origin);
-		if (next.text !== previous.text) {
+		if (bufferText(next) !== bufferText(previous)) {
 			for (const watcher of entry.watchers) watcher();
 		}
 		if (
-			next.text !== previous.text ||
+			bufferText(next) !== bufferText(previous) ||
 			draftBaseHash(next) !== draftBaseHash(previous) ||
 			conflictsOf(next.doc) !== conflictsOf(previous.doc)
 		) {
@@ -296,7 +297,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		const { draftOwner } = deps;
 		if (draft.owner !== draftOwner.id && (await draftOwner.isAlive(draft.owner))) return;
 		if (entry.dropped) return;
-		if (draft.text === entry.state.text) {
+		if (draft.text === bufferText(entry.state)) {
 			void deps.drafts.remove(draftKey(entry), draft.owner);
 			return;
 		}
@@ -329,7 +330,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			handle: {
 				key,
 				session: {
-					snapshot: () => entry.state.text,
+					snapshot: () => bufferText(entry.state),
 					applyLocal: (changes, kind) =>
 						commit(entry, localEdit(entry.state, changes, kind), "view"),
 					select: (ranges) => {
