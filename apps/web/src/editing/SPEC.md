@@ -45,7 +45,9 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `clean`, so a disk that turned binary or offline shows over the conflict lens. A failed save of a deleted file shows its reason,
   not `deleted` again. Dirty means `text !== base.text` and is reported apart from
   the status, so a deleted or stale buffer can still be clean or dirty. Only the summary
-  (`{status, dirty, error, conflicts}`) reaches the store (`fileBuffersByWorkspace`), never the text. The tab dot
+  (`{status, dirty, error, conflicts, merges}`) reaches the store (`fileBuffersByWorkspace`), never the text.
+  `merges` counts disk changes merged into the buffer with no conflict; while the buffer is dirty the
+  banner's polite live region announces each one, since the merged lines land with no other notice. The tab dot
   shows `dirty`, pulses while `saving`, and paints `CanvasText` in forced colors. The tab dot, the banner and the
   close guard all read dirtiness from that summary.
 - **Disk text is adopted only through `toEditorText`,** and only when `meta.text` is true and the mime

@@ -15,6 +15,7 @@ export interface FileBufferSummary {
 	dirty: boolean;
 	error?: FileBufferError;
 	conflicts?: number;
+	merges?: number;
 }
 
 export type FileBufferSummaries = Record<string, Record<string, FileBufferSummary>>;
@@ -25,7 +26,8 @@ function sameSummary(left: FileBufferSummary | undefined, right: FileBufferSumma
 		left.status === right.status &&
 		left.dirty === right.dirty &&
 		left.error === right.error &&
-		left.conflicts === right.conflicts
+		left.conflicts === right.conflicts &&
+		left.merges === right.merges
 	);
 }
 

@@ -64,7 +64,7 @@ test("a disk change replaces a clean buffer and merges into a dirty one", () => 
 		base: disk("one\nTWO\n"),
 		issue: null,
 	});
-	expect(bufferSummary(merged)).toEqual({ status: "dirty", dirty: true });
+	expect(bufferSummary(merged)).toEqual({ status: "dirty", dirty: true, merges: 1 });
 	const clash = adoptDisk(dirty, disk("uno\ntwo\n"));
 	expect(bufferText(clash)).toBe("ONE\ntwo\n");
 	expect(clash.base).toEqual(disk("uno\ntwo\n"));

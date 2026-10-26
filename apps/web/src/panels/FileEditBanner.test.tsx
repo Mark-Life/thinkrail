@@ -21,7 +21,7 @@ test("the live region is mounted before any issue, so its text change is announc
 	expect(clean).not.toContain('data-testid="file-edit-banner"');
 
 	const deleted = render({ status: "deleted", dirty: false });
-	expect(deleted).toMatch(/role="status" aria-live="polite"[^>]*>Deleted on disk/);
+	expect(deleted).toMatch(/role="status" aria-live="polite"[^>]*><span>Deleted on disk/);
 	expect(deleted).toContain('data-status="deleted"');
 });
 
@@ -66,4 +66,12 @@ test("the banner undo chord falls back to the Z key only when the layout types a
 	expect(historyCommand({ ...ctrl, key: "Я", code: "KeyZ", shiftKey: true }, "Win32")).toBe("redo");
 	expect(historyCommand({ ...ctrl, key: "w", code: "KeyZ" }, "Win32")).toBeNull();
 	expect(historyCommand({ ...ctrl, key: "z", code: "KeyW" }, "Win32")).toBe("undo");
+});
+
+test("a disk change merged into unsaved edits is announced, and each new merge again", () => {
+	const announced = /role="status" aria-live="polite"[^>]*><span>Changes from disk were merged/;
+	expect(render({ status: "dirty", dirty: true, merges: 1 })).toMatch(announced);
+	expect(render({ status: "dirty", dirty: true, merges: 1 })).not.toContain("file-edit-banner");
+	expect(render({ status: "dirty", dirty: true })).not.toMatch(announced);
+	expect(render({ status: "clean", dirty: false, merges: 1 })).not.toMatch(announced);
 });

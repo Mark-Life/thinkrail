@@ -36,6 +36,7 @@ export interface BufferState {
 	saving: { text: string } | null;
 	unconfirmed: string | null;
 	issue: BufferIssue | null;
+	merges: number;
 }
 
 interface SaveRequest {
@@ -55,6 +56,7 @@ export function createBuffer(disk: DiskText): BufferState {
 		saving: null,
 		unconfirmed: null,
 		issue: null,
+		merges: 0,
 	};
 }
 
@@ -97,6 +99,7 @@ export function bufferSummary(state: BufferState): FileBufferSummary {
 		dirty: isDirty(state),
 		...(status === "error" && state.issue?.kind === "error" ? { error: state.issue.error } : {}),
 		...(conflicts > 0 ? { conflicts } : {}),
+		...(state.merges > 0 ? { merges: state.merges } : {}),
 	};
 }
 
@@ -143,7 +146,8 @@ function mergeDisk(state: BufferState, disk: DiskText): BufferState {
 		add: result.conflicts,
 		touched: result.touched,
 	});
-	return settledOn(withDoc(state, merged), disk);
+	const merges = result.conflicts.length === 0 ? state.merges + 1 : state.merges;
+	return settledOn({ ...withDoc(state, merged), merges }, disk);
 }
 
 export function adoptDisk(state: BufferState, disk: DiskText): BufferState {

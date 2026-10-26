@@ -79,7 +79,7 @@ test("a disk change that settles a conflict's lines closes it", async () => {
 	type(handle, handle.session.snapshot().length, "four\n");
 	diskChange(context, "mine one\ntwo\nthree\n");
 	expect(handle.session.conflicts()).toEqual([]);
-	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
+	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true, merges: 1 });
 	await registry.save(handle.key);
 	expect(disk.text(PATH)).toBe("mine one\ntwo\nthree\nfour\n");
 });
@@ -108,7 +108,7 @@ test("a stale save that merges into a conflict still re-reads a change made duri
 	const summary = await registry.save(handle.key);
 	expect(disk.writes).toHaveLength(1);
 	expect(handle.session.snapshot()).toBe("mine one\ntwo\nTHREE\n");
-	expect(summary).toEqual({ status: "conflict", dirty: true, conflicts: 1 });
+	expect(summary).toEqual({ status: "conflict", dirty: true, conflicts: 1, merges: 1 });
 });
 
 test("a stale save answer during a composition saves again once it ends", async () => {

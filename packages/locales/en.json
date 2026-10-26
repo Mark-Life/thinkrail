@@ -849,6 +849,7 @@
 	"panels.fileEdit.failed": "Couldn't save. Press {{shortcut}} to try again.",
 	"panels.fileEdit.firstConflict": "First change that also changed on disk",
 	"panels.fileEdit.keepMine": "Keep mine",
+	"panels.fileEdit.merged": "Changes from disk were merged into your edits.",
 	"panels.fileEdit.notEditable": "This file is no longer text, so your edits can't be saved.",
 	"panels.fileEdit.offline": "Not connected to the host. Press {{shortcut}} to save once it reconnects.",
 	"panels.fileEdit.paused_one": "1 change here also changed on disk. Pick Mine, Theirs or Both to save again.",

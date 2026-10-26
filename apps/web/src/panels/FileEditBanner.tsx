@@ -82,13 +82,15 @@ export function FileEditBanner({
 				limit: FILE_WRITE_MAX_BYTES / MEBIBYTE,
 				count: summary?.conflicts ?? 0,
 			})
-		: "";
+		: summary?.status === "dirty" && summary.merges
+			? t("panels.fileEdit.merged")
+			: "";
 	const urgent =
 		summary?.status === "stale" || summary?.status === "conflict" || summary?.status === "error";
 	return (
 		<>
 			<span role="status" aria-live={urgent ? "assertive" : "polite"} className="sr-only">
-				{text}
+				<span key={summary?.merges ?? 0}>{text}</span>
 			</span>
 			{summary && message ? (
 				<div

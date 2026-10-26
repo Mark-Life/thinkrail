@@ -46,7 +46,7 @@ test("a dirty buffer merges a disk change on another line, and a save writes bot
 	handle.adoptRead(disk.content(PATH), handle.readToken());
 	expect(handle.session.snapshot()).toBe("mine one\nTWO\n");
 	expect(received.at(-1)).toEqual([{ from: 9, to: 12, insert: "TWO" }]);
-	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
+	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true, merges: 1 });
 	await registry.save(handle.key);
 	expect(disk.text(PATH)).toBe("mine one\nTWO\n");
 });
@@ -125,7 +125,7 @@ test("a stale save merges the disk version and retries once", async () => {
 		"mine one\nagent\n",
 	]);
 	expect(disk.text(PATH)).toBe("mine one\nagent\n");
-	expect(summary).toEqual({ status: "clean", dirty: false });
+	expect(summary).toEqual({ status: "clean", dirty: false, merges: 1 });
 });
 
 test("a stale save on the same line pauses and writes nothing", async () => {
