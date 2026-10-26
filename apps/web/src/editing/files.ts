@@ -59,7 +59,10 @@ export function hasUnsavedEdits(state: Pick<AppState, "fileBuffersByWorkspace">)
 	);
 }
 
-function activeTabChanged(state: AppState, previous: AppState): boolean {
+export function activeTabChanged(
+	state: Pick<AppState, "activeWorkspaceId" | "activeTabByWorkspace">,
+	previous: Pick<AppState, "activeWorkspaceId" | "activeTabByWorkspace">,
+): boolean {
 	const workspaceId = state.activeWorkspaceId;
 	return (
 		workspaceId !== previous.activeWorkspaceId ||

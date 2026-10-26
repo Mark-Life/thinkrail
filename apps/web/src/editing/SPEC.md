@@ -206,7 +206,8 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
   draft restored with no issue (the user's own unsaved text). A merge, a disk adoption and Reload never
   do, so two dirty windows cannot bounce writes. Each arm restarts the 1,000 ms delay. A step arms only
   when autosave may write the file (`canAutosave`): not for a deleted file, a `readonly` refusal or an
-  open conflict of either kind, so `pending` always means a write will follow.
+  open conflict of either kind, so a user step never arms a timer that cannot write. A timer armed
+  before a merge opened a conflict stays armed; the tab indicator checks the status too.
 - **When the timer fires** it checks `canAutosave` again, since a merge may have opened a conflict
   meanwhile. Only Cmd/Ctrl+S or the guard re-creates a deleted file or retries a `readonly` one. While
   the editor composes it re-arms instead, so a half-composed IME text is never written.

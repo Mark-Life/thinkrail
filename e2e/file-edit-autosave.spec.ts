@@ -74,11 +74,11 @@ test("switching tabs saves at once, also when focus never leaves the editor", as
 	);
 
 	await typeAtLineEnd(page, 2, " // switch");
-	const typedAt = Date.now();
 	await otherNode.dblclick();
 	await expect(fileTab(page, "other.ts")).toBeVisible();
+	const switchedAt = Date.now();
 	await expect.poll(() => writes.length).toBe(1);
-	expect(writes[0] - typedAt).toBeLessThan(800);
+	expect(writes[0] - switchedAt).toBeLessThan(250);
 	expect(readFileSync(path, "utf8")).toBe(
 		"const one = 1;\nconst two = 2; // switch\nconst three = 3;\n",
 	);
@@ -89,6 +89,9 @@ test("review threads stay mounted while autosave writes the edit", async ({ page
 	await page.getByTestId("file-node").filter({ hasText: "review.ts" }).dblclick();
 	await expect(page.locator("[data-file-buffer]")).toHaveCount(1);
 	await commentOnFirstLine(page, "Keep me visible");
+	await page.getByTestId("review-thread-card").evaluate((card) => {
+		card.dataset.probe = "kept";
+	});
 	await page.evaluate(() => {
 		const counts: number[] = [];
 		Object.assign(window, { __threadCounts: counts });
@@ -103,7 +106,9 @@ test("review threads stay mounted while autosave writes the edit", async ({ page
 		await typeAtLineEnd(page, 3, suffix);
 		await expect.poll(() => readFileSync(path, "utf8")).toContain(suffix);
 	}
-	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+	await expect(page.locator('[data-testid="review-thread-card"][data-probe="kept"]')).toHaveCount(
+		1,
+	);
 	const counts = await page.evaluate(
 		() => (window as unknown as { __threadCounts: number[] }).__threadCounts,
 	);
