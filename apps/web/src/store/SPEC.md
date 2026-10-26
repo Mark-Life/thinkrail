@@ -574,7 +574,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   tick; an `authorsOnly` frame folds its authors and leaves the tick and paths alone: per path the newest 8 writes by others plus the newest save of this client (`{author, hash, seen}`,
   `seen` the client clock), newest first, one per author and hash, so your own autosaves never push another
   writer out before 60 s. A frame's `user` author becomes `{kind: "user", mine}`: `mine` when the hash is one
-  this client saved in the last minute (`noteOwnFileSave`, the newest 4 per path in `saves`). `agents` maps each session to the slot it got at first sight (`nextAgent` counts
+  this client saved in the last minute (`noteOwnFileSave`, the newest 4 per path in `saves`). **`noteFileRead(workspaceId, path, file)`** seeds a file tab read's `lastWrite` the same way, so a reload or a frame lost while disconnected keeps the writer: `thisClient` becomes `mine`, `seen` is the host's `at` capped at the client clock, and a write older than 60 s or a hash the path already holds adds nothing. Writes stay newest first by `seen`. `agents` maps each session to the slot it got at first sight (`nextAgent` counts
   up), so its tone (`agent1..3`, cycling) never shifts while it stays. Past 64 sessions the oldest one with
   no live write gives up its slot. A missing author is unknown, never `external`. **`expireFileActivity()`** drops writes
   and own saves older than 60 s at `nextFileActivityExpiry` (cached per slice object) or the clock, whichever is later;
@@ -583,8 +583,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   it still prunes, and selectors never read the clock. **`selectFileWrites`** returns the
   stored array (user writes included, so the editor's newest write can be the user's) and
   **`selectFileAgentSlots`** the slot map. The barrel exports what `panels` derives from them:
-  `fileWriters` (the distinct writers other than this client, newest first), `writerTone`, `writerId`,
-  `isInferredAuthor`, `isMine` and `nextFileActivityExpiry`. This client's saves are never a writer and show
+  `fileWriters` (the distinct writers other than this client, newest first), `fileWriter` (one author as
+  that writer, `null` for this client) and `nextFileActivityExpiry`. This client's saves are never a writer and show
   nothing; a save from another window or device is "You" in the user tone, and one "You" covers them all. `applyWorkspaceRemoved` drops the entry, and a
   removed workspace's frame folds nothing. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
 ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and

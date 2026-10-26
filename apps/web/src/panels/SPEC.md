@@ -2097,7 +2097,7 @@ own section. The kebab menu (`plan-menu`, a
   **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
   (`focusRendererEditor`).
 - **Who changes what (`FileWriters.tsx`).** The store's file activity slice feeds four surfaces, all
-  labeled the same way (`fileWriterLabels.ts`): "You", "Agent · <chat title>" (plain "Agent" for a session with no known chat),
+  labeled the same way (`fileWriterLabels.ts`): "You", "Agent · <chat title>" (plain "Agent" for a session with no known chat; titles come from `selectKnownChatTitles`, one map per tab and history snapshot, so a streamed update scans no tabs),
   "<agent> via script", "External". `useFilePresence` turns the file's newest write into the renderer's
   `presence` prop (hash plus writer and tone), so an older write never claims a landing; `FilePane` passes it only with `edit`, so a phone or a
   read-only view gets none. `FileWritersChip` is the pane's status chip, a pill floating over the editor's bottom right

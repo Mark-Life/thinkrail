@@ -7,16 +7,13 @@ import { useShallow } from "zustand/react/shallow";
 import {
 	type ActivityAuthor,
 	type FileWriter,
+	fileWriter,
 	fileWriters,
-	isInferredAuthor,
-	isMine,
 	nextFileActivityExpiry,
 	selectFileAgentSlots,
 	selectFileWrites,
-	selectKnownChatLocation,
+	selectKnownChatTitles,
 	useAppStore,
-	writerId,
-	writerTone,
 } from "../store";
 import { writerInitial, writerLabel } from "./fileWriterLabels";
 
@@ -43,10 +40,8 @@ interface LabeledWriter extends FileWriter {
 	initial: string;
 }
 
-function chatTitle(state: Parameters<typeof selectKnownChatLocation>[0], author: ActivityAuthor) {
-	return author.kind === "agent"
-		? (selectKnownChatLocation(state, author.sessionId)?.title ?? "")
-		: "";
+function chatTitle(state: Parameters<typeof selectKnownChatTitles>[0], author: ActivityAuthor) {
+	return author.kind === "agent" ? (selectKnownChatTitles(state).get(author.sessionId) ?? "") : "";
 }
 
 function useLabeledWriters(workspaceId: string, path: string): readonly LabeledWriter[] {
@@ -73,23 +68,15 @@ export function useFilePresence(workspaceId: string, path: string): SurfacePrese
 	const latest = useAppStore((state) => selectFileWrites(state, workspaceId, path)[0]);
 	const agents = useAppStore((state) => selectFileAgentSlots(state, workspaceId));
 	const title = useAppStore((state) => (latest ? chatTitle(state, latest.author) : ""));
-	return useMemo(
-		() =>
-			latest?.hash == null || isMine(latest.author)
-				? {}
-				: {
-						latest: {
-							hash: latest.hash,
-							writer: {
-								id: writerId(latest.author),
-								label: writerLabel(t, latest.author, title),
-								tone: writerTone(latest.author, agents),
-								inferred: isInferredAuthor(latest.author),
-							},
-						},
-					},
-		[latest, agents, title, t],
-	);
+	return useMemo(() => {
+		const hash = latest?.hash;
+		const writer = latest && hash != null ? fileWriter(latest.author, agents) : null;
+		if (!writer || hash == null) return {};
+		const { id, tone, inferred, author } = writer;
+		return {
+			latest: { hash, writer: { id, tone, inferred, label: writerLabel(t, author, title) } },
+		};
+	}, [latest, agents, title, t]);
 }
 
 function WriterAvatar({ writer }: { writer: LabeledWriter }) {

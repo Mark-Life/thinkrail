@@ -508,9 +508,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (tab.kind === "file") {
 				void getTransport()
 					.request("fs.readFile", { workspaceId, path: tab.path })
-					.then(({ content, meta }) => {
+					.then((file) => {
+						const { content, meta } = file;
 						const latest = useAppStore.getState();
 						if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
+						latest.noteFileRead(workspaceId, tab.path, file);
 						const placed = currentPlacement();
 						if (placed?.kind !== "file" || cacheArrived()) return;
 						useAppStore.getState().openTab(

@@ -795,6 +795,32 @@ export function selectKnownChatLocation(
 	return null;
 }
 
+type ChatTitleSource = Parameters<typeof selectKnownChatLocation>[0];
+
+const chatTitles = new WeakMap<
+	ChatTitleSource["tabsByWorkspace"],
+	WeakMap<ChatTitleSource["closedChatsByWorkspace"], ReadonlyMap<string, string>>
+>();
+
+export function selectKnownChatTitles(state: ChatTitleSource): ReadonlyMap<string, string> {
+	const byClosed = chatTitles.get(state.tabsByWorkspace) ?? new WeakMap();
+	chatTitles.set(state.tabsByWorkspace, byClosed);
+	const cached = byClosed.get(state.closedChatsByWorkspace);
+	if (cached) return cached;
+	const titles = new Map<string, string>();
+	for (const tabs of Object.values(state.tabsByWorkspace)) {
+		for (const tab of tabs) {
+			if (tab.kind === "chat" && !titles.has(tab.sessionId)) titles.set(tab.sessionId, tab.name);
+		}
+	}
+	for (const chats of Object.values(state.closedChatsByWorkspace)) {
+		for (const chat of chats)
+			if (!titles.has(chat.sessionId)) titles.set(chat.sessionId, chat.title);
+	}
+	byClosed.set(state.closedChatsByWorkspace, titles);
+	return titles;
+}
+
 export function selectWorkspaceSessionIds(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;

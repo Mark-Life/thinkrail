@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	ComposerGrowthLimit,
 	ExtUiRequest,
+	FileRead,
 	FileSaveMode,
 	GitDiffScope,
 	HostPlatform,
@@ -105,6 +106,7 @@ import {
 	type FileActivity,
 	nextFileActivityExpiry,
 	pruneFileActivity,
+	withFileReadActivity,
 	withFsChangeActivity,
 	withOwnFileSave,
 } from "./fileActivity";
@@ -1034,6 +1036,7 @@ interface AppState {
 	fileActivityByWorkspace: FileActivity;
 	expireFileActivity: () => void;
 	noteOwnFileSave: (workspaceId: string, path: string, hash: string | null) => void;
+	noteFileRead: (workspaceId: string, path: string, file: FileRead) => void;
 	setFileBufferSummary: (
 		workspaceId: string,
 		path: string,
@@ -3231,6 +3234,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (due === null) return s;
 			const next = pruneFileActivity(s.fileActivityByWorkspace, Math.max(due, Date.now()));
 			return next === s.fileActivityByWorkspace ? s : { fileActivityByWorkspace: next };
+		}),
+	noteFileRead: (workspaceId, path, file) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return s;
+			const activity = withFileReadActivity(s.fileActivityByWorkspace, {
+				workspaceId,
+				path,
+				file,
+				now: Date.now(),
+			});
+			return activity === s.fileActivityByWorkspace ? s : { fileActivityByWorkspace: activity };
 		}),
 	noteOwnFileSave: (workspaceId, path, hash) =>
 		set((s) =>

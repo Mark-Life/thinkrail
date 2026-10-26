@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import type { WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type { FileRead, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useAppStore } from "../store";
@@ -26,9 +26,15 @@ afterEach(() => {
 });
 
 function seedWriters(count: number) {
+	seedActivity(() => {
+		for (let index = 1; index <= count; index++)
+			useAppStore.getState().noteFsChanged(frame(`s${index}`));
+	});
+}
+
+function seedActivity(fold: () => void) {
 	useAppStore.setState({ fileActivityByWorkspace: {}, removedWorkspaceIds: {} });
-	for (let index = 1; index <= count; index++)
-		useAppStore.getState().noteFsChanged(frame(`s${index}`));
+	fold();
 	const initial = useAppStore.getInitialState();
 	const previous = initial.fileActivityByWorkspace;
 	initial.fileActivityByWorkspace = useAppStore.getState().fileActivityByWorkspace;
@@ -61,4 +67,20 @@ test("three writers or fewer show no overflow count", () => {
 	expect(render(<FileWriterAvatars workspaceId="ws" path="a.ts" />)).not.toContain(
 		"file-writer-overflow",
 	);
+});
+
+test("after a reload, the last write a file read reports shows as a writer", () => {
+	seedActivity(() =>
+		useAppStore.getState().noteFileRead("ws", "a.ts", {
+			content: "x",
+			meta: { hash: "h1" } as FileRead["meta"],
+			lastWrite: {
+				author: { kind: "agent", sessionId: "s1", via: "tool", toolName: "edit" },
+				at: Date.now() - 1_000,
+			},
+		}),
+	);
+	const html = render(<FileWritersChip workspaceId="ws" path="a.ts" />);
+	expect(html).toContain("1 writer");
+	expect(html).toContain('data-writer="agent:s1"');
 });

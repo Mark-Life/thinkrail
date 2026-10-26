@@ -71,7 +71,10 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			return getTransport()
 				.request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path })
 				.then(
-					(file) => ({ file, token }),
+					(file) => {
+						useAppStore.getState().noteFileRead(tab.workspaceId, tab.path, file);
+						return { file, token };
+					},
 					(error: unknown) => {
 						buffer?.readFailed(error, token);
 						throw error;

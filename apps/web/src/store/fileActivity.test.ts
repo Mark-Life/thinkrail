@@ -1,15 +1,16 @@
 import { describe, expect, setSystemTime, test } from "bun:test";
-import type { FsChangeWrite, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type { FileRead, FsChangeWrite, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
 import {
 	FILE_ACTIVITY_WINDOW_MS,
 	type FileActivity,
+	fileWriter,
 	fileWriters,
 	nextFileActivityExpiry,
 	pruneFileActivity,
+	withFileReadActivity,
 	withFsChangeActivity,
 	withOwnFileSave,
-	writerTone,
 } from "./fileActivity";
 import { selectFileAgentSlots, selectFileWrites } from "./selectors";
 
@@ -122,14 +123,14 @@ describe("fileActivity", () => {
 			);
 		}
 		const tones = () =>
-			["s0", "s2", "s63"].map((id) => writerTone(agent(id), activity.ws?.agents ?? {}));
+			["s0", "s2", "s63"].map((id) => fileWriter(agent(id), activity.ws?.agents ?? {})?.tone);
 		const before = tones();
 		activity = withFsChangeActivity(activity, frame({ "y.ts": write(agent("s64"), "h64") }), 0);
 		expect(tones()).toEqual(before);
 		expect(Object.keys(activity.ws?.agents ?? {})).toHaveLength(64);
 		expect(activity.ws?.agents.s0).toBe(0);
 		expect(activity.ws?.agents.s1).toBeUndefined();
-		expect(writerTone(agent("s64"), activity.ws?.agents ?? {})).toBe("agent2");
+		expect(fileWriter(agent("s64"), activity.ws?.agents ?? {})?.tone).toBe("agent2");
 	});
 
 	test("the same frame twice records one write", () => {
@@ -238,5 +239,54 @@ describe("the store slice", () => {
 		s().noteFsChanged({ ...frame({ "a.ts": write(agent("s1"), "h1") }), authorsOnly: true });
 		expect(s().fsChangesByWorkspace.ws).toBe(change);
 		expect(selectFileWrites(s(), "ws", "a.ts").map((entry) => entry.hash)).toEqual(["h1"]);
+	});
+
+	describe("a read that carries the last write", () => {
+		const NOW = 1_000_000;
+		const read = (hash: string | null, lastWrite?: FileRead["lastWrite"]): FileRead => ({
+			content: "x",
+			meta: { hash } as FileRead["meta"],
+			...(lastWrite ? { lastWrite } : {}),
+		});
+		const seed = (activity: FileActivity, file: FileRead) =>
+			withFileReadActivity(activity, { workspaceId: "ws", path: "a.ts", file, now: NOW });
+
+		test("seeds the writer a reload lost, with the agent's tone", () => {
+			const activity = seed({}, read("h1", { author: agent("s1"), at: NOW - 5_000 }));
+			expect(activity.ws?.paths["a.ts"]).toEqual([
+				{ author: agent("s1"), hash: "h1", seen: NOW - 5_000 },
+			]);
+			expect(fileWriters(activity.ws?.paths["a.ts"] ?? [], activity.ws?.agents ?? {})).toEqual([
+				{ id: "agent:s1", author: agent("s1"), tone: "agent1", inferred: false },
+			]);
+		});
+
+		test("maps this client's write to mine, so it shows no writer", () => {
+			const activity = seed(
+				{},
+				read("h1", { author: { kind: "user", thisClient: true }, at: NOW }),
+			);
+			expect(activity.ws?.paths["a.ts"]?.[0]?.author).toEqual({ kind: "user", mine: true });
+			expect(fileWriters(activity.ws?.paths["a.ts"] ?? [], {})).toEqual([]);
+		});
+
+		test("ignores a write older than the window, no last write, and a server clock ahead", () => {
+			const empty: FileActivity = {};
+			expect(
+				seed(empty, read("h1", { author: agent("s1"), at: NOW - FILE_ACTIVITY_WINDOW_MS })),
+			).toBe(empty);
+			expect(seed(empty, read("h1"))).toBe(empty);
+			expect(
+				seed(empty, read("h1", { author: agent("s1"), at: NOW + 9_000 })).ws?.paths["a.ts"]?.[0]
+					?.seen,
+			).toBe(NOW);
+		});
+
+		test("never displaces a newer live write or repeats a hash a frame already brought", () => {
+			const live = withFsChangeActivity({}, frame({ "a.ts": write(agent("s2"), "h2") }), NOW);
+			const seeded = seed(live, read("h1", { author: agent("s1"), at: NOW - 1_000 }));
+			expect(seeded.ws?.paths["a.ts"]?.map((entry) => entry.hash)).toEqual(["h2", "h1"]);
+			expect(seed(live, read("h2", { author: agent("s1"), at: NOW - 1_000 }))).toBe(live);
+		});
 	});
 });

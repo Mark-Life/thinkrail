@@ -1,4 +1,4 @@
-import type { FsChangeAuthor, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type { FileRead, FsChangeAuthor, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 
 export const FILE_ACTIVITY_WINDOW_MS = 60_000;
 const WRITES_PER_PATH = 8;
@@ -43,12 +43,12 @@ export const NO_FILE_WRITES: readonly FileWrite[] = [];
 const NO_FILE_WRITERS: readonly FileWriter[] = [];
 const EMPTY_WORKSPACE: WorkspaceFileActivity = { paths: {}, saves: {}, agents: {}, nextAgent: 0 };
 
-export const isMine = (author: ActivityAuthor) => author.kind === "user" && author.mine;
+const isMine = (author: ActivityAuthor) => author.kind === "user" && author.mine;
 
-export const isInferredAuthor = (author: ActivityAuthor) =>
+const isInferredAuthor = (author: ActivityAuthor) =>
 	author.kind === "external" || (author.kind === "agent" && author.via === "script");
 
-export const writerId = (author: ActivityAuthor) =>
+const writerId = (author: ActivityAuthor) =>
 	author.kind === "agent"
 		? `agent:${author.sessionId}`
 		: author.kind === "user" && !author.mine
@@ -57,7 +57,7 @@ export const writerId = (author: ActivityAuthor) =>
 
 export type AgentSlots = WorkspaceFileActivity["agents"];
 
-export function writerTone(author: ActivityAuthor, agents: AgentSlots): FileWriterTone {
+function writerTone(author: ActivityAuthor, agents: AgentSlots): FileWriterTone {
 	if (author.kind === "user") return "user";
 	if (author.kind === "external") return "external";
 	const slot = (agents[author.sessionId] ?? 0) % AGENT_SLOTS;
@@ -98,6 +98,30 @@ export function withOwnFileSave(
 	return { ...activity, [save.workspaceId]: { ...current, saves } };
 }
 
+interface FoldedWrite extends FileWrite {
+	path: string;
+}
+
+function foldWrites(
+	current: WorkspaceFileActivity,
+	writes: readonly FoldedWrite[],
+): WorkspaceFileActivity {
+	const paths = { ...current.paths };
+	let { agents, nextAgent } = current;
+	for (const { path, author, hash, seen } of writes) {
+		const kept = (paths[path] ?? []).filter(
+			(previous) =>
+				seen - previous.seen < FILE_ACTIVITY_WINDOW_MS &&
+				(previous.hash !== hash || writerId(previous.author) !== writerId(author)),
+		);
+		paths[path] = capWrites([{ author, hash, seen }, ...kept].sort((a, b) => b.seen - a.seen));
+		if (author.kind === "agent" && agents[author.sessionId] === undefined) {
+			agents = withAgent(agents, paths, author.sessionId, nextAgent++);
+		}
+	}
+	return { ...current, paths, agents, nextAgent };
+}
+
 export function withFsChangeActivity(
 	activity: FileActivity,
 	payload: WorkspaceFsChangedPayload,
@@ -108,21 +132,32 @@ export function withFsChangeActivity(
 	const entries = Object.entries(authors);
 	if (entries.length === 0) return activity;
 	const current = activity[payload.workspaceId] ?? EMPTY_WORKSPACE;
-	const paths = { ...current.paths };
-	let { agents, nextAgent } = current;
-	for (const [path, write] of entries) {
-		const author = activityAuthor(write.author, write.hash, current.saves[path] ?? [], seen);
-		const kept = (paths[path] ?? []).filter(
-			(previous) =>
-				seen - previous.seen < FILE_ACTIVITY_WINDOW_MS &&
-				(previous.hash !== write.hash || writerId(previous.author) !== writerId(author)),
-		);
-		paths[path] = capWrites([{ author, hash: write.hash, seen }, ...kept]);
-		if (write.author.kind === "agent" && agents[write.author.sessionId] === undefined) {
-			agents = withAgent(agents, paths, write.author.sessionId, nextAgent++);
-		}
-	}
-	return { ...activity, [payload.workspaceId]: { ...current, paths, agents, nextAgent } };
+	const writes = entries.map(([path, write]) => ({
+		path,
+		author: activityAuthor(write.author, write.hash, current.saves[path] ?? [], seen),
+		hash: write.hash,
+		seen,
+	}));
+	return { ...activity, [payload.workspaceId]: foldWrites(current, writes) };
+}
+
+export function withFileReadActivity(
+	activity: FileActivity,
+	read: { workspaceId: string; path: string; file: FileRead; now: number },
+): FileActivity {
+	const last = read.file.lastWrite;
+	const hash = read.file.meta.hash;
+	if (!last || hash === null) return activity;
+	const seen = Math.min(read.now, last.at);
+	if (read.now - seen >= FILE_ACTIVITY_WINDOW_MS) return activity;
+	const current = activity[read.workspaceId] ?? EMPTY_WORKSPACE;
+	if ((current.paths[read.path] ?? []).some((write) => write.hash === hash)) return activity;
+	const author: ActivityAuthor =
+		last.author.kind === "user" ? { kind: "user", mine: last.author.thisClient } : last.author;
+	return {
+		...activity,
+		[read.workspaceId]: foldWrites(current, [{ path: read.path, author, hash, seen }]),
+	};
 }
 
 function withAgent(
@@ -195,22 +230,24 @@ export function nextFileActivityExpiry(activity: FileActivity): number | null {
 	return earliest;
 }
 
+export function fileWriter(author: ActivityAuthor, agents: AgentSlots): FileWriter | null {
+	if (isMine(author)) return null;
+	return {
+		id: writerId(author),
+		author,
+		tone: writerTone(author, agents),
+		inferred: isInferredAuthor(author),
+	};
+}
+
 export function fileWriters(
 	writes: readonly FileWrite[],
 	agents: AgentSlots,
 ): readonly FileWriter[] {
 	const writers: FileWriter[] = [];
-	for (const write of writes) {
-		const { author } = write;
-		if (isMine(author)) continue;
-		const id = writerId(author);
-		if (writers.some((writer) => writer.id === id)) continue;
-		writers.push({
-			id,
-			author,
-			tone: writerTone(author, agents),
-			inferred: isInferredAuthor(author),
-		});
+	for (const { author } of writes) {
+		const writer = fileWriter(author, agents);
+		if (writer && !writers.some((known) => known.id === writer.id)) writers.push(writer);
 	}
 	return writers.length > 0 ? writers : NO_FILE_WRITERS;
 }

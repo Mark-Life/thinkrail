@@ -3,12 +3,9 @@ export type { ChatResourceScope } from "./chatResources";
 export {
 	type ActivityAuthor,
 	type FileWriter,
+	fileWriter,
 	fileWriters,
-	isInferredAuthor,
-	isMine,
 	nextFileActivityExpiry,
-	writerId,
-	writerTone,
 } from "./fileActivity";
 export type { FileBufferError, FileBufferStatus, FileBufferSummary } from "./fileBuffers";
 export type { McpRead, McpWorkspaceProjection } from "./mcp";

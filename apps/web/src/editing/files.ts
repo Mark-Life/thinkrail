@@ -36,6 +36,7 @@ const fileIo: FileIo = {
 		return getTransport()
 			.request("fs.readFile", { workspaceId, path })
 			.then((file) => {
+				useAppStore.getState().noteFileRead(workspaceId, path, file);
 				syncFileTabs(workspaceId, path, file, tick);
 				return file;
 			});

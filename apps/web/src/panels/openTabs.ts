@@ -135,7 +135,13 @@ export function openFileInTab(
 		id,
 		layoutResourceIdentity({ kind: "file", id, name: baseName(path), path }),
 		intent,
-		() => getTransport().request("fs.readFile", { workspaceId, path }),
+		() =>
+			getTransport()
+				.request("fs.readFile", { workspaceId, path })
+				.then((file) => {
+					useAppStore.getState().noteFileRead(workspaceId, path, file);
+					return file;
+				}),
 		({ content, meta }, loadedTick) => ({
 			kind: "file",
 			id,

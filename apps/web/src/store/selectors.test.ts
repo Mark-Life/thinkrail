@@ -32,6 +32,7 @@ import {
 	selectFileChangeSince,
 	selectHistoryTarget,
 	selectKnownChatLocation,
+	selectKnownChatTitles,
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
@@ -613,6 +614,25 @@ test("selectKnownChatLocation resolves open and history chats without guessing u
 		title: "Closed chat",
 	});
 	expect(selectKnownChatLocation(state, "other-client-session")).toBeNull();
+});
+
+test("selectKnownChatTitles builds one title map per tab and history snapshot", () => {
+	const tabsByWorkspace = { w2: [fileTab, chat1] };
+	const closedChatsByWorkspace = {
+		w3: [
+			{ sessionId: "closed-session", title: "Closed chat", closedAt: 1 },
+			{ sessionId: "s1", title: "Older title", closedAt: 0 },
+		],
+	};
+	const titles = selectKnownChatTitles({ tabsByWorkspace, closedChatsByWorkspace });
+	expect([...titles]).toEqual([
+		["s1", "One"],
+		["closed-session", "Closed chat"],
+	]);
+	expect(selectKnownChatTitles({ tabsByWorkspace, closedChatsByWorkspace })).toBe(titles);
+	expect(
+		selectKnownChatTitles({ tabsByWorkspace: { w2: [fileTab] }, closedChatsByWorkspace }).get("s1"),
+	).toBe("Older title");
 });
 
 test("selectActiveEditorTab resolves the mirrored render-cache selection", () => {
