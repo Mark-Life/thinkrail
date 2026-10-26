@@ -79,7 +79,7 @@ test("a disk change that settles a conflict's lines closes it", async () => {
 	type(handle, handle.session.snapshot().length, "four\n");
 	diskChange(context, "mine one\ntwo\nthree\n");
 	expect(handle.session.conflicts()).toEqual([]);
-	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true, merges: 1 });
+	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
 	await registry.save(handle.key);
 	expect(disk.text(PATH)).toBe("mine one\ntwo\nthree\nfour\n");
 });

@@ -35,6 +35,7 @@ test("undoing my edit inside a conflict lands on the disk text, not the old base
 	expect(conflictsOf(state.doc)).toEqual([]);
 	expect(bufferStatus(state)).toBe("clean");
 	expect(beginSave(state).request).toBeNull();
+	expect(remoteText(state.doc, { text: bufferText(state), clear: true })).toBe(state.doc);
 	state = redo(state);
 	expect(bufferText(state)).toBe("a\nbYX\nc\n");
 	expect(bufferStatus(state)).toBe("dirty");

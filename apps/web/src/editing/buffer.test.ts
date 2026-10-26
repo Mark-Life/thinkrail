@@ -249,3 +249,10 @@ test("Keep mine closes conflicts typed against an older disk version", () => {
 	expect(bufferStatus(stale)).toBe("stale");
 	expect(bufferSummary(keepMine(stale))).toEqual({ status: "dirty", dirty: true });
 });
+
+test("a disk change mine already holds merges with nothing to announce", () => {
+	const dirty = edit(createBuffer(disk("a\nb\nc\n")), "A\nb\nC\n");
+	const merged = adoptDisk(dirty, disk("A\nb\nc\n"));
+	expect(bufferText(merged)).toBe("A\nb\nC\n");
+	expect(bufferSummary(merged)).toEqual({ status: "dirty", dirty: true });
+});

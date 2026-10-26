@@ -68,7 +68,7 @@ test("the banner undo chord falls back to the Z key only when the layout types a
 	expect(historyCommand({ ...ctrl, key: "z", code: "KeyW" }, "Win32")).toBe("undo");
 });
 
-test("a disk change merged into unsaved edits is announced, and each new merge again", () => {
+test("a disk change merged into unsaved edits is announced while the buffer is dirty", () => {
 	const announced = /role="status" aria-live="polite"[^>]*><span>Changes from disk were merged/;
 	expect(render({ status: "dirty", dirty: true, merges: 1 })).toMatch(announced);
 	expect(render({ status: "dirty", dirty: true, merges: 1 })).not.toContain("file-edit-banner");

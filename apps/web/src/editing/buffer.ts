@@ -146,7 +146,8 @@ function mergeDisk(state: BufferState, disk: DiskText): BufferState {
 		add: result.conflicts,
 		touched: result.touched,
 	});
-	const merges = result.conflicts.length === 0 ? state.merges + 1 : state.merges;
+	const silent = result.conflicts.length === 0 && !result.changes.empty;
+	const merges = silent ? state.merges + 1 : state.merges;
 	return settledOn({ ...withDoc(state, merged), merges }, disk);
 }
 
