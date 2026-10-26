@@ -1,10 +1,10 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import type { EditConflict } from "../registry";
-import { type ConflictSpan, planConflictZones } from "./conflictLayout";
+import { type ConflictSpan, conflictSpan, planConflictZones } from "./conflictLayout";
 
 const LENS_HEIGHT_PX = 36;
 
-export interface ConflictZone {
+export interface ConflictZone extends Pick<ConflictSpan, "theirsText"> {
 	conflict: EditConflict;
 	lens: HTMLElement;
 	theirs: HTMLElement;
@@ -14,24 +14,6 @@ interface PlacedConflict extends ConflictZone, ConflictSpan {
 	lensId: string;
 	theirsId: string;
 	theirsZone: monaco.editor.IViewZone;
-}
-
-function lineSpan(model: monaco.editor.ITextModel, conflict: EditConflict) {
-	const start = model.getPositionAt(conflict.from);
-	const startsOnBreak =
-		conflict.to === model.getValueLength() &&
-		model.getPositionAt(conflict.to).column > 1 &&
-		start.column === model.getLineMaxColumn(start.lineNumber) &&
-		conflict.to > conflict.from + 1;
-	return {
-		startLine: startsOnBreak ? start.lineNumber + 1 : start.lineNumber,
-		endLine: conflict.to > conflict.from ? model.getPositionAt(conflict.to - 1).lineNumber : null,
-	};
-}
-
-function theirsLineCount(theirs: string): number {
-	if (theirs === "") return 1;
-	return theirs.split("\n").length - (theirs.endsWith("\n") ? 1 : 0);
 }
 
 function zoneNode(kind: "lens" | "theirs", lineHeight: number): HTMLElement {
@@ -87,7 +69,7 @@ export function attachConflictZones(
 	const place = (
 		accessor: monaco.editor.IViewZoneChangeAccessor,
 		conflict: EditConflict,
-		span: ReturnType<typeof lineSpan>,
+		span: ConflictSpan,
 	): PlacedConflict => {
 		const height = lineHeight();
 		const lens = zoneNode("lens", height);
@@ -101,7 +83,7 @@ export function attachConflictZones(
 		});
 		const theirsZone: monaco.editor.IViewZone = {
 			afterLineNumber: span.endLine ?? span.startLine - 1,
-			heightInLines: theirsLineCount(conflict.theirs),
+			heightInLines: span.theirsText.split("\n").length,
 			ordinal: 1,
 			domNode: theirsHolder,
 		};
@@ -118,7 +100,7 @@ export function attachConflictZones(
 		setConflicts(conflicts: readonly EditConflict[]) {
 			const model = codeEditor.getModel();
 			const next = model
-				? conflicts.map((conflict) => ({ conflict, span: lineSpan(model, conflict) }))
+				? conflicts.map((conflict) => ({ conflict, span: conflictSpan(model, conflict) }))
 				: [];
 			const plan = planConflictZones(placed, next);
 			if (plan.unchanged) {
@@ -147,7 +129,14 @@ export function attachConflictZones(
 							],
 				),
 			);
-			onZones(placed.map(({ conflict, lens, theirs }) => ({ conflict, lens, theirs })));
+			onZones(
+				placed.map(({ conflict, lens, theirs, theirsText }) => ({
+					conflict,
+					lens,
+					theirs,
+					theirsText,
+				})),
+			);
 			relayout();
 		},
 		dispose() {

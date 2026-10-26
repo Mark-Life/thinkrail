@@ -4,10 +4,6 @@ import { createPortal } from "react-dom";
 import { CONFLICT_CHOICE_LABELS, CONFLICT_CHOICES, type ConflictChoice } from "../registry";
 import type { ConflictZone } from "./conflictWidgets";
 
-function theirsText(theirs: string): string {
-	return theirs.endsWith("\n") ? theirs.slice(0, -1) : theirs;
-}
-
 export function MonacoConflictZones({
 	zones,
 	onResolve,
@@ -16,7 +12,7 @@ export function MonacoConflictZones({
 	onResolve(id: number, choice: ConflictChoice): void;
 }) {
 	const t = useT();
-	return zones.map(({ conflict, lens, theirs }) => [
+	return zones.map(({ conflict, lens, theirs, theirsText }) => [
 		createPortal(
 			<div
 				data-testid="edit-conflict-lens"
@@ -49,9 +45,7 @@ export function MonacoConflictZones({
 						{t("panels.editConflict.deletedOnDisk")}
 					</div>
 				) : (
-					<pre className="edit-conflict-theirs-text tr-code-text-small">
-						{theirsText(conflict.theirs)}
-					</pre>
+					<pre className="edit-conflict-theirs-text tr-code-text-small">{theirsText}</pre>
 				)}
 			</div>,
 			theirs,

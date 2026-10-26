@@ -37,6 +37,9 @@ test("an on-disk change to another line merges into unsaved edits, and Save writ
 	await expect(visibleEditor(page)).toContainText("const three = 33;", { timeout: 10_000 });
 	await expect(visibleEditor(page)).toContainText("const one = 1; // mine");
 	await expect(banner(page)).toHaveCount(0);
+	await expect(
+		page.getByRole("status").filter({ hasText: "Changes from disk were merged into your edits." }),
+	).toHaveCount(1);
 	await expect(fileTab(page, "merge.ts").getByTestId("file-dirty-dot")).toBeVisible();
 
 	await page.keyboard.type("!");
@@ -195,4 +198,34 @@ test("a save that meets an unseen disk change on another line merges it and retr
 	await expect(visibleEditor(page)).toContainText("const three = 33;");
 	await expect(fileTab(page, "race.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
 	await expect(banner(page)).toHaveCount(0);
+});
+
+test("a disk edit to a last line I deleted, with no final newline, shows below the line above it", async ({
+	page,
+}) => {
+	const path = await openFile(page, "tail.ts", BASE.trimEnd());
+	await visibleEditor(page).locator(".view-line").nth(2).click();
+	await page.keyboard.press("End");
+	await page.keyboard.press("Shift+Home");
+	await page.keyboard.press("Backspace");
+	await page.keyboard.press("Backspace");
+	await expect.poll(() => editorText(page)).toBe("const one = 1;\nconst two = 2;");
+
+	writeFileSync(path, "const one = 1;\nconst two = 2;\nconst three = 33;");
+	await expect(conflictLens(page)).toHaveCount(1, { timeout: 10_000 });
+	const disk = page.locator('[data-testid="edit-conflict-disk"]:visible');
+	await expect(disk.locator("pre")).toHaveText("const three = 33;");
+	const lastLine = visibleEditor(page).locator(".view-line").filter({ hasText: "const two = 2;" });
+	const lineBox = await lastLine.boundingBox();
+	const lensBox = await conflictLens(page).boundingBox();
+	const diskBox = await disk.boundingBox();
+	if (!lineBox || !lensBox || !diskBox) throw new Error("conflict layout not rendered");
+	expect(lensBox.y).toBeGreaterThanOrEqual(lineBox.y + lineBox.height - 1);
+	expect(diskBox.y).toBeGreaterThan(lineBox.y);
+
+	await conflictLens(page).getByTestId("edit-conflict-theirs").click();
+	await pressPlatformShortcut(page, "s");
+	await expect
+		.poll(() => readFileSync(path, "utf8"))
+		.toBe("const one = 1;\nconst two = 2;\nconst three = 33;");
 });

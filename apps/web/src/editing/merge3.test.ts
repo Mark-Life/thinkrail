@@ -184,3 +184,9 @@ test("a disk that deletes a last line without a newline gives a conflict whose T
 	expect(result.text).toBe("a\nB");
 	expect(result.conflicts).toEqual([{ from: 1, to: 3, theirs: "", base: "\nb\n" }]);
 });
+
+test("disk lines after a last line mine deleted, with no final newline, insert after that line", () => {
+	const result = merged("a\nb", "a\nb\nC", "a\nb\nc");
+	expect(result.text).toBe("a\nb");
+	expect(result.conflicts).toEqual([{ from: 3, to: 3, theirs: "\nC" }]);
+});

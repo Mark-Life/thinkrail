@@ -649,8 +649,10 @@ content's own height.
   wash. A choice puts focus back in the editor. Monaco marks view zones `aria-hidden`, so the lens
   buttons stay out of the tab order (`tabIndex -1`) and the host offers the same choices outside the
   editor. The disk lines wrap like the editor, and their zone takes the measured height of its text
-  (a `ResizeObserver`, then one frame), so a long disk line is never cut off. `conflictLayout.ts` decides
-  which zones stay: a conflict on the same lines with the same disk text keeps its zones, and an edit
+  (a `ResizeObserver`, then one frame), so a long disk line is never cut off. `conflictLayout.ts` places
+  each conflict's lines and the disk text it shows: an empty conflict past a line's start (disk lines
+  after a last line with no newline) sits below that line, and its disk text drops the joining line
+  break. It also decides which zones stay: a conflict on the same lines with the same disk text keeps its zones, and an edit
   that keeps every conflict that way touches no zone, decoration or React state. A path or session change rebinds in place.
   The model and options effects skip their first run, because the mount just created the editor with exactly those inputs. The
   editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
