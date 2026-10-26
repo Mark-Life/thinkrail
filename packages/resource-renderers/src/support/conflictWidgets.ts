@@ -1,6 +1,6 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import type { EditConflict } from "../registry";
-import { type ConflictSpan, sameConflictLayout } from "./conflictLayout";
+import { type ConflictSpan, planConflictZones } from "./conflictLayout";
 
 const LENS_HEIGHT_PX = 36;
 
@@ -13,6 +13,7 @@ export interface ConflictZone {
 interface PlacedConflict extends ConflictZone, ConflictSpan {
 	lensId: string;
 	theirsId: string;
+	theirsZone: monaco.editor.IViewZone;
 }
 
 function lineSpan(model: monaco.editor.ITextModel, conflict: EditConflict) {
@@ -40,8 +41,42 @@ export function attachConflictZones(
 	onZones: (zones: ConflictZone[]) => void,
 ) {
 	let placed: PlacedConflict[] = [];
+	let disposed = false;
+	let layoutFrame: number | null = null;
 	const decorations = codeEditor.createDecorationsCollection();
 	const lineHeight = () => codeEditor.getOption(monaco.editor.EditorOption.lineHeight);
+
+	const fitTheirs = () => {
+		codeEditor.changeViewZones((accessor) => {
+			for (const entry of placed) {
+				const height = entry.theirs.offsetHeight;
+				if (height > 0 && entry.theirsZone.heightInPx !== height) {
+					entry.theirsZone.heightInPx = height;
+					accessor.layoutZone(entry.theirsId);
+				}
+			}
+		});
+	};
+	const sizeObserver = new ResizeObserver(() => relayout());
+	let observed = new Set<HTMLElement>();
+	const observeTheirs = () => {
+		const targets = new Set(placed.map((entry) => entry.theirs));
+		if (targets.size === observed.size && [...targets].every((target) => observed.has(target))) {
+			return;
+		}
+		sizeObserver.disconnect();
+		observed = targets;
+		for (const target of targets) sizeObserver.observe(target);
+	};
+	const relayout = () => {
+		if (layoutFrame !== null || disposed) return;
+		layoutFrame = requestAnimationFrame(() => {
+			layoutFrame = null;
+			if (disposed) return;
+			observeTheirs();
+			fitTheirs();
+		});
+	};
 
 	const place = (
 		accessor: monaco.editor.IViewZoneChangeAccessor,
@@ -50,20 +85,22 @@ export function attachConflictZones(
 	): PlacedConflict => {
 		const height = lineHeight();
 		const lens = zoneNode("lens", height);
-		const theirs = zoneNode("theirs", height);
+		const theirsHolder = zoneNode("theirs", height);
+		const theirs = theirsHolder.appendChild(document.createElement("div"));
 		const lensId = accessor.addZone({
 			afterLineNumber: span.startLine - 1,
 			heightInPx: LENS_HEIGHT_PX,
 			ordinal: 0,
 			domNode: lens,
 		});
-		const theirsId = accessor.addZone({
+		const theirsZone: monaco.editor.IViewZone = {
 			afterLineNumber: span.endLine ?? span.startLine - 1,
 			heightInLines: theirsLineCount(conflict.theirs),
 			ordinal: 1,
-			domNode: theirs,
-		});
-		return { conflict, ...span, lens, theirs, lensId, theirsId };
+			domNode: theirsHolder,
+		};
+		const theirsId = accessor.addZone(theirsZone);
+		return { conflict, ...span, lens, theirs, lensId, theirsId, theirsZone };
 	};
 
 	const clear = (accessor: monaco.editor.IViewZoneChangeAccessor, entry: PlacedConflict) => {
@@ -77,30 +114,15 @@ export function attachConflictZones(
 			const next = model
 				? conflicts.map((conflict) => ({ conflict, span: lineSpan(model, conflict) }))
 				: [];
-			if (sameConflictLayout(placed, next)) {
-				placed = placed.map((entry, index) => ({
-					...entry,
-					conflict: next[index]?.conflict ?? entry.conflict,
-				}));
+			const plan = planConflictZones(placed, next);
+			if (plan.unchanged) {
+				placed = placed.map((entry) => plan.kept.get(entry.conflict.id) ?? entry);
 				return;
 			}
 			codeEditor.changeViewZones((accessor) => {
-				const kept = new Map<number, PlacedConflict>();
-				for (const entry of placed) {
-					const match = next.find(({ conflict }) => conflict.id === entry.conflict.id);
-					if (
-						match &&
-						match.conflict.theirs === entry.conflict.theirs &&
-						match.span.startLine === entry.startLine &&
-						match.span.endLine === entry.endLine
-					) {
-						kept.set(entry.conflict.id, { ...entry, conflict: match.conflict });
-					} else {
-						clear(accessor, entry);
-					}
-				}
+				for (const entry of plan.removed) clear(accessor, entry);
 				placed = next.map(
-					({ conflict, span }) => kept.get(conflict.id) ?? place(accessor, conflict, span),
+					({ conflict, span }) => plan.kept.get(conflict.id) ?? place(accessor, conflict, span),
 				);
 			});
 			decorations.set(
@@ -120,8 +142,12 @@ export function attachConflictZones(
 				),
 			);
 			onZones(placed.map(({ conflict, lens, theirs }) => ({ conflict, lens, theirs })));
+			relayout();
 		},
 		dispose() {
+			disposed = true;
+			if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
+			sizeObserver.disconnect();
 			codeEditor.changeViewZones((accessor) => {
 				for (const entry of placed) clear(accessor, entry);
 			});

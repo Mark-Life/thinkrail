@@ -364,7 +364,8 @@
 	margin: 0;
 	padding-left: var(--space-8);
 	line-height: var(--edit-conflict-line-height);
-	white-space: pre;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 /* The zone node spans Monaco's content (scroll) width — it stays a transparent, click-through holder;
    the visible composer is the bounded card inside it (width capped in reviewWidgets.ts). */

@@ -5,21 +5,28 @@ export interface ConflictSpan {
 	endLine: number | null;
 }
 
-export function sameConflictLayout(
-	placed: readonly (ConflictSpan & { conflict: EditConflict })[],
+export function planConflictZones<Entry extends ConflictSpan & { conflict: EditConflict }>(
+	placed: readonly Entry[],
 	next: readonly { conflict: EditConflict; span: ConflictSpan }[],
-): boolean {
-	return (
+) {
+	const kept = new Map<number, Entry>();
+	const removed: Entry[] = [];
+	for (const entry of placed) {
+		const match = next.find(({ conflict }) => conflict.id === entry.conflict.id);
+		if (
+			match &&
+			match.conflict.theirs === entry.conflict.theirs &&
+			match.span.startLine === entry.startLine &&
+			match.span.endLine === entry.endLine
+		) {
+			kept.set(entry.conflict.id, { ...entry, conflict: match.conflict });
+		} else {
+			removed.push(entry);
+		}
+	}
+	const unchanged =
+		removed.length === 0 &&
 		placed.length === next.length &&
-		next.every(({ conflict, span }, index) => {
-			const entry = placed[index];
-			return (
-				entry !== undefined &&
-				entry.conflict.id === conflict.id &&
-				entry.conflict.theirs === conflict.theirs &&
-				entry.startLine === span.startLine &&
-				entry.endLine === span.endLine
-			);
-		})
-	);
+		next.every(({ conflict }, index) => placed[index]?.conflict.id === conflict.id);
+	return { kept, removed, unchanged };
 }
