@@ -209,6 +209,27 @@ test("Cmd/Ctrl+/ toggles a line comment in the language's own syntax", async ({ 
 	await expect.poll(() => readFileSync(path, "utf8")).toBe("// export const a = 1;\n");
 });
 
+test("a paste and a copied line are undo steps of their own, apart from the typing before them", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	const path = await openFile(page, "undo-steps.ts", "one\n");
+	await page.evaluate(() => navigator.clipboard.writeText("XYZ"));
+	await typeAtLineEnd(page, 1, "ab");
+	await pressPlatformShortcut(page, "v");
+	await expect(visibleEditor(page)).toContainText("oneabXYZ");
+	await pressPlatformShortcut(page, "z");
+	await expect(visibleEditor(page).locator(".view-line").first()).toHaveText("oneab");
+
+	await page.keyboard.type("c");
+	await page.keyboard.press("Shift+Alt+ArrowDown");
+	await expect(visibleEditor(page).locator(".view-line").nth(1)).toHaveText("oneabc");
+	await pressPlatformShortcut(page, "z");
+	await pressPlatformShortcut(page, "s");
+	await expect.poll(() => readFileSync(path, "utf8")).toBe("oneabc\n");
+});
+
 test("an unsaved buffer hides review commenting until it is saved", async ({ page }) => {
 	await openFile(page, "review.ts", "const reviewed = 1;\nconst other = 2;\n");
 	const addIcon = page.locator('[data-testid="review-add-icon"]:visible');

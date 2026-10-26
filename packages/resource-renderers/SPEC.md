@@ -241,7 +241,9 @@ editable mount passes `ResourceViewProps.edit`, a `ResourceEditSession`; without
 read-only, so chat cards, phones and diffs stay read-only by construction. The session is
 editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes, kind)` reports the view's own
 edits with their `LocalEditKind` (type, delete, paste, composition start and step, other) so the host
-can group undo steps, `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
+can group undo steps: `type` is only inserts without a line break, each one character when it replaces
+text, so Enter, a copied line or a drag-move is `other`; `paste` is the one change a paste event
+causes, `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
 other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo). The host owns undo:
 `undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
 holds remote text back. `conflicts()` lists open same-line conflicts (`EditConflict`: offsets of the

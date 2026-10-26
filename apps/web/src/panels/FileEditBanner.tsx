@@ -15,13 +15,15 @@ const MEBIBYTE = 1024 * 1024;
 
 type HistoryCommand = "undo" | "redo";
 
+function typedZ(event: Pick<KeyboardEvent, "key" | "code">): boolean {
+	return /^[a-z]$/i.test(event.key) ? event.key.toLowerCase() === "z" : event.code === "KeyZ";
+}
+
 export function historyCommand(
-	event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">,
+	event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">,
 	platform?: string,
 ): HistoryCommand | null {
-	if (event.altKey || !hasPlatformModifier(event, platform) || event.key.toLowerCase() !== "z") {
-		return null;
-	}
+	if (event.altKey || !hasPlatformModifier(event, platform) || !typedZ(event)) return null;
 	return event.shiftKey ? "redo" : "undo";
 }
 

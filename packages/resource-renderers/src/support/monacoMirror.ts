@@ -20,8 +20,13 @@ function editKind(
 	if (composition === "active") return "compose";
 	if (pasting) return "paste";
 	if (changes.every((change) => change.text === "")) return "delete";
-	if (changes.every((change) => change.rangeLength === 0 || change.text.length <= 1)) return "type";
-	return "other";
+	const typed = changes.every(
+		(change) =>
+			change.text !== "" &&
+			!change.text.includes("\n") &&
+			(change.rangeLength === 0 || change.text.length === 1),
+	);
+	return typed ? "type" : "other";
 }
 
 function toRange(model: editor.ITextModel, change: TextChange): monaco.IRange {
@@ -57,6 +62,7 @@ export function mirrorEditSession(
 	let applying = false;
 	let composition: Composition = "idle";
 	let pasting = false;
+	let pasteTimer: ReturnType<typeof setTimeout> | null = null;
 	let disposed = false;
 	let conflicts: readonly EditConflict[] | null = null;
 
@@ -112,6 +118,7 @@ export function mirrorEditSession(
 				})),
 				editKind(event.changes, composition, pasting),
 			);
+			pasting = false;
 			if (composition === "start") composition = "active";
 			reportConflicts();
 		}),
@@ -133,8 +140,10 @@ export function mirrorEditSession(
 	const domNode = codeEditor.getDomNode();
 	const onPaste = () => {
 		pasting = true;
-		queueMicrotask(() => {
+		if (pasteTimer !== null) clearTimeout(pasteTimer);
+		pasteTimer = setTimeout(() => {
 			pasting = false;
+			pasteTimer = null;
 		});
 	};
 	const onBeforeInput = (event: InputEvent) => {
@@ -156,6 +165,7 @@ export function mirrorEditSession(
 			unsubscribe();
 			for (const subscription of subscriptions) subscription.dispose();
 			domNode?.removeEventListener("paste", onPaste, true);
+			if (pasteTimer !== null) clearTimeout(pasteTimer);
 			domNode?.removeEventListener("beforeinput", onBeforeInput, true);
 			if (composition !== "idle") session.setComposing(false);
 			Object.assign(model, original);

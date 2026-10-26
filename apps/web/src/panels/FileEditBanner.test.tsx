@@ -45,6 +45,7 @@ test("an open conflict offers Mine, Theirs and Both outside the editor", () => {
 test("Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z in the banner map to the file's undo and redo", () => {
 	const key = (key: string, mods: Partial<KeyboardEvent> = {}) => ({
 		key,
+		code: `Key${key.toUpperCase()}`,
 		ctrlKey: false,
 		metaKey: false,
 		shiftKey: false,
@@ -57,4 +58,12 @@ test("Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z in the banner map to the file's undo and r
 	expect(historyCommand(key("z", { ctrlKey: true }), "MacIntel")).toBeNull();
 	expect(historyCommand(key("z", { ctrlKey: true, altKey: true }), "Win32")).toBeNull();
 	expect(historyCommand(key("y", { ctrlKey: true }), "Win32")).toBeNull();
+});
+
+test("the banner undo chord falls back to the Z key only when the layout types a non-Latin letter", () => {
+	const ctrl = { ctrlKey: true, metaKey: false, shiftKey: false, altKey: false };
+	expect(historyCommand({ ...ctrl, key: "я", code: "KeyZ" }, "Win32")).toBe("undo");
+	expect(historyCommand({ ...ctrl, key: "Я", code: "KeyZ", shiftKey: true }, "Win32")).toBe("redo");
+	expect(historyCommand({ ...ctrl, key: "w", code: "KeyZ" }, "Win32")).toBeNull();
+	expect(historyCommand({ ...ctrl, key: "z", code: "KeyW" }, "Win32")).toBe("undo");
 });
