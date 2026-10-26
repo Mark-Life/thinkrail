@@ -245,7 +245,8 @@ other change as an `EditUpdate` (`changes`, plus `selection` after an undo or re
 `undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
 holds remote text back. `conflicts()` lists open same-line conflicts (`EditConflict`: offsets of the
 user's lines and the disk lines, `theirs`), and `resolveConflict(id, "mine" | "theirs" | "both")` picks
-a side. Saving is the host's (its shortcut and menu), not the view's. A change set is `TextChange[]` (`{from, to, insert}`), all offsets into the document
+a side; `CONFLICT_CHOICES` and `CONFLICT_CHOICE_LABELS` give every surface that offers the choice one
+order and one set of label keys. Saving is the host's (its shortcut and menu), not the view's. A change set is `TextChange[]` (`{from, to, insert}`), all offsets into the document
 before the set, never overlapping: the CodeMirror convention, so a CodeMirror- or CRDT-backed session
 needs no new contract. A view mounts from `snapshot()`, never from `content`, and applies subscribed
 changes as deltas. The package owns no buffer, save, history or conflict state. An editable Monaco keeps Monaco's

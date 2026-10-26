@@ -1,10 +1,8 @@
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { createPortal } from "react-dom";
-import type { ConflictChoice } from "../registry";
+import { CONFLICT_CHOICE_LABELS, CONFLICT_CHOICES, type ConflictChoice } from "../registry";
 import type { ConflictZone } from "./conflictWidgets";
-
-const CHOICES: readonly ConflictChoice[] = ["mine", "theirs", "both"];
 
 function theirsText(theirs: string): string {
 	return theirs.endsWith("\n") ? theirs.slice(0, -1) : theirs;
@@ -18,11 +16,6 @@ export function MonacoConflictZones({
 	onResolve(id: number, choice: ConflictChoice): void;
 }) {
 	const t = useT();
-	const label = {
-		mine: t("panels.editConflict.mine"),
-		theirs: t("panels.editConflict.theirs"),
-		both: t("panels.editConflict.both"),
-	} satisfies Record<ConflictChoice, string>;
 	return zones.map(({ conflict, lens, theirs }) => [
 		createPortal(
 			<div
@@ -30,7 +23,7 @@ export function MonacoConflictZones({
 				className="edit-conflict-lens flex h-full items-center gap-8 bg-feedback-warning-subtle px-8 tr-text-metadata text-text-default"
 			>
 				<span className="min-w-0 truncate">{t("panels.editConflict.title")}</span>
-				{CHOICES.map((choice) => (
+				{CONFLICT_CHOICES.map((choice) => (
 					<Button
 						key={choice}
 						size="sm"
@@ -39,7 +32,7 @@ export function MonacoConflictZones({
 						data-testid={`edit-conflict-${choice}`}
 						onClick={() => onResolve(conflict.id, choice)}
 					>
-						{label[choice]}
+						{t(CONFLICT_CHOICE_LABELS[choice])}
 					</Button>
 				))}
 			</div>,

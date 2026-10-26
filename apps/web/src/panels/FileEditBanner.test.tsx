@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { CONFLICT_CHOICES } from "@thinkrail/resource-renderers";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { FileBufferSummary } from "../store";
 import { FileEditBanner } from "./FileEditBanner";
@@ -33,8 +34,9 @@ test("a conflict or a failed save is announced assertively", () => {
 test("an open conflict offers Mine, Theirs and Both outside the editor", () => {
 	const html = render({ status: "conflict", dirty: true, conflicts: 2 });
 	expect(html).toContain('aria-label="First change that also changed on disk"');
-	for (const choice of ["mine", "theirs", "both"]) {
-		expect(html).toContain(`data-testid="file-edit-resolve-${choice}"`);
-	}
+	const offered = [...html.matchAll(/data-testid="file-edit-resolve-(\w+)"/g)].map(
+		(match) => match[1],
+	);
+	expect(offered).toEqual([...CONFLICT_CHOICES]);
 	expect(render({ status: "stale", dirty: true })).not.toContain("file-edit-resolve-");
 });

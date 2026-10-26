@@ -19,6 +19,8 @@ export {
 export {
 	type AnchorDraft,
 	anchorLabel,
+	CONFLICT_CHOICE_LABELS,
+	CONFLICT_CHOICES,
 	type ConflictChoice,
 	canonicalWorkspacePath,
 	describeResource,
