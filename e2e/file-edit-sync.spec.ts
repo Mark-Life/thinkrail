@@ -5,10 +5,12 @@ import { pressPlatformShortcut, revealWorkbenchTool } from "./fixtures/app";
 import {
 	banner,
 	editorHasFocus,
+	editorShortcut,
 	fileTab,
 	openFile,
 	openWorkspaceWithFile,
 	typeAtLineEnd,
+	unmergeableText,
 	visibleEditor,
 } from "./fixtures/fileEdit";
 
@@ -179,15 +181,41 @@ test("Save from the close dialog of a background tab that fails selects that tab
 	await expect(page.getByTestId("file-close-guard")).toBeHidden();
 	await expect(tab).toHaveCount(1);
 	await expect(tab).toHaveAttribute("data-active", "true");
-	await expect(banner(page)).toHaveAttribute("data-status", "stale");
+	await expect(banner(page)).toHaveAttribute("data-status", "conflict");
+	await expect(page.locator('[data-testid="edit-conflict-lens"]:visible')).toHaveCount(1);
 	expect(readFileSync(path, "utf8")).toBe("const a = 2; // theirs\n");
 });
 
+test("undo in a review composer inside the editor leaves the file's history alone", async ({
+	page,
+}) => {
+	const path = await openFile(page, "composer.ts", "const a = 1;\n");
+	await typeAtLineEnd(page, 1, " // saved");
+	await pressPlatformShortcut(page, "s");
+	await expect.poll(() => readFileSync(path, "utf8")).toBe("const a = 1; // saved\n");
+
+	const box = await visibleEditor(page).locator(".view-line").first().boundingBox();
+	if (!box) throw new Error("line 1 has no box");
+	await page.mouse.move(box.x + 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + 120, box.y + box.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await page.locator('[data-testid="review-add-icon"]:visible').click();
+	const input = page.getByTestId("review-composer-input");
+	await input.click();
+	await page.keyboard.type("draft");
+	await editorShortcut(page, "z");
+
+	await expect(input).toBeVisible();
+	await expect(fileTab(page, "composer.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
+	await expect(visibleEditor(page)).toContainText("const a = 1; // saved");
+});
+
 test("Reload and Keep mine put keyboard focus back in the editor", async ({ page }) => {
-	const path = await openFile(page, "focus.ts", "const base = 1;\n");
+	const path = await openFile(page, "focus.ts", unmergeableText(""));
 	for (const [action, theirs] of [
-		["file-edit-keep-mine", "const theirs = 2;\n"],
-		["file-edit-reload", "const theirs = 3;\n"],
+		["file-edit-keep-mine", unmergeableText("theirs")],
+		["file-edit-reload", unmergeableText("again")],
 	] as const) {
 		await typeAtLineEnd(page, 1, " // mine");
 		writeFileSync(path, theirs);

@@ -44,3 +44,18 @@ export async function typeAtLineEnd(page: Page, line: number, text: string) {
 export function editorHasFocus(page: Page) {
 	return page.evaluate(() => document.activeElement?.closest(".monaco-editor") !== null);
 }
+
+export function unmergeableText(tag: string) {
+	return Array.from({ length: 2500 }, (_, index) =>
+		index % 2 === 0 && tag ? `${tag} line ${index}\n` : `line ${index}\n`,
+	).join("");
+}
+
+export function conflictLens(page: Page) {
+	return page.locator('[data-testid="edit-conflict-lens"]:visible');
+}
+
+export async function editorShortcut(page: Page, key: string) {
+	const mac = await page.evaluate(() => navigator.userAgent.includes("Macintosh"));
+	await page.keyboard.press(`${mac ? "Meta" : "Control"}+${key}`);
+}
