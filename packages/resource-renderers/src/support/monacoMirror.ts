@@ -65,7 +65,7 @@ export function mirrorEditSession(
 	session: ResourceEditSession,
 	hooks: {
 		onConflicts(conflicts: readonly EditConflict[]): void;
-		onDisk?(landing: DiskLanding): void;
+		onDisk(landing: DiskLanding): void;
 	},
 ) {
 	let applying = false;
@@ -96,8 +96,7 @@ export function mirrorEditSession(
 	const apply = (update: EditUpdate) => {
 		if (model.isDisposed()) return;
 		applying = true;
-		const before =
-			update.disk && hooks.onDisk ? model.getValue(monaco.editor.EndOfLinePreference.LF) : null;
+		const before = update.disk ? model.getValue(monaco.editor.EndOfLinePreference.LF) : null;
 		try {
 			if (update.changes.length > 0) {
 				model.applyEdits(
@@ -116,7 +115,7 @@ export function mirrorEditSession(
 			applying = false;
 		}
 		if (update.disk && before !== null) {
-			hooks.onDisk?.({ hash: update.disk.hash, before, changes: update.changes });
+			hooks.onDisk({ hash: update.disk.hash, before, changes: update.changes });
 		}
 		reportConflicts();
 	};

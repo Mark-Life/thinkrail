@@ -183,7 +183,7 @@ export function bindEditSession(
 	input: Omit<FileModelInput, "text"> & {
 		session: ResourceEditSession;
 		onConflicts(conflicts: readonly EditConflict[]): void;
-		onDisk?(landing: DiskLanding): void;
+		onDisk(landing: DiskLanding): void;
 	},
 ) {
 	const text = input.session.snapshot();
@@ -199,7 +199,7 @@ export function bindEditSession(
 	if (model.getEOL() !== "\n") model.setEOL(monaco.editor.EndOfLineSequence.LF);
 	return mirrorEditSession(codeEditor, model, input.session, {
 		onConflicts: input.onConflicts,
-		...(input.onDisk ? { onDisk: input.onDisk } : {}),
+		onDisk: input.onDisk,
 	});
 }
 
