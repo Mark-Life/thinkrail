@@ -147,6 +147,24 @@ describe("fileActivity", () => {
 		expect(pruned.ws?.agents).toEqual({ s1: 0 });
 		expect(nextFileActivityExpiry(pruned)).toBeNull();
 	});
+
+	test("your own saves expire with the window, so saved paths do not pile up", () => {
+		let activity: FileActivity = {};
+		for (let index = 0; index < 1000; index++) {
+			activity = withOwnFileSave(activity, {
+				workspaceId: "ws",
+				path: `p${index}`,
+				hash: `h${index}`,
+				seen: 1000,
+			});
+		}
+		expect(nextFileActivityExpiry(activity)).toBe(1000 + FILE_ACTIVITY_WINDOW_MS);
+		expect(pruneFileActivity(activity, 1000 + FILE_ACTIVITY_WINDOW_MS - 1)).toBe(activity);
+		const pruned = pruneFileActivity(activity, 1000 + FILE_ACTIVITY_WINDOW_MS);
+		expect(pruned).not.toBe(activity);
+		expect(pruned.ws?.saves).toEqual({});
+		expect(nextFileActivityExpiry(pruned)).toBeNull();
+	});
 });
 
 describe("the store slice", () => {
@@ -183,6 +201,29 @@ describe("the store slice", () => {
 		} finally {
 			setSystemTime();
 		}
+	});
+
+	test("only the first own save moves the prune expiry; later saves and their echoes keep it", () => {
+		useAppStore.setState({ fileActivityByWorkspace: {}, removedWorkspaceIds: {} });
+		const s = () => useAppStore.getState();
+		const expiries: (number | null)[] = [];
+		const stop = useAppStore.subscribe((state, previous) => {
+			const next = nextFileActivityExpiry(state.fileActivityByWorkspace);
+			if (next !== nextFileActivityExpiry(previous.fileActivityByWorkspace)) expiries.push(next);
+		});
+		setSystemTime(new Date(1_000_000));
+		try {
+			s().noteOwnFileSave("ws", "a.ts", "h1");
+			setSystemTime(new Date(1_001_000));
+			s().noteFsChanged(frame({ "a.ts": write({ kind: "user" }, "h1") }));
+			s().noteOwnFileSave("ws", "a.ts", "h2");
+			s().noteOwnFileSave("ws", "b.ts", "h3");
+			s().noteFsChanged(frame({ "a.ts": write({ kind: "user" }, "h2") }));
+		} finally {
+			setSystemTime();
+			stop();
+		}
+		expect(expiries).toEqual([1_000_000 + FILE_ACTIVITY_WINDOW_MS]);
 	});
 
 	test("an authors-only frame folds its author without a second invalidation", () => {

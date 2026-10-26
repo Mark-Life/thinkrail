@@ -143,37 +143,55 @@ function withAgent(
 	return Object.fromEntries(Object.entries(next).filter(([id]) => id !== evicted));
 }
 
+function liveByPath<T extends { seen: number }>(
+	byPath: Record<string, readonly T[]>,
+	now: number,
+): Record<string, readonly T[]> | null {
+	let changed = false;
+	const live: Record<string, readonly T[]> = {};
+	for (const [path, entries] of Object.entries(byPath)) {
+		const kept = entries.filter((entry) => now - entry.seen < FILE_ACTIVITY_WINDOW_MS);
+		if (kept.length !== entries.length) changed = true;
+		if (kept.length > 0) live[path] = kept.length === entries.length ? entries : kept;
+	}
+	return changed ? live : null;
+}
+
 export function pruneFileActivity(activity: FileActivity, now: number): FileActivity {
 	let changed = false;
 	const next: FileActivity = {};
 	for (const [workspaceId, workspace] of Object.entries(activity)) {
-		const paths: Record<string, readonly FileWrite[]> = {};
-		let workspaceChanged = false;
-		for (const [path, writes] of Object.entries(workspace.paths)) {
-			const live = writes.filter((write) => now - write.seen < FILE_ACTIVITY_WINDOW_MS);
-			if (live.length !== writes.length) workspaceChanged = true;
-			if (live.length > 0) paths[path] = live.length === writes.length ? writes : live;
-		}
-		if (!workspaceChanged) {
+		const paths = liveByPath(workspace.paths, now);
+		const saves = liveByPath(workspace.saves, now);
+		if (!paths && !saves) {
 			next[workspaceId] = workspace;
 			continue;
 		}
 		changed = true;
-		next[workspaceId] = { ...workspace, paths };
+		next[workspaceId] = {
+			...workspace,
+			...(paths ? { paths } : {}),
+			...(saves ? { saves } : {}),
+		};
 	}
 	return changed ? next : activity;
 }
 
+const expiries = new WeakMap<FileActivity, number | null>();
+
 export function nextFileActivityExpiry(activity: FileActivity): number | null {
+	const cached = expiries.get(activity);
+	if (cached !== undefined) return cached;
 	let earliest: number | null = null;
 	for (const workspace of Object.values(activity)) {
-		for (const writes of Object.values(workspace.paths)) {
-			for (const write of writes) {
-				const expiry = write.seen + FILE_ACTIVITY_WINDOW_MS;
+		for (const entries of [...Object.values(workspace.paths), ...Object.values(workspace.saves)]) {
+			for (const { seen } of entries) {
+				const expiry = seen + FILE_ACTIVITY_WINDOW_MS;
 				if (earliest === null || expiry < earliest) earliest = expiry;
 			}
 		}
 	}
+	expiries.set(activity, earliest);
 	return earliest;
 }
 

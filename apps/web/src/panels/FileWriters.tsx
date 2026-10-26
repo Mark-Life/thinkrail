@@ -208,8 +208,7 @@ export function FileWriterDot({ workspaceId, path }: { workspaceId: string; path
 }
 
 export function useFileActivityPrune() {
-	const activity = useAppStore((state) => state.fileActivityByWorkspace);
-	const expiry = useMemo(() => nextFileActivityExpiry(activity), [activity]);
+	const expiry = useAppStore((state) => nextFileActivityExpiry(state.fileActivityByWorkspace));
 	useEffect(() => {
 		if (expiry === null) return;
 		const timer = setTimeout(
