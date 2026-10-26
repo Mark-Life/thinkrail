@@ -1,6 +1,7 @@
 import type { FileSaveMode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
+import { platformShortcutLabel } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, supportsFileWrite } from "@/transport";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
@@ -24,7 +25,9 @@ export function FileSaveModeSwitch({
 		>
 			<SettingsRow
 				label={t("settings.fileSaveMode.label")}
-				description={t("settings.fileSaveMode.description")}
+				description={t("settings.fileSaveMode.description", {
+					shortcut: platformShortcutLabel("S"),
+				})}
 				control={
 					<SettingsSwitch
 						checked={mode === "auto"}

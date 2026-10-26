@@ -737,8 +737,10 @@ a project picker, the prompt hero, and the reused
   disclosed by a warning notice under the mode control — outside the disclosure, so it is always visible —
   naming the effective same-appearance fallback, and is never silently written back. The panel never owns
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
-  the family/contrast counterpart the two controls move to. An **Editor** group hosts the file
-  `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
+  the family/contrast counterpart the two controls move to. An **Editor** group hosts the
+  **Autosave** switch (`FileSaveModeControl`, `FileSaveModeSettings.tsx`: host `fileSaveMode`, hidden
+  until the host speaks `FILE_WRITE_PROTOCOL_VERSION` (v91), converges on `settings.changed`, a rejected
+  update raises a toast) and the file `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
   (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from
@@ -2070,11 +2072,13 @@ own section. The kebab menu (`plan-menu`, a
   rich CSV/JSON views) show the buffer text through `useFileBufferText`, not the disk text. The pane
   routes each live-refresh read to the buffer with a read token, and a failed read's error to it
   (`FILE_NOT_FOUND` marks it deleted); the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
-  the focused file, and its first edit keeps a preview tab. While the buffer is dirty the pane passes no
-  `review` to any renderer (code, Preview, the rich views), so review threads and commenting hide until a
-  save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A
-  Review panel "go to comment" request that arrives meanwhile is dropped, not held for a scroll jump after
-  the save. **`FileEditBanner`** shows one strip per
+  the focused file, and its first edit keeps a preview tab. While the buffer is dirty and autosave is not
+  writing it (`selectFileAutosaving`), the pane passes no `review` to any renderer (code, Preview, the
+  rich views), so review threads and commenting hide until a save or Reload: the host anchors a comment
+  against disk lines, which no longer match the buffer. A Review panel "go to comment" request that
+  arrives meanwhile is dropped, not held for a scroll jump after the save. In auto mode threads stay up
+  through the 1 s autosave window, so they do not collapse and reopen around the cursor on every pause;
+  the trade-off is that a comment added in that window anchors to disk lines up to 1 s old. **`FileEditBanner`** shows one strip per
   issue: open same-line conflicts (status `conflict`, with their count and **Mine** / **Theirs** /
   **Both** for the first one: Monaco hides its view zones, and so the editor's lens, from screen
   readers, so the banner is the keyboard and screen-reader path; focus stays on the banner while
@@ -2088,8 +2092,9 @@ own section. The kebab menu (`plan-menu`, a
   (`focusRendererEditor`).
 - **Closing an unsaved file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
-  **Cancel**. It reads the store's `selectFileSaveIndicator`. In auto mode a file autosave is about to
-  write (`pending`) saves first and closes when that leaves it clean; only a paused file, or one that save
+  **Cancel**. It reads the store's `selectFileSaveIndicator` and `selectFileAutosaving`. In auto mode a
+  file autosave is about to write or is writing (`pending` / `saving`) saves first and closes when that
+  leaves it clean; only a paused file, or one that save
   did not clean, gets the dialog. Save closes only once the save leaves the
   buffer clean; any other result (a conflict, offline, read-only, too large, a failure) closes the dialog
   and selects that tab, so its banner says why, even when the tab was in the background. Don't save

@@ -42,10 +42,9 @@ export function fileSaveIndicator(
 	mode: FileSaveMode,
 ): FileSaveIndicator | null {
 	if (summary?.dirty !== true) return null;
-	if (mode === "manual") return summary.status === "saving" ? "saving" : "unsaved";
-	const writing =
-		summary.status === "saving" || (summary.status === "dirty" && summary.pending === true);
-	return writing ? "pending" : "unsaved";
+	if (summary.status === "saving") return "saving";
+	if (mode === "manual" || summary.pending !== true) return "unsaved";
+	return summary.status === "dirty" || summary.status === "error" ? "pending" : "unsaved";
 }
 
 export function withFileBufferSummary(

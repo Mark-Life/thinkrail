@@ -2,17 +2,25 @@ import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { selectFileSaveIndicator, useAppStore } from "../store";
 
-export function FileDirtyDot({ workspaceId, path }: { workspaceId: string; path: string }) {
+type Indicator = NonNullable<ReturnType<typeof selectFileSaveIndicator>>;
+
+export function FileSaveMark({
+	indicator,
+	autosaving,
+}: {
+	indicator: Indicator;
+	autosaving: boolean;
+}) {
 	const t = useT();
-	const indicator = useAppStore((state) => selectFileSaveIndicator(state, workspaceId, path));
-	const autosaving = useAppStore((state) => state.fileSaveMode === "auto");
-	if (indicator === null) return null;
-	if (indicator === "pending") {
+	if (autosaving && indicator !== "unsaved") {
 		return (
 			<span
 				role="img"
 				data-testid="file-save-pending"
-				aria-label={t("shell.workbench.autosavePending")}
+				data-status={indicator}
+				aria-label={t(
+					indicator === "saving" ? "shell.workbench.saving" : "shell.workbench.autosavePending",
+				)}
 				className="mr-4 size-8 shrink-0 animate-pulse rounded-full border-2 border-feedback-info motion-reduce:animate-none forced-colors:border-[CanvasText] forced-colors:forced-color-adjust-none"
 			/>
 		);
@@ -29,4 +37,10 @@ export function FileDirtyDot({ workspaceId, path }: { workspaceId: string; path:
 			)}
 		/>
 	);
+}
+
+export function FileDirtyDot({ workspaceId, path }: { workspaceId: string; path: string }) {
+	const indicator = useAppStore((state) => selectFileSaveIndicator(state, workspaceId, path));
+	const autosaving = useAppStore((state) => state.fileSaveMode === "auto");
+	return indicator === null ? null : <FileSaveMark indicator={indicator} autosaving={autosaving} />;
 }

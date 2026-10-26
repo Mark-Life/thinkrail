@@ -11,12 +11,20 @@ import {
 import { type ReactNode, useRef, useState } from "react";
 import { discardFile, saveFile } from "../editing";
 import { fileName } from "../lib";
-import { selectFileSaveIndicator, useAppStore } from "../store";
+import { selectFileAutosaving, selectFileSaveIndicator, useAppStore } from "../store";
 
 interface PendingClose {
 	workspaceId: string;
 	path: string;
 	close: () => void;
+}
+
+export function closeAction(
+	state: Parameters<typeof selectFileSaveIndicator>[0],
+	{ workspaceId, path }: { workspaceId: string; path: string },
+): "close" | "ask" | "saveFirst" {
+	if (selectFileSaveIndicator(state, workspaceId, path) === null) return "close";
+	return selectFileAutosaving(state, workspaceId, path) ? "saveFirst" : "ask";
 }
 
 function revealFile({ workspaceId, path }: PendingClose) {
@@ -41,9 +49,9 @@ export function useFileCloseGuard(): {
 		setPendingState(next);
 	};
 	const requestClose = (file: { workspaceId: string; path: string }, close: () => void) => {
-		const indicator = selectFileSaveIndicator(useAppStore.getState(), file.workspaceId, file.path);
-		if (indicator === null) close();
-		else if (indicator !== "pending") setPending({ ...file, close });
+		const action = closeAction(useAppStore.getState(), file);
+		if (action === "close") close();
+		else if (action === "ask") setPending({ ...file, close });
 		else
 			void saveFile(file.workspaceId, file.path)
 				.catch(() => null)

@@ -968,6 +968,15 @@ export function selectFileSaveIndicator(
 	return fileSaveIndicator(selectFileBufferSummary(state, workspaceId, path), state.fileSaveMode);
 }
 
+export function selectFileAutosaving(
+	state: { fileBuffersByWorkspace: FileBufferSummaries; fileSaveMode: FileSaveMode },
+	workspaceId: string,
+	path: string,
+): boolean {
+	const indicator = selectFileSaveIndicator(state, workspaceId, path);
+	return state.fileSaveMode === "auto" && (indicator === "pending" || indicator === "saving");
+}
+
 export function fsChangedPaths(change: {
 	paths: readonly string[];
 	truncated: boolean;

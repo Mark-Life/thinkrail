@@ -18,9 +18,11 @@ test("manual mode shows the unsaved dot, pulsing while a save runs", () => {
 test("auto mode pulses only while a write is coming and shows the dot for a paused file", () => {
 	expect(fileSaveIndicator({ status: "saving", dirty: false }, "auto")).toBeNull();
 	expect(fileSaveIndicator(dirty("dirty", true), "auto")).toBe("pending");
-	expect(fileSaveIndicator(dirty("saving"), "auto")).toBe("pending");
+	expect(fileSaveIndicator(dirty("saving"), "auto")).toBe("saving");
+	expect(fileSaveIndicator(dirty("error", true), "auto")).toBe("pending");
 	expect(fileSaveIndicator(dirty("dirty"), "auto")).toBe("unsaved");
-	for (const status of ["stale", "conflict", "deleted", "readonly", "error"] as const) {
+	expect(fileSaveIndicator(dirty("error"), "auto")).toBe("unsaved");
+	for (const status of ["stale", "conflict", "deleted", "readonly"] as const) {
 		expect(fileSaveIndicator(dirty(status, true), "auto")).toBe("unsaved");
 	}
 });

@@ -497,7 +497,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
-  `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
+  `fileLineWidthBounded`** switches, **`fileSaveMode: FileSaveMode`** (`"auto"` / `"manual"`),
+  **`customLayoutPresets: LayoutPreset[]`**,
   optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats, the picker's
   **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
@@ -507,7 +508,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
-  `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
+  `DEFAULT_CONFIG.terminalWindowsShell`, and `fileSaveMode` narrows through `isFileSaveMode` and otherwise
+  uses `DEFAULT_CONFIG.fileSaveMode`; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
@@ -563,7 +565,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   status of each open editor buffer (`status`, `dirty`, the `error` reason, and `pending` for an armed
   autosave) for the tab indicator, the banner and the close guard. **`selectFileSaveIndicator`** derives
   the tab's `unsaved` / `saving` / `pending` / none from that summary and **`fileSaveMode`**, so the
-  indicator and the close guard never disagree. [[submodule-web-editing]] owns the buffers and is its only writer; it never carries text, and
+  indicator and the close guard never disagree. **`selectFileAutosaving`** is true in auto mode while
+  that indicator is `pending` or `saving` (a write is coming or running): the close guard saves first
+  then, and the file pane keeps review threads up. [[submodule-web-editing]] owns the buffers and is its only writer; it never carries text, and
   `applyWorkspaceRemoved` drops a removed workspace's entry. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
 ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,

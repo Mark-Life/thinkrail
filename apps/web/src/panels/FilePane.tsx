@@ -17,7 +17,7 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import { canEditFile, useFileBuffer, useFileBufferText } from "../editing";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
-import { selectFileBufferSummary, useAppStore } from "../store";
+import { selectFileAutosaving, selectFileBufferSummary, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { FileEditBanner } from "./FileEditBanner";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
@@ -56,6 +56,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const summary = useAppStore((state) => selectFileBufferSummary(state, tab.workspaceId, tab.path));
 	const isPreview = useAppStore((state) => state.previewTabByWorkspace[tab.workspaceId] === tab.id);
 	const dirty = summary?.dirty === true;
+	const autosaving = useAppStore((state) => selectFileAutosaving(state, tab.workspaceId, tab.path));
 	useEffect(() => {
 		if (dirty && isPreview) useAppStore.getState().setActiveTab(tab.id, "keep");
 	}, [dirty, isPreview, tab.id]);
@@ -88,8 +89,9 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
-	const reviewSurface = dirty ? undefined : review.worktree;
-	const heldFocus = dirty ? review.worktree.focus : null;
+	const reviewHidden = dirty && !autosaving;
+	const reviewSurface = reviewHidden ? undefined : review.worktree;
+	const heldFocus = reviewHidden ? review.worktree.focus : null;
 	const dropFocus = review.worktree.onFocusHandled;
 	useEffect(() => {
 		if (heldFocus) dropFocus();
