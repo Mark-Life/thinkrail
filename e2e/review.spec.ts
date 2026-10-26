@@ -481,6 +481,7 @@ test("preview mode: selecting rendered text comments on the mapped source lines"
 	);
 	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "NOTES.md" }).click();
+	await lockPreview(page);
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toContainText("important words");
 
@@ -549,6 +550,7 @@ test("cards drawn in the preview reserve their height in the source view — and
 	);
 	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "GUIDE.md" }).click();
+	await lockPreview(page);
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toContainText("Filler paragraph number 1.");
 
@@ -570,13 +572,22 @@ test("cards drawn in the preview reserve their height in the source view — and
 	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
 
 	await page.getByTestId("view-toggle-markdown").click();
-	await expect(page.getByTestId("markdown-preview").getByTestId("review-thread-card")).toHaveCount(
-		2,
-	);
+	const live = page.locator('[data-testid="markdown-preview"][data-mode="live"]');
+	await expect(live.locator(".cm-content")).toBeVisible();
+	await live.evaluate((node) => {
+		node.scrollTop = node.scrollHeight;
+	});
+	await expect(live.getByTestId("review-thread-card")).toHaveCount(2);
 	await page.getByTestId("view-toggle-code").click();
 	await scrollCardsIntoView(page);
 	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
 });
+
+async function lockPreview(page: Page) {
+	const lock = page.getByTestId("markdown-lock");
+	await lock.click();
+	await expect(lock).toHaveAttribute("aria-pressed", "true");
+}
 
 function viewportRatio(target: Locator): Promise<number> {
 	return target.evaluate(
@@ -620,6 +631,7 @@ test("preview selection stays honest: a dragged piece stays a piece, and the com
 	);
 	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "BULLETS.md" }).click();
+	await lockPreview(page);
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toContainText("Owns");
 	await page.waitForTimeout(1200);
@@ -688,6 +700,7 @@ test("an in-flow card never halves a code fence — the rest of the document sta
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
 	await page.getByTestId("view-toggle-markdown").click();
+	await lockPreview(page);
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview.getByTestId("review-thread-card")).toHaveCount(1);
 	const code = preview.locator("pre[data-md-line-start]");

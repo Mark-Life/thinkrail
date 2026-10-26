@@ -130,6 +130,18 @@ test.describe("autosave", () => {
 	});
 });
 
+test("Cmd/Ctrl+click follows a link; a plain click edits it", async ({ page }) => {
+	const path = await openLive(page, "links.md", NOTES);
+	writeFileSync(path.replace(/links\.md$/, "other.md"), "# Other target\n");
+	const link = live(page).locator(".md-link", { hasText: "link" });
+	await expect(link).toHaveAttribute("data-href", "other.md");
+	await link.click();
+	await expect(liveLine(page, "Some bold")).toContainText("[link](other.md)");
+	await expect(fileTab(page, "other.md")).toHaveCount(0);
+	await live(page).locator(".md-link").click({ modifiers: ["ControlOrMeta"] });
+	await expect(fileTab(page, "other.md")).toBeVisible();
+});
+
 test.describe("manual save", () => {
 	pinFileSaveMode("manual");
 
