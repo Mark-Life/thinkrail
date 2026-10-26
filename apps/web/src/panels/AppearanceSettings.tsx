@@ -36,6 +36,7 @@ import {
 	type ThemeResolution,
 } from "@/themes";
 import { errorText, getTransport } from "@/transport";
+import { FileSaveModeControl } from "./FileSaveModeSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
@@ -485,6 +486,7 @@ export function AppearanceSettings() {
 				/>
 			</SettingsGroup>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
+				<FileSaveModeControl />
 				<LineWidthControl kind="file" />
 			</SettingsGroup>
 		</SettingsPageContainer>

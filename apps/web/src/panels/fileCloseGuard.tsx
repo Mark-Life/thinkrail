@@ -11,7 +11,7 @@ import {
 import { type ReactNode, useRef, useState } from "react";
 import { discardFile, saveFile } from "../editing";
 import { fileName } from "../lib";
-import { selectFileBufferSummary, useAppStore } from "../store";
+import { selectFileSaveIndicator, useAppStore } from "../store";
 
 interface PendingClose {
 	workspaceId: string;
@@ -41,9 +41,13 @@ export function useFileCloseGuard(): {
 		setPendingState(next);
 	};
 	const requestClose = (file: { workspaceId: string; path: string }, close: () => void) => {
-		const summary = selectFileBufferSummary(useAppStore.getState(), file.workspaceId, file.path);
-		if (summary?.dirty === true) setPending({ ...file, close });
-		else close();
+		const indicator = selectFileSaveIndicator(useAppStore.getState(), file.workspaceId, file.path);
+		if (indicator === null) close();
+		else if (indicator !== "pending") setPending({ ...file, close });
+		else
+			void saveFile(file.workspaceId, file.path)
+				.catch(() => null)
+				.then((summary) => (summary?.dirty === false ? close() : setPending({ ...file, close })));
 	};
 	const save = async (request: PendingClose) => {
 		setSavingRequest(request);
