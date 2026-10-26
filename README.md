@@ -41,7 +41,9 @@ create the tools it needs based on how you actually work.
   decision, and lets you mark it ready, hand failing checks or a diverged branch to the agent, merge it
   with the repository's last-used method, reopen it, or delete the remote branch.
 - **A real IDE around the agent.** A splittable workbench of Monaco editor tabs where you edit files and
-  save with Cmd/Ctrl+S (unsaved edits survive a reload, and a change on disk never replaces them silently),
+  save with Cmd/Ctrl+S (unsaved edits survive a reload; an agent's change on disk merges into them live,
+  a line you both changed waits for you to pick Mine, Theirs or Both, and Cmd/Ctrl+Z undoes only your own
+  edits),
   a Files tree with live git change marks and a Changed view, terminals, and documents — all scoped to the active workspace. Leave
   anchored review comments on files and diffs and send them to a chat as structured context, or open the
   worktree in your installed IDE.
