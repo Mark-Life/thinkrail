@@ -181,7 +181,8 @@ visible step is taken with it, so every Cmd/Ctrl+Z shows a change. A cursor move
    closes the socket on an oversized frame.
 3. `fs.writeFile {workspaceId, path, content: text, expect: {hash: base.hash}}` (`typedOn`'s hash after an
    undo of Reload).
-4. `written`: `base` becomes the sent text and the new hash; edits typed meanwhile stay dirty.
+4. `written`: `base` becomes the sent text and the new hash; edits typed meanwhile stay dirty. `fileIo`
+   also hands the hash to the store (`noteOwnFileSave`), so this save's `fsChanged` echo is known as this client's.
    `stale`: when the current disk version is no longer editable text the buffer gets issue
    `notEditable` and nothing merges. When it equals the buffer text it is adopted. Otherwise it merges
    into the latest text (typing during the write included) as above, and a merge with no open conflict

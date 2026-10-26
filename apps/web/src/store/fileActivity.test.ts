@@ -8,6 +8,7 @@ import {
 	nextFileActivityExpiry,
 	pruneFileActivity,
 	withFsChangeActivity,
+	withOwnFileSave,
 	writerTone,
 } from "./fileActivity";
 import { selectFileAgentSlots, selectFileWrites } from "./selectors";
@@ -57,10 +58,48 @@ describe("fileActivity", () => {
 		]);
 	});
 
-	test("user writes stay for the hash lookup but are never a writer", () => {
-		const activity = withFsChangeActivity({}, frame({ "a.ts": write({ kind: "user" }, "h1") }), 0);
-		expect(activity.ws?.paths["a.ts"]).toHaveLength(1);
+	test("your own saves stay for the hash lookup but are never a writer", () => {
+		const saved = withOwnFileSave({}, { workspaceId: "ws", path: "a.ts", hash: "h1", seen: 0 });
+		const activity = withFsChangeActivity(
+			saved,
+			frame({ "a.ts": write({ kind: "user" }, "h1") }),
+			500,
+		);
+		expect(activity.ws?.paths["a.ts"]?.map((entry) => entry.author)).toEqual([
+			{ kind: "user", mine: true },
+		]);
 		expect(fileWriters(activity.ws?.paths["a.ts"] ?? [], {})).toHaveLength(0);
+	});
+
+	test("a save from another window is a writer in the user tone", () => {
+		const saved = withOwnFileSave({}, { workspaceId: "ws", path: "a.ts", hash: "h1", seen: 0 });
+		const activity = withFsChangeActivity(
+			saved,
+			frame({ "a.ts": write({ kind: "user" }, "h2") }),
+			500,
+		);
+		const writers = fileWriters(activity.ws?.paths["a.ts"] ?? [], {});
+		expect(writers.map((writer) => [writer.id, writer.tone, writer.inferred])).toEqual([
+			["user:elsewhere", "user", false],
+		]);
+	});
+
+	test("your own autosaves never push another writer out of the window", () => {
+		let activity = withFsChangeActivity({}, frame({ "a.ts": write(agent("s1"), "h0") }), 0);
+		for (let index = 1; index <= 12; index++) {
+			const hash = `mine${index}`;
+			activity = withOwnFileSave(activity, { workspaceId: "ws", path: "a.ts", hash, seen: 0 });
+			activity = withFsChangeActivity(
+				activity,
+				frame({ "a.ts": write({ kind: "user" }, hash) }),
+				index * 1000,
+			);
+		}
+		const writes = activity.ws?.paths["a.ts"] ?? [];
+		expect(writes.map((entry) => entry.hash)).toEqual(["mine12", "h0"]);
+		expect(fileWriters(writes, activity.ws?.agents ?? {}).map((writer) => writer.id)).toEqual([
+			"agent:s1",
+		]);
 	});
 
 	test("a script write is inferred and keeps its session's tone", () => {

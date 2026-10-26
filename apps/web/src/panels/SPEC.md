@@ -2106,9 +2106,10 @@ own section. The kebab menu (`plan-menu`, a
   adornment (`renderTabAdornment`), and `FileWriterDot` is a `FileTree` row dot in the last writer's tone (the first of the same writers),
   named for screen readers. Avatars are rings in the writer's tone around its initial, dashed when
   inferred. Tones map to roles once: user `primary`, agents `feedback-info` / `feedback-success` /
-  `feedback-warning`, external `text-subtle`; identity is in the label, not the color alone. Your own
-  writes show nothing: user writes never count as writers, and the editor paints no mark for them (a
-  revert from the Review panel included). There is no workspace-wide writer count: the per-file chip
+  `feedback-warning`, external `text-subtle`; identity is in the label, not the color alone. This
+  client's own writes show nothing: they never count as writers, and `useFilePresence` passes no write
+  for them. A save from another window shows as "You, in another window" in the user tone. `DiffSurface`
+  notes the hash of its own revert and undo receipts the same way, so they show nothing too. There is no workspace-wide writer count: the per-file chip
   is the status chip. `useFileActivityPrune` is the one timer that fades writers after 60 s; it derives
   the next expiry only when the slice changes.
 - **Closing an unsaved file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close

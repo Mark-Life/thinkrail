@@ -31,13 +31,12 @@ const lineOffset = (line: number) =>
 
 const AGENT: PresenceWriter = { id: "agent:s1", label: "Agent", tone: "agent1", inferred: false };
 const OTHER: PresenceWriter = { id: "agent:s2", label: "Other", tone: "agent2", inferred: false };
-const OUTSIDE: PresenceWriter = {
-	id: "external",
-	label: "Outside",
-	tone: "external",
-	inferred: true,
+const ELSEWHERE: PresenceWriter = {
+	id: "user:elsewhere",
+	label: "You, in another window",
+	tone: "user",
+	inferred: false,
 };
-const USER: PresenceWriter = { id: "user", label: "You", tone: "user", inferred: false };
 
 let collections: Collection[];
 let flags: unknown[];
@@ -109,49 +108,37 @@ beforeEach(() => {
 });
 
 describe("attachPresence", () => {
-	test("a hash two writers produced is credited to the newest one", () => {
+	test("a landing is credited only when it matches the latest write", () => {
 		const marks = attach();
-		marks.setWrites([
-			{ hash: "h1", writer: AGENT },
-			{ hash: "h1", writer: OUTSIDE },
-		]);
+		marks.setLatest({ hash: "h1", writer: AGENT });
 		marks.land(editLine(4, "h1"));
+		marks.land(editLine(9, "h0"));
 		expect(bars()).toEqual(["presence-bar presence-tone-agent1"]);
+		expect(announced).toEqual(["Agent changed 4-4"]);
 		marks.dispose();
 	});
 
-	test("a landing that only matches an older write stays unknown", () => {
+	test("a landing with no latest write stays unknown", () => {
 		const marks = attach();
-		marks.setWrites([
-			{ hash: "h0", writer: OUTSIDE },
-			{ hash: "h1", writer: AGENT },
-		]);
 		marks.land(editLine(4, "h1"));
 		expect(bars()).toEqual([]);
 		expect(announced).toEqual([]);
 		marks.dispose();
 	});
 
-	test("your own write paints, flags and announces nothing", () => {
+	test("a write you made in another window is marked in the user tone", () => {
 		const marks = attach();
-		marks.setWrites([{ hash: "mine", writer: USER }]);
-		marks.land(editLine(4, "mine"));
-		marks.land({
-			hash: "mine",
-			before: TEXT,
-			changes: [{ from: 0, to: TEXT.length, insert: "x\n" }],
-		});
-		expect(bars()).toEqual([]);
-		expect(flags).toEqual([]);
-		expect(chips).toEqual([]);
-		expect(announced).toEqual([]);
+		marks.setLatest({ hash: "there", writer: ELSEWHERE });
+		marks.land(editLine(4, "there"));
+		expect(bars()).toEqual(["presence-bar presence-tone-user"]);
+		expect(flags).toHaveLength(1);
 		marks.dispose();
 	});
 
 	test("a burst from one writer keeps one mark, one flag and one announcement", () => {
 		const marks = attach();
 		for (let index = 0; index < 5; index++) {
-			marks.setWrites([{ hash: `h${index}`, writer: AGENT }]);
+			marks.setLatest({ hash: `h${index}`, writer: AGENT });
 			marks.land(editLine(index === 4 ? 9 : 3, `h${index}`));
 		}
 		const live = collections.filter((collection) => collection.decorations.length > 0);
@@ -166,9 +153,9 @@ describe("attachPresence", () => {
 
 	test("a second writer on the same line takes the flag", () => {
 		const marks = attach();
-		marks.setWrites([{ hash: "a", writer: AGENT }]);
+		marks.setLatest({ hash: "a", writer: AGENT });
 		marks.land(editLine(5, "a"));
-		marks.setWrites([{ hash: "b", writer: OTHER }]);
+		marks.setLatest({ hash: "b", writer: OTHER });
 		marks.land(editLine(5, "b"));
 		expect(flags).toHaveLength(1);
 		expect(bars()).toEqual([

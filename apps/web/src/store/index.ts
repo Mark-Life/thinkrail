@@ -1,9 +1,11 @@
 export * from "./appStore";
 export type { ChatResourceScope } from "./chatResources";
 export {
+	type ActivityAuthor,
 	type FileWriter,
 	fileWriters,
 	isInferredAuthor,
+	isMine,
 	nextFileActivityExpiry,
 	writerId,
 	writerTone,

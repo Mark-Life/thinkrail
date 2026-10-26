@@ -3,7 +3,7 @@ import { CLIENT_ERROR_REPORT_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import * as transport from "../transport";
-import { activeTabChanged, loadBufferRegistry, syncFileTabs } from "./files";
+import { activeTabChanged, fileIo, loadBufferRegistry, syncFileTabs } from "./files";
 
 const meta = (hash: string, text: string) => ({ hash, byteLength: text.length, text: true });
 
@@ -87,4 +87,33 @@ test("only a change of the active workspace or its active tab counts as a tab sw
 	expect(activeTabChanged(at("other", "a"), at("ws", "a"))).toBe(true);
 	expect(activeTabChanged(at("ws", "a", "d"), at("ws", "a"))).toBe(false);
 	expect(activeTabChanged(at(null, "b"), at(null, "a"))).toBe(false);
+});
+
+test("a save this client wrote is remembered, so its fsChanged echo is never a writer", async () => {
+	useAppStore.setState({ fileActivityByWorkspace: {}, removedWorkspaceIds: {} });
+	const spy = spyOn(transport, "getTransport").mockReturnValue({
+		request: () => Promise.resolve({ status: "written", meta: meta("h-mine", "mine\n") }),
+	} as unknown as ReturnType<typeof transport.getTransport>);
+	try {
+		await fileIo.write({
+			workspaceId: "ws",
+			path: "a.ts",
+			content: "mine\n",
+			expect: { hash: "h-before" },
+		});
+	} finally {
+		spy.mockRestore();
+	}
+	const state = useAppStore.getState();
+	state.noteFsChanged({
+		workspaceId: "ws",
+		paths: ["a.ts"],
+		truncated: false,
+		skillChange: "none",
+		authors: { "a.ts": { author: { kind: "user" }, hash: "h-mine" } },
+	});
+	expect(useAppStore.getState().fileActivityByWorkspace.ws?.paths["a.ts"]?.[0]?.author).toEqual({
+		kind: "user",
+		mine: true,
+	});
 });

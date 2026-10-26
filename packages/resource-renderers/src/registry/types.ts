@@ -117,7 +117,7 @@ export interface PresenceWrite {
 }
 
 export interface SurfacePresence {
-	writes: readonly PresenceWrite[];
+	latest?: PresenceWrite;
 }
 
 export interface ResourceViewProps {

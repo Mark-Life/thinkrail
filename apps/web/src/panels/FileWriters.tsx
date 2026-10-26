@@ -1,13 +1,14 @@
-import type { FsChangeAuthor } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import type { PresenceTone, SurfacePresence } from "@thinkrail/resource-renderers";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
+	type ActivityAuthor,
 	type FileWriter,
 	fileWriters,
 	isInferredAuthor,
+	isMine,
 	nextFileActivityExpiry,
 	selectFileAgentSlots,
 	selectFileWrites,
@@ -41,7 +42,7 @@ interface LabeledWriter extends FileWriter {
 	initial: string;
 }
 
-function chatTitle(state: Parameters<typeof selectKnownChatLocation>[0], author: FsChangeAuthor) {
+function chatTitle(state: Parameters<typeof selectKnownChatLocation>[0], author: ActivityAuthor) {
 	return author.kind === "agent"
 		? (selectKnownChatLocation(state, author.sessionId)?.title ?? "")
 		: "";
@@ -72,22 +73,20 @@ export function useFilePresence(workspaceId: string, path: string): SurfacePrese
 	const agents = useAppStore((state) => selectFileAgentSlots(state, workspaceId));
 	const title = useAppStore((state) => (latest ? chatTitle(state, latest.author) : ""));
 	return useMemo(
-		() => ({
-			writes:
-				latest?.hash == null
-					? []
-					: [
-							{
-								hash: latest.hash,
-								writer: {
-									id: writerId(latest.author),
-									label: writerLabel(t, latest.author, title),
-									tone: writerTone(latest.author, agents),
-									inferred: isInferredAuthor(latest.author),
-								},
+		() =>
+			latest?.hash == null || isMine(latest.author)
+				? {}
+				: {
+						latest: {
+							hash: latest.hash,
+							writer: {
+								id: writerId(latest.author),
+								label: writerLabel(t, latest.author, title),
+								tone: writerTone(latest.author, agents),
+								inferred: isInferredAuthor(latest.author),
 							},
-						],
-		}),
+						},
+					},
 		[latest, agents, title, t],
 	);
 }

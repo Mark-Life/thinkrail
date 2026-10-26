@@ -1307,6 +1307,7 @@
 	"presence.writers_one": "1 writer",
 	"presence.writers_other": "{{count}} writers",
 	"presence.you": "You",
+	"presence.youElsewhere": "You, in another window",
 	"prompt.slashMenu.builtinSource": "Pi/built-in",
 	"prompt.slotHint.label": "slot {{index}}/{{count}} · ⇥ next · esc done",
 	"resources.action.stop": "Stop",

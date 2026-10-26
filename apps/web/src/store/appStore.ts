@@ -106,6 +106,7 @@ import {
 	nextFileActivityExpiry,
 	pruneFileActivity,
 	withFsChangeActivity,
+	withOwnFileSave,
 } from "./fileActivity";
 import {
 	type FileBufferSummaries,
@@ -1032,6 +1033,7 @@ interface AppState {
 	fileBuffersByWorkspace: FileBufferSummaries;
 	fileActivityByWorkspace: FileActivity;
 	expireFileActivity: () => void;
+	noteOwnFileSave: (workspaceId: string, path: string, hash: string | null) => void;
 	setFileBufferSummary: (
 		workspaceId: string,
 		path: string,
@@ -3227,6 +3229,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const next = pruneFileActivity(s.fileActivityByWorkspace, Math.max(due, Date.now()));
 			return next === s.fileActivityByWorkspace ? s : { fileActivityByWorkspace: next };
 		}),
+	noteOwnFileSave: (workspaceId, path, hash) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? s
+				: {
+						fileActivityByWorkspace: withOwnFileSave(s.fileActivityByWorkspace, {
+							workspaceId,
+							path,
+							hash,
+							seen: Date.now(),
+						}),
+					},
+		),
 	setFileBufferSummary: (workspaceId, path, summary) =>
 		set((s) => {
 			if (summary !== null && s.removedWorkspaceIds[workspaceId]) return s;

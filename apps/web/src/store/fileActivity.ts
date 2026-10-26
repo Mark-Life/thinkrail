@@ -2,26 +2,37 @@ import type { FsChangeAuthor, WorkspaceFsChangedPayload } from "@thinkrail/contr
 
 export const FILE_ACTIVITY_WINDOW_MS = 60_000;
 const WRITES_PER_PATH = 8;
+const SAVES_PER_PATH = 4;
 const AGENT_SLOTS = 3;
 const SLOTS_PER_WORKSPACE = 64;
 
+export type ActivityAuthor =
+	| Exclude<FsChangeAuthor, { kind: "user" }>
+	| { kind: "user"; mine: boolean };
+
 export interface FileWrite {
-	author: FsChangeAuthor;
+	author: ActivityAuthor;
 	hash: string | null;
 	seen: number;
 }
 
-export type FileWriterTone = "user" | "agent1" | "agent2" | "agent3" | "external";
+type FileWriterTone = "user" | "agent1" | "agent2" | "agent3" | "external";
 
 export interface FileWriter {
 	id: string;
-	author: Exclude<FsChangeAuthor, { kind: "user" }>;
+	author: ActivityAuthor;
 	tone: FileWriterTone;
 	inferred: boolean;
 }
 
+interface OwnSave {
+	hash: string | null;
+	seen: number;
+}
+
 interface WorkspaceFileActivity {
 	paths: Record<string, readonly FileWrite[]>;
+	saves: Record<string, readonly OwnSave[]>;
 	agents: Readonly<Record<string, number>>;
 	nextAgent: number;
 }
@@ -30,20 +41,61 @@ export type FileActivity = Record<string, WorkspaceFileActivity>;
 
 export const NO_FILE_WRITES: readonly FileWrite[] = [];
 const NO_FILE_WRITERS: readonly FileWriter[] = [];
+const EMPTY_WORKSPACE: WorkspaceFileActivity = { paths: {}, saves: {}, agents: {}, nextAgent: 0 };
 
-export const isInferredAuthor = (author: FsChangeAuthor) =>
+export const isMine = (author: ActivityAuthor) => author.kind === "user" && author.mine;
+
+export const isInferredAuthor = (author: ActivityAuthor) =>
 	author.kind === "external" || (author.kind === "agent" && author.via === "script");
 
-export const writerId = (author: FsChangeAuthor) =>
-	author.kind === "agent" ? `agent:${author.sessionId}` : author.kind;
+export const writerId = (author: ActivityAuthor) =>
+	author.kind === "agent"
+		? `agent:${author.sessionId}`
+		: author.kind === "user" && !author.mine
+			? "user:elsewhere"
+			: author.kind;
 
 export type AgentSlots = WorkspaceFileActivity["agents"];
 
-export function writerTone(author: FsChangeAuthor, agents: AgentSlots): FileWriterTone {
+export function writerTone(author: ActivityAuthor, agents: AgentSlots): FileWriterTone {
 	if (author.kind === "user") return "user";
 	if (author.kind === "external") return "external";
 	const slot = (agents[author.sessionId] ?? 0) % AGENT_SLOTS;
 	return slot === 0 ? "agent1" : slot === 1 ? "agent2" : "agent3";
+}
+
+function activityAuthor(
+	author: FsChangeAuthor,
+	hash: string | null,
+	saves: readonly OwnSave[],
+	seen: number,
+): ActivityAuthor {
+	if (author.kind !== "user") return author;
+	const mine = saves.some(
+		(save) => save.hash === hash && seen - save.seen < FILE_ACTIVITY_WINDOW_MS,
+	);
+	return { kind: "user", mine };
+}
+
+function capWrites(writes: readonly FileWrite[]): FileWrite[] {
+	let mine = 0;
+	let others = 0;
+	return writes.filter((write) =>
+		isMine(write.author) ? ++mine <= 1 : ++others <= WRITES_PER_PATH,
+	);
+}
+
+export function withOwnFileSave(
+	activity: FileActivity,
+	save: { workspaceId: string; path: string; hash: string | null; seen: number },
+): FileActivity {
+	const current = activity[save.workspaceId] ?? EMPTY_WORKSPACE;
+	const previous = (current.saves[save.path] ?? []).filter((entry) => entry.hash !== save.hash);
+	const saves = {
+		...current.saves,
+		[save.path]: [{ hash: save.hash, seen: save.seen }, ...previous].slice(0, SAVES_PER_PATH),
+	};
+	return { ...activity, [save.workspaceId]: { ...current, saves } };
 }
 
 export function withFsChangeActivity(
@@ -55,24 +107,22 @@ export function withFsChangeActivity(
 	if (!authors) return activity;
 	const entries = Object.entries(authors);
 	if (entries.length === 0) return activity;
-	const current = activity[payload.workspaceId] ?? { paths: {}, agents: {}, nextAgent: 0 };
+	const current = activity[payload.workspaceId] ?? EMPTY_WORKSPACE;
 	const paths = { ...current.paths };
 	let { agents, nextAgent } = current;
 	for (const [path, write] of entries) {
+		const author = activityAuthor(write.author, write.hash, current.saves[path] ?? [], seen);
 		const kept = (paths[path] ?? []).filter(
 			(previous) =>
 				seen - previous.seen < FILE_ACTIVITY_WINDOW_MS &&
-				(previous.hash !== write.hash || writerId(previous.author) !== writerId(write.author)),
+				(previous.hash !== write.hash || writerId(previous.author) !== writerId(author)),
 		);
-		paths[path] = [{ author: write.author, hash: write.hash, seen }, ...kept].slice(
-			0,
-			WRITES_PER_PATH,
-		);
+		paths[path] = capWrites([{ author, hash: write.hash, seen }, ...kept]);
 		if (write.author.kind === "agent" && agents[write.author.sessionId] === undefined) {
 			agents = withAgent(agents, paths, write.author.sessionId, nextAgent++);
 		}
 	}
-	return { ...activity, [payload.workspaceId]: { paths, agents, nextAgent } };
+	return { ...activity, [payload.workspaceId]: { ...current, paths, agents, nextAgent } };
 }
 
 function withAgent(
@@ -134,7 +184,7 @@ export function fileWriters(
 	const writers: FileWriter[] = [];
 	for (const write of writes) {
 		const { author } = write;
-		if (author.kind === "user") continue;
+		if (isMine(author)) continue;
 		const id = writerId(author);
 		if (writers.some((writer) => writer.id === id)) continue;
 		writers.push({

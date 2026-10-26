@@ -30,7 +30,7 @@ export function syncFileTabs(workspaceId: string, path: string, file: FileConten
 	}
 }
 
-const io: FileIo = {
+export const fileIo: FileIo = {
 	read: (workspaceId, path) => {
 		const tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		return getTransport()
@@ -40,7 +40,15 @@ const io: FileIo = {
 				return file;
 			});
 	},
-	write: (params) => getTransport().request("fs.writeFile", params),
+	write: (params) =>
+		getTransport()
+			.request("fs.writeFile", params)
+			.then((result) => {
+				if (result.status === "written") {
+					useAppStore.getState().noteOwnFileSave(params.workspaceId, params.path, result.meta.hash);
+				}
+				return result;
+			}),
 };
 
 function writable(protocolVersion: number | null): boolean {
@@ -155,7 +163,7 @@ export function loadBufferRegistry(
 	loading ??= load()
 		.then(({ createBufferRegistry }) => {
 			registry = createBufferRegistry({
-				io,
+				io: fileIo,
 				drafts,
 				draftOwner: pageDraftOwner(),
 				publish: (workspaceId, path, summary) =>

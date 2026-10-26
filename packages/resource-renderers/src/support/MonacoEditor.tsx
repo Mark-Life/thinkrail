@@ -204,7 +204,7 @@ export default function MonacoEditor({
 			text: () => latestRef.current.presenceText,
 			announce: (text) => setAnnouncement((previous) => ({ seq: previous.seq + 1, text })),
 		});
-		marks.setWrites(latestRef.current.presence?.writes ?? []);
+		marks.setLatest(latestRef.current.presence?.latest);
 		presenceRef.current = marks;
 		const binding = bindEditSession(codeEditor, {
 			scope,
@@ -227,7 +227,7 @@ export default function MonacoEditor({
 	}, [commentLabel]);
 
 	useLayoutEffect(() => {
-		presenceRef.current?.setWrites(presence?.writes ?? []);
+		presenceRef.current?.setLatest(presence?.latest);
 	}, [presence]);
 
 	useLayoutEffect(() => {

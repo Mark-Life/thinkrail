@@ -258,13 +258,14 @@ needs no new contract. A view mounts from `snapshot()`, never from `content`, an
 changes as deltas. The package owns no buffer, save, history or conflict state. An editable Monaco keeps Monaco's
 tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor for keyboard users.
 
-**Presence is an optional prop, like review.** `ResourceViewProps.presence` (`SurfacePresence`) lists the
-recent writes the host knows for the file, newest first: each a disk `hash` and a `PresenceWriter` (`id`, `label`,
+**Presence is an optional prop, like review.** `ResourceViewProps.presence` (`SurfacePresence`) carries the
+newest write the host knows for the file as `latest`: a disk `hash` and a `PresenceWriter` (`id`, `label`,
 `tone`: `user` | `agent1..3` | `external`, `inferred`). The host owns who wrote what; the view owns where.
-A view marks the changes of an `EditUpdate` whose `disk.hash` matches the newest write, so the ranges come from the
+A view marks the changes of an `EditUpdate` whose `disk.hash` matches `latest`, so the ranges come from the
 host's own merge diff and only the author from the host. A match with an older write stays unknown: the
 same content can come back from another writer, and a path the host sent no author for must not inherit
-an old one. A `user` write marks nothing, but it still claims its hash. Without `edit` there is no disk update, so a
+an old one. The host leaves `latest` out for the viewer's own write, so it marks nothing; a `user` writer it does send
+(the same person in another window) is marked like any other. Without `edit` there is no disk update, so a
 read-only view shows no marks.
 
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,

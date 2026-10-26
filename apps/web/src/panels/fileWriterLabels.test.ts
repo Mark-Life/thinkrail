@@ -18,6 +18,7 @@ test("an agent with no known chat, an outside writer and the user get plain name
 	expect(writerInitial(t, tool, "")).toBe("A");
 	expect(writerLabel(t, { kind: "external" }, "")).toBe("External");
 	expect(writerInitial(t, { kind: "external" }, "")).toBe("E");
-	expect(writerLabel(t, { kind: "user" }, "")).toBe("You");
-	expect(writerInitial(t, { kind: "user" }, "")).toBe("Y");
+	expect(writerLabel(t, { kind: "user", mine: true }, "")).toBe("You");
+	expect(writerLabel(t, { kind: "user", mine: false }, "")).toBe("You, in another window");
+	expect(writerInitial(t, { kind: "user", mine: false }, "")).toBe("Y");
 });

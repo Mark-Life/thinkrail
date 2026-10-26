@@ -163,10 +163,6 @@ export function attachPresence(
 
 	const paint = (mark: Mark, writer: PresenceWriter) => {
 		for (const timer of mark.timers) clearTimeout(timer);
-		if (writer.tone === "user") {
-			drop(mark);
-			return;
-		}
 		const now = Date.now();
 		mark.writer = writer;
 		mark.paintedAt = now;
@@ -223,8 +219,8 @@ export function attachPresence(
 			if (writer) paint(mark, writer);
 			else mark.timers = [setTimeout(() => drop(mark), PRESENCE_TIMING.pendingMs)];
 		},
-		setWrites(next: readonly PresenceWrite[]) {
-			latest = next[0];
+		setLatest(next: PresenceWrite | undefined) {
+			latest = next;
 			for (const mark of [...marks]) {
 				if (!marks.has(mark)) continue;
 				const writer = mark.writer ? undefined : writerOf(mark.hash);
