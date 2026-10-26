@@ -2095,7 +2095,9 @@ own section. The kebab menu (`plan-menu`, a
   **Cancel**. It reads the store's `selectFileSaveIndicator` and `selectFileAutosaving`. In auto mode a
   file autosave is about to write or is writing (`pending` / `saving`) saves first (`saveBeforeClose`) and
   closes when that leaves it clean. An edit typed during that save is saved too before the close, and a
-  second close request for the same file while this runs does nothing. Only a paused file gets the dialog. Save closes only once the save leaves the
+  second close request for the same file while this runs does nothing. A save with no answer after 3 s
+  (a slow disk, a dropped socket) opens the dialog instead; its late answer neither closes the tab nor asks
+  again. Otherwise only a paused file gets the dialog. Save closes only once the save leaves the
   buffer clean; any other result (a conflict, offline, read-only, too large, a failure) closes the dialog
   and selects that tab, so its banner says why, even when the tab was in the background. Don't save
   discards the buffer and its draft. While a save runs, Save shows "Saving…" and

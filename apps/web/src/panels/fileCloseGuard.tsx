@@ -13,6 +13,8 @@ import { discardFile, saveFile } from "../editing";
 import { fileName } from "../lib";
 import { selectFileAutosaving, selectFileSaveIndicator, useAppStore } from "../store";
 
+const CLOSE_SAVE_WAIT_MS = 3000;
+
 interface PendingClose {
 	workspaceId: string;
 	path: string;
@@ -34,6 +36,7 @@ export async function saveBeforeClose({
 	state,
 	close,
 	ask,
+	patience,
 }: {
 	file: { workspaceId: string; path: string };
 	closing: Set<string>;
@@ -41,13 +44,21 @@ export async function saveBeforeClose({
 	state: () => Parameters<typeof closeAction>[0];
 	close: () => void;
 	ask: () => void;
+	patience: Promise<unknown>;
 }) {
 	const key = JSON.stringify([file.workspaceId, file.path]);
 	if (closing.has(key)) return;
 	closing.add(key);
 	try {
 		for (;;) {
-			await save(file.workspaceId, file.path).catch(() => null);
+			const settled = await Promise.race([
+				save(file.workspaceId, file.path).then(
+					() => true,
+					() => true,
+				),
+				patience.then(() => false),
+			]);
+			if (!settled) return ask();
 			const action = closeAction(state(), file);
 			if (action === "close") return close();
 			if (action === "ask") return ask();
@@ -91,6 +102,7 @@ export function useFileCloseGuard(): {
 				state: useAppStore.getState,
 				close,
 				ask: () => setPending({ ...file, close }),
+				patience: new Promise((resolve) => setTimeout(resolve, CLOSE_SAVE_WAIT_MS)),
 			});
 	};
 	const save = async (request: PendingClose) => {

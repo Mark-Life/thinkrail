@@ -4,6 +4,7 @@ import type { FileBufferSummary } from "../store";
 import { closeAction, saveBeforeClose } from "./fileCloseGuard";
 
 const FILE = { workspaceId: "ws", path: "a.ts" };
+const never = new Promise<void>(() => {});
 
 const action = (summary: FileBufferSummary | null, fileSaveMode: FileSaveMode) =>
 	closeAction(
@@ -36,6 +37,7 @@ test("an edit typed while the close-time save runs is saved too, and the guard n
 		state: () => ({ fileSaveMode: "auto", fileBuffersByWorkspace: { ws: { "a.ts": summary } } }),
 		close: () => events.push("close"),
 		ask: () => events.push("ask"),
+		patience: never,
 	});
 	summary = { status: "dirty", dirty: true, pending: true };
 	saves[0]?.();
@@ -59,6 +61,7 @@ test("a save that leaves the file paused opens the guard", async () => {
 		}),
 		close: () => events.push("close"),
 		ask: () => events.push("ask"),
+		patience: never,
 	});
 	expect(events).toEqual(["ask"]);
 });
@@ -77,6 +80,7 @@ test("a second close click while the first save runs starts no save and closes o
 				closes += 1;
 			},
 			ask: () => {},
+			patience: never,
 		});
 	const closing = new Set<string>();
 	const first = request();
@@ -87,4 +91,32 @@ test("a second close click while the first save runs starts no save and closes o
 	await first;
 	expect(closes).toBe(1);
 	expect(closing.size).toBe(0);
+});
+
+test("a save that never answers opens the guard once patience runs out, and its late answer does nothing", async () => {
+	const events: string[] = [];
+	const closing = new Set<string>();
+	let answer = () => {};
+	let giveUp = () => {};
+	const done = saveBeforeClose({
+		file: FILE,
+		closing,
+		save: () => new Promise<void>((resolve) => (answer = resolve)),
+		state: () => ({
+			fileSaveMode: "auto",
+			fileBuffersByWorkspace: { ws: { "a.ts": { status: "saving", dirty: true } } },
+		}),
+		close: () => events.push("close"),
+		ask: () => events.push("ask"),
+		patience: new Promise<void>((resolve) => (giveUp = resolve)),
+	});
+	await Bun.sleep(0);
+	expect(events).toEqual([]);
+	giveUp();
+	await done;
+	expect(events).toEqual(["ask"]);
+	expect(closing.size).toBe(0);
+	answer();
+	await Bun.sleep(0);
+	expect(events).toEqual(["ask"]);
 });
