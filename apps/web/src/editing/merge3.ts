@@ -92,24 +92,16 @@ function clusters(all: Hunk[]): Hunk[][] {
 	return groups;
 }
 
-function commonEdge(a: readonly string[], b: readonly string[], fromEnd: boolean, skip = 0) {
-	let count = 0;
-	const limit = Math.min(a.length, b.length) - skip;
-	while (count < limit) {
-		const index = fromEnd ? -1 - count : count;
-		if (a.at(index) !== b.at(index)) break;
-		count++;
-	}
-	return count;
+function startsWith(lines: readonly string[], part: readonly string[], fromEnd: boolean): boolean {
+	const offset = fromEnd ? lines.length - part.length : 0;
+	return part.every((line, index) => lines[offset + index] === line);
 }
 
 function insertUnion(mine: readonly string[], theirs: readonly string[]): string[] | null {
-	const head = commonEdge(mine, theirs, false);
-	const tail = commonEdge(mine, theirs, true, head);
-	const mineRest = mine.slice(head, mine.length - tail);
-	const theirsRest = theirs.slice(head, theirs.length - tail);
-	if (mineRest.some((line) => theirsRest.includes(line))) return null;
-	return [...mine.slice(0, mine.length - tail), ...theirsRest, ...mine.slice(mine.length - tail)];
+	const [longer, shorter] = mine.length >= theirs.length ? [mine, theirs] : [theirs, mine];
+	if (startsWith(longer, shorter, false) || startsWith(longer, shorter, true)) return [...longer];
+	if (mine.some((line) => theirs.includes(line))) return null;
+	return [...mine, ...theirs];
 }
 
 function version(base: string[], start: number, end: number, members: Hunk[]): string[] {

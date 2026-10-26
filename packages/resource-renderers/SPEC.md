@@ -25,7 +25,8 @@ diff panes, the file-comparison diff tab, and extension tool cards (visualize's 
 One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
 
 - the registry contract — types, `registerResourceRenderer`, `resolveRenderers`, `describeResource`,
-  `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, `rendererImplementationKey`, and the content
+  `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, `rendererImplementationKey`,
+  `CONFLICT_CHOICES`, `CONFLICT_CHOICE_LABELS`, and the content
   rules every surface shares: `resourceContent(text, meta, url)` (no metadata yet is provisional text, a
   missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
   modified)` (a diff is described by its modified side unless that side is absent, and is text only when

@@ -66,14 +66,19 @@ test("inserts at the same point keep mine first; an insert inside an edit confli
 	expect(inside.conflicts).toHaveLength(1);
 });
 
-test("same-point inserts that share lines keep each shared line once", () => {
+test("same-point inserts where one contains the other keep the longer one", () => {
 	expect(merged("a\nX\n", "a\nX\nY\n", "a\n")).toMatchObject({
 		text: "a\nX\nY\n",
 		conflicts: [],
 	});
-	expect(merged("a\nA\nX\n", "a\nB\nX\n", "a\n").text).toBe("a\nA\nB\nX\n");
+	expect(merged("a\nY\nX\n", "a\nX\n", "a\n").text).toBe("a\nY\nX\n");
+});
+
+test("same-point inserts that share only some lines conflict", () => {
+	const result = merged("a\nfunction x() {\n}\n", "a\nfunction y() {\n}\n", "a\n");
+	expect(result.text).toBe("a\nfunction x() {\n}\n");
+	expect(result.conflicts).toEqual([{ from: 2, to: 19, theirs: "function y() {\n}\n" }]);
 	const crossed = merged("a\nA\nX\n", "a\nX\nB\n", "a\n");
-	expect(crossed.text).toBe("a\nA\nX\n");
 	expect(crossed.conflicts).toEqual([{ from: 2, to: 6, theirs: "X\nB\n" }]);
 });
 

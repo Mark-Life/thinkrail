@@ -224,3 +224,12 @@ test("Theirs and Both for a deleted last line keep its line break", () => {
 		expect(handle.session.snapshot()).toBe(expected);
 	}
 });
+
+test("Both on two functions inserted at the same point keeps each whole", () => {
+	const context = setup({ text: "a\n" });
+	const { handle } = context;
+	type(handle, 2, "function x() {\n}\n");
+	diskChange(context, "a\nfunction y() {\n}\n");
+	handle.session.resolveConflict(firstConflict(handle).id, "both");
+	expect(handle.session.snapshot()).toBe("a\nfunction x() {\n}\nfunction y() {\n}\n");
+});

@@ -78,8 +78,8 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   banner). Hunks conflict only when they share a base line, or when an insert lands strictly inside the
   other side's changed lines. Edits on adjacent lines, and an insert at the edge of the other side's
   edit, merge. The same change on both sides lands once. Two different inserts at the same point merge
-  with mine first, keeping lines they share at their start or end once; if the rest still shares a line,
-  they conflict. A conflict keeps mine in the text and records the disk lines (`theirs`) next to it.
+  with mine first. When one insert starts or ends with the whole other one, the longer one lands; any
+  other pair that shares a line conflicts. A conflict keeps mine in the text and records the disk lines (`theirs`) next to it.
   Inputs are LF editor text; a missing final newline is merged as if present, then follows the side
   that changed it. A conflict at the end of the text holds the disk tail exactly: its final newline
   follows the disk, and an empty one after a dropped newline starts its `theirs` with one. The merge also returns the disk side as `TextChange[]` against mine, which enter

@@ -151,7 +151,7 @@ flow through the operating-system responder chain across ordinary inputs, Monaco
 webview surfaces without competing with their local key handling.
 
 macOS receives the conventional application, File, Edit, and Window menus; File holds only Save (Command-S, a custom-action item). Windows receives the same
-Edit menu: custom-action Undo and Redo (Ctrl-Z, Ctrl-Shift-Z; redo is no longer Ctrl-Y) above the role items. Linux skips registration because Electrobun 2.0.1 does not support application menus
+Edit menu: custom-action Undo and Redo (Ctrl-Z, Ctrl-Shift-Z) above the role items. Linux skips registration because Electrobun 2.0.1 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
 are custom-action items, not roles; see Confirmed quit and close. Undo and Redo (Command/Ctrl-Z,
