@@ -26,7 +26,6 @@ const frame = (paths: string[], truncated = false): WorkspaceFsChangedPayload =>
 
 test("fsChanged carries the author of each changed path the ledger knows", () => {
 	const provenance = createProvenance();
-	const resolve = (_workspaceId: string, path: string) => join(dir, path);
 	const content = new TextEncoder().encode("agent\n");
 	writeFileSync(join(dir, "a.ts"), content);
 	writeFileSync(join(dir, "b.ts"), "nobody\n");
@@ -39,7 +38,7 @@ test("fsChanged carries the author of each changed path the ledger knows", () =>
 
 	const payload = withFsChangeAuthors(frame(["a.ts", "b.ts", "../out.ts"]), {
 		provenance,
-		resolve: (workspaceId, path) => (path.startsWith("..") ? null : resolve(workspaceId, path)),
+		root: () => dir,
 	});
 	expect(payload.authors).toEqual({
 		"a.ts": {
@@ -52,12 +51,12 @@ test("fsChanged carries the author of each changed path the ledger knows", () =>
 
 test("a frame with no known author, a truncated frame and a pathless frame stay as they were", () => {
 	const provenance = createProvenance();
-	const resolve = (_workspaceId: string, path: string) => join(dir, path);
+	const root = () => dir;
 	writeFileSync(join(dir, "a.ts"), "x\n");
 	const plain = frame(["a.ts"]);
-	expect(withFsChangeAuthors(plain, { provenance, resolve })).toBe(plain);
+	expect(withFsChangeAuthors(plain, { provenance, root })).toBe(plain);
 	const truncated = frame(["a.ts"], true);
-	expect(withFsChangeAuthors(truncated, { provenance, resolve })).toBe(truncated);
+	expect(withFsChangeAuthors(truncated, { provenance, root })).toBe(truncated);
 	const pathless = frame([]);
-	expect(withFsChangeAuthors(pathless, { provenance, resolve })).toBe(pathless);
+	expect(withFsChangeAuthors(pathless, { provenance, root })).toBe(pathless);
 });
