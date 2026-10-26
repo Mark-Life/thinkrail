@@ -39,32 +39,149 @@ test("the editor's own edits are never echoed back to it", () => {
 	expect(received).toEqual([]);
 });
 
-test("a dirty buffer keeps its text on a disk change until Reload or Keep mine", async () => {
+test("a dirty buffer merges a disk change on another line, and a save writes both", async () => {
 	const { disk, registry, handle, received, summaries } = setup();
 	type(handle, 0, "mine ");
-	disk.put(PATH, "theirs\n");
+	disk.put(PATH, "one\nTWO\n");
 	handle.adoptRead(disk.content(PATH), handle.readToken());
-	expect(handle.session.snapshot()).toBe("mine one\ntwo\n");
-	expect(summaries.at(-1)?.status).toBe("stale");
-	handle.keepMine();
+	expect(handle.session.snapshot()).toBe("mine one\nTWO\n");
+	expect(received.at(-1)).toEqual([{ from: 9, to: 12, insert: "TWO" }]);
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
 	await registry.save(handle.key);
-	expect(disk.text(PATH)).toBe("mine one\ntwo\n");
-	disk.put(PATH, "agent\n");
-	type(handle, 0, "x");
-	handle.adoptRead(disk.content(PATH), handle.readToken());
-	handle.reload();
-	expect(handle.session.snapshot()).toBe("agent\n");
-	expect(received.at(-1)).toBeDefined();
+	expect(disk.text(PATH)).toBe("mine one\nTWO\n");
 });
 
-test("a stale save shows the conflict and writes nothing", async () => {
+test("a change to the same line pauses the save until the user picks a side", async () => {
+	const { disk, registry, handle, summaries } = setup();
+	type(handle, 0, "mine ");
+	disk.put(PATH, "theirs\ntwo\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(handle.session.snapshot()).toBe("mine one\ntwo\n");
+	expect(summaries.at(-1)).toEqual({ status: "conflict", dirty: true, conflicts: 1 });
+	expect(handle.session.conflicts()).toEqual([
+		{ id: expect.any(Number), from: 0, to: 9, theirs: "theirs\n" },
+	]);
+	await registry.save(handle.key);
+	expect(disk.writes).toEqual([]);
+	const [conflict] = handle.session.conflicts();
+	handle.session.resolveConflict(conflict?.id ?? 0, "both");
+	expect(handle.session.snapshot()).toBe("mine one\ntheirs\ntwo\n");
+	expect(handle.session.conflicts()).toEqual([]);
+	handle.session.undo();
+	expect(handle.session.snapshot()).toBe("mine one\ntwo\n");
+	expect(handle.session.conflicts()).toHaveLength(1);
+	handle.session.resolveConflict(handle.session.conflicts()[0]?.id ?? 0, "theirs");
+	await registry.save(handle.key);
+	expect(disk.text(PATH)).toBe("theirs\ntwo\n");
+});
+
+test("Mine keeps the text, saves it, and undo reopens the conflict", async () => {
+	const { disk, registry, handle, received } = setup();
+	type(handle, 0, "mine ");
+	disk.put(PATH, "theirs\ntwo\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	const updates = received.length;
+	handle.session.resolveConflict(handle.session.conflicts()[0]?.id ?? 0, "mine");
+	expect(handle.session.conflicts()).toEqual([]);
+	expect(received.slice(updates)).toEqual([[]]);
+	handle.session.undo();
+	expect(handle.session.conflicts()).toHaveLength(1);
+	expect(handle.session.snapshot()).toBe("mine one\ntwo\n");
+	handle.session.redo();
+	expect(handle.session.conflicts()).toEqual([]);
+	await registry.save(handle.key);
+	expect(disk.text(PATH)).toBe("mine one\ntwo\n");
+});
+
+test("Keep mine and Reload stay for a disk change that cannot merge", async () => {
+	const { disk, registry, handle, summaries } = setup();
+	const lines = Array.from({ length: 3000 }, (_, index) => `line ${index}\n`);
+	disk.put(PATH, lines.join(""));
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	type(handle, 0, "mine ");
+	disk.put(PATH, lines.map((line, index) => (index % 2 ? line : `agent ${line}`)).join(""));
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(summaries.at(-1)?.status).toBe("stale");
+	handle.keepMine();
+	await registry.save(handle.key);
+	expect(disk.text(PATH)?.startsWith("mine line 0\n")).toBe(true);
+	type(handle, 0, "x");
+	const agent = lines.map((line, index) => (index % 2 ? `agent ${line}` : line)).join("");
+	disk.put(PATH, agent);
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(summaries.at(-1)?.status).toBe("stale");
+	handle.reload();
+	expect(handle.session.snapshot()).toBe(agent);
+	expect(summaries.at(-1)).toEqual({ status: "clean", dirty: false });
+});
+
+test("a stale save merges the disk version and retries once", async () => {
+	const { disk, registry, handle } = setup();
+	type(handle, 0, "mine ");
+	disk.put(PATH, "one\nagent\n");
+	const summary = await registry.save(handle.key);
+	expect(disk.writes.map((write) => write.content)).toEqual([
+		"mine one\ntwo\n",
+		"mine one\nagent\n",
+	]);
+	expect(disk.text(PATH)).toBe("mine one\nagent\n");
+	expect(summary).toEqual({ status: "clean", dirty: false });
+});
+
+test("a stale save on the same line pauses and writes nothing", async () => {
 	const { disk, registry, handle } = setup();
 	type(handle, 0, "mine ");
 	disk.put(PATH, "agent wrote this\n");
 	const summary = await registry.save(handle.key);
-	expect(summary?.status).toBe("stale");
+	expect(summary).toMatchObject({ status: "conflict", conflicts: 1 });
 	expect(disk.text(PATH)).toBe("agent wrote this\n");
+});
+
+test("undo skips a merge above the cursor, and redo brings the edit back", () => {
+	const { disk, handle } = setup();
+	type(handle, 4, "X");
+	disk.put(PATH, "zero\none\ntwo\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(handle.session.snapshot()).toBe("zero\none\nXtwo\n");
+	handle.session.undo();
+	expect(handle.session.snapshot()).toBe("zero\none\ntwo\n");
+	expect(handle.session.canUndo()).toBe(false);
+	handle.session.redo();
+	expect(handle.session.snapshot()).toBe("zero\none\nXtwo\n");
+});
+
+test("only merges in the history means nothing to undo", () => {
+	const { disk, handle, received } = setup();
+	disk.put(PATH, "one\nTWO\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(handle.session.canUndo()).toBe(false);
+	handle.session.undo();
+	expect(handle.session.snapshot()).toBe("one\nTWO\n");
+	expect(received).toHaveLength(1);
+});
+
+test("undo sends the change and the restored selection to the editor", () => {
+	const { handle } = setup();
+	const updates: unknown[] = [];
+	handle.session.subscribe((update) => updates.push(update));
+	handle.session.select([{ anchor: 4, head: 4 }]);
+	type(handle, 4, "X");
+	handle.session.undo();
+	expect(updates).toEqual([
+		{ changes: [{ from: 4, to: 5, insert: "" }], selection: [{ anchor: 4, head: 4 }] },
+	]);
+});
+
+test("a disk read waits while the editor is composing, then merges", async () => {
+	const { disk, handle } = setup();
+	type(handle, 0, "mine ");
+	handle.session.setComposing(true);
+	disk.put(PATH, "one\nTWO\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(handle.session.snapshot()).toBe("mine one\ntwo\n");
+	handle.session.setComposing(false);
+	await settle();
+	expect(handle.session.snapshot()).toBe("mine one\nTWO\n");
 });
 
 test("a read that lands during a save is dropped, and one fresh read follows the save", async () => {

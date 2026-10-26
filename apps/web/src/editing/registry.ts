@@ -1,6 +1,5 @@
 import type { FileContent, FileWriteResult, ResourceMeta, WsParams } from "@thinkrail/contracts";
-import type { ResourceEditSession, TextChange } from "@thinkrail/resource-renderers";
-import { tupleKey } from "../lib";
+import type { EditUpdate, ResourceEditSession } from "@thinkrail/resource-renderers";
 import type { FileBufferError, FileBufferSummary } from "../store";
 import { wsErrorCode } from "../transport";
 import {
@@ -19,10 +18,23 @@ import {
 	markError,
 	markMissing,
 	reloadFromDisk,
+	resolveConflict,
 	restoreDraft,
+	withDoc,
 } from "./buffer";
 import type { DraftKey, DraftOwner, DraftStore } from "./drafts";
-import { applyChanges, textChanges } from "./textChanges";
+import {
+	canRedoDoc,
+	canUndoDoc,
+	conflictsOf,
+	docChanges,
+	docSelection,
+	redoDoc,
+	selectDoc,
+	undoDoc,
+} from "./history";
+import { fileBufferKey } from "./keys";
+import { textChanges } from "./textChanges";
 
 export interface FileIo {
 	read(workspaceId: string, path: string): Promise<FileContent>;
@@ -57,7 +69,7 @@ interface Entry {
 	workspaceId: string;
 	path: string;
 	state: BufferState;
-	views: Set<(changes: readonly TextChange[]) => void>;
+	views: Set<(update: EditUpdate) => void>;
 	watchers: Set<() => void>;
 	readSeq: number;
 	landedRead: number;
@@ -67,12 +79,12 @@ interface Entry {
 	dropped: boolean;
 	pendingSave: Promise<void> | null;
 	nextSave: Promise<void> | null;
+	composing: boolean;
+	afterCompose: "read" | "save" | null;
 	handle: FileBufferHandle;
 }
 
-export function fileBufferKey(workspaceId: string, path: string): string {
-	return tupleKey("file-buffer", workspaceId, path);
-}
+type CommitOrigin = "view" | "history" | "other";
 
 function saveError(error: unknown): FileBufferError {
 	const code = wsErrorCode(error);
@@ -111,15 +123,25 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		entry.draftTimer = setTimeout(() => void writeDraft(entry), deps.draftDelayMs);
 	};
 
-	const commit = (entry: Entry, next: BufferState, fromView: boolean) => {
+	const broadcast = (entry: Entry, previous: BufferState, origin: CommitOrigin) => {
+		const next = entry.state;
+		const textChanged = next.text !== previous.text;
+		if (origin === "view" || entry.views.size === 0) return;
+		if (!textChanged && conflictsOf(next.doc) === conflictsOf(previous.doc)) return;
+		const changes = textChanged
+			? (docChanges(previous.doc, next.doc) ?? textChanges(previous.text, next.text))
+			: [];
+		const update: EditUpdate =
+			origin === "history" ? { changes, selection: docSelection(next.doc) } : { changes };
+		for (const view of entry.views) view(update);
+	};
+
+	const commit = (entry: Entry, next: BufferState, origin: CommitOrigin) => {
 		const previous = entry.state;
 		if (next === previous || entry.dropped) return;
 		entry.state = next;
+		broadcast(entry, previous, origin);
 		if (next.text !== previous.text) {
-			if (!fromView && entry.views.size > 0) {
-				const changes = textChanges(previous.text, next.text);
-				for (const view of entry.views) view(changes);
-			}
 			for (const watcher of entry.watchers) watcher();
 		}
 		if (next.text !== previous.text || draftBaseHash(next) !== draftBaseHash(previous)) {
@@ -177,29 +199,34 @@ export function createBufferRegistry(deps: RegistryDeps) {
 
 	const readFailed = (entry: Entry, error: unknown, token: number) => {
 		if (wsErrorCode(error) !== "FILE_NOT_FOUND" || !lands(entry, token)) return;
-		commit(entry, markMissing(entry.state), false);
+		commit(entry, markMissing(entry.state), "other");
 	};
 
 	const adoptRead = (entry: Entry, file: FileContent, token: number) => {
+		if (entry.dropped) return;
+		if (entry.composing) {
+			entry.afterCompose ??= "read";
+			return;
+		}
 		if (!lands(entry, token)) return;
 		const disk = editorDisk(file);
 		commit(
 			entry,
 			disk ? adoptDisk(entry.state, disk) : markError(entry.state, "notEditable"),
-			false,
+			"other",
 		);
 	};
 
-	const runSave = async (entry: Entry): Promise<void> => {
+	const runSave = async (entry: Entry, retried = false): Promise<void> => {
 		if (entry.dropped) return;
 		const { state, request } = beginSave(entry.state);
 		if (request && !deps.isConnected()) {
-			commit(entry, markError(entry.state, "offline"), false);
+			commit(entry, markError(entry.state, "offline"), "other");
 			return;
 		}
-		commit(entry, state, false);
+		commit(entry, state, "other");
 		if (!request) return;
-		let ownEcho = false;
+		let retry = false;
 		try {
 			const result = await deps.io.write({
 				workspaceId: entry.workspaceId,
@@ -207,15 +234,21 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				content: request.content,
 				expect: request.expect,
 			});
+			if (result.status === "stale" && entry.composing) {
+				commit(entry, { ...entry.state, saving: null }, "other");
+				entry.afterCompose = "save";
+				entry.rereadAfterSave = false;
+				return;
+			}
 			const next = finishSave(entry.state, result);
-			ownEcho = result.status === "stale" && next.issue === null && isDirty(next);
-			commit(entry, next, false);
+			retry = result.status === "stale" && next.issue === null && isDirty(next);
+			commit(entry, next, "other");
 		} catch (error) {
-			commit(entry, failSave(entry.state, saveError(error)), false);
+			commit(entry, failSave(entry.state, saveError(error)), "other");
 		} finally {
 			entry.writeFloor = entry.readSeq + 1;
 		}
-		if (ownEcho && !entry.dropped) return runSave(entry);
+		if (retry && !retried && !entry.dropped) return runSave(entry, true);
 		if (entry.rereadAfterSave && !entry.dropped) {
 			entry.rereadAfterSave = false;
 			await reread(entry);
@@ -238,6 +271,14 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		return pending;
 	};
 
+	const setComposing = (entry: Entry, composing: boolean) => {
+		entry.composing = composing;
+		const after = entry.afterCompose;
+		if (composing || after === null || entry.dropped) return;
+		entry.afterCompose = null;
+		void reread(entry).then(() => (after === "save" ? save(entry) : undefined));
+	};
+
 	const loadDraft = async (entry: Entry) => {
 		const draft = await deps.drafts.get(draftKey(entry));
 		if (!draft || entry.dropped) return;
@@ -250,7 +291,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		}
 		const next = restoreDraft(entry.state, draft);
 		if (next === entry.state) return;
-		commit(entry, next, false);
+		commit(entry, next, "other");
 		void writeDraft(entry);
 		deps.onDraftRestored(entry.path);
 	};
@@ -272,16 +313,28 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			dropped: false,
 			pendingSave: null,
 			nextSave: null,
+			composing: false,
+			afterCompose: null,
 			handle: {
 				key,
 				session: {
 					snapshot: () => entry.state.text,
-					applyLocal: (changes) =>
-						commit(entry, localEdit(entry.state, applyChanges(entry.state.text, changes)), true),
+					applyLocal: (changes, kind) =>
+						commit(entry, localEdit(entry.state, changes, kind), "view"),
+					select: (ranges) =>
+						commit(entry, withDoc(entry.state, selectDoc(entry.state.doc, ranges)), "view"),
 					subscribe: (listener) => {
 						entry.views.add(listener);
 						return () => entry.views.delete(listener);
 					},
+					undo: () => commit(entry, withDoc(entry.state, undoDoc(entry.state.doc)), "history"),
+					redo: () => commit(entry, withDoc(entry.state, redoDoc(entry.state.doc)), "history"),
+					canUndo: () => canUndoDoc(entry.state.doc),
+					canRedo: () => canRedoDoc(entry.state.doc),
+					setComposing: (composing) => setComposing(entry, composing),
+					conflicts: () => conflictsOf(entry.state.doc),
+					resolveConflict: (id, choice) =>
+						commit(entry, resolveConflict(entry.state, id, choice), "other"),
 				},
 				subscribeText: (listener) => {
 					entry.watchers.add(listener);
@@ -290,8 +343,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				readToken: () => readToken(entry),
 				adoptRead: (file, token) => adoptRead(entry, file, token),
 				readFailed: (error, token) => readFailed(entry, error, token),
-				reload: () => commit(entry, reloadFromDisk(entry.state), false),
-				keepMine: () => commit(entry, keepMine(entry.state), false),
+				reload: () => commit(entry, reloadFromDisk(entry.state), "other"),
+				keepMine: () => commit(entry, keepMine(entry.state), "other"),
 			},
 		};
 		return entry;

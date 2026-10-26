@@ -1,7 +1,8 @@
 import type { ResourceMeta } from "@thinkrail/contracts";
 import { useCallback, useLayoutEffect, useSyncExternalStore } from "react";
-import { bufferRegistry } from "./files";
-import { type FileBufferHandle, fileBufferKey } from "./registry";
+import { loadBufferRegistry, loadedBufferRegistry, subscribeBufferRegistry } from "./files";
+import { fileBufferKey } from "./keys";
+import type { FileBufferHandle } from "./registry";
 
 const NO_SUBSCRIPTION = () => () => {};
 
@@ -9,12 +10,16 @@ export function useFileBuffer(
 	file: { workspaceId: string; path: string; content: string; meta?: ResourceMeta | undefined },
 	editable: boolean,
 ): FileBufferHandle | null {
-	const registry = bufferRegistry();
+	const registry = useSyncExternalStore(subscribeBufferRegistry, loadedBufferRegistry);
 	const key = fileBufferKey(file.workspaceId, file.path);
-	const handle = useSyncExternalStore(registry.subscribeEntries, () => registry.get(key));
+	const handle = useSyncExternalStore(registry?.subscribeEntries ?? NO_SUBSCRIPTION, () =>
+		registry ? registry.get(key) : null,
+	);
 	const { workspaceId, path, content, meta } = file;
 	useLayoutEffect(() => {
-		if (editable && meta) registry.ensure({ workspaceId, path, content, meta });
+		if (!editable || !meta) return;
+		if (registry) registry.ensure({ workspaceId, path, content, meta });
+		else void loadBufferRegistry();
 	}, [registry, editable, workspaceId, path, content, meta]);
 	return handle;
 }

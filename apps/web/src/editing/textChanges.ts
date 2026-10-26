@@ -10,14 +10,6 @@ interface LinePart {
 	removed: boolean;
 }
 
-export function applyChanges(text: string, changes: readonly TextChange[]): string {
-	let next = text;
-	for (const change of [...changes].sort((left, right) => right.from - left.from)) {
-		next = next.slice(0, change.from) + change.insert + next.slice(change.to);
-	}
-	return next;
-}
-
 export function splitLines(text: string): string[] {
 	return text === "" ? [] : text.split(/(?<=\n)/);
 }

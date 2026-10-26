@@ -3,6 +3,7 @@ export type FileBufferStatus =
 	| "dirty"
 	| "saving"
 	| "stale"
+	| "conflict"
 	| "deleted"
 	| "readonly"
 	| "error";
@@ -13,6 +14,7 @@ export interface FileBufferSummary {
 	status: FileBufferStatus;
 	dirty: boolean;
 	error?: FileBufferError;
+	conflicts?: number;
 }
 
 export type FileBufferSummaries = Record<string, Record<string, FileBufferSummary>>;
@@ -22,7 +24,8 @@ function sameSummary(left: FileBufferSummary | undefined, right: FileBufferSumma
 		left !== undefined &&
 		left.status === right.status &&
 		left.dirty === right.dirty &&
-		left.error === right.error
+		left.error === right.error &&
+		left.conflicts === right.conflicts
 	);
 }
 

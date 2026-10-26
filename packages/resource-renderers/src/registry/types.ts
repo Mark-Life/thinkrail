@@ -63,10 +63,39 @@ export interface TextChange {
 	insert: string;
 }
 
+export interface TextRange {
+	anchor: number;
+	head: number;
+}
+
+export type LocalEditKind = "type" | "delete" | "paste" | "composeStart" | "compose" | "other";
+
+export interface EditConflict {
+	id: number;
+	from: number;
+	to: number;
+	theirs: string;
+}
+
+export type ConflictChoice = "mine" | "theirs" | "both";
+
+export interface EditUpdate {
+	changes: readonly TextChange[];
+	selection?: readonly TextRange[];
+}
+
 export interface ResourceEditSession {
 	snapshot(): string;
-	applyLocal(changes: readonly TextChange[]): void;
-	subscribe(listener: (changes: readonly TextChange[]) => void): () => void;
+	applyLocal(changes: readonly TextChange[], kind: LocalEditKind): void;
+	select(ranges: readonly TextRange[]): void;
+	subscribe(listener: (update: EditUpdate) => void): () => void;
+	undo(): void;
+	redo(): void;
+	canUndo(): boolean;
+	canRedo(): boolean;
+	setComposing(composing: boolean): void;
+	conflicts(): readonly EditConflict[];
+	resolveConflict(id: number, choice: ConflictChoice): void;
 }
 
 export interface ResourceViewProps {

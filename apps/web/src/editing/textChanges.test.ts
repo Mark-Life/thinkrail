@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { applyChanges, textChanges } from "./textChanges";
+import type { TextChange } from "@thinkrail/resource-renderers";
+import { textChanges } from "./textChanges";
+
+function applyChanges(text: string, changes: readonly TextChange[]): string {
+	let next = text;
+	for (const change of [...changes].sort((left, right) => right.from - left.from)) {
+		next = next.slice(0, change.from) + change.insert + next.slice(change.to);
+	}
+	return next;
+}
 
 function roundTrip(previous: string, next: string) {
 	const changes = textChanges(previous, next);
