@@ -47,7 +47,7 @@ export interface FileBufferHandle {
 	subscribeText(listener: () => void): () => void;
 	readToken(): number;
 	adoptRead(file: FileContent, token: number): void;
-	readFailed(error: unknown): void;
+	readFailed(error: unknown, token: number): void;
 	reload(): void;
 	keepMine(): void;
 }
@@ -59,7 +59,9 @@ interface Entry {
 	state: BufferState;
 	views: Set<(changes: readonly TextChange[]) => void>;
 	watchers: Set<() => void>;
-	saveSeq: number;
+	readSeq: number;
+	landedRead: number;
+	writeFloor: number;
 	rereadAfterSave: boolean;
 	draftTimer: ReturnType<typeof setTimeout> | null;
 	dropped: boolean;
@@ -71,8 +73,6 @@ interface Entry {
 export function fileBufferKey(workspaceId: string, path: string): string {
 	return tupleKey("file-buffer", workspaceId, path);
 }
-
-const SAVING_TOKEN = -1;
 
 function saveError(error: unknown): FileBufferError {
 	const code = wsErrorCode(error);
@@ -150,35 +150,41 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		notifyEntries();
 	};
 
-	const readFailed = (entry: Entry, error: unknown) => {
-		if (wsErrorCode(error) !== "FILE_NOT_FOUND" || entry.dropped) return;
-		if (entry.state.saving) {
-			entry.rereadAfterSave = true;
-			return;
-		}
-		commit(entry, markMissing(entry.state), false);
+	const readToken = (entry: Entry) => {
+		entry.readSeq += 1;
+		return entry.readSeq;
 	};
-
-	const readToken = (entry: Entry) => (entry.state.saving ? SAVING_TOKEN : entry.saveSeq);
 
 	const reread = (entry: Entry): Promise<void> => {
 		const token = readToken(entry);
 		return deps.io.read(entry.workspaceId, entry.path).then(
 			(file) => adoptRead(entry, file, token),
-			(error: unknown) => readFailed(entry, error),
+			(error: unknown) => readFailed(entry, error, token),
 		);
 	};
 
-	const adoptRead = (entry: Entry, file: FileContent, token: number) => {
-		if (entry.dropped) return;
+	const lands = (entry: Entry, token: number) => {
+		if (entry.dropped) return false;
 		if (entry.state.saving) {
 			entry.rereadAfterSave = true;
-			return;
+			return false;
 		}
-		if (token !== entry.saveSeq) {
+		if (token < entry.landedRead) return false;
+		if (token < entry.writeFloor) {
 			void reread(entry);
-			return;
+			return false;
 		}
+		entry.landedRead = token;
+		return true;
+	};
+
+	const readFailed = (entry: Entry, error: unknown, token: number) => {
+		if (wsErrorCode(error) !== "FILE_NOT_FOUND" || !lands(entry, token)) return;
+		commit(entry, markMissing(entry.state), false);
+	};
+
+	const adoptRead = (entry: Entry, file: FileContent, token: number) => {
+		if (!lands(entry, token)) return;
 		const disk = editorDisk(file);
 		commit(
 			entry,
@@ -196,7 +202,6 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		}
 		commit(entry, state, false);
 		if (!request) return;
-		entry.saveSeq += 1;
 		let ownEcho = false;
 		try {
 			const result = await deps.io.write({
@@ -210,6 +215,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			commit(entry, next, false);
 		} catch (error) {
 			commit(entry, failSave(entry.state, saveError(error)), false);
+		} finally {
+			entry.writeFloor = entry.readSeq + 1;
 		}
 		if (ownEcho && !entry.dropped) return runSave(entry);
 		if (entry.rereadAfterSave && !entry.dropped) {
@@ -260,7 +267,9 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			state,
 			views: new Set(),
 			watchers: new Set(),
-			saveSeq: 0,
+			readSeq: 0,
+			landedRead: 0,
+			writeFloor: 0,
 			rereadAfterSave: false,
 			draftTimer: null,
 			dropped: false,
@@ -283,7 +292,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				},
 				readToken: () => readToken(entry),
 				adoptRead: (file, token) => adoptRead(entry, file, token),
-				readFailed: (error) => readFailed(entry, error),
+				readFailed: (error, token) => readFailed(entry, error, token),
 				reload: () => commit(entry, reloadFromDisk(entry.state), false),
 				keepMine: () => commit(entry, keepMine(entry.state), false),
 			},

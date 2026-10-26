@@ -60,9 +60,13 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   comes back with the base text adopts it as the base and keeps its edits, with no conflict. A disk text
   equal to a write whose answer never came (`unconfirmed`) is this page's own save: it becomes the base,
   with no conflict. Any editable read clears `notEditable` and `offline`, also on the same hash.
-- **No read lands across a save.** A read carries a token from before it started. A read that started
-  before, or arrived during, a write is dropped, and one fresh read runs after the write answers.
-  Otherwise the echo of an older save would look like an external change.
+- **No read lands across a save.** Every read, by the registry or a file tab, takes a per-buffer
+  sequence number when it starts. A read that started before a write answered, or arrived during it,
+  is dropped, and one fresh read runs after the write answers. Otherwise the echo of an older save would
+  look like an external change.
+- **Newest read wins.** Reads can answer out of order. A result (text or `FILE_NOT_FOUND`) whose read
+  started before the last one that landed is dropped, so older disk text never replaces newer text and
+  never reopens a resolved conflict.
 - **Deleted on disk.** A read that fails with `FILE_NOT_FOUND` sets `base.hash` to `null`: status
   `deleted`, text kept. Any other failure (timeout, host error) leaves the buffer as it was. One that
   arrives during a save waits for the fresh read after it. A rename is a delete; the watcher has no

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { FileContent } from "@thinkrail/contracts";
 import {
 	DRAFT_ID,
 	draftRecordId,
@@ -117,4 +118,90 @@ test("removing a workspace drops its buffers and every draft it left", async () 
 	expect([...drafts.records.keys()]).toEqual([otherWorkspace]);
 	expect(registry.get(handle.key)).toBeNull();
 	expect(summaries.at(-1)).toBeNull();
+});
+
+function deferReads(disk: ReturnType<typeof fakeDisk>) {
+	const pending: (() => void)[] = [];
+	disk.io.read = (_workspaceId, path) => {
+		const result = Promise.withResolvers<FileContent>();
+		try {
+			const file = disk.content(path);
+			pending.push(() => result.resolve(file));
+		} catch (error) {
+			pending.push(() => result.reject(error));
+		}
+		return result.promise;
+	};
+	return { land: (index: number) => pending[index]?.() };
+}
+
+test("an older read that lands after a newer one never brings back older disk text", async () => {
+	const { disk, registry, handle } = setup({ text: "one\n" });
+	const reads = deferReads(disk);
+	disk.put(PATH, "two\n");
+	const older = registry.reconcileAll();
+	disk.put(PATH, "three\n");
+	const newer = registry.reconcileAll();
+	reads.land(1);
+	await newer;
+	expect(handle.session.snapshot()).toBe("three\n");
+	reads.land(0);
+	await older;
+	expect(handle.session.snapshot()).toBe("three\n");
+});
+
+test("a tab read that started first and lands last keeps the newer text and base", async () => {
+	const { disk, registry, handle } = setup({ text: "one\n" });
+	const reads = deferReads(disk);
+	disk.put(PATH, "two\n");
+	const tabToken = handle.readToken();
+	const tabRead = disk.content(PATH);
+	disk.put(PATH, "three\n");
+	const newer = registry.reconcileAll();
+	reads.land(0);
+	await newer;
+	handle.adoptRead(tabRead, tabToken);
+	await settle();
+	expect(handle.session.snapshot()).toBe("three\n");
+	type(handle, 0, "x");
+	expect(await registry.save(handle.key)).toEqual({ status: "clean", dirty: false });
+	expect(disk.writes.map((write) => write.expect.hash)).toEqual(["rev-3"]);
+});
+
+test("an older read that lands after a newer one leaves a dirty buffer on the newer disk", async () => {
+	const { disk, registry, handle, received } = setup();
+	const reads = deferReads(disk);
+	type(handle, 4, "mine ");
+	disk.put(PATH, "ONE\ntwo\n");
+	const older = registry.reconcileAll();
+	disk.put(PATH, "ONE!\ntwo\n");
+	const newer = registry.reconcileAll();
+	reads.land(1);
+	await newer;
+	const text = handle.session.snapshot();
+	const updates = received.length;
+	reads.land(0);
+	await older;
+	await settle();
+	expect(handle.session.snapshot()).toBe(text);
+	expect(received.length).toBe(updates);
+	handle.keepMine();
+	await registry.save(handle.key);
+	expect(disk.writes.map((write) => write.expect.hash)).toEqual(["rev-3"]);
+	expect(disk.text(PATH)).toBe(text);
+});
+
+test("an older 'not found' that lands after a newer read does not mark the file deleted", async () => {
+	const { disk, registry, handle, summaries } = setup({ text: "one\n" });
+	const reads = deferReads(disk);
+	disk.remove(PATH);
+	const older = registry.reconcileAll();
+	disk.put(PATH, "back\n");
+	const newer = registry.reconcileAll();
+	reads.land(1);
+	await newer;
+	reads.land(0);
+	await older;
+	expect(handle.session.snapshot()).toBe("back\n");
+	expect(summaries.at(-1)).toEqual({ status: "clean", dirty: false });
 });

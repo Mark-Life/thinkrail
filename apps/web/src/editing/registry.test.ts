@@ -95,7 +95,7 @@ test("a read that started before a save and lands after it is re-read, not adopt
 test("a failed read of a deleted file marks it deleted, and Save creates it again", async () => {
 	const { disk, registry, handle, summaries } = setup();
 	disk.remove(PATH);
-	handle.readFailed(notFound());
+	handle.readFailed(notFound(), handle.readToken());
 	await settle();
 	expect(summaries.at(-1)).toEqual({ status: "deleted", dirty: false });
 	await registry.save(handle.key);
@@ -205,7 +205,7 @@ test("a buffer dropped while its save is in flight leaves no draft that resurrec
 test("a failed re-create of a deleted file shows why instead of 'deleted'", async () => {
 	const { disk, registry, handle } = setup();
 	disk.remove(PATH);
-	handle.readFailed(notFound());
+	handle.readFailed(notFound(), handle.readToken());
 	await settle();
 	type(handle, 0, "x");
 	const write = disk.io.write;
@@ -238,7 +238,7 @@ test("a NOT_EDITABLE save says so instead of asking for a retry", async () => {
 test("a read that fails for another reason leaves the buffer alone instead of marking it deleted", async () => {
 	const { disk, handle, summaries, registry } = setup();
 	type(handle, 0, "// ");
-	handle.readFailed(new Error("Request timed out"));
+	handle.readFailed(new Error("Request timed out"), handle.readToken());
 	await settle();
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
 	disk.io.read = () => Promise.reject(new Error("Request timed out"));
@@ -249,12 +249,12 @@ test("a read that fails for another reason leaves the buffer alone instead of ma
 test("a not-found read during a re-creating save waits for one fresh read after it", async () => {
 	const { disk, registry, handle, summaries } = setup();
 	disk.remove(PATH);
-	handle.readFailed(notFound());
+	handle.readFailed(notFound(), handle.readToken());
 	await settle();
 	expect(summaries.at(-1)).toEqual({ status: "deleted", dirty: false });
 	const release = disk.hold();
 	const saving = registry.save(handle.key);
-	handle.readFailed(notFound());
+	handle.readFailed(notFound(), handle.readToken());
 	release();
 	expect(await saving).toEqual({ status: "clean", dirty: false });
 	await settle();

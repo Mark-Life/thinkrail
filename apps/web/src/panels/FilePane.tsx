@@ -63,7 +63,13 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			const token = buffer?.readToken() ?? 0;
 			return getTransport()
 				.request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path })
-				.then((file) => ({ file, token }));
+				.then(
+					(file) => ({ file, token }),
+					(error: unknown) => {
+						buffer?.readFailed(error, token);
+						throw error;
+					},
+				);
 		},
 		applyFresh: ({ file, token }, tick) => {
 			useAppStore
@@ -75,7 +81,6 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			useAppStore
 				.getState()
 				.updateFileTabContent(tab.workspaceId, tab.id, tab.content, tab.meta, tick),
-		readFailed: (error) => buffer?.readFailed(error),
 	});
 
 	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>
