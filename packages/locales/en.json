@@ -852,6 +852,7 @@
 	"panels.fileEdit.merged": "Changes from disk were merged into your edits.",
 	"panels.fileEdit.notEditable": "This file is no longer text, so your edits can't be saved.",
 	"panels.fileEdit.offline": "Not connected to the host. Press {{shortcut}} to save once it reconnects.",
+	"panels.fileEdit.offlineAuto": "Not connected to the host. Your edits save once it reconnects.",
 	"panels.fileEdit.paused_one": "1 change here also changed on disk. Pick Mine, Theirs or Both to save again.",
 	"panels.fileEdit.paused_other": "{{count}} changes here also changed on disk. Pick Mine, Theirs or Both to save again.",
 	"panels.fileEdit.readonly": "Read-only on disk, so your edits can't be saved.",

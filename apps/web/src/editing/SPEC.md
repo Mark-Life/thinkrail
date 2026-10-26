@@ -227,7 +227,7 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
   since every failed request goes to PostHog. Resolving the last conflict is a user step, so it resumes.
   A save that throws while the host is disconnected (a request that timed out during a long outage)
   fails `offline`, not `failed`. On reconnect a buffer whose save failed `offline` re-arms once its read
-  clears the issue.
+  clears the issue, so in auto mode the offline banner says the edits save on reconnect, not to press Cmd/Ctrl+S.
 - **Cmd/Ctrl+S** cancels the timer and saves at once, in both modes.
 - **Mode switch.** To manual: every timer is cancelled. To auto: every dirty buffer with no issue, no open
   conflict and a file on disk arms.

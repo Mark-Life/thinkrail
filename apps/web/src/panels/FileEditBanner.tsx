@@ -41,7 +41,7 @@ function listenForMenuHistory(
 	return () => node.removeEventListener("beforeinput", onBeforeInput);
 }
 
-function bannerMessage(summary: FileBufferSummary): MessageKey | null {
+function bannerMessage(summary: FileBufferSummary, autosave: boolean): MessageKey | null {
 	switch (summary.status) {
 		case "stale":
 			return "panels.fileEdit.conflict";
@@ -54,7 +54,8 @@ function bannerMessage(summary: FileBufferSummary): MessageKey | null {
 		case "error":
 			if (summary.error === "tooLarge") return "panels.fileEdit.tooLarge";
 			if (summary.error === "notEditable") return "panels.fileEdit.notEditable";
-			if (summary.error === "offline") return "panels.fileEdit.offline";
+			if (summary.error === "offline")
+				return autosave ? "panels.fileEdit.offlineAuto" : "panels.fileEdit.offline";
 			return "panels.fileEdit.failed";
 		default:
 			return null;
@@ -63,19 +64,21 @@ function bannerMessage(summary: FileBufferSummary): MessageKey | null {
 
 export function FileEditBanner({
 	summary,
+	autosave,
 	onReload,
 	onKeepMine,
 	onResolveFirst,
 	onHistory,
 }: {
 	summary: FileBufferSummary | undefined;
+	autosave: boolean;
 	onReload(): void;
 	onKeepMine(): void;
 	onResolveFirst(choice: ConflictChoice): void;
 	onHistory(command: HistoryCommand): void;
 }) {
 	const t = useT();
-	const message = summary ? bannerMessage(summary) : null;
+	const message = summary ? bannerMessage(summary, autosave) : null;
 	const text = message
 		? t(message, {
 				shortcut: platformShortcutLabel("S"),

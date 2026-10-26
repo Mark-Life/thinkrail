@@ -57,6 +57,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const isPreview = useAppStore((state) => state.previewTabByWorkspace[tab.workspaceId] === tab.id);
 	const dirty = summary?.dirty === true;
 	const autosaving = useAppStore((state) => selectFileAutosaving(state, tab.workspaceId, tab.path));
+	const saveMode = useAppStore((state) => state.fileSaveMode);
 	useEffect(() => {
 		if (dirty && isPreview) useAppStore.getState().setActiveTab(tab.id, "keep");
 	}, [dirty, isPreview, tab.id]);
@@ -149,6 +150,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			{buffer ? (
 				<FileEditBanner
 					summary={summary}
+					autosave={saveMode === "auto"}
 					onReload={() => resolveConflict(buffer.reload)}
 					onKeepMine={() => resolveConflict(buffer.keepMine)}
 					onResolveFirst={(choice) => resolveFirstConflict(buffer.session, choice)}
