@@ -544,9 +544,6 @@
 .md-live .md-code {
 	padding: 0 var(--space-2);
 }
-.md-live .md-link[data-href] {
-	cursor: text;
-}
 .md-live .md-bullet {
 	display: inline-block;
 	color: var(--text-muted);
