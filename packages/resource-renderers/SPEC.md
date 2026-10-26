@@ -634,7 +634,9 @@ content's own height.
   keybinding, the `undo` command, `editor.trigger`) reaches the host's history; it also turns a
   `beforeinput` `historyUndo`/`historyRedo` on the editor into the session's undo, which is how the
   desktop Edit menu reaches it. Monaco's own undo stack is never valid after a remote edit: it replays
-  stored offsets and corrupts the text. Content events go to `applyLocal` with their kind (except the
+  stored offsets and corrupts the text. Typing still records Monaco stack elements, which nothing reads;
+  they cost memory only (about one per typing group) until the model is disposed, and Monaco exposes no
+  typed way to drop them. The bundle loads no Monaco contribution that calls `model.undo()` itself. Content events go to `applyLocal` with their kind (except the
   ones the mirror applied), cursor moves to `select`, and composition start and end to
   `setComposing`. Subscribed changes, undo and conflict choices land only through `model.applyEdits`,
   never `setValue` or `pushEditOperations`, so cursors and decorations stay. A model swap or unmount

@@ -150,8 +150,8 @@ not browser-level key handlers, own standard editing commands so Command/Ctrl-C,
 flow through the operating-system responder chain across ordinary inputs, Monaco, xterm, and future
 webview surfaces without competing with their local key handling.
 
-macOS receives the conventional application, File, Edit, and Window menus; File holds only Save (Command-S, a custom-action item). Windows receives the supported
-Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
+macOS receives the conventional application, File, Edit, and Window menus; File holds only Save (Command-S, a custom-action item). Windows receives the same
+Edit menu: custom-action Undo and Redo (Ctrl-Z, Ctrl-Shift-Z; redo is no longer Ctrl-Y) above the role items. Linux skips registration because Electrobun 2.0.1 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
 are custom-action items, not roles; see Confirmed quit and close. Undo and Redo (Command/Ctrl-Z,
@@ -207,8 +207,8 @@ its focused item or do nothing; it never closes the native window. Command-comma
 to open Settings; the web decides whether a modal blocks it. Command-S (`save`, the File menu's Save) asks it to
 save the focused file; with nothing to save it does nothing. The preload exposes hints and commands
 as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBridge` (built by
-`shortcutsBridge.ts`) on every desktop platform; only the macOS menu sends events today. On Windows and
-Linux the web shell owns Ctrl+W / Ctrl+F4 (close item), Ctrl+, (Settings) and Ctrl+S (save) through its command table.
+`shortcutsBridge.ts`) on every desktop platform. The macOS menu sends every command; the Windows menu sends only `undo` and
+`redo`. On Windows and Linux the web shell owns Ctrl+W / Ctrl+F4 (close item), Ctrl+, (Settings) and Ctrl+S (save) through its command table.
 
 The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
 `NativeNotificationBridge` ([[module-contracts]]) on every desktop platform. It has two capabilities:
