@@ -609,21 +609,29 @@ content's own height.
     selection is outside them, reusing the host markdown through `MarkdownDocument` (same sanitizing,
     links, Shiki and Mermaid) in React portals; the front matter shows as a one-line summary. Clicking
     a widget away from its controls puts the caret in the block and shows its source. A block nested in
-    a list renders dedented; one inside a quote stays source. A widget keeps its DOM while its source is
-    unchanged, and every widget's size change asks CodeMirror to measure again.
+    a list renders dedented; one inside a quote stays source. An HTML block ends at a blank line, as in
+    CommonMark, so a `<details>` whose body is markdown renders as separate widgets; an inline image
+    stays source. A widget keeps its DOM while its source is unchanged, and every widget's size change
+    asks CodeMirror to measure again. Widgets reset the editor's `white-space: pre`, or the newlines
+    react-markdown leaves between elements would render as blank lines.
   - **Review threads** render as block widgets after their end line (`ReviewThreadCard`). Authoring a
     comment needs the lock (the reading view's commenting) or Source. A review focus scrolls its line
     into view.
   - **Presence** uses the shared rules (`presenceCore.ts`) through a CodeMirror surface: a bar and a
     wash on the changed lines, the flag after the first line, the chip at the top right, the writer and
-    diff on hover.
+    diff on hover. Marks are line classes, so two writers on one line show the later one's tone.
   - **Typography** is the `doc` prose system: the editor content carries `tr-prose-doc`, heading and
     code lines carry the classes the generator maps next to the elements (`md-h1`…`md-h6`,
     `md-code`, `md-codeblock`), and spacing is line padding, since CodeMirror measures line boxes and
     margins between lines break its height map. The measure is the reading view's 78ch.
   - **Access.** The content is a labelled multi-line textbox; Tab leaves the editor (no tab binding);
     heading lines carry `role="heading"` and their level. Widget controls stay keyboard reachable.
-    Reduced motion drops the presence fades.
+    Reduced motion drops the presence fades. Enter on a list item starts the next one (an empty item
+    ends the list), outside code.
+  - **Cost.** Entry chunk unchanged (1,663 kB, 527 kB gzip). `MarkdownPreview` grows from 13.1 to
+    15.8 kB (5.5 to 6.6 kB gzip). The editor chunk is 58.6 kB (20.9 kB gzip) plus one CodeMirror chunk
+    of 270.6 kB (87.6 kB gzip: state, commands, view, language) that it shares with the editing
+    registry ([[submodule-web-editing]]).
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
   (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
