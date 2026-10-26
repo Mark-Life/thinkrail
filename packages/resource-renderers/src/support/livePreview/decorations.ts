@@ -21,7 +21,7 @@ import { frontmatterBlock, type LiveBlock, liveBlocks } from "./blocks";
 import { type InlineStyle, type LineStyle, type LiveMark, liveMarks, type Span } from "./markers";
 import { type PortalContent, type PortalHost, PortalWidget } from "./portals";
 
-export interface LiveText {
+interface LiveText {
 	task: string;
 	followLink: string;
 }
@@ -53,18 +53,103 @@ function focusChanged(tr: Transaction): boolean {
 	return tr.effects.some((effect) => effect.is(setFocused));
 }
 
+export const setConflicts = StateEffect.define<readonly EditConflict[]>();
+
+const conflictMine = Decoration.line({ class: "edit-conflict-mine" });
+
+function conflictDecorations(
+	state: EditorState,
+	conflicts: readonly EditConflict[],
+): DecorationSet {
+	const host = state.facet(portalHost);
+	if (!host) return Decoration.none;
+	const { doc } = state;
+	const model = {
+		getPositionAt: (offset: number) => {
+			const line = doc.lineAt(Math.min(offset, doc.length));
+			return { lineNumber: line.number, column: Math.min(offset, doc.length) - line.from + 1 };
+		},
+		getValueLength: () => doc.length,
+		getLineMaxColumn: (number: number) => doc.line(number).length + 1,
+	};
+	const ranges: Range<Decoration>[] = [];
+	const widget = (content: PortalContent, pos: number, side: number) =>
+		Decoration.widget({ widget: new PortalWidget(content, host), block: true, side }).range(pos);
+	for (const conflict of conflicts) {
+		const span = conflictSpan(model, conflict);
+		const pastEnd = span.startLine > doc.lines;
+		ranges.push(
+			widget(
+				{ kind: "lens", conflict },
+				pastEnd ? doc.length : doc.line(span.startLine).from,
+				pastEnd ? 1 : -2,
+			),
+		);
+		if (span.endLine !== null) {
+			for (let number = span.startLine; number <= Math.min(span.endLine, doc.lines); number += 1) {
+				ranges.push(conflictMine.range(doc.line(number).from));
+			}
+		}
+		const after = span.endLine ?? span.startLine - 1;
+		const theirs: PortalContent = { kind: "theirs", conflict, theirsText: span.theirsText };
+		ranges.push(
+			after < 1
+				? widget(theirs, 0, -1)
+				: widget(theirs, doc.line(Math.min(after, doc.lines)).to, 2),
+		);
+	}
+	return Decoration.set(ranges, true);
+}
+
+const conflictField = StateField.define<DecorationSet>({
+	create: () => Decoration.none,
+	update(value, tr) {
+		for (const effect of tr.effects) {
+			if (effect.is(setConflicts)) return conflictDecorations(tr.state, effect.value);
+		}
+		return value.map(tr.changes);
+	},
+	provide: (field) => EditorView.decorations.from(field),
+});
+
 interface BlockState {
 	blocks: readonly LiveBlock[];
 	decorations: DecorationSet;
 }
 
-function buildBlocks(state: EditorState): BlockState {
+function sameBlocks(a: readonly LiveBlock[], b: readonly LiveBlock[]): boolean {
+	return (
+		a.length === b.length &&
+		a.every((block, index) => {
+			const other = b[index];
+			return (
+				other !== undefined &&
+				other.from === block.from &&
+				other.to === block.to &&
+				other.kind === block.kind &&
+				other.source === block.source
+			);
+		})
+	);
+}
+
+function decorationSpans(set: DecorationSet): Span[] {
+	const spans: Span[] = [];
+	for (let cursor = set.iter(); cursor.value; cursor.next()) {
+		spans.push({ from: cursor.from, to: cursor.to });
+	}
+	return spans;
+}
+
+function buildBlocks(state: EditorState, previous: BlockState | null): BlockState {
 	const host = state.facet(portalHost);
 	const blocks = liveBlocks({
 		tree: syntaxTree(state),
 		doc: state.doc,
 		selection: liveSelection(state),
+		keep: decorationSpans(state.field(conflictField)),
 	});
+	if (previous && sameBlocks(previous.blocks, blocks)) return previous;
 	const decorations = host
 		? Decoration.set(
 				blocks.map((block) =>
@@ -78,12 +163,15 @@ function buildBlocks(state: EditorState): BlockState {
 	return { blocks, decorations };
 }
 
-export const blockField = StateField.define<BlockState>({
-	create: buildBlocks,
+const blockField = StateField.define<BlockState>({
+	create: (state) => buildBlocks(state, null),
 	update(value, tr) {
 		const reparsed = syntaxTree(tr.startState) !== syntaxTree(tr.state);
-		if (!tr.docChanged && !tr.selection && !reparsed && !focusChanged(tr)) return value;
-		return buildBlocks(tr.state);
+		const conflicts = tr.startState.field(conflictField) !== tr.state.field(conflictField);
+		if (!tr.docChanged && !tr.selection && !reparsed && !conflicts && !focusChanged(tr)) {
+			return value;
+		}
+		return buildBlocks(tr.state, tr.docChanged ? null : value);
 	},
 	provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
 });
@@ -154,7 +242,7 @@ const STYLE_CLASS: Readonly<Record<InlineStyle, string>> = {
 	strike: "line-through",
 	code: "md-code rounded-sm bg-sunken",
 	link: "md-link text-primary underline decoration-primary-muted underline-offset-2",
-	marker: "md-marker tr-code-text text-text-subtle",
+	marker: "tr-code-text text-text-subtle",
 };
 
 const LINE_CLASS: Readonly<Record<LineStyle, string>> = {
@@ -234,8 +322,7 @@ const markPlugin = ViewPlugin.fromClass(
 				update.selectionSet ||
 				update.focusChanged ||
 				syntaxTree(update.startState) !== syntaxTree(update.state) ||
-				update.startState.field(blockField) !== update.state.field(blockField) ||
-				update.transactions.some(focusChanged)
+				update.startState.field(blockField) !== update.state.field(blockField)
 			) {
 				this.decorations = buildMarks(update.view);
 			}
@@ -266,6 +353,18 @@ function threadDecorations(state: EditorState, threads: readonly ThreadAnchor[])
 	);
 }
 
+function outsideBlocks(threads: DecorationSet, blocks: readonly LiveBlock[]): DecorationSet {
+	const inside = (pos: number) => blocks.find((block) => block.from <= pos && pos < block.to);
+	const ranges: Range<Decoration>[] = [];
+	let moved = false;
+	for (let cursor = threads.iter(); cursor.value; cursor.next()) {
+		const block = inside(cursor.from);
+		moved ||= block !== undefined;
+		ranges.push(cursor.value.range(block ? block.to : cursor.from));
+	}
+	return moved ? Decoration.set(ranges, true) : threads;
+}
+
 const threadField = StateField.define<DecorationSet>({
 	create: () => Decoration.none,
 	update(value, tr) {
@@ -274,66 +373,10 @@ const threadField = StateField.define<DecorationSet>({
 		}
 		return value.map(tr.changes);
 	},
-	provide: (field) => EditorView.decorations.from(field),
+	provide: (field) =>
+		EditorView.decorations.compute([field, blockField], (state) =>
+			outsideBlocks(state.field(field), state.field(blockField).blocks),
+		),
 });
 
-export const setConflicts = StateEffect.define<readonly EditConflict[]>();
-
-const conflictMine = Decoration.line({ class: "edit-conflict-mine" });
-
-function conflictDecorations(
-	state: EditorState,
-	conflicts: readonly EditConflict[],
-): DecorationSet {
-	const host = state.facet(portalHost);
-	if (!host) return Decoration.none;
-	const { doc } = state;
-	const model = {
-		getPositionAt: (offset: number) => {
-			const line = doc.lineAt(Math.min(offset, doc.length));
-			return { lineNumber: line.number, column: Math.min(offset, doc.length) - line.from + 1 };
-		},
-		getValueLength: () => doc.length,
-		getLineMaxColumn: (number: number) => doc.line(number).length + 1,
-	};
-	const ranges: Range<Decoration>[] = [];
-	const widget = (content: PortalContent, pos: number, side: number) =>
-		Decoration.widget({ widget: new PortalWidget(content, host), block: true, side }).range(pos);
-	for (const conflict of conflicts) {
-		const span = conflictSpan(model, conflict);
-		const pastEnd = span.startLine > doc.lines;
-		ranges.push(
-			widget(
-				{ kind: "lens", conflict },
-				pastEnd ? doc.length : doc.line(span.startLine).from,
-				pastEnd ? 1 : -2,
-			),
-		);
-		if (span.endLine !== null) {
-			for (let number = span.startLine; number <= Math.min(span.endLine, doc.lines); number += 1) {
-				ranges.push(conflictMine.range(doc.line(number).from));
-			}
-		}
-		const after = span.endLine ?? span.startLine - 1;
-		const theirs: PortalContent = { kind: "theirs", conflict, theirsText: span.theirsText };
-		ranges.push(
-			after < 1
-				? widget(theirs, 0, -1)
-				: widget(theirs, doc.line(Math.min(after, doc.lines)).to, 2),
-		);
-	}
-	return Decoration.set(ranges, true);
-}
-
-const conflictField = StateField.define<DecorationSet>({
-	create: () => Decoration.none,
-	update(value, tr) {
-		for (const effect of tr.effects) {
-			if (effect.is(setConflicts)) return conflictDecorations(tr.state, effect.value);
-		}
-		return value.map(tr.changes);
-	},
-	provide: (field) => EditorView.decorations.from(field),
-});
-
-export const livePreview = [focusField, blockField, markPlugin, threadField, conflictField];
+export const livePreview = [focusField, conflictField, blockField, markPlugin, threadField];

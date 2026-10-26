@@ -700,6 +700,10 @@ test("an in-flow card never halves a code fence — the rest of the document sta
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
 	await page.getByTestId("view-toggle-markdown").click();
+	const live = page.locator('[data-testid="markdown-preview"][data-mode="live"]');
+	await expect(live.locator(".md-widget-block")).toHaveCount(1);
+	await expect(live.locator(".md-widget-block + .md-widget-thread")).toHaveCount(1);
+	await expect(live.getByTestId("review-thread-card")).toBeVisible();
 	await lockPreview(page);
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview.getByTestId("review-thread-card")).toHaveCount(1);

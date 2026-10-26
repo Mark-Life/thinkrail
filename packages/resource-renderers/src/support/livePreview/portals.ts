@@ -14,6 +14,13 @@ export interface PortalEntry {
 	content: PortalContent;
 }
 
+const WIDGET_CLASS: Readonly<Record<PortalContent["kind"], string>> = {
+	block: "md-widget md-widget-block",
+	thread: "md-widget md-widget-thread",
+	lens: "md-widget",
+	theirs: "md-widget",
+};
+
 const INTERACTIVE = "a, button, input, textarea, select, summary, label, [role='button']";
 
 function sameContent(a: PortalContent, b: PortalContent): boolean {
@@ -90,7 +97,7 @@ export class PortalWidget extends WidgetType {
 
 	override toDOM(): HTMLElement {
 		const node = document.createElement("div");
-		node.className = `md-widget md-widget-${this.content.kind}`;
+		node.className = WIDGET_CLASS[this.content.kind];
 		this.host.mount(node, this.content);
 		return node;
 	}
