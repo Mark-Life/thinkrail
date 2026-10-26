@@ -678,7 +678,7 @@ content's own height.
   disk update to `attachPresence` with the text before it. `presencePaint` turns the change set into
   joined post-change line spans plus a capped diff (12 lines, 160 characters a line). When more than half
   of a file of 10 or more lines changed, it paints one whole-file chip (an overlay widget at the top right)
-  instead of line marks. Removed lines count, against the longer of the two versions, so a mass deletion
+  instead of line marks, and it retires every mark that landed before it, whoever wrote it. Removed lines count, against the longer of the two versions, so a mass deletion
   gets the chip too. Line marks are tracked decorations (`NeverGrowsWhenTypingAtEdges`): a thin bar in the
   line-decoration lane, set off from the review and conflict rails by an editor-colored gap, at a slot per
   tone so two writers on one line both show, and dashed for an inferred writer; a wash that fades in

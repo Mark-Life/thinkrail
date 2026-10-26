@@ -171,6 +171,25 @@ describe("attachPresence", () => {
 		marks.dispose();
 	});
 
+	test("a whole-file rewrite retires earlier line marks but keeps a newer landing", () => {
+		const marks = attach();
+		marks.setLatest({ hash: "h1", writer: AGENT });
+		marks.land(editLine(5, "h1"));
+		marks.land({
+			hash: "h2",
+			before: TEXT,
+			changes: [{ from: 0, to: TEXT.length, insert: TEXT.toUpperCase() }],
+		});
+		marks.land(editLine(9, "h3"));
+		marks.setLatest({ hash: "h2", writer: OTHER });
+		expect(chips).toHaveLength(1);
+		expect(bars()).toEqual([]);
+		expect(flags).toHaveLength(0);
+		marks.setLatest({ hash: "h3", writer: AGENT });
+		expect(bars()).toEqual(["presence-bar presence-tone-agent1"]);
+		marks.dispose();
+	});
+
 	test("the bar's tooltip is the plain label, since Monaco escapes it", () => {
 		const marks = attach();
 		marks.setLatest({ hash: "h1", writer: { ...AGENT, label: 'Agent · "<A> & B"' } });

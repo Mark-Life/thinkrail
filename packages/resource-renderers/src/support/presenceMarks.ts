@@ -128,7 +128,11 @@ export function attachPresence(
 	};
 
 	const showChip = (mark: Mark, writer: PresenceWriter) => {
-		for (const other of marks) if (other !== mark && other.paint.kind === "file") drop(other);
+		let earlier = true;
+		for (const other of [...marks]) {
+			if (other === mark) earlier = false;
+			else if (earlier || other.paint.kind === "file") drop(other);
+		}
 		const node = badge("chip", writer, options.text().file(writer));
 		const id = `presence-chip-${++widgetSeq}`;
 		mark.chip = {
