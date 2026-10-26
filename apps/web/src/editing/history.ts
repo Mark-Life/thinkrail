@@ -129,6 +129,7 @@ function touches(conflict: EditConflict, range: MergeRange): boolean {
 }
 
 const NO_CONFLICTS: ConflictState = { open: [], closed: [] };
+const CLOSED_LIMIT = 120;
 
 const withoutId = (conflicts: readonly OpenConflict[], id: number) =>
 	conflicts.filter((conflict) => conflict.id !== id);
@@ -145,8 +146,10 @@ const conflictField = StateField.define<ConflictState>({
 				open = [];
 				closed = [];
 			} else if (effect.is(removeConflict)) {
+				if (!open.some((conflict) => conflict.id === effect.value.id)) continue;
 				open = withoutId(open, effect.value.id);
-				closed = [...withoutId(closed, effect.value.id), effect.value];
+				if (tr.annotation(Transaction.remote) === true) continue;
+				closed = [...withoutId(closed, effect.value.id), effect.value].slice(-CLOSED_LIMIT);
 			} else if (effect.is(newBase)) {
 				const untouched = (conflict: OpenConflict) =>
 					!effect.value.some((range) => touches(conflict, range));
@@ -294,6 +297,15 @@ function hasConflictState(doc: EditorState): boolean {
 	return state.open.length > 0 || state.closed.length > 0;
 }
 
+function remoteNoOp(
+	doc: EditorState,
+	input: { touched?: readonly MergeRange[]; clear?: boolean },
+): boolean {
+	const { open, closed } = doc.field(conflictField);
+	if (open.length > 0) return false;
+	return closed.length === 0 || (!input.clear && (input.touched?.length ?? 0) === 0);
+}
+
 function changedRanges(changes: ChangeSet): MergeRange[] {
 	const ranges: MergeRange[] = [];
 	changes.iterChangedRanges((_fromA, _toA, from, to) => {
@@ -314,7 +326,7 @@ export function remoteText(
 ): EditorState {
 	const current = docText(doc);
 	const added = (input.add ?? []).map((conflict) => ({ ...conflict, id: nextConflictId++ }));
-	if (current === input.text && added.length === 0 && !hasConflictState(doc)) return doc;
+	if (current === input.text && added.length === 0 && remoteNoOp(doc, input)) return doc;
 	const changes = ChangeSet.of(input.changes ?? textChanges(current, input.text), current.length);
 	const effects = [
 		...(input.clear && hasConflictState(doc) ? [clearConflicts.of(null)] : []),
@@ -376,6 +388,16 @@ function takeTheirsWhereReverted(doc: EditorState): EditorState {
 	return tr.state;
 }
 
+function sameConflicts(a: readonly EditConflict[], b: readonly EditConflict[]): boolean {
+	return (
+		a.length === b.length &&
+		a.every((conflict, index) => {
+			const other = b[index];
+			return other?.id === conflict.id && other.from === conflict.from && other.to === conflict.to;
+		})
+	);
+}
+
 function runCommand(doc: EditorState, command: typeof undo): EditorState {
 	let next = doc;
 	command({
@@ -387,8 +409,24 @@ function runCommand(doc: EditorState, command: typeof undo): EditorState {
 	return next === doc ? doc : takeTheirsWhereReverted(next);
 }
 
-export const undoDoc = (doc: EditorState) => runCommand(doc, undo);
-export const redoDoc = (doc: EditorState) => runCommand(doc, redo);
+const unseen = (from: EditorState, to: EditorState) =>
+	from.doc === to.doc && sameConflicts(conflictsOf(from), conflictsOf(to));
+
+function runVisible(doc: EditorState, command: typeof undo): EditorState {
+	let next = runCommand(doc, command);
+	let shown = !unseen(doc, next);
+	for (;;) {
+		const further = runCommand(next, command);
+		if (further === next) return next;
+		const seen = !unseen(next, further);
+		if (shown && seen) return next;
+		shown ||= seen;
+		next = further;
+	}
+}
+
+export const undoDoc = (doc: EditorState) => runVisible(doc, undo);
+export const redoDoc = (doc: EditorState) => runVisible(doc, redo);
 export const canUndoDoc = (doc: EditorState) => undoDepth(doc) > 0;
 export const canRedoDoc = (doc: EditorState) => redoDepth(doc) > 0;
 

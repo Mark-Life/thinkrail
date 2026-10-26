@@ -99,7 +99,9 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   Keep mine, a deletion and a disk that caught up with the buffer close them all; a clean adoption
   closes those on the lines it changed. Resolved conflicts stay in the field, mapped like open ones, and
   close the same way: undo reopens a resolved conflict only while no later disk change, Reload or Keep
-  mine reached its lines, since its Theirs would overwrite the newer disk. An edit (or undo) that makes
+  mine reached its lines, since its Theirs would overwrite the newer disk. The field keeps the last 120
+  resolved conflicts, the most the history can reach unless one step closed several; a conflict closed
+  by a remote step is not kept, since nothing can reopen it. An edit (or undo) that makes
   a conflict's text equal its `theirs` closes it in the same transaction, so undoing that edit reopens
   it. An undo or redo that brings a conflict's text back to its `base` takes `theirs` there, as a
   3-way merge would, in a remote step composed into the same change set; a redo after that lands the
@@ -146,7 +148,9 @@ Merges and disk adoptions are `addToHistory: false` and `remote` transactions, s
 only the user's own steps and the history maps them over every merge. Reload and a conflict choice
 are user steps. The editor reports its selection outside the history, so undo restores the cursor; the
 undo or redo change set reaches every attached view with that selection. A buffer whose history holds
-only merges has nothing to undo. A cursor move updates the selection in `doc` without publishing.
+only merges has nothing to undo. An undo or redo step that would change neither the text nor the open
+conflicts (a resolve whose conflict a later disk change replaced) is skipped, and one left on top after a
+visible step is taken with it, so every Cmd/Ctrl+Z shows a change. A cursor move updates the selection in `doc` without publishing.
 
 ## Save pipeline
 

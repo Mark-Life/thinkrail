@@ -10,7 +10,7 @@ import {
 	resolveConflict,
 	withDoc,
 } from "./buffer";
-import { conflictsOf, redoDoc, undoDoc } from "./history";
+import { canRedoDoc, canUndoDoc, conflictsOf, redoDoc, remoteText, undoDoc } from "./history";
 import { textChanges } from "./textChanges";
 
 const disk = (text: string) => ({ text, hash: `h:${text}` });
@@ -94,4 +94,30 @@ test("undoing an unrelated delete next to a deleted-lines conflict leaves the co
 	state = undo(state);
 	expect(bufferText(state)).toBe("a\nc\n");
 	expect(conflictsOf(state.doc)).toMatchObject([{ from: 2, to: 2, theirs: "bY\n" }]);
+});
+
+test("undo skips a Mine pick that a newer disk change replaced, and redo skips it too", () => {
+	let state = createBuffer(disk("one\ntwo\n"));
+	state = edit(state, "mine one\ntwo\n");
+	state = adoptDisk(state, disk("theirs\ntwo\n"));
+	state = resolveConflict(state, firstId(state), "mine");
+	state = adoptDisk(state, disk("theirs2\ntwo\n"));
+	const reopened = firstId(state);
+	expect(bufferText(state)).toBe("mine one\ntwo\n");
+	state = undo(state);
+	expect(bufferText(state)).toBe("one\ntwo\n");
+	expect(canUndoDoc(state.doc)).toBe(false);
+	state = redo(state);
+	expect(bufferText(state)).toBe("mine one\ntwo\n");
+	expect(canRedoDoc(state.doc)).toBe(false);
+	expect(conflictsOf(state.doc).map((conflict) => conflict.id)).toEqual([reopened]);
+});
+
+test("a disk text equal to the buffer is a no-op after a conflict was resolved", () => {
+	let state = createBuffer(disk("a\nb\nc\n"));
+	state = edit(state, "a\nbX\nc\n");
+	state = adoptDisk(state, disk("a\nbY\nc\n"));
+	state = resolveConflict(state, firstId(state), "mine");
+	expect(remoteText(state.doc, { text: bufferText(state) })).toBe(state.doc);
+	expect(remoteText(state.doc, { text: bufferText(state), clear: true })).not.toBe(state.doc);
 });
