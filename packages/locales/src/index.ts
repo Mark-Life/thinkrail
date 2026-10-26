@@ -26,6 +26,8 @@ export const DESKTOP_MENU_KEYS = [
 	"desktop.menu.close",
 	"desktop.menu.file",
 	"desktop.menu.save",
+	"desktop.menu.undo",
+	"desktop.menu.redo",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
 
 export const DESKTOP_DIALOG_KEYS = [

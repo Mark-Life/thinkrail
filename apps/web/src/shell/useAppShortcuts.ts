@@ -57,6 +57,14 @@ function dismissTopLayer() {
 	return true;
 }
 
+function runEditHistory(command: "undo" | "redo") {
+	const doc = globalThis.document;
+	const target = doc.activeElement ?? doc.body;
+	const inputType = command === "undo" ? "historyUndo" : "historyRedo";
+	const event = new InputEvent("beforeinput", { inputType, bubbles: true, cancelable: true });
+	if (target.dispatchEvent(event)) doc.execCommand(command);
+}
+
 function openSettingsUnlessModal() {
 	if (!hasLayer(globalThis.document, MODAL_LAYER_SELECTOR)) useAppStore.getState().openSettings();
 }
@@ -113,6 +121,8 @@ export function useAppShortcuts() {
 			},
 			openSettings: openSettingsUnlessModal,
 			save: saveFocusedFile,
+			undo: () => runEditHistory("undo"),
+			redo: () => runEditHistory("redo"),
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
 					console.error("[shortcuts] quit failed", error);
