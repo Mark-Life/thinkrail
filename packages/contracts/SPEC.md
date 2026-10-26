@@ -532,7 +532,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `dismissInstallResult()` clears it. The window-controls bridge exposes the same
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
   (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
-  focused in-app item, `open-settings`, open Settings unless a modal is open, and `save`, save the focused file), and its one action `quit()` asks the host for an ordinary coordinated quit. The
+  focused in-app item, `open-settings`, open Settings unless a modal is open, `save`, save the focused file, and `undo` / `redo` from the Edit menu), and its one action `quit()` asks the host for an ordinary coordinated quit. The
   notification bridge exposes `show({ title, subtitle?, body, silent? })` (fire-and-forget OS notification,
   no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
   when DevTools has renderer focus, unlike `document.hasFocus()`. The editing bridge stores file drafts

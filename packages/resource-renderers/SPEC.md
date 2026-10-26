@@ -238,12 +238,17 @@ control rather than emulate one.
 renderer whose desktop view can edit text; only `code` (Monaco) sets it today. A host that wants an
 editable mount passes `ResourceViewProps.edit`, a `ResourceEditSession`; without it every view is
 read-only, so chat cards, phones and diffs stay read-only by construction. The session is
-editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes)` reports the view's own edits,
-and `subscribe(listener)` delivers every other change. Saving is the host's (its shortcut and menu),
-not the view's. A change set is `TextChange[]` (`{from, to, insert}`), all offsets into the document
+editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes, kind)` reports the view's own
+edits with their `LocalEditKind` (type, delete, paste, composition start and step, other) so the host
+can group undo steps, `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
+other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo). The host owns undo:
+`undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
+holds remote text back. `conflicts()` lists open same-line conflicts (`EditConflict`: offsets of the
+user's lines and the disk lines, `theirs`), and `resolveConflict(id, "mine" | "theirs" | "both")` picks
+a side. Saving is the host's (its shortcut and menu), not the view's. A change set is `TextChange[]` (`{from, to, insert}`), all offsets into the document
 before the set, never overlapping: the CodeMirror convention, so a CodeMirror- or CRDT-backed session
 needs no new contract. A view mounts from `snapshot()`, never from `content`, and applies subscribed
-changes as deltas. The package owns no buffer, save or conflict state. An editable Monaco keeps Monaco's
+changes as deltas. The package owns no buffer, save, history or conflict state. An editable Monaco keeps Monaco's
 tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor for keyboard users.
 
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
@@ -609,7 +614,8 @@ content's own height.
   context menu/clipboard, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
   messaging and Unicode highlighting) plus the basic editing ones (line operations, comment toggle, word
   operations, multi-cursor, cursor undo); undo/redo and typing are core. Editing contributions grow the
-  Monaco chunk from 3,087 to 3,154 kB (792 to 807 kB gzip). Keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
+  Monaco chunk from 3,087 to 3,154 kB (792 to 807 kB gzip); the edit mirror and conflict zones add
+  about 5 kB (3,156 to 3,162 kB, 808 to 809 kB gzip). Keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
   ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
@@ -622,9 +628,19 @@ content's own height.
   follows the path, because `RendererView` is keyed by implementation, not path. Read-only, new text calls `setValue`
   only when it differs from the text last applied, compared as strings, never through `getValue()`.
   With an edit session, `bindEditSession` owns the model instead: it is created from `snapshot()` with LF
-  line endings, its content events go to `applyLocal` (except the ones it applied), and subscribed changes
-  land through `pushEditOperations` between undo stops, so cursors, decorations and Monaco's own undo stay
-  coherent. `setValue` never runs on an editable model. A path or session change rebinds in place.
+  line endings and handed to one mirror (`monacoMirror.ts`) per model. The mirror patches the model
+  instance's `undo`/`redo`/`canUndo`/`canRedo` to call the session, so every Monaco undo path (the
+  keybinding, the `undo` command, `editor.trigger`) reaches the host's history; it also turns a
+  `beforeinput` `historyUndo`/`historyRedo` on the editor into the session's undo, which is how the
+  desktop Edit menu reaches it. Monaco's own undo stack is never valid after a remote edit: it replays
+  stored offsets and corrupts the text. Content events go to `applyLocal` with their kind (except the
+  ones the mirror applied), cursor moves to `select`, and composition start and end to
+  `setComposing`. Subscribed changes, undo and conflict choices land only through `model.applyEdits`,
+  never `setValue` or `pushEditOperations`, so cursors and decorations stay. A model swap or unmount
+  disposes the mirror and restores the four methods. Open conflicts render as two view zones each
+  (`conflictWidgets.ts`, React portals in `MonacoConflictZones`): a lens above the user's lines with
+  **Mine** / **Theirs** / **Both**, and the disk lines below them; the user's lines get a whole-line
+  wash. A choice puts focus back in the editor. A path or session change rebinds in place.
   The model and options effects skip their first run, because the mount just created the editor with exactly those inputs. The
   editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
   open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
