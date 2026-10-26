@@ -30,7 +30,7 @@ export function syncFileTabs(workspaceId: string, path: string, file: FileConten
 	}
 }
 
-export const fileIo: FileIo = {
+const fileIo: FileIo = {
 	read: (workspaceId, path) => {
 		const tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		return getTransport()

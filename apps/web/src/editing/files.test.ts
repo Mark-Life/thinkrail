@@ -3,7 +3,8 @@ import { CLIENT_ERROR_REPORT_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import * as transport from "../transport";
-import { activeTabChanged, fileIo, loadBufferRegistry, syncFileTabs } from "./files";
+import { activeTabChanged, loadBufferRegistry, syncFileTabs } from "./files";
+import type { FileIo } from "./registry";
 
 const meta = (hash: string, text: string) => ({ hash, byteLength: text.length, text: true });
 
@@ -94,8 +95,18 @@ test("a save this client wrote is remembered, so its fsChanged echo is never a w
 	const spy = spyOn(transport, "getTransport").mockReturnValue({
 		request: () => Promise.resolve({ status: "written", meta: meta("h-mine", "mine\n") }),
 	} as unknown as ReturnType<typeof transport.getTransport>);
+	let io: FileIo | undefined;
+	await loadBufferRegistry(async () => {
+		const real = await import("./registry");
+		return {
+			createBufferRegistry: (deps) => {
+				io = deps.io;
+				return real.createBufferRegistry(deps);
+			},
+		};
+	});
 	try {
-		await fileIo.write({
+		await io?.write({
 			workspaceId: "ws",
 			path: "a.ts",
 			content: "mine\n",
