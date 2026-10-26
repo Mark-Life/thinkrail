@@ -246,7 +246,8 @@ edits with their `LocalEditKind` (type, delete, paste, composition start and ste
 can group undo steps: `type` is only inserts without a line break, each one character when it replaces
 text, so Enter, a copied line or a drag-move is `other`; `paste` is the one change a paste event
 causes, `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
-other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo). The host owns undo:
+other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo, plus `disk {hash}` when
+the change is a disk version the host adopted or merged, so a view can tell who wrote it). The host owns undo:
 `undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
 holds remote text back. `conflicts()` lists open same-line conflicts (`EditConflict`: offsets of the
 user's lines and the disk lines, `theirs`), and `resolveConflict(id, "mine" | "theirs" | "both")` picks
@@ -256,6 +257,13 @@ before the set, never overlapping: the CodeMirror convention, so a CodeMirror- o
 needs no new contract. A view mounts from `snapshot()`, never from `content`, and applies subscribed
 changes as deltas. The package owns no buffer, save, history or conflict state. An editable Monaco keeps Monaco's
 tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor for keyboard users.
+
+**Presence is an optional prop, like review.** `ResourceViewProps.presence` (`SurfacePresence`) lists the
+recent writes the host knows for the file: each a disk `hash` and a `PresenceWriter` (`id`, `label`,
+`tone`: `user` | `agent1..3` | `external`, `inferred`). The host owns who wrote what; the view owns where.
+A view marks the changes of an `EditUpdate` whose `disk.hash` matches a write, so the ranges come from the
+host's own merge diff and only the author from the host. Without `edit` there is no disk update, so a
+read-only view shows no marks.
 
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
 and opaque per-tab view state. `anchorLabel` prefers a structural locator over its mandatory text fallback:
@@ -656,7 +664,20 @@ content's own height.
   after a last line with no newline) sits below that line, and its disk text drops the joining line
   break. It also decides which zones stay: a conflict on the same lines with the same disk text keeps its zones, and an edit
   that keeps every conflict that way touches no zone, decoration or React state. A path or session change rebinds in place.
-  The model and options effects skip their first run, because the mount just created the editor with exactly those inputs. The
+  The model and options effects skip their first run, because the mount just created the editor with exactly those inputs.
+- **Presence marks (`presenceMarks.ts`, pure rules in `presenceDecorations.ts`).** The mirror hands each
+  disk update to `attachPresence` with the text before it. `presencePaint` turns the change set into
+  joined post-change line spans plus a capped diff (12 lines, 160 characters a line); when more than half
+  of a file of 10 or more lines changed it paints one whole-file chip (an overlay widget at the top right)
+  instead of line marks. Line marks are tracked decorations (`NeverGrowsWhenTypingAtEdges`): a bar on the
+  right edge of the line-decoration lane, drawn over the review and conflict rails and dashed for an
+  inferred writer; a wash that fades in 2.4 s; a name flag (a content widget at the end of the first
+  line, non-user writers only) that fades in 5 s; a hover with the writer and the diff. The bar and hover
+  stay 60 s, the chip 10 s (`PRESENCE_TIMING`). An update whose hash has no writer yet waits 3 s for the
+  next `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame.
+  Flags and chips are `aria-hidden`; each mark is announced once in a polite live region. Reduced motion
+  drops the fades. The tones are CSS classes the host styles (`presence-tone-*`).
+  The
   editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
   open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
   and its loaded component is cached.

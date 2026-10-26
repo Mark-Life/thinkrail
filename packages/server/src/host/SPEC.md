@@ -469,7 +469,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `writeTextFile` replaced and wrote, with the hash `writeTextFile` already computed. `change.revert`/`change.undo` pass a `written` callback with the
   queue, so a revert or undo is the user's write too, a delete included, from the bytes `changes` replaced. A ledger failure never fails the RPC, since the
   bytes already landed: it is logged as `PROVENANCE_RECORD_FAILED`. `fs.readFile` adds `lastWrite` from `fileProvenance.lastWrite`
-  with the asking client's key; an unknown author leaves the field out.
+  with the asking client's key; an unknown author leaves the field out. Every `workspace.fsChanged`
+  publish runs `withFsChangeAuthors` (`fsChangeAuthors.ts`): each path of a non-truncated frame resolves
+  through `resolveWorktreeFile` and gets `fileProvenance.changeWrite`'s answer, when it has one, under
+  `authors`. The frame is still one broadcast, so a user author carries no client.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.

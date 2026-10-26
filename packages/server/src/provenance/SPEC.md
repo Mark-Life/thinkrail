@@ -12,7 +12,7 @@ tags: [public-surface-checked]
 ## Responsibility
 
 Remember who wrote each version of a worktree file, what each agent session last read, and when each
-shell command ran. The host reports a file's last writer on `fs.readFile`. The agent's `fileGuard`
+shell command ran. The host reports a file's last writer on `fs.readFile` and on each `workspace.fsChanged` path. The agent's `fileGuard`
 uses the same data to tell an agent that someone changed a file under it.
 
 ## Boundary
@@ -56,6 +56,13 @@ uses the same data to tell an agent that someone changed a file under it.
     `external`, inferred; else nothing. A `user` author goes on the wire as `thisClient` relative to the
     asking client, never as the clientKey, because the clientKey is a reconnect identity another client
     could take over.
+  - **`changeWrite(path)`** answers one `fsChanged` author (`FsChangeWrite {author, at, hash}`). It reads
+    the file only when the path has ledger history or a bash window covers it, so a build writing 100
+    untracked files costs no reads. It answers nothing while a mutating claim on the path is open (pi
+    wrote, but the re-read has not recorded it yet, so the guess would be `external`), for a version older
+    than 10 s, or for a file it cannot read. Otherwise it is `lastWrite` with the user's client dropped, plus
+    the hash; a recorded delete answers its author with `hash: null`. A change to an untracked path with no
+    window has no author.
   - `forgetSession` drops one session's baselines and claims and closes its windows.
   - `readSnapshot(abs)`: bytes, hash and mtime, `null` when absent, not a file, or over 8 MiB, so files
     over 8 MiB are not guarded (the wire caps a user save at 4 MiB). Ledger calls take that hash, and

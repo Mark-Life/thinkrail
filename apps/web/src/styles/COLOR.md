@@ -122,6 +122,17 @@ them would be a large and brittle surface, and the base is chosen from the manif
 contrast metadata, so it is never wildly wrong. If a theme ever looks off in one of these widgets, the
 fix is to add that specific key — not to adopt the whole surface.
 
+## Writer tones
+
+Presence (who changed a file) reuses roles; it has no palette keys of its own. The user is `primary`,
+agents cycle `feedback-info`, `feedback-success`, `feedback-warning` by first appearance in the
+workspace, and an outside writer is `text-subtle`. Washes use the matching `-subtle` step
+(`control-bg-hovered` for the outside writer, since `text-subtle` has no tint). `index.css` sets them
+once as `--presence-tone` / `--presence-wash` on `presence-tone-*` for Monaco's decorations, and
+`panels/FileWriters.tsx` maps the same tones to utilities. Flags and chips put the tone on a border and
+keep `text-default` on `container-elevated-bg`, so a warning tone never carries text. A fourth agent
+reuses a tone; the label carries identity.
+
 ## Adding or changing a colour
 
 Every case is a JSON edit followed by `bun run colors:generate`.

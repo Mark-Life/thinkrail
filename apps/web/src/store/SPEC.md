@@ -568,7 +568,19 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   sets `pending` in manual mode too. **`selectFileAutosaving`** is true in auto mode while that indicator is `pending` or `saving`
   (a write is coming or running): the tab ring, the close guard's save-first path and the file pane's
   review threads all read it, so they never disagree. [[submodule-web-editing]] owns the buffers and is its only writer; it never carries text, and
-  `applyWorkspaceRemoved` drops a removed workspace's entry. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
+  `applyWorkspaceRemoved` drops a removed workspace's entry. The **file activity slice** (`fileActivity.ts`,
+  private like `mcp.ts`) — **`fileActivityByWorkspace: Record<workspaceId, {paths, agents}>`** — is who
+  wrote each file lately. `noteFsChanged` folds a frame's optional `authors` in the same `set` as the
+  tick: per path the newest 8 writes (`{author, hash, seen}`, `seen` the client clock), newest first, one
+  per author and hash. `agents` lists sessions in first-seen order, so each keeps its tone (`agent1..3`,
+  cycling). A missing author is unknown, never `external`. **`pruneFileActivity(now)`** drops writes
+  older than `FILE_ACTIVITY_WINDOW_MS` (60 s); `panels`' `useFileActivityPrune` (mounted once in `Shell`)
+  calls it at `nextFileActivityExpiry`, so selectors never read the clock. **`selectFileWrites`** returns the
+  stored array (user writes included, for the editor's hash lookup); `fileWriters` derives the distinct
+  non-user writers; **`selectFileLastWriterTone`** answers a primitive for each tree row;
+  **`selectWorkspaceWriterCount`** counts a workspace's writers. A user write is never a writer: your own
+  saves show nothing, and one "You" covers every device. `applyWorkspaceRemoved` drops the entry, and a
+  removed workspace's frame folds nothing. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
 ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
 including a mutation's initiator, converges here — no optimism); `applyWorkspaceRemoved` drops the
