@@ -218,7 +218,7 @@ test("a paste and a copied line are undo steps of their own, apart from the typi
 	const path = await openFile(page, "undo-steps.ts", "one\n");
 	await page.evaluate(() => navigator.clipboard.writeText("XYZ"));
 	await typeAtLineEnd(page, 1, "ab");
-	await editorShortcut(page, "v");
+	await page.keyboard.press("ControlOrMeta+V");
 	await expect(visibleEditor(page)).toContainText("oneabXYZ");
 	await editorShortcut(page, "z");
 	await expect(visibleEditor(page)).not.toContainText("XYZ");
