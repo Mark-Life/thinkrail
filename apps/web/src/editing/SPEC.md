@@ -50,7 +50,7 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `pending` means an autosave timer is armed.
   `merges` counts disk changes merged into the buffer with no conflict; while the buffer is dirty the
   banner's polite live region announces each one, since the merged lines land with no other notice. The tab
-  indicator comes from one store selector, `selectFileSaveIndicator`: in manual mode a dot for `dirty`
+  indicator comes from the store selectors `selectFileSaveIndicator` and `selectFileAutosaving`: in manual mode a dot for `dirty`
   that pulses while `saving`; in auto mode a pulsing ring while a dirty buffer is `pending` ("Saving
   soon") or `saving` ("Saving"), and the dot only for a dirty buffer autosave will not write (paused). Both paint `CanvasText` in forced
   colors. The tab indicator, the banner and the close guard all read from that summary.

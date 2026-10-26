@@ -21,6 +21,6 @@ test("auto mode saves first while a write is coming or running; a paused file as
 
 test("manual mode asks for every unsaved file", () => {
 	expect(action({ status: "saving", dirty: true }, "manual")).toBe("ask");
-	expect(action({ status: "dirty", dirty: true, pending: true }, "manual")).toBe("ask");
+	expect(action({ status: "dirty", dirty: true }, "manual")).toBe("ask");
 	expect(action({ status: "clean", dirty: false }, "manual")).toBe("close");
 });

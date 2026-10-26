@@ -7,23 +7,20 @@ const dirty = (status: FileBufferSummary["status"], pending?: true): FileBufferS
 	...(pending ? { pending } : {}),
 });
 
-test("manual mode shows the unsaved dot, pulsing while a save runs", () => {
-	expect(fileSaveIndicator(undefined, "manual")).toBeNull();
-	expect(fileSaveIndicator({ status: "clean", dirty: false }, "manual")).toBeNull();
-	expect(fileSaveIndicator(dirty("dirty", true), "manual")).toBe("unsaved");
-	expect(fileSaveIndicator(dirty("saving"), "manual")).toBe("saving");
-	expect(fileSaveIndicator(dirty("conflict"), "manual")).toBe("unsaved");
+test("a clean buffer shows nothing, a running save pulses", () => {
+	expect(fileSaveIndicator(undefined)).toBeNull();
+	expect(fileSaveIndicator({ status: "clean", dirty: false })).toBeNull();
+	expect(fileSaveIndicator({ status: "saving", dirty: false })).toBeNull();
+	expect(fileSaveIndicator(dirty("saving"))).toBe("saving");
 });
 
-test("auto mode pulses only while a write is coming and shows the dot for a paused file", () => {
-	expect(fileSaveIndicator({ status: "saving", dirty: false }, "auto")).toBeNull();
-	expect(fileSaveIndicator(dirty("dirty", true), "auto")).toBe("pending");
-	expect(fileSaveIndicator(dirty("saving"), "auto")).toBe("saving");
-	expect(fileSaveIndicator(dirty("error", true), "auto")).toBe("pending");
-	expect(fileSaveIndicator(dirty("dirty"), "auto")).toBe("unsaved");
-	expect(fileSaveIndicator(dirty("error"), "auto")).toBe("unsaved");
+test("an armed timer is pending only while the file can still be written", () => {
+	expect(fileSaveIndicator(dirty("dirty", true))).toBe("pending");
+	expect(fileSaveIndicator(dirty("error", true))).toBe("pending");
+	expect(fileSaveIndicator(dirty("dirty"))).toBe("unsaved");
+	expect(fileSaveIndicator(dirty("error"))).toBe("unsaved");
 	for (const status of ["stale", "conflict", "deleted", "readonly"] as const) {
-		expect(fileSaveIndicator(dirty(status, true), "auto")).toBe("unsaved");
+		expect(fileSaveIndicator(dirty(status, true))).toBe("unsaved");
 	}
 });
 

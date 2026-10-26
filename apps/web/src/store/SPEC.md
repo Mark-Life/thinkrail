@@ -564,10 +564,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`setFileBufferSummary(workspaceId, path, summary | null)`** and **`selectFileBufferSummary`** — is the
   status of each open editor buffer (`status`, `dirty`, the `error` reason, and `pending` for an armed
   autosave) for the tab indicator, the banner and the close guard. **`selectFileSaveIndicator`** derives
-  the tab's `unsaved` / `saving` / `pending` / none from that summary and **`fileSaveMode`**, so the
-  indicator and the close guard never disagree. **`selectFileAutosaving`** is true in auto mode while
-  that indicator is `pending` or `saving` (a write is coming or running): the close guard saves first
-  then, and the file pane keeps review threads up. [[submodule-web-editing]] owns the buffers and is its only writer; it never carries text, and
+  the tab's `unsaved` / `saving` / `pending` / none from that summary alone (only an auto-mode timer sets
+  `pending`). **`selectFileAutosaving`** is true in auto mode while that indicator is `pending` or `saving`
+  (a write is coming or running): the tab ring, the close guard's save-first path and the file pane's
+  review threads all read it, so they never disagree. [[submodule-web-editing]] owns the buffers and is its only writer; it never carries text, and
   `applyWorkspaceRemoved` drops a removed workspace's entry. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
 ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,

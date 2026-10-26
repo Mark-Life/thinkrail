@@ -961,11 +961,11 @@ export function selectFileBufferSummary(
 }
 
 export function selectFileSaveIndicator(
-	state: { fileBuffersByWorkspace: FileBufferSummaries; fileSaveMode: FileSaveMode },
+	state: { fileBuffersByWorkspace: FileBufferSummaries },
 	workspaceId: string,
 	path: string,
 ): FileSaveIndicator | null {
-	return fileSaveIndicator(selectFileBufferSummary(state, workspaceId, path), state.fileSaveMode);
+	return fileSaveIndicator(selectFileBufferSummary(state, workspaceId, path));
 }
 
 export function selectFileAutosaving(

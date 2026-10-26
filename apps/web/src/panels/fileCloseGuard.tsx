@@ -20,7 +20,7 @@ interface PendingClose {
 }
 
 export function closeAction(
-	state: Parameters<typeof selectFileSaveIndicator>[0],
+	state: Parameters<typeof selectFileAutosaving>[0],
 	{ workspaceId, path }: { workspaceId: string; path: string },
 ): "close" | "ask" | "saveFirst" {
 	if (selectFileSaveIndicator(state, workspaceId, path) === null) return "close";

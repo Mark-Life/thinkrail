@@ -1,5 +1,3 @@
-import type { FileSaveMode } from "@thinkrail/contracts";
-
 export type FileBufferStatus =
 	| "clean"
 	| "dirty"
@@ -39,11 +37,10 @@ function sameSummary(left: FileBufferSummary | undefined, right: FileBufferSumma
 
 export function fileSaveIndicator(
 	summary: FileBufferSummary | undefined,
-	mode: FileSaveMode,
 ): FileSaveIndicator | null {
 	if (summary?.dirty !== true) return null;
 	if (summary.status === "saving") return "saving";
-	if (mode === "manual" || summary.pending !== true) return "unsaved";
+	if (summary.pending !== true) return "unsaved";
 	return summary.status === "dirty" || summary.status === "error" ? "pending" : "unsaved";
 }
 
