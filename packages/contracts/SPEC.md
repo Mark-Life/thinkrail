@@ -571,7 +571,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `FileRead` = `FileContent` (`{ content, meta: ResourceMeta }`) plus an optional **`lastWrite`**
   (`FileLastWrite {author, at}`): who wrote this exact version, as far as the host knows. `FileAuthor` is
   `user{thisClient}`, `agent{sessionId, via:"tool", toolName}`, `agent{sessionId, via:"script"}`
-  or `external`; the last two are inferred from the mtime, so the variant itself says so. The host never puts a clientKey on the wire, only whether the
+  or `external`; the last two are inferred from the change time (the later of mtime and ctime), so the variant itself says so. The host never puts a clientKey on the wire, only whether the
   writer is the asking client. The field needs no version gate: a current host also omits it when the
   author is unknown, so an older host's absence means the same thing to a newer client, and an older
   client ignores it; **`fs.writeFile`** (`FILE_WRITE_PROTOCOL_VERSION` =

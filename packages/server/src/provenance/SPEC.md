@@ -52,14 +52,14 @@ uses the same data to tell an agent that someone changed a file under it.
   - **`lastWrite({path, hash, clientKey})`** answers the wire's `FileLastWrite` and stats the file only
     when it needs the change time: the later of mtime and ctime, so a file an agent's `mv` or `cp -p`
     moved, which keeps its old mtime, still counts as changed now. The order is: the path's newest ledger entry when its hash matches (an older
-    match is a restore, so it falls through); else a bash window under the file that covers the mtime, or, when the mtime is older than
+    match is a restore, so it falls through); else a bash window under the file that covers the change time, or, when it is older than
     the newest entry, any window open since that entry → `agent` via `script`, inferred; else a path with ledger history →
     `external`, inferred; else nothing. A `user` author goes on the wire as `thisClient` relative to the
     asking client, never as the clientKey, because the clientKey is a reconnect identity another client
     could take over.
   - **`changeWrite(path, late?)`** answers one `fsChanged` author (`FsChangeWrite {author, hash}`). It
     stats the file first and reads it only when an answer is still possible: the path's newest entry or
-    its mtime is under 10 s old, or, for an untracked path, a bash window covers that fresh mtime. So
+    its change time is under 10 s old, or, for an untracked path, a bash window covers that fresh change time. So
     a build writing 100 untracked files costs no reads, and neither does a later build after an agent
     bash call. While a mutating claim on the path is open it answers nothing (pi wrote, but the re-read
     has not recorded it yet, so the guess would be `external`). It reads the hash on disk instead and keeps it
