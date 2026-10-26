@@ -318,7 +318,7 @@ export function remoteText(
 	doc: EditorState,
 	input: {
 		text: string;
-		changes?: readonly TextChange[];
+		changes?: ChangeSet;
 		add?: readonly MergeConflict[];
 		touched?: readonly MergeRange[];
 		clear?: boolean;
@@ -327,7 +327,7 @@ export function remoteText(
 	const current = docText(doc);
 	const added = (input.add ?? []).map((conflict) => ({ ...conflict, id: nextConflictId++ }));
 	if (current === input.text && added.length === 0 && remoteNoOp(doc, input)) return doc;
-	const changes = ChangeSet.of(input.changes ?? textChanges(current, input.text), current.length);
+	const changes = input.changes ?? ChangeSet.of(textChanges(current, input.text), current.length);
 	const effects = [
 		...(input.clear && hasConflictState(doc) ? [clearConflicts.of(null)] : []),
 		newBase.of(input.touched ?? changedRanges(changes)),

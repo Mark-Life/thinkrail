@@ -27,7 +27,7 @@ type MergeResult =
 			kind: "merged";
 			text: string;
 			conflicts: MergeConflict[];
-			changes: TextChange[];
+			changes: ChangeSet;
 			touched: MergeRange[];
 	  }
 	| { kind: "tooLarge" };
@@ -157,7 +157,7 @@ function exactChanges(input: {
 	merged: string;
 	text: string;
 	changes: readonly TextChange[];
-}): TextChange[] {
+}): ChangeSet {
 	let set = ChangeSet.of(input.changes, input.mineText.length);
 	if (input.mineText !== input.mine) {
 		set = ChangeSet.of({ from: input.mine.length, insert: "\n" }, input.mine.length).compose(set);
@@ -167,11 +167,7 @@ function exactChanges(input: {
 			ChangeSet.of({ from: input.text.length, to: input.merged.length }, input.merged.length),
 		);
 	}
-	const out: TextChange[] = [];
-	set.iterChanges((from, to, _fromB, _toB, inserted) => {
-		out.push({ from, to, insert: inserted.toString() });
-	});
-	return out;
+	return set;
 }
 
 export function merge3(input: { base: string; mine: string; theirs: string }): MergeResult {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import { Text } from "@codemirror/state";
 import { toEditorText } from "@thinkrail/contracts";
-import type { TextChange } from "@thinkrail/resource-renderers";
 import { merge3 } from "./merge3";
 
 const BASE = "one\ntwo\nthree\nfour\nfive\n";
@@ -25,7 +25,8 @@ test("edits far apart both land", () => {
 
 test("the same change on both sides lands once", () => {
 	const both = "one\ntwo\n3\nfour\nfive\n";
-	expect(merged(both, both)).toMatchObject({ text: both, conflicts: [], changes: [] });
+	expect(merged(both, both)).toMatchObject({ text: both, conflicts: [] });
+	expect(merged(both, both).changes.empty).toBe(true);
 	const inserted = "one\ntwo\nnew\nthree\nfour\nfive\n";
 	expect(merged(inserted, inserted).text).toBe(inserted);
 });
@@ -130,16 +131,6 @@ test("a merge past the diff budget falls back", () => {
 	expect(merge3({ base, mine, theirs: base })).toEqual({ kind: "tooLarge" });
 });
 
-function applyChanges(text: string, changes: readonly TextChange[]) {
-	let out = "";
-	let position = 0;
-	for (const change of changes) {
-		out += text.slice(position, change.from) + change.insert;
-		position = change.to;
-	}
-	return out + text.slice(position);
-}
-
 test("the changes turn mine into the merged text, also around a missing last newline", () => {
 	const variants = ["", "a", "a\n", "a\nb", "a\nb\n", "A\nb", "a\nB\n", "a\nb\nc", "x\na\nb", "b"];
 	for (const base of variants) {
@@ -147,7 +138,7 @@ test("the changes turn mine into the merged text, also around a missing last new
 			for (const theirs of variants) {
 				const result = merge3({ base, mine, theirs });
 				if (result.kind !== "merged") throw new Error("merge fell back");
-				expect(applyChanges(mine, result.changes)).toBe(result.text);
+				expect(result.changes.apply(Text.of(mine.split("\n"))).toString()).toBe(result.text);
 				for (const range of [...result.conflicts, ...result.touched]) {
 					expect(range.to).toBeLessThanOrEqual(result.text.length);
 				}
@@ -158,7 +149,7 @@ test("the changes turn mine into the merged text, also around a missing last new
 
 test("changes hold only the disk side, trimmed inside the line", () => {
 	const result = merged("ONE\ntwo\nthree\nfour\nfive\n", "one\ntwo\nthree\nfour\nfive!\n");
-	expect(result.changes).toEqual([{ from: 23, to: 23, insert: "!" }]);
+	expect(result.changes.toJSON()).toEqual([23, [0, "!"], 1]);
 });
 
 test("touched ranges cover every block the disk side changed, in merged text", () => {
