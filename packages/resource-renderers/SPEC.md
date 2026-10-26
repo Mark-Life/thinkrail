@@ -582,7 +582,8 @@ content's own height.
   buffer and an autosave can never reformat the file: the doc is the session's LF text, mounted from
   `snapshot()`, and the host owns line endings and the BOM (no `lineSeparator`). Without a session
   (chat cards, phones, a buffer still loading) and while the view is **locked**, it is the read-only
-  reading view below, with its review commenting; the lock is the view's own toggle (`markdown-lock`,
+  reading view below, with its review commenting; with a session that view reads the session's text, so
+  locking never hides unsaved edits; the lock is the view's own toggle (`markdown-lock`,
   `aria-pressed`), kept in the tab's view state with the scroll offset, so a review pass cannot type
   into the file. The editor lives in its own lazy chunk (`LiveMarkdownEditor`) behind a Suspense whose
   fallback is the reading view, so a surface without a session never loads CodeMirror and the first
@@ -595,26 +596,34 @@ content's own height.
     own: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y and a `beforeinput` `historyUndo`/`historyRedo` (the
     desktop Edit menu) call the session. Composition start and end go to `setComposing`. Open conflicts
     render as block widgets: the lens above the user's lines (the same **Mine** / **Theirs** / **Both**
-    as Monaco, through `ConflictZones`) and the disk lines below, with the user's lines washed.
+    as Monaco, through `ConflictLens` and `ConflictTheirs`) and the disk lines below, with the user's lines washed.
   - **Markers (`markers.ts`, pure).** Syntax markers hide unless the selection touches their node,
     and only while the editor has focus, so an unfocused page reads like the reading view: inline
     nodes (emphasis, strong, strikethrough, inline code, links, autolinks, escapes) reveal when the
     selection touches the node, line markers (heading `#`, quote `>`, list bullets, task boxes, rules)
     when it touches the line. A shown marker is muted mono. Off the caret a bullet draws as `•`, a task
-    box as a checkbox that toggles the source, a rule as a line. Link targets hide with their brackets;
-    Cmd/Ctrl+click follows a link the way the reading view does. Decorations are built only over the
-    visible ranges.
+    box as a checkbox that toggles the source, a rule as a line. Link targets hide with their brackets,
+    line by line (CodeMirror refuses a plugin decoration that hides a line break); brackets with no URL
+    and no matching reference definition (`array[0]`, `[WIP]`) stay literal text, as in CommonMark.
+    Cmd/Ctrl+click, or Cmd/Ctrl+Enter with the caret on a link, follows it: an anchor finds its heading
+    by the reading view's ids (syntax tree headings, `-n` for repeats), and only `http`, `https` and
+    `mailto` open outside the app. Inline marks are built only over the visible ranges.
   - **Blocks (`blocks.ts`, pure).** Tables, GitHub alerts, fenced code (Mermaid included), HTML
     blocks, a paragraph that is only an image, and the front matter render as block widgets while the
     selection is outside them, reusing the host markdown through `MarkdownDocument` (same sanitizing,
     links, Shiki and Mermaid) in React portals; the front matter shows as a one-line summary. Clicking
-    a widget away from its controls puts the caret in the block and shows its source. A block nested in
+    a widget away from its controls puts the caret in the block and shows its source. A block that holds
+    an open conflict stays source, so its lens and lines show; a presence mark inside a rendered block
+    is not drawn (the chip still names the writer). The block candidates come from one walk per parse,
+    cached with the front matter by document, so a caret move only re-filters them and keeps the
+    decorations when no block enters or leaves. A block nested in
     a list renders dedented; one inside a quote stays source. An HTML block ends at a blank line, as in
     CommonMark, so a `<details>` whose body is markdown renders as separate widgets; an inline image
     stays source. A widget keeps its DOM while its source is unchanged, and every widget's size change
     asks CodeMirror to measure again. Widgets reset the editor's `white-space: pre`, or the newlines
     react-markdown leaves between elements would render as blank lines.
-  - **Review threads** render as block widgets after their end line (`ReviewThreadCard`). Authoring a
+  - **Review threads** render as block widgets after their end line (`ReviewThreadCard`), or after the
+    rendered block that holds that line, as the reading view does. Authoring a
     comment needs the lock (the reading view's commenting) or Source. A review focus scrolls its line
     into view.
   - **Presence** uses the shared rules (`presenceCore.ts`) through a CodeMirror surface: a bar and a
@@ -625,7 +634,7 @@ content's own height.
     `md-code`, `md-codeblock`), and spacing is line padding, since CodeMirror measures line boxes and
     margins between lines break its height map. The measure is the reading view's 78ch.
   - **Access.** The content is a labelled multi-line textbox; Tab leaves the editor (no tab binding);
-    heading lines carry `role="heading"` and their level. Widget controls stay keyboard reachable.
+    heading lines carry `role="heading"` and their level. The focused editor rings its pane. Widget controls stay keyboard reachable.
     Reduced motion drops the presence fades. Enter on a list item starts the next one (an empty item
     ends the list), outside code.
   - **Cost.** Entry chunk unchanged (1,663 kB, 527 kB gzip). `MarkdownPreview` grows from 13.1 to
