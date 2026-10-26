@@ -21,6 +21,7 @@ import { selectFileAutosaving, selectFileBufferSummary, useAppStore } from "../s
 import { getTransport } from "../transport";
 import { commentAfterSave, hidesReview } from "./commentAfterSave";
 import { FileEditBanner } from "./FileEditBanner";
+import { FileWritersChip, useFilePresence } from "./FileWriters";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
@@ -123,6 +124,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		if (first) session.resolveConflict(first.id, choice);
 		if (session.conflicts().length === 0) focusRendererEditor(viewRef.current);
 	};
+	const presence = useFilePresence(tab.workspaceId, tab.path);
 	const reviews = reviewSurface ? [reviewSurface] : [];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
@@ -155,6 +157,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					/>
 				</div>
 			) : null}
+			<FileWritersChip workspaceId={tab.workspaceId} path={tab.path} />
 			<UnplacedReviewStrip
 				reviews={reviews}
 				renderer={renderer}
@@ -189,6 +192,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						content={content}
 						{...(editing ? { edit: buffer.session } : {})}
 						{...(reviewSurface ? { review: reviewSurface } : {})}
+						{...(editing ? { presence } : {})}
 						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}

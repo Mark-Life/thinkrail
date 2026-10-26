@@ -78,6 +78,8 @@ const NON_COLOR = new Set([
 	"clip-padding",
 	"none",
 	"inset",
+	"dashed",
+	"dotted",
 ]);
 
 const COLOR_PREFIX =

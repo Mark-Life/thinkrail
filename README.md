@@ -44,6 +44,8 @@ create the tools it needs based on how you actually work.
   Edits autosave a second after you stop typing, and Cmd/Ctrl+S saves at once; turn Autosave off to save
   only by hand. Unsaved edits survive a reload. An agent's change on disk merges into yours live: a line
   you both changed waits for you to pick Mine, Theirs or Both, and Cmd/Ctrl+Z undoes only your own edits.
+  Each landed change shows who made it: a colored bar and a name flag on the lines an agent, its script
+  or an outside program changed, and the same writers on the file's tab, its Files row and a writers chip.
   The workbench also holds a Files tree with live git change marks and a Changed view, terminals, and
   documents — all scoped to the active workspace. Leave
   anchored review comments on files and diffs and send them to a chat as structured context, or open the

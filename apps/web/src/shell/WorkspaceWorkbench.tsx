@@ -27,6 +27,7 @@ import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
+import { FileWriterAvatars } from "../panels/FileWriters";
 import { useFileCloseGuard } from "../panels/fileCloseGuard";
 import { startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
@@ -717,6 +718,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const flag = reviewFlagForPaths(reviewFlagByPath, tabReviewPaths(tab));
 			const unsaved =
 				tab.kind === "file" ? <FileDirtyDot workspaceId={workspaceId} path={tab.path} /> : null;
+			const writers =
+				tab.kind === "file" ? (
+					<FileWriterAvatars workspaceId={workspaceId} path={tab.path} />
+				) : null;
 			const review = flag ? (
 				<span
 					data-testid="review-tab-flag"
@@ -730,8 +735,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					{t("shell.workbench.reviewFlag")}
 				</span>
 			) : null;
-			return unsaved || review ? (
+			return unsaved || review || writers ? (
 				<>
+					{writers}
 					{review}
 					{unsaved}
 				</>

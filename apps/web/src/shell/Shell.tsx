@@ -9,6 +9,7 @@ import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
+import { useFileActivityPrune } from "../panels/FileWriters";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
@@ -60,6 +61,7 @@ export function Shell() {
 	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
+	useFileActivityPrune();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
