@@ -65,3 +65,23 @@ test("the banner resolves a conflict by keyboard while the lens stays out of the
 		.poll(() => readFileSync(path, "utf8"))
 		.toBe("const one = 1;\nconst two = 22;\nconst three = 3;\n");
 });
+
+test("Edit menu undo with focus on the banner undoes the last conflict choice", async ({
+	page,
+}) => {
+	const five = `${BASE}const four = 4;\nconst five = 5;\n`;
+	const path = await openFile(page, "menu-banner.ts", five);
+	await typeAtLineEnd(page, 1, " // m1");
+	await typeAtLineEnd(page, 5, " // m5");
+	writeFileSync(path, five.replace("one = 1", "one = 11").replace("five = 5", "five = 55"));
+	await expect(conflictLens(page)).toHaveCount(2, { timeout: 10_000 });
+
+	await banner(page).getByTestId("file-edit-resolve-theirs").click();
+	await expect(conflictLens(page)).toHaveCount(1);
+	await nativeCommand(page, "undo");
+	await expect(conflictLens(page)).toHaveCount(2);
+	await expect(visibleEditor(page)).toContainText("const one = 1; // m1");
+	await nativeCommand(page, "redo");
+	await expect(conflictLens(page)).toHaveCount(1);
+	await expect(visibleEditor(page)).toContainText("const one = 11;");
+});

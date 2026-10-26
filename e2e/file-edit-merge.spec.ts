@@ -106,6 +106,64 @@ test("a change to the same line pauses the file until Mine, Theirs or Both, whic
 	await expect(fileTab(page, "clash.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
 });
 
+test("a long disk line in a conflict wraps inside the editor and its zone fits it", async ({
+	page,
+}) => {
+	const path = await openFile(page, "wrap.ts", BASE);
+	await typeAtLineEnd(page, 2, " // mine");
+	const long = `const two = "${"x".repeat(380)}TAILMARK";`;
+	writeFileSync(path, `const one = 1;\n${long}\nconst three = 3;\n`);
+	await expect(conflictLens(page)).toHaveCount(1, { timeout: 10_000 });
+	const disk = page.locator('[data-testid="edit-conflict-disk"]:visible');
+	await expect(disk).toContainText("TAILMARK");
+	await expect
+		.poll(() =>
+			disk.evaluate((node) => {
+				const text = node.querySelector("pre");
+				const zone = node.closest("[data-conflict-zone]");
+				const editor = node.closest(".monaco-editor");
+				if (!text?.firstChild || !zone || !editor) return "missing";
+				const content = text.firstChild.textContent ?? "";
+				const range = document.createRange();
+				range.setStart(text.firstChild, content.indexOf("TAILMARK"));
+				range.setEnd(text.firstChild, content.indexOf("TAILMARK") + 8);
+				const tail = range.getBoundingClientRect();
+				const bounds = editor.getBoundingClientRect();
+				return {
+					clipped: text.scrollWidth > text.clientWidth,
+					tailInside:
+						tail.right <= bounds.right && tail.bottom <= zone.getBoundingClientRect().bottom,
+					wrapped: text.offsetHeight > 1.5 * Number.parseFloat(getComputedStyle(text).lineHeight),
+				};
+			}),
+		)
+		.toEqual({ clipped: false, tailInside: true, wrapped: true });
+});
+
+test("undo and redo work while focus stays on the banner between conflicts", async ({ page }) => {
+	const five = `${BASE}const four = 4;\nconst five = 5;\n`;
+	const path = await openFile(page, "steps.ts", five);
+	await typeAtLineEnd(page, 1, " // m1");
+	await typeAtLineEnd(page, 5, " // m5");
+	writeFileSync(path, five.replace("one = 1", "one = 11").replace("five = 5", "five = 55"));
+	await expect(conflictLens(page)).toHaveCount(2, { timeout: 10_000 });
+
+	const theirs = banner(page).getByTestId("file-edit-resolve-theirs");
+	await theirs.focus();
+	await page.keyboard.press("Enter");
+	await expect(conflictLens(page)).toHaveCount(1);
+	await expect(visibleEditor(page)).toContainText("const one = 11;");
+	await expect(theirs).toBeFocused();
+
+	await pressPlatformShortcut(page, "z");
+	await expect(conflictLens(page)).toHaveCount(2);
+	await expect(visibleEditor(page)).toContainText("const one = 1; // m1");
+	await expect(theirs).toBeFocused();
+	await pressPlatformShortcut(page, "Shift+z");
+	await expect(conflictLens(page)).toHaveCount(1);
+	await expect(visibleEditor(page)).toContainText("const one = 11;");
+});
+
 test("a save that meets an unseen disk change on another line merges it and retries once", async ({
 	page,
 }) => {
