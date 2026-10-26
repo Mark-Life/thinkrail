@@ -66,6 +66,17 @@ test("inserts at the same point keep mine first; an insert inside an edit confli
 	expect(inside.conflicts).toHaveLength(1);
 });
 
+test("same-point inserts that share lines keep each shared line once", () => {
+	expect(merged("a\nX\n", "a\nX\nY\n", "a\n")).toMatchObject({
+		text: "a\nX\nY\n",
+		conflicts: [],
+	});
+	expect(merged("a\nA\nX\n", "a\nB\nX\n", "a\n").text).toBe("a\nA\nB\nX\n");
+	const crossed = merged("a\nA\nX\n", "a\nX\nB\n", "a\n");
+	expect(crossed.text).toBe("a\nA\nX\n");
+	expect(crossed.conflicts).toEqual([{ from: 2, to: 6, theirs: "X\nB\n" }]);
+});
+
 test("an insert at the edge of the other side's edit merges", () => {
 	expect(merged("one\ntwo\nadded\nthree\nfour\nfive\n", "one\nTWO\nthree\nfour\nfive\n").text).toBe(
 		"one\nTWO\nadded\nthree\nfour\nfive\n",
@@ -82,6 +93,14 @@ test("a conflict on a last line without a newline keeps both forms", () => {
 	const result = merged("a\nmine", "a\ntheirs", "a\nb");
 	expect(result.text).toBe("a\nmine");
 	expect(result.conflicts).toEqual([{ from: 2, to: 6, theirs: "theirs" }]);
+});
+
+test("a conflict at the end of the text gives back exactly the disk tail", () => {
+	const deleted = merged("a\n", "a\nb2", "a\nb\n");
+	expect(deleted.text).toBe("a");
+	expect(deleted.conflicts).toEqual([{ from: 1, to: 1, theirs: "\nb2" }]);
+	expect(merged("", "y", "x").conflicts).toEqual([{ from: 0, to: 0, theirs: "y" }]);
+	expect(merged("a\nb1\n", "a\nb2", "a\nb").conflicts).toEqual([{ from: 2, to: 5, theirs: "b2" }]);
 });
 
 test("CRLF disk text merges once it is in editor form", () => {

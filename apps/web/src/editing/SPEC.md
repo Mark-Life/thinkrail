@@ -77,11 +77,14 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   banner). Hunks conflict only when they share a base line, or when an insert lands strictly inside the
   other side's changed lines. Edits on adjacent lines, and an insert at the edge of the other side's
   edit, merge. The same change on both sides lands once. Two different inserts at the same point merge
-  with mine first. A conflict keeps mine in the text and records the disk lines (`theirs`) next to it.
+  with mine first, keeping lines they share at their start or end once; if the rest still shares a line,
+  they conflict. A conflict keeps mine in the text and records the disk lines (`theirs`) next to it.
   Inputs are LF editor text; a missing final newline is merged as if present, then follows the side
-  that changed it. The merge also returns the disk side as `TextChange[]` against mine, which enter
+  that changed it. A conflict at the end of the text holds the disk tail exactly: its final newline
+  follows the disk, and an empty one after a dropped newline starts its `theirs` with one. The merge also returns the disk side as `TextChange[]` against mine, which enter
   the doc as they are (no second diff), and the merged range of every block the disk side changed.
-- **Open conflicts** live in a CodeMirror `StateField` and move with every edit. **Mine** keeps the
+- **Open conflicts** live in a CodeMirror `StateField` and move with every edit. Typing at the end of
+  a conflict on a last line without a newline extends it; any other edit at its edges stays outside. **Mine** keeps the
   text, **Theirs** replaces it with the disk lines, **Both** keeps mine then the disk lines; each is a
   user transaction, so Cmd/Ctrl+Z reopens the conflict (`invertedEffects`). A later disk change merges
   against the new base. An open conflict in a block the disk changed again closes: the new merge either

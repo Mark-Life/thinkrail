@@ -40,26 +40,35 @@ interface ConflictState {
 
 const lineage = new WeakMap<EditorState, Hop>();
 
-function mapConflict(conflict: EditConflict, mapping: ChangeDesc, remote: boolean): EditConflict {
-	const from = mapping.mapPos(conflict.from, remote ? 1 : -1);
-	const to = Math.max(from, mapping.mapPos(conflict.to, -1));
+function endsOnOpenLastLine(conflict: EditConflict, doc: Text): boolean {
+	return (
+		conflict.to > conflict.from &&
+		conflict.to === doc.length &&
+		doc.sliceString(conflict.to - 1, conflict.to) !== "\n"
+	);
+}
+
+function mapConflict(conflict: EditConflict, mapping: ChangeDesc, localDoc?: Text): EditConflict {
+	const from = mapping.mapPos(conflict.from, localDoc ? -1 : 1);
+	const grows = localDoc !== undefined && endsOnOpenLastLine(conflict, localDoc);
+	const to = Math.max(from, mapping.mapPos(conflict.to, grows ? 1 : -1));
 	return from === conflict.from && to === conflict.to ? conflict : { ...conflict, from, to };
 }
 
 function mapConflicts(
 	conflicts: readonly EditConflict[],
 	mapping: ChangeDesc,
-	remote: boolean,
+	localDoc: Text | undefined,
 ): readonly EditConflict[] {
-	const mapped = conflicts.map((conflict) => mapConflict(conflict, mapping, remote));
+	const mapped = conflicts.map((conflict) => mapConflict(conflict, mapping, localDoc));
 	return mapped.every((conflict, index) => conflict === conflicts[index]) ? conflicts : mapped;
 }
 
 const addConflicts = StateEffect.define<readonly EditConflict[]>({
-	map: (conflicts, mapping) => conflicts.map((conflict) => mapConflict(conflict, mapping, true)),
+	map: (conflicts, mapping) => conflicts.map((conflict) => mapConflict(conflict, mapping)),
 });
 const removeConflict = StateEffect.define<EditConflict>({
-	map: (conflict, mapping) => mapConflict(conflict, mapping, true),
+	map: (conflict, mapping) => mapConflict(conflict, mapping),
 });
 const clearConflicts = StateEffect.define<null>();
 const newBase = StateEffect.define<readonly MergeRange[]>();
@@ -85,7 +94,7 @@ const conflictField = StateField.define<ConflictState>({
 		const rebased = tr.effects.some((effect) => effect.is(newBase));
 		let open =
 			tr.docChanged && value.open.length > 0
-				? mapConflicts(value.open, tr.changes, remote)
+				? mapConflicts(value.open, tr.changes, remote ? undefined : tr.startState.doc)
 				: value.open;
 		for (const effect of tr.effects) {
 			if (effect.is(clearConflicts)) open = [];

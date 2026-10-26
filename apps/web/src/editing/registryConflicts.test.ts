@@ -187,3 +187,40 @@ test("typing after a conflict keeps the same conflict list", () => {
 	expect(handle.session.conflicts()).not.toBe(conflicts);
 	expect(handle.session.conflicts()).toMatchObject([{ from: 0, to: 10 }]);
 });
+
+test("typing at the end of a conflict on a last line without a newline stays inside it", () => {
+	const context = setup({ text: "one\ntwo" });
+	const { handle } = context;
+	type(handle, 7, "X");
+	diskChange(context, "one\ntwoY");
+	type(handle, handle.session.snapshot().length, "Z");
+	expect(handle.session.snapshot()).toBe("one\ntwoXZ");
+	handle.session.resolveConflict(firstConflict(handle).id, "theirs");
+	expect(handle.session.snapshot()).toBe("one\ntwoY");
+});
+
+test("a remote append after a last-line conflict stays outside it", () => {
+	const context = setup({ text: "one\ntwo" });
+	const { handle } = context;
+	type(handle, 7, "X");
+	diskChange(context, "one\ntwoY");
+	diskChange(context, "one\ntwoY\nthree");
+	expect(handle.session.snapshot()).toBe("one\ntwoX\nthree");
+	handle.session.resolveConflict(firstConflict(handle).id, "theirs");
+	expect(handle.session.snapshot()).toBe("one\ntwoY\nthree");
+});
+
+test("Theirs and Both for a deleted last line keep its line break", () => {
+	for (const [choice, expected] of [
+		["theirs", "a\nb2"],
+		["both", "a\nb2"],
+		["mine", "a"],
+	] as const) {
+		const context = setup({ text: "a\nb\n" });
+		const { handle } = context;
+		handle.session.applyLocal([{ from: 2, to: 4, insert: "" }], "delete");
+		diskChange(context, "a\nb2");
+		handle.session.resolveConflict(firstConflict(handle).id, choice);
+		expect(handle.session.snapshot()).toBe(expected);
+	}
+});

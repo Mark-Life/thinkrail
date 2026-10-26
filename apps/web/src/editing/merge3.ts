@@ -1,5 +1,5 @@
 import { ChangeSet } from "@codemirror/state";
-import type { TextChange } from "@thinkrail/resource-renderers";
+import type { EditConflict, TextChange } from "@thinkrail/resource-renderers";
 import { diffArrays } from "diff";
 import { refined, splitLines } from "./textChanges";
 
@@ -15,15 +15,12 @@ interface Hunk {
 	lines: string[];
 }
 
-export interface MergeConflict {
-	from: number;
-	to: number;
-	theirs: string;
-}
+export type MergeConflict = Omit<EditConflict, "id">;
 
-export interface MergeRange {
-	from: number;
-	to: number;
+export type MergeRange = Pick<EditConflict, "from" | "to">;
+
+interface PendingConflict extends MergeConflict {
+	atEnd: boolean;
 }
 
 type MergeResult =
@@ -95,6 +92,26 @@ function clusters(all: Hunk[]): Hunk[][] {
 	return groups;
 }
 
+function commonEdge(a: readonly string[], b: readonly string[], fromEnd: boolean, skip = 0) {
+	let count = 0;
+	const limit = Math.min(a.length, b.length) - skip;
+	while (count < limit) {
+		const index = fromEnd ? -1 - count : count;
+		if (a.at(index) !== b.at(index)) break;
+		count++;
+	}
+	return count;
+}
+
+function insertUnion(mine: readonly string[], theirs: readonly string[]): string[] | null {
+	const head = commonEdge(mine, theirs, false);
+	const tail = commonEdge(mine, theirs, true, head);
+	const mineRest = mine.slice(head, mine.length - tail);
+	const theirsRest = theirs.slice(head, theirs.length - tail);
+	if (mineRest.some((line) => theirsRest.includes(line))) return null;
+	return [...mine.slice(0, mine.length - tail), ...theirsRest, ...mine.slice(mine.length - tail)];
+}
+
 function version(base: string[], start: number, end: number, members: Hunk[]): string[] {
 	const out: string[] = [];
 	let position = start;
@@ -141,7 +158,7 @@ export function merge3(input: { base: string; mine: string; theirs: string }): M
 	if (!mineHunks || !theirsHunks) return { kind: "tooLarge" };
 	const mineText = mineLines.join("");
 	const out: string[] = [];
-	const conflicts: MergeConflict[] = [];
+	const conflicts: PendingConflict[] = [];
 	const changes: TextChange[] = [];
 	const touched: MergeRange[] = [];
 	let length = 0;
@@ -174,31 +191,32 @@ export function merge3(input: { base: string; mine: string; theirs: string }): M
 		);
 		const sides = new Set(group.map((hunk) => hunk.side));
 		const from = length;
+		const union = group.every(isInsert) ? insertUnion(mine, theirs) : null;
 		let emitted = mine;
 		if (!sides.has("theirs") || mine.join("") === theirs.join("")) {
 			emit(mine);
 		} else if (!sides.has("mine")) {
 			emitted = theirs;
 			emit(theirs);
-		} else if (group.every(isInsert)) {
-			emitted = [...mine, ...theirs];
-			emit(emitted);
+		} else if (union) {
+			emitted = union;
+			emit(union);
 		} else {
 			emit(mine);
-			conflicts.push({ from, to: length, theirs: theirs.join("") });
+			conflicts.push({ from, to: length, theirs: theirs.join(""), atEnd: end === base.length });
 		}
 		if (sides.has("theirs")) touched.push({ from, to: length });
-		const mineLength = mine.join("").length;
-		if (emitted !== mine) {
+		const mineChunk = mine.join("");
+		if (emitted.join("") !== mineChunk) {
 			changes.push(
 				refined(mineText, {
 					from: minePosition,
-					to: minePosition + mineLength,
+					to: minePosition + mineChunk.length,
 					insert: emitted.join(""),
 				}),
 			);
 		}
-		minePosition += mineLength;
+		minePosition += mineChunk.length;
 	}
 	emit(base.slice(position));
 	const merged = out.join("");
@@ -213,14 +231,14 @@ export function merge3(input: { base: string; mine: string; theirs: string }): M
 		text,
 		changes: exactChanges({ mine: input.mine, mineText, merged, text, changes }),
 		touched: touched.map(clamp),
-		conflicts: conflicts.map((conflict) =>
-			conflict.to > text.length
-				? {
-						from: Math.min(conflict.from, text.length),
-						to: text.length,
-						theirs: endsLine(input.theirs) ? conflict.theirs : conflict.theirs.slice(0, -1),
-					}
-				: conflict,
-		),
+		conflicts: conflicts.map(({ atEnd, ...conflict }) => {
+			if (conflict.to < merged.length) return conflict;
+			const dropNewline = !endsLine(input.theirs) && (atEnd || text !== merged);
+			const theirs = dropNewline ? conflict.theirs.slice(0, -1) : conflict.theirs;
+			if (conflict.from > text.length) {
+				return { from: text.length, to: text.length, theirs: `\n${theirs}` };
+			}
+			return { from: conflict.from, to: Math.min(conflict.to, text.length), theirs };
+		}),
 	};
 }
