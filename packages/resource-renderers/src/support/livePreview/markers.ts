@@ -39,6 +39,44 @@ function children(node: SyntaxNode): SyntaxNode[] {
 	return out;
 }
 
+const REFERENCE_CONTAINERS = new Set([
+	"Document",
+	"Blockquote",
+	"BulletList",
+	"OrderedList",
+	"ListItem",
+]);
+const referenceCache = new WeakMap<Tree, ReadonlyMap<string, string>>();
+
+function referenceKey(label: string): string {
+	return label.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function unwrapUrl(url: string): string {
+	return url.startsWith("<") && url.endsWith(">") ? url.slice(1, -1) : url;
+}
+
+function references(tree: Tree, doc: Text): ReadonlyMap<string, string> {
+	const cached = referenceCache.get(tree);
+	if (cached) return cached;
+	const found = new Map<string, string>();
+	tree.iterate({
+		enter: (ref) => {
+			if (ref.name === "LinkReference") {
+				const label = ref.node.getChild("LinkLabel");
+				const url = ref.node.getChild("URL");
+				const key = label ? referenceKey(doc.sliceString(label.from + 1, label.to - 1)) : "";
+				if (key && url && !found.has(key))
+					found.set(key, unwrapUrl(doc.sliceString(url.from, url.to)));
+				return false;
+			}
+			return REFERENCE_CONTAINERS.has(ref.name);
+		},
+	});
+	referenceCache.set(tree, found);
+	return found;
+}
+
 function bareHref(text: string): string {
 	return /^www\./i.test(text) ? `https://${text}` : text;
 }
@@ -79,6 +117,13 @@ export function liveMarks({
 			marks.push({ kind: "line", at: doc.line(number).from, style: kind });
 		}
 	};
+	const hide = (from: number, to: number) => {
+		for (let at = from; at < to; ) {
+			const end = Math.min(to, doc.lineAt(at).to);
+			if (end > at) marks.push({ kind: "hide", from: at, to: end });
+			at = end + 1;
+		}
+	};
 	const blankAfter = (pos: number, limit: number) =>
 		pos + (/^[ \t]*/.exec(doc.sliceString(pos, limit))?.[0].length ?? 0);
 	const blankBefore = (pos: number, limit: number) =>
@@ -88,24 +133,38 @@ export function liveMarks({
 		if (parent.name.startsWith("Setext") || lineTouched(ref.from)) {
 			style(ref.from, ref.to, "marker");
 		} else if (ref.from === parent.from) {
-			marks.push({ kind: "hide", from: ref.from, to: blankAfter(ref.to, parent.to) });
+			hide(ref.from, blankAfter(ref.to, parent.to));
 		} else {
-			marks.push({ kind: "hide", from: blankBefore(ref.from, parent.from), to: ref.to });
+			hide(blankBefore(ref.from, parent.from), ref.to);
 		}
+	};
+
+	const linkHref = (parts: readonly SyntaxNode[], brackets: readonly SyntaxNode[]) => {
+		const url = parts.find((child) => child.name === "URL");
+		if (url) return unwrapUrl(doc.sliceString(url.from, url.to));
+		if (brackets.length > 2) return "";
+		const label = parts.find((child) => child.name === "LinkLabel");
+		const [open, close] = brackets;
+		const key =
+			label && label.to - label.from > 2
+				? doc.sliceString(label.from + 1, label.to - 1)
+				: open && close
+					? doc.sliceString(open.to, close.from)
+					: "";
+		return references(tree, doc).get(referenceKey(key)) ?? null;
 	};
 
 	const link = (node: SyntaxNode) => {
 		const parts = children(node).filter((child) => LINK_PARTS.has(child.name));
 		const brackets = parts.filter((child) => child.name === "LinkMark");
-		const url = parts.find((child) => child.name === "URL");
-		const href = url ? doc.sliceString(url.from, url.to) : undefined;
-		const open = brackets[0];
-		const close = brackets[1];
+		const href = linkHref(parts, brackets);
+		if (href === null) return;
+		const [open, close] = brackets;
 		if (open && close) style(open.to, close.from, "link", href);
 		const shown = touches(selection, node.from, node.to);
 		for (const part of parts) {
 			if (shown) style(part.from, part.to, "marker");
-			else marks.push({ kind: "hide", from: part.from, to: part.to });
+			else hide(part.from, part.to);
 		}
 	};
 
@@ -115,7 +174,7 @@ export function liveMarks({
 			if (part.name === "URL") {
 				style(part.from, part.to, "link", bareHref(doc.sliceString(part.from, part.to)));
 			} else if (shown) style(part.from, part.to, "marker");
-			else marks.push({ kind: "hide", from: part.from, to: part.to });
+			else hide(part.from, part.to);
 		}
 	};
 
@@ -154,7 +213,7 @@ export function liveMarks({
 					if (lineTouched(ref.from)) style(ref.from, ref.to, "marker");
 					else {
 						const spaced = doc.sliceString(ref.to, ref.to + 1) === " " ? 1 : 0;
-						marks.push({ kind: "hide", from: ref.from, to: ref.to + spaced });
+						hide(ref.from, ref.to + spaced);
 					}
 					return false;
 				}
@@ -162,7 +221,7 @@ export function liveMarks({
 					if (parent?.parent?.name !== "BulletList") return false;
 					if (lineTouched(ref.from)) style(ref.from, ref.to, "marker");
 					else if (parent.getChild("Task")) {
-						marks.push({ kind: "hide", from: ref.from, to: blankAfter(ref.to, parent.to) });
+						hide(ref.from, blankAfter(ref.to, parent.to));
 					} else marks.push({ kind: "bullet", from: ref.from, to: ref.to });
 					return false;
 				}
@@ -208,7 +267,7 @@ export function liveMarks({
 				}
 				if (INLINE_MARKS.has(name) && parent) {
 					if (touches(selection, parent.from, parent.to)) style(ref.from, ref.to, "marker");
-					else marks.push({ kind: "hide", from: ref.from, to: ref.to });
+					else hide(ref.from, ref.to);
 					return false;
 				}
 				if (name === "Link") {
@@ -227,7 +286,7 @@ export function liveMarks({
 				}
 				if (name === "Escape") {
 					if (!touches(selection, ref.from, ref.to)) {
-						marks.push({ kind: "hide", from: ref.from, to: ref.from + 1 });
+						hide(ref.from, ref.from + 1);
 					}
 					return false;
 				}
@@ -237,7 +296,10 @@ export function liveMarks({
 	}
 	const seen = new Set<string>();
 	return marks.filter((mark) => {
-		const key = JSON.stringify(mark);
+		const key =
+			mark.kind === "line"
+				? `line:${mark.at}:${mark.style}`
+				: `${mark.kind}:${mark.from}:${mark.to}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;

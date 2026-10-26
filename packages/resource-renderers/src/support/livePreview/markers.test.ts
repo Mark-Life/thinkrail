@@ -111,6 +111,36 @@ describe("links", () => {
 		const link = marks(doc, 0).find((mark) => mark.kind === "style" && mark.style === "link");
 		expect(link).toMatchObject({ href: "https://www.example.com" });
 	});
+	test("a title or label that spans lines hides line by line, never across a break", () => {
+		for (const doc of [
+			'a [x](http://e.com "t1\nt2") b\n',
+			"a [x][long\nlabel] b\n\n[long label]: http://e.com\n",
+		]) {
+			const hidden = cut(doc, marks(doc, null));
+			expect(hidden.length).toBeGreaterThan(0);
+			expect(hidden.some((text) => text.includes("\n"))).toBe(false);
+		}
+	});
+	test("brackets with no target stay literal text", () => {
+		const doc = "array[0] and see [1] or [WIP] x [^1]\n";
+		const list = marks(doc, null);
+		expect(cut(doc, list)).toEqual([]);
+		expect(styled(doc, list, "link")).toEqual([]);
+	});
+	test("a reference link takes its target from the definition", () => {
+		const doc =
+			"see [Docs] and [the guide][g] and [g][]\n\n[docs]: <https://d.dev>\n[G]: https://g.dev\n";
+		const links = marks(doc, null).flatMap((mark) =>
+			mark.kind === "style" && mark.style === "link"
+				? [[doc.slice(mark.from, mark.to), mark.href]]
+				: [],
+		);
+		expect(links).toEqual([
+			["Docs", "https://d.dev"],
+			["the guide", "https://g.dev"],
+			["g", "https://g.dev"],
+		]);
+	});
 	test("an autolink hides its angle brackets off the caret", () => {
 		const doc = "a <https://x.dev> b\n\nnext";
 		expect(cut(doc, marks(doc, doc.length))).toEqual(["<", ">"]);
