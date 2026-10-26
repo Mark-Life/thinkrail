@@ -4,7 +4,7 @@ import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import * as transport from "../transport";
 import { activeTabChanged, loadBufferRegistry, syncFileTabs } from "./files";
-import type { FileIo } from "./registry";
+import type { BufferRegistry, FileIo } from "./registry";
 
 const meta = (hash: string, text: string) => ({ hash, byteLength: text.length, text: true });
 
@@ -96,15 +96,15 @@ test("a save this client wrote is remembered, so its fsChanged echo is never a w
 		request: () => Promise.resolve({ status: "written", meta: meta("h-mine", "mine\n") }),
 	} as unknown as ReturnType<typeof transport.getTransport>);
 	let io: FileIo | undefined;
-	await loadBufferRegistry(async () => {
-		const real = await import("./registry");
-		return {
-			createBufferRegistry: (deps) => {
-				io = deps.io;
-				return real.createBufferRegistry(deps);
-			},
-		};
+	const idle = new Proxy({} as BufferRegistry, {
+		get: (_, key) => (key === "then" ? undefined : () => undefined),
 	});
+	await loadBufferRegistry(async () => ({
+		createBufferRegistry: (deps) => {
+			io = deps.io;
+			return idle;
+		},
+	}));
 	try {
 		await io?.write({
 			workspaceId: "ws",
