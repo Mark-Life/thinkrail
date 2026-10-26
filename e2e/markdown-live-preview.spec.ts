@@ -138,7 +138,9 @@ test("Cmd/Ctrl+click follows a link; a plain click edits it", async ({ page }) =
 	await link.click();
 	await expect(liveLine(page, "Some bold")).toContainText("[link](other.md)");
 	await expect(fileTab(page, "other.md")).toHaveCount(0);
-	await live(page).locator(".md-link").click({ modifiers: ["ControlOrMeta"] });
+	await live(page)
+		.locator(".md-link")
+		.click({ modifiers: ["ControlOrMeta"] });
 	await expect(fileTab(page, "other.md")).toBeVisible();
 });
 
@@ -146,7 +148,7 @@ test.describe("manual save", () => {
 	pinFileSaveMode("manual");
 
 	test("open then save keeps the file's bytes, CRLF and BOM included", async ({ page }) => {
-		const bytes = Buffer.from(`﻿${NOTES.replaceAll("\n", "\r\n")}`, "utf8");
+		const bytes = Buffer.from(`\uFEFF${NOTES.replaceAll("\n", "\r\n")}`, "utf8");
 		const path = await openLive(page, "bytes.md", bytes);
 		await caretAtLineEnd(page, "second");
 		await page.keyboard.type("x");
@@ -160,6 +162,48 @@ test.describe("manual save", () => {
 		await pressPlatformShortcut(page, "s");
 		await expect
 			.poll(() => readFileSync(path).toString("utf8"))
-			.toBe(`﻿${NOTES.replace("- second", "- second!").replaceAll("\n", "\r\n")}`);
+			.toBe(`\uFEFF${NOTES.replace("- second", "- second!").replaceAll("\n", "\r\n")}`);
 	});
+
+	test("a same-line disk change opens the conflict lens in the live preview, and Mine keeps your text", async ({
+		page,
+	}) => {
+		const path = await openLive(page, "conflict.md", NOTES);
+		await caretAtLineEnd(page, "first");
+		await page.keyboard.type(" mine");
+		writeFileSync(path, NOTES.replace("- first", "- first theirs"));
+		const lens = live(page).getByTestId("edit-conflict-lens");
+		await expect(lens).toBeVisible({ timeout: 10_000 });
+		await expect(live(page).getByTestId("edit-conflict-disk")).toHaveText("- first theirs");
+		await expect(live(page).locator(".cm-line.edit-conflict-mine")).toHaveText(/first mine$/);
+		await lens.getByTestId("edit-conflict-mine").click();
+		await expect(lens).toHaveCount(0);
+		await pressPlatformShortcut(page, "s");
+		await expect
+			.poll(() => readFileSync(path, "utf8"))
+			.toBe(NOTES.replace("- first", "- first mine"));
+	});
+});
+
+test("an outside write marks its lines in the live preview", async ({ page }) => {
+	const path = await openLive(page, "outside.md", NOTES);
+	await caretAtLineEnd(page, "first");
+	await page.keyboard.type(" mine");
+	const saved = NOTES.replace("- first", "- first mine");
+	await expect.poll(() => readFileSync(path, "utf8")).toBe(saved);
+	await liveLine(page, "Notes").click();
+	await page.waitForTimeout(1_500);
+	await expect(live(page).locator(".presence-bar")).toHaveCount(0);
+	writeFileSync(path, saved.replace("- second", "- second from outside"));
+	const bar = live(page).locator(".cm-line.presence-bar.presence-tone-external");
+	await expect(bar).toHaveText(/second from outside/, { timeout: 10_000 });
+	await expect(bar).toHaveAttribute("title", "Changed by External (inferred from timing)");
+	const flag = live(page).locator('[data-presence="flag"]');
+	await expect(flag).toHaveText("External");
+	await expect(flag.locator(".presence-flag-icon svg")).toHaveCount(1);
+	expect(
+		await flag
+			.locator(".presence-flag-body")
+			.evaluate((body) => getComputedStyle(body).borderTopWidth),
+	).toBe("0px");
 });
