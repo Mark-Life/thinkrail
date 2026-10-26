@@ -23,7 +23,7 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 - **Allowed deps:** `store` (tabs and their content writes, the active tab and workspace tick
   selectors, connection status and generation, removed workspace ids, the buffer summary slice, `toast`),
   `transport`
-  (`getTransport`, `supportsFileWrite`, `wsErrorCode`), `lib` (`tupleKey`, `fileName`, `randomId`),
+  (`getTransport`, `supportsFileWrite`, `wsErrorCode`, `reportClientError`, `clientErrorReport`), `lib` (`tupleKey`, `fileName`, `randomId`),
   `contracts` (`toEditorText`,
   `FILE_WRITE_MAX_BYTES`, `LFS_POINTER_MIME`, wire types), `@thinkrail/resource-renderers` (edit-session types only),
   `@thinkrail/locales` (the restore toast), `diff` (`diffArrays`), `@codemirror/state` and
@@ -54,7 +54,8 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   (`import("./registry")` in `files.ts`); `keys.ts` and `drafts.ts` stay eager. `useFileBuffer` reads
   the loaded registry and the buffer through `useSyncExternalStore`. Once the file is editable, a layout
   effect starts the load, then creates the buffer when the registry exists, so the editor mounts
-  read-only until then and binds before paint; nothing is created during render. Removing a workspace
+  read-only until then and binds before paint; nothing is created during render. A failed chunk load is
+  reported as a client error and forgotten, so the next editable file tries again. Removing a workspace
   deletes its drafts even before the chunk loads. The buffer then lives as long as its
   file tab: it survives tab switches and unmounts, so a background tab keeps its dot and its text. When the tab leaves the store the buffer is dropped (its draft stays), and
   **Don't save** drops it with its draft.

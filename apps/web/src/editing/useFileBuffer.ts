@@ -19,7 +19,7 @@ export function useFileBuffer(
 	useLayoutEffect(() => {
 		if (!editable || !meta) return;
 		if (registry) registry.ensure({ workspaceId, path, content, meta });
-		else void loadBufferRegistry();
+		else loadBufferRegistry().catch(() => {});
 	}, [registry, editable, workspaceId, path, content, meta]);
 	return handle;
 }

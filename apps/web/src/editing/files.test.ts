@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
-import { syncFileTabs } from "./files";
+import { loadBufferRegistry, loadedBufferRegistry, syncFileTabs } from "./files";
 
 const meta = (hash: string, text: string) => ({ hash, byteLength: text.length, text: true });
 
@@ -33,4 +33,16 @@ test("a buffer's own disk read refreshes the file tab, unless the tab already ho
 		content: "before\n",
 		loadedTick: 3,
 	});
+});
+
+test("a failed registry load is retried by the next caller", async () => {
+	let calls = 0;
+	const failing = () => {
+		calls++;
+		return Promise.reject(new Error("chunk failed"));
+	};
+	await expect(loadBufferRegistry(failing)).rejects.toThrow("chunk failed");
+	await expect(loadBufferRegistry(failing)).rejects.toThrow("chunk failed");
+	expect(calls).toBe(2);
+	expect(loadedBufferRegistry()).toBeNull();
 });

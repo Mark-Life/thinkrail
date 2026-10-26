@@ -3,7 +3,12 @@ import { i18n } from "@thinkrail/locales/react";
 import type { ResourceRenderer } from "@thinkrail/resource-renderers";
 import { fileName } from "../lib";
 import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "../store";
-import { getTransport, supportsFileWrite } from "../transport";
+import {
+	clientErrorReport,
+	getTransport,
+	reportClientError,
+	supportsFileWrite,
+} from "../transport";
 import { indexedDbDrafts, nativeDrafts, nativeEditingBridge, pageDraftOwner } from "./drafts";
 import { fileBufferKey, isEditableMeta } from "./keys";
 import type { BufferRegistry, FileIo } from "./registry";
@@ -102,8 +107,11 @@ export function subscribeBufferRegistry(listener: () => void): () => void {
 	return () => loadListeners.delete(listener);
 }
 
-export function loadBufferRegistry(): Promise<BufferRegistry> {
-	loading ??= import("./registry").then(({ createBufferRegistry }) => {
+export function loadBufferRegistry(
+	load: () => Promise<Pick<typeof import("./registry"), "createBufferRegistry">> = () =>
+		import("./registry"),
+): Promise<BufferRegistry> {
+	loading ??= load().then(({ createBufferRegistry }) => {
 		registry = createBufferRegistry({
 			io,
 			drafts,
@@ -120,6 +128,10 @@ export function loadBufferRegistry(): Promise<BufferRegistry> {
 		watchStore();
 		for (const listener of loadListeners) listener();
 		return registry;
+	});
+	loading.catch((error: unknown) => {
+		loading = null;
+		reportClientError(clientErrorReport("rejection", error));
 	});
 	return loading;
 }
