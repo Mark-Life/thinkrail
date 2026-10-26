@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { FileSaveMode } from "@thinkrail/contracts";
 import type { FileBufferSummary } from "../store";
-import { closeAction } from "./fileCloseGuard";
+import { closeAction, saveBeforeClose } from "./fileCloseGuard";
 
 const FILE = { workspaceId: "ws", path: "a.ts" };
 
@@ -23,4 +23,68 @@ test("manual mode asks for every unsaved file", () => {
 	expect(action({ status: "saving", dirty: true }, "manual")).toBe("ask");
 	expect(action({ status: "dirty", dirty: true }, "manual")).toBe("ask");
 	expect(action({ status: "clean", dirty: false }, "manual")).toBe("close");
+});
+
+test("an edit typed while the close-time save runs is saved too, and the guard never opens", async () => {
+	let summary: FileBufferSummary = { status: "saving", dirty: true };
+	const saves: (() => void)[] = [];
+	const events: string[] = [];
+	const done = saveBeforeClose({
+		file: FILE,
+		closing: new Set(),
+		save: () => new Promise<void>((resolve) => saves.push(resolve)),
+		state: () => ({ fileSaveMode: "auto", fileBuffersByWorkspace: { ws: { "a.ts": summary } } }),
+		close: () => events.push("close"),
+		ask: () => events.push("ask"),
+	});
+	summary = { status: "dirty", dirty: true, pending: true };
+	saves[0]?.();
+	await Bun.sleep(0);
+	expect(saves).toHaveLength(2);
+	summary = { status: "clean", dirty: false };
+	saves[1]?.();
+	await done;
+	expect(events).toEqual(["close"]);
+});
+
+test("a save that leaves the file paused opens the guard", async () => {
+	const events: string[] = [];
+	await saveBeforeClose({
+		file: FILE,
+		closing: new Set(),
+		save: () => Promise.reject(new Error("socket closed")),
+		state: () => ({
+			fileSaveMode: "auto",
+			fileBuffersByWorkspace: { ws: { "a.ts": { status: "error", dirty: true, error: "failed" } } },
+		}),
+		close: () => events.push("close"),
+		ask: () => events.push("ask"),
+	});
+	expect(events).toEqual(["ask"]);
+});
+
+test("a second close click while the first save runs starts no save and closes once", async () => {
+	let summary: FileBufferSummary = { status: "dirty", dirty: true, pending: true };
+	const saves: (() => void)[] = [];
+	let closes = 0;
+	const request = () =>
+		saveBeforeClose({
+			file: FILE,
+			closing,
+			save: () => new Promise<void>((resolve) => saves.push(resolve)),
+			state: () => ({ fileSaveMode: "auto", fileBuffersByWorkspace: { ws: { "a.ts": summary } } }),
+			close: () => {
+				closes += 1;
+			},
+			ask: () => {},
+		});
+	const closing = new Set<string>();
+	const first = request();
+	await request();
+	expect(saves).toHaveLength(1);
+	summary = { status: "clean", dirty: false };
+	saves[0]?.();
+	await first;
+	expect(closes).toBe(1);
+	expect(closing.size).toBe(0);
 });

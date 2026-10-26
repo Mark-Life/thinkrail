@@ -2093,9 +2093,9 @@ own section. The kebab menu (`plan-menu`, a
 - **Closing an unsaved file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
   **Cancel**. It reads the store's `selectFileSaveIndicator` and `selectFileAutosaving`. In auto mode a
-  file autosave is about to write or is writing (`pending` / `saving`) saves first and closes when that
-  leaves it clean; only a paused file, or one that save
-  did not clean, gets the dialog. Save closes only once the save leaves the
+  file autosave is about to write or is writing (`pending` / `saving`) saves first (`saveBeforeClose`) and
+  closes when that leaves it clean. An edit typed during that save is saved too before the close, and a
+  second close request for the same file while this runs does nothing. Only a paused file gets the dialog. Save closes only once the save leaves the
   buffer clean; any other result (a conflict, offline, read-only, too large, a failure) closes the dialog
   and selects that tab, so its banner says why, even when the tab was in the background. Don't save
   discards the buffer and its draft. While a save runs, Save shows "Saving…" and

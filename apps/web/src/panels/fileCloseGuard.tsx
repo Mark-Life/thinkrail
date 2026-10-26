@@ -27,6 +27,36 @@ export function closeAction(
 	return selectFileAutosaving(state, workspaceId, path) ? "saveFirst" : "ask";
 }
 
+export async function saveBeforeClose({
+	file,
+	closing,
+	save,
+	state,
+	close,
+	ask,
+}: {
+	file: { workspaceId: string; path: string };
+	closing: Set<string>;
+	save: (workspaceId: string, path: string) => Promise<unknown>;
+	state: () => Parameters<typeof closeAction>[0];
+	close: () => void;
+	ask: () => void;
+}) {
+	const key = JSON.stringify([file.workspaceId, file.path]);
+	if (closing.has(key)) return;
+	closing.add(key);
+	try {
+		for (;;) {
+			await save(file.workspaceId, file.path).catch(() => null);
+			const action = closeAction(state(), file);
+			if (action === "close") return close();
+			if (action === "ask") return ask();
+		}
+	} finally {
+		closing.delete(key);
+	}
+}
+
 function revealFile({ workspaceId, path }: PendingClose) {
 	const state = useAppStore.getState();
 	if (state.activeWorkspaceId !== workspaceId) return;
@@ -44,6 +74,7 @@ export function useFileCloseGuard(): {
 	const [pending, setPendingState] = useState<PendingClose | null>(null);
 	const pendingRef = useRef<PendingClose | null>(null);
 	const [savingRequest, setSavingRequest] = useState<PendingClose | null>(null);
+	const closing = useRef(new Set<string>());
 	const setPending = (next: PendingClose | null) => {
 		pendingRef.current = next;
 		setPendingState(next);
@@ -53,9 +84,14 @@ export function useFileCloseGuard(): {
 		if (action === "close") close();
 		else if (action === "ask") setPending({ ...file, close });
 		else
-			void saveFile(file.workspaceId, file.path)
-				.catch(() => null)
-				.then((summary) => (summary?.dirty === false ? close() : setPending({ ...file, close })));
+			void saveBeforeClose({
+				file,
+				closing: closing.current,
+				save: saveFile,
+				state: useAppStore.getState,
+				close,
+				ask: () => setPending({ ...file, close }),
+			});
 	};
 	const save = async (request: PendingClose) => {
 		setSavingRequest(request);
