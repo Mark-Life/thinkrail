@@ -2,6 +2,7 @@ import type { TextChange } from "../registry";
 
 export const PRESENCE_TIMING = {
 	washMs: 2400,
+	washSteps: 4,
 	flagMs: 5000,
 	chipMs: 10_000,
 	holdMs: 60_000,

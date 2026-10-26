@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import type { PresenceWriter } from "../registry";
 
 mock.module("monaco-editor/esm/vs/editor/editor.api.js", () => ({
@@ -17,7 +17,7 @@ interface Range {
 }
 interface Decoration {
 	range: Range;
-	options: { linesDecorationsClassName?: string };
+	options: { linesDecorationsClassName?: string; className?: string };
 }
 interface Collection {
 	decorations: Decoration[];
@@ -180,5 +180,24 @@ describe("attachPresence", () => {
 		});
 		expect(announced).toEqual(["Agent changed 4-4, 15-15"]);
 		marks.dispose();
+	});
+
+	test("the wash fades in fixed steps, so a redrawn line keeps the current step", () => {
+		jest.useFakeTimers();
+		try {
+			const marks = attach();
+			marks.setLatest({ hash: "h1", writer: AGENT });
+			marks.land(editLine(4, "h1"));
+			const wash = () =>
+				collections.flatMap((collection) => collection.decorations)[0]?.options.className;
+			expect(wash()).toBe("presence-wash presence-wash-0 presence-tone-agent1");
+			jest.advanceTimersByTime(600);
+			expect(wash()).toBe("presence-wash presence-wash-1 presence-tone-agent1");
+			jest.advanceTimersByTime(1800);
+			expect(wash()).toBeUndefined();
+			marks.dispose();
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 });

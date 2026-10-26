@@ -78,7 +78,10 @@ export function attachPresence(
 	const render = (mark: Mark) => {
 		const writer = mark.writer;
 		if (!writer || mark.paint.kind !== "lines") return;
-		const washing = Date.now() - mark.paintedAt < PRESENCE_TIMING.washMs;
+		const step = Math.floor(
+			((Date.now() - mark.paintedAt) / PRESENCE_TIMING.washMs) * PRESENCE_TIMING.washSteps,
+		);
+		const washing = step < PRESENCE_TIMING.washSteps;
 		const bar = `presence-bar presence-tone-${writer.tone}${writer.inferred ? " presence-inferred" : ""}`;
 		const label = options.text().hover(writer);
 		const hover = [
@@ -95,7 +98,9 @@ export function attachPresence(
 					linesDecorationsClassName: bar,
 					linesDecorationsTooltip: htmlAttribute(label),
 					hoverMessage: hover,
-					...(washing ? { className: `presence-wash presence-tone-${writer.tone}` } : {}),
+					...(washing
+						? { className: `presence-wash presence-wash-${step} presence-tone-${writer.tone}` }
+						: {}),
 				},
 			})),
 		);
@@ -184,8 +189,11 @@ export function attachPresence(
 			mark.announcedAt = now;
 			options.announce(text.lines(writer, spans));
 		}
+		const washStep = PRESENCE_TIMING.washMs / PRESENCE_TIMING.washSteps;
 		mark.timers = [
-			setTimeout(() => render(mark), PRESENCE_TIMING.washMs),
+			...Array.from({ length: PRESENCE_TIMING.washSteps }, (_, index) =>
+				setTimeout(() => render(mark), (index + 1) * washStep),
+			),
 			setTimeout(() => clearFlag(mark), PRESENCE_TIMING.flagMs),
 			setTimeout(() => drop(mark), PRESENCE_TIMING.holdMs),
 		];

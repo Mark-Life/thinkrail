@@ -682,7 +682,9 @@ content's own height.
   gets the chip too. Line marks are tracked decorations (`NeverGrowsWhenTypingAtEdges`): a thin bar in the
   line-decoration lane, set off from the review and conflict rails by an editor-colored gap, at a slot per
   tone so two writers on one line both show, and dashed for an inferred writer; a wash that fades in
-  2.4 s; a name flag (a content widget at the end of the first line) that fades in 5 s; a hover with the
+  four steps over 2.4 s (static `presence-wash-0..3` classes the mark sets on a timer, never a CSS animation:
+  Monaco rebuilds a line's overlay node when the cursor, a selection or a scroll redraws it, which would
+  restart an animation); a name flag (a content widget at the end of the first line) that fades in 5 s; a hover with the
   writer and the diff over the lines, and the writer as the bar's own tooltip (`linesDecorationsTooltip`,
   HTML-escaped: Monaco writes it raw). The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
   writer has one line mark: a new landing takes over the writer's earlier ranges and diff and restarts the
@@ -690,7 +692,8 @@ content's own height.
   `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame. Flags
   and chips are `aria-hidden`. A polite live region announces a chip, and a writer's line changes (every span the landing
   changed) at most once per flag time, so a burst of saves is one message. Reduced motion drops the fades. The tones are
-  CSS classes the host styles (`presence-tone-*`).
+  CSS classes the host styles (`presence-tone-*`); in forced colors the host draws the bar as a
+  `CanvasText` border, dashed when inferred, because forced colors erase backgrounds.
 - **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`:
   `createFileEditor` applies it and the theme refresh defines it.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that

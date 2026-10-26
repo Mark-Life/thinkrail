@@ -412,7 +412,16 @@
 	background: repeating-linear-gradient(to bottom, var(--presence-tone) 0 3px, transparent 3px 5px);
 }
 .presence-wash {
-	animation: presence-wash 2.4s ease-out forwards;
+	background: var(--presence-wash);
+}
+.presence-wash-1 {
+	opacity: 0.6;
+}
+.presence-wash-2 {
+	opacity: 0.3;
+}
+.presence-wash-3 {
+	opacity: 0.12;
 }
 .presence-flag,
 .presence-chip {
@@ -442,14 +451,6 @@
 .presence-chip.presence-inferred {
 	border-style: dashed;
 }
-@keyframes presence-wash {
-	from {
-		background: var(--presence-wash);
-	}
-	to {
-		background: transparent;
-	}
-}
 @keyframes presence-flag {
 	0%,
 	70% {
@@ -460,12 +461,24 @@
 	}
 }
 @media (prefers-reduced-motion: reduce) {
-	.presence-wash,
 	.presence-flag {
 		animation: none;
 	}
-	.presence-wash {
-		background: var(--presence-wash);
+	.presence-wash-1,
+	.presence-wash-2,
+	.presence-wash-3 {
+		opacity: 1;
+	}
+}
+@media (forced-colors: active) {
+	.presence-bar::after {
+		background: none;
+		box-shadow: none;
+		width: 0;
+		border-left: 2px solid CanvasText;
+	}
+	.presence-bar.presence-inferred::after {
+		border-left-style: dashed;
 	}
 }
 /* The zone node spans Monaco's content (scroll) width — it stays a transparent, click-through holder;
