@@ -4,9 +4,11 @@ import { expect, type Page, test } from "@playwright/test";
 import { pressPlatformShortcut } from "./fixtures/app";
 import {
 	banner,
+	commentOnFirstLine,
 	conflictLens,
 	fileTab,
 	openFile,
+	openWorkspaceWithFile,
 	pinFileSaveMode,
 	typeAtLineEnd,
 	visibleEditor,
@@ -49,11 +51,9 @@ test("typing autosaves after a pause with no Cmd/Ctrl+S, and the save's own echo
 	await expect(banner(page)).toHaveCount(0);
 });
 
-test("leaving the editor or switching tabs saves at once", async ({ page }) => {
+test("leaving the editor saves at once", async ({ page }) => {
 	const writes = trackWrites(page);
 	const path = await openFile(page, "flush.ts", BASE);
-	const other = join(dirname(path), "other.ts");
-	writeFileSync(other, "export {};\n");
 
 	await typeAtLineEnd(page, 1, " // blur");
 	const blurredAt = Date.now();
@@ -61,18 +61,54 @@ test("leaving the editor or switching tabs saves at once", async ({ page }) => {
 	await expect.poll(() => writes.length).toBe(1);
 	expect(writes[0] - blurredAt).toBeLessThan(700);
 	expect(readFileSync(path, "utf8")).toContain("const one = 1; // blur");
+});
 
+test("switching tabs saves at once, also when focus never leaves the editor", async ({ page }) => {
+	const writes = trackWrites(page);
+	const path = await openFile(page, "switch.ts", BASE);
+	writeFileSync(join(dirname(path), "other.ts"), "export {};\n");
 	const otherNode = page.getByTestId("file-node").filter({ hasText: "other.ts" });
 	await expect(otherNode).toBeVisible();
+	await page.evaluate(() =>
+		window.addEventListener("focusout", (event) => event.stopPropagation(), { capture: true }),
+	);
+
 	await typeAtLineEnd(page, 2, " // switch");
-	const switchedAt = Date.now();
+	const typedAt = Date.now();
 	await otherNode.dblclick();
 	await expect(fileTab(page, "other.ts")).toBeVisible();
-	await expect.poll(() => writes.length).toBe(2);
-	expect(writes[1] - switchedAt).toBeLessThan(700);
+	await expect.poll(() => writes.length).toBe(1);
+	expect(writes[0] - typedAt).toBeLessThan(800);
 	expect(readFileSync(path, "utf8")).toBe(
-		"const one = 1; // blur\nconst two = 2; // switch\nconst three = 3;\n",
+		"const one = 1;\nconst two = 2; // switch\nconst three = 3;\n",
 	);
+});
+
+test("review threads stay mounted while autosave writes the edit", async ({ page }) => {
+	const path = await openWorkspaceWithFile(page, "review.ts", BASE);
+	await page.getByTestId("file-node").filter({ hasText: "review.ts" }).dblclick();
+	await expect(page.locator("[data-file-buffer]")).toHaveCount(1);
+	await commentOnFirstLine(page, "Keep me visible");
+	await page.evaluate(() => {
+		const counts: number[] = [];
+		Object.assign(window, { __threadCounts: counts });
+		const sample = () => {
+			counts.push(document.querySelectorAll('[data-testid="review-thread-card"]').length);
+			requestAnimationFrame(sample);
+		};
+		sample();
+	});
+
+	for (const suffix of [" // a", " // b"]) {
+		await typeAtLineEnd(page, 3, suffix);
+		await expect.poll(() => readFileSync(path, "utf8")).toContain(suffix);
+	}
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+	const counts = await page.evaluate(
+		() => (window as unknown as { __threadCounts: number[] }).__threadCounts,
+	);
+	expect(counts.length).toBeGreaterThan(10);
+	expect(counts.filter((count) => count !== 1)).toEqual([]);
 });
 
 test("closing a file autosave is about to write saves it with no prompt", async ({ page }) => {

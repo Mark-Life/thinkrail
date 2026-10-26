@@ -1,7 +1,7 @@
 import { FILE_WRITE_MAX_BYTES, type FileContent, type ResourceMeta } from "@thinkrail/contracts";
 import { i18n } from "@thinkrail/locales/react";
 import type { ResourceRenderer } from "@thinkrail/resource-renderers";
-import { fileName, tupleKey } from "../lib";
+import { fileName } from "../lib";
 import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "../store";
 import {
 	clientErrorReport,
@@ -59,10 +59,13 @@ export function hasUnsavedEdits(state: Pick<AppState, "fileBuffersByWorkspace">)
 	);
 }
 
-function activeTabId(state: AppState): string | null {
+function activeTabChanged(state: AppState, previous: AppState): boolean {
 	const workspaceId = state.activeWorkspaceId;
-	if (!workspaceId) return null;
-	return tupleKey("active-tab", workspaceId, state.activeTabByWorkspace[workspaceId] ?? "");
+	return (
+		workspaceId !== previous.activeWorkspaceId ||
+		(workspaceId !== null &&
+			state.activeTabByWorkspace[workspaceId] !== previous.activeTabByWorkspace[workspaceId])
+	);
 }
 
 let registry: BufferRegistry | null = null;
@@ -90,7 +93,7 @@ function watchStore() {
 			}
 		}
 		if (!registry) return;
-		if (activeTabId(state) !== activeTabId(previous)) registry.flushAll();
+		if (activeTabChanged(state, previous)) registry.flushAll();
 		if (state.tabsByWorkspace !== previous.tabsByWorkspace) registry.prune(openFileKeys(state));
 		if (state.fileSaveMode !== previous.fileSaveMode) registry.saveModeChanged();
 		if (state.connectionGeneration !== previous.connectionGeneration) {

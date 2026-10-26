@@ -40,11 +40,12 @@ create the tools it needs based on how you actually work.
   your PR template, or an agent-written draft. Once a GitHub PR is open it shows the CI checks and review
   decision, and lets you mark it ready, hand failing checks or a diverged branch to the agent, merge it
   with the repository's last-used method, reopen it, or delete the remote branch.
-- **A real IDE around the agent.** A splittable workbench of Monaco editor tabs where you edit files that
-  autosave a second after you stop typing (Cmd/Ctrl+S saves at once; turn Autosave off to save only by hand; unsaved edits survive a reload; an agent's change on disk merges into them live,
-  a line you both changed waits for you to pick Mine, Theirs or Both, and Cmd/Ctrl+Z undoes only your own
-  edits),
-  a Files tree with live git change marks and a Changed view, terminals, and documents — all scoped to the active workspace. Leave
+- **A real IDE around the agent.** A splittable workbench of Monaco editor tabs where you edit files.
+  Edits autosave a second after you stop typing, and Cmd/Ctrl+S saves at once; turn Autosave off to save
+  only by hand. Unsaved edits survive a reload. An agent's change on disk merges into yours live: a line
+  you both changed waits for you to pick Mine, Theirs or Both, and Cmd/Ctrl+Z undoes only your own edits.
+  The workbench also holds a Files tree with live git change marks and a Changed view, terminals, and
+  documents — all scoped to the active workspace. Leave
   anchored review comments on files and diffs and send them to a chat as structured context, or open the
   worktree in your installed IDE.
 - **Chats that stream like the engine thinks.** Several concurrent `pi` sessions per workspace, each with

@@ -77,3 +77,26 @@ test("callers waiting on one failed registry load send one error report", async 
 		useAppStore.setState({ protocolVersion: null });
 	}
 });
+
+test("switching the active tab or workspace flushes autosave; other store changes do not", async () => {
+	const { createBufferRegistry } = await import("./registry");
+	let flushes = 0;
+	await loadBufferRegistry(async () => ({
+		createBufferRegistry: (deps) => ({
+			...createBufferRegistry({ ...deps, hostKey: () => "http://host" }),
+			flushAll: () => {
+				flushes += 1;
+			},
+		}),
+	}));
+	useAppStore.setState({ activeWorkspaceId: "ws", activeTabByWorkspace: { ws: "a", other: "c" } });
+	flushes = 0;
+	useAppStore.setState({ activeTabByWorkspace: { ws: "b", other: "c" } });
+	expect(flushes).toBe(1);
+	useAppStore.setState({ activeTabByWorkspace: { ws: "b", other: "d" } });
+	expect(flushes).toBe(1);
+	useAppStore.setState({ activeWorkspaceId: "other" });
+	expect(flushes).toBe(2);
+	useAppStore.setState({ protocolVersion: null });
+	expect(flushes).toBe(2);
+});

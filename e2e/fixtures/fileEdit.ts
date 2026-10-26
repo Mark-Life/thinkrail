@@ -76,3 +76,17 @@ export async function editorShortcut(page: Page, key: string) {
 	const mac = await page.evaluate(() => navigator.userAgent.includes("Macintosh"));
 	await page.keyboard.press(`${mac ? "Meta" : "Control"}+${key}`);
 }
+
+export async function commentOnFirstLine(page: Page, body: string) {
+	await visibleEditor(page).locator(".view-line").nth(1).click();
+	const box = await visibleEditor(page).locator(".view-line").first().boundingBox();
+	if (!box) throw new Error("line 1 has no box");
+	await page.mouse.move(box.x + 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + 120, box.y + box.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await page.locator('[data-testid="review-add-icon"]:visible').click();
+	await page.getByTestId("review-composer-input").fill(body);
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+}
