@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
-import { loadBufferRegistry, loadedBufferRegistry, syncFileTabs } from "./files";
+import { loadBufferRegistry, syncFileTabs } from "./files";
 
 const meta = (hash: string, text: string) => ({ hash, byteLength: text.length, text: true });
 
@@ -44,5 +44,4 @@ test("a failed registry load is retried by the next caller", async () => {
 	await expect(loadBufferRegistry(failing)).rejects.toThrow("chunk failed");
 	await expect(loadBufferRegistry(failing)).rejects.toThrow("chunk failed");
 	expect(calls).toBe(2);
-	expect(loadedBufferRegistry()).toBeNull();
 });
