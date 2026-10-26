@@ -26,17 +26,23 @@ import type {
 	TextRange,
 } from "@thinkrail/resource-renderers";
 import type { MergeConflict, MergeRange } from "./merge3";
-import { textChanges } from "./textChanges";
+import { refined, textChanges } from "./textChanges";
 
 interface Hop {
 	fromDoc: Text;
 	changes: ChangeSet;
 }
 
-interface ConflictState {
-	open: readonly EditConflict[];
-	reopenable: ReadonlySet<number>;
+interface OpenConflict extends EditConflict {
+	base?: string;
 }
+
+interface ConflictState {
+	open: readonly OpenConflict[];
+	closed: readonly OpenConflict[];
+}
+
+type MapMode = "remote" | "local" | "history";
 
 const lineage = new WeakMap<EditorState, Hop>();
 
@@ -48,26 +54,41 @@ function endsOnOpenLastLine(conflict: EditConflict, doc: Text): boolean {
 	);
 }
 
-function mapConflict(conflict: EditConflict, mapping: ChangeDesc, localDoc?: Text): EditConflict {
-	const from = mapping.mapPos(conflict.from, localDoc ? -1 : 1);
-	const grows = localDoc !== undefined && endsOnOpenLastLine(conflict, localDoc);
+function mapConflict<T extends EditConflict>(
+	conflict: T,
+	mapping: ChangeDesc,
+	mode: MapMode = "remote",
+	startDoc?: Text,
+): T {
+	const from = mapping.mapPos(conflict.from, mode === "remote" ? 1 : -1);
+	const grows =
+		(mode === "history" && conflict.from === conflict.to) ||
+		(mode !== "remote" && startDoc !== undefined && endsOnOpenLastLine(conflict, startDoc));
 	const to = Math.max(from, mapping.mapPos(conflict.to, grows ? 1 : -1));
 	return from === conflict.from && to === conflict.to ? conflict : { ...conflict, from, to };
 }
 
 function mapConflicts(
-	conflicts: readonly EditConflict[],
-	mapping: ChangeDesc,
-	localDoc: Text | undefined,
-): readonly EditConflict[] {
-	const mapped = conflicts.map((conflict) => mapConflict(conflict, mapping, localDoc));
+	conflicts: readonly OpenConflict[],
+	tr: Transaction,
+	mode: MapMode,
+): readonly OpenConflict[] {
+	if (!tr.docChanged || conflicts.length === 0) return conflicts;
+	const mapped = conflicts.map((conflict) =>
+		mapConflict(conflict, tr.changes, mode, tr.startState.doc),
+	);
 	return mapped.every((conflict, index) => conflict === conflicts[index]) ? conflicts : mapped;
 }
 
-const addConflicts = StateEffect.define<readonly EditConflict[]>({
+function mapMode(tr: Transaction): MapMode {
+	if (tr.annotation(Transaction.remote) === true) return "remote";
+	return tr.isUserEvent("undo") || tr.isUserEvent("redo") ? "history" : "local";
+}
+
+const addConflicts = StateEffect.define<readonly OpenConflict[]>({
 	map: (conflicts, mapping) => conflicts.map((conflict) => mapConflict(conflict, mapping)),
 });
-const removeConflict = StateEffect.define<EditConflict>({
+const removeConflict = StateEffect.define<OpenConflict>({
 	map: (conflict, mapping) => mapConflict(conflict, mapping),
 });
 const clearConflicts = StateEffect.define<null>();
@@ -85,47 +106,76 @@ function touches(conflict: EditConflict, range: MergeRange): boolean {
 	return conflict.from < range.to && range.from < conflict.to;
 }
 
-const NO_CONFLICTS: ConflictState = { open: [], reopenable: new Set() };
+const NO_CONFLICTS: ConflictState = { open: [], closed: [] };
+
+const withoutId = (conflicts: readonly OpenConflict[], id: number) =>
+	conflicts.filter((conflict) => conflict.id !== id);
 
 const conflictField = StateField.define<ConflictState>({
 	create: () => NO_CONFLICTS,
 	update(value, tr) {
-		const remote = tr.annotation(Transaction.remote) === true;
 		const rebased = tr.effects.some((effect) => effect.is(newBase));
-		let open =
-			tr.docChanged && value.open.length > 0
-				? mapConflicts(value.open, tr.changes, remote ? undefined : tr.startState.doc)
-				: value.open;
+		const mode = mapMode(tr);
+		let open = mapConflicts(value.open, tr, mode);
+		let closed = mapConflicts(value.closed, tr, "remote");
 		for (const effect of tr.effects) {
-			if (effect.is(clearConflicts)) open = [];
-			else if (effect.is(removeConflict)) {
-				open = open.filter((conflict) => conflict.id !== effect.value.id);
+			if (effect.is(clearConflicts)) {
+				open = [];
+				closed = [];
+			} else if (effect.is(removeConflict)) {
+				open = withoutId(open, effect.value.id);
+				closed = [...withoutId(closed, effect.value.id), effect.value];
 			} else if (effect.is(newBase)) {
-				const touched = effect.value;
-				open = open.filter((conflict) => !touched.some((range) => touches(conflict, range)));
+				const untouched = (conflict: OpenConflict) =>
+					!effect.value.some((range) => touches(conflict, range));
+				open = open.filter(untouched);
+				closed = closed.filter(untouched);
 			} else if (effect.is(addConflicts)) {
 				const added = effect.value.filter(
-					(conflict) => rebased || value.reopenable.has(conflict.id),
+					(conflict) => rebased || closed.some((other) => other.id === conflict.id),
 				);
 				if (added.length === 0) continue;
+				closed = closed.filter((conflict) => !added.some((other) => other.id === conflict.id));
 				open = [
 					...open.filter((conflict) => !added.some((other) => overlaps(conflict, other))),
 					...added,
 				].sort((a, b) => a.from - b.from);
 			}
 		}
-		const reopenable = rebased ? new Set(open.map((conflict) => conflict.id)) : value.reopenable;
-		return open === value.open && reopenable === value.reopenable ? value : { open, reopenable };
+		return open === value.open && closed === value.closed ? value : { open, closed };
 	},
 });
 
-const invertConflicts = invertedEffects.of((tr) =>
-	tr.effects.flatMap((effect): StateEffect<unknown>[] => {
-		if (effect.is(removeConflict)) return [addConflicts.of([effect.value])];
-		if (effect.is(addConflicts)) return effect.value.map((conflict) => removeConflict.of(conflict));
+const invertConflicts = invertedEffects.of((tr) => {
+	const before = tr.startState.field(conflictField);
+	return tr.effects.flatMap((effect): StateEffect<unknown>[] => {
+		if (effect.is(removeConflict)) {
+			const original = before.open.find((conflict) => conflict.id === effect.value.id);
+			return original ? [addConflicts.of([original])] : [];
+		}
+		if (effect.is(addConflicts)) {
+			return effect.value.map((conflict) =>
+				removeConflict.of(before.closed.find((other) => other.id === conflict.id) ?? conflict),
+			);
+		}
 		return [];
-	}),
-);
+	});
+});
+
+const closeMatched = EditorState.transactionExtender.of((tr) => {
+	if (!tr.docChanged || tr.annotation(Transaction.remote) === true) return null;
+	const removed = new Set(
+		tr.effects.flatMap((effect) => (effect.is(removeConflict) ? [effect.value.id] : [])),
+	);
+	const matched = mapConflicts(tr.startState.field(conflictField).open, tr, mapMode(tr)).filter(
+		(conflict) =>
+			!removed.has(conflict.id) &&
+			tr.newDoc.sliceString(conflict.from, conflict.to) === conflict.theirs,
+	);
+	return matched.length > 0
+		? { effects: matched.map((conflict) => removeConflict.of(conflict)) }
+		: null;
+});
 
 let nextConflictId = 1;
 
@@ -146,6 +196,7 @@ export function createDoc(text: string): EditorState {
 			historyField,
 			conflictField,
 			invertConflicts,
+			closeMatched,
 			EditorState.allowMultipleSelections.of(true),
 		],
 	});
@@ -162,10 +213,10 @@ export function docText(doc: EditorState): string {
 	return text;
 }
 
-export function docChanges(from: EditorState, to: EditorState): TextChange[] | null {
+export function docChanges(from: EditorState, to: EditorState): TextChange[] {
 	if (from.doc === to.doc) return [];
 	const hop = lineage.get(to);
-	if (!hop || hop.fromDoc !== from.doc) return null;
+	if (!hop || hop.fromDoc !== from.doc) throw new Error("Doc moved by more than one step");
 	const out: TextChange[] = [];
 	hop.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
 		out.push({ from: fromA, to: toA, insert: inserted.toString() });
@@ -218,7 +269,15 @@ export function docSelection(doc: EditorState): TextRange[] {
 
 function hasConflictState(doc: EditorState): boolean {
 	const state = doc.field(conflictField);
-	return state.open.length > 0 || state.reopenable.size > 0;
+	return state.open.length > 0 || state.closed.length > 0;
+}
+
+function changedRanges(changes: ChangeSet): MergeRange[] {
+	const ranges: MergeRange[] = [];
+	changes.iterChangedRanges((_fromA, _toA, from, to) => {
+		ranges.push({ from, to });
+	});
+	return ranges;
 }
 
 export function remoteText(
@@ -234,13 +293,14 @@ export function remoteText(
 	const current = docText(doc);
 	const added = (input.add ?? []).map((conflict) => ({ ...conflict, id: nextConflictId++ }));
 	if (current === input.text && added.length === 0 && !hasConflictState(doc)) return doc;
+	const changes = ChangeSet.of(input.changes ?? textChanges(current, input.text), current.length);
 	const effects = [
-		...(input.clear && conflictsOf(doc).length > 0 ? [clearConflicts.of(null)] : []),
-		newBase.of(input.touched ?? []),
+		...(input.clear && hasConflictState(doc) ? [clearConflicts.of(null)] : []),
+		newBase.of(input.touched ?? changedRanges(changes)),
 		...(added.length > 0 ? [addConflicts.of(added)] : []),
 	];
 	return step(doc, {
-		changes: input.changes ?? textChanges(current, input.text),
+		changes,
 		effects,
 		annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
 	});
@@ -251,9 +311,47 @@ export function userText(doc: EditorState, text: string): EditorState {
 	if (current === text && !hasConflictState(doc)) return doc;
 	return step(doc, {
 		changes: textChanges(current, text),
-		effects: [...conflictsOf(doc).map((conflict) => removeConflict.of(conflict)), newBase.of([])],
+		effects: clearConflicts.of(null),
 		annotations: [Transaction.userEvent.of("input.replace"), isolateHistory.of("full")],
 	});
+}
+
+function withNewline(doc: EditorState, conflict: EditConflict): string {
+	const text = doc.sliceDoc(conflict.from, conflict.to);
+	return text !== "" && !text.endsWith("\n") && conflict.to === doc.doc.length ? `${text}\n` : text;
+}
+
+function takeTheirsWhereReverted(doc: EditorState): EditorState {
+	const reverted = conflictsOf(doc).filter(
+		(conflict) => conflict.base !== undefined && withNewline(doc, conflict) === conflict.base,
+	);
+	if (reverted.length === 0) return doc;
+	const text = docText(doc);
+	const changes = ChangeSet.of(
+		reverted.map((conflict) =>
+			refined(text, { from: conflict.from, to: conflict.to, insert: conflict.theirs }),
+		),
+		doc.doc.length,
+	);
+	const tr = doc.update({
+		changes,
+		effects: reverted.map((conflict) =>
+			removeConflict.of({
+				...conflict,
+				from: changes.mapPos(conflict.from, -1),
+				to: changes.mapPos(conflict.to, 1),
+			}),
+		),
+		annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
+	});
+	const hop = lineage.get(doc);
+	lineage.set(
+		tr.state,
+		hop
+			? { fromDoc: hop.fromDoc, changes: hop.changes.compose(tr.changes) }
+			: { fromDoc: doc.doc, changes: tr.changes },
+	);
+	return tr.state;
 }
 
 function runCommand(doc: EditorState, command: typeof undo): EditorState {
@@ -264,7 +362,7 @@ function runCommand(doc: EditorState, command: typeof undo): EditorState {
 			next = record(tr);
 		},
 	});
-	return next;
+	return next === doc ? doc : takeTheirsWhereReverted(next);
 }
 
 export const undoDoc = (doc: EditorState) => runCommand(doc, undo);
@@ -272,7 +370,7 @@ export const redoDoc = (doc: EditorState) => runCommand(doc, redo);
 export const canUndoDoc = (doc: EditorState) => undoDepth(doc) > 0;
 export const canRedoDoc = (doc: EditorState) => redoDepth(doc) > 0;
 
-export function conflictsOf(doc: EditorState): readonly EditConflict[] {
+export function conflictsOf(doc: EditorState): readonly OpenConflict[] {
 	return doc.field(conflictField).open;
 }
 
@@ -296,8 +394,7 @@ export function resolveDocConflict(
 				: joined(mine, conflict.theirs);
 	return step(doc, {
 		...(insert === mine ? {} : { changes: { from: conflict.from, to: conflict.to, insert } }),
-		effects: removeConflict.of(conflict),
-		selection: { anchor: conflict.from + insert.length },
+		effects: removeConflict.of({ ...conflict, to: conflict.from + insert.length }),
 		annotations: [Transaction.userEvent.of("input.resolve"), isolateHistory.of("full")],
 	});
 }

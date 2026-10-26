@@ -43,13 +43,15 @@ function isConflict(value: unknown): value is MergeConflict {
 	const from: unknown = Reflect.get(value, "from");
 	const to: unknown = Reflect.get(value, "to");
 	const theirs: unknown = Reflect.get(value, "theirs");
+	const base: unknown = Reflect.get(value, "base");
 	return (
 		typeof from === "number" &&
 		typeof to === "number" &&
 		Number.isInteger(from) &&
 		Number.isInteger(to) &&
 		from >= 0 &&
-		typeof theirs === "string"
+		typeof theirs === "string" &&
+		(base === undefined || typeof base === "string")
 	);
 }
 

@@ -111,28 +111,30 @@ export function loadBufferRegistry(
 	load: () => Promise<Pick<typeof import("./registry"), "createBufferRegistry">> = () =>
 		import("./registry"),
 ): Promise<BufferRegistry> {
-	loading ??= load().then(({ createBufferRegistry }) => {
-		registry = createBufferRegistry({
-			io,
-			drafts,
-			draftOwner: pageDraftOwner(),
-			publish: (workspaceId, path, summary) =>
-				useAppStore.getState().setFileBufferSummary(workspaceId, path, summary),
-			hostKey: () => getTransport().httpBase(),
-			canWrite: () => writable(useAppStore.getState().protocolVersion),
-			isConnected: () => useAppStore.getState().status === "connected",
-			onDraftRestored: (path) =>
-				toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
-			draftDelayMs: DRAFT_DELAY_MS,
+	loading ??= load()
+		.then(({ createBufferRegistry }) => {
+			registry = createBufferRegistry({
+				io,
+				drafts,
+				draftOwner: pageDraftOwner(),
+				publish: (workspaceId, path, summary) =>
+					useAppStore.getState().setFileBufferSummary(workspaceId, path, summary),
+				hostKey: () => getTransport().httpBase(),
+				canWrite: () => writable(useAppStore.getState().protocolVersion),
+				isConnected: () => useAppStore.getState().status === "connected",
+				onDraftRestored: (path) =>
+					toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
+				draftDelayMs: DRAFT_DELAY_MS,
+			});
+			watchStore();
+			for (const listener of loadListeners) listener();
+			return registry;
+		})
+		.catch((error: unknown) => {
+			loading = null;
+			reportClientError(clientErrorReport("rejection", error));
+			throw error;
 		});
-		watchStore();
-		for (const listener of loadListeners) listener();
-		return registry;
-	});
-	loading.catch((error: unknown) => {
-		loading = null;
-		reportClientError(clientErrorReport("rejection", error));
-	});
 	return loading;
 }
 

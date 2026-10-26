@@ -17,8 +17,14 @@ interface PlacedConflict extends ConflictZone, ConflictSpan {
 }
 
 function lineSpan(model: monaco.editor.ITextModel, conflict: EditConflict) {
+	const start = model.getPositionAt(conflict.from);
+	const startsOnBreak =
+		conflict.to === model.getValueLength() &&
+		model.getPositionAt(conflict.to).column > 1 &&
+		start.column === model.getLineMaxColumn(start.lineNumber) &&
+		conflict.to > conflict.from + 1;
 	return {
-		startLine: model.getPositionAt(conflict.from).lineNumber,
+		startLine: startsOnBreak ? start.lineNumber + 1 : start.lineNumber,
 		endLine: conflict.to > conflict.from ? model.getPositionAt(conflict.to - 1).lineNumber : null,
 	};
 }

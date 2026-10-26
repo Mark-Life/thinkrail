@@ -36,7 +36,6 @@ import {
 	undoDoc,
 } from "./history";
 import { fileBufferKey } from "./keys";
-import { textChanges } from "./textChanges";
 
 export interface FileIo {
 	read(workspaceId: string, path: string): Promise<FileContent>;
@@ -132,9 +131,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		const textChanged = bufferText(next) !== bufferText(previous);
 		if (origin === "view" || entry.views.size === 0) return;
 		if (!textChanged && conflictsOf(next.doc) === conflictsOf(previous.doc)) return;
-		const changes = textChanged
-			? (docChanges(previous.doc, next.doc) ?? textChanges(bufferText(previous), bufferText(next)))
-			: [];
+		const changes = textChanged ? docChanges(previous.doc, next.doc) : [];
 		const update: EditUpdate =
 			origin === "history" ? { changes, selection: docSelection(next.doc) } : { changes };
 		for (const view of entry.views) view(update);

@@ -152,8 +152,10 @@ export function adoptDisk(state: BufferState, disk: DiskText): BufferState {
 	}
 	if (state.unconfirmed !== null && disk.text === state.unconfirmed) return settledOn(state, disk);
 	if (state.base.hash === null && disk.text === state.base.text) return settledOn(state, disk);
-	if (!isDirty(state) || disk.text === bufferText(state))
-		return settledOn(withDiskText(state, disk.text), disk);
+	if (disk.text === bufferText(state)) return settledOn(withDiskText(state, disk.text), disk);
+	if (!isDirty(state)) {
+		return settledOn(withDoc(state, remoteText(state.doc, { text: disk.text })), disk);
+	}
 	if (state.issue?.kind === "conflict") return { ...state, issue: conflict(state, disk) };
 	return mergeDisk(state, disk);
 }
@@ -227,7 +229,7 @@ export function keepMine(state: BufferState): BufferState {
 }
 
 export function draftConflicts(state: BufferState): MergeConflict[] {
-	return conflictsOf(state.doc).map(({ from, to, theirs }) => ({ from, to, theirs }));
+	return conflictsOf(state.doc).map(({ id: _id, ...conflict }) => conflict);
 }
 
 export function restoreDraft(

@@ -137,7 +137,9 @@ test("open conflicts survive a page reload through the draft", async () => {
 	diskChange(first, "theirs\ntwo\n");
 	first.registry.flushDrafts();
 	await settle();
-	expect(drafts.records.get(DRAFT_ID)?.conflicts).toEqual([{ from: 0, to: 9, theirs: "theirs\n" }]);
+	expect(drafts.records.get(DRAFT_ID)?.conflicts).toEqual([
+		{ from: 0, to: 9, theirs: "theirs\n", base: "one\n" },
+	]);
 
 	const second = setup({ disk, drafts, owner: "page-b" });
 	await settle();
@@ -232,4 +234,54 @@ test("Both on two functions inserted at the same point keeps each whole", () => 
 	diskChange(context, "a\nfunction y() {\n}\n");
 	handle.session.resolveConflict(firstConflict(handle).id, "both");
 	expect(handle.session.snapshot()).toBe("a\nfunction x() {\n}\nfunction y() {\n}\n");
+});
+
+test("undo of a Theirs pick reopens the conflict after a disk change on other lines", async () => {
+	const context = setup({ text: "one\ntwo\nthree\n" });
+	const { disk, registry, handle } = context;
+	type(handle, 0, "mine ");
+	diskChange(context, "theirs\ntwo\nthree\n");
+	handle.session.resolveConflict(firstConflict(handle).id, "theirs");
+	diskChange(context, "theirs\ntwo\nTHREE\n");
+	handle.session.undo();
+	expect(handle.session.snapshot()).toBe("mine one\ntwo\nTHREE\n");
+	expect(handle.session.conflicts()).toMatchObject([{ theirs: "theirs\n" }]);
+	expect(context.summaries.at(-1)).toMatchObject({ status: "conflict" });
+	await registry.save(handle.key);
+	expect(disk.writes).toEqual([]);
+});
+
+test("an undo that takes the disk side reaches the view as one change set", () => {
+	const context = setup({ text: "a\nb\nc\n" });
+	const { handle } = context;
+	type(handle, 3, "X");
+	diskChange(context, "a\nbY\nc\n");
+	let mirrored = handle.session.snapshot();
+	handle.session.subscribe((update) => {
+		for (const change of [...update.changes].reverse()) {
+			mirrored = mirrored.slice(0, change.from) + change.insert + mirrored.slice(change.to);
+		}
+	});
+	handle.session.undo();
+	expect(handle.session.snapshot()).toBe("a\nbY\nc\n");
+	expect(mirrored).toBe("a\nbY\nc\n");
+	expect(handle.session.conflicts()).toEqual([]);
+});
+
+test("a conflict choice sends no selection, and the next undo restores the real cursor", () => {
+	const context = setup({ text: "one\ntwo\nthree\nfour\n" });
+	const { handle } = context;
+	const selections: unknown[] = [];
+	handle.session.subscribe((update) => selections.push(update.selection));
+	type(handle, 0, "mine ");
+	diskChange(context, "theirs\ntwo\nthree\nfour\n");
+	const end = handle.session.snapshot().length;
+	handle.session.select([{ anchor: end, head: end }]);
+	handle.session.resolveConflict(firstConflict(handle).id, "theirs");
+	expect(selections.at(-1)).toBeUndefined();
+	const cursor = handle.session.snapshot().length;
+	type(handle, cursor, "X");
+	handle.session.select([{ anchor: cursor + 1, head: cursor + 1 }]);
+	handle.session.undo();
+	expect(selections.at(-1)).toEqual([{ anchor: cursor, head: cursor }]);
 });

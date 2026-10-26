@@ -59,7 +59,7 @@ test("a change to the same line pauses the save until the user picks a side", as
 	expect(handle.session.snapshot()).toBe("mine one\ntwo\n");
 	expect(summaries.at(-1)).toEqual({ status: "conflict", dirty: true, conflicts: 1 });
 	expect(handle.session.conflicts()).toEqual([
-		{ id: expect.any(Number), from: 0, to: 9, theirs: "theirs\n" },
+		{ id: expect.any(Number), from: 0, to: 9, theirs: "theirs\n", base: "one\n" },
 	]);
 	await registry.save(handle.key);
 	expect(disk.writes).toEqual([]);

@@ -1,0 +1,81 @@
+import { expect, test } from "bun:test";
+import {
+	adoptDisk,
+	type BufferState,
+	beginSave,
+	bufferStatus,
+	bufferText,
+	createBuffer,
+	localEdit,
+	resolveConflict,
+	withDoc,
+} from "./buffer";
+import { conflictsOf, redoDoc, undoDoc } from "./history";
+import { textChanges } from "./textChanges";
+
+const disk = (text: string) => ({ text, hash: `h:${text}` });
+const edit = (state: BufferState, text: string) =>
+	localEdit(state, textChanges(bufferText(state), text), "type");
+const undo = (state: BufferState) => withDoc(state, undoDoc(state.doc));
+const redo = (state: BufferState) => withDoc(state, redoDoc(state.doc));
+
+const firstId = (state: BufferState) => {
+	const [conflict] = conflictsOf(state.doc);
+	if (!conflict) throw new Error("no open conflict");
+	return conflict.id;
+};
+
+test("undoing my edit inside a conflict lands on the disk text, not the old base", () => {
+	let state = createBuffer(disk("a\nb\nc\n"));
+	state = edit(state, "a\nbX\nc\n");
+	state = adoptDisk(state, disk("a\nbY\nc\n"));
+	expect(bufferStatus(state)).toBe("conflict");
+	state = undo(state);
+	expect(bufferText(state)).toBe("a\nbY\nc\n");
+	expect(conflictsOf(state.doc)).toEqual([]);
+	expect(bufferStatus(state)).toBe("clean");
+	expect(beginSave(state).request).toBeNull();
+	state = redo(state);
+	expect(bufferText(state)).toBe("a\nbYX\nc\n");
+	expect(bufferStatus(state)).toBe("dirty");
+});
+
+test("undoing a deleted line that the disk edited brings the disk line back", () => {
+	let state = createBuffer(disk("a\nb\nc\n"));
+	state = edit(state, "a\nc\n");
+	state = adoptDisk(state, disk("a\nbY\nc\n"));
+	expect(conflictsOf(state.doc)).toHaveLength(1);
+	state = undo(state);
+	expect(bufferText(state)).toBe("a\nbY\nc\n");
+	expect(bufferStatus(state)).toBe("clean");
+});
+
+test("typing a conflict's text into its disk version closes it, and undo opens it again", () => {
+	let state = createBuffer(disk("a\nb\nc\n"));
+	state = edit(state, "a\nbX\nc\n");
+	state = adoptDisk(state, disk("a\nbY\nc\n"));
+	state = localEdit(state, [{ from: 3, to: 4, insert: "Y" }], "paste");
+	expect(bufferText(state)).toBe("a\nbY\nc\n");
+	expect(bufferStatus(state)).toBe("clean");
+	state = undo(state);
+	expect(bufferText(state)).toBe("a\nbX\nc\n");
+	expect(bufferStatus(state)).toBe("conflict");
+});
+
+test("Theirs on a last line the disk deleted gives exactly the disk text", () => {
+	const clash = adoptDisk(edit(createBuffer(disk("a\nb")), "a\nB"), disk("a"));
+	expect(bufferText(clash)).toBe("a\nB");
+	expect(bufferText(resolveConflict(clash, firstId(clash), "theirs"))).toBe("a");
+	expect(bufferStatus(resolveConflict(clash, firstId(clash), "theirs"))).toBe("clean");
+	expect(bufferText(resolveConflict(clash, firstId(clash), "mine"))).toBe("a\nB");
+	expect(bufferText(resolveConflict(clash, firstId(clash), "both"))).toBe("a\nB");
+});
+
+test("a conflict choice leaves the selection where the edit mapped it", () => {
+	let state = createBuffer(disk("one\ntwo\n"));
+	state = edit(state, "mine one\ntwo\n");
+	state = adoptDisk(state, disk("theirs\ntwo\n"));
+	const before = state.doc.selection.main.head;
+	state = resolveConflict(state, firstId(state), "theirs");
+	expect(state.doc.selection.main.head).toBe(Math.min(before, bufferText(state).length));
+});

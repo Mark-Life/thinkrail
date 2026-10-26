@@ -55,7 +55,7 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   the loaded registry and the buffer through `useSyncExternalStore`. Once the file is editable, a layout
   effect starts the load, then creates the buffer when the registry exists, so the editor mounts
   read-only until then and binds before paint; nothing is created during render. A failed chunk load is
-  reported as a client error and forgotten, so the next editable file tries again. Removing a workspace
+  reported once as a client error, however many callers wait on it, and forgotten, so the next editable file tries again. Removing a workspace
   deletes its drafts even before the chunk loads. The buffer then lives as long as its
   file tab: it survives tab switches and unmounts, so a background tab keeps its dot and its text. When the tab leaves the store the buffer is dropped (its draft stays), and
   **Don't save** drops it with its draft.
@@ -74,25 +74,37 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   to a write whose answer never came (`unconfirmed`) is this page's own save: it becomes the base, with
   no conflict. Any editable read clears `notEditable` and `offline`, also on the same hash.
 - **Merge rules (`merge3.ts`).** Pure and line-based, on jsdiff `diffArrays` from `base` to each side,
-  with the same 2,000-edit / 50 ms budget as `textChanges`; past it the result is `tooLarge` (the
-  banner). Hunks conflict only when they share a base line, or when an insert lands strictly inside the
+  with the same 2,000-edit / 50 ms budget as `textChanges` (one pair of constants); past it the result is `tooLarge` (the
+  banner). jsdiff can write a one-line replace next to an equal line (a blank line, a `}`) as an insert
+  plus a delete of the equal line further on; each side's insert and such a delete join into one
+  replace before the hunks meet, so both sides editing that line conflict. Hunks conflict only when they share a base line, or when an insert lands strictly inside the
   other side's changed lines. Edits on adjacent lines, and an insert at the edge of the other side's
   edit, merge. The same change on both sides lands once. Two different inserts at the same point merge
   with mine first. When one insert starts or ends with the whole other one, the longer one lands; any
   other pair that shares a line conflicts. A conflict keeps mine in the text and records the disk lines (`theirs`) next to it.
   Inputs are LF editor text; a missing final newline is merged as if present, then follows the side
   that changed it. A conflict at the end of the text holds the disk tail exactly: its final newline
-  follows the disk, and an empty one after a dropped newline starts its `theirs` with one. The merge also returns the disk side as `TextChange[]` against mine, which enter
+  follows the disk, an empty one after a dropped newline starts its `theirs` with one, and one whose
+  disk side deleted a last line without a newline starts at the line break before it, so Theirs drops
+  that break too (the lens still starts on the conflict's own line). Each conflict also keeps its
+  `base` lines, saved with drafts. The merge also returns the disk side as `TextChange[]` against mine, which enter
   the doc as they are (no second diff), and the merged range of every block the disk side changed.
 - **Open conflicts** live in a CodeMirror `StateField` and move with every edit. Typing at the end of
   a conflict on a last line without a newline extends it; any other edit at its edges stays outside. **Mine** keeps the
   text, **Theirs** replaces it with the disk lines, **Both** keeps mine then the disk lines; each is a
-  user transaction, so Cmd/Ctrl+Z reopens the conflict (`invertedEffects`). A later disk change merges
+  user transaction, so Cmd/Ctrl+Z reopens the conflict (`invertedEffects`); a choice sets no selection,
+  the cursor maps through it. A later disk change merges
   against the new base. An open conflict in a block the disk changed again closes: the new merge either
   opens a fresh conflict there or found nothing to pick. One the disk left alone stays open. Reload,
-  Keep mine, a clean adoption and a deletion close them all. Undo reopens only a conflict merged
-  against the current base: after any later merge, adoption or Reload, undo restores the text but not
-  an older conflict, whose Theirs would overwrite the newer disk.
+  Keep mine, a deletion and a disk that caught up with the buffer close them all; a clean adoption
+  closes those on the lines it changed. Resolved conflicts stay in the field, mapped like open ones, and
+  close the same way: undo reopens a resolved conflict only while no later disk change, Reload or Keep
+  mine reached its lines, since its Theirs would overwrite the newer disk. An edit (or undo) that makes
+  a conflict's text equal its `theirs` closes it in the same transaction, so undoing that edit reopens
+  it. An undo or redo that brings a conflict's text back to its `base` takes `theirs` there, as a
+  3-way merge would, in a remote step composed into the same change set; a redo after that lands the
+  user's edit on the disk text with no conflict. Undo maps an empty conflict (mine deleted the lines)
+  over the text it brings back.
 - **IME.** While the editor composes, disk reads and a stale save answer wait; the end of the
   composition re-reads once (and retries that save). A merge never lands inside a composition.
 - **No read lands across a save.** Every read, by the registry or a file tab, takes a per-buffer
@@ -112,6 +124,8 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   a superseded token) also updates every file tab on that path through `updateFileTabContent`, stamped
   with the workspace tick taken before the read, so `tab.content` and `tab.meta` never lag the buffer. A
   tab that already holds a newer tick keeps it.
+- **One step per commit.** Every commit moves `doc` by one transaction (or a composed pair), so
+  `docChanges` always finds the hop; a commit that moves it further throws instead of diffing.
 - **Deltas, never a reset.** Every text change that did not come from the attached editor (a merge, a
   disk adoption, undo, a conflict choice) is one CodeMirror transaction; the editor gets that
   transaction's change set as `TextChange[]`. Remote text enters the doc as a line diff (`textChanges`,

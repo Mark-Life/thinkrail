@@ -21,14 +21,14 @@ test("a doc keeps no earlier state alive", async () => {
 	expect(first.deref()).toBeUndefined();
 });
 
-test("docChanges gives one step's changes, also past a selection, and null across more", () => {
+test("docChanges gives one step's changes, also past a selection, and throws across more", () => {
 	const start = createDoc("ab");
 	const typed = localChange(start, [{ from: 1, to: 1, insert: "x" }], "type");
 	const selected = selectDoc(typed, [{ anchor: 0, head: 0 }]);
 	expect(docChanges(start, selected)).toEqual([{ from: 1, to: 1, insert: "x" }]);
 	expect(docChanges(typed, selected)).toEqual([]);
 	const again = localChange(selected, [{ from: 0, to: 0, insert: "y" }], "type");
-	expect(docChanges(start, again)).toBeNull();
+	expect(() => docChanges(start, again)).toThrow();
 });
 
 test("docText builds a doc's string once and follows every edit", () => {

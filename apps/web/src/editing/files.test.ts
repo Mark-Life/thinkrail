@@ -1,6 +1,8 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
+import { CLIENT_ERROR_REPORT_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
+import * as transport from "../transport";
 import { loadBufferRegistry, syncFileTabs } from "./files";
 
 const meta = (hash: string, text: string) => ({ hash, byteLength: text.length, text: true });
@@ -44,4 +46,34 @@ test("a failed registry load is retried by the next caller", async () => {
 	await expect(loadBufferRegistry(failing)).rejects.toThrow("chunk failed");
 	await expect(loadBufferRegistry(failing)).rejects.toThrow("chunk failed");
 	expect(calls).toBe(2);
+});
+
+test("callers waiting on one failed registry load send one error report", async () => {
+	const methods: string[] = [];
+	const spy = spyOn(transport, "getTransport").mockReturnValue({
+		request: (method: string) => {
+			methods.push(method);
+			return Promise.resolve({ ok: true });
+		},
+	} as unknown as ReturnType<typeof transport.getTransport>);
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	methods.length = 0;
+	try {
+		let calls = 0;
+		const failing = () => {
+			calls++;
+			return Promise.reject(new Error("chunk failed"));
+		};
+		const results = await Promise.allSettled([
+			loadBufferRegistry(failing),
+			loadBufferRegistry(failing),
+			loadBufferRegistry(failing),
+		]);
+		expect(results.map((result) => result.status)).toEqual(["rejected", "rejected", "rejected"]);
+		expect(calls).toBe(1);
+		expect(methods.filter((method) => method === "client.reportError")).toHaveLength(1);
+	} finally {
+		spy.mockRestore();
+		useAppStore.setState({ protocolVersion: null });
+	}
 });
