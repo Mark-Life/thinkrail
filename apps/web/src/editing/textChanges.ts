@@ -18,7 +18,7 @@ export function applyChanges(text: string, changes: readonly TextChange[]): stri
 	return next;
 }
 
-function lines(text: string): string[] {
+export function splitLines(text: string): string[] {
 	return text === "" ? [] : text.split(/(?<=\n)/);
 }
 
@@ -65,8 +65,8 @@ function alignedParts(before: string[], after: string[]): LinePart[] | null {
 
 export function textChanges(previous: string, next: string): TextChange[] {
 	if (previous === next) return [];
-	const before = lines(previous);
-	const after = lines(next);
+	const before = splitLines(previous);
+	const after = splitLines(next);
 	const parts =
 		diffArrays(before, after, { maxEditLength: MAX_EDIT_LENGTH, timeout: DIFF_TIMEOUT_MS }) ??
 		alignedParts(before, after);
