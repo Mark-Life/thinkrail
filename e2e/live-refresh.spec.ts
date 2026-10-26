@@ -1,7 +1,8 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
+import { openFile, setFileSaveMode, typeAtLineEnd } from "./fixtures/fileEdit";
 import { commitFile } from "./fixtures/git";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -177,4 +178,46 @@ test("churn canary: a write storm coalesces to a few frames and the host stays r
 	expect(stormFrames).toBeLessThanOrEqual(8);
 	expect(healthMs).toBeGreaterThanOrEqual(0);
 	expect(healthMs).toBeLessThan(1000);
+});
+
+test("churn canary: typing with autosave on stays within the frame budget", async ({
+	page,
+	baseURL,
+}) => {
+	await setFileSaveMode(baseURL, "auto");
+	const fsFrames: number[] = [];
+	const writeFrames: number[] = [];
+	page.on("websocket", (ws) => {
+		ws.on("framereceived", (frame) => {
+			const payload = typeof frame.payload === "string" ? frame.payload : frame.payload.toString();
+			if (payload.includes('"channel":"workspace.fsChanged"')) fsFrames.push(Date.now());
+		});
+		ws.on("framesent", (frame) => {
+			const payload = typeof frame.payload === "string" ? frame.payload : frame.payload.toString();
+			if (payload.includes('"method":"fs.writeFile"')) writeFrames.push(Date.now());
+		});
+	});
+
+	const path = await openFile(page, "typing.ts", "export const typed = [\n];\n");
+	await sleep(1200);
+	const framesBefore = fsFrames.length;
+
+	const bursts = 3;
+	for (let burst = 0; burst < bursts; burst++) {
+		await typeAtLineEnd(page, 1, "");
+		await page.keyboard.type(` ${burst}, 1, 2, 3, 4,`, { delay: 120 });
+		await sleep(1600);
+	}
+	await expect
+		.poll(() => readFileSync(path, "utf8"))
+		.toBe("export const typed = [ 0, 1, 2, 3, 4, 1, 1, 2, 3, 4, 2, 1, 2, 3, 4,\n];\n");
+	await sleep(1500);
+
+	const typingFrames = fsFrames.length - framesBefore;
+	console.log(
+		`churn canary (typing): ${typingFrames} fsChanged frames, ${writeFrames.length} writes`,
+	);
+	expect(writeFrames).toHaveLength(bursts);
+	expect(typingFrames).toBeGreaterThanOrEqual(1);
+	expect(typingFrames).toBeLessThanOrEqual(8);
 });

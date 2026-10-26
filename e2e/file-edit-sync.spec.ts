@@ -9,6 +9,7 @@ import {
 	fileTab,
 	openFile,
 	openWorkspaceWithFile,
+	pinFileSaveMode,
 	typeAtLineEnd,
 	unmergeableText,
 	visibleEditor,
@@ -47,6 +48,8 @@ async function commentOnFirstLine(page: Page, body: string) {
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
 }
+
+pinFileSaveMode("manual");
 
 test("a file that changes on disk while it opens shows the new text and saves without a conflict", async ({
 	page,

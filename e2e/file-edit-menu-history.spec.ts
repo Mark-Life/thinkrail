@@ -1,6 +1,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { banner, conflictLens, openFile, typeAtLineEnd, visibleEditor } from "./fixtures/fileEdit";
+import {
+	banner,
+	conflictLens,
+	openFile,
+	pinFileSaveMode,
+	typeAtLineEnd,
+	visibleEditor,
+} from "./fixtures/fileEdit";
 import { installNativeShortcuts, nativeCommand } from "./fixtures/nativeShortcuts";
 
 const BASE = "const one = 1;\nconst two = 2;\nconst three = 3;\n";
@@ -8,6 +15,8 @@ const BASE = "const one = 1;\nconst two = 2;\nconst three = 3;\n";
 test.beforeEach(async ({ page }) => {
 	await installNativeShortcuts(page, "MacIntel");
 });
+
+pinFileSaveMode("manual");
 
 test("Edit menu undo and redo reach the file's own history and keep a merged disk change", async ({
 	page,

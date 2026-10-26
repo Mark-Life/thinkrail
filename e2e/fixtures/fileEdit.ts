@@ -1,7 +1,24 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+import type { FileSaveMode } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./app";
+import { E2eWire } from "./wire";
+
+export async function setFileSaveMode(baseURL: string | undefined, fileSaveMode: FileSaveMode) {
+	if (!baseURL) throw new Error("The file save mode fixture requires the isolated host URL");
+	const wire = await E2eWire.connect(Number(new URL(baseURL).port));
+	try {
+		await wire.request("settings.update", { config: { fileSaveMode } });
+	} finally {
+		wire.close();
+	}
+}
+
+export function pinFileSaveMode(mode: FileSaveMode) {
+	test.beforeEach(({ baseURL }) => setFileSaveMode(baseURL, mode));
+	test.afterEach(({ baseURL }) => setFileSaveMode(baseURL, "auto"));
+}
 
 export function visibleEditor(page: Page) {
 	return page.locator('[data-testid="editor-pane"]:visible .monaco-editor');
