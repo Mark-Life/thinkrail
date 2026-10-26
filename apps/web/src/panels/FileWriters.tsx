@@ -1,6 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import type { PresenceTone, SurfacePresence } from "@thinkrail/resource-renderers";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -150,12 +150,12 @@ export function FileWritersChip({
 	if (writers.length === 0) return null;
 	const names = writers.map((writer) => writer.label).join(", ");
 	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
+		<Popover>
+			<PopoverTrigger asChild>
 				<button
 					type="button"
 					data-testid="file-writers"
-					aria-label={t("presence.writersList", { names })}
+					aria-label={t("presence.writersNamed", { count: writers.length, names })}
 					className={cn(
 						"inline-flex items-center gap-4 rounded-full border border-border-default bg-container-elevated-bg px-8 py-2 tr-text-metadata text-text-muted shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
 						className,
@@ -169,9 +169,29 @@ export function FileWritersChip({
 					</span>
 					<span aria-hidden>{t("presence.writers", { count: writers.length })}</span>
 				</button>
-			</TooltipTrigger>
-			<TooltipContent>{names}</TooltipContent>
-		</Tooltip>
+			</PopoverTrigger>
+			<PopoverContent
+				side="top"
+				align="end"
+				data-testid="file-writers-list"
+				className="px-8 py-4 tr-text-metadata"
+			>
+				<ul className="flex flex-col gap-2">
+					{writers.map((writer) => (
+						<li key={writer.id} className="flex items-center gap-8">
+							<span
+								aria-hidden
+								className={cn(
+									"size-6 shrink-0 rounded-full forced-colors:bg-[CanvasText]",
+									TONE_FILL[writer.tone],
+								)}
+							/>
+							{writer.label}
+						</li>
+					))}
+				</ul>
+			</PopoverContent>
+		</Popover>
 	);
 }
 

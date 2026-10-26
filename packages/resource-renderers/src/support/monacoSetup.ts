@@ -107,6 +107,7 @@ export function fileEditorOptions(
 	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
+	const paddingBottom = Number.parseFloat(cssVar("--space-40") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
 		readOnly: !editable,
 		...(editable ? {} : { readOnlyMessage: { value: t("panels.monacoSetup.readOnly") } }),
@@ -135,7 +136,10 @@ export function fileEditorOptions(
 		overviewRulerBorder: false,
 		hideCursorInOverviewRuler: true,
 	};
-	options.padding = { top: Number.isFinite(paddingTop) ? paddingTop : 0 };
+	options.padding = {
+		top: Number.isFinite(paddingTop) ? paddingTop : 0,
+		bottom: Number.isFinite(paddingBottom) ? paddingBottom : 0,
+	};
 	return options;
 }
 

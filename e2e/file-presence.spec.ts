@@ -113,6 +113,15 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 	await expect(dot).toHaveAttribute("data-tone", "external");
 	await expect(dot).toHaveAttribute("aria-label", "Changed by External in the last minute");
 	await expect(page.getByTestId("file-writers")).toContainText("2 writers");
+	await expect(
+		page.getByRole("button", { name: "2 writers: changed in the last minute by External, Agent" }),
+	).toBeVisible();
+	await page.getByTestId("file-writers").click();
+	await expect(page.getByTestId("file-writers-list").getByRole("listitem")).toHaveText([
+		"External",
+		"Agent",
+	]);
+	await page.keyboard.press("Escape");
 	await expect(page.getByRole("status").filter({ hasText: "External changed line 9" })).toHaveCount(
 		1,
 	);
@@ -155,4 +164,44 @@ test("a save from another window and an agent on one line draw bars in separate 
 		(node) => node.getBoundingClientRect().left,
 	);
 	expect(userX - 2).toBeGreaterThanOrEqual(lane);
+});
+
+test("a touch tap on the writers chip lists the writers", async ({ page }) => {
+	const authors = await routeFsAuthors(page);
+	const path = await openFile(page, NAME, BASE);
+	authors.agentWrites(path);
+	writeFileSync(path, withLine(readFileSync(path, "utf8"), 4, "const v4 = 40;"));
+	await expect(page.getByTestId("file-writers")).toBeVisible({ timeout: 10_000 });
+	const chip = page.getByTestId("file-writers");
+	for (const type of ["pointerdown", "pointerup"]) {
+		await chip.dispatchEvent(type, { pointerType: "touch", isPrimary: true, button: 0 });
+	}
+	await chip.dispatchEvent("click");
+	await expect(page.getByTestId("file-writers-list")).toContainText("Agent");
+});
+
+test("scrolled to the end, the writers chip leaves the last line clear", async ({ page }) => {
+	const authors = await routeFsAuthors(page);
+	const long = Array.from(
+		{ length: 80 },
+		(_, index) => `const v${index + 1} = "${"x".repeat(300)}";`,
+	);
+	const path = await openFile(page, NAME, `${long.join("\n")}\n`);
+	await visibleEditor(page).locator(".view-line").first().click();
+	await page.keyboard.press("Control+End");
+	const last = visibleEditor(page).locator(".view-line").filter({ hasText: "const v80 =" });
+	await expect(last).toHaveCount(1);
+	authors.agentWrites(path);
+	writeFileSync(path, withLine(readFileSync(path, "utf8"), 2, "const v2 = 2;"));
+	const chip = page.getByTestId("file-writers");
+	await expect(chip).toBeVisible({ timeout: 10_000 });
+	const textBottom = () =>
+		visibleEditor(page)
+			.locator(".view-line")
+			.evaluateAll((lines) =>
+				Math.max(...lines.map((line) => line.getBoundingClientRect().bottom)),
+			);
+	await expect
+		.poll(async () => ((await chip.boundingBox())?.y ?? 0) - (await textBottom()))
+		.toBeGreaterThanOrEqual(0);
 });

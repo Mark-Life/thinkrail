@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
 import type { FileRead, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
-import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useAppStore } from "../store";
 import { FileWriterAvatars, FileWritersChip } from "./FileWriters";
@@ -43,8 +42,7 @@ function seedActivity(fold: () => void) {
 	};
 }
 
-const render = (node: React.ReactNode) =>
-	renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
+const render = (node: React.ReactNode) => renderToStaticMarkup(node);
 
 test("past three writers the tab avatars show how many more there are", () => {
 	seedWriters(5);
@@ -60,6 +58,8 @@ test("the pane chip is a focusable button that names every writer", () => {
 	expect(html).toMatch(/<button type="button" data-testid="file-writers"/);
 	expect(html).toContain(">+2<");
 	expect(html).toContain("5 writers");
+	expect(html).toContain('aria-label="5 writers: changed in the last minute by Agent');
+	expect(html).toContain('aria-haspopup="dialog"');
 });
 
 test("three writers or fewer show no overflow count", () => {

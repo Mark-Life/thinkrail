@@ -1311,6 +1311,8 @@
 	"presence.writersList": "Changed in the last minute by {{names}}",
 	"presence.writers_one": "1 writer",
 	"presence.writers_other": "{{count}} writers",
+	"presence.writersNamed_one": "1 writer: changed in the last minute by {{names}}",
+	"presence.writersNamed_other": "{{count}} writers: changed in the last minute by {{names}}",
 	"presence.you": "You",
 	"presence.youElsewhere": "You, in another window",
 	"prompt.slashMenu.builtinSource": "Pi/built-in",
