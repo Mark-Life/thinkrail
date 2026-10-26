@@ -135,7 +135,7 @@ test("after a thrown save error the file waits for the next edit", async () => {
 test("a deleted file is never re-created by autosave, only by an explicit save", async () => {
 	const { disk, registry, handle, clock } = autoSetup();
 	disk.remove(PATH);
-	handle.readFailed(notFound());
+	handle.readFailed(notFound(), handle.readToken());
 	type(handle, 0, "a");
 	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
@@ -296,7 +296,7 @@ test("a file recreated on disk after the timer fired while it was deleted autosa
 	const { disk, handle, clock, summaries } = autoSetup();
 	type(handle, 0, "a");
 	disk.remove(PATH);
-	handle.readFailed(notFound());
+	handle.readFailed(notFound(), handle.readToken());
 	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(clock.timers()).toBe(0);
