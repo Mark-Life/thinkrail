@@ -36,7 +36,7 @@ test("a shared line is a conflict that keeps mine in the text", () => {
 		"one\ntwo theirs\nthree\nfour\nfive\n",
 	);
 	expect(result.text).toBe("one\ntwo mine\nthree\nfour\nfive\n");
-	expect(result.conflicts).toEqual([{ from: 4, to: 13, theirs: "two theirs\n" }]);
+	expect(result.conflicts).toEqual([{ from: 4, to: 13, theirs: "two theirs\n", base: "two\n" }]);
 	const [conflict] = result.conflicts;
 	expect(result.text.slice(conflict?.from, conflict?.to)).toBe("two mine\n");
 });
@@ -44,9 +44,9 @@ test("a shared line is a conflict that keeps mine in the text", () => {
 test("deleting a line the other side edited is a conflict", () => {
 	const mineDeletes = merged("one\nthree\nfour\nfive\n", "one\ntwo!\nthree\nfour\nfive\n");
 	expect(mineDeletes.text).toBe("one\nthree\nfour\nfive\n");
-	expect(mineDeletes.conflicts).toEqual([{ from: 4, to: 4, theirs: "two!\n" }]);
+	expect(mineDeletes.conflicts).toEqual([{ from: 4, to: 4, theirs: "two!\n", base: "two\n" }]);
 	const theirsDeletes = merged("one\ntwo!\nthree\nfour\nfive\n", "one\nthree\nfour\nfive\n");
-	expect(theirsDeletes.conflicts).toEqual([{ from: 4, to: 9, theirs: "" }]);
+	expect(theirsDeletes.conflicts).toEqual([{ from: 4, to: 9, theirs: "", base: "two\n" }]);
 });
 
 test("a delete next to an edit merges", () => {
@@ -77,9 +77,9 @@ test("same-point inserts where one contains the other keep the longer one", () =
 test("same-point inserts that share only some lines conflict", () => {
 	const result = merged("a\nfunction x() {\n}\n", "a\nfunction y() {\n}\n", "a\n");
 	expect(result.text).toBe("a\nfunction x() {\n}\n");
-	expect(result.conflicts).toEqual([{ from: 2, to: 19, theirs: "function y() {\n}\n" }]);
+	expect(result.conflicts).toEqual([{ from: 2, to: 19, theirs: "function y() {\n}\n", base: "" }]);
 	const crossed = merged("a\nA\nX\n", "a\nX\nB\n", "a\n");
-	expect(crossed.conflicts).toEqual([{ from: 2, to: 6, theirs: "X\nB\n" }]);
+	expect(crossed.conflicts).toEqual([{ from: 2, to: 6, theirs: "X\nB\n", base: "" }]);
 });
 
 test("an insert at the edge of the other side's edit merges", () => {
@@ -97,15 +97,17 @@ test("a last line without a newline merges with lines added after it", () => {
 test("a conflict on a last line without a newline keeps both forms", () => {
 	const result = merged("a\nmine", "a\ntheirs", "a\nb");
 	expect(result.text).toBe("a\nmine");
-	expect(result.conflicts).toEqual([{ from: 2, to: 6, theirs: "theirs" }]);
+	expect(result.conflicts).toEqual([{ from: 2, to: 6, theirs: "theirs", base: "b\n" }]);
 });
 
 test("a conflict at the end of the text gives back exactly the disk tail", () => {
 	const deleted = merged("a\n", "a\nb2", "a\nb\n");
 	expect(deleted.text).toBe("a");
 	expect(deleted.conflicts).toEqual([{ from: 1, to: 1, theirs: "\nb2" }]);
-	expect(merged("", "y", "x").conflicts).toEqual([{ from: 0, to: 0, theirs: "y" }]);
-	expect(merged("a\nb1\n", "a\nb2", "a\nb").conflicts).toEqual([{ from: 2, to: 5, theirs: "b2" }]);
+	expect(merged("", "y", "x").conflicts).toEqual([{ from: 0, to: 0, theirs: "y", base: "x\n" }]);
+	expect(merged("a\nb1\n", "a\nb2", "a\nb").conflicts).toEqual([
+		{ from: 2, to: 5, theirs: "b2", base: "b\n" },
+	]);
 });
 
 test("CRLF disk text merges once it is in editor form", () => {
@@ -165,4 +167,29 @@ test("touched ranges cover every block the disk side changed, in merged text", (
 	const same = merged("one\nTWO\nthree\nfour\nfive\n", "one\nTWO\nthree\nfour\nfive\n");
 	expect(same.touched).toEqual([{ from: 4, to: 8 }]);
 	expect(merged("ONE\ntwo\nthree\nfour\nfive\n", BASE).touched).toEqual([]);
+});
+
+test("both sides editing one of two equal lines is a conflict, not two inserts", () => {
+	const pair = merge3({ base: "a\na\n", mine: "b\na\n", theirs: "c\na\n" });
+	expect(pair).toMatchObject({ text: "b\na\n", conflicts: [{ from: 0, to: 2, theirs: "c\n" }] });
+	const blank = merged("x\nmine\n\ny\n", "x\ntheirs\n\ny\n", "x\n\n\ny\n");
+	expect(blank.text).toBe("x\nmine\n\ny\n");
+	expect(blank.conflicts).toEqual([{ from: 2, to: 7, theirs: "theirs\n", base: "\n" }]);
+	const brace = merged(
+		"if (a) {\n  f();\n};\n}\n",
+		"if (a) {\n  f();\n} // done\n}\n",
+		"if (a) {\n  f();\n}\n}\n",
+	);
+	expect(brace.text).toBe("if (a) {\n  f();\n};\n}\n");
+	expect(brace.conflicts).toHaveLength(1);
+});
+
+test("a delete inside a run of equal lines merges with the other side's edit nearby", () => {
+	expect(merged("a\nx\nx\nB\n", "A\nx\nx\nb\n", "a\nx\nx\nx\nb\n").text).toBe("A\nx\nx\nB\n");
+});
+
+test("a disk that deletes a last line without a newline gives a conflict whose Theirs drops it", () => {
+	const result = merged("a\nB", "a", "a\nb");
+	expect(result.text).toBe("a\nB");
+	expect(result.conflicts).toEqual([{ from: 1, to: 3, theirs: "", base: "\nb\n" }]);
 });

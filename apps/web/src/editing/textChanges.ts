@@ -1,8 +1,8 @@
 import type { TextChange } from "@thinkrail/resource-renderers";
 import { diffArrays } from "diff";
 
-const MAX_EDIT_LENGTH = 2000;
-const DIFF_TIMEOUT_MS = 50;
+export const MAX_EDIT_LENGTH = 2000;
+export const DIFF_TIMEOUT_MS = 50;
 
 interface LinePart {
 	value: string[];

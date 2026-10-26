@@ -1,10 +1,7 @@
 import { ChangeSet } from "@codemirror/state";
 import type { EditConflict, TextChange } from "@thinkrail/resource-renderers";
 import { diffArrays } from "diff";
-import { refined, splitLines } from "./textChanges";
-
-const MAX_EDIT_LENGTH = 2000;
-const DIFF_TIMEOUT_MS = 50;
+import { DIFF_TIMEOUT_MS, MAX_EDIT_LENGTH, refined, splitLines } from "./textChanges";
 
 type Side = "mine" | "theirs";
 
@@ -15,7 +12,9 @@ interface Hunk {
 	lines: string[];
 }
 
-export type MergeConflict = Omit<EditConflict, "id">;
+export interface MergeConflict extends Omit<EditConflict, "id"> {
+	base?: string;
+}
 
 export type MergeRange = Pick<EditConflict, "from" | "to">;
 
@@ -40,6 +39,8 @@ function endsLine(text: string): boolean {
 function normalizedLines(text: string): string[] {
 	return splitLines(endsLine(text) ? text : `${text}\n`);
 }
+
+const isInsert = (hunk: Hunk) => hunk.start === hunk.end;
 
 function hunks(base: string[], other: string[], side: Side): Hunk[] | null {
 	const parts = diffArrays(base, other, {
@@ -66,10 +67,41 @@ function hunks(base: string[], other: string[], side: Side): Hunk[] | null {
 		}
 	}
 	if (pending) found.push(pending);
-	return found;
+	return compacted(base, found);
 }
 
-const isInsert = (hunk: Hunk) => hunk.start === hunk.end;
+function joinedAcross(base: readonly string[], left: Hunk, right: Hunk): Hunk | null {
+	if (isInsert(left) && right.lines.length === 0) {
+		let start = right.start;
+		let end = right.end;
+		while (start > left.end && base[start - 1] === base[end - 1]) {
+			start -= 1;
+			end -= 1;
+		}
+		return start === left.end ? { ...left, end } : null;
+	}
+	if (left.lines.length === 0 && isInsert(right)) {
+		let start = left.start;
+		let end = left.end;
+		while (end < right.start && base[start] === base[end]) {
+			start += 1;
+			end += 1;
+		}
+		return end === right.start ? { ...right, start } : null;
+	}
+	return null;
+}
+
+function compacted(base: readonly string[], found: readonly Hunk[]): Hunk[] {
+	const out: Hunk[] = [];
+	for (const hunk of found) {
+		const previous = out.at(-1);
+		const joined = previous ? joinedAcross(base, previous, hunk) : null;
+		if (joined) out[out.length - 1] = joined;
+		else out.push(hunk);
+	}
+	return out;
+}
 
 function sharesLine(a: Hunk, b: Hunk): boolean {
 	if (isInsert(a) && isInsert(b)) return a.start === b.start;
@@ -195,7 +227,13 @@ export function merge3(input: { base: string; mine: string; theirs: string }): M
 			emit(union);
 		} else {
 			emit(mine);
-			conflicts.push({ from, to: length, theirs: theirs.join(""), atEnd: end === base.length });
+			conflicts.push({
+				from,
+				to: length,
+				theirs: theirs.join(""),
+				base: base.slice(start, end).join(""),
+				atEnd: end === base.length,
+			});
 		}
 		if (sides.has("theirs")) touched.push({ from, to: length });
 		const mineChunk = mine.join("");
@@ -230,7 +268,11 @@ export function merge3(input: { base: string; mine: string; theirs: string }): M
 			if (conflict.from > text.length) {
 				return { from: text.length, to: text.length, theirs: `\n${theirs}` };
 			}
-			return { from: conflict.from, to: Math.min(conflict.to, text.length), theirs };
+			const to = Math.min(conflict.to, text.length);
+			if (dropNewline && theirs === "" && conflict.from > 0) {
+				return { from: conflict.from - 1, to, theirs, base: `\n${conflict.base}` };
+			}
+			return { ...conflict, to, theirs };
 		}),
 	};
 }
