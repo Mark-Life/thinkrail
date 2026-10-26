@@ -282,3 +282,59 @@ test("a save that throws while disconnected resumes on reconnect", async () => {
 	await settle();
 	expect(disk.text(PATH)).toBe("aone\ntwo\n");
 });
+
+test("the first keystroke of a burst publishes one summary, already pending", () => {
+	const { handle, summaries } = autoSetup();
+	const before = summaries.length;
+	type(handle, 0, "a");
+	expect(summaries.slice(before)).toEqual([{ status: "dirty", dirty: true, pending: true }]);
+});
+
+test("a file recreated on disk after the timer fired while it was deleted autosaves again", async () => {
+	const { disk, handle, clock, summaries } = autoSetup();
+	type(handle, 0, "a");
+	disk.remove(PATH);
+	handle.readFailed(notFound());
+	clock.advance(AUTOSAVE_MS);
+	await settle();
+	expect(clock.timers()).toBe(0);
+	disk.put(PATH, "one\ntwo\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true, pending: true });
+	clock.advance(AUTOSAVE_MS);
+	await settle();
+	expect(disk.writes).toHaveLength(1);
+	expect(disk.text(PATH)).toBe("aone\ntwo\n");
+});
+
+test("a read never resumes a file paused by a thrown save error, nor does switching to auto", async () => {
+	const { disk, handle, clock, setMode } = autoSetup();
+	const write = disk.io.write;
+	disk.io.write = async () => {
+		throw new Error("socket closed");
+	};
+	type(handle, 0, "a");
+	clock.advance(AUTOSAVE_MS);
+	await settle();
+	disk.io.write = write;
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	setMode("manual");
+	setMode("auto");
+	clock.advance(AUTOSAVE_MS * 3);
+	await settle();
+	expect(clock.timers()).toBe(0);
+	expect(disk.writes).toHaveLength(0);
+});
+
+test("a flush while a save runs queues the newer edit behind it", async () => {
+	const { disk, registry, handle, clock } = autoSetup();
+	type(handle, 0, "a");
+	const release = disk.hold();
+	clock.advance(AUTOSAVE_MS);
+	type(handle, 1, "b");
+	registry.flushAll();
+	expect(disk.writes).toHaveLength(1);
+	release();
+	await settle();
+	expect(disk.writes.map((write) => write.content)).toEqual(["aone\ntwo\n", "abone\ntwo\n"]);
+});

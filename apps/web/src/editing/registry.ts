@@ -27,6 +27,8 @@ import {
 	localEdit,
 	markError,
 	markMissing,
+	mayResumeAutosave,
+	pausedByDisk,
 	reloadFromDisk,
 	resolveConflict,
 	restoreDraft,
@@ -135,13 +137,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 	const autosaving = () => deps.saveMode() === "auto";
 
 	const armIfReady = (entry: Entry) => {
-		if (
-			autosaving() &&
-			canAutosave(entry.state) &&
-			entry.state.issue === null &&
-			isDirty(entry.state)
-		)
-			autosave.arm(entry.key);
+		if (autosaving() && mayResumeAutosave(entry.state)) autosave.arm(entry.key);
 	};
 
 	const draftKey = (entry: Entry): DraftKey => ({
@@ -183,10 +179,11 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		for (const view of entry.views) view(update);
 	};
 
-	const commit = (entry: Entry, next: BufferState, origin: CommitOrigin) => {
+	const commit = (entry: Entry, next: BufferState, origin: CommitOrigin, arm = false) => {
 		const previous = entry.state;
 		if (next === previous || entry.dropped) return false;
 		entry.state = next;
+		if (arm && autosaving()) autosave.arm(entry.key, { notify: false });
 		broadcast(entry, previous, origin);
 		if (bufferText(next) !== bufferText(previous)) {
 			for (const watcher of entry.watchers) watcher();
@@ -202,10 +199,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		return true;
 	};
 
-	const userStep = (entry: Entry, next: BufferState, origin: CommitOrigin) => {
-		if (commit(entry, next, origin) && autosaving() && canAutosave(entry.state))
-			autosave.arm(entry.key);
-	};
+	const userStep = (entry: Entry, next: BufferState, origin: CommitOrigin) =>
+		commit(entry, next, origin, canAutosave(next));
 
 	const notifyEntries = () => {
 		for (const listener of entryListeners) listener();
@@ -282,11 +277,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		}
 		if (!lands(entry, token)) return;
 		const disk = editorDisk(file);
-		commit(
-			entry,
-			disk ? adoptDisk(entry.state, disk) : markError(entry.state, "notEditable"),
-			"other",
-		);
+		const next = disk ? adoptDisk(entry.state, disk) : markError(entry.state, "notEditable");
+		commit(entry, next, "other", pausedByDisk(entry.state) && mayResumeAutosave(next));
 	};
 
 	const runSave = async (entry: Entry, retried = false): Promise<void> => {
@@ -368,9 +360,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		}
 		const next = restoreDraft(entry.state, draft);
 		if (next === entry.state) return;
-		commit(entry, next, "other");
+		commit(entry, next, "other", mayResumeAutosave(next));
 		void writeDraft(entry);
-		armIfReady(entry);
 		deps.onDraftRestored(entry.path);
 	};
 

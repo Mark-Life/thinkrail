@@ -204,7 +204,10 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
 
 - **Only a user step arms the timer:** an editor edit, undo, redo, a conflict choice, Keep mine, and a
   draft restored with no issue (the user's own unsaved text). A merge, a disk adoption and Reload never
-  do, so two dirty windows cannot bounce writes. Each arm restarts the 1,000 ms delay. A step arms only
+  do, so two dirty windows cannot bounce writes. One exception: a read that clears a disk pause (a
+  deleted file recreated, a `stale` conflict cleared by the disk) arms a buffer that could not autosave
+  before, since its timer may have fired and gone during the pause. A buffer that could already
+  autosave never arms on a read, and a read never resumes a `readonly` or thrown-error pause. Each arm restarts the 1,000 ms delay. A step arms only
   when autosave may write the file (`canAutosave`): not for a deleted file, a `readonly` refusal or an
   open conflict of either kind, so a user step never arms a timer that cannot write. A timer armed
   before a merge opened a conflict stays armed; the tab indicator checks the status too.
@@ -215,6 +218,9 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
   unmounting, a change of `activeTabByWorkspace` or `activeWorkspaceId` (hidden panes stay mounted, so a
   tab switch is not an unmount), `visibilitychange` to hidden, and `pagehide`. A flush with nothing armed
   does nothing, and a save of bytes already on disk is a host no-op, so extra flushes cost nothing.
+  With a save already running, a flush only queues the newer edit behind it: a second write has no
+  correct `expect` hash until the first answers. If the page unloads first, the draft written on the
+  same `pagehide` keeps that edit and restores it on the next load.
 - **Paused** is a dirty buffer autosave will not write: status `stale`, `conflict`, `deleted`,
   `readonly` or `error`, or a dirty buffer with no armed timer and no save running (a second `stale`
   answer). A thrown save error pauses that file until the next user step; nothing retries on its own,

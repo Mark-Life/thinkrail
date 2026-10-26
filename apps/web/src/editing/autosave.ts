@@ -38,13 +38,13 @@ export function createAutosave({
 
 	return {
 		isArmed: (key: string) => armed.has(key),
-		arm(key: string) {
+		arm(key: string, { notify = true }: { notify?: boolean } = {}) {
 			const wasArmed = disarm(key);
 			armed.set(
 				key,
 				schedule(() => run(key), delayMs),
 			);
-			if (!wasArmed) changed(key);
+			if (!wasArmed && notify) changed(key);
 		},
 		cancel(key: string) {
 			if (disarm(key)) changed(key);
