@@ -23,6 +23,17 @@ function parseFrame(message: string | Buffer): Record<string, unknown> | null {
 	}
 }
 
+async function firstLineBox(page: Page) {
+	const line = visibleEditor(page).locator(".view-line").first();
+	const measured: { box: Awaited<ReturnType<typeof line.boundingBox>> } = { box: null };
+	await expect(async () => {
+		measured.box = await line.boundingBox();
+		expect(measured.box).not.toBeNull();
+	}).toPass();
+	if (!measured.box) throw new Error("line 1 has no box");
+	return measured.box;
+}
+
 async function commentOnFirstLine(page: Page, body: string) {
 	await visibleEditor(page).locator(".view-line").nth(1).click();
 	const box = await visibleEditor(page).locator(".view-line").first().boundingBox();
@@ -193,9 +204,9 @@ test("undo in a review composer inside the editor leaves the file's history alon
 	await typeAtLineEnd(page, 1, " // saved");
 	await pressPlatformShortcut(page, "s");
 	await expect.poll(() => readFileSync(path, "utf8")).toBe("const a = 1; // saved\n");
+	await expect(fileTab(page, "composer.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
 
-	const box = await visibleEditor(page).locator(".view-line").first().boundingBox();
-	if (!box) throw new Error("line 1 has no box");
+	const box = await firstLineBox(page);
 	await page.mouse.move(box.x + 2, box.y + box.height / 2);
 	await page.mouse.down();
 	await page.mouse.move(box.x + 120, box.y + box.height / 2, { steps: 5 });
