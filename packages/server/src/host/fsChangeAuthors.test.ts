@@ -99,6 +99,13 @@ test("a held path whose claim ends with no write sends nothing", async () => {
 		republish: (payload) => republished.push(payload),
 	});
 	provenance.endTool({ sessionId: "s1", toolCallId: "t1" });
+	provenance.openClaim({ sessionId: "s1", toolCallId: "t2", path, mutates: true, hash: null });
+	writeFileSync(path, "y\n");
+	withFsChangeAuthors(frame(["a.ts"]), {
+		provenance,
+		root: () => dir,
+		republish: (payload) => republished.push(payload),
+	});
 	provenance.forgetSession("s1");
 	await Promise.resolve();
 	expect(republished).toEqual([]);

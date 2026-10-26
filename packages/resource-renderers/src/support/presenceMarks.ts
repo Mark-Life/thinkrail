@@ -23,7 +23,6 @@ interface Mark {
 	paint: PresencePaint;
 	ranges: monaco.editor.IEditorDecorationsCollection;
 	writer: PresenceWriter | null;
-	paintedAt: number;
 	announcedAt: number;
 	flag: monaco.editor.IContentWidget | null;
 	chip: monaco.editor.IOverlayWidget | null;
@@ -75,12 +74,9 @@ export function attachPresence(
 		marks.delete(mark);
 	};
 
-	const render = (mark: Mark) => {
+	const render = (mark: Mark, step: number) => {
 		const writer = mark.writer;
 		if (!writer || mark.paint.kind !== "lines") return;
-		const step = Math.floor(
-			((Date.now() - mark.paintedAt) / PRESENCE_TIMING.washMs) * PRESENCE_TIMING.washSteps,
-		);
 		const washing = step < PRESENCE_TIMING.washSteps;
 		const bar = `presence-bar presence-tone-${writer.tone}${writer.inferred ? " presence-inferred" : ""}`;
 		const label = options.text().hover(writer);
@@ -171,7 +167,6 @@ export function attachPresence(
 		for (const timer of mark.timers) clearTimeout(timer);
 		const now = Date.now();
 		mark.writer = writer;
-		mark.paintedAt = now;
 		const text = options.text();
 		if (mark.paint.kind === "file") {
 			showChip(mark, writer);
@@ -183,7 +178,7 @@ export function attachPresence(
 			.getRanges()
 			.map((range) => ({ startLine: range.startLineNumber, endLine: range.endLineNumber }));
 		absorb(mark, writer);
-		render(mark);
+		render(mark, 0);
 		showFlag(mark, writer);
 		if (spans.length > 0 && now - mark.announcedAt >= PRESENCE_TIMING.flagMs) {
 			mark.announcedAt = now;
@@ -192,7 +187,7 @@ export function attachPresence(
 		const washStep = PRESENCE_TIMING.washMs / PRESENCE_TIMING.washSteps;
 		mark.timers = [
 			...Array.from({ length: PRESENCE_TIMING.washSteps }, (_, index) =>
-				setTimeout(() => render(mark), (index + 1) * washStep),
+				setTimeout(() => render(mark, index + 1), (index + 1) * washStep),
 			),
 			setTimeout(() => clearFlag(mark), PRESENCE_TIMING.flagMs),
 			setTimeout(() => drop(mark), PRESENCE_TIMING.holdMs),
@@ -219,7 +214,6 @@ export function attachPresence(
 					),
 				),
 				writer: null,
-				paintedAt: 0,
 				announcedAt: Number.NEGATIVE_INFINITY,
 				flag: null,
 				chip: null,

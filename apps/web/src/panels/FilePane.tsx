@@ -141,7 +141,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	};
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div className="relative flex h-full min-h-0 flex-col">
 			{showToolbar ? (
 				<div
 					data-testid="resource-view-toggle"
@@ -182,11 +182,6 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				className="relative min-h-0 flex-1"
 				data-file-buffer={editing ? buffer.key : undefined}
 			>
-				<FileWritersChip
-					workspaceId={tab.workspaceId}
-					path={tab.path}
-					className="absolute right-16 bottom-8 z-10"
-				/>
 				<Suspense fallback={loading}>
 					<RendererView
 						key={implementationKey}
@@ -203,6 +198,11 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					/>
 				</Suspense>
 			</div>
+			<FileWritersChip
+				workspaceId={tab.workspaceId}
+				path={tab.path}
+				className="absolute right-16 bottom-8 z-10"
+			/>
 		</div>
 	);
 }
