@@ -63,7 +63,7 @@ describe("presencePaint", () => {
 			before: TEXT,
 			changes: [{ from: 0, to: offsetOf(12), insert: "x\n".repeat(11) }],
 		});
-		expect(paint).toEqual({ kind: "file", changedLines: 11, totalLines: 20 });
+		expect(paint).toEqual({ kind: "file" });
 	});
 
 	test("a mass deletion counts the removed lines, so it is one file mark", () => {
@@ -71,7 +71,7 @@ describe("presencePaint", () => {
 			before: TEXT,
 			changes: [{ from: offsetOf(5), to: TEXT.length, insert: "" }],
 		});
-		expect(paint).toEqual({ kind: "file", changedLines: 16, totalLines: 20 });
+		expect(paint).toEqual({ kind: "file" });
 	});
 
 	test("a small file keeps line marks even when most of it changed", () => {

@@ -2,7 +2,6 @@ export * from "./appStore";
 export type { ChatResourceScope } from "./chatResources";
 export {
 	type FileWriter,
-	type FileWriterTone,
 	fileWriters,
 	isInferredAuthor,
 	nextFileActivityExpiry,

@@ -79,7 +79,6 @@ const NON_COLOR = new Set([
 	"none",
 	"inset",
 	"dashed",
-	"dotted",
 ]);
 
 const COLOR_PREFIX =

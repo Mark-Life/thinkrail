@@ -20,7 +20,7 @@ export interface FileWriter {
 	inferred: boolean;
 }
 
-export interface WorkspaceFileActivity {
+interface WorkspaceFileActivity {
 	paths: Record<string, readonly FileWrite[]>;
 	agents: Readonly<Record<string, number>>;
 	nextAgent: number;
@@ -29,7 +29,7 @@ export interface WorkspaceFileActivity {
 export type FileActivity = Record<string, WorkspaceFileActivity>;
 
 export const NO_FILE_WRITES: readonly FileWrite[] = [];
-export const NO_FILE_WRITERS: readonly FileWriter[] = [];
+const NO_FILE_WRITERS: readonly FileWriter[] = [];
 
 export const isInferredAuthor = (author: FsChangeAuthor) =>
 	author.kind === "external" || (author.kind === "agent" && author.via === "script");

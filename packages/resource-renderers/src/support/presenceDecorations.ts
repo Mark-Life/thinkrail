@@ -13,14 +13,14 @@ const WHOLE_FILE_MIN_LINES = 10;
 const DIFF_MAX_LINES = 12;
 const DIFF_MAX_CHARS = 160;
 
-export interface PresenceSpan {
+interface PresenceSpan {
 	startLine: number;
 	endLine: number;
 }
 
 export type PresencePaint =
 	| { kind: "lines"; spans: PresenceSpan[]; diff: string[] }
-	| { kind: "file"; changedLines: number; totalLines: number };
+	| { kind: "file" };
 
 function applyChanges(before: string, changes: readonly TextChange[]): string {
 	let out = "";
@@ -120,7 +120,7 @@ export function presencePaint(input: {
 	const changedLines = Math.max(spanLines(joined), spanLines(joinSpans(removedSpans)));
 	const totalLines = Math.max(lineCount(input.before), lineCount(after));
 	if (totalLines >= WHOLE_FILE_MIN_LINES && changedLines > totalLines * WHOLE_FILE_SHARE) {
-		return { kind: "file", changedLines, totalLines };
+		return { kind: "file" };
 	}
 	return { kind: "lines", spans: joined, diff: diff.slice(0, DIFF_MAX_LINES) };
 }
