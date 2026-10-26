@@ -26,6 +26,7 @@ const withLine = (text: string, line: number, next: string) =>
 
 async function routeFsAuthors(page: Page) {
 	let agentPath: string | null = null;
+	let author: FsChangeAuthor = AGENT;
 	await page.routeWebSocket(/\/ws(\?|$)/, (browserSocket) => {
 		const serverSocket = browserSocket.connectToServer();
 		browserSocket.onMessage((message) => serverSocket.send(message));
@@ -41,13 +42,14 @@ async function routeFsAuthors(page: Page) {
 				return;
 			}
 			const hash = createHash("sha256").update(readFileSync(agentPath)).digest("hex");
-			const authors = { ...data.authors, [NAME]: { author: AGENT, hash } };
+			const authors = { ...data.authors, [NAME]: { author, hash } };
 			browserSocket.send(JSON.stringify({ ...frame, data: { ...data, authors } }));
 		});
 	});
 	return {
-		agentWrites(path: string | null) {
+		agentWrites(path: string | null, by: FsChangeAuthor = AGENT) {
 			agentPath = path;
+			author = by;
 		},
 	};
 }
@@ -120,4 +122,37 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 		marks(page, selector).evaluate((node) => getComputedStyle(node, "::after").borderLeftStyle);
 	expect(await barStyle(".presence-bar.presence-tone-agent1")).toBe("solid");
 	expect(await barStyle(".presence-bar.presence-tone-external")).toBe("dashed");
+});
+
+test("a save from another window and an agent on one line draw bars in separate slots", async ({
+	page,
+}) => {
+	const authors = await routeFsAuthors(page);
+	const path = await openFile(page, NAME, BASE);
+
+	authors.agentWrites(path);
+	writeFileSync(path, withLine(readFileSync(path, "utf8"), 4, "const v4 = 40;"));
+	await expect(marks(page, ".presence-bar.presence-tone-agent1")).toHaveCount(1, {
+		timeout: 10_000,
+	});
+
+	authors.agentWrites(path, { kind: "user" });
+	writeFileSync(path, withLine(readFileSync(path, "utf8"), 4, "const v4 = 400;"));
+	const userBar = marks(page, ".presence-bar.presence-tone-user");
+	await expect(userBar).toHaveCount(1, { timeout: 10_000 });
+	await expect(userBar).toHaveAttribute("title", "Changed by You, in another window");
+	await expect(marks(page, ".presence-bar.presence-tone-agent1")).toHaveCount(1);
+
+	const barX = (selector: string) =>
+		marks(page, selector).evaluate((node) => {
+			const box = node.getBoundingClientRect();
+			return box.right - Number.parseFloat(getComputedStyle(node, "::after").right);
+		});
+	const userX = await barX(".presence-bar.presence-tone-user");
+	const agentX = await barX(".presence-bar.presence-tone-agent1");
+	expect(Math.abs(userX - agentX)).toBeGreaterThanOrEqual(3);
+	const lane = await marks(page, ".presence-bar.presence-tone-user").evaluate(
+		(node) => node.getBoundingClientRect().left,
+	);
+	expect(userX - 2).toBeGreaterThanOrEqual(lane);
 });

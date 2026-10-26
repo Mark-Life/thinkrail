@@ -372,6 +372,7 @@
    distinct on the review and conflict rails; a short wash, a name flag and a whole-file chip, each in its
    writer's tone. Inferred writers get a dashed bar. */
 .presence-tone-user {
+	--presence-slot: 12px;
 	--presence-tone: var(--primary);
 	--presence-wash: var(--primary-subtle);
 }
