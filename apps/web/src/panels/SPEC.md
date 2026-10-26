@@ -2077,8 +2077,12 @@ own section. The kebab menu (`plan-menu`, a
   rich views), so review threads and commenting hide until a save or Reload: the host anchors a comment
   against disk lines, which no longer match the buffer. A Review panel "go to comment" request that
   arrives meanwhile is dropped, not held for a scroll jump after the save. In auto mode threads stay up
-  through the 1 s autosave window, so they do not collapse and reopen around the cursor on every pause;
-  the trade-off is that a comment added in that window anchors to disk lines up to 1 s old. **`FileEditBanner`** shows one strip per
+  while autosave is pending or writing, so they do not collapse and reopen around the cursor on every pause.
+  Typing keeps that window open, so disk can lag the buffer by any number of lines: adding a comment on a
+  dirty buffer first saves it (`saveFile`) and sends the comment only once the buffer is clean, so the host
+  anchors against the lines the user selected. A save that leaves the buffer dirty (a conflict, offline, a
+  failure) refuses the comment with a toast; the paused file then hides review, so the composer closes
+  and its text is lost. **`FileEditBanner`** shows one strip per
   issue: open same-line conflicts (status `conflict`, with their count and **Mine** / **Theirs** /
   **Both** for the first one: Monaco hides its view zones, and so the editor's lens, from screen
   readers, so the banner is the keyboard and screen-reader path; focus stays on the banner while

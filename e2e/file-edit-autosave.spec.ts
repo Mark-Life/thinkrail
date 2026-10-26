@@ -116,6 +116,59 @@ test("review threads stay mounted while autosave writes the edit", async ({ page
 	expect(counts.filter((count) => count !== 1)).toEqual([]);
 });
 
+test("a comment added before autosave writes saves the file first, so it anchors to the selected line", async ({
+	page,
+}) => {
+	const path = await openFile(page, "anchor.ts", "one\ntwo\nthree\nfour\nfive\nsix\nseven\n");
+	await typeAtLineEnd(page, 1, "");
+	await page.keyboard.press("Enter");
+	await page.keyboard.press("Enter");
+	const line = await visibleEditor(page)
+		.locator(".view-line")
+		.filter({ hasText: /^five$/ })
+		.boundingBox();
+	if (!line) throw new Error("the five line has no box");
+	await page.mouse.move(line.x + 2, line.y + line.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(line.x + 120, line.y + line.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await page.locator('[data-testid="review-add-icon"]:visible').click();
+	await page.getByTestId("review-composer-input").fill("On five");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+
+	expect(readFileSync(path, "utf8")).toBe("one\n\n\ntwo\nthree\nfour\nfive\nsix\nseven\n");
+	const reviewFile = await page.evaluate(async () => {
+		const proto = location.protocol === "https:" ? "wss:" : "ws:";
+		const ws = new WebSocket(`${proto}//${location.host}/ws`);
+		await new Promise((resolve) => {
+			ws.onopen = resolve;
+		});
+		const request = (method: string, params: unknown) =>
+			new Promise<unknown>((resolve) => {
+				const id = `t_${Math.random()}`;
+				ws.addEventListener("message", (event) => {
+					const message = JSON.parse(event.data as string);
+					if (message.id === id) resolve(message.result);
+				});
+				ws.send(JSON.stringify({ id, method, params }));
+			});
+		const projects = (await request("project.list", {})) as { id: string }[];
+		const workspaces = (await request("workspace.list", { projectId: projects[0]?.id })) as {
+			id: string;
+			kind?: string;
+		}[];
+		const workspaceId = workspaces.find((workspace) => workspace.kind !== "default")?.id;
+		const snapshot = (await request("review.get", { workspaceId })) as {
+			comments: { anchor?: { selectors: { kind: string; exact?: string }[] } }[];
+		};
+		ws.close();
+		return snapshot.comments;
+	});
+	const quote = reviewFile[0]?.anchor?.selectors.find((selector) => selector.kind === "textQuote");
+	expect(quote?.exact).toBe("five");
+});
+
 test("closing a file autosave is about to write saves it with no prompt", async ({ page }) => {
 	const path = await openFile(page, "close.ts", BASE);
 	const tab = fileTab(page, "close.ts");

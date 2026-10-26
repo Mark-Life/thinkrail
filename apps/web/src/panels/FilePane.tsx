@@ -14,11 +14,12 @@ import {
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { canEditFile, useFileBuffer, useFileBufferText } from "../editing";
+import { canEditFile, saveFile, useFileBuffer, useFileBufferText } from "../editing";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
-import { selectFileAutosaving, selectFileBufferSummary, useAppStore } from "../store";
+import { selectFileAutosaving, selectFileBufferSummary, toast, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { commentAfterSave } from "./commentAfterSave";
 import { FileEditBanner } from "./FileEditBanner";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
@@ -90,8 +91,21 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
+	const worktreeReview = useMemo(
+		() => ({
+			...review.worktree,
+			commenting: commentAfterSave(review.worktree.commenting, {
+				dirty: () =>
+					selectFileBufferSummary(useAppStore.getState(), tab.workspaceId, tab.path)?.dirty ===
+					true,
+				save: () => saveFile(tab.workspaceId, tab.path),
+				refused: () => toast.error(t("panels.reviewCommenting.unsavedFile")),
+			}),
+		}),
+		[review.worktree, tab.workspaceId, tab.path, t],
+	);
 	const reviewHidden = dirty && !autosaving;
-	const reviewSurface = reviewHidden ? undefined : review.worktree;
+	const reviewSurface = reviewHidden ? undefined : worktreeReview;
 	const heldFocus = reviewHidden ? review.worktree.focus : null;
 	const dropFocus = review.worktree.onFocusHandled;
 	useEffect(() => {

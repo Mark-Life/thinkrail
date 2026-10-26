@@ -1023,6 +1023,7 @@
 	"panels.reviewCommenting.deleteFailed": "Couldn't delete the draft",
 	"panels.reviewCommenting.hostTooOld": "This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.",
 	"panels.reviewCommenting.saveFailed": "Couldn't save the comment",
+	"panels.reviewCommenting.unsavedFile": "Couldn't add the comment: the file's edits could not be saved first",
 	"panels.reviewCommenting.updateFailed": "Couldn't update the comment",
 	"panels.reviewZones.line": "Line {{line}}",
 	"panels.reviewZones.lines": "Lines {{start}}–{{end}}",
