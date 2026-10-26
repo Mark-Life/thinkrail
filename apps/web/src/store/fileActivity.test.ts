@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import type { FsChangeWrite, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
 import {
@@ -122,7 +122,7 @@ describe("the store slice", () => {
 		s().noteFsChanged({ ...frame({}), paths: ["b.ts"], authors: undefined });
 		expect(s().fileActivityByWorkspace).toBe(before);
 
-		s().pruneFileActivity(Date.now() + FILE_ACTIVITY_WINDOW_MS);
+		s().expireFileActivity();
 		expect(selectFileWrites(s(), "ws", "a.ts")).toHaveLength(0);
 
 		s().noteFsChanged(frame({ "a.ts": write(agent("s1"), "h2") }));
@@ -130,5 +130,19 @@ describe("the store slice", () => {
 		expect(s().fileActivityByWorkspace.ws).toBeUndefined();
 		s().noteFsChanged(frame({ "a.ts": write(agent("s1"), "h3") }));
 		expect(s().fileActivityByWorkspace.ws).toBeUndefined();
+	});
+
+	test("a prune timer that fires before the wall clock reaches the expiry still prunes", () => {
+		useAppStore.setState({ fileActivityByWorkspace: {}, removedWorkspaceIds: {} });
+		const s = () => useAppStore.getState();
+		setSystemTime(new Date(1_000_000));
+		try {
+			s().noteFsChanged(frame({ "a.ts": write(agent("s1"), "h1") }));
+			setSystemTime(new Date(1_000_000 + FILE_ACTIVITY_WINDOW_MS - 5));
+			s().expireFileActivity();
+			expect(selectFileWrites(s(), "ws", "a.ts")).toHaveLength(0);
+		} finally {
+			setSystemTime();
+		}
 	});
 });

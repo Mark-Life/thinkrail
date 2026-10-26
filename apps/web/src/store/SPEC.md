@@ -574,9 +574,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   tick: per path the newest 8 writes (`{author, hash, seen}`, `seen` the client clock), newest first, one
   per author and hash. `agents` maps each session to the slot it got at first sight (`nextAgent` counts
   up), so its tone (`agent1..3`, cycling) never shifts while it stays. Past 64 sessions the oldest one with
-  no live write gives up its slot. A missing author is unknown, never `external`. **`pruneFileActivity(now)`** drops writes
-  older than 60 s; `panels`' `useFileActivityPrune` (mounted once in `Shell`)
-  calls it at `nextFileActivityExpiry`, so selectors never read the clock. **`selectFileWrites`** returns the
+  no live write gives up its slot. A missing author is unknown, never `external`. **`expireFileActivity()`** drops writes
+  older than 60 s at `nextFileActivityExpiry` or the clock, whichever is later; `panels`' `useFileActivityPrune`
+  (mounted once in `Shell`) calls it when that expiry is due, so a timer that fires before the wall clock reaches
+  it still prunes, and selectors never read the clock. **`selectFileWrites`** returns the
   stored array (user writes included, so the editor's newest write can be the user's) and
   **`selectFileAgentSlots`** the slot map. The barrel exports what `panels` derives from them:
   `fileWriters` (the distinct non-user writers, newest first), `writerTone`, `writerId`,

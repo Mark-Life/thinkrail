@@ -185,7 +185,7 @@ export function useFileActivityPrune() {
 	useEffect(() => {
 		if (expiry === null) return;
 		const timer = setTimeout(
-			() => useAppStore.getState().pruneFileActivity(Date.now()),
+			() => useAppStore.getState().expireFileActivity(),
 			Math.max(0, expiry - Date.now()),
 		);
 		return () => clearTimeout(timer);

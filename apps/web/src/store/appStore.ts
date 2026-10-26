@@ -101,7 +101,12 @@ import {
 	type ChatResourceSnapshots,
 	staleChatResources,
 } from "./chatResources";
-import { type FileActivity, pruneFileActivity, withFsChangeActivity } from "./fileActivity";
+import {
+	type FileActivity,
+	nextFileActivityExpiry,
+	pruneFileActivity,
+	withFsChangeActivity,
+} from "./fileActivity";
 import {
 	type FileBufferSummaries,
 	type FileBufferSummary,
@@ -1026,7 +1031,7 @@ interface AppState {
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	fileBuffersByWorkspace: FileBufferSummaries;
 	fileActivityByWorkspace: FileActivity;
-	pruneFileActivity: (now: number) => void;
+	expireFileActivity: () => void;
 	setFileBufferSummary: (
 		workspaceId: string,
 		path: string,
@@ -3215,9 +3220,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {}),
 			};
 		}),
-	pruneFileActivity: (now) =>
+	expireFileActivity: () =>
 		set((s) => {
-			const next = pruneFileActivity(s.fileActivityByWorkspace, now);
+			const due = nextFileActivityExpiry(s.fileActivityByWorkspace);
+			if (due === null) return s;
+			const next = pruneFileActivity(s.fileActivityByWorkspace, Math.max(due, Date.now()));
 			return next === s.fileActivityByWorkspace ? s : { fileActivityByWorkspace: next };
 		}),
 	setFileBufferSummary: (workspaceId, path, summary) =>
