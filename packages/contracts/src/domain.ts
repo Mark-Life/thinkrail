@@ -237,6 +237,7 @@ export interface WorkspaceFsChangedPayload {
 	paths: string[];
 	truncated: boolean;
 	skillChange: WorkspaceSkillChange;
+	authors?: Record<string, FsChangeWrite>;
 }
 
 export type FileKind = "file" | "dir";
@@ -270,6 +271,14 @@ export type FileAuthor =
 export interface FileLastWrite {
 	author: FileAuthor;
 	at: number;
+}
+
+export type FsChangeAuthor = { kind: "user" } | Exclude<FileAuthor, { kind: "user" }>;
+
+export interface FsChangeWrite {
+	author: FsChangeAuthor;
+	at: number;
+	hash: string | null;
 }
 
 export interface FileRead extends FileContent {

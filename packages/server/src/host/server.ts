@@ -116,6 +116,7 @@ import {
 	setWorkspacePublisher,
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
+import { withFsChangeAuthors } from "./fsChangeAuthors";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -653,7 +654,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
 		server.publish(
 			WS_CHANNELS.workspaceFsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
+			JSON.stringify({
+				channel: WS_CHANNELS.workspaceFsChanged,
+				data: withFsChangeAuthors(payload),
+			}),
 		);
 		reanchorWorkspace(payload.workspaceId);
 		if (

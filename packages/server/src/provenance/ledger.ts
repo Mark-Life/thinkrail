@@ -1,8 +1,8 @@
 import { statSync } from "node:fs";
 import { sep } from "node:path";
-import type { FileAuthor, FileLastWrite } from "@thinkrail/contracts";
+import type { FileAuthor, FileLastWrite, FsChangeWrite } from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
-import { editorText, type FileSnapshot, fileKey, firstChangedLine } from "./snapshot";
+import { editorText, type FileSnapshot, fileKey, firstChangedLine, readSnapshot } from "./snapshot";
 
 export type WriteAuthor =
 	| { kind: "user"; clientKey: string }
@@ -79,6 +79,7 @@ const TEXT_MAX_BYTES = 4 * TEXT_MAX_CHARS;
 const UNREAD_RECENT_MS = 10 * 60 * 1000;
 const WINDOW_SLACK_MS = 2000;
 const WINDOW_GRACE_MS = 1500;
+const CHANGE_FRESH_MS = 10_000;
 
 function touch<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
 	map.delete(key);
@@ -111,6 +112,10 @@ function changedLine(before: () => string | null | undefined, after: () => strin
 	if (old === undefined || old === null) return undefined;
 	const next = after();
 	return next === null ? undefined : firstChangedLine(old, next);
+}
+
+function wireChangeAuthor(author: WriteAuthor): FsChangeWrite["author"] {
+	return author.kind === "user" ? { kind: "user" } : author;
 }
 
 const textId = (key: string, hash: string) => `${key}\n${hash}`;
@@ -461,6 +466,23 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		return undefined;
 	}
 
+	function changeWrite(path: string): FsChangeWrite | undefined {
+		const key = fileKey(path);
+		const newest = writes.get(key)?.at(-1);
+		if (!newest && !windows.some((window) => within(key, window.root))) return undefined;
+		for (const claim of claims.values()) if (claim.key === key && claim.mutates) return undefined;
+		const snapshot = readSnapshot(path);
+		const fresh = (at: number) => now() - at <= CHANGE_FRESH_MS;
+		if (!snapshot) {
+			if (!newest || newest.hash !== null || !fresh(newest.at)) return undefined;
+			return { author: wireChangeAuthor(newest.author), at: newest.at, hash: null };
+		}
+		const last = lastWrite({ path, hash: snapshot.hash, clientKey: "" });
+		if (!last || !fresh(last.at)) return undefined;
+		const author = last.author.kind === "user" ? { kind: "user" as const } : last.author;
+		return { author, at: last.at, hash: snapshot.hash };
+	}
+
 	function forgetSession(sessionId: string): void {
 		reads.delete(sessionId);
 		for (const [id, claim] of claims) if (claim.sessionId === sessionId) claims.delete(id);
@@ -481,6 +503,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		closeBashWindow,
 		endTool,
 		lastWrite,
+		changeWrite,
 		forgetSession,
 	};
 }
