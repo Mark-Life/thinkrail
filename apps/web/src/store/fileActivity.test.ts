@@ -184,4 +184,18 @@ describe("the store slice", () => {
 			setSystemTime();
 		}
 	});
+
+	test("an authors-only frame folds its author without a second invalidation", () => {
+		useAppStore.setState({
+			fileActivityByWorkspace: {},
+			fsChangesByWorkspace: {},
+			removedWorkspaceIds: {},
+		});
+		const s = () => useAppStore.getState();
+		s().noteFsChanged({ ...frame({}), paths: ["a.ts"], authors: undefined });
+		const change = s().fsChangesByWorkspace.ws;
+		s().noteFsChanged({ ...frame({ "a.ts": write(agent("s1"), "h1") }), authorsOnly: true });
+		expect(s().fsChangesByWorkspace.ws).toBe(change);
+		expect(selectFileWrites(s(), "ws", "a.ts").map((entry) => entry.hash)).toEqual(["h1"]);
+	});
 });

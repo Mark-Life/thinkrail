@@ -60,7 +60,7 @@ test("a frame with no known author, a truncated frame and a pathless frame stay 
 	expect(withFsChangeAuthors(pathless, { provenance, root })).toBe(pathless);
 });
 
-test("a path held back by an agent claim is published again, alone, with its author", async () => {
+test("a path held back by an agent claim is sent again as an authors-only frame", async () => {
 	const provenance = createProvenance();
 	const path = join(dir, "a.ts");
 	const agent = { kind: "agent", sessionId: "s1", via: "tool", toolName: "edit" } as const;
@@ -71,8 +71,7 @@ test("a path held back by an agent claim is published again, alone, with its aut
 	const options = {
 		provenance,
 		root: () => dir,
-		republish: (payload: WorkspaceFsChangedPayload) =>
-			republished.push(withFsChangeAuthors(payload, options)),
+		republish: (payload: WorkspaceFsChangedPayload) => republished.push(payload),
 	};
 	expect(withFsChangeAuthors(frame(["a.ts"]), options).authors).toBeUndefined();
 
@@ -80,8 +79,29 @@ test("a path held back by an agent claim is published again, alone, with its aut
 	provenance.endTool({ sessionId: "s1", toolCallId: "t1" });
 	await Promise.resolve();
 	expect(republished).toEqual([
-		{ ...frame(["a.ts"]), authors: { "a.ts": { author: agent, hash: hashBytes(content) } } },
+		{
+			...frame(["a.ts"]),
+			authorsOnly: true,
+			authors: { "a.ts": { author: agent, hash: hashBytes(content) } },
+		},
 	]);
+});
+
+test("a held path whose claim ends with no write sends nothing", async () => {
+	const provenance = createProvenance();
+	const path = join(dir, "a.ts");
+	writeFileSync(path, "x\n");
+	provenance.openClaim({ sessionId: "s1", toolCallId: "t1", path, mutates: true, hash: null });
+	const republished: WorkspaceFsChangedPayload[] = [];
+	withFsChangeAuthors(frame(["a.ts"]), {
+		provenance,
+		root: () => dir,
+		republish: (payload) => republished.push(payload),
+	});
+	provenance.endTool({ sessionId: "s1", toolCallId: "t1" });
+	provenance.forgetSession("s1");
+	await Promise.resolve();
+	expect(republished).toEqual([]);
 });
 
 test("a root file whose name starts with two dots gets an author; a parent path does not", () => {

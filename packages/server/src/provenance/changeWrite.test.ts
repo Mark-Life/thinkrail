@@ -139,8 +139,8 @@ test("a path held back by an open claim calls back once the claim closes", async
 	const path = put("late.ts", "a\n");
 	provenance.openClaim({ sessionId: "s1", toolCallId: "t1", path, mutates: true, hash: null });
 	writeFileSync(path, "agent\n");
-	let late = 0;
-	expect(provenance.changeWrite(path, () => late++)).toBeUndefined();
+	const late: unknown[] = [];
+	expect(provenance.changeWrite(path, (write) => late.push(write))).toBeUndefined();
 	provenance.recordWrite({
 		path,
 		author: AGENT,
@@ -150,6 +150,45 @@ test("a path held back by an open claim calls back once the claim closes", async
 	});
 	provenance.endTool({ sessionId: "s1", toolCallId: "t1" });
 	await Promise.resolve();
-	expect(late).toBe(1);
+	expect(late).toEqual([{ author: AGENT, hash: hashBytes(bytes("agent\n")) }]);
 	expect(provenance.changeWrite(path)?.author).toEqual(AGENT);
+});
+
+test("a user save queued ahead of the agent's record still leaves the held version to the agent", async () => {
+	const provenance = store();
+	const path = put("race.ts", "a\n");
+	provenance.recordRead({ sessionId: "s1", path, bytes: bytes("a\n") });
+	provenance.openClaim({
+		sessionId: "s1",
+		toolCallId: "t1",
+		path,
+		mutates: true,
+		hash: hashBytes(bytes("a\n")),
+	});
+	writeFileSync(path, "agent\n");
+	const late: unknown[] = [];
+	expect(provenance.changeWrite(path, (write) => late.push(write))).toBeUndefined();
+	writeFileSync(path, "agent\nmine\n");
+	provenance.recordWrite({ path, author: USER, before: null, after: bytes("agent\nmine\n") });
+	provenance.recordWrite({
+		path,
+		author: AGENT,
+		before: null,
+		after: bytes("agent\nmine\n"),
+		toolCallId: "t1",
+	});
+	await Promise.resolve();
+	expect(late).toEqual([{ author: AGENT, hash: hashBytes(bytes("agent\n")) }]);
+});
+
+test("a held path the closing tool never recorded calls back nothing", async () => {
+	const provenance = store();
+	const path = put("same.ts", "a\n");
+	const late: unknown[] = [];
+	provenance.openClaim({ sessionId: "s1", toolCallId: "t2", path, mutates: true, hash: null });
+	writeFileSync(path, "outside\n");
+	provenance.changeWrite(path, (write) => late.push(write));
+	provenance.endTool({ sessionId: "s1", toolCallId: "t2" });
+	await Promise.resolve();
+	expect(late).toEqual([]);
 });

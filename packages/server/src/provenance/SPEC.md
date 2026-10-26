@@ -61,8 +61,12 @@ uses the same data to tell an agent that someone changed a file under it.
     its mtime is under 10 s old, or, for an untracked path, a bash window covers that fresh mtime. So
     a build writing 100 untracked files costs no reads, and neither does a later build after an agent
     bash call. While a mutating claim on the path is open it answers nothing (pi wrote, but the re-read
-    has not recorded it yet, so the guess would be `external`) and keeps `late`, which runs once that
-    claim closes, so the caller can ask again. It also answers nothing for a version older than 10 s or
+    has not recorded it yet, so the guess would be `external`). It reads the hash on disk instead and keeps it
+    with `late`. When the claim closes, `late` gets that version's author: the newest entry with that hash
+    written during the claim, or else the closing agent when its own `recordWrite` closed the claim and the
+    hash differs from the claim's start. That second case covers a user save that the mutation queue ran
+    before the agent's record, which then never appends an agent entry. A close from `endTool` or
+    `forgetSession` never names the agent, and a version with no author calls `late` not at all. It also answers nothing for a version older than 10 s or
     a file it cannot read. Otherwise it is `lastWrite` with the user's client dropped, plus the hash; a
     recorded delete answers its author with `hash: null`.
   - `forgetSession` drops one session's baselines and claims and closes its windows.

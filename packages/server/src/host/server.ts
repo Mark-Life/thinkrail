@@ -651,14 +651,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		server.publish(channel, JSON.stringify({ channel, data }));
 	});
 
-	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
+	const sendFsChanged = (data: WorkspaceFsChangedPayload) =>
 		server.publish(
 			WS_CHANNELS.workspaceFsChanged,
-			JSON.stringify({
-				channel: WS_CHANNELS.workspaceFsChanged,
-				data: withFsChangeAuthors(payload, { republish: publishFsChanged }),
-			}),
+			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data }),
 		);
+	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
+		sendFsChanged(withFsChangeAuthors(payload, { republish: sendFsChanged }));
 		reanchorWorkspace(payload.workspaceId);
 		if (
 			payload.truncated ||

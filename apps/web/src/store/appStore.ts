@@ -3202,10 +3202,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	noteFsChanged: (payload) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[payload.workspaceId]) return {};
+			const activity = withFsChangeActivity(s.fileActivityByWorkspace, payload, Date.now());
+			if (payload.authorsOnly) {
+				return activity === s.fileActivityByWorkspace ? {} : { fileActivityByWorkspace: activity };
+			}
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
 			const tick = (prev?.tick ?? 0) + 1;
 			const skillChanged = payload.skillChange !== "none";
-			const activity = withFsChangeActivity(s.fileActivityByWorkspace, payload, Date.now());
 			return {
 				fsChangesByWorkspace: {
 					...s.fsChangesByWorkspace,

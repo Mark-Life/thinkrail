@@ -36,12 +36,14 @@ export function withFsChangeAuthors(
 		const abs = insideRoot(root, path);
 		const late =
 			republish &&
-			(() =>
+			((write: FsChangeWrite) =>
 				republish({
 					workspaceId: payload.workspaceId,
 					paths: [path],
 					truncated: false,
 					skillChange: "none",
+					authorsOnly: true,
+					authors: { [path]: write },
 				}));
 		const write = abs === null ? undefined : provenance.changeWrite(abs, late);
 		if (write) authors[path] = write;

@@ -238,6 +238,7 @@ export interface WorkspaceFsChangedPayload {
 	truncated: boolean;
 	skillChange: WorkspaceSkillChange;
 	authors?: Record<string, FsChangeWrite>;
+	authorsOnly?: true;
 }
 
 export type FileKind = "file" | "dir";

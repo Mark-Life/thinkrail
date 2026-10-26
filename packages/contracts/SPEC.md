@@ -798,7 +798,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   variant reduced to `{kind:"user"}`: the frame is one broadcast, so it cannot say which client saved.
   `hash` is the version's hash (`null` for a delete), which lets a client pair the author with the change
   its buffer merged. A path missing from `authors` is unknown, never `external`; an older host sends no
-  `authors`, and an older client ignores it, so the field needs no version gate.
+  `authors`, and an older client ignores it, so the field needs no version gate. **`authorsOnly: true`** marks a
+  frame that only adds `authors` for paths an earlier frame already invalidated: a client folds the authors and
+  re-reads nothing. An older client treats it as one more nudge, which is harmless.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
   in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:

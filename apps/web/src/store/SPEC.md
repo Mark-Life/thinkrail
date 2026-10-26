@@ -571,7 +571,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `applyWorkspaceRemoved` drops a removed workspace's entry. The **file activity slice** (`fileActivity.ts`)
   — **`fileActivityByWorkspace: Record<workspaceId, {paths, agents, nextAgent}>`** — is who
   wrote each file lately. `noteFsChanged` folds a frame's optional `authors` in the same `set` as the
-  tick: per path the newest 8 writes by others plus the newest save of this client (`{author, hash, seen}`,
+  tick; an `authorsOnly` frame folds its authors and leaves the tick and paths alone: per path the newest 8 writes by others plus the newest save of this client (`{author, hash, seen}`,
   `seen` the client clock), newest first, one per author and hash, so your own autosaves never push another
   writer out before 60 s. A frame's `user` author becomes `{kind: "user", mine}`: `mine` when the hash is one
   this client saved in the last minute (`noteOwnFileSave`, the newest 4 per path in `saves`). `agents` maps each session to the slot it got at first sight (`nextAgent` counts

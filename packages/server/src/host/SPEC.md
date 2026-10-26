@@ -472,8 +472,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   with the asking client's key; an unknown author leaves the field out. Every `workspace.fsChanged`
   publish runs `withFsChangeAuthors` (`fsChangeAuthors.ts`): it reads the worktree root once per frame,
   and each path of a non-truncated frame that stays under it gets `fileProvenance.changeWrite`'s answer, when it has one, under
-  `authors`. A path held back by an open agent claim is published again, alone, once that claim
-  closes, so the agent's own write still reaches clients with its author. The frame is still one
+  `authors`. A path held back by an open agent claim is sent again, alone, once that claim
+  closes and only when the ledger names an author: an `authorsOnly` frame that goes straight to clients, with no
+  second `withFsChangeAuthors`, reanchor or MCP reconcile, so the agent's own write still reaches clients with its author. The frame is still one
   broadcast, so a user author carries no client.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
