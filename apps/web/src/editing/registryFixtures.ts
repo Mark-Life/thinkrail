@@ -4,6 +4,7 @@ import type { FileBufferSummary } from "../store";
 import { RequestError } from "../transport";
 import type { Schedule } from "./autosave";
 import type { Draft, DraftKey, DraftStore } from "./drafts";
+import { AUTOSAVE_DELAY_MS } from "./keys";
 import { createBufferRegistry, type FileIo } from "./registry";
 
 export const WS = "ws-1";
@@ -114,8 +115,6 @@ export function fakeClock() {
 	return { schedule, advance, timers: () => timers.size };
 }
 
-export const AUTOSAVE_MS = 1000;
-
 export function setup(
 	options: {
 		text?: string;
@@ -145,7 +144,7 @@ export function setup(
 		onDraftRestored: (path) => restored.push(path),
 		draftDelayMs: 5,
 		saveMode: options.mode ?? (() => "manual"),
-		autosaveDelayMs: AUTOSAVE_MS,
+		autosaveDelayMs: AUTOSAVE_DELAY_MS,
 		schedule: clock.schedule,
 	});
 	const file = disk.content(PATH);

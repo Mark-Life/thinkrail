@@ -10,11 +10,10 @@ import {
 	supportsFileWrite,
 } from "../transport";
 import { indexedDbDrafts, nativeDrafts, nativeEditingBridge, pageDraftOwner } from "./drafts";
-import { fileBufferKey, isEditableMeta } from "./keys";
+import { AUTOSAVE_DELAY_MS, fileBufferKey, isEditableMeta } from "./keys";
 import type { BufferRegistry, FileIo } from "./registry";
 
 const DRAFT_DELAY_MS = 300;
-const AUTOSAVE_DELAY_MS = 1000;
 
 export function syncFileTabs(workspaceId: string, path: string, file: FileContent, tick: number) {
 	const state = useAppStore.getState();

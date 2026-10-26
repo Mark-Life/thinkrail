@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { FILE_SAVE_MODE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
+import { AUTOSAVE_DELAY_MS } from "@/editing";
 import { platformShortcutLabel } from "@/lib";
 import { FileSaveModeSwitch } from "./FileSaveModeSettings";
 
@@ -23,4 +24,10 @@ test("the description names the platform's save shortcut", () => {
 	const html = render(FILE_SAVE_MODE_PROTOCOL_VERSION, "auto");
 	expect(html).toContain(platformShortcutLabel("S"));
 	expect(html).not.toContain("Cmd/Ctrl");
+});
+
+test("the description states the autosave delay the editor uses", () => {
+	expect(render(FILE_SAVE_MODE_PROTOCOL_VERSION, "auto")).toContain(
+		`Save edited files ${AUTOSAVE_DELAY_MS / 1000} second`,
+	);
 });

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { FileSaveMode } from "@thinkrail/contracts";
 import { selectFileSaveIndicator } from "../store";
+import { AUTOSAVE_DELAY_MS } from "./keys";
 import {
-	AUTOSAVE_MS,
 	DRAFT_ID,
 	memoryDrafts,
 	notFound,
@@ -29,9 +29,9 @@ test("typing autosaves after the last edit with no explicit save", async () => {
 	const { disk, handle, clock, summaries } = autoSetup();
 	type(handle, 0, "a");
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true, pending: true });
-	clock.advance(AUTOSAVE_MS - 100);
+	clock.advance(AUTOSAVE_DELAY_MS - 100);
 	type(handle, 1, "b");
-	clock.advance(AUTOSAVE_MS - 100);
+	clock.advance(AUTOSAVE_DELAY_MS - 100);
 	expect(disk.writes).toHaveLength(0);
 	clock.advance(100);
 	await settle();
@@ -42,7 +42,7 @@ test("typing autosaves after the last edit with no explicit save", async () => {
 test("manual mode never arms a timer", async () => {
 	const { disk, handle, clock, summaries } = setup();
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS * 5);
+	clock.advance(AUTOSAVE_DELAY_MS * 5);
 	await settle();
 	expect(disk.writes).toHaveLength(0);
 	expect(clock.timers()).toBe(0);
@@ -59,7 +59,7 @@ test("flush writes at once, and Cmd/Ctrl+S cancels the timer", async () => {
 	await registry.save(handle.key);
 	expect(disk.writes).toHaveLength(2);
 	expect(clock.timers()).toBe(0);
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	registry.flush(handle.key);
 	await settle();
 	expect(disk.writes).toHaveLength(2);
@@ -68,7 +68,7 @@ test("flush writes at once, and Cmd/Ctrl+S cancels the timer", async () => {
 test("the echo of our own save and a disk change never arm the timer", async () => {
 	const { disk, handle, clock } = autoSetup();
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	handle.adoptRead(disk.content(PATH), handle.readToken());
 	expect(clock.timers()).toBe(0);
@@ -76,7 +76,7 @@ test("the echo of our own save and a disk change never arm the timer", async () 
 	handle.adoptRead(disk.content(PATH), handle.readToken());
 	expect(handle.session.snapshot()).toBe("aone\nTWO\n");
 	expect(clock.timers()).toBe(0);
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.writes).toHaveLength(1);
 });
@@ -84,10 +84,10 @@ test("the echo of our own save and a disk change never arm the timer", async () 
 test("a merge does not restart the timer a user edit armed", async () => {
 	const { disk, handle, clock } = autoSetup();
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS / 2);
+	clock.advance(AUTOSAVE_DELAY_MS / 2);
 	disk.put(PATH, "one\nTWO\n");
 	handle.adoptRead(disk.content(PATH), handle.readToken());
-	clock.advance(AUTOSAVE_MS / 2);
+	clock.advance(AUTOSAVE_DELAY_MS / 2);
 	await settle();
 	expect(disk.writes.map((write) => write.content)).toEqual(["aone\nTWO\n"]);
 });
@@ -98,14 +98,14 @@ test("a same-line conflict pauses autosave and resolving it resumes", async () =
 	disk.put(PATH, "theirs\ntwo\n");
 	handle.adoptRead(disk.content(PATH), handle.readToken());
 	type(handle, 0, "x");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.writes).toHaveLength(0);
 	expect(summaries.at(-1)).toMatchObject({ status: "conflict", dirty: true });
 	expect(summaries.at(-1)?.pending).toBeUndefined();
 	handle.session.resolveConflict(handle.session.conflicts()[0]?.id ?? 0, "mine");
 	expect(summaries.at(-1)?.pending).toBe(true);
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.text(PATH)).toBe("xmine one\ntwo\n");
 });
@@ -119,15 +119,15 @@ test("after a thrown save error the file waits for the next edit", async () => {
 		throw new Error("socket closed");
 	};
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
-	clock.advance(AUTOSAVE_MS * 10);
+	clock.advance(AUTOSAVE_DELAY_MS * 10);
 	await settle();
 	expect(calls).toBe(1);
 	expect(summaries.at(-1)).toEqual({ status: "error", dirty: true, error: "failed" });
 	disk.io.write = write;
 	type(handle, 1, "b");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.text(PATH)).toBe("abone\ntwo\n");
 });
@@ -137,7 +137,7 @@ test("a deleted file is never re-created by autosave, only by an explicit save",
 	disk.remove(PATH);
 	handle.readFailed(notFound());
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.writes).toHaveLength(0);
 	await registry.save(handle.key);
@@ -148,11 +148,11 @@ test("an IME composition defers the write until it ends", async () => {
 	const { disk, handle, clock } = autoSetup();
 	handle.session.setComposing?.(true);
 	type(handle, 0, "か");
-	clock.advance(AUTOSAVE_MS * 3);
+	clock.advance(AUTOSAVE_DELAY_MS * 3);
 	await settle();
 	expect(disk.writes).toHaveLength(0);
 	handle.session.setComposing?.(false);
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.text(PATH)).toBe("かone\ntwo\n");
 });
@@ -161,12 +161,12 @@ test("a save that failed offline autosaves once the reconnect read clears it", a
 	let connected = false;
 	const { disk, registry, handle, clock, summaries } = autoSetup({ connected: () => connected });
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(summaries.at(-1)).toMatchObject({ status: "error", error: "offline" });
 	connected = true;
 	await registry.reconcileAll();
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.text(PATH)).toBe("aone\ntwo\n");
 });
@@ -176,12 +176,12 @@ test("switching to manual cancels timers; switching to auto arms every savable d
 	type(handle, 0, "a");
 	setMode("manual");
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true });
-	clock.advance(AUTOSAVE_MS * 2);
+	clock.advance(AUTOSAVE_DELAY_MS * 2);
 	await settle();
 	expect(disk.writes).toHaveLength(0);
 	setMode("auto");
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true, pending: true });
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.text(PATH)).toBe("aone\ntwo\n");
 });
@@ -200,7 +200,7 @@ test("a draft restored on the same base autosaves; one typed on another version 
 		drafts: memoryDrafts({ [DRAFT_ID]: { text: "draft\n", baseHash: "rev-1", owner: "page-x" } }),
 	});
 	await settle();
-	same.clock.advance(AUTOSAVE_MS);
+	same.clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(same.disk.text(PATH)).toBe("draft\n");
 
@@ -208,7 +208,7 @@ test("a draft restored on the same base autosaves; one typed on another version 
 		drafts: memoryDrafts({ [DRAFT_ID]: { text: "draft\n", baseHash: "rev-0", owner: "page-x" } }),
 	});
 	await settle();
-	other.clock.advance(AUTOSAVE_MS);
+	other.clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(other.disk.writes).toHaveLength(0);
 	expect(other.summaries.at(-1)).toMatchObject({ status: "stale", dirty: true });
@@ -240,7 +240,7 @@ test("a read-only file is not retried by autosave, only by an explicit save", as
 	};
 	for (const at of [0, 1, 2]) {
 		type(handle, at, "a");
-		clock.advance(AUTOSAVE_MS);
+		clock.advance(AUTOSAVE_DELAY_MS);
 		await settle();
 	}
 	expect(disk.writes).toHaveLength(1);
@@ -256,7 +256,7 @@ test("an edit in a file autosave cannot write arms no timer", async () => {
 	type(handle, 0, "mine ");
 	disk.put(PATH, "theirs\ntwo\n");
 	handle.adoptRead(disk.content(PATH), handle.readToken());
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	const before = summaries.length;
 	type(handle, 0, "x");
@@ -274,13 +274,13 @@ test("a save that throws while disconnected resumes on reconnect", async () => {
 		throw new Error("fs.writeFile timed out");
 	};
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(summaries.at(-1)).toMatchObject({ status: "error", error: "offline" });
 	disk.io.write = write;
 	connected = true;
 	await registry.reconcileAll();
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.text(PATH)).toBe("aone\ntwo\n");
 });
@@ -297,13 +297,13 @@ test("a file recreated on disk after the timer fired while it was deleted autosa
 	type(handle, 0, "a");
 	disk.remove(PATH);
 	handle.readFailed(notFound());
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(clock.timers()).toBe(0);
 	disk.put(PATH, "one\ntwo\n");
 	handle.adoptRead(disk.content(PATH), handle.readToken());
 	expect(summaries.at(-1)).toEqual({ status: "dirty", dirty: true, pending: true });
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	expect(disk.writes).toHaveLength(1);
 	expect(disk.text(PATH)).toBe("aone\ntwo\n");
@@ -316,13 +316,13 @@ test("a read never resumes a file paused by a thrown save error, nor does switch
 		throw new Error("socket closed");
 	};
 	type(handle, 0, "a");
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	disk.io.write = write;
 	handle.adoptRead(disk.content(PATH), handle.readToken());
 	setMode("manual");
 	setMode("auto");
-	clock.advance(AUTOSAVE_MS * 3);
+	clock.advance(AUTOSAVE_DELAY_MS * 3);
 	await settle();
 	expect(clock.timers()).toBe(0);
 	expect(disk.writes).toHaveLength(0);
@@ -332,7 +332,7 @@ test("a flush while a save runs queues the newer edit behind it", async () => {
 	const { disk, registry, handle, clock } = autoSetup();
 	type(handle, 0, "a");
 	const release = disk.hold();
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	type(handle, 1, "b");
 	registry.flushAll();
 	expect(disk.writes).toHaveLength(1);
@@ -345,7 +345,7 @@ test("a save queued behind a running one keeps the file autosaving through the e
 	const { disk, registry, handle, clock, summaries } = autoSetup();
 	type(handle, 0, "a");
 	const release = disk.hold();
-	clock.advance(AUTOSAVE_MS);
+	clock.advance(AUTOSAVE_DELAY_MS);
 	await settle();
 	type(handle, 1, "b");
 	registry.flush(handle.key);

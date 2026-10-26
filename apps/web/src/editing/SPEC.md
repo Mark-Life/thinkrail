@@ -19,7 +19,7 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
 ## Boundary
 
 - **Public surface:** `useFileBuffer`, `useFileBufferText`, `canEditFile`, `saveFile`,
-  `saveFocusedFile`, `discardFile`.
+  `saveFocusedFile`, `discardFile`, `AUTOSAVE_DELAY_MS`.
 - **Allowed deps:** `store` (tabs and their content writes, the active tab and workspace tick
   selectors, `activeWorkspaceId` / `activeTabByWorkspace` and `fileSaveMode` as flush and mode signals, connection status and generation, removed workspace ids, the buffer summary slice, `toast`),
   `transport`
@@ -207,7 +207,7 @@ alone: nothing writes until Cmd/Ctrl+S or the close guard's Save. In `"auto"` th
   do, so two dirty windows cannot bounce writes. One exception: a read that clears a disk pause (a
   deleted file recreated, a `stale` conflict cleared by the disk) arms a buffer that could not autosave
   before, since its timer may have fired and gone during the pause. A buffer that could already
-  autosave never arms on a read, and a read never resumes a `readonly` or thrown-error pause. Each arm restarts the 1,000 ms delay. A step arms only
+  autosave never arms on a read, and a read never resumes a `readonly` or thrown-error pause. Each arm restarts the `AUTOSAVE_DELAY_MS` (1,000 ms) delay, the one value Settings states too. A step arms only
   when autosave may write the file (`canAutosave`): not for a deleted file, a `readonly` refusal or an
   open conflict of either kind, so a user step never arms a timer that cannot write. A timer armed
   before a merge opened a conflict stays armed; the tab indicator checks the status too.

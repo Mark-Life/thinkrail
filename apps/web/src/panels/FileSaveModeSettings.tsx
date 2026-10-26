@@ -1,6 +1,7 @@
 import { FILE_SAVE_MODE_PROTOCOL_VERSION, type FileSaveMode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
+import { AUTOSAVE_DELAY_MS } from "@/editing";
 import { platformShortcutLabel } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
@@ -26,6 +27,7 @@ export function FileSaveModeSwitch({
 			<SettingsRow
 				label={t("settings.fileSaveMode.label")}
 				description={t("settings.fileSaveMode.description", {
+					count: AUTOSAVE_DELAY_MS / 1000,
 					shortcut: platformShortcutLabel("S"),
 				})}
 				control={
