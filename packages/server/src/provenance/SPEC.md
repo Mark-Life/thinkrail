@@ -56,13 +56,15 @@ uses the same data to tell an agent that someone changed a file under it.
     `external`, inferred; else nothing. A `user` author goes on the wire as `thisClient` relative to the
     asking client, never as the clientKey, because the clientKey is a reconnect identity another client
     could take over.
-  - **`changeWrite(path)`** answers one `fsChanged` author (`FsChangeWrite {author, at, hash}`). It reads
-    the file only when the path has ledger history or a bash window covers it, so a build writing 100
-    untracked files costs no reads. It answers nothing while a mutating claim on the path is open (pi
-    wrote, but the re-read has not recorded it yet, so the guess would be `external`), for a version older
-    than 10 s, or for a file it cannot read. Otherwise it is `lastWrite` with the user's client dropped, plus
-    the hash; a recorded delete answers its author with `hash: null`. A change to an untracked path with no
-    window has no author.
+  - **`changeWrite(path, late?)`** answers one `fsChanged` author (`FsChangeWrite {author, hash}`). It
+    stats the file first and reads it only when an answer is still possible: the path's newest entry or
+    its mtime is under 10 s old, or, for an untracked path, a bash window covers that fresh mtime. So
+    a build writing 100 untracked files costs no reads, and neither does a later build after an agent
+    bash call. While a mutating claim on the path is open it answers nothing (pi wrote, but the re-read
+    has not recorded it yet, so the guess would be `external`) and keeps `late`, which runs once that
+    claim closes, so the caller can ask again. It also answers nothing for a version older than 10 s or
+    a file it cannot read. Otherwise it is `lastWrite` with the user's client dropped, plus the hash; a
+    recorded delete answers its author with `hash: null`.
   - `forgetSession` drops one session's baselines and claims and closes its windows.
   - `readSnapshot(abs)`: bytes, hash and mtime, `null` when absent, not a file, or over 8 MiB, so files
     over 8 MiB are not guarded (the wire caps a user save at 4 MiB). Ledger calls take that hash, and

@@ -41,7 +41,7 @@ async function routeFsAuthors(page: Page) {
 				return;
 			}
 			const hash = createHash("sha256").update(readFileSync(agentPath)).digest("hex");
-			const authors = { ...data.authors, [NAME]: { author: AGENT, at: Date.now(), hash } };
+			const authors = { ...data.authors, [NAME]: { author: AGENT, hash } };
 			browserSocket.send(JSON.stringify({ ...frame, data: { ...data, authors } }));
 		});
 	});

@@ -656,7 +656,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			WS_CHANNELS.workspaceFsChanged,
 			JSON.stringify({
 				channel: WS_CHANNELS.workspaceFsChanged,
-				data: withFsChangeAuthors(payload),
+				data: withFsChangeAuthors(payload, { republish: publishFsChanged }),
 			}),
 		);
 		reanchorWorkspace(payload.workspaceId);

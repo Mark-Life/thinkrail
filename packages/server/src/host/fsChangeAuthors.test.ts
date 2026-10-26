@@ -43,7 +43,6 @@ test("fsChanged carries the author of each changed path the ledger knows", () =>
 	expect(payload.authors).toEqual({
 		"a.ts": {
 			author: { kind: "agent", sessionId: "s1", via: "tool", toolName: "write" },
-			at: expect.any(Number),
 			hash: hashBytes(content),
 		},
 	});
@@ -59,4 +58,28 @@ test("a frame with no known author, a truncated frame and a pathless frame stay 
 	expect(withFsChangeAuthors(truncated, { provenance, root })).toBe(truncated);
 	const pathless = frame([]);
 	expect(withFsChangeAuthors(pathless, { provenance, root })).toBe(pathless);
+});
+
+test("a path held back by an agent claim is published again, alone, with its author", async () => {
+	const provenance = createProvenance();
+	const path = join(dir, "a.ts");
+	const agent = { kind: "agent", sessionId: "s1", via: "tool", toolName: "edit" } as const;
+	provenance.openClaim({ sessionId: "s1", toolCallId: "t1", path, mutates: true, hash: null });
+	const content = new TextEncoder().encode("agent\n");
+	writeFileSync(path, content);
+	const republished: WorkspaceFsChangedPayload[] = [];
+	const options = {
+		provenance,
+		root: () => dir,
+		republish: (payload: WorkspaceFsChangedPayload) =>
+			republished.push(withFsChangeAuthors(payload, options)),
+	};
+	expect(withFsChangeAuthors(frame(["a.ts"]), options).authors).toBeUndefined();
+
+	provenance.recordWrite({ path, author: agent, before: null, after: content, toolCallId: "t1" });
+	provenance.endTool({ sessionId: "s1", toolCallId: "t1" });
+	await Promise.resolve();
+	expect(republished).toEqual([
+		{ ...frame(["a.ts"]), authors: { "a.ts": { author: agent, hash: hashBytes(content) } } },
+	]);
 });

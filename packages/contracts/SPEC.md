@@ -793,7 +793,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   after the cap stays `detected`, and only a pathless platform/startup uncertainty is `unknown`; a pathless
   non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
-  frame is harmless. An optional **`authors`** (`Record<path, FsChangeWrite>`, `{author, at, hash}`) names
+  frame is harmless. An optional **`authors`** (`Record<path, FsChangeWrite>`, `{author, hash}`) names
   who wrote a path's new version when the host knows. `FsChangeAuthor` is `FileAuthor` with the user
   variant reduced to `{kind:"user"}`: the frame is one broadcast, so it cannot say which client saved.
   `hash` is the version's hash (`null` for a delete), which lets a client pair the author with the change

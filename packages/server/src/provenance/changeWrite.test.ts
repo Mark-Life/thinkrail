@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBytes } from "../fs";
 import { createProvenance, type WriteAuthor } from "./ledger";
+import * as snapshot from "./snapshot";
 
 const BYTES = new TextEncoder();
 const USER: WriteAuthor = { kind: "user", clientKey: "client-a" };
@@ -36,7 +37,6 @@ test("a recorded write names its author with the hash, and a user carries no cli
 	provenance.recordWrite({ path, author: USER, before: null, after: bytes("one\n") });
 	expect(provenance.changeWrite(path)).toEqual({
 		author: { kind: "user" },
-		at: clock,
 		hash: hashBytes(bytes("one\n")),
 	});
 
@@ -113,5 +113,43 @@ test("a recorded delete names its author with a null hash", () => {
 	provenance.recordWrite({ path, author: USER, before: null, after: bytes("a\n") });
 	unlinkSync(path);
 	provenance.recordWrite({ path, author: AGENT, before: bytes("a\n"), after: null });
-	expect(provenance.changeWrite(path)).toEqual({ author: AGENT, at: clock, hash: null });
+	expect(provenance.changeWrite(path)).toEqual({ author: AGENT, hash: null });
+});
+
+test("a stale tracked path and a path under a long-closed bash window cost no reads", () => {
+	const provenance = store();
+	const tracked = put("tracked.ts", "a\n");
+	provenance.recordWrite({ path: tracked, author: AGENT, before: null, after: bytes("a\n") });
+	provenance.openBashWindow({ sessionId: "s2", toolCallId: "t1", cwd: dir });
+	provenance.endTool({ sessionId: "s2", toolCallId: "t1" });
+	const built = put("built.js", "out\n");
+	clock += 60 * 60_000;
+	const reads = spyOn(snapshot, "readSnapshot");
+	try {
+		expect(provenance.changeWrite(built)).toBeUndefined();
+		expect(provenance.changeWrite(tracked)).toBeUndefined();
+		expect(reads).not.toHaveBeenCalled();
+	} finally {
+		reads.mockRestore();
+	}
+});
+
+test("a path held back by an open claim calls back once the claim closes", async () => {
+	const provenance = store();
+	const path = put("late.ts", "a\n");
+	provenance.openClaim({ sessionId: "s1", toolCallId: "t1", path, mutates: true, hash: null });
+	writeFileSync(path, "agent\n");
+	let late = 0;
+	expect(provenance.changeWrite(path, () => late++)).toBeUndefined();
+	provenance.recordWrite({
+		path,
+		author: AGENT,
+		before: null,
+		after: bytes("agent\n"),
+		toolCallId: "t1",
+	});
+	provenance.endTool({ sessionId: "s1", toolCallId: "t1" });
+	await Promise.resolve();
+	expect(late).toBe(1);
+	expect(provenance.changeWrite(path)?.author).toEqual(AGENT);
 });

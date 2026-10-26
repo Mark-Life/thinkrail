@@ -22,16 +22,27 @@ export function withFsChangeAuthors(
 	options: {
 		provenance?: Pick<Provenance, "changeWrite">;
 		root?: (workspaceId: string) => string | null;
+		republish?: (payload: WorkspaceFsChangedPayload) => void;
 	} = {},
 ): WorkspaceFsChangedPayload {
 	if (payload.truncated || payload.paths.length === 0) return payload;
 	const root = (options.root ?? worktreeRoot)(payload.workspaceId);
 	if (root === null) return payload;
 	const provenance = options.provenance ?? fileProvenance;
+	const { republish } = options;
 	const authors: Record<string, FsChangeWrite> = {};
 	for (const path of payload.paths) {
 		const abs = insideRoot(root, path);
-		const write = abs === null ? undefined : provenance.changeWrite(abs);
+		const late =
+			republish &&
+			(() =>
+				republish({
+					workspaceId: payload.workspaceId,
+					paths: [path],
+					truncated: false,
+					skillChange: "none",
+				}));
+		const write = abs === null ? undefined : provenance.changeWrite(abs, late);
 		if (write) authors[path] = write;
 	}
 	return Object.keys(authors).length > 0 ? { ...payload, authors } : payload;

@@ -56,6 +56,7 @@ interface Claim {
 	mutates: boolean;
 	hash: string | null;
 	kept?: Baseline;
+	late?: () => void;
 }
 
 interface Settled {
@@ -114,7 +115,7 @@ function changedLine(before: () => string | null | undefined, after: () => strin
 	return next === null ? undefined : firstChangedLine(old, next);
 }
 
-function wireChangeAuthor(author: WriteAuthor): FsChangeWrite["author"] {
+function wireChangeAuthor(author: WriteAuthor | FileAuthor): FsChangeWrite["author"] {
 	return author.kind === "user" ? { kind: "user" } : author;
 }
 
@@ -247,11 +248,17 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		);
 	}
 
+	function closeClaim(id: string): void {
+		const late = claims.get(id)?.late;
+		claims.delete(id);
+		if (late) queueMicrotask(late);
+	}
+
 	function settle(sessionId: string, toolCallId: string | undefined, key: string) {
 		if (toolCallId === undefined) return undefined;
 		const id = callId(sessionId, toolCallId);
 		const claim = claims.get(id);
-		claims.delete(id);
+		closeClaim(id);
 		if (!claim || claim.key !== key) return undefined;
 		const othersOpen = [...claims.values()].some(
 			(other) => other.mutates && other.key === key && other.sessionId !== sessionId,
@@ -429,7 +436,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 	}
 
 	function endTool(input: { sessionId: string; toolCallId: string }): void {
-		claims.delete(callId(input.sessionId, input.toolCallId));
+		closeClaim(callId(input.sessionId, input.toolCallId));
 		closeBashWindow(input);
 	}
 
@@ -466,26 +473,35 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		return undefined;
 	}
 
-	function changeWrite(path: string): FsChangeWrite | undefined {
+	function changeWrite(path: string, late?: () => void): FsChangeWrite | undefined {
 		const key = fileKey(path);
-		const newest = writes.get(key)?.at(-1);
-		if (!newest && !windows.some((window) => within(key, window.root))) return undefined;
-		for (const claim of claims.values()) if (claim.key === key && claim.mutates) return undefined;
-		const snapshot = readSnapshot(path);
-		const fresh = (at: number) => now() - at <= CHANGE_FRESH_MS;
-		if (!snapshot) {
-			if (!newest || newest.hash !== null || !fresh(newest.at)) return undefined;
-			return { author: wireChangeAuthor(newest.author), at: newest.at, hash: null };
+		for (const claim of claims.values()) {
+			if (claim.key !== key || !claim.mutates) continue;
+			if (late) claim.late = late;
+			return undefined;
 		}
+		const newest = writes.get(key)?.at(-1);
+		const fresh = (at: number) => now() - at <= CHANGE_FRESH_MS;
+		const deleted = () =>
+			newest && newest.hash === null && fresh(newest.at)
+				? { author: wireChangeAuthor(newest.author), hash: null }
+				: undefined;
+		const mtimeMs = mtimeOf(path);
+		if (mtimeMs === undefined) return deleted();
+		const answerable = newest
+			? fresh(newest.at) || fresh(mtimeMs)
+			: fresh(mtimeMs) && windowsAt(key, mtimeMs).length > 0;
+		if (!answerable) return undefined;
+		const snapshot = readSnapshot(path);
+		if (!snapshot) return deleted();
 		const last = lastWrite({ path, hash: snapshot.hash, clientKey: "" });
 		if (!last || !fresh(last.at)) return undefined;
-		const author = last.author.kind === "user" ? { kind: "user" as const } : last.author;
-		return { author, at: last.at, hash: snapshot.hash };
+		return { author: wireChangeAuthor(last.author), hash: snapshot.hash };
 	}
 
 	function forgetSession(sessionId: string): void {
 		reads.delete(sessionId);
-		for (const [id, claim] of claims) if (claim.sessionId === sessionId) claims.delete(id);
+		for (const [id, claim] of claims) if (claim.sessionId === sessionId) closeClaim(id);
 		for (const window of windows) {
 			if (window.sessionId !== sessionId || window.end !== undefined) continue;
 			window.end = now();

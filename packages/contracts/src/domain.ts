@@ -277,7 +277,6 @@ export type FsChangeAuthor = { kind: "user" } | Exclude<FileAuthor, { kind: "use
 
 export interface FsChangeWrite {
 	author: FsChangeAuthor;
-	at: number;
 	hash: string | null;
 }
 

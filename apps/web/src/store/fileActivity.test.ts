@@ -32,7 +32,6 @@ const frame = (authors: Record<string, FsChangeWrite>): WorkspaceFsChangedPayloa
 
 const write = (author: FsChangeWrite["author"], hash: string): FsChangeWrite => ({
 	author,
-	at: 1,
 	hash,
 });
 
