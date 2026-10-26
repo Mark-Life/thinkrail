@@ -83,3 +83,12 @@ test("a path held back by an agent claim is published again, alone, with its aut
 		{ ...frame(["a.ts"]), authors: { "a.ts": { author: agent, hash: hashBytes(content) } } },
 	]);
 });
+
+test("a root file whose name starts with two dots gets an author; a parent path does not", () => {
+	const write = { author: { kind: "external" }, hash: "h" } as const;
+	const payload = withFsChangeAuthors(frame(["..env", "...config", "..", "../x", "a.ts"]), {
+		provenance: { changeWrite: () => write },
+		root: () => "/r",
+	});
+	expect(payload.authors).toEqual({ "..env": write, "...config": write, "a.ts": write });
+});

@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { FsChangeWrite, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { fileProvenance, type Provenance } from "../provenance";
 import { getWorkspace } from "../workspaces";
@@ -14,7 +14,8 @@ function worktreeRoot(workspaceId: string): string | null {
 function insideRoot(root: string, path: string): string | null {
 	const abs = resolve(root, path);
 	const rel = relative(root, abs);
-	return rel === "" || rel.startsWith("..") || isAbsolute(rel) ? null : abs;
+	const escapes = rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+	return rel === "" || escapes ? null : abs;
 }
 
 export function withFsChangeAuthors(
