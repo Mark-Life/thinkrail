@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { toEditorText } from "@thinkrail/contracts";
+import type { TextChange } from "@thinkrail/resource-renderers";
 import { merge3 } from "./merge3";
 
 const BASE = "one\ntwo\nthree\nfour\nfive\n";
@@ -12,7 +13,8 @@ function merged(mine: string, theirs: string, base = BASE) {
 
 test("edits on adjacent lines merge without a conflict", () => {
 	const result = merged("one\nTWO\nthree\nfour\nfive\n", "one\ntwo\nTHREE\nfour\nfive\n");
-	expect(result).toEqual({ kind: "merged", text: "one\nTWO\nTHREE\nfour\nfive\n", conflicts: [] });
+	expect(result.text).toBe("one\nTWO\nTHREE\nfour\nfive\n");
+	expect(result.conflicts).toEqual([]);
 });
 
 test("edits far apart both land", () => {
@@ -23,7 +25,7 @@ test("edits far apart both land", () => {
 
 test("the same change on both sides lands once", () => {
 	const both = "one\ntwo\n3\nfour\nfive\n";
-	expect(merged(both, both)).toEqual({ kind: "merged", text: both, conflicts: [] });
+	expect(merged(both, both)).toMatchObject({ text: both, conflicts: [], changes: [] });
 	const inserted = "one\ntwo\nnew\nthree\nfour\nfive\n";
 	expect(merged(inserted, inserted).text).toBe(inserted);
 });
@@ -58,11 +60,8 @@ test("inserts at the same point keep mine first; an insert inside an edit confli
 		"one\nmine\ntwo\nthree\nfour\nfive\n",
 		"one\ntheirs\ntwo\nthree\nfour\nfive\n",
 	);
-	expect(result).toEqual({
-		kind: "merged",
-		text: "one\nmine\ntheirs\ntwo\nthree\nfour\nfive\n",
-		conflicts: [],
-	});
+	expect(result.text).toBe("one\nmine\ntheirs\ntwo\nthree\nfour\nfive\n");
+	expect(result.conflicts).toEqual([]);
 	const inside = merged("one\ntwo\nadded\nthree\nfour\nfive\n", "one\nTWO\nTHREE\nfour\nfive\n");
 	expect(inside.conflicts).toHaveLength(1);
 });
@@ -103,4 +102,43 @@ test("a merge past the diff budget falls back", () => {
 	const base = lines.join("");
 	const mine = lines.map((line, index) => (index % 2 === 0 ? `mine ${line}` : line)).join("");
 	expect(merge3({ base, mine, theirs: base })).toEqual({ kind: "tooLarge" });
+});
+
+function applyChanges(text: string, changes: readonly TextChange[]) {
+	let out = "";
+	let position = 0;
+	for (const change of changes) {
+		out += text.slice(position, change.from) + change.insert;
+		position = change.to;
+	}
+	return out + text.slice(position);
+}
+
+test("the changes turn mine into the merged text, also around a missing last newline", () => {
+	const variants = ["", "a", "a\n", "a\nb", "a\nb\n", "A\nb", "a\nB\n", "a\nb\nc", "x\na\nb", "b"];
+	for (const base of variants) {
+		for (const mine of variants) {
+			for (const theirs of variants) {
+				const result = merge3({ base, mine, theirs });
+				if (result.kind !== "merged") throw new Error("merge fell back");
+				expect(applyChanges(mine, result.changes)).toBe(result.text);
+				for (const range of [...result.conflicts, ...result.touched]) {
+					expect(range.to).toBeLessThanOrEqual(result.text.length);
+				}
+			}
+		}
+	}
+});
+
+test("changes hold only the disk side, trimmed inside the line", () => {
+	const result = merged("ONE\ntwo\nthree\nfour\nfive\n", "one\ntwo\nthree\nfour\nfive!\n");
+	expect(result.changes).toEqual([{ from: 23, to: 23, insert: "!" }]);
+});
+
+test("touched ranges cover every block the disk side changed, in merged text", () => {
+	const result = merged("ONE\ntwo\nthree\nfour\nfive\n", "one\ntwo\nTHREE\nfour\nfive\n");
+	expect(result.touched).toEqual([{ from: 8, to: 14 }]);
+	const same = merged("one\nTWO\nthree\nfour\nfive\n", "one\nTWO\nthree\nfour\nfive\n");
+	expect(same.touched).toEqual([{ from: 4, to: 8 }]);
+	expect(merged("ONE\ntwo\nthree\nfour\nfive\n", BASE).touched).toEqual([]);
 });

@@ -1,5 +1,6 @@
 import type { NativeEditingBridge } from "@thinkrail/contracts";
 import { randomId } from "../lib";
+import type { MergeConflict } from "./merge3";
 
 export interface DraftKey {
 	host: string;
@@ -11,6 +12,7 @@ export interface Draft {
 	text: string;
 	baseHash: string | null;
 	owner: string;
+	conflicts?: MergeConflict[];
 }
 
 export interface DraftStore {
@@ -36,15 +38,32 @@ function workspaceRange({ host, workspaceId }: Omit<DraftKey, "path">): IDBKeyRa
 	return IDBKeyRange.bound([host, workspaceId], [host, workspaceId, []]);
 }
 
+function isConflict(value: unknown): value is MergeConflict {
+	if (typeof value !== "object" || value === null) return false;
+	const from: unknown = Reflect.get(value, "from");
+	const to: unknown = Reflect.get(value, "to");
+	const theirs: unknown = Reflect.get(value, "theirs");
+	return (
+		typeof from === "number" &&
+		typeof to === "number" &&
+		Number.isInteger(from) &&
+		Number.isInteger(to) &&
+		from >= 0 &&
+		typeof theirs === "string"
+	);
+}
+
 function isDraft(value: unknown): value is Draft {
 	if (typeof value !== "object" || value === null) return false;
 	const text: unknown = Reflect.get(value, "text");
 	const baseHash: unknown = Reflect.get(value, "baseHash");
 	const owner: unknown = Reflect.get(value, "owner");
+	const conflicts: unknown = Reflect.get(value, "conflicts");
 	return (
 		typeof text === "string" &&
 		(typeof baseHash === "string" || baseHash === null) &&
-		typeof owner === "string"
+		typeof owner === "string" &&
+		(conflicts === undefined || (Array.isArray(conflicts) && conflicts.every(isConflict)))
 	);
 }
 

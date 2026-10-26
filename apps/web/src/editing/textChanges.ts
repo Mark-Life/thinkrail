@@ -37,7 +37,7 @@ function trimmedChange(previous: string, next: string): TextChange {
 	};
 }
 
-function refined(previous: string, change: TextChange): TextChange {
+export function refined(previous: string, change: TextChange): TextChange {
 	const inner = trimmedChange(previous.slice(change.from, change.to), change.insert);
 	return { from: change.from + inner.from, to: change.from + inner.to, insert: inner.insert };
 }

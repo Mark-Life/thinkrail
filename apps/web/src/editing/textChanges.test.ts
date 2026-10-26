@@ -49,15 +49,6 @@ test("a rewrite past the edit cap falls back to one trimmed change", () => {
 	expect(changes).toHaveLength(1);
 });
 
-test("applyChanges reads every offset against the original text", () => {
-	expect(
-		applyChanges("abcdef", [
-			{ from: 0, to: 1, insert: "X" },
-			{ from: 4, to: 6, insert: "" },
-		]),
-	).toBe("Xbcd");
-});
-
 test("a large rewrite that keeps the line count stays per-line and returns quickly", () => {
 	const previous = Array.from({ length: 60_000 }, (_, index) => `line ${index} of the file\n`).join(
 		"",

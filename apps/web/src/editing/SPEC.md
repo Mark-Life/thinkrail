@@ -27,22 +27,22 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `contracts` (`toEditorText`,
   `FILE_WRITE_MAX_BYTES`, `LFS_POINTER_MIME`, wire types), `@thinkrail/resource-renderers` (edit-session types only),
   `@thinkrail/locales` (the restore toast), `diff` (`diffArrays`), `@codemirror/state` and
-  `@codemirror/commands` (a headless `EditorState` with `history()`, never a view), React.
-- **Forbidden:** UI components (banners and the close dialog belong to `panels`), Monaco or any
-  editor import, and buffer text in Zustand.
+  `@codemirror/commands` (a headless `EditorState` with `historyField`, never a view), React.
+- **Forbidden:** UI components (banners and the close dialog belong to `panels`), Monaco,
+  `@codemirror/view` or any other editor view, and buffer text in Zustand.
 
 ## Model
 
 - **One buffer per (workspace, path).** The key is `tupleKey("file-buffer", workspaceId, path)`, the
   same identity as the file tab, so one tab owns one buffer. A buffer holds `doc`, a headless CodeMirror
-  `EditorState` (`history.ts`) with `history()` and the open merge conflicts; `text` (LF editor text) is
+  `EditorState` (`history.ts`) with its undo history and the open merge conflicts; `text` (LF editor text) is
   always `doc`'s text,
   `base {text, hash}` (the last disk state it adopted; `hash: null` means the file is absent), one
   write in flight, and at most one issue (`conflict`, `readonly`, `error`). The pure transitions live in
   `buffer.ts`; the registry (`registry.ts`) owns side effects.
-- **Status is derived, by precedence:** `stale` (a disk version that could not merge) › `conflict`
-  (open same-line conflicts) › `readonly` › `error` › `deleted`
-  (`base.hash` null) › `saving` › `dirty` › `clean`. A failed save of a deleted file shows its reason,
+- **Status is derived, by precedence:** `stale` (a disk version that could not merge) › `readonly` ›
+  `error` › `deleted` (`base.hash` null) › `conflict` (open same-line conflicts) › `saving` › `dirty` ›
+  `clean`, so a disk that turned binary or offline shows over the conflict lens. A failed save of a deleted file shows its reason,
   not `deleted` again. Dirty means `text !== base.text` and is reported apart from
   the status, so a deleted or stale buffer can still be clean or dirty. Only the summary
   (`{status, dirty, error, conflicts}`) reaches the store (`fileBuffersByWorkspace`), never the text. The tab dot
@@ -79,11 +79,16 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   edit, merge. The same change on both sides lands once. Two different inserts at the same point merge
   with mine first. A conflict keeps mine in the text and records the disk lines (`theirs`) next to it.
   Inputs are LF editor text; a missing final newline is merged as if present, then follows the side
-  that changed it.
+  that changed it. The merge also returns the disk side as `TextChange[]` against mine, which enter
+  the doc as they are (no second diff), and the merged range of every block the disk side changed.
 - **Open conflicts** live in a CodeMirror `StateField` and move with every edit. **Mine** keeps the
   text, **Theirs** replaces it with the disk lines, **Both** keeps mine then the disk lines; each is a
   user transaction, so Cmd/Ctrl+Z reopens the conflict (`invertedEffects`). A later disk change merges
-  against the new base; a new conflict on the same lines replaces the old one. Reload clears them.
+  against the new base. An open conflict in a block the disk changed again closes: the new merge either
+  opens a fresh conflict there or found nothing to pick. One the disk left alone stays open. Reload,
+  Keep mine, a clean adoption and a deletion close them all. Undo reopens only a conflict merged
+  against the current base: after any later merge, adoption or Reload, undo restores the text but not
+  an older conflict, whose Theirs would overwrite the newer disk.
 - **IME.** While the editor composes, disk reads and a stale save answer wait; the end of the
   composition re-reads once (and retries that save). A merge never lands inside a composition.
 - **No read lands across a save.** Every read, by the registry or a file tab, takes a per-buffer
@@ -107,21 +112,22 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   disk adoption, undo, a conflict choice) is one CodeMirror transaction; the editor gets that
   transaction's change set as `TextChange[]`. Remote text enters the doc as a line diff (`textChanges`,
   jsdiff `diffArrays` capped at 2,000 edits and 50 ms),
-  so cursors and scroll stay. Past a cap, texts with the same line count change line by line in place
-  (a formatter or an agent rewrite); others fall back to one prefix/suffix-trimmed change. No editor
-  A disk change is diffed once, with or without an editor: the history needs exact changes to keep
-  the user's undo steps in place. A change never starts or ends inside a UTF-16 surrogate pair: Monaco
+  so cursors and scroll stay; a merge uses its own changes instead. Past a cap, texts with the same line count change line by line in place
+  (a formatter or an agent rewrite); others fall back to one prefix/suffix-trimmed change. A disk
+  change is diffed once, with or without an editor: the history needs exact changes to keep the
+  user's undo steps in place. Each doc state remembers only the change set from the state before it,
+  so a buffer never holds a chain of past states. A change never starts or ends inside a UTF-16 surrogate pair: Monaco
   widens such a range to the whole pair, and its model would drift from the buffer.
 
 ## Undo
 
-The buffer, not the editor, owns undo: CodeMirror's `history()` on `doc`. Typing, deletes, paste and
+The buffer, not the editor, owns undo: CodeMirror's history (`historyField`) on `doc`. Typing, deletes, paste and
 IME compositions enter it with their CodeMirror user events, so typing groups as in CodeMirror (500 ms).
 Merges and disk adoptions are `addToHistory: false` and `remote` transactions, so Cmd/Ctrl+Z undoes
 only the user's own steps and the history maps them over every merge. Reload and a conflict choice
 are user steps. The editor reports its selection outside the history, so undo restores the cursor; the
 undo or redo change set reaches every attached view with that selection. A buffer whose history holds
-only merges has nothing to undo.
+only merges has nothing to undo. A cursor move updates the selection in `doc` without publishing.
 
 ## Save pipeline
 
@@ -139,7 +145,8 @@ only merges has nothing to undo.
    `stale`: when the current disk version is no longer editable text the buffer gets issue
    `notEditable` and nothing merges. When it equals the buffer text it is adopted. Otherwise it merges
    into the latest text (typing during the write included) as above, and a merge with no open conflict
-   saves once more at once; a second `stale` answer merges again and stops there. `missing`: status `deleted`; nothing is re-created
+   saves once more at once; a second `stale` answer merges again and stops there. A read dropped during
+   the write still runs once after it, retry or not. `missing`: status `deleted`; nothing is re-created
    until the user saves again. `readonly`: issue `readonly`, shown with its reason; the next save retries.
    A thrown error: `NOT_EDITABLE` gives issue `notEditable`, `FILE_TOO_LARGE` gives `tooLarge`, any
    other error `failed`; a retry cannot fix the first two. The write may still have landed, so its text
@@ -154,11 +161,13 @@ save goes ahead, but the `offline` check stops it until a connection exists.
 ## Drafts
 
 IndexedDB database `thinkrail-drafts`, one record per `[host, workspaceId, path]` key holding the text,
-the base hash it was typed against, and its owner page. The host is `getTransport().httpBase()`. A record
+the base hash it was typed against, its open conflicts (`{from, to, theirs}`), and its owner page. The host is `getTransport().httpBase()`. A record
 is written about 300 ms after a change, and at once on `pagehide` and when the page becomes hidden
 (`visibilitychange`); it is deleted once the buffer is clean. When a
-buffer is created, a draft with the same base hash restores as a dirty buffer; a draft typed against
-another hash restores as a conflict, so Reload / Keep mine decides. Until that choice the conflict keeps
+buffer is created, a draft with the same base hash restores as a dirty buffer with its open
+conflicts, so a reload never turns a paused save into a plain overwrite (a conflict outside the text
+is dropped). Any change to the open conflicts rewrites the draft. A draft typed against another hash
+restores as a conflict, so Reload / Keep mine decides. Until that choice the conflict keeps
 the hash the draft was typed on (`typedOn`), and every draft write stores it, so a second reload shows the
 conflict again instead of a plain dirty buffer that would overwrite the newer disk. Removing a workspace
 deletes all of its drafts (a key range), since a new workspace never reuses the id. A draft whose text equals the

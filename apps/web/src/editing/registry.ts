@@ -9,6 +9,7 @@ import {
 	bufferSummary,
 	createBuffer,
 	draftBaseHash,
+	draftConflicts,
 	editorDisk,
 	failSave,
 	finishSave,
@@ -107,10 +108,12 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (entry.draftTimer !== null) clearTimeout(entry.draftTimer);
 		entry.draftTimer = null;
 		if (!isDirty(entry.state)) return deps.drafts.remove(draftKey(entry), deps.draftOwner.id);
+		const conflicts = draftConflicts(entry.state);
 		return deps.drafts.put(draftKey(entry), {
 			text: entry.state.text,
 			baseHash: draftBaseHash(entry.state),
 			owner: deps.draftOwner.id,
+			...(conflicts.length > 0 ? { conflicts } : {}),
 		});
 	};
 
@@ -144,7 +147,11 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (next.text !== previous.text) {
 			for (const watcher of entry.watchers) watcher();
 		}
-		if (next.text !== previous.text || draftBaseHash(next) !== draftBaseHash(previous)) {
+		if (
+			next.text !== previous.text ||
+			draftBaseHash(next) !== draftBaseHash(previous) ||
+			conflictsOf(next.doc) !== conflictsOf(previous.doc)
+		) {
 			scheduleDraft(entry);
 		}
 		deps.publish(entry.workspaceId, entry.path, bufferSummary(next));
@@ -241,14 +248,18 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				return;
 			}
 			const next = finishSave(entry.state, result);
-			retry = result.status === "stale" && next.issue === null && isDirty(next);
+			retry =
+				result.status === "stale" &&
+				next.issue === null &&
+				conflictsOf(next.doc).length === 0 &&
+				isDirty(next);
 			commit(entry, next, "other");
 		} catch (error) {
 			commit(entry, failSave(entry.state, saveError(error)), "other");
 		} finally {
 			entry.writeFloor = entry.readSeq + 1;
 		}
-		if (retry && !retried && !entry.dropped) return runSave(entry, true);
+		if (retry && !retried && !entry.dropped) await runSave(entry, true);
 		if (entry.rereadAfterSave && !entry.dropped) {
 			entry.rereadAfterSave = false;
 			await reread(entry);
@@ -321,8 +332,10 @@ export function createBufferRegistry(deps: RegistryDeps) {
 					snapshot: () => entry.state.text,
 					applyLocal: (changes, kind) =>
 						commit(entry, localEdit(entry.state, changes, kind), "view"),
-					select: (ranges) =>
-						commit(entry, withDoc(entry.state, selectDoc(entry.state.doc, ranges)), "view"),
+					select: (ranges) => {
+						if (!entry.dropped)
+							entry.state = withDoc(entry.state, selectDoc(entry.state.doc, ranges));
+					},
 					subscribe: (listener) => {
 						entry.views.add(listener);
 						return () => entry.views.delete(listener);

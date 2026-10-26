@@ -14,6 +14,7 @@ import {
 	EditorState,
 	StateEffect,
 	StateField,
+	type Text,
 	Transaction,
 	type TransactionSpec,
 } from "@codemirror/state";
@@ -24,14 +25,34 @@ import type {
 	TextChange,
 	TextRange,
 } from "@thinkrail/resource-renderers";
-import type { MergeConflict } from "./merge3";
+import type { MergeConflict, MergeRange } from "./merge3";
 import { textChanges } from "./textChanges";
 
-const lineage = new WeakMap<EditorState, { from: EditorState; changes: ChangeSet }>();
+interface Hop {
+	fromDoc: Text;
+	changes: ChangeSet;
+}
+
+interface ConflictState {
+	open: readonly EditConflict[];
+	reopenable: ReadonlySet<number>;
+}
+
+const lineage = new WeakMap<EditorState, Hop>();
 
 function mapConflict(conflict: EditConflict, mapping: ChangeDesc, remote: boolean): EditConflict {
 	const from = mapping.mapPos(conflict.from, remote ? 1 : -1);
-	return { ...conflict, from, to: Math.max(from, mapping.mapPos(conflict.to, -1)) };
+	const to = Math.max(from, mapping.mapPos(conflict.to, -1));
+	return from === conflict.from && to === conflict.to ? conflict : { ...conflict, from, to };
+}
+
+function mapConflicts(
+	conflicts: readonly EditConflict[],
+	mapping: ChangeDesc,
+	remote: boolean,
+): readonly EditConflict[] {
+	const mapped = conflicts.map((conflict) => mapConflict(conflict, mapping, remote));
+	return mapped.every((conflict, index) => conflict === conflicts[index]) ? conflicts : mapped;
 }
 
 const addConflicts = StateEffect.define<readonly EditConflict[]>({
@@ -41,30 +62,51 @@ const removeConflict = StateEffect.define<EditConflict>({
 	map: (conflict, mapping) => mapConflict(conflict, mapping, true),
 });
 const clearConflicts = StateEffect.define<null>();
+const newBase = StateEffect.define<readonly MergeRange[]>();
 
 const overlaps = (a: EditConflict, b: EditConflict) =>
 	a.from === b.from || (a.from < b.to && b.from < a.to);
 
-const conflictField = StateField.define<readonly EditConflict[]>({
-	create: () => [],
+function touches(conflict: EditConflict, range: MergeRange): boolean {
+	const emptyConflict = conflict.from === conflict.to;
+	const emptyRange = range.from === range.to;
+	if (emptyConflict && emptyRange) return conflict.from === range.from;
+	if (emptyConflict) return range.from < conflict.from && conflict.from < range.to;
+	if (emptyRange) return conflict.from < range.from && range.from < conflict.to;
+	return conflict.from < range.to && range.from < conflict.to;
+}
+
+const NO_CONFLICTS: ConflictState = { open: [], reopenable: new Set() };
+
+const conflictField = StateField.define<ConflictState>({
+	create: () => NO_CONFLICTS,
 	update(value, tr) {
 		const remote = tr.annotation(Transaction.remote) === true;
-		let next =
-			tr.docChanged && value.length > 0
-				? value.map((conflict) => mapConflict(conflict, tr.changes, remote))
-				: value;
+		const rebased = tr.effects.some((effect) => effect.is(newBase));
+		let open =
+			tr.docChanged && value.open.length > 0
+				? mapConflicts(value.open, tr.changes, remote)
+				: value.open;
 		for (const effect of tr.effects) {
-			if (effect.is(clearConflicts)) next = [];
+			if (effect.is(clearConflicts)) open = [];
 			else if (effect.is(removeConflict)) {
-				next = next.filter((conflict) => conflict.id !== effect.value.id);
+				open = open.filter((conflict) => conflict.id !== effect.value.id);
+			} else if (effect.is(newBase)) {
+				const touched = effect.value;
+				open = open.filter((conflict) => !touched.some((range) => touches(conflict, range)));
 			} else if (effect.is(addConflicts)) {
-				next = [
-					...next.filter((conflict) => !effect.value.some((added) => overlaps(conflict, added))),
-					...effect.value,
+				const added = effect.value.filter(
+					(conflict) => rebased || value.reopenable.has(conflict.id),
+				);
+				if (added.length === 0) continue;
+				open = [
+					...open.filter((conflict) => !added.some((other) => overlaps(conflict, other))),
+					...added,
 				].sort((a, b) => a.from - b.from);
 			}
 		}
-		return next;
+		const reopenable = rebased ? new Set(open.map((conflict) => conflict.id)) : value.reopenable;
+		return open === value.open && reopenable === value.reopenable ? value : { open, reopenable };
 	},
 });
 
@@ -79,7 +121,8 @@ const invertConflicts = invertedEffects.of((tr) =>
 let nextConflictId = 1;
 
 function record(tr: Transaction): EditorState {
-	lineage.set(tr.state, { from: tr.startState, changes: tr.changes });
+	const carried = tr.docChanged ? null : lineage.get(tr.startState);
+	lineage.set(tr.state, carried ?? { fromDoc: tr.startState.doc, changes: tr.changes });
 	return tr.state;
 }
 
@@ -104,18 +147,11 @@ export function docText(doc: EditorState): string {
 }
 
 export function docChanges(from: EditorState, to: EditorState): TextChange[] | null {
-	const chain: ChangeSet[] = [];
-	let cursor = to;
-	while (cursor !== from) {
-		const link = lineage.get(cursor);
-		if (!link) return null;
-		chain.push(link.changes);
-		cursor = link.from;
-	}
-	let composed = ChangeSet.empty(from.doc.length);
-	for (const changes of chain.reverse()) composed = composed.compose(changes);
+	if (from.doc === to.doc) return [];
+	const hop = lineage.get(to);
+	if (!hop || hop.fromDoc !== from.doc) return null;
 	const out: TextChange[] = [];
-	composed.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+	hop.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
 		out.push({ from: fromA, to: toA, insert: inserted.toString() });
 	});
 	return out;
@@ -164,20 +200,31 @@ export function docSelection(doc: EditorState): TextRange[] {
 	return doc.selection.ranges.map((range) => ({ anchor: range.anchor, head: range.head }));
 }
 
+function hasConflictState(doc: EditorState): boolean {
+	const state = doc.field(conflictField);
+	return state.open.length > 0 || state.reopenable.size > 0;
+}
+
 export function remoteText(
 	doc: EditorState,
-	text: string,
-	conflicts: { add?: readonly MergeConflict[]; clear?: boolean } = {},
+	input: {
+		text: string;
+		changes?: readonly TextChange[];
+		add?: readonly MergeConflict[];
+		touched?: readonly MergeRange[];
+		clear?: boolean;
+	},
 ): EditorState {
 	const current = docText(doc);
-	const added = (conflicts.add ?? []).map((conflict) => ({ ...conflict, id: nextConflictId++ }));
+	const added = (input.add ?? []).map((conflict) => ({ ...conflict, id: nextConflictId++ }));
+	if (current === input.text && added.length === 0 && !hasConflictState(doc)) return doc;
 	const effects = [
-		...(conflicts.clear && conflictsOf(doc).length > 0 ? [clearConflicts.of(null)] : []),
+		...(input.clear && conflictsOf(doc).length > 0 ? [clearConflicts.of(null)] : []),
+		newBase.of(input.touched ?? []),
 		...(added.length > 0 ? [addConflicts.of(added)] : []),
 	];
-	if (current === text && effects.length === 0) return doc;
 	return step(doc, {
-		changes: textChanges(current, text),
+		changes: input.changes ?? textChanges(current, input.text),
 		effects,
 		annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
 	});
@@ -185,10 +232,10 @@ export function remoteText(
 
 export function userText(doc: EditorState, text: string): EditorState {
 	const current = docText(doc);
-	if (current === text && conflictsOf(doc).length === 0) return doc;
+	if (current === text && !hasConflictState(doc)) return doc;
 	return step(doc, {
 		changes: textChanges(current, text),
-		effects: conflictsOf(doc).map((conflict) => removeConflict.of(conflict)),
+		effects: [...conflictsOf(doc).map((conflict) => removeConflict.of(conflict)), newBase.of([])],
 		annotations: [Transaction.userEvent.of("input.replace"), isolateHistory.of("full")],
 	});
 }
@@ -210,7 +257,7 @@ export const canUndoDoc = (doc: EditorState) => undoDepth(doc) > 0;
 export const canRedoDoc = (doc: EditorState) => redoDepth(doc) > 0;
 
 export function conflictsOf(doc: EditorState): readonly EditConflict[] {
-	return doc.field(conflictField);
+	return doc.field(conflictField).open;
 }
 
 function joined(mine: string, theirs: string): string {

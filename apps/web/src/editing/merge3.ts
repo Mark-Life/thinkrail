@@ -1,5 +1,7 @@
+import { ChangeSet } from "@codemirror/state";
+import type { TextChange } from "@thinkrail/resource-renderers";
 import { diffArrays } from "diff";
-import { splitLines } from "./textChanges";
+import { refined, splitLines } from "./textChanges";
 
 const MAX_EDIT_LENGTH = 2000;
 const DIFF_TIMEOUT_MS = 50;
@@ -19,8 +21,19 @@ export interface MergeConflict {
 	theirs: string;
 }
 
-export type MergeResult =
-	| { kind: "merged"; text: string; conflicts: MergeConflict[] }
+export interface MergeRange {
+	from: number;
+	to: number;
+}
+
+type MergeResult =
+	| {
+			kind: "merged";
+			text: string;
+			conflicts: MergeConflict[];
+			changes: TextChange[];
+			touched: MergeRange[];
+	  }
 	| { kind: "tooLarge" };
 
 function endsLine(text: string): boolean {
@@ -97,14 +110,42 @@ function trailingNewline(base: string, mine: string, theirs: string): boolean {
 	return endsLine(mine) === endsLine(base) ? endsLine(theirs) : endsLine(mine);
 }
 
+function exactChanges(input: {
+	mine: string;
+	mineText: string;
+	merged: string;
+	text: string;
+	changes: readonly TextChange[];
+}): TextChange[] {
+	let set = ChangeSet.of(input.changes, input.mineText.length);
+	if (input.mineText !== input.mine) {
+		set = ChangeSet.of({ from: input.mine.length, insert: "\n" }, input.mine.length).compose(set);
+	}
+	if (input.text !== input.merged) {
+		set = set.compose(
+			ChangeSet.of({ from: input.text.length, to: input.merged.length }, input.merged.length),
+		);
+	}
+	const out: TextChange[] = [];
+	set.iterChanges((from, to, _fromB, _toB, inserted) => {
+		out.push({ from, to, insert: inserted.toString() });
+	});
+	return out;
+}
+
 export function merge3(input: { base: string; mine: string; theirs: string }): MergeResult {
 	const base = normalizedLines(input.base);
-	const mineHunks = hunks(base, normalizedLines(input.mine), "mine");
+	const mineLines = normalizedLines(input.mine);
+	const mineHunks = hunks(base, mineLines, "mine");
 	const theirsHunks = hunks(base, normalizedLines(input.theirs), "theirs");
 	if (!mineHunks || !theirsHunks) return { kind: "tooLarge" };
+	const mineText = mineLines.join("");
 	const out: string[] = [];
 	const conflicts: MergeConflict[] = [];
+	const changes: TextChange[] = [];
+	const touched: MergeRange[] = [];
 	let length = 0;
+	let minePosition = 0;
 	let position = 0;
 	const emit = (lines: readonly string[]) => {
 		for (const line of lines) {
@@ -115,7 +156,9 @@ export function merge3(input: { base: string; mine: string; theirs: string }): M
 	for (const group of clusters([...mineHunks, ...theirsHunks])) {
 		const start = Math.min(...group.map((hunk) => hunk.start));
 		const end = Math.max(...group.map((hunk) => hunk.end));
-		emit(base.slice(position, start));
+		const gap = base.slice(position, start);
+		emit(gap);
+		minePosition += gap.join("").length;
 		position = end;
 		const mine = version(
 			base,
@@ -130,25 +173,46 @@ export function merge3(input: { base: string; mine: string; theirs: string }): M
 			group.filter((hunk) => hunk.side === "theirs"),
 		);
 		const sides = new Set(group.map((hunk) => hunk.side));
+		const from = length;
+		let emitted = mine;
 		if (!sides.has("theirs") || mine.join("") === theirs.join("")) {
 			emit(mine);
 		} else if (!sides.has("mine")) {
+			emitted = theirs;
 			emit(theirs);
 		} else if (group.every(isInsert)) {
-			emit([...mine, ...theirs]);
+			emitted = [...mine, ...theirs];
+			emit(emitted);
 		} else {
-			const from = length;
 			emit(mine);
 			conflicts.push({ from, to: length, theirs: theirs.join("") });
 		}
+		if (sides.has("theirs")) touched.push({ from, to: length });
+		const mineLength = mine.join("").length;
+		if (emitted !== mine) {
+			changes.push(
+				refined(mineText, {
+					from: minePosition,
+					to: minePosition + mineLength,
+					insert: emitted.join(""),
+				}),
+			);
+		}
+		minePosition += mineLength;
 	}
 	emit(base.slice(position));
 	const merged = out.join("");
 	const keepNewline = trailingNewline(input.base, input.mine, input.theirs);
 	const text = keepNewline || merged === "" ? merged : merged.slice(0, -1);
+	const clamp = (range: MergeRange) => ({
+		from: Math.min(range.from, text.length),
+		to: Math.min(range.to, text.length),
+	});
 	return {
 		kind: "merged",
 		text,
+		changes: exactChanges({ mine: input.mine, mineText, merged, text, changes }),
+		touched: touched.map(clamp),
 		conflicts: conflicts.map((conflict) =>
 			conflict.to > text.length
 				? {

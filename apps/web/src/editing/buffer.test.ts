@@ -216,3 +216,26 @@ test("a fresh text read clears 'not editable' and 'offline', even on the same ha
 		error: "tooLarge",
 	});
 });
+
+test("deleted and error states show over an open conflict, and a deletion closes it", () => {
+	const clash = adoptDisk(edit(createBuffer(disk("a\n")), "mine\n"), disk("theirs\n"));
+	expect(bufferSummary(clash)).toEqual({ status: "conflict", dirty: true, conflicts: 1 });
+	const deleted = markMissing(clash);
+	expect(bufferSummary(deleted)).toEqual({ status: "deleted", dirty: true });
+	expect(beginSave(deleted).request).toEqual({ content: "mine\n", expect: { hash: null } });
+	expect(bufferStatus(markError(clash, "notEditable"))).toBe("error");
+	expect(bufferStatus(markError(clash, "offline"))).toBe("error");
+});
+
+test("Keep mine closes conflicts typed against an older disk version", () => {
+	const lines = Array.from({ length: 3000 }, (_, index) => `line ${index}\n`);
+	const base = createBuffer(disk(lines.join("")));
+	const clash = adoptDisk(
+		edit(base, `mine\n${lines.slice(1).join("")}`),
+		disk(`theirs\n${lines.slice(1).join("")}`),
+	);
+	expect(bufferSummary(clash).conflicts).toBe(1);
+	const stale = adoptDisk(clash, disk(lines.map((line) => `agent ${line}`).join("")));
+	expect(bufferStatus(stale)).toBe("stale");
+	expect(bufferSummary(keepMine(stale))).toEqual({ status: "dirty", dirty: true });
+});

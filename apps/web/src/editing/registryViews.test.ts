@@ -28,3 +28,15 @@ test("a disk change is diffed once, and an attached editor reuses that diff", as
 	expect(diffs).toBe(2);
 	expect(updates).toEqual([{ changes: [{ from: 1, to: 3, insert: "hree" }] }]);
 });
+
+test("a merge into a dirty buffer reuses the merge's own changes instead of a second diff", async () => {
+	const { PATH, setup, type } = await import("./registryFixtures");
+	const { disk, handle, received } = setup({ text: "one\ntwo\n" });
+	type(handle, 0, "mine ");
+	const before = diffs;
+	disk.put(PATH, "one\nTWO\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(diffs).toBe(before);
+	expect(handle.session.snapshot()).toBe("mine one\nTWO\n");
+	expect(received.at(-1)).toEqual([{ from: 9, to: 12, insert: "TWO" }]);
+});

@@ -7,6 +7,7 @@ import {
 } from "@thinkrail/contracts";
 import type { ConflictChoice, LocalEditKind, TextChange } from "@thinkrail/resource-renderers";
 import type { FileBufferError, FileBufferStatus, FileBufferSummary } from "../store";
+import type { Draft } from "./drafts";
 import {
 	conflictsOf,
 	createDoc,
@@ -17,7 +18,7 @@ import {
 	userText,
 } from "./history";
 import { isEditableMeta } from "./keys";
-import { merge3 } from "./merge3";
+import { type MergeConflict, merge3 } from "./merge3";
 
 interface DiskText {
 	text: string;
@@ -65,10 +66,10 @@ export function withDoc(state: BufferState, doc: EditorState): BufferState {
 }
 
 function withDiskText(state: BufferState, text: string): BufferState {
-	return withDoc(state, remoteText(state.doc, text, { clear: true }));
+	return withDoc(state, remoteText(state.doc, { text, clear: true }));
 }
 
-export function openConflicts(state: BufferState): number {
+function openConflicts(state: BufferState): number {
 	return conflictsOf(state.doc).length;
 }
 
@@ -78,10 +79,10 @@ export function isDirty(state: BufferState): boolean {
 
 export function bufferStatus(state: BufferState): FileBufferStatus {
 	if (state.issue?.kind === "conflict") return "stale";
-	if (openConflicts(state) > 0) return "conflict";
 	if (state.issue?.kind === "readonly") return "readonly";
 	if (state.issue?.kind === "error") return "error";
 	if (state.base.hash === null) return "deleted";
+	if (openConflicts(state) > 0) return "conflict";
 	if (state.saving) return "saving";
 	return isDirty(state) ? "dirty" : "clean";
 }
@@ -134,10 +135,13 @@ function mergeDisk(state: BufferState, disk: DiskText): BufferState {
 	const result = merge3({ base: state.base.text, mine: state.text, theirs: disk.text });
 	if (result.kind === "tooLarge")
 		return { ...state, unconfirmed: null, issue: conflict(state, disk) };
-	return settledOn(
-		withDoc(state, remoteText(state.doc, result.text, { add: result.conflicts })),
-		disk,
-	);
+	const merged = remoteText(state.doc, {
+		text: result.text,
+		changes: result.changes,
+		add: result.conflicts,
+		touched: result.touched,
+	});
+	return settledOn(withDoc(state, merged), disk);
 }
 
 export function adoptDisk(state: BufferState, disk: DiskText): BufferState {
@@ -158,7 +162,7 @@ export function markError(state: BufferState, error: FileBufferError): BufferSta
 
 export function markMissing(state: BufferState): BufferState {
 	if (state.base.hash === null && state.issue === null) return state;
-	return settledOn(state, { text: state.base.text, hash: null });
+	return settledOn(withDiskText(state, state.text), { text: state.base.text, hash: null });
 }
 
 function utf8Length(text: string): number {
@@ -217,15 +221,24 @@ export function reloadFromDisk(state: BufferState): BufferState {
 
 export function keepMine(state: BufferState): BufferState {
 	if (state.issue?.kind !== "conflict") return state;
-	return settledOn(state, state.issue.disk);
+	return settledOn(withDiskText(state, state.text), state.issue.disk);
+}
+
+export function draftConflicts(state: BufferState): MergeConflict[] {
+	return conflictsOf(state.doc).map(({ from, to, theirs }) => ({ from, to, theirs }));
 }
 
 export function restoreDraft(
 	state: BufferState,
-	draft: { text: string; baseHash: string | null },
+	draft: Pick<Draft, "text" | "baseHash" | "conflicts">,
 ): BufferState {
 	if (isDirty(state) || state.saving || draft.text === state.text) return state;
-	const restored = withDoc(state, remoteText(state.doc, draft.text));
-	if (draft.baseHash === state.base.hash) return restored;
+	if (draft.baseHash === state.base.hash) {
+		const add = (draft.conflicts ?? []).filter(
+			(conflict) => conflict.from <= conflict.to && conflict.to <= draft.text.length,
+		);
+		return withDoc(state, remoteText(state.doc, { text: draft.text, add }));
+	}
+	const restored = withDoc(state, remoteText(state.doc, { text: draft.text }));
 	return { ...restored, issue: { kind: "conflict", disk: state.base, typedOn: draft.baseHash } };
 }
