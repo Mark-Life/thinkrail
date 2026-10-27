@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -10,9 +11,10 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { delimiter, join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
+import { setSyncGitTimeoutForTests } from "../git";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
@@ -378,6 +380,123 @@ test("external workspace branch metadata converges on refresh and list", async (
 		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
 	).toBe("feature/list-refresh");
 });
+
+const posix = test.skipIf(process.platform === "win32");
+
+async function withGitWrapper<T>(script: string, run: () => T | Promise<T>): Promise<T> {
+	const bin = join(dataDir, "wrapped-bin");
+	mkdirSync(bin, { recursive: true });
+	writeFileSync(join(bin, "git"), `#!/bin/sh\n${script}\nexec "${Bun.which("git")}" "$@"\n`);
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	try {
+		return await run();
+	} finally {
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
+}
+
+posix(
+	"a git that hangs reading the branch keeps the stored Default branch instead of saving HEAD",
+	async () => {
+		const [stored] = await listWorkspaces("p1");
+		expect(stored?.branch).toBe("main");
+		const events: WorkspaceLifecycleEvent[] = [];
+		setWorkspacePublisher((event) => events.push(event));
+
+		const hang = 'case "$*" in *symbolic-ref*) sleep 30;; esac';
+		setSyncGitTimeoutForTests(300);
+		const listed = await withGitWrapper(hang, async () => {
+			const result = await listWorkspaces("p1", { includeDiffStats: false });
+			refreshUserOwnedWorkspace(stored?.id ?? "");
+			return result;
+		}).finally(() => setSyncGitTimeoutForTests(undefined));
+
+		expect(listed.find((w) => w.id === stored?.id)?.branch).toBe("main");
+		expect(events).toHaveLength(0);
+		const record = listWorkspaceRecords("p1").find((w) => w.id === stored?.id);
+		expect(record?.branch).toBe("main");
+		expect(record?.baseBranch).toBe(stored?.baseBranch ?? "");
+	},
+);
+
+posix(
+	"a failed worktree checkout deletes the branch it cut, so a retry reuses the name",
+	async () => {
+		const failCheckout =
+			'case "$*" in *"worktree add"*) echo "checkout broke" >&2; exit 128;; esac';
+		const failed = await withGitWrapper(failCheckout, () =>
+			createWorkspace("p1", "Retry Me").then(
+				() => "resolved",
+				(error: Error) => error.message,
+			),
+		);
+
+		expect(failed).toContain("checkout broke");
+		expect(gitOut(repo, "branch", "--list", "retry-me")).toBe("");
+		expect(existsSync(join(dataDir, "worktrees", "repo", "retry-me"))).toBe(false);
+		const retried = await createWorkspace("p1", "Retry Me");
+		expect(retried.branch).toBe("retry-me");
+		expect(gitOut(retried.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("retry-me");
+	},
+);
+
+posix(
+	"a checkout killed mid-way leaves no locked worktree entry and no orphan branch",
+	async () => {
+		writeFileSync(join(repo, ".gitattributes"), "*.slow filter=slow\n");
+		writeFileSync(join(repo, "big.slow"), "payload\n");
+		git(repo, "add", "-A");
+		git(repo, "commit", "-m", "slow file");
+		git(repo, "config", "filter.slow.smudge", "sleep 3; cat");
+		const realGit = Bun.which("git");
+		const killMidCheckout = `case "$*" in *"worktree add"*) "${realGit}" "$@" & pid=$!; sleep 1; kill -9 $pid; exit 137;; esac`;
+		const failed = await withGitWrapper(killMidCheckout, () =>
+			createWorkspace("p1", "Killed").then(
+				() => "resolved",
+				(error: Error) => error.message,
+			),
+		);
+
+		expect(failed).toContain("git worktree add failed");
+		expect(gitOut(repo, "branch", "--list", "killed")).toBe("");
+		expect(registeredWorktrees(repo)).not.toContain(join(dataDir, "worktrees", "repo", "killed"));
+		expect((await listExistingWorktrees("p1")).map((c) => c.path)).not.toContain(
+			join(dataDir, "worktrees", "repo", "killed"),
+		);
+		git(repo, "config", "--unset", "filter.slow.smudge");
+		expect((await createWorkspace("p1", "Killed")).branch).toBe("killed");
+	},
+	15_000,
+);
+
+posix(
+	"a worktree still being created is neither listed nor adoptable as an existing one",
+	async () => {
+		const realGit = Bun.which("git");
+		const slowAdd = `case "$*" in *"worktree add"*) "${realGit}" "$@"; rc=$?; sleep 2; exit $rc;; esac`;
+		const worktreePath = join(dataDir, "worktrees", "repo", "in-flight");
+		const seen = await withGitWrapper(slowAdd, async () => {
+			const creating = createWorkspace("p1", "In Flight");
+			while (!existsSync(join(worktreePath, ".git"))) await Bun.sleep(20);
+			const listed = await listExistingWorktrees("p1");
+			const adopted = await openExistingWorktree("p1", worktreePath).then(
+				() => "adopted",
+				(error: Error) => error.message,
+			);
+			return { listed, adopted, created: await creating };
+		});
+
+		expect(seen.listed.map((candidate) => candidate.path)).not.toContain(worktreePath);
+		expect(seen.adopted).toContain("still creating");
+		expect(seen.created.branch).toBe("in-flight");
+		const records = listWorkspaceRecords("p1").filter((w) => w.branch === "in-flight");
+		expect(records).toHaveLength(1);
+		expect((await listExistingWorktrees("p1")).map((c) => c.path)).not.toContain(worktreePath);
+	},
+);
 
 test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept out of git", async () => {
 	const ws = await createWorkspace("p1");

@@ -36,11 +36,11 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
   change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it; everything else stays a plain `error` string. The one exception is the three host-protocol refusals
+  for it; everything else stays a plain `error` string. The exceptions are the three host-protocol refusals
   of the request replay cache — `REQUEST_REPLAY_CONFLICT`, `REQUEST_REPLAY_OVERFLOW`,
-  `REQUEST_REPLAY_UNRETAINED` ([[submodule-server-host]]) — coded so error tracking can tell them apart without
-  message text; no UI branches on them, and an older client wraps them like any unknown code, so they need no
-  protocol bump. Expected method-specific outcomes remain typed method
+  `REQUEST_REPLAY_UNRETAINED` ([[submodule-server-host]]) — and `GIT_TIMEOUT` (a sync git killed at its
+  deadline, [[submodule-server-git]]), coded so error tracking can tell them apart without message text; an older
+  client wraps them like any unknown code, so they need no protocol bump. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,

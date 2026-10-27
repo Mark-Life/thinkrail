@@ -50,7 +50,9 @@ bootstrap it into one so it can be opened.
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
   the folder's contents, or an empty commit when it is empty, so the repo gets a HEAD and `git worktree
-  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws).
+  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws; a timed-out
+  top-level probe throws `GIT_TIMEOUT` rather than classifying a slow repo as `initable`, and a failed
+  add/commit removes `.git` only when this call created it).
   The commit supplies a **fallback `user.name`/`user.email` only for a field git has none configured for**,
   so a real global identity is never overridden. ("Does the project have specs?" is **not** computed here
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free

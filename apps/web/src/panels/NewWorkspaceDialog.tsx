@@ -9,6 +9,7 @@ import {
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
 import {
+	MAX_REQUEST_TIMEOUT_MS,
 	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	type SlashCommandInfo,
@@ -92,6 +93,18 @@ export function reconcileModel(
 	const found = selectCatalogModel(models, model);
 	if (found) return found;
 	return catalogFresh && models.length > 0 ? "unavailable" : null;
+}
+
+export function requestWorktreeCreate(
+	projectId: string,
+	baseRef: string | undefined,
+	transport: Pick<ReturnType<typeof getTransport>, "request"> = getTransport(),
+) {
+	return transport.request(
+		"workspace.create",
+		{ projectId, ...(baseRef ? { baseRef } : {}) },
+		{ timeoutMs: MAX_REQUEST_TIMEOUT_MS },
+	);
 }
 
 const PILL =
@@ -376,12 +389,7 @@ export function NewWorkspaceDialog({
 			workspace = def;
 		} else {
 			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
-			const createWorktree = async () =>
-				getTransport().request("workspace.create", {
-					projectId: selectedProjectId,
-					...(baseRef ? { baseRef } : {}),
-				});
-			const created = await createWorktree()
+			const created = await requestWorktreeCreate(selectedProjectId, baseRef)
 				.catch((err: unknown) => {
 					toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
 					setCreating(false);

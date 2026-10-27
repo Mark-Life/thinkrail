@@ -1097,7 +1097,8 @@ export type WsErrorCode =
 	| "MCP_HANDLED_ELSEWHERE"
 	| "REQUEST_REPLAY_CONFLICT"
 	| "REQUEST_REPLAY_OVERFLOW"
-	| "REQUEST_REPLAY_UNRETAINED";
+	| "REQUEST_REPLAY_UNRETAINED"
+	| "GIT_TIMEOUT";
 
 export interface WsResponse {
 	id: string;

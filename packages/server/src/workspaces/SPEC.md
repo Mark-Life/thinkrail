@@ -28,13 +28,18 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
   event loop; each listed path is resolved, since git prints `C:/…` on Windows and the row's path becomes the
   stored `worktreePath` (architecture Decision 22); drop the project folder, prunable registrations, and every
-  path already represented in ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`),
+  path already represented in ThinkRail, including a managed worktree `createWorkspace` is still checking out
+  (git lists it before the record is saved; `openExistingWorktree` refuses it too, so it never gets a second,
+  external record); branch-backed rows are `available`, detached-HEAD ones `detached`),
   `openExistingWorktree(projectId, path)`
   (**async** for the same worktree-list read; revalidate against
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —
-  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
+  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — a `git branch` cut, then an async `worktree add`
+  of that branch (25-minute deadline, off the event loop, so fetch plus checkout fit under the client's
+  `MAX_REQUEST_TIMEOUT_MS` wait for `workspace.create`; a failed or timed-out checkout force-removes the half-made
+  worktree and deletes the branch it cut, so a retry reuses the name), never a detached
   remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
   upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
   *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
@@ -167,7 +172,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
   Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
   re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
-  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
+  unreadable checkout is never persisted as a fake detached `HEAD`; nor is a git that timed out — a
+  timeout is no answer, so the stored fields stay and only a warning is logged, and an existing Default
+  is returned as stored for the same reason; unknown id / a managed workspace /
   no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
   `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving

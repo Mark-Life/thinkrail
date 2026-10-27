@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { WireModel } from "@thinkrail/contracts";
-import { reconcileModel } from "./NewWorkspaceDialog";
+import { MAX_REQUEST_TIMEOUT_MS, type WireModel } from "@thinkrail/contracts";
+import { reconcileModel, requestWorktreeCreate } from "./NewWorkspaceDialog";
 
 const wm = (
 	provider: string,
@@ -49,5 +49,25 @@ describe("reconcileModel", () => {
 		const settled = reconcileModel(models, held, true);
 		if (!settled || settled === "unavailable") throw new Error("unexpected reconciliation");
 		expect(reconcileModel(models, settled, true)).toBe(settled);
+	});
+});
+
+describe("requestWorktreeCreate", () => {
+	test("waits as long as the host may check out, not the 60s default", async () => {
+		const sent: unknown[] = [];
+		const transport: Parameters<typeof requestWorktreeCreate>[2] = {
+			request: async (method, params, options) => {
+				sent.push({ method, params, options });
+				return undefined as never;
+			},
+		};
+		await requestWorktreeCreate("p1", "main", transport);
+		expect(sent).toEqual([
+			{
+				method: "workspace.create",
+				params: { projectId: "p1", baseRef: "main" },
+				options: { timeoutMs: MAX_REQUEST_TIMEOUT_MS },
+			},
+		]);
 	});
 });
