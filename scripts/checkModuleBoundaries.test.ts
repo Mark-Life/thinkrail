@@ -556,3 +556,31 @@ test("locales is a leaf every UI surface and the host may import", () => {
 		'packages/locales/src/b.ts: import "@thinkrail/contracts" creates forbidden packages/locales -> packages/contracts edge',
 	]);
 });
+
+test("keeps CodeMirror history inside the web editing module", () => {
+	const root = fixture();
+	write(
+		root,
+		"apps/web/src/editing/history.ts",
+		'import { historyField, undo, standardKeymap } from "@codemirror/commands";',
+	);
+	write(
+		root,
+		"apps/web/src/panels/keys.ts",
+		'import { standardKeymap, type Command } from "@codemirror/commands"; import type { undo } from "@codemirror/commands";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(
+		root,
+		"apps/web/src/panels/undo.ts",
+		'import { standardKeymap, undo as u, history } from "@codemirror/commands";',
+	);
+	write(root, "apps/web/src/panels/all.ts", 'export * from "@codemirror/commands";');
+	write(root, "apps/web/src/panels/lazy.ts", 'void import("@codemirror/commands");');
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/panels/all.ts: import "@codemirror/commands" reaches CodeMirror history outside apps/web/src/editing/; import keymaps by name',
+		'apps/web/src/panels/lazy.ts: import "@codemirror/commands" reaches CodeMirror history outside apps/web/src/editing/; import keymaps by name',
+		'apps/web/src/panels/undo.ts: import "@codemirror/commands" imports CodeMirror history (undo, history) outside apps/web/src/editing/',
+	]);
+});

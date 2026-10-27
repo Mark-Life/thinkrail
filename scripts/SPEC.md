@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Repository development and conformance scripts
 parent: architecture
-references: [module-contracts, module-server, module-web, module-cli, module-desktop, module-ci-release, module-thinkrail-extensions]
+references: [module-contracts, module-server, module-web, submodule-web-editing, module-cli, module-desktop, module-ci-release, module-thinkrail-extensions]
 tags: [tooling, boundaries, build]
 depends-on: [module-spec-graph]
 ---
@@ -29,6 +29,8 @@ The extension boundary follows [[module-thinkrail-extensions]] and is registered
 - An extension manifest may declare the union of its halves' dependencies. Its `web/**` sources may use UI, extension-api's public `./web`, and contracts; its `server/**` sources may use extension-api's public `./server` and its corresponding `pi-extensions/<name>` package. Neither half may import the other, even within the same package, with relative paths, or with type-only syntax. Extension code may not import host internals.
 - `apps/web` may consume only the exact public `@thinkrail/ext-*/web` entry of a discovered extension; `packages/server` only `@thinkrail/ext-*/server`. Root, deep, opposite-half, and relative source imports are rejected. Their manifests may depend on the extension package because manifests cannot express subpath edges. Existing server pi-package edges remain until each extension's server-wiring delivery.
 - Browser sources (web app, UI, extension-api's browser half, and extension web halves) must never import extension-api's server half. All of extension-api remains runtime-browser-safe: pi types may describe the server contract, but neither entry may value-import pi. Browser sources and contracts likewise reject pi value imports, including external pi packages not registered as workspace roots. Explicit type imports/re-exports remain subject to the existing workspace-edge rules; a type-only import cannot bypass a forbidden module or source-half edge.
+
+CodeMirror history value exports of `@codemirror/commands` (`history`, `historyField`, `undo`, `redo`, their depth, selection and keymap variants, `isolateHistory`, `invertedEffects`) are imported only under `apps/web/src/editing/` ([[submodule-web-editing]]); elsewhere only named keymap imports pass, so namespace, `export *`, dynamic and `require` forms of the module fail too.
 
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.
 

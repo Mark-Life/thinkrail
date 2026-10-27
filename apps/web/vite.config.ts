@@ -3,6 +3,7 @@ import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { bufferHistoryChunk } from "./bufferHistoryChunk";
 import { posthogSourceMapUpload, sourceMapRelease } from "./sourceMapUpload";
 
 const hostPort = process.env.THINKRAIL_PORT ?? 24242;
@@ -15,6 +16,7 @@ export default defineConfig(({ mode }) => {
 			react(),
 			babel({ presets: [reactCompilerPreset()] }),
 			tailwindcss(),
+			bufferHistoryChunk(),
 			...(release ? [posthogSourceMapUpload(release)] : []),
 		],
 		resolve: {

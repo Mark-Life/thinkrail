@@ -93,6 +93,11 @@ posthog-cli (the root `posthog-cli` script exposes it to desktop's `preBuild`): 
 pinned SHA-256s before running it ([[module-ci-release]]). The injected chunk-id registry is what
 `transport` reads for UI error reports.
 
+**The buffer gets its own `@codemirror/commands`.** The build-only `bufferHistoryChunk.ts` plugin resolves
+`@codemirror/commands` imported from `src/editing/` to a second module id, so the buffer history chunk does not
+share one module with the live preview keymap and never loads `@codemirror/view`. Sizes and the limits of
+this live in `src/editing/SPEC.md`.
+
 **The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@rolldown/plugin-babel` running
 `@vitejs/plugin-react`'s `reactCompilerPreset()` over dev and build). Three devDependencies live in this
 manifest only, and the `@babel/core` 7.x pin is load-bearing: `babel-plugin-react-compiler` 1.0.0 mis-lowers

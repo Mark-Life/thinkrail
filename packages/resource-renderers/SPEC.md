@@ -202,7 +202,8 @@ keeps it.
   engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`, and for the markdown live preview `@codemirror/state`, `@codemirror/view`,
-  `@codemirror/language`, `@codemirror/commands`, `@codemirror/search`, `@lezer/markdown`, `@lezer/common`).
+  `@codemirror/language`, `@codemirror/commands` (keymaps only, never its undo history: the web
+  build gives the buffer its own copy of that module), `@codemirror/search`, `@lezer/markdown`, `@lezer/common`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
   pi packages. `scripts/check-module-boundaries.ts` enforces it; only `apps/web` consumes the package today.
 - UI text follows [[architecture]] Decision 23: renderer chrome renders through `useT()`'s translator
