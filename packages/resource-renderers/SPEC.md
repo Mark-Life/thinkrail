@@ -271,6 +271,17 @@ needs no new contract. A view mounts from `snapshot()`, never from `content`, an
 changes as deltas. The package owns no buffer, save, history or conflict state. An editable Monaco keeps Monaco's
 tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor for keyboard users.
 
+**Presence is an optional prop, like review.** `ResourceViewProps.presence` (`SurfacePresence`) carries the
+newest write the host knows for the file as `latest`: a disk `hash` and a `PresenceWriter` (`id`, `label`,
+`spoken`, `tone`: `user` | `agent1..3` | `external`, `inferred`). `label` is the visible name; `spoken` is the
+screen-reader name, which can add the writer kind the icon shows. The host owns who wrote what; the view owns where.
+A view marks the changes of an `EditUpdate` whose `disk.hash` matches `latest`, so the ranges come from the
+host's own merge diff and only the author from the host. A match with an older write stays unknown: the
+same content can come back from another writer, and a path the host sent no author for must not inherit
+an old one. The host leaves `latest` out for the viewer's own write, so it marks nothing; a `user` writer it does send
+(the same person in another window) is marked like any other. Without `edit` there is no disk update, so a
+read-only view shows no marks.
+
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
 and opaque per-tab view state. `anchorLabel` prefers a structural locator over its mandatory text fallback:
 `table-cell` is `R<row>C<column>`, `json-pointer` is the pointer itself, and unknown schemes retain
