@@ -3930,6 +3930,16 @@ test("applyConfig projects synchronized chat and file line-width settings", () =
 	});
 });
 
+test("applyConfig projects the file save mode; a host without the setting saves manually", () => {
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, fileSaveMode: "auto" });
+	expect(useAppStore.getState().fileSaveMode).toBe("auto");
+	const { fileSaveMode: _, ...older } = DEFAULT_CONFIG;
+	useAppStore
+		.getState()
+		.applyConfig(older as Parameters<ReturnType<typeof useAppStore.getState>["applyConfig"]>[0]);
+	expect(useAppStore.getState().fileSaveMode).toBe("manual");
+});
+
 test("applyConfig defaults absent or malformed line-width fields independently", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

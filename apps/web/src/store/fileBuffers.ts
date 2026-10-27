@@ -16,7 +16,10 @@ export interface FileBufferSummary {
 	error?: FileBufferError;
 	conflicts?: number;
 	merges?: number;
+	pending?: true;
 }
+
+export type FileSaveIndicator = "unsaved" | "saving" | "pending";
 
 export type FileBufferSummaries = Record<string, Record<string, FileBufferSummary>>;
 
@@ -27,8 +30,18 @@ function sameSummary(left: FileBufferSummary | undefined, right: FileBufferSumma
 		left.dirty === right.dirty &&
 		left.error === right.error &&
 		left.conflicts === right.conflicts &&
-		left.merges === right.merges
+		left.merges === right.merges &&
+		left.pending === right.pending
 	);
+}
+
+export function fileSaveIndicator(
+	summary: FileBufferSummary | undefined,
+): FileSaveIndicator | null {
+	if (summary?.dirty !== true) return null;
+	if (summary.status === "saving") return "saving";
+	if (summary.pending !== true) return "unsaved";
+	return summary.status === "dirty" || summary.status === "error" ? "pending" : "unsaved";
 }
 
 export function withFileBufferSummary(
