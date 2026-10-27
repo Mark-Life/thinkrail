@@ -2107,8 +2107,8 @@ own section. The kebab menu (`plan-menu`, a
   and it shows on phones too. The Monaco view keeps `--space-40` of bottom padding, so scrolled to the end
   no line sits under the chip; mid-file the chip can cover the end of a bottom line, like Monaco's own find widget. `FileWriterAvatars` is the same avatars and
   "+N" in the file tab's adornment (`renderTabAdornment`), never focusable inside the tab, and `FileWriterDot` is a `FileTree` row dot in the last writer's tone (the first of the same writers),
-  named for screen readers. Avatars are rings in the writer's tone around its initial, dashed when
-  inferred. Tones map to roles once: user `primary`, agents `feedback-info` / `feedback-success` /
+  named for screen readers. Avatars are solid rings in the writer's tone around its initial; an
+  inferred writer gets a `control-bg-hovered` fill and a `text-muted` initial instead. Tones map to roles once: user `primary`, agents `feedback-info` / `feedback-success` /
   `feedback-warning`, external `text-subtle`; identity is in the label, not the color alone. This
   client's own writes show nothing: they never count as writers, and `useFilePresence` passes no write
   for them. A save from another window shows as "You, in another window" in the user tone. `DiffSurface`

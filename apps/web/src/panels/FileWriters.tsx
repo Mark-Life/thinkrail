@@ -89,10 +89,12 @@ function WriterAvatar({ writer }: { writer: LabeledWriter }) {
 			title={writer.label}
 			aria-hidden
 			className={cn(
-				"-ml-2 inline-flex size-14 shrink-0 items-center justify-center rounded-full border-2 bg-container-elevated-bg text-text-default first:ml-0 forced-colors:border-[CanvasText]",
-				"tr-text-label-pill",
+				"ml-2 inline-flex size-18 shrink-0 items-center justify-center rounded-full border-2 first:ml-0 forced-colors:border-[CanvasText]",
+				"tr-text-caption leading-none",
 				TONE_RING[writer.tone],
-				writer.inferred && "border-dashed",
+				writer.inferred
+					? "bg-control-bg-hovered text-text-muted"
+					: "bg-container-elevated-bg text-text-default",
 			)}
 		>
 			{writer.initial}
