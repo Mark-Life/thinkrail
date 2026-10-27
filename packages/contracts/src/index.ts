@@ -40,6 +40,7 @@ export {
 	TERMINAL_WINDOWS_SHELLS,
 	THEME_MODES,
 	TODO_NUDGE_PREFIX,
+	UNWATCHED_PATH_SEGMENTS,
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
