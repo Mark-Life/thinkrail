@@ -1,12 +1,27 @@
+import type { EditorState } from "@codemirror/state";
 import {
 	FILE_WRITE_MAX_BYTES,
 	type FileContent,
 	type FileWriteResult,
-	LFS_POINTER_MIME,
-	type ResourceMeta,
 	toEditorText,
 } from "@thinkrail/contracts";
+import type { ConflictChoice, LocalEditKind, TextChange } from "@thinkrail/resource-renderers";
 import type { FileBufferError, FileBufferStatus, FileBufferSummary } from "../store";
+import type { Draft } from "./drafts";
+import {
+	clearTypedOn,
+	conflictsOf,
+	createDoc,
+	docText,
+	localChange,
+	reloadText,
+	remoteText,
+	resolveDocConflict,
+	type TypedOn,
+	typedOnOf,
+} from "./history";
+import { isEditableMeta } from "./keys";
+import { type MergeConflict, merge3 } from "./merge3";
 
 interface DiskText {
 	text: string;
@@ -19,20 +34,17 @@ type BufferIssue =
 	| { kind: "error"; error: FileBufferError };
 
 export interface BufferState {
-	text: string;
+	doc: EditorState;
 	base: DiskText;
-	saving: { text: string } | null;
+	saving: { text: string; expect: string | null } | null;
 	unconfirmed: string | null;
 	issue: BufferIssue | null;
+	merges: number;
 }
 
 interface SaveRequest {
 	content: string;
 	expect: { hash: string | null };
-}
-
-export function isEditableMeta(meta: Pick<ResourceMeta, "text" | "mime">): boolean {
-	return meta.text && meta.mime !== LFS_POINTER_MIME;
 }
 
 export function editorDisk(file: FileContent): DiskText | null {
@@ -41,11 +53,35 @@ export function editorDisk(file: FileContent): DiskText | null {
 }
 
 export function createBuffer(disk: DiskText): BufferState {
-	return { text: disk.text, base: disk, saving: null, unconfirmed: null, issue: null };
+	return {
+		doc: createDoc(disk.text),
+		base: disk,
+		saving: null,
+		unconfirmed: null,
+		issue: null,
+		merges: 0,
+	};
+}
+
+export function bufferText(state: Pick<BufferState, "doc">): string {
+	return docText(state.doc);
+}
+
+export function withDoc(state: BufferState, doc: EditorState): BufferState {
+	if (doc === state.doc) return state;
+	return { ...state, doc };
+}
+
+function withDiskText(state: BufferState, text: string): BufferState {
+	return withDoc(state, remoteText(state.doc, { text, clear: true }));
+}
+
+function openConflicts(state: BufferState): number {
+	return conflictsOf(state.doc).length;
 }
 
 export function isDirty(state: BufferState): boolean {
-	return state.text !== state.base.text;
+	return bufferText(state) !== state.base.text;
 }
 
 export function bufferStatus(state: BufferState): FileBufferStatus {
@@ -53,25 +89,45 @@ export function bufferStatus(state: BufferState): FileBufferStatus {
 	if (state.issue?.kind === "readonly") return "readonly";
 	if (state.issue?.kind === "error") return "error";
 	if (state.base.hash === null) return "deleted";
+	if (openConflicts(state) > 0) return "conflict";
 	if (state.saving) return "saving";
 	return isDirty(state) ? "dirty" : "clean";
 }
 
 export function bufferSummary(state: BufferState): FileBufferSummary {
 	const status = bufferStatus(state);
+	const conflicts = openConflicts(state);
 	return {
 		status,
 		dirty: isDirty(state),
 		...(status === "error" && state.issue?.kind === "error" ? { error: state.issue.error } : {}),
+		...(conflicts > 0 ? { conflicts } : {}),
+		...(state.merges > 0 ? { merges: state.merges } : {}),
 	};
 }
 
-export function localEdit(state: BufferState, text: string): BufferState {
-	return text === state.text ? state : { ...state, text };
+export function localEdit(
+	state: BufferState,
+	changes: readonly TextChange[],
+	kind: LocalEditKind,
+): BufferState {
+	return withDoc(state, localChange(state.doc, changes, kind));
+}
+
+export function resolveConflict(
+	state: BufferState,
+	id: number,
+	choice: ConflictChoice,
+): BufferState {
+	return withDoc(state, resolveDocConflict(state.doc, id, choice));
+}
+
+function typedOn(state: BufferState): TypedOn {
+	return typedOnOf(state.doc) ?? state.base;
 }
 
 export function draftBaseHash(state: BufferState): string | null {
-	return state.issue?.kind === "conflict" ? state.issue.typedOn : state.base.hash;
+	return state.issue?.kind === "conflict" ? state.issue.typedOn : typedOn(state).hash;
 }
 
 function conflict(state: BufferState, disk: DiskText): BufferIssue {
@@ -79,6 +135,11 @@ function conflict(state: BufferState, disk: DiskText): BufferIssue {
 }
 
 function settledOn(state: BufferState, base: DiskText): BufferState {
+	return { ...withDoc(state, clearTypedOn(state.doc)), base, unconfirmed: null, issue: null };
+}
+
+function savedOn(state: BufferState, base: DiskText, sentOn: string | null): BufferState {
+	if (typedOn(state).hash === sentOn) return settledOn(state, base);
 	return { ...state, base, unconfirmed: null, issue: null };
 }
 
@@ -87,16 +148,35 @@ function clearedByRead(issue: BufferIssue | null, disk: DiskText): boolean {
 	return issue?.kind === "error" && (issue.error === "notEditable" || issue.error === "offline");
 }
 
+function mergeDisk(state: BufferState, disk: DiskText): BufferState {
+	const { text: base } = typedOn(state);
+	const result =
+		base === null ? null : merge3({ base, mine: bufferText(state), theirs: disk.text });
+	if (result === null || result.kind === "tooLarge")
+		return { ...state, unconfirmed: null, issue: conflict(state, disk) };
+	const merged = remoteText(state.doc, {
+		text: result.text,
+		changes: result.changes,
+		add: result.conflicts,
+		touched: result.touched,
+	});
+	const silent = result.conflicts.length === 0 && !result.changes.empty;
+	const merges = silent ? state.merges + 1 : state.merges;
+	return settledOn({ ...withDoc(state, merged), merges }, disk);
+}
+
 export function adoptDisk(state: BufferState, disk: DiskText): BufferState {
 	if (disk.hash === state.base.hash) {
 		return clearedByRead(state.issue, disk) ? { ...state, issue: null } : state;
 	}
 	if (state.unconfirmed !== null && disk.text === state.unconfirmed) return settledOn(state, disk);
 	if (state.base.hash === null && disk.text === state.base.text) return settledOn(state, disk);
-	if (!isDirty(state) || disk.text === state.text) {
-		return settledOn({ ...state, text: disk.text }, disk);
+	if (disk.text === bufferText(state)) return settledOn(withDiskText(state, disk.text), disk);
+	if (!isDirty(state)) {
+		return settledOn(withDoc(state, remoteText(state.doc, { text: disk.text })), disk);
 	}
-	return { ...state, issue: conflict(state, disk) };
+	if (state.issue?.kind === "conflict") return { ...state, issue: conflict(state, disk) };
+	return mergeDisk(state, disk);
 }
 
 export function markError(state: BufferState, error: FileBufferError): BufferState {
@@ -105,7 +185,7 @@ export function markError(state: BufferState, error: FileBufferError): BufferSta
 
 export function markMissing(state: BufferState): BufferState {
 	if (state.base.hash === null && state.issue === null) return state;
-	return settledOn(state, { text: state.base.text, hash: null });
+	return settledOn(withDiskText(state, bufferText(state)), { text: state.base.text, hash: null });
 }
 
 function utf8Length(text: string): number {
@@ -113,34 +193,38 @@ function utf8Length(text: string): number {
 }
 
 export function beginSave(state: BufferState): { state: BufferState; request: SaveRequest | null } {
-	if (state.saving || state.issue?.kind === "conflict") return { state, request: null };
+	if (state.saving || state.issue?.kind === "conflict" || openConflicts(state) > 0) {
+		return { state, request: null };
+	}
 	if (!isDirty(state) && state.base.hash !== null) {
 		return { state: state.issue ? { ...state, issue: null } : state, request: null };
 	}
-	if (utf8Length(state.text) > FILE_WRITE_MAX_BYTES) {
+	if (utf8Length(bufferText(state)) > FILE_WRITE_MAX_BYTES) {
 		return { state: { ...state, issue: { kind: "error", error: "tooLarge" } }, request: null };
 	}
+	const text = bufferText(state);
+	const expect = typedOn(state).hash;
 	return {
-		state: { ...state, saving: { text: state.text }, issue: null },
-		request: { content: state.text, expect: { hash: state.base.hash } },
+		state: { ...state, saving: { text, expect }, issue: null },
+		request: { content: text, expect: { hash: expect } },
 	};
 }
 
 export function finishSave(state: BufferState, result: FileWriteResult): BufferState {
-	const sent = state.saving?.text ?? state.text;
+	const sent = state.saving?.text ?? bufferText(state);
+	const sentOn = state.saving ? state.saving.expect : typedOn(state).hash;
 	const settled = { ...state, saving: null };
 	switch (result.status) {
 		case "written":
 			return result.meta.hash === null
 				? settled
-				: settledOn(settled, { text: sent, hash: result.meta.hash });
+				: savedOn(settled, { text: sent, hash: result.meta.hash }, sentOn);
 		case "stale": {
 			const disk = editorDisk(result.current);
 			if (!disk) return markError(settled, "notEditable");
-			if (disk.text === state.text || disk.text === state.unconfirmed) {
-				return settledOn(settled, disk);
-			}
-			return { ...settled, unconfirmed: null, issue: conflict(settled, disk) };
+			if (disk.text === bufferText(state)) return settledOn(settled, disk);
+			if (disk.text === state.unconfirmed) return savedOn(settled, disk, sentOn);
+			return mergeDisk({ ...settled, unconfirmed: null }, disk);
 		}
 		case "missing":
 			return markMissing(settled);
@@ -156,24 +240,33 @@ export function failSave(state: BufferState, error: FileBufferError): BufferStat
 
 export function reloadFromDisk(state: BufferState): BufferState {
 	if (state.issue?.kind !== "conflict") return state;
-	const { disk } = state.issue;
-	return settledOn({ ...state, text: disk.text }, disk);
+	const { disk, typedOn: typedOnHash } = state.issue;
+	const previous =
+		typedOnOf(state.doc) ??
+		(typedOnHash === state.base.hash ? state.base : { text: null, hash: typedOnHash });
+	return settledOn(withDoc(state, reloadText(state.doc, disk.text, previous)), disk);
 }
 
 export function keepMine(state: BufferState): BufferState {
 	if (state.issue?.kind !== "conflict") return state;
-	return settledOn(state, state.issue.disk);
+	return settledOn(withDiskText(state, bufferText(state)), state.issue.disk);
+}
+
+export function draftConflicts(state: BufferState): MergeConflict[] {
+	return conflictsOf(state.doc).map(({ id: _id, ...conflict }) => conflict);
 }
 
 export function restoreDraft(
 	state: BufferState,
-	draft: { text: string; baseHash: string | null },
+	draft: Pick<Draft, "text" | "baseHash" | "conflicts">,
 ): BufferState {
-	if (isDirty(state) || state.saving || draft.text === state.text) return state;
-	if (draft.baseHash === state.base.hash) return { ...state, text: draft.text };
-	return {
-		...state,
-		text: draft.text,
-		issue: { kind: "conflict", disk: state.base, typedOn: draft.baseHash },
-	};
+	if (isDirty(state) || state.saving || draft.text === bufferText(state)) return state;
+	if (draft.baseHash === state.base.hash) {
+		const add = (draft.conflicts ?? []).filter(
+			(conflict) => conflict.from <= conflict.to && conflict.to <= draft.text.length,
+		);
+		return withDoc(state, remoteText(state.doc, { text: draft.text, add }));
+	}
+	const restored = withDoc(state, remoteText(state.doc, { text: draft.text }));
+	return { ...restored, issue: { kind: "conflict", disk: state.base, typedOn: draft.baseHash } };
 }
