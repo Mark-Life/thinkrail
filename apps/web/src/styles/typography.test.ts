@@ -11,6 +11,7 @@ import {
 	isRef,
 	loadTypography,
 	PROSE_SELECTORS,
+	proseExemptClassName,
 	proseRootClassName,
 	rawStyle,
 	renderCss,
@@ -21,6 +22,8 @@ import {
 } from "../../scripts/typography";
 
 const typography = loadTypography();
+const EXEMPT = `:where(:not(.${proseExemptClassName(typography)} *))`;
+const EXEMPT_PATTERN = EXEMPT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const GENERATED = normalizeEol(readFileSync(GENERATED_PATH, "utf8"));
 
@@ -166,6 +169,17 @@ describe("typography source", () => {
 });
 
 describe("prose systems", () => {
+	it("leaves an exempt subtree inside a prose root to its own styles", () => {
+		const css = renderCss(typography);
+		const rules = [...css.matchAll(/^\.tr-prose-[a-z]+ ([^{]+) \{$/gm)].map((match) => match[1]);
+		expect(rules.length).toBeGreaterThan(0);
+		for (const rule of rules) expect(rule?.endsWith(EXEMPT), rule).toBe(true);
+		const reset = new RegExp(`^\\.${proseExemptClassName(typography)} \\{([^}]*)\\}`, "m").exec(
+			css,
+		);
+		expect(reset?.[1]).toContain("font-size: var(--tr-font-size-s14);");
+	});
+
 	it("gives every surface the same element set", () => {
 		const systems = Object.keys(typography.proseSystems);
 		expect(systems).toEqual(["chat", "doc"]);
@@ -405,7 +419,9 @@ describe("generated CSS", () => {
 	it("styles prose <strong> with weight ALONE in every system, so bold inherits its parent", () => {
 		for (const system of Object.keys(typography.proseSystems)) {
 			const root = proseRootClassName(typography, system);
-			const block = new RegExp(`\\.${root} :is\\(strong, b\\) \\{([^}]*)\\}`).exec(GENERATED);
+			const block = new RegExp(
+				`\\.${root} :is\\(strong, b, :where\\(\\.md-strong\\)\\)${EXEMPT_PATTERN} \\{([^}]*)\\}`,
+			).exec(GENERATED);
 			expect(block, `${system}: the weight-only strong rule is missing`).not.toBeNull();
 			const declarations = (block?.[1] ?? "")
 				.split(";")
@@ -422,8 +438,19 @@ describe("generated CSS", () => {
 			const root = proseRootClassName(typography, system);
 			expect(GENERATED).toContain(`.${root} {`);
 			for (const [id, selector] of Object.entries(PROSE_SELECTORS))
-				expect(GENERATED, `${system} prose ${id}`).toContain(`.${root}${selector} {`);
+				expect(GENERATED, `${system} prose ${id}`).toContain(
+					`.${root}${selector}${selector ? EXEMPT : ""} {`,
+				);
 		}
+	});
+
+	it("adds no specificity for the live preview's line classes, so table-cell code keeps its size", () => {
+		for (const [id, selector] of Object.entries(PROSE_SELECTORS))
+			expect(selector.replace(/:where\([^()]*\)/g, ""), id).not.toContain(".");
+		const root = proseRootClassName(typography, "chat");
+		const rule = (id: string) => GENERATED.indexOf(`.${root}${PROSE_SELECTORS[id]}${EXEMPT} {`);
+		expect(rule("inlineCode")).toBeGreaterThan(-1);
+		expect(rule("tableInlineCode")).toBeGreaterThan(rule("inlineCode"));
 	});
 
 	it("exposes the code family + size tokens Monaco and xterm read", () => {

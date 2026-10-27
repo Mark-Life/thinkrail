@@ -138,19 +138,23 @@ export function proseRootClassName(t: Typography, system: string): string {
 	return `${t.metadata.classPrefix}-prose-${kebab(system)}`;
 }
 
+export function proseExemptClassName(t: Typography): string {
+	return `${t.metadata.classPrefix}-prose-exempt`;
+}
+
 export const PROSE_STRONG_WEIGHT = "medium";
 
 export const PROSE_SELECTORS: Record<string, string> = {
 	body: "",
-	h1: " h1",
-	h2: " h2",
-	h3: " h3",
-	h4: " h4",
-	h5: " h5",
-	h6: " h6",
-	inlineCode: " :not(pre) > code",
-	codeBlock: " :is(pre, pre code)",
-	blockquote: " blockquote",
+	h1: " :is(h1, :where(.md-h1))",
+	h2: " :is(h2, :where(.md-h2))",
+	h3: " :is(h3, :where(.md-h3))",
+	h4: " :is(h4, :where(.md-h4))",
+	h5: " :is(h5, :where(.md-h5))",
+	h6: " :is(h6, :where(.md-h6))",
+	inlineCode: " :is(:not(pre) > code, :where(.md-code))",
+	codeBlock: " :is(pre, pre code, :where(.md-codeblock))",
+	blockquote: " :is(blockquote, :where(.md-quote))",
 	list: " :is(ul, ol, li)",
 	tableBody: " :is(table, td)",
 	tableHeader: " th",
@@ -482,6 +486,12 @@ export function renderCss(t: Typography): string {
 	out.push("}\n");
 
 	out.push("@layer components {");
+	out.push(
+		"/* Prose exempt: UI inside a prose root (a card, a lens) takes no prose rule and restarts from the base. */",
+	);
+	out.push(`.${proseExemptClassName(t)} {`);
+	out.push(declarations(t, resolveStyle(t, t.rootStyle.$ref)));
+	out.push("}");
 	out.push("/* Semantic text styles — one class per style. Colour stays at the call site. */");
 	for (const [group, styles] of Object.entries(t.textStyles))
 		for (const name of Object.keys(styles)) {
@@ -490,18 +500,19 @@ export function renderCss(t: Typography): string {
 			out.push("}");
 		}
 
+	const exempt = `:where(:not(.${proseExemptClassName(t)} *))`;
 	for (const [system, styles] of Object.entries(t.proseSystems)) {
 		const root = proseRootClassName(t, system);
 		out.push("");
 		out.push(`/* Prose system '${system}' — the markdown typography for that surface. */`);
 		for (const name of Object.keys(styles)) {
 			const selector = PROSE_SELECTORS[name] ?? "";
-			out.push(`.${root}${selector} {`);
+			out.push(`.${root}${selector}${selector ? exempt : ""} {`);
 			out.push(declarations(t, resolveStyle(t, `${system}.${name}`)));
 			out.push("}");
 		}
 		out.push(`/* Bold: weight only — every other property inherits from the parent element. */`);
-		out.push(`.${root} :is(strong, b) {`);
+		out.push(`.${root} :is(strong, b, :where(.md-strong))${exempt} {`);
 		out.push(`\tfont-weight: var(${cssVarName(t, "font-weight", PROSE_STRONG_WEIGHT)});`);
 		out.push("}");
 	}
