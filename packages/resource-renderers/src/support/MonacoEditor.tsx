@@ -23,7 +23,8 @@ import {
 	syncFileModel,
 	warmLanguage,
 } from "./monacoSetup";
-import { attachPresence, type PresenceText } from "./presenceMarks";
+import { attachPresence } from "./presenceMarks";
+import { usePresenceText } from "./presenceText";
 import {
 	applyReviewDecorations,
 	attachReviewCommenting,
@@ -65,32 +66,7 @@ export default function MonacoEditor({
 	const path = resource.path;
 	const text = content.kind === "text" ? content.text : "";
 	const commentLabel = t("review.widget.commentOnSelection");
-	const presenceText: PresenceText = {
-		hover: (writer) =>
-			t(writer.inferred ? "presence.changedByInferred" : "presence.changedBy", {
-				name: writer.label,
-			}),
-		lines: (writer, spans) => {
-			const [only] = spans;
-			if (only && spans.length === 1) {
-				return only.startLine === only.endLine
-					? t("presence.changedLine", { name: writer.spoken, line: only.startLine })
-					: t("presence.changedLines", {
-							name: writer.spoken,
-							start: only.startLine,
-							end: only.endLine,
-						});
-			}
-			const lines = spans.map((span) =>
-				span.startLine === span.endLine
-					? String(span.startLine)
-					: t("presence.lineRange", { start: span.startLine, end: span.endLine }),
-			);
-			return t("presence.changedSpans", { name: writer.spoken, lines: lines.join(", ") });
-		},
-		places: (writer, count) => t("presence.changedPlaces", { name: writer.spoken, count }),
-		file: (name) => t("presence.rewrote", { name }),
-	};
+	const presenceText = usePresenceText();
 	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
 	const editable = edit !== undefined;
 	const options = fileEditorOptions(
