@@ -873,7 +873,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     [MCP servers](#mcp-servers).
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
-- **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
+- **Public surface (barrel):** `withFileMutationQueue`: pi's per-realpath queue, re-exported so the host
+  composes user writes into the queue pi's `edit`/`write` hold; the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the

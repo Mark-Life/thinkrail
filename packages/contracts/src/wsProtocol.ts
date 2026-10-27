@@ -12,7 +12,9 @@ import type {
 	EditorInfo,
 	ExistingWorktreeCandidate,
 	ExtensionCatalogEntry,
+	FileContent,
 	FileNode,
+	FileWriteResult,
 	GitCommit,
 	GitDiffScope,
 	GithubAuthStatus,
@@ -122,7 +124,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 92;
+export const PROTOCOL_VERSION = 93;
+export const FILE_WRITE_PROTOCOL_VERSION = 93;
 export const USER_THEMES_PROTOCOL_VERSION = 92;
 export const HOST_ENVIRONMENT_PROTOCOL_VERSION = 91;
 export const CLIENT_ERROR_REPORT_PROTOCOL_VERSION = 90;
@@ -251,6 +254,7 @@ export const WS_METHODS = {
 	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	fsWriteFile: "fs.writeFile",
 	specGraph: "spec.graph",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
@@ -507,6 +511,12 @@ export function isBackgroundCommandCompletionMessage(
 	return !!d.output && typeof d.output.text === "string" && typeof d.output.truncated === "boolean";
 }
 
+export const FILE_WRITE_MAX_BYTES = 4 * 1024 * 1024;
+
+export function toEditorText(raw: string): string {
+	return (raw.startsWith("\uFEFF") ? raw.slice(1) : raw).replace(/\r\n?/g, "\n");
+}
+
 export function customMessageText(content: WireCustomMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content
@@ -711,9 +721,15 @@ export interface WsMethodMap {
 		result: OpenPrResult;
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
-	"fs.readFile": {
-		params: { workspaceId: string; path: string };
-		result: { content: string; meta: ResourceMeta };
+	"fs.readFile": { params: { workspaceId: string; path: string }; result: FileContent };
+	"fs.writeFile": {
+		params: {
+			workspaceId: string;
+			path: string;
+			content: string;
+			expect: { hash: string | null };
+		};
+		result: FileWriteResult;
 	};
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
@@ -1089,6 +1105,8 @@ export type WsErrorCode =
 	| "RANGE_INVALID"
 	| "RECEIPT_UNKNOWN"
 	| "UNSUPPORTED_CHANGE"
+	| "NOT_EDITABLE"
+	| "FILE_TOO_LARGE"
 	| "LOGIN_NOT_OWNER"
 	| "MCP_CONFIG_INVALID"
 	| "MCP_PATH_UNSAFE"

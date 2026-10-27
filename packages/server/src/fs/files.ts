@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
+import type { FileContent, FileNode } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
+import { isMissing } from "./errno";
 
 function isContained(root: string, candidate: string): boolean {
 	const rel = relative(root, candidate);
@@ -31,9 +32,7 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 		try {
 			real = realpathSync(cursor);
 		} catch (error) {
-			const code =
-				typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+			if (!isMissing(error)) throw error;
 			const parent = dirname(cursor);
 			if (parent === cursor) throw error;
 			cursor = parent;
@@ -76,10 +75,7 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
-export function readFile(
-	workspaceId: string,
-	path: string,
-): { content: string; meta: ResourceMeta } {
+export function readFile(workspaceId: string, path: string): FileContent {
 	const { abs } = resolveInWorktree(workspaceId, path, true);
 	const bytes = readFileSync(abs);
 	const meta = resourceMeta(bytes, path);
