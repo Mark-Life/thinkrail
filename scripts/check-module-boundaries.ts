@@ -160,7 +160,13 @@ function sourceFiles(root: string): string[] {
 interface SourceImport {
 	specifier: string;
 	typeOnly: boolean;
+	names?: readonly string[];
 }
+
+const valueNames = (elements: ts.NodeArray<ts.ImportSpecifier | ts.ExportSpecifier>): string[] =>
+	elements
+		.filter((element) => !element.isTypeOnly)
+		.map((element) => (element.propertyName ?? element.name).text);
 
 function importSpecifiers(path: string): SourceImport[] {
 	const source = ts.createSourceFile(
@@ -171,8 +177,13 @@ function importSpecifiers(path: string): SourceImport[] {
 		path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
 	);
 	const specifiers: SourceImport[] = [];
-	const add = (node: ts.Expression | undefined, typeOnly = false): void => {
-		if (node && ts.isStringLiteralLike(node)) specifiers.push({ specifier: node.text, typeOnly });
+	const add = (
+		node: ts.Expression | undefined,
+		typeOnly = false,
+		names?: readonly string[],
+	): void => {
+		if (node && ts.isStringLiteralLike(node))
+			specifiers.push({ specifier: node.text, typeOnly, names });
 	};
 	const visit = (node: ts.Node): void => {
 		if (ts.isImportDeclaration(node)) {
@@ -185,7 +196,12 @@ function importSpecifiers(path: string): SourceImport[] {
 					ts.isNamedImports(bindings) &&
 					bindings.elements.length > 0 &&
 					bindings.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
+			const names = !clause
+				? []
+				: !clause.name && bindings && ts.isNamedImports(bindings)
+					? valueNames(bindings.elements)
+					: undefined;
+			add(node.moduleSpecifier, !!typeOnly, names);
 		} else if (ts.isExportDeclaration(node)) {
 			const clause = node.exportClause;
 			const typeOnly =
@@ -194,7 +210,11 @@ function importSpecifiers(path: string): SourceImport[] {
 					ts.isNamedExports(clause) &&
 					clause.elements.length > 0 &&
 					clause.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
+			add(
+				node.moduleSpecifier,
+				!!typeOnly,
+				clause && ts.isNamedExports(clause) ? valueNames(clause.elements) : undefined,
+			);
 		} else if (
 			ts.isImportEqualsDeclaration(node) &&
 			ts.isExternalModuleReference(node.moduleReference)
@@ -278,12 +298,44 @@ function sourceRule(rule: ModuleRule, subpath: string): ModuleRule {
 	}
 }
 
+const HISTORY_EXPORTS = new Set([
+	"history",
+	"historyField",
+	"historyKeymap",
+	"undo",
+	"redo",
+	"undoSelection",
+	"redoSelection",
+	"undoDepth",
+	"redoDepth",
+	"canUndoSelection",
+	"canRedoSelection",
+	"isolateHistory",
+	"invertedEffects",
+]);
+
+function historyViolation(
+	rule: ModuleRule,
+	subpath: string,
+	{ specifier, typeOnly, names }: SourceImport,
+): string | undefined {
+	if (specifier !== "@codemirror/commands" || typeOnly) return undefined;
+	if (rule.root === "apps/web" && subpath.startsWith("src/editing/")) return undefined;
+	if (!names)
+		return "reaches CodeMirror history outside apps/web/src/editing/; import keymaps by name";
+	const history = names.filter((name) => HISTORY_EXPORTS.has(name));
+	return history.length > 0
+		? `imports CodeMirror history (${history.join(", ")}) outside apps/web/src/editing/`
+		: undefined;
+}
+
 function sourceViolation(
 	rule: ModuleRule,
 	subpath: string,
-	{ specifier, typeOnly }: SourceImport,
+	sourceImport: SourceImport,
 	target: WorkspaceTarget | undefined,
 ): string | undefined {
+	const { specifier, typeOnly } = sourceImport;
 	if (target && !allowedEdge(sourceRule(rule, subpath), target.root)) {
 		return `creates forbidden ${rule.root} -> ${target.root} edge`;
 	}
@@ -317,6 +369,8 @@ function sourceViolation(
 			return `may use only public ${target.name}/${publicEntry}`;
 		}
 	}
+	const history = historyViolation(rule, subpath, sourceImport);
+	if (history) return history;
 	const browserSafe =
 		rule.root === "apps/web" ||
 		rule.root === "packages/ui" ||

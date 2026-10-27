@@ -291,7 +291,8 @@ IndexedDB (private mode, tests) means no drafts.
   `bufferHistoryChunk` Vite plugin (build only) therefore gives modules under `editing/` their own copy
   of `@codemirror/commands`; the build keeps only the history code in it, and a markdown edit session
   pays about 4 kB (1 kB gzip) for the second copy. The two copies share `@codemirror/state`. This holds
-  while nothing outside `editing/` uses CodeMirror history (`history()`, `historyField`, `undo`).
+  while nothing outside `editing/` uses CodeMirror history (`history()`, `historyField`, `undo`);
+  `check:boundaries` enforces this.
   No chunking option fixes this: a `codeSplitting` group for `view` still leaves an import edge from
   the shared `commands` code. The registry uses `historyField`, not `history()`. jsdiff stays out of
   the entry chunk.
