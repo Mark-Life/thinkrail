@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EditorState } from "@codemirror/state";
 import { markdownLanguage } from "./language";
-import { linkTarget } from "./links";
+import { linkHrefAt, linkTarget } from "./links";
 
 const state = (doc: string) => EditorState.create({ doc, extensions: markdownLanguage });
 
@@ -22,6 +22,16 @@ describe("linkTarget", () => {
 			href: "mailto:a@x.dev",
 		});
 		expect(linkTarget(doc, "docs/a.md", "")).toBeNull();
+	});
+
+	test("a bare or bracketed email opens as mailto, not as a file", () => {
+		const mail = state("Mail a@x.dev or <b@y.dev> or www.z.dev or <https://w.dev>\n");
+		const at = (text: string) =>
+			linkTarget(mail, "docs/a.md", linkHrefAt(mail, mail.doc.toString().indexOf(text) + 1) ?? "");
+		expect(at("a@x.dev")).toEqual({ kind: "external", href: "mailto:a@x.dev" });
+		expect(at("b@y.dev")).toEqual({ kind: "external", href: "mailto:b@y.dev" });
+		expect(at("www.z.dev")).toEqual({ kind: "external", href: "https://www.z.dev" });
+		expect(at("https://w.dev")).toEqual({ kind: "external", href: "https://w.dev" });
 	});
 
 	test("only http, https and mailto leave the app", () => {

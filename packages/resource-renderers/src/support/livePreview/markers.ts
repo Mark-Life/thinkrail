@@ -94,8 +94,11 @@ function plainText(tree: Tree, doc: Text, from: number, to: number): string {
 	return (text + doc.sliceString(at, to)).replace(/\s+/g, " ").trim();
 }
 
+const EMAIL = /^[^\s@<>:/]+@[^\s@<>:/]+\.[^\s@<>:/]+$/;
+
 function bareHref(text: string): string {
-	return /^www\./i.test(text) ? `https://${text}` : text;
+	if (/^www\./i.test(text)) return `https://${text}`;
+	return EMAIL.test(text) ? `mailto:${text}` : text;
 }
 
 export function liveMarks({

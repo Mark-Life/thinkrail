@@ -608,7 +608,7 @@ content's own height.
     and no matching reference definition (`array[0]`, `[WIP]`) stay literal text, as in CommonMark.
     Cmd/Ctrl+click, or Cmd/Ctrl+Enter with the caret on a link, follows it: an anchor finds its heading
     by the reading view's ids (syntax tree headings, `-n` for repeats), and only `http`, `https` and
-    `mailto` open outside the app. Inline marks are built only over the visible ranges.
+    `mailto` open outside the app; a bare or `<…>` email autolink opens as `mailto:`, as in the reading view. Inline marks are built only over the visible ranges.
   - **Blocks (`blocks.ts`, pure).** Tables, GitHub alerts, fenced code (Mermaid included), HTML
     blocks, a paragraph that is only an image, and the front matter render as block widgets while the
     selection is outside them, reusing the host markdown through `MarkdownDocument` (same sanitizing,
