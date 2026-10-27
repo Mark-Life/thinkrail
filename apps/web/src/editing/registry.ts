@@ -403,6 +403,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 						if (!entry.dropped)
 							entry.state = withDoc(entry.state, selectDoc(entry.state.doc, ranges));
 					},
+					selection: () => docSelection(entry.state.doc),
 					subscribe: (listener) => {
 						entry.views.add(listener);
 						return () => entry.views.delete(listener);

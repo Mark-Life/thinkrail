@@ -97,7 +97,8 @@ export function RendererView({
 	return <Component {...props} />;
 }
 
-const EDITOR_INPUT = ".monaco-editor .native-edit-context, .monaco-editor textarea.inputarea";
+const EDITOR_INPUT =
+	".monaco-editor .native-edit-context, .monaco-editor textarea.inputarea, .md-live .cm-content";
 
 export function focusRendererEditor(root: ParentNode | null): void {
 	root?.querySelector<HTMLElement>(EDITOR_INPUT)?.focus();

@@ -201,7 +201,8 @@ keeps it.
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
   engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
-  `node-htmldiff`).
+  `node-htmldiff`, and for the markdown live preview `@codemirror/state`, `@codemirror/view`,
+  `@codemirror/language`, `@codemirror/commands`, `@codemirror/search`, `@lezer/markdown`, `@lezer/common`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
   pi packages. `scripts/check-module-boundaries.ts` enforces it; only `apps/web` consumes the package today.
 - UI text follows [[architecture]] Decision 23: renderer chrome renders through `useT()`'s translator
@@ -251,14 +252,16 @@ refresh, and error UI. An immutable scope omits `hunkActions`; renderers must th
 control rather than emulate one.
 
 **Editing is a capability plus an optional prop, never a third intent.** `capabilities.edit` marks a
-renderer whose desktop view can edit text; only `code` (Monaco) sets it today. A host that wants an
+renderer whose desktop view can edit text: `code` (Monaco) and `markdown` (the CodeMirror live preview)
+set it. A host that wants an
 editable mount passes `ResourceViewProps.edit`, a `ResourceEditSession`; without it every view is
 read-only, so chat cards, phones and diffs stay read-only by construction. The session is
 editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes, kind)` reports the view's own
 edits with their `LocalEditKind` (type, delete, paste, composition start and step, other) so the host
 can group undo steps: `type` is only inserts without a line break, each one character when it replaces
 text, so Enter, a copied line or a drag-move is `other`; `paste` is the one change a paste event
-causes, `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
+causes; both views name the kind through one pure rule (`classifyEdit`, `support/editKind.ts`), so
+Preview and Source group undo the same way. `select(ranges)` reports the selection and `selection()` returns it, so a view that mounts later (the other mode, or Preview after the lock) starts at the same caret, and `subscribe(listener)` delivers every
 other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo, plus `disk {hash}` when
 the change is a disk version the host adopted or merged, so a view can tell who wrote it). The host owns undo:
 `undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
@@ -588,6 +591,23 @@ against a stale offset. Natural-height stacked sections run the same structure w
 the viewport's height is read back from the scroller after the sizer is set, so it never feeds the
 content's own height.
 
+- **Markdown edits in place (live preview).** With an `edit` session the markdown view is a
+  CodeMirror 6 editor over the raw text (`livePreview/`), so Preview and Source are two views of one
+  buffer and an autosave can never reformat the file: the doc is the session's LF text, mounted from
+  `snapshot()`, and the host owns line endings and the BOM (no `lineSeparator`). Without a session
+  (chat cards, phones, a buffer still loading) and while the view is **locked**, it is the read-only
+  reading view below, with its review commenting; with a session that view reads the session's text, so
+  locking never hides unsaved edits; the lock is the view's own toggle (`markdown-lock`,
+  `aria-pressed`), kept in the tab's view state with the scroll offset, so a review pass cannot type
+  into the file. The editor lives in its own lazy chunk (`LiveMarkdownEditor`) behind a Suspense whose
+  fallback is the reading view, so a surface without a session never loads CodeMirror and the first
+  editable open shows the document, not a skeleton. The language is `@lezer/markdown` with GFM, built
+  directly on `@codemirror/language`: `@codemirror/lang-markdown` pulls HTML, CSS and JavaScript
+  parsers in for embedded code.
+  The extensions, rules and binding live in `support/livePreview/` ([[submodule-resource-renderers-live-preview]]),
+  reached only through its barrel by `LiveMarkdownEditor` and `LiveFindBar`; it may use the engine-neutral
+  `support` rules (`conflictLayout`, `editKind`, `markdownAlerts`, `markdownLinks`, `presenceCore`,
+  `presenceDecorations`), never React, Monaco or the host.
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
   (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
@@ -672,8 +692,10 @@ content's own height.
   ones the mirror applied), cursor moves to `select`, and composition start and end to
   `setComposing`. Subscribed changes, undo and conflict choices land only through `model.applyEdits`,
   never `setValue` or `pushEditOperations`, so cursors and decorations stay. A rebind (new path or session) or unmount
-  disposes the mirror and restores the four methods. Open conflicts render as two view zones each
-  (`conflictWidgets.ts`, React portals in `MonacoConflictZones`): a lens above the user's lines with
+  disposes the mirror and restores the four methods. With no saved Monaco view state (the tab last showed
+  Preview) the editor adopts the session's `selection()` and reveals it. Open conflicts render as two view zones each
+  (`conflictWidgets.ts`, React portals in `MonacoConflictZones` of the engine-neutral `ConflictLens` and
+  `ConflictTheirs` from `conflictLens.tsx`, which the live preview reuses): a lens above the user's lines with
   **Mine** / **Theirs** / **Both**, and the disk lines below them; the user's lines get a whole-line
   wash. A choice puts focus back in the editor. Monaco marks view zones `aria-hidden`, so the lens
   buttons stay out of the tab order (`tabIndex -1`) and the host offers the same choices outside the
@@ -690,7 +712,8 @@ content's own height.
   A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
   before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
   a live editor scrolls smoothly.
-- **Presence marks (`presenceMarks.ts`, pure rules in `presenceDecorations.ts`).** The mirror hands each
+- **Presence marks (`presenceCore.ts` over an engine surface, pure rules in `presenceDecorations.ts`;
+  Monaco's surface is `presenceMarks.ts`).** The mirror hands each
   disk update to `attachPresence` with the text before it. `presencePaint` turns the change set into
   joined post-change line spans plus a capped diff (12 lines, 160 characters a line). When more than half
   of a file of 10 or more lines changed, it paints one whole-file chip (an overlay widget at the top right)
@@ -700,7 +723,7 @@ content's own height.
   tone so two writers on one line both show, and dashed for an inferred writer; a wash that fades in
   four steps over 2.4 s (static `presence-wash-0..3` classes the mark sets on a timer, never a CSS animation:
   Monaco rebuilds a line's overlay node when the cursor, a selection or a scroll redraws it, which would
-  restart an animation); a name flag (a content widget at the end of the first line: the writer kind's Remix icon, chat for an agent, person for the user, login box for an outside writer, rendered once to static SVG markup, then the label, on the tone's wash with no border, the same for an inferred writer) that fades in 5 s; a hover with the
+  restart an animation); a name flag (a content widget at the end of the first line: the writer kind's Remix icon, chat for an agent, person for the user, login box for an outside writer, rendered once to static SVG markup in `presenceIcons.ts` and handed to the core, so `presenceCore` stays React-free, then the label, on the tone's wash with no border, the same for an inferred writer) that fades in 5 s; a hover with the
   writer and the diff over the lines, and the writer as the bar's own tooltip (`linesDecorationsTooltip`,
   passed as plain text: Monaco escapes it). By keyboard the hover opens through F1, "Show or Focus Hover": the host's Cmd/Ctrl+K session switcher takes Monaco's Cmd/Ctrl+K Cmd/Ctrl+I chord first. The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
   writer has one line mark per style: a new landing takes over the writer's earlier ranges and diff and restarts the

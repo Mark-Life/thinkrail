@@ -1,10 +1,21 @@
-import { useMemo } from "react";
-import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
-import type { ResourceViewProps } from "../registry";
+import { RiLockLine, RiLockUnlockLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	lazy,
+	Suspense,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
+import { type ResourceMarkdown, useResourceHost } from "../host";
+import type { ResourceEditSession, ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentRehypePlugins } from "./markdownHtml";
-import { documentComponents, remarkHeadingIds } from "./markdownLinks";
+import { type DocumentLinks, documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
@@ -45,7 +56,7 @@ export function MarkdownDocument({
 	workspaceId: string;
 	path: string;
 	Markdown: ResourceMarkdown;
-	links: Pick<ResourceHost, "bytesUrl" | "openFile">;
+	links: DocumentLinks;
 }) {
 	const components = useMemo(
 		() => documentComponents({ workspaceId, path }, links),
@@ -110,9 +121,76 @@ function splicedSegments(
 	return segments;
 }
 
-export default function MarkdownPreview({
+const LiveMarkdownEditor = lazy(() => import("./LiveMarkdownEditor"));
+
+function lockedIn(viewState: unknown): boolean {
+	return (
+		typeof viewState === "object" && viewState !== null && Reflect.get(viewState, "locked") === true
+	);
+}
+
+export default function MarkdownPreview(props: ResourceViewProps) {
+	const { edit, onViewState } = props;
+	const t = useT();
+	const [locked, setLocked] = useState(() => lockedIn(props.viewState));
+	const lockedRef = useRef(locked);
+	useLayoutEffect(() => {
+		lockedRef.current = locked;
+	});
+	if (!edit) return <ReadingView {...props} />;
+	const viewProps: ResourceViewProps = {
+		...props,
+		...(onViewState
+			? {
+					onViewState: (state: unknown) =>
+						onViewState({
+							...(typeof state === "object" && state !== null ? state : {}),
+							locked: lockedRef.current,
+						}),
+				}
+			: {}),
+	};
+	const reading = <BufferReadingView {...viewProps} edit={edit} />;
+	return (
+		<div className="relative h-full">
+			{locked ? (
+				reading
+			) : (
+				<Suspense fallback={reading}>
+					<LiveMarkdownEditor {...viewProps} edit={edit} />
+				</Suspense>
+			)}
+			<Button
+				variant="ghost"
+				size="icon"
+				data-testid="markdown-lock"
+				aria-pressed={locked}
+				aria-label={t("viewer.markdown.lock")}
+				title={t("viewer.markdown.lock")}
+				onClick={() => setLocked((value) => !value)}
+				className="absolute top-8 right-8 z-10 bg-container-workspace-bg aria-pressed:text-primary"
+			>
+				{locked ? <RiLockLine className="size-16" /> : <RiLockUnlockLine className="size-16" />}
+			</Button>
+		</div>
+	);
+}
+
+function BufferReadingView(props: ResourceViewProps & { edit: ResourceEditSession }) {
+	const { edit, content } = props;
+	const text = useSyncExternalStore(
+		(listener) => edit.subscribe(listener),
+		() => edit.snapshot(),
+	);
+	return (
+		<ReadingView {...props} content={content.kind === "text" ? { ...content, text } : content} />
+	);
+}
+
+function ReadingView({
 	resource,
 	content,
+	edit,
 	review,
 	viewState,
 	onViewState,
@@ -126,6 +204,7 @@ export default function MarkdownPreview({
 		[path, workspaceId, links],
 	);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
+	const clearLock = edit ? "pr-16" : undefined;
 	if (!review) {
 		return (
 			<div
@@ -134,13 +213,15 @@ export default function MarkdownPreview({
 				className="h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal"
 			>
 				<article className="mx-auto max-w-[78ch] px-24 py-16">
-					<MarkdownDocument
-						content={text}
-						workspaceId={workspaceId}
-						path={path}
-						Markdown={Markdown}
-						links={links}
-					/>
+					<div className={clearLock}>
+						<MarkdownDocument
+							content={text}
+							workspaceId={workspaceId}
+							path={path}
+							Markdown={Markdown}
+							links={links}
+						/>
+					</div>
 				</article>
 			</div>
 		);
@@ -180,7 +261,7 @@ export default function MarkdownPreview({
 				return (
 					<article className="mx-auto max-w-[78ch] px-24 py-16">
 						{segments.map((segment) => (
-							<div key={segment.key}>
+							<div key={segment.key} className={clearLock}>
 								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}
 								{segment.nodes}
 							</div>

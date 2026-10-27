@@ -172,6 +172,16 @@ test("undo sends the change and the restored selection to the editor", () => {
 	]);
 });
 
+test("the buffer keeps the last caret for the next view, moved by later edits", () => {
+	const { disk, handle } = setup();
+	expect(handle.session.selection()).toEqual([{ anchor: 0, head: 0 }]);
+	handle.session.select([{ anchor: 5, head: 7 }]);
+	expect(handle.session.selection()).toEqual([{ anchor: 5, head: 7 }]);
+	disk.put(PATH, "zero\none\ntwo\n");
+	handle.adoptRead(disk.content(PATH), handle.readToken());
+	expect(handle.session.selection()).toEqual([{ anchor: 10, head: 12 }]);
+});
+
 test("a disk read waits while the editor is composing, then merges", async () => {
 	const { disk, handle } = setup();
 	type(handle, 0, "mine ");
