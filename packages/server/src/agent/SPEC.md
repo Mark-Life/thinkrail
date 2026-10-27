@@ -588,6 +588,34 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
+  - `fileGuard` — the collision guard: an inline extension (`fileGuard`, one of `buildResourceLoader`'s
+    shared factories and the delegated-child base set) over pi's public `tool_call` / `tool_result` hooks.
+    It feeds [[submodule-server-provenance]] and blocks a `write` over a change the agent has not read.
+    It never replaces pi's tools. `tool_call` opens a provenance claim for `read`/`edit`/`write` (a
+    `write` only once it passes the block check) and a bash window for `bash`/`powershell`. A successful
+    `read` records the session's baseline; a failed one records the file as absent when it is gone. A successful `edit`/`write` records an agent ledger entry and
+    a new baseline (an `edit` that started from a change the session never read keeps the old one); a failed one is recorded only when its bytes reached the disk (a `write` whose
+    content is on disk, an `edit` failing with pi's "Operation aborted" that changed the file). Every
+    other `edit` error is thrown before pi writes, so it records nothing: a change on disk then is
+    another writer's, and it must keep blocking a stale `write`. All re-read the file inside pi's
+    `withFileMutationQueue`, so they never see a half-written pi edit, and settle the claim so a writer
+    that slipped in before the re-read is not adopted (see the provenance spec). `tool_execution_end`,
+    which pi emits on every path, drops the claim and closes the window when a block or abort skipped
+    `tool_result`. pi's `edit` needs no guard: it re-reads the file and fails when its old text
+    is gone, so a change on the same lines is caught and other lines survive. pi's `write` replaces the
+    whole file, so a `write` is blocked when the session's last read is stale, by any writer: the
+    session's own shell is not exempt, since an outside save during the call looks the same. The reason
+    names the writers and diffs what the agent read against the disk. A file deleted since the read is
+    blocked until a `read` confirms it is gone. A file the session never read, or one over 8 MiB, is
+    not blocked. pi checks a parallel batch before running it, so a save can still land after the
+    check; that write is recorded as the agent's.
+    The session id comes from `ctx.sessionManager`; shutdown other than `reload` forgets its baselines,
+    claims and windows, using the id cached from `session_start` or a tool event, since the shutdown
+    budget can expire and `dispose()` make the ctx stale before the handler runs. `agentPath` resolves a path as pi's `resolveToCwd` does (strip `@`, fold Unicode
+    spaces, the win32 Git Bash/WSL/Cygwin drive forms, expand `~`, `file://`, resolve against `ctx.cwd`);
+    `agentReadPath` adds the spelling variants pi's `read` tries. A mismatch keys the read or write
+    under another path, so it loses the write block and the author for that spelling. The abort text
+    and the path rule are pi-sensitive seams, listed in `pi-compatibility.md`.
   - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
     **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
     the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
@@ -739,9 +767,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `pi-web-access` + `pi-spec-graph` + every registry extension's `childExtensions` (named inline,
     from [[submodule-server-extensions]]; none today) — deliberately not the parent's full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
-    also loads the core's base set (`childBaseExtensionFactories`, same decision): just
-    `oversizedImageGuard`, since a child's `read` returns raw images under the shared settings (see the
-    `buildSessionSettings` bullet). Web-access reaches the child set via a **named bundled-seam
+    also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
+    since a child's `read` returns raw images under the shared settings (see the
+    `buildSessionSettings` bullet), and `fileGuard`, so a subagent's writes are attributed and guarded
+    like its parent's. Web-access reaches the child set via a **named bundled-seam
     field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its raw
     third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
@@ -860,7 +889,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (normalizes ask-only assistant batches),
-    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), `fileGuard`
+    (see the `fileGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
     (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
@@ -951,8 +981,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
-  receipt stores); `trash` (the recoverable-delete primitive); Node.
-- **Forbidden:** `host`; sibling features other than `log`, `trash` and those narrow persistence surfaces (session
+  receipt stores); `trash` (the recoverable-delete primitive); `provenance` (the store `fileGuard` feeds and
+  its write-block text); Node.
+- **Forbidden:** `host`; sibling features other than `log`, `trash`, `provenance` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
