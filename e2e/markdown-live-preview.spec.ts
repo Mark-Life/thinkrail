@@ -55,6 +55,9 @@ test.describe("autosave", () => {
 		await expect(liveLine(page, "Typed.")).toHaveText("Some **bold** words and a link. Typed.");
 		await liveLine(page, "Notes").click();
 		await expect(liveLine(page, "Notes")).toHaveText("# Notes");
+		await expect(liveLine(page, "Notes").locator(".tr-code-text")).toHaveClass(
+			/\btext-text-muted\b/,
+		);
 		await expect(liveLine(page, "Typed.")).toHaveText("Some bold words and a link. Typed.");
 		await liveLine(page, "first").click();
 		await expect(liveLine(page, "first")).toHaveText("- first");

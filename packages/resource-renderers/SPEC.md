@@ -601,7 +601,8 @@ content's own height.
     and only while the editor has focus, so an unfocused page reads like the reading view: inline
     nodes (emphasis, strong, strikethrough, inline code, links, autolinks, escapes) reveal when the
     selection touches the node, line markers (heading `#`, quote `>`, list bullets, task boxes, rules)
-    when it touches the line. A shown marker is muted mono. Off the caret a bullet draws as `•`, a task
+    when it touches the line. A shown marker is mono in `text-muted`, the quiet tier that keeps the 4.5:1 floor, since it is text
+    the user reads and edits. Off the caret a bullet draws as `•`, a task
     box as a checkbox that toggles the source, named by its item's text and keeping its DOM and focus
     across a toggle, a rule as a line. Link targets hide with their brackets,
     line by line (CodeMirror refuses a plugin decoration that hides a line break); brackets with no URL

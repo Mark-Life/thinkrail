@@ -257,7 +257,7 @@ const STYLE_CLASS: Readonly<Record<InlineStyle, string>> = {
 	strike: "line-through",
 	code: "md-code rounded-sm bg-sunken",
 	link: "md-link text-primary underline decoration-primary-muted underline-offset-2",
-	marker: "tr-code-text text-text-subtle",
+	marker: "tr-code-text text-text-muted",
 };
 
 const LINE_CLASS: Readonly<Record<LineStyle, string>> = {
