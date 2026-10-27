@@ -85,6 +85,7 @@ export type ConflictChoice = "mine" | "theirs" | "both";
 export interface EditUpdate {
 	changes: readonly TextChange[];
 	selection?: readonly TextRange[];
+	disk?: { hash: string };
 }
 
 export interface ResourceEditSession {
@@ -101,11 +102,31 @@ export interface ResourceEditSession {
 	resolveConflict(id: number, choice: ConflictChoice): void;
 }
 
+export type PresenceTone = "user" | "agent1" | "agent2" | "agent3" | "external";
+
+export interface PresenceWriter {
+	id: string;
+	label: string;
+	spoken: string;
+	tone: PresenceTone;
+	inferred: boolean;
+}
+
+export interface PresenceWrite {
+	hash: string;
+	writer: PresenceWriter;
+}
+
+export interface SurfacePresence {
+	latest?: PresenceWrite;
+}
+
 export interface ResourceViewProps {
 	resource: ResourceDescriptor;
 	content: ResourceContent;
 	edit?: ResourceEditSession;
 	review?: SurfaceReview;
+	presence?: SurfacePresence;
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;

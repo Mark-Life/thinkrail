@@ -137,7 +137,9 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `docChanges` always finds the hop; a commit that moves it further throws instead of diffing.
 - **Deltas, never a reset.** Every text change that did not come from the attached editor (a merge, a
   disk adoption, undo, a conflict choice) is one CodeMirror transaction; the editor gets that
-  transaction's change set as `TextChange[]`. Remote text enters the doc as a line diff (`textChanges`,
+  transaction's change set as `TextChange[]`; a disk adoption or merge (a read, or a `stale` answer)
+  also carries the adopted `base.hash` as `disk`, so a view can pair the change with its writer.
+  Remote text enters the doc as a line diff (`textChanges`,
   jsdiff `diffArrays` capped at 2,000 edits and 50 ms),
   so cursors and scroll stay; a merge uses its own changes instead. Past a cap, texts with the same line count change line by line in place
   (a formatter or an agent rewrite); others fall back to one prefix/suffix-trimmed change. A disk
@@ -179,7 +181,8 @@ visible step is taken with it, so every Cmd/Ctrl+Z shows a change. A cursor move
    closes the socket on an oversized frame.
 3. `fs.writeFile {workspaceId, path, content: text, expect: {hash: base.hash}}` (`typedOn`'s hash after an
    undo of Reload).
-4. `written`: `base` becomes the sent text and the new hash; edits typed meanwhile stay dirty.
+4. `written`: `base` becomes the sent text and the new hash; edits typed meanwhile stay dirty. `fileIo`
+   also hands the hash to the store (`noteOwnFileSave`), so this save's `fsChanged` echo is known as this client's.
    `stale`: when the current disk version is no longer editable text the buffer gets issue
    `notEditable` and nothing merges. When it equals the buffer text it is adopted. Otherwise it merges
    into the latest text (typing during the write included) as above, and a merge with no open conflict

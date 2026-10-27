@@ -590,7 +590,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `FileRead` = `FileContent` (`{ content, meta: ResourceMeta }`) plus an optional **`lastWrite`**
   (`FileLastWrite {author, at}`): who wrote this exact version, as far as the host knows. `FileAuthor` is
   `user{thisClient}`, `agent{sessionId, via:"tool", toolName}`, `agent{sessionId, via:"script"}`
-  or `external`; the last two are inferred from the mtime, so the variant itself says so. The host never puts a clientKey on the wire, only whether the
+  or `external`; the last two are inferred from the change time (the later of mtime and ctime), so the variant itself says so. The host never puts a clientKey on the wire, only whether the
   writer is the asking client. The field needs no version gate: a current host also omits it when the
   author is unknown, so an older host's absence means the same thing to a newer client, and an older
   client ignores it; **`fs.writeFile`** (`FILE_WRITE_PROTOCOL_VERSION` =
@@ -817,7 +817,14 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   after the cap stays `detected`, and only a pathless platform/startup uncertainty is `unknown`; a pathless
   non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
-  frame is harmless.
+  frame is harmless. An optional **`authors`** (`Record<path, FsChangeWrite>`, `{author, hash}`) names
+  who wrote a path's new version when the host knows. `FsChangeAuthor` is `FileAuthor` with the user
+  variant reduced to `{kind:"user"}`: the frame is one broadcast, so it cannot say which client saved.
+  `hash` is the version's hash (`null` for a delete), which lets a client pair the author with the change
+  its buffer merged. A path missing from `authors` is unknown, never `external`; an older host sends no
+  `authors`, and an older client ignores it, so the field needs no version gate. **`authorsOnly: true`** marks a
+  frame that only adds `authors` for paths an earlier frame already invalidated: a client folds the authors and
+  re-reads nothing. An older client treats it as one more nudge, which is harmless.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
   in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:

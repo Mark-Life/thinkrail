@@ -1,8 +1,8 @@
 import { statSync } from "node:fs";
 import { sep } from "node:path";
-import type { FileAuthor, FileLastWrite } from "@thinkrail/contracts";
+import type { FileAuthor, FileLastWrite, FsChangeWrite } from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
-import { editorText, type FileSnapshot, fileKey } from "./snapshot";
+import { editorText, type FileSnapshot, fileKey, readSnapshot } from "./snapshot";
 
 export type WriteAuthor =
 	| { kind: "user"; clientKey: string }
@@ -49,6 +49,12 @@ interface Claim {
 	mutates: boolean;
 	hash: string | null;
 	kept?: Baseline;
+	held?: Held[];
+}
+
+interface Held {
+	hash: string | null;
+	late: (write: FsChangeWrite) => void;
 }
 
 interface Settled {
@@ -71,6 +77,7 @@ const TEXT_MAX_BYTES = 4 * TEXT_MAX_CHARS;
 const UNREAD_RECENT_MS = 10 * 60 * 1000;
 const WINDOW_SLACK_MS = 2000;
 const WINDOW_GRACE_MS = 1500;
+const CHANGE_FRESH_MS = 10_000;
 
 function touch<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
 	map.delete(key);
@@ -90,13 +97,24 @@ function within(key: string, root: string): boolean {
 	return key === root || key.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
 }
 
-function mtimeOf(path: string): number | undefined {
+function changedAt(path: string): number | undefined {
 	try {
-		return statSync(path).mtimeMs;
+		const stat = statSync(path);
+		return Math.max(stat.mtimeMs, stat.ctimeMs);
 	} catch {
 		return undefined;
 	}
 }
+
+function wireChangeAuthor(author: WriteAuthor | FileAuthor): FsChangeWrite["author"] {
+	return author.kind === "user" ? { kind: "user" } : author;
+}
+
+const scriptAuthor = (window: BashWindow): FileAuthor => ({
+	kind: "agent",
+	sessionId: window.sessionId,
+	via: "script",
+});
 
 const textId = (key: string, hash: string) => `${key}\n${hash}`;
 const callId = (sessionId: string, toolCallId: string) => `${sessionId}\n${toolCallId}`;
@@ -200,11 +218,49 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		);
 	}
 
-	function settle(sessionId: string, toolCallId: string | undefined, key: string) {
+	function heldAuthor(claim: Claim, hash: string | null, closer: WriteAuthor | undefined) {
+		const entries = writes.get(claim.key) ?? [];
+		const entry = entries.findLast(
+			(candidate) => candidate.seq > claim.seq && candidate.hash === hash,
+		);
+		if (entry) return wireChangeAuthor(entry.author);
+		if (hash === claim.hash || !closer) return undefined;
+		const userSaved = entries.some(
+			(candidate) => candidate.seq > claim.seq && candidate.author.kind === "user",
+		);
+		if (userSaved) return wireChangeAuthor(closer);
+		const tracked = entries.some((candidate) => candidate.seq <= claim.seq);
+		return tracked ? ({ kind: "external" } as const) : undefined;
+	}
+
+	function heldWrite(claim: Claim, hash: string | null, closer: WriteAuthor | undefined) {
+		const author = heldAuthor(claim, hash, closer);
+		return author && { author, hash };
+	}
+
+	function closeClaim(id: string, closer?: WriteAuthor): void {
+		const claim = claims.get(id);
+		claims.delete(id);
+		const held = claim?.held;
+		if (!claim || !held) return;
+		queueMicrotask(() => {
+			for (const { hash, late } of held) {
+				const write = heldWrite(claim, hash, closer);
+				if (write) late(write);
+			}
+		});
+	}
+
+	function settle(
+		sessionId: string,
+		toolCallId: string | undefined,
+		key: string,
+		closer?: WriteAuthor,
+	) {
 		if (toolCallId === undefined) return undefined;
 		const id = callId(sessionId, toolCallId);
 		const claim = claims.get(id);
-		claims.delete(id);
+		closeClaim(id, claim?.key === key ? closer : undefined);
 		if (!claim || claim.key !== key) return undefined;
 		const othersOpen = [...claims.values()].some(
 			(other) => other.mutates && other.key === key && other.sessionId !== sessionId,
@@ -245,7 +301,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		const after = input.after;
 		const hash = after === null ? null : (input.hash ?? hashBytes(after));
 		const agent = input.author.kind === "agent" ? input.author : undefined;
-		const settled = agent ? settle(agent.sessionId, input.toolCallId, key) : undefined;
+		const settled = agent ? settle(agent.sessionId, input.toolCallId, key, agent) : undefined;
 		if (input.changedOnly && (!settled || settled.hash === hash)) return;
 		const latest = writes.get(key)?.at(-1);
 		if (settled?.contested && latest?.hash === hash) {
@@ -339,7 +395,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 	}
 
 	function endTool(input: { sessionId: string; toolCallId: string }): void {
-		claims.delete(callId(input.sessionId, input.toolCallId));
+		closeClaim(callId(input.sessionId, input.toolCallId));
 		closeBashWindow(input);
 	}
 
@@ -362,23 +418,55 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		if (entries.length === 0 && !windows.some((window) => within(key, window.root))) {
 			return undefined;
 		}
-		const mtimeMs = mtimeOf(input.path);
+		const mtimeMs = changedAt(input.path);
 		if (mtimeMs === undefined) return undefined;
 		const since = newest?.at ?? Number.NEGATIVE_INFINITY;
 		const window = scriptWindows(key, since, mtimeMs).at(-1);
 		if (window) {
-			return {
-				author: { kind: "agent", sessionId: window.sessionId, via: "script" },
-				at: mtimeMs,
-			};
+			return { author: scriptAuthor(window), at: mtimeMs };
 		}
 		if (entries.length > 0) return { author: { kind: "external" }, at: mtimeMs };
 		return undefined;
 	}
 
+	function changeWrite(
+		path: string,
+		late?: (write: FsChangeWrite) => void,
+	): FsChangeWrite | undefined {
+		const key = fileKey(path);
+		for (const claim of claims.values()) {
+			if (claim.key !== key || !claim.mutates) continue;
+			if (late) {
+				const hash = readSnapshot(path)?.hash ?? null;
+				claim.held = [...(claim.held ?? []).filter((held) => held.hash !== hash), { hash, late }];
+			}
+			return undefined;
+		}
+		const newest = writes.get(key)?.at(-1);
+		const fresh = (at: number) => now() - at <= CHANGE_FRESH_MS;
+		const deleted = () => {
+			if (newest && newest.hash === null && fresh(newest.at)) {
+				return { author: wireChangeAuthor(newest.author), hash: null };
+			}
+			const window = windowsAt(key, now()).at(-1);
+			return window && { author: scriptAuthor(window), hash: null };
+		};
+		const mtimeMs = changedAt(path);
+		if (mtimeMs === undefined) return deleted();
+		const answerable = newest
+			? fresh(newest.at) || fresh(mtimeMs)
+			: fresh(mtimeMs) && windowsAt(key, mtimeMs).length > 0;
+		if (!answerable) return undefined;
+		const snapshot = readSnapshot(path);
+		if (!snapshot) return changedAt(path) === undefined ? deleted() : undefined;
+		const last = lastWrite({ path, hash: snapshot.hash, clientKey: "" });
+		if (!last || !fresh(last.at)) return undefined;
+		return { author: wireChangeAuthor(last.author), hash: snapshot.hash };
+	}
+
 	function forgetSession(sessionId: string): void {
 		reads.delete(sessionId);
-		for (const [id, claim] of claims) if (claim.sessionId === sessionId) claims.delete(id);
+		for (const [id, claim] of claims) if (claim.sessionId === sessionId) closeClaim(id);
 		for (const window of windows) {
 			if (window.sessionId === sessionId && window.end === undefined) window.end = now();
 		}
@@ -394,6 +482,7 @@ export function createProvenance(options: { now?: () => number } = {}) {
 		closeBashWindow,
 		endTool,
 		lastWrite,
+		changeWrite,
 		forgetSession,
 	};
 }

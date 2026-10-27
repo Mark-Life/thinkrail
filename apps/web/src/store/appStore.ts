@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	ComposerGrowthLimit,
 	ExtUiRequest,
+	FileRead,
 	FileSaveMode,
 	GitDiffScope,
 	HostPlatform,
@@ -102,6 +103,14 @@ import {
 	type ChatResourceSnapshots,
 	staleChatResources,
 } from "./chatResources";
+import {
+	type FileActivity,
+	nextFileActivityExpiry,
+	pruneFileActivity,
+	withFileReadActivity,
+	withFsChangeActivity,
+	withOwnFileSave,
+} from "./fileActivity";
 import {
 	type FileBufferSummaries,
 	type FileBufferSummary,
@@ -1032,6 +1041,10 @@ interface AppState {
 	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	fileBuffersByWorkspace: FileBufferSummaries;
+	fileActivityByWorkspace: FileActivity;
+	expireFileActivity: () => void;
+	noteOwnFileSave: (workspaceId: string, path: string, hash: string | null) => void;
+	noteFileRead: (workspaceId: string, path: string, file: FileRead) => void;
 	setFileBufferSummary: (
 		workspaceId: string,
 		path: string,
@@ -2296,6 +2309,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
 	fileBuffersByWorkspace: {},
+	fileActivityByWorkspace: {},
 	turnsByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
@@ -2600,6 +2614,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				fileBuffersByWorkspace: omitKey(state.fileBuffersByWorkspace, workspaceId),
+				fileActivityByWorkspace: omitKey(state.fileActivityByWorkspace, workspaceId),
 				turnsByWorkspace: omitKey(state.turnsByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				mcpByWorkspace: omitKey(state.mcpByWorkspace, workspaceId),
@@ -3220,6 +3235,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	noteFsChanged: (payload) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[payload.workspaceId]) return {};
+			const activity = withFsChangeActivity(s.fileActivityByWorkspace, payload, Date.now());
+			if (payload.authorsOnly) {
+				return activity === s.fileActivityByWorkspace ? {} : { fileActivityByWorkspace: activity };
+			}
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
 			const tick = (prev?.tick ?? 0) + 1;
 			const skillChanged = payload.skillChange !== "none";
@@ -3228,6 +3247,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.fsChangesByWorkspace,
 					[payload.workspaceId]: { tick, paths: payload.paths, truncated: payload.truncated },
 				},
+				...(activity === s.fileActivityByWorkspace ? {} : { fileActivityByWorkspace: activity }),
 				...(skillChanged
 					? {
 							skillChangeTickByWorkspace: {
@@ -3238,6 +3258,37 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {}),
 			};
 		}),
+	expireFileActivity: () =>
+		set((s) => {
+			const due = nextFileActivityExpiry(s.fileActivityByWorkspace);
+			if (due === null) return s;
+			const next = pruneFileActivity(s.fileActivityByWorkspace, Math.max(due, Date.now()));
+			return next === s.fileActivityByWorkspace ? s : { fileActivityByWorkspace: next };
+		}),
+	noteFileRead: (workspaceId, path, file) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return s;
+			const activity = withFileReadActivity(s.fileActivityByWorkspace, {
+				workspaceId,
+				path,
+				file,
+				now: Date.now(),
+			});
+			return activity === s.fileActivityByWorkspace ? s : { fileActivityByWorkspace: activity };
+		}),
+	noteOwnFileSave: (workspaceId, path, hash) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? s
+				: {
+						fileActivityByWorkspace: withOwnFileSave(s.fileActivityByWorkspace, {
+							workspaceId,
+							path,
+							hash,
+							seen: Date.now(),
+						}),
+					},
+		),
 	setFileBufferSummary: (workspaceId, path, summary) =>
 		set((s) => {
 			if (summary !== null && s.removedWorkspaceIds[workspaceId]) return s;
