@@ -149,6 +149,20 @@ test("isIgnoredPath skips .git and node_modules subtrees and .DS_Store noise", (
 	expect(isIgnoredPath("my_node_modules_tool/a.ts")).toBe(false);
 });
 
+test("isIgnoredPath skips the host's own temp and trash-claim files but not its recovery files", () => {
+	expect(isIgnoredPath(".thinkrail-write-1-ab12cd34.tmp")).toBe(true);
+	expect(isIgnoredPath("src/deep/.thinkrail-write-42-0f0f0f0f.tmp")).toBe(true);
+	expect(isIgnoredPath("src/.thinkrail-revert-01J00000000000000000000000")).toBe(true);
+	expect(isIgnoredPath(".thinkrail-recovery-01J0000000000000000000000")).toBe(false);
+	expect(isIgnoredPath(".thinkrail-notes-draft.tmp")).toBe(false);
+	expect(isIgnoredPath("docs/.thinkrail-cache-v2.tmp")).toBe(false);
+	expect(isIgnoredPath(".thinkrail-write-1-ab12cd34.tmp.bak")).toBe(false);
+	expect(isIgnoredPath(".thinkrail-revert-notes")).toBe(false);
+	expect(isIgnoredPath(".thinkrail/context/plan.md")).toBe(false);
+	expect(isIgnoredPath(".thinkrail-write.tmp")).toBe(false);
+	expect(isIgnoredPath("notes.tmp")).toBe(false);
+});
+
 let dataDir: string;
 let worktree: string;
 let payloads: WorkspaceFsChangedPayload[];
