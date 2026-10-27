@@ -101,6 +101,11 @@ import {
 	staleChatResources,
 } from "./chatResources";
 import {
+	type FileBufferSummaries,
+	type FileBufferSummary,
+	withFileBufferSummary,
+} from "./fileBuffers";
+import {
 	EMPTY_MCP_PROJECTION,
 	foldMcpList,
 	foldMcpSnapshot,
@@ -1024,6 +1029,12 @@ interface AppState {
 		surface: ReviewFocusSurface;
 	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
+	fileBuffersByWorkspace: FileBufferSummaries;
+	setFileBufferSummary: (
+		workspaceId: string,
+		path: string,
+		summary: FileBufferSummary | null,
+	) => void;
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;
 	activeLogin: LoginState | null;
@@ -2280,6 +2291,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatLocationRequest: null,
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
+	fileBuffersByWorkspace: {},
 	turnsByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
@@ -2582,6 +2594,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					(id) => id !== workspaceId,
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+				fileBuffersByWorkspace: omitKey(state.fileBuffersByWorkspace, workspaceId),
 				turnsByWorkspace: omitKey(state.turnsByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				mcpByWorkspace: omitKey(state.mcpByWorkspace, workspaceId),
@@ -3219,6 +3232,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}
 					: {}),
 			};
+		}),
+	setFileBufferSummary: (workspaceId, path, summary) =>
+		set((s) => {
+			if (summary !== null && s.removedWorkspaceIds[workspaceId]) return s;
+			const next = withFileBufferSummary(s.fileBuffersByWorkspace, workspaceId, path, summary);
+			return next === s.fileBuffersByWorkspace ? s : { fileBuffersByWorkspace: next };
 		}),
 	markSkillsSynced: (sessionId, syncedTick) =>
 		set((s) => {

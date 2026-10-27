@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	FILE_WRITE_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -11,6 +12,7 @@ import {
 import {
 	mergeSessionStateRecords,
 	supportsChangeMutations,
+	supportsFileWrite,
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
@@ -36,6 +38,12 @@ test("change mutations are offered only by a host at or beyond their capability 
 	expect(supportsChangeMutations(CHANGE_MUTATIONS_PROTOCOL_VERSION + 1)).toBe(true);
 	expect(supportsChangeMutations(CHANGE_MUTATIONS_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsChangeMutations(null)).toBe(false);
+});
+
+test("files are editable only against a host that serves fs.writeFile", () => {
+	expect(supportsFileWrite(FILE_WRITE_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsFileWrite(FILE_WRITE_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsFileWrite(null)).toBe(false);
 });
 
 test("rich review anchors are authored only against a host that preserves them", () => {
