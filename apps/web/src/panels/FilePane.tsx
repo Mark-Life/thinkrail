@@ -13,12 +13,13 @@ import {
 	useRendererSelection,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { Suspense, useEffect, useMemo, useRef } from "react";
-import { canEditFile, useFileBuffer, useFileBufferText } from "../editing";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { canEditFile, saveFile, useFileBuffer, useFileBufferText } from "../editing";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
-import { selectFileBufferSummary, useAppStore } from "../store";
+import { selectFileAutosaving, selectFileBufferSummary, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { commentAfterSave, hidesReview } from "./commentAfterSave";
 import { FileEditBanner } from "./FileEditBanner";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
@@ -56,6 +57,9 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const summary = useAppStore((state) => selectFileBufferSummary(state, tab.workspaceId, tab.path));
 	const isPreview = useAppStore((state) => state.previewTabByWorkspace[tab.workspaceId] === tab.id);
 	const dirty = summary?.dirty === true;
+	const autosaving = useAppStore((state) => selectFileAutosaving(state, tab.workspaceId, tab.path));
+	const saveMode = useAppStore((state) => state.fileSaveMode);
+	const [composers, setComposers] = useState(0);
 	useEffect(() => {
 		if (dirty && isPreview) useAppStore.getState().setActiveTab(tab.id, "keep");
 	}, [dirty, isPreview, tab.id]);
@@ -88,8 +92,23 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const content = resourceContent(bufferText ?? tab.content, tab.meta, () =>
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
-	const reviewSurface = dirty ? undefined : review.worktree;
-	const heldFocus = dirty ? review.worktree.focus : null;
+	const worktreeReview = useMemo(
+		() => ({
+			...review.worktree,
+			commenting: commentAfterSave(review.worktree.commenting, {
+				dirty: () =>
+					selectFileBufferSummary(useAppStore.getState(), tab.workspaceId, tab.path)?.dirty ===
+					true,
+				save: () => saveFile(tab.workspaceId, tab.path),
+				refusal: () => t("panels.reviewCommenting.unsavedFile"),
+				onComposing: (open) => setComposers((count) => count + (open ? 1 : -1)),
+			}),
+		}),
+		[review.worktree, tab.workspaceId, tab.path, t],
+	);
+	const reviewHidden = hidesReview({ dirty, autosaving, composing: composers > 0 });
+	const reviewSurface = reviewHidden ? undefined : worktreeReview;
+	const heldFocus = reviewHidden ? review.worktree.focus : null;
 	const dropFocus = review.worktree.onFocusHandled;
 	useEffect(() => {
 		if (heldFocus) dropFocus();
@@ -147,6 +166,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			{buffer ? (
 				<FileEditBanner
 					summary={summary}
+					autosave={saveMode === "auto"}
 					onReload={() => resolveConflict(buffer.reload)}
 					onKeepMine={() => resolveConflict(buffer.keepMine)}
 					onResolveFirst={(choice) => resolveFirstConflict(buffer.session, choice)}

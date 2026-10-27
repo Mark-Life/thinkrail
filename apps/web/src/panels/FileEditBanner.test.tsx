@@ -1,13 +1,15 @@
 import { expect, test } from "bun:test";
 import { CONFLICT_CHOICES } from "@thinkrail/resource-renderers";
 import { renderToStaticMarkup } from "react-dom/server";
+import { platformShortcutLabel } from "../lib";
 import type { FileBufferSummary } from "../store";
 import { FileEditBanner, historyCommand } from "./FileEditBanner";
 
-const render = (summary: FileBufferSummary | undefined) =>
+const render = (summary: FileBufferSummary | undefined, autosave = false) =>
 	renderToStaticMarkup(
 		<FileEditBanner
 			summary={summary}
+			autosave={autosave}
 			onReload={() => {}}
 			onKeepMine={() => {}}
 			onResolveFirst={() => {}}
@@ -74,4 +76,12 @@ test("a disk change merged into unsaved edits is announced while the buffer is d
 	expect(render({ status: "dirty", dirty: true, merges: 1 })).not.toContain("file-edit-banner");
 	expect(render({ status: "dirty", dirty: true })).not.toMatch(announced);
 	expect(render({ status: "clean", dirty: false, merges: 1 })).not.toMatch(announced);
+});
+
+test("offline asks for Cmd/Ctrl+S only when autosave will not write on reconnect", () => {
+	const offline: FileBufferSummary = { status: "error", dirty: true, error: "offline" };
+	expect(render(offline, false)).toContain(`Press ${platformShortcutLabel("S")} to save`);
+	const auto = render(offline, true);
+	expect(auto).toContain("Your edits save once it reconnects");
+	expect(auto).not.toContain(platformShortcutLabel("S"));
 });
