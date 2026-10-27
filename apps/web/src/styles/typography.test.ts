@@ -420,7 +420,7 @@ describe("generated CSS", () => {
 		for (const system of Object.keys(typography.proseSystems)) {
 			const root = proseRootClassName(typography, system);
 			const block = new RegExp(
-				`\\.${root} :is\\(strong, b, \\.md-strong\\)${EXEMPT_PATTERN} \\{([^}]*)\\}`,
+				`\\.${root} :is\\(strong, b, :where\\(\\.md-strong\\)\\)${EXEMPT_PATTERN} \\{([^}]*)\\}`,
 			).exec(GENERATED);
 			expect(block, `${system}: the weight-only strong rule is missing`).not.toBeNull();
 			const declarations = (block?.[1] ?? "")
@@ -442,6 +442,15 @@ describe("generated CSS", () => {
 					`.${root}${selector}${selector ? EXEMPT : ""} {`,
 				);
 		}
+	});
+
+	it("adds no specificity for the live preview's line classes, so table-cell code keeps its size", () => {
+		for (const [id, selector] of Object.entries(PROSE_SELECTORS))
+			expect(selector.replace(/:where\([^()]*\)/g, ""), id).not.toContain(".");
+		const root = proseRootClassName(typography, "chat");
+		const rule = (id: string) => GENERATED.indexOf(`.${root}${PROSE_SELECTORS[id]}${EXEMPT} {`);
+		expect(rule("inlineCode")).toBeGreaterThan(-1);
+		expect(rule("tableInlineCode")).toBeGreaterThan(rule("inlineCode"));
 	});
 
 	it("exposes the code family + size tokens Monaco and xterm read", () => {

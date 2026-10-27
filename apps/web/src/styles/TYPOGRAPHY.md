@@ -217,7 +217,9 @@ a cell keeps the table's.
 Each element selector also matches one class (`md-h1`…`md-h6`, `md-code`, `md-codeblock`,
 `md-quote`, `md-strong`): the markdown live preview is a CodeMirror editor whose lines are
 `div`s, so its heading and code lines wear those classes inside `.tr-prose-doc` and get the document's
-type from the same generated rules.
+type from the same generated rules. The class arm sits in `:where()`, so it adds no specificity: an
+element rule keeps the weight it has without the class, and the later table-cell code rule still beats
+inline code.
 
 A "prose skin" at a call site carries only spacing, measure and chrome (`chat/Markdown.tsx` = bubble
 rhythm, `resource-renderers/support/MarkdownPreview.tsx` = document rhythm, heading rules, table chrome). Never add a
