@@ -28,8 +28,9 @@ import * as monaco from "monaco-editor/editor/editor.api.js";
 import editorWorker from "monaco-editor/editor/editor.worker?worker";
 import onigWasmUrl from "shiki/onig.wasm?url";
 import type { ResourceCodeHost } from "../host";
-import type { ResourceEditSession, TextChange } from "../registry";
+import type { EditConflict, ResourceEditSession } from "../registry";
 import { editorWrappingOptions } from "./editorWrapping";
+import { mirrorEditSession } from "./monacoMirror";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
 declare global {
@@ -175,18 +176,12 @@ export function syncFileModel(
 	if (input.text !== appliedText) current.setValue(input.text);
 }
 
-function editOperation(model: editor.ITextModel, change: TextChange) {
-	const start = model.getPositionAt(change.from);
-	const end = model.getPositionAt(change.to);
-	return {
-		range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-		text: change.insert,
-	};
-}
-
 export function bindEditSession(
 	codeEditor: editor.IStandaloneCodeEditor,
-	input: Omit<FileModelInput, "text"> & { session: ResourceEditSession },
+	input: Omit<FileModelInput, "text"> & {
+		session: ResourceEditSession;
+		onConflicts(conflicts: readonly EditConflict[]): void;
+	},
 ) {
 	const text = input.session.snapshot();
 	let model = codeEditor.getModel();
@@ -196,43 +191,10 @@ export function bindEditSession(
 		codeEditor.setModel(model);
 		previous?.dispose();
 	} else if (model.getValue(monaco.editor.EndOfLinePreference.LF) !== text) {
-		model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+		model.applyEdits([{ range: model.getFullModelRange(), text }]);
 	}
 	if (model.getEOL() !== "\n") model.setEOL(monaco.editor.EndOfLineSequence.LF);
-	const bound = model;
-	let applying = false;
-	const local = bound.onDidChangeContent((event) => {
-		if (applying || event.isEolChange) return;
-		input.session.applyLocal(
-			event.changes.map((change) => ({
-				from: change.rangeOffset,
-				to: change.rangeOffset + change.rangeLength,
-				insert: change.text,
-			})),
-			"other",
-		);
-	});
-	const unsubscribe = input.session.subscribe(({ changes }) => {
-		if (changes.length === 0 || bound.isDisposed()) return;
-		applying = true;
-		try {
-			bound.pushStackElement();
-			bound.pushEditOperations(
-				[],
-				changes.map((change) => editOperation(bound, change)),
-				() => null,
-			);
-			bound.pushStackElement();
-		} finally {
-			applying = false;
-		}
-	});
-	return {
-		dispose() {
-			local.dispose();
-			unsubscribe();
-		},
-	};
+	return mirrorEditSession(codeEditor, model, input.session, input.onConflicts);
 }
 
 export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
