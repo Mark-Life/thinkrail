@@ -50,3 +50,12 @@ export function unmergeableText(tag: string) {
 		index % 2 === 0 && tag ? `${tag} line ${index}\n` : `line ${index}\n`,
 	).join("");
 }
+
+export function conflictLens(page: Page) {
+	return page.locator('[data-testid="edit-conflict-lens"]:visible');
+}
+
+export async function editorShortcut(page: Page, key: string) {
+	const mac = await page.evaluate(() => navigator.userAgent.includes("Macintosh"));
+	await page.keyboard.press(`${mac ? "Meta" : "Control"}+${key}`);
+}

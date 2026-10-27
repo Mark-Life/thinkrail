@@ -2,7 +2,14 @@ import { useT } from "@thinkrail/locales/react";
 import type { editor } from "monaco-editor/editor/editor.api.js";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
-import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
+import type {
+	ConflictChoice,
+	ResourceDescriptor,
+	ResourceViewProps,
+	SurfaceReview,
+} from "../registry";
+import { attachConflictZones, type ConflictZone } from "./conflictWidgets";
+import { MonacoConflictZones } from "./MonacoConflictZones";
 import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
@@ -87,6 +94,7 @@ export default function MonacoEditor({
 		onViewState,
 	});
 	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>(NO_REVIEW_ZONES);
+	const [conflictZones, setConflictZones] = useState<readonly ConflictZone[]>([]);
 	const hasReview = review !== undefined;
 
 	const detachReview = () => {
@@ -172,9 +180,16 @@ export default function MonacoEditor({
 	useLayoutEffect(() => {
 		const codeEditor = editorRef.current;
 		if (!codeEditor || !edit) return;
-		const binding = bindEditSession(codeEditor, { scope, path, session: edit });
+		const zones = attachConflictZones(codeEditor, setConflictZones);
+		const binding = bindEditSession(codeEditor, {
+			scope,
+			path,
+			session: edit,
+			onConflicts: zones.setConflicts,
+		});
 		return () => {
 			binding.dispose();
+			zones.dispose();
 			appliedRef.current = { ...appliedRef.current, text: null };
 		};
 	}, [scope, path, edit]);
@@ -191,6 +206,10 @@ export default function MonacoEditor({
 	}, [options]);
 
 	const closeComposer = () => threadsRef.current?.closeComposer();
+	const resolveConflict = (id: number, choice: ConflictChoice) => {
+		edit?.resolveConflict(id, choice);
+		editorRef.current?.focus();
+	};
 	const layoutReviewZones = () => threadsRef.current?.layout();
 
 	useLayoutEffect(() => {
@@ -214,6 +233,7 @@ export default function MonacoEditor({
 	return (
 		<>
 			<div ref={containerRef} className="h-full w-full text-left" />
+			<MonacoConflictZones zones={conflictZones} onResolve={resolveConflict} />
 			<MonacoReviewZones
 				zones={reviewZones}
 				review={review}

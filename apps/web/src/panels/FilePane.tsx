@@ -1,10 +1,12 @@
 import { useT } from "@thinkrail/locales/react";
 import {
+	type ConflictChoice,
 	describeResource,
 	focusRendererEditor,
 	PENDING_TEXT_META,
 	RendererToggles,
 	RendererView,
+	type ResourceEditSession,
 	rendererImplementationKey,
 	resourceContent,
 	UnplacedReviewStrip,
@@ -97,6 +99,11 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		action();
 		focusRendererEditor(viewRef.current);
 	};
+	const resolveFirstConflict = (session: ResourceEditSession, choice: ConflictChoice) => {
+		const [first] = session.conflicts();
+		if (first) session.resolveConflict(first.id, choice);
+		if (session.conflicts().length === 0) focusRendererEditor(viewRef.current);
+	};
 	const reviews = reviewSurface ? [reviewSurface] : [];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
@@ -142,6 +149,10 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					summary={summary}
 					onReload={() => resolveConflict(buffer.reload)}
 					onKeepMine={() => resolveConflict(buffer.keepMine)}
+					onResolveFirst={(choice) => resolveFirstConflict(buffer.session, choice)}
+					onHistory={(command) =>
+						command === "undo" ? buffer.session.undo() : buffer.session.redo()
+					}
 				/>
 			) : null}
 			<div

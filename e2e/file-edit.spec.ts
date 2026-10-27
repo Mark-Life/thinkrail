@@ -3,7 +3,9 @@ import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import { PHONE_VIEWPORT, pressPlatformShortcut } from "./fixtures/app";
 import {
 	banner,
+	conflictLens,
 	editorHasFocus,
+	editorShortcut,
 	fileTab,
 	openFile,
 	typeAtLineEnd,
@@ -134,6 +136,7 @@ test("a save against a same-line change on disk writes nothing and pauses on the
 	await pressPlatformShortcut(page, "s");
 
 	await expect(banner(page)).toHaveAttribute("data-status", "conflict", { timeout: 10_000 });
+	await expect(conflictLens(page)).toHaveCount(1);
 	expect(readFileSync(path, "utf8")).toBe("const agent = 2;\n");
 	await expect(fileTab(page, "stale.ts").getByTestId("file-dirty-dot")).toBeVisible();
 });
@@ -205,6 +208,29 @@ test("Cmd/Ctrl+/ toggles a line comment in the language's own syntax", async ({ 
 	await page.keyboard.press(toggle);
 	await pressPlatformShortcut(page, "s");
 	await expect.poll(() => readFileSync(path, "utf8")).toBe("// export const a = 1;\n");
+});
+
+test("a paste and a copied line are undo steps of their own, apart from the typing before them", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	const path = await openFile(page, "undo-steps.ts", "one\n");
+	await page.evaluate(() => navigator.clipboard.writeText("XYZ"));
+	await typeAtLineEnd(page, 1, "ab");
+	await page.keyboard.press("ControlOrMeta+V");
+	await expect(visibleEditor(page)).toContainText("oneabXYZ");
+	await editorShortcut(page, "z");
+	await expect(visibleEditor(page)).not.toContainText("XYZ");
+	await expect(visibleEditor(page)).toContainText("oneab");
+
+	await page.keyboard.type("c");
+	await page.keyboard.press("Shift+Alt+ArrowDown");
+	await expect(visibleEditor(page).locator(".view-line")).toHaveCount(3);
+	await editorShortcut(page, "z");
+	await expect(visibleEditor(page).locator(".view-line")).toHaveCount(2);
+	await pressPlatformShortcut(page, "s");
+	await expect.poll(() => readFileSync(path, "utf8")).toBe("oneabc\n");
 });
 
 test("an unsaved buffer hides review commenting until it is saved", async ({ page }) => {

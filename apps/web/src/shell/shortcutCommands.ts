@@ -99,6 +99,8 @@ export interface WebShortcutsOptions extends Pick<QuitConfirmationDependencies, 
 	closeItem(): void;
 	openSettings(): void;
 	save(): void;
+	undo(): void;
+	redo(): void;
 	quit(): void;
 	onQuitHint(hint: NativeQuitHint): void;
 	isInTerminal(target: EventTarget | null): boolean;
@@ -119,6 +121,8 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 		"close-item": options.closeItem,
 		"open-settings": options.openSettings,
 		save: options.save,
+		undo: options.undo,
+		redo: options.redo,
 		quit: () => quitConfirmation.press(true),
 	};
 

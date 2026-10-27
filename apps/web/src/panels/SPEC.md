@@ -2107,10 +2107,14 @@ own section. The kebab menu (`plan-menu`, a
   save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A
   Review panel "go to comment" request that arrives meanwhile is dropped, not held for a scroll jump after
   the save. **`FileEditBanner`** shows one strip per
-  issue: open same-line conflicts (status `conflict`, with their count), a disk version that could not
-  merge (status `stale`, **Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
-  disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text, not connected,
-  or a failed save. Its live region stays mounted while
+  issue: open same-line conflicts (status `conflict`, with their count and **Mine** / **Theirs** /
+  **Both** for the first one: Monaco hides its view zones, and so the editor's lens, from screen
+  readers, so the banner is the keyboard and screen-reader path; focus stays on the banner while
+  conflicts remain, where Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and the Edit menu undo and redo the file's
+  history, and goes back to the editor once none is left), a disk version that could not merge (status `stale`, **Reload** / **Keep mine**: a change past
+  the merge budget or a draft typed on another version), deleted on disk (Save creates it again),
+  read-only on disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text,
+  not connected, or a failed save. A disk change on other lines merges with no banner. Its live region stays mounted while
   the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
   **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
   (`focusRendererEditor`).

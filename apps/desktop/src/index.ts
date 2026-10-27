@@ -16,6 +16,7 @@ import {
 	installDesktopApplicationMenu,
 	isNativeCommand,
 	QUIT_SHORTCUT_ACTION,
+	REPEATABLE_COMMANDS,
 	readMenuAction,
 	readMenuLabels,
 } from "./applicationMenu";
@@ -230,7 +231,10 @@ async function start(): Promise<void> {
 		const action = readMenuAction(event);
 		const target = menuTarget;
 		if (action === QUIT_SHORTCUT_ACTION) quitShortcut.press();
-		else if (target && isNativeCommand(action)) commandGate(() => target.command(action));
+		else if (target && isNativeCommand(action)) {
+			if (REPEATABLE_COMMANDS.has(action)) target.command(action);
+			else commandGate(() => target.command(action));
+		}
 	});
 	const runtimeDir = join(PATHS.RESOURCES_FOLDER, "app", "runtime");
 	process.env.BUN_PTY_LIB = join(

@@ -12,8 +12,8 @@ import {
 const editMenu: ApplicationMenuItemConfig = {
 	label: "Edit",
 	submenu: [
-		{ role: "undo" },
-		{ role: "redo" },
+		{ label: "Undo", action: "undo", accelerator: "CommandOrControl+Z" },
+		{ label: "Redo", action: "redo", accelerator: "CommandOrControl+Shift+Z" },
 		{ type: "separator" },
 		{ role: "cut" },
 		{ role: "copy" },
@@ -99,6 +99,8 @@ test("recognizes forwarded native commands only", () => {
 	expect(isNativeCommand(QUIT_SHORTCUT_ACTION)).toBe(false);
 	expect(isNativeCommand(null)).toBe(false);
 	expect(isNativeCommand("toString")).toBe(false);
+	expect(isNativeCommand("undo")).toBe(true);
+	expect(isNativeCommand("redo")).toBe(true);
 });
 
 test("translated labels rename the custom items and fall back to English per label", () => {
@@ -117,6 +119,8 @@ test("translated labels rename the custom items and fall back to English per lab
 		"desktop.menu.close": "Close",
 		"desktop.menu.file": "File",
 		"desktop.menu.save": "Save",
+		"desktop.menu.undo": "Undo",
+		"desktop.menu.redo": "Redo",
 	});
 	const menu = desktopApplicationMenu("darwin", labels);
 	expect(menu?.[2]).toMatchObject({ label: "Bearbeiten" });

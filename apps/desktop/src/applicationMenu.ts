@@ -18,11 +18,19 @@ export const QUIT_SHORTCUT_ACTION = "quit-shortcut";
 const CLOSE_ITEM_COMMAND: NativeCommand = "close-item";
 const OPEN_SETTINGS_COMMAND: NativeCommand = "open-settings";
 const SAVE_COMMAND: NativeCommand = "save";
+const UNDO_COMMAND: NativeCommand = "undo";
+const REDO_COMMAND: NativeCommand = "redo";
 const NATIVE_COMMANDS = {
 	"close-item": true,
 	"open-settings": true,
 	save: true,
+	undo: true,
+	redo: true,
 } satisfies Record<NativeCommand, true>;
+export const REPEATABLE_COMMANDS: ReadonlySet<NativeCommand> = new Set([
+	UNDO_COMMAND,
+	REDO_COMMAND,
+]);
 
 type ApplicationMenuApi = {
 	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;
@@ -32,8 +40,16 @@ function editMenu(labels: DesktopMenuLabels): ApplicationMenuItemConfig {
 	return {
 		label: labels["desktop.menu.edit"],
 		submenu: [
-			{ role: "undo" },
-			{ role: "redo" },
+			{
+				label: labels["desktop.menu.undo"],
+				action: UNDO_COMMAND,
+				accelerator: "CommandOrControl+Z",
+			},
+			{
+				label: labels["desktop.menu.redo"],
+				action: REDO_COMMAND,
+				accelerator: "CommandOrControl+Shift+Z",
+			},
 			{ type: "separator" },
 			{ role: "cut" },
 			{ role: "copy" },

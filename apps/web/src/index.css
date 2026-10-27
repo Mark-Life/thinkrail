@@ -344,6 +344,29 @@
 .review-add-icon-float[data-dragging] {
 	pointer-events: none;
 }
+/* Same-line edit conflicts (resource-renderers conflictWidgets.ts): your lines get the info wash, the
+   disk version below them the warning wash; the zone holders stay click-through like review zones. */
+.edit-conflict-mine {
+	background: var(--feedback-info-subtle);
+}
+.edit-conflict-mine-rail {
+	background: var(--feedback-info);
+}
+.edit-conflict-zone {
+	pointer-events: none;
+	z-index: 10;
+}
+.edit-conflict-lens,
+.edit-conflict-theirs {
+	pointer-events: auto;
+}
+.edit-conflict-theirs .edit-conflict-theirs-text {
+	margin: 0;
+	padding-left: var(--space-8);
+	line-height: var(--edit-conflict-line-height);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
 /* The zone node spans Monaco's content (scroll) width — it stays a transparent, click-through holder;
    the visible composer is the bounded card inside it (width capped in reviewWidgets.ts). */
 .review-composer-zone {
