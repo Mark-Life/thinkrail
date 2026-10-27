@@ -576,6 +576,32 @@
 	right: auto;
 	left: calc(-1 * (var(--space-12) + var(--presence-slot, 0px)));
 }
+/* The wash fades a layer behind the text: opacity on the line box would fade the text with it. */
+.md-live .cm-line.presence-wash {
+	background: none;
+	opacity: 1;
+}
+.md-live .cm-line.presence-wash::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background: var(--presence-wash);
+}
+.md-live .cm-line.presence-wash-1::before {
+	opacity: 0.6;
+}
+.md-live .cm-line.presence-wash-2::before {
+	opacity: 0.3;
+}
+.md-live .cm-line.presence-wash-3::before {
+	opacity: 0.12;
+}
+@media (prefers-reduced-motion: reduce) {
+	.md-live .cm-line.presence-wash::before {
+		opacity: 1;
+	}
+}
 .md-live .cm-line .presence-flag {
 	display: inline-block;
 }

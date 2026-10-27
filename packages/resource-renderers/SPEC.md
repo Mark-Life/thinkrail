@@ -632,7 +632,8 @@ content's own height.
     into view.
   - **Presence** uses the shared rules (`presenceCore.ts`) through a CodeMirror surface: a bar and a
     wash on the changed lines, the flag after the first line, the chip at the top right, the writer and
-    diff on hover. Marks are line classes, so two writers on one line show the later one's tone.
+    diff on hover. Marks are line classes, so two writers on one line show the later one's tone. The
+    wash fades a `::before` layer behind the line's text, never the line box, which would fade the text.
   - **Typography** is the `doc` prose system: the editor content carries `tr-prose-doc`, heading and
     code lines carry the classes the generator maps next to the elements (`md-h1`…`md-h6`,
     `md-code`, `md-codeblock`), and spacing is line padding, since CodeMirror measures line boxes and

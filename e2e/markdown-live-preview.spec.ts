@@ -261,6 +261,20 @@ test("an outside write marks its lines in the live preview", async ({ page }) =>
 	const bar = live(page).locator(".cm-line.presence-bar.presence-tone-external");
 	await expect(bar).toHaveText(/second from outside/, { timeout: 10_000 });
 	await expect(bar).toHaveAttribute("title", "Changed by External (inferred from timing)");
+	await expect
+		.poll(
+			() =>
+				live(page)
+					.locator(".cm-content")
+					.evaluate((content) => {
+						const line = content.querySelector(".cm-line.presence-wash-3");
+						if (!line) return null;
+						const wash = getComputedStyle(line, "::before");
+						return [getComputedStyle(line).opacity, wash.opacity, wash.position];
+					}),
+			{ timeout: 10_000, intervals: [50] },
+		)
+		.toEqual(["1", "0.12", "absolute"]);
 	const flag = live(page).locator('[data-presence="flag"]');
 	await expect(flag).toHaveText("External");
 	await expect(flag.locator(".presence-flag-icon svg")).toHaveCount(1);
