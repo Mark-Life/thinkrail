@@ -6,10 +6,13 @@ import * as pi from "@earendil-works/pi-coding-agent";
 import { createEditTool, createWriteTool } from "@earendil-works/pi-coding-agent";
 import type {
 	ChangeReceipt,
+	FileRead,
 	FileWriteResult,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
+import { observeLoggedErrors } from "../log/logging";
+import { fileProvenance } from "../provenance";
 import { setWatchPublisher, stopAllWatches } from "../watch";
 import { handleRequest } from "./handlers";
 
@@ -260,6 +263,68 @@ test("workspace activity is stamped only when a save changes bytes", async () =>
 	expect(lastActiveAt()).toBeUndefined();
 	await save("a.ts", "next\n", hash("base\n"));
 	expect(lastActiveAt()).toBeNumber();
+});
+
+function readAs(clientKey: string, path: string) {
+	return handleRequest(
+		"fs.readFile",
+		{ workspaceId: "w1", path },
+		{ clientKey },
+	) as Promise<FileRead>;
+}
+
+test("a save is recorded as the user, and readFile reports it to the saving client only as this client", async () => {
+	writeFileSync(join(root, "a.ts"), "base\n");
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite).toBeUndefined();
+	await save("a.ts", "mine\n", hash("base\n"));
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite).toEqual({
+		author: { kind: "user", thisClient: true },
+		at: expect.any(Number),
+	});
+	expect((await readAs("other-client", "a.ts")).lastWrite?.author).toEqual({
+		kind: "user",
+		thisClient: false,
+	});
+	writeFileSync(join(root, "a.ts"), "outside\n");
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite?.author).toEqual({
+		kind: "external",
+	});
+});
+
+test("a change.revert is recorded as the user's write", async () => {
+	commitRepo("a.ts", "one\n");
+	writeFileSync(join(root, "a.ts"), "two\n");
+	await revert("a.ts", hash("one\n"), hash("two\n"));
+	expect((await readAs(CTX.clientKey, "a.ts")).lastWrite?.author).toEqual({
+		kind: "user",
+		thisClient: true,
+	});
+});
+
+test("a save or revert that landed stays a success when the provenance ledger fails", async () => {
+	const recordWrite = spyOn(fileProvenance, "recordWrite").mockImplementation(() => {
+		throw new Error("ledger unavailable");
+	});
+	const logged: { scope: string; code: unknown }[] = [];
+	observeLoggedErrors((scope, error) =>
+		logged.push({ scope, code: Reflect.get(Object(error), "code") }),
+	);
+	try {
+		commitRepo("a.ts", "one\n");
+		const saved = await save("a.ts", "two\n", hash("one\n"));
+		expect(saved.status).toBe("written");
+		expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("two\n");
+		const { receipt } = await revert("a.ts", hash("one\n"), hash("two\n"));
+		expect(receipt).toBeDefined();
+		expect(readFileSync(join(root, "a.ts"), "utf8")).toBe("one\n");
+		expect(logged).toEqual([
+			{ scope: "host", code: "PROVENANCE_RECORD_FAILED" },
+			{ scope: "host", code: "PROVENANCE_RECORD_FAILED" },
+		]);
+	} finally {
+		observeLoggedErrors(null);
+		recordWrite.mockRestore();
+	}
 });
 
 test("a save's fsChanged frame names the target and never the temp file", async () => {
