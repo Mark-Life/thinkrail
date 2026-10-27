@@ -1085,7 +1085,8 @@ export type WsErrorCode =
 	| "LOGIN_NOT_OWNER"
 	| "MCP_CONFIG_INVALID"
 	| "MCP_PATH_UNSAFE"
-	| "MCP_HANDLED_ELSEWHERE";
+	| "MCP_HANDLED_ELSEWHERE"
+	| "PROVENANCE_RECORD_FAILED";
 
 export interface WsResponse {
 	id: string;

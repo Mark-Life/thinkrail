@@ -467,7 +467,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Authorship is recorded inside the queue.** A save that changed bytes is recorded in
   [[submodule-server-provenance]] as `user{ctx.clientKey}` in the same queue callback, from the bytes
   `writeTextFile` replaced and wrote, with the hash `writeTextFile` already computed. `change.revert`/`change.undo` pass a `written` callback with the
-  queue, so a revert or undo is the user's write too, a delete included, from the bytes `changes` replaced. `fs.readFile` adds `lastWrite` from `fileProvenance.lastWrite`
+  queue, so a revert or undo is the user's write too, a delete included, from the bytes `changes` replaced. A ledger failure never fails the RPC, since the
+  bytes already landed: it is logged as `PROVENANCE_RECORD_FAILED`. `fs.readFile` adds `lastWrite` from `fileProvenance.lastWrite`
   with the asking client's key; an unknown author leaves the field out.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a

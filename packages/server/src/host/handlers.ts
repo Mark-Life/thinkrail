@@ -459,8 +459,16 @@ function sessionStateWorkspace(workspace: Workspace) {
 function userMutation(clientKey: string) {
 	return {
 		queue: withFileMutationQueue,
-		written: ({ abs, ...version }) =>
-			fileProvenance.recordWrite({ path: abs, author: { kind: "user", clientKey }, ...version }),
+		written: ({ abs, ...version }) => {
+			try {
+				fileProvenance.recordWrite({ path: abs, author: { kind: "user", clientKey }, ...version });
+			} catch (cause) {
+				log.error(
+					"could not record a user write",
+					new CodedError("PROVENANCE_RECORD_FAILED", "provenance record failed", { cause }),
+				);
+			}
+		},
 	} satisfies FileMutation;
 }
 
