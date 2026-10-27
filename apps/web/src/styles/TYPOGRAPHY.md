@@ -130,6 +130,7 @@ The generator derives one class per semantic style, mechanically:
 | `body.reading` | `.tr-text-reading` |
 | `code.text` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
 | `proseSystems.<id>.*` | `.tr-prose-<id>` + one element selector each |
+| (generator) | `.tr-prose-exempt`: a subtree inside a prose root that takes no prose rule |
 
 Primitive tokens are also emitted as custom properties — `--tr-font-family-code`,
 `--tr-font-size-s11`, `--tr-line-height-default`, … — for the surfaces that cannot use a class.
@@ -189,6 +190,12 @@ naming its own type. Two exist:
 | table body / header | 12 / 370 · 12 / 600 | 14 / 370 · 14 / 600 |
 | table cell inline code | **11 mono / 1.5** (`code.textSmall`) | 13 mono (`code.text`) |
 | `strong` / `b` | weight 500 only | weight 500 only |
+
+**Exempt subtrees.** UI mounted inside a prose root (the live markdown editor's conflict lens, disk
+lines and thread cards) carries `.tr-prose-exempt`. Every prose element rule ends in
+`:where(:not(.tr-prose-exempt *))`, which adds no specificity, so such a subtree takes no prose rule and
+restarts from the `rootStyle` base; its own classes (`tr-code-text-small`, …) then apply as they do outside
+prose. A prose root nested inside an exempt subtree is exempt too.
 
 **Why two.** A chat bubble is a stream of short messages: headings there are separators, and a 24px h1
 inside a bubble shouts. A rendered file is a document: its headings have to be visibly larger than its

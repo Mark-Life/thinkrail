@@ -238,6 +238,9 @@ test.describe("manual save", () => {
 		const lens = live(page).getByTestId("edit-conflict-lens");
 		await expect(lens).toBeVisible({ timeout: 10_000 });
 		await expect(live(page).getByTestId("edit-conflict-disk")).toHaveText("- first theirs");
+		const theirs = live(page).getByTestId("edit-conflict-disk").locator("pre");
+		await expect(theirs).toHaveCSS("font-size", "11px");
+		await expect(theirs).toHaveCSS("font-weight", "400");
 		await expect(live(page).locator(".cm-line.edit-conflict-mine")).toHaveText(/first mine$/);
 		await lens.getByTestId("edit-conflict-mine").click();
 		await expect(lens).toHaveCount(0);

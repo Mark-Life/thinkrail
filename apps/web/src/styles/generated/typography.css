@@ -75,6 +75,16 @@
 }
 
 @layer components {
+/* Prose exempt: UI inside a prose root (a card, a lens) takes no prose rule and restarts from the base. */
+.tr-prose-exempt {
+	font-family: var(--tr-font-family-interface);
+	font-size: var(--tr-font-size-s14);
+	font-weight: var(--tr-font-weight-light);
+	line-height: var(--tr-line-height-ui);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+}
 /* Semantic text styles — one class per style. Colour stays at the call site. */
 .tr-brand-hero {
 	font-family: var(--tr-font-family-brand);
@@ -285,7 +295,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(h1, .md-h1) {
+.tr-prose-chat :is(h1, .md-h1):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s18);
 	font-weight: var(--tr-font-weight-semibold);
@@ -294,7 +304,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(h2, .md-h2) {
+.tr-prose-chat :is(h2, .md-h2):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-semibold);
@@ -303,7 +313,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(h3, .md-h3) {
+.tr-prose-chat :is(h3, .md-h3):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-semibold);
@@ -312,7 +322,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(h4, .md-h4) {
+.tr-prose-chat :is(h4, .md-h4):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-medium);
@@ -321,7 +331,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(h5, .md-h5) {
+.tr-prose-chat :is(h5, .md-h5):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-medium);
@@ -330,7 +340,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(h6, .md-h6) {
+.tr-prose-chat :is(h6, .md-h6):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s10);
 	font-weight: var(--tr-font-weight-medium);
@@ -339,7 +349,7 @@
 	text-transform: uppercase;
 	font-style: normal;
 }
-.tr-prose-chat :is(:not(pre) > code, .md-code) {
+.tr-prose-chat :is(:not(pre) > code, .md-code):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -348,7 +358,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(pre, pre code, .md-codeblock) {
+.tr-prose-chat :is(pre, pre code, .md-codeblock):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -357,7 +367,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(blockquote, .md-quote) {
+.tr-prose-chat :is(blockquote, .md-quote):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
@@ -366,7 +376,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(ul, ol, li) {
+.tr-prose-chat :is(ul, ol, li):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
@@ -375,7 +385,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(table, td) {
+.tr-prose-chat :is(table, td):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-light);
@@ -384,7 +394,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat th {
+.tr-prose-chat th:where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-semibold);
@@ -393,7 +403,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(td, th) > code {
+.tr-prose-chat :is(td, th) > code:where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s11);
 	font-weight: var(--tr-font-weight-regular);
@@ -403,7 +413,7 @@
 	font-style: normal;
 }
 /* Bold: weight only — every other property inherits from the parent element. */
-.tr-prose-chat :is(strong, b, .md-strong) {
+.tr-prose-chat :is(strong, b, .md-strong):where(:not(.tr-prose-exempt *)) {
 	font-weight: var(--tr-font-weight-medium);
 }
 
@@ -417,7 +427,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(h1, .md-h1) {
+.tr-prose-doc :is(h1, .md-h1):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s24);
 	font-weight: var(--tr-font-weight-semibold);
@@ -426,7 +436,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(h2, .md-h2) {
+.tr-prose-doc :is(h2, .md-h2):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s20);
 	font-weight: var(--tr-font-weight-semibold);
@@ -435,7 +445,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(h3, .md-h3) {
+.tr-prose-doc :is(h3, .md-h3):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s18);
 	font-weight: var(--tr-font-weight-semibold);
@@ -444,7 +454,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(h4, .md-h4) {
+.tr-prose-doc :is(h4, .md-h4):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s16);
 	font-weight: var(--tr-font-weight-semibold);
@@ -453,7 +463,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(h5, .md-h5) {
+.tr-prose-doc :is(h5, .md-h5):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-semibold);
@@ -462,7 +472,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(h6, .md-h6) {
+.tr-prose-doc :is(h6, .md-h6):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-semibold);
@@ -471,7 +481,7 @@
 	text-transform: uppercase;
 	font-style: normal;
 }
-.tr-prose-doc :is(:not(pre) > code, .md-code) {
+.tr-prose-doc :is(:not(pre) > code, .md-code):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -480,7 +490,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(pre, pre code, .md-codeblock) {
+.tr-prose-doc :is(pre, pre code, .md-codeblock):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -489,7 +499,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(blockquote, .md-quote) {
+.tr-prose-doc :is(blockquote, .md-quote):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
@@ -498,7 +508,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(ul, ol, li) {
+.tr-prose-doc :is(ul, ol, li):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
@@ -507,7 +517,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(table, td) {
+.tr-prose-doc :is(table, td):where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
@@ -516,7 +526,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc th {
+.tr-prose-doc th:where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-semibold);
@@ -525,7 +535,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(td, th) > code {
+.tr-prose-doc :is(td, th) > code:where(:not(.tr-prose-exempt *)) {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
@@ -535,7 +545,7 @@
 	font-style: normal;
 }
 /* Bold: weight only — every other property inherits from the parent element. */
-.tr-prose-doc :is(strong, b, .md-strong) {
+.tr-prose-doc :is(strong, b, .md-strong):where(:not(.tr-prose-exempt *)) {
 	font-weight: var(--tr-font-weight-medium);
 }
 }

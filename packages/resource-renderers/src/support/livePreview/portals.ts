@@ -14,11 +14,13 @@ export interface PortalEntry {
 	content: PortalContent;
 }
 
+const CHROME = "md-widget tr-prose-exempt";
+
 const WIDGET_CLASS: Readonly<Record<PortalContent["kind"], string>> = {
 	block: "md-widget md-widget-block",
-	thread: "md-widget md-widget-thread",
-	lens: "md-widget",
-	theirs: "md-widget",
+	thread: `${CHROME} md-widget-thread`,
+	lens: CHROME,
+	theirs: CHROME,
 };
 
 const INTERACTIVE = "a, button, input, textarea, select, summary, label, [role='button']";

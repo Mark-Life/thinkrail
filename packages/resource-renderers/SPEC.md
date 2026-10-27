@@ -634,7 +634,9 @@ content's own height.
     wash on the changed lines, the flag after the first line, the chip at the top right, the writer and
     diff on hover. Marks are line classes, so two writers on one line show the later one's tone. The
     wash fades a `::before` layer behind the line's text, never the line box, which would fade the text.
-  - **Typography** is the `doc` prose system: the editor content carries `tr-prose-doc`, heading and
+  - **Typography** is the `doc` prose system: the editor content carries `tr-prose-doc`; the lens,
+    disk lines and thread cards mounted inside it carry `tr-prose-exempt`, so they look as in Monaco and
+    the reading view; heading and
     code lines carry the classes the generator maps next to the elements (`md-h1`…`md-h6`,
     `md-code`, `md-codeblock`), and spacing is line padding, since CodeMirror measures line boxes and
     margins between lines break its height map. The measure is the reading view's 78ch.

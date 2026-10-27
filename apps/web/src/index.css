@@ -566,6 +566,9 @@
 	padding: var(--space-4) 0;
 	cursor: text;
 }
+.md-live .edit-conflict-theirs {
+	--edit-conflict-line-height: var(--tr-line-height-code);
+}
 .md-live .md-widget-thread {
 	padding: var(--space-8) 0;
 }

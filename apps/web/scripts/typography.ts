@@ -138,6 +138,10 @@ export function proseRootClassName(t: Typography, system: string): string {
 	return `${t.metadata.classPrefix}-prose-${kebab(system)}`;
 }
 
+export function proseExemptClassName(t: Typography): string {
+	return `${t.metadata.classPrefix}-prose-exempt`;
+}
+
 export const PROSE_STRONG_WEIGHT = "medium";
 
 export const PROSE_SELECTORS: Record<string, string> = {
@@ -482,6 +486,12 @@ export function renderCss(t: Typography): string {
 	out.push("}\n");
 
 	out.push("@layer components {");
+	out.push(
+		"/* Prose exempt: UI inside a prose root (a card, a lens) takes no prose rule and restarts from the base. */",
+	);
+	out.push(`.${proseExemptClassName(t)} {`);
+	out.push(declarations(t, resolveStyle(t, t.rootStyle.$ref)));
+	out.push("}");
 	out.push("/* Semantic text styles — one class per style. Colour stays at the call site. */");
 	for (const [group, styles] of Object.entries(t.textStyles))
 		for (const name of Object.keys(styles)) {
@@ -490,18 +500,19 @@ export function renderCss(t: Typography): string {
 			out.push("}");
 		}
 
+	const exempt = `:where(:not(.${proseExemptClassName(t)} *))`;
 	for (const [system, styles] of Object.entries(t.proseSystems)) {
 		const root = proseRootClassName(t, system);
 		out.push("");
 		out.push(`/* Prose system '${system}' — the markdown typography for that surface. */`);
 		for (const name of Object.keys(styles)) {
 			const selector = PROSE_SELECTORS[name] ?? "";
-			out.push(`.${root}${selector} {`);
+			out.push(`.${root}${selector}${selector ? exempt : ""} {`);
 			out.push(declarations(t, resolveStyle(t, `${system}.${name}`)));
 			out.push("}");
 		}
 		out.push(`/* Bold: weight only — every other property inherits from the parent element. */`);
-		out.push(`.${root} :is(strong, b, .md-strong) {`);
+		out.push(`.${root} :is(strong, b, .md-strong)${exempt} {`);
 		out.push(`\tfont-weight: var(${cssVarName(t, "font-weight", PROSE_STRONG_WEIGHT)});`);
 		out.push("}");
 	}
