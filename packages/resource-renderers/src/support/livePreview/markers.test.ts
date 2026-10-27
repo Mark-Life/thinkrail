@@ -163,9 +163,16 @@ describe("line markers", () => {
 	test("a task box is a checkbox off its line", () => {
 		const source = "- [x] done\n- [ ] todo";
 		const list = marks(source, source.length);
-		expect(list).toContainEqual({ kind: "task", from: 2, to: 5, checked: true });
+		expect(list).toContainEqual({ kind: "task", from: 2, to: 5, checked: true, label: "done" });
 		expect(cut(source, list)).toEqual(["- "]);
 		expect(styled(source, list, "marker")).toEqual(["-", "[ ]"]);
+	});
+	test("a task box is named by its item's text, without markup", () => {
+		const source = "- [ ] write **the** [docs](a.md) `now`\n- [x] ship\n- [ ]   \nend";
+		const labels = marks(source, source.length).flatMap((mark) =>
+			mark.kind === "task" ? [mark.label] : [],
+		);
+		expect(labels).toEqual(["write the docs now", "ship", ""]);
 	});
 	test("a quote marker hides with its space and styles every line", () => {
 		const source = "> one\n> two\n\nafter";

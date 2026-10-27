@@ -602,7 +602,8 @@ content's own height.
     nodes (emphasis, strong, strikethrough, inline code, links, autolinks, escapes) reveal when the
     selection touches the node, line markers (heading `#`, quote `>`, list bullets, task boxes, rules)
     when it touches the line. A shown marker is muted mono. Off the caret a bullet draws as `•`, a task
-    box as a checkbox that toggles the source, a rule as a line. Link targets hide with their brackets,
+    box as a checkbox that toggles the source, named by its item's text and keeping its DOM and focus
+    across a toggle, a rule as a line. Link targets hide with their brackets,
     line by line (CodeMirror refuses a plugin decoration that hides a line break); brackets with no URL
     and no matching reference definition (`array[0]`, `[WIP]`) stay literal text, as in CommonMark.
     Cmd/Ctrl+click, or Cmd/Ctrl+Enter with the caret on a link, follows it: an anchor finds its heading

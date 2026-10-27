@@ -15,7 +15,7 @@ export type LiveMark =
 	| { kind: "style"; from: number; to: number; style: InlineStyle; href?: string }
 	| { kind: "line"; at: number; style: LineStyle }
 	| { kind: "bullet"; from: number; to: number }
-	| { kind: "task"; from: number; to: number; checked: boolean }
+	| { kind: "task"; from: number; to: number; checked: boolean; label: string }
 	| { kind: "rule"; from: number; to: number };
 
 const INLINE_STYLES: Readonly<Record<string, InlineStyle>> = {
@@ -28,6 +28,7 @@ const INLINE_MARKS = new Set(["EmphasisMark", "StrikethroughMark", "CodeMark"]);
 const LINK_PARTS = new Set(["LinkMark", "URL", "LinkTitle", "LinkLabel"]);
 const RAW_BLOCKS = new Set(["Table", "HTMLBlock"]);
 const MUTED_BLOCKS = new Set(["CommentBlock", "ProcessingInstructionBlock", "LinkReference"]);
+const LABEL_MARKUP = new Set([...INLINE_MARKS, "LinkMark", "URL", "LinkTitle", "HTMLTag"]);
 
 export function touches(selection: readonly Span[] | null, from: number, to: number): boolean {
 	return selection?.some((range) => range.from <= to && range.to >= from) ?? false;
@@ -75,6 +76,22 @@ function references(tree: Tree, doc: Text): ReadonlyMap<string, string> {
 	});
 	referenceCache.set(tree, found);
 	return found;
+}
+
+function plainText(tree: Tree, doc: Text, from: number, to: number): string {
+	let text = "";
+	let at = from;
+	tree.iterate({
+		from,
+		to,
+		enter: (ref) => {
+			if (!LABEL_MARKUP.has(ref.name)) return true;
+			text += doc.sliceString(at, Math.max(at, ref.from));
+			at = Math.max(at, ref.to);
+			return false;
+		},
+	});
+	return (text + doc.sliceString(at, to)).replace(/\s+/g, " ").trim();
 }
 
 function bareHref(text: string): string {
@@ -229,7 +246,9 @@ export function liveMarks({
 					if (lineTouched(ref.from)) style(ref.from, ref.to, "marker");
 					else {
 						const checked = /x/i.test(doc.sliceString(ref.from, ref.to));
-						marks.push({ kind: "task", from: ref.from, to: ref.to, checked });
+						const end = Math.min(parent?.to ?? ref.to, doc.lineAt(ref.from).to);
+						const label = plainText(tree, doc, ref.to, end);
+						marks.push({ kind: "task", from: ref.from, to: ref.to, checked, label });
 					}
 					return false;
 				}

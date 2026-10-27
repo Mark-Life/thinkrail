@@ -210,26 +210,41 @@ class TaskWidget extends WidgetType {
 	override eq(other: TaskWidget): boolean {
 		return other.checked === this.checked && other.label === this.label;
 	}
+	override updateDOM(dom: HTMLElement): boolean {
+		if (!(dom instanceof HTMLInputElement)) return false;
+		dom.checked = this.checked;
+		dom.setAttribute("aria-label", this.label);
+		return true;
+	}
 	override toDOM(view: EditorView): HTMLElement {
 		const box = document.createElement("input");
 		box.type = "checkbox";
-		box.checked = this.checked;
 		box.className = "md-task";
-		box.setAttribute("aria-label", this.label);
+		this.updateDOM(box);
 		box.addEventListener("mousedown", (event) => event.preventDefault());
-		box.addEventListener("click", (event) => {
-			event.preventDefault();
+		box.addEventListener("click", () => {
 			const at = view.posAtDOM(box);
+			const mark = () => /x/i.test(view.state.doc.sliceString(at + 1, at + 2));
+			const focused = box.ownerDocument.activeElement === box;
 			view.dispatch({
-				changes: { from: at + 1, to: at + 2, insert: this.checked ? " " : "x" },
+				changes: { from: at + 1, to: at + 2, insert: mark() ? " " : "x" },
 				userEvent: "input",
 			});
+			const current = box.isConnected ? box : taskAt(view, at);
+			if (current) current.checked = mark();
+			if (focused) current?.focus();
 		});
 		return box;
 	}
 	override ignoreEvent(): boolean {
 		return true;
 	}
+}
+
+function taskAt(view: EditorView, at: number): HTMLInputElement | undefined {
+	return [...view.contentDOM.querySelectorAll<HTMLInputElement>("input.md-task")].find(
+		(box) => view.posAtDOM(box) === at,
+	);
 }
 
 const bullet = Decoration.replace({ widget: new BulletWidget() });
@@ -273,10 +288,9 @@ function markDecoration(mark: LiveMark, text: LiveText): Range<Decoration> | nul
 		case "rule":
 			return rule.range(mark.from, mark.to);
 		case "task":
-			return Decoration.replace({ widget: new TaskWidget(mark.checked, text.task) }).range(
-				mark.from,
-				mark.to,
-			);
+			return Decoration.replace({
+				widget: new TaskWidget(mark.checked, mark.label || text.task),
+			}).range(mark.from, mark.to);
 		case "line":
 			return lineDecoration(mark.style).range(mark.at);
 		case "style":

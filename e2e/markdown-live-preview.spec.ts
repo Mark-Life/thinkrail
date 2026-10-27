@@ -105,6 +105,26 @@ test.describe("autosave", () => {
 			.toBe(NOTES.replace("- first", "- first from preview"));
 	});
 
+	test("a task box toggled from the keyboard keeps focus and is named by its item", async ({
+		page,
+	}) => {
+		const source = "- [ ] write **docs**\n- [x] ship\n\nend\n";
+		const path = await openLive(page, "tasks.md", source);
+		await liveLine(page, "end").click();
+		const boxes = live(page).locator("input.md-task");
+		await expect(boxes).toHaveCount(2);
+		await expect(boxes.nth(0)).toHaveAttribute("aria-label", "write docs");
+		await expect(boxes.nth(1)).toHaveAttribute("aria-label", "ship");
+		await boxes.nth(0).focus();
+		await page.keyboard.press("Space");
+		await expect.poll(() => readFileSync(path, "utf8")).toBe(source.replace("[ ]", "[x]"));
+		await expect(boxes.nth(0)).toBeChecked();
+		await expect(boxes.nth(0)).toBeFocused();
+		await page.keyboard.press("Space");
+		await expect.poll(() => readFileSync(path, "utf8")).toBe(source);
+		await expect(boxes.nth(0)).toBeFocused();
+	});
+
 	test("the lock keeps a review pass from typing into the file", async ({ page }) => {
 		const path = await openLive(page, "locked.md", NOTES);
 		const lock = page.getByTestId("markdown-lock");
