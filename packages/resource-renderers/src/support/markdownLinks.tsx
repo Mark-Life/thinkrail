@@ -40,7 +40,7 @@ export function slugify(text: string): string {
 		.replace(/\s+/g, "-");
 }
 
-function relativePathname(href: string): string {
+export function relativePathname(href: string): string {
 	const i = href.search(/[?#]/);
 	return i < 0 ? href : href.slice(0, i);
 }
@@ -117,9 +117,13 @@ export function srcsetCandidates(srcSet: string): { url: string; descriptor: str
 	return candidates;
 }
 
+export interface DocumentLinks extends Pick<ResourceHost, "bytesUrl" | "openFile"> {
+	onAnchor?(href: string): void;
+}
+
 export function documentComponents(
 	ctx: { workspaceId: string; path: string },
-	{ bytesUrl, openFile }: Pick<ResourceHost, "bytesUrl" | "openFile">,
+	{ bytesUrl, openFile, onAnchor }: DocumentLinks,
 ): Components {
 	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {
 		const kind = classifyHref(href);
@@ -129,7 +133,8 @@ export function documentComponents(
 					href={href}
 					onClick={(e) => {
 						e.preventDefault();
-						scrollToAnchor(href.slice(1));
+						if (onAnchor) onAnchor(href);
+						else scrollToAnchor(href.slice(1));
 					}}
 				>
 					{children}
