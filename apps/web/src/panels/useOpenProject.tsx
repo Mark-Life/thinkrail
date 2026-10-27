@@ -1,4 +1,4 @@
-import type { Project } from "@thinkrail/contracts";
+import { MAX_REQUEST_TIMEOUT_MS, type Project } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { type ReactNode, useState } from "react";
 import { useAppStore } from "../store";
@@ -8,7 +8,6 @@ import { createLatestOperation } from "./latestOperation";
 import { NoticeDialog } from "./NoticeDialog";
 import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
 
-const PICK_TIMEOUT_MS = 30 * 60_000;
 const projectOpenIntents = createLatestOperation();
 
 export function useOpenProject(onOpened: (project: Project) => void | Promise<void>): {
@@ -80,7 +79,7 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 			({ path } = await getTransport().request(
 				"dialog.selectDirectory",
 				{},
-				{ timeoutMs: PICK_TIMEOUT_MS },
+				{ timeoutMs: MAX_REQUEST_TIMEOUT_MS },
 			));
 		} catch (err) {
 			if (!isCurrent()) return;

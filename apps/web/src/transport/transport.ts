@@ -1,5 +1,5 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { MAX_REQUEST_TIMEOUT_MS, PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
 import { RequestError } from "./requestError";
@@ -112,7 +112,8 @@ export class WsTransport {
 		params: WsParams<M>,
 		options: RequestOptions = {},
 	): Promise<WsResult<M>> {
-		const { sessionId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+		const { sessionId } = options;
+		const timeoutMs = Math.min(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_REQUEST_TIMEOUT_MS);
 		const id = `trpi_${++this.seq}`;
 		const frame = JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) });
 		return new Promise<WsResult<M>>((resolve, reject) => {

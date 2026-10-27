@@ -1,3 +1,4 @@
+import { MAX_REQUEST_TIMEOUT_MS } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 
 export class RequestReplayConflictError extends CodedError {
@@ -29,6 +30,7 @@ export class RequestReplayUnretainedError extends CodedError {
 
 interface ReplayEntry<T> {
 	readonly fingerprint: string;
+	readonly startedAt: number;
 	result: Promise<T> | null;
 	settled: boolean;
 	abandoned: boolean;
@@ -76,6 +78,7 @@ export class RequestReplayCache<T> {
 		const result = Promise.resolve().then(execute);
 		const entry: ReplayEntry<T> = {
 			fingerprint,
+			startedAt: Date.now(),
 			result,
 			settled: false,
 			abandoned: false,
@@ -110,7 +113,10 @@ export class RequestReplayCache<T> {
 	clearClient(clientKey: string): boolean {
 		const namespace = this.clients.get(clientKey);
 		if (!namespace) return true;
-		for (const entry of namespace.requests.values()) if (!entry.settled) return false;
+		const now = Date.now();
+		for (const entry of namespace.requests.values()) {
+			if (!entry.settled && now - entry.startedAt < MAX_REQUEST_TIMEOUT_MS) return false;
+		}
 		this.clients.delete(clientKey);
 		return true;
 	}

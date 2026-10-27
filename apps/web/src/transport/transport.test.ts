@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { MAX_REQUEST_TIMEOUT_MS, PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -277,5 +277,30 @@ describe("WsTransport response receipts", () => {
 		await tick(0);
 
 		expect(acksIn(socket?.sent ?? [])).toEqual([id ?? "", id ?? ""]);
+	});
+});
+
+describe("WsTransport request deadline", () => {
+	test("no request waits longer than the host keeps its id", () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		TestWebSocket.instances[0]?.open();
+		const timer = spyOn(globalThis, "setTimeout");
+		try {
+			for (const timeoutMs of [undefined, 5_000, MAX_REQUEST_TIMEOUT_MS * 4]) {
+				transport
+					.request("project.list", {}, timeoutMs === undefined ? {} : { timeoutMs })
+					.catch(() => {});
+			}
+			expect(timer.mock.calls.map(([, delay]) => delay)).toEqual([
+				60_000,
+				5_000,
+				MAX_REQUEST_TIMEOUT_MS,
+			]);
+		} finally {
+			for (const result of timer.mock.results)
+				clearTimeout(result.value as ReturnType<typeof setTimeout>);
+			timer.mockRestore();
+		}
 	});
 });

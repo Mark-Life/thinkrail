@@ -52,7 +52,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   and reaping the client clears its cache — but **only once nothing is in flight**: an unresolved request
   outlives the socket grace window, since the page holds that frame until its *own* deadline (30 minutes for
   the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms rather than
-  let the replay start a second execution of a handler that has not finished). **Nothing in that cache is ever evicted**, because a
+  let the replay start a second execution of a handler that has not finished. The wait has a horizon:
+  once every unsettled request is older than `MAX_REQUEST_TIMEOUT_MS`, the longest deadline any client
+  gives a request, no page can still replay it, so `clearClient` drops the namespace anyway and the reap
+  releases the client's terminals, interview, and MCP probes. A handler that settles later finds its
+  namespace gone and is ignored; without the horizon one handler that never settles pins the client forever). **Nothing in that cache is ever evicted**, because a
   successful `send` says the bytes were queued, not that the page read them, and a socket that dies holding a
   reply is indistinguishable from one that flushed it — so any result dropped on the host's own initiative may
   be the one a replay is about to ask for. A result leaves only on the client's own word, via two frames handled

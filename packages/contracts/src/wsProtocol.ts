@@ -1067,6 +1067,8 @@ export interface WsRequest<M extends WsMethodName = WsMethodName> {
 	sessionId?: string;
 }
 
+export const MAX_REQUEST_TIMEOUT_MS = 30 * 60_000;
+
 export interface WsAck {
 	ack: string[];
 }

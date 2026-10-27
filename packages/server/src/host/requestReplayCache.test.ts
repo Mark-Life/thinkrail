@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
+import { MAX_REQUEST_TIMEOUT_MS } from "@thinkrail/contracts";
 import {
 	RequestReplayCache,
 	RequestReplayConflictError,
@@ -349,6 +350,42 @@ describe("request replay cache", () => {
 		expect(await inFlight).toBe("/picked/path");
 		expect(cache.clearClient("page")).toBe(true);
 		expect(await cache.run("page", "picker", "same", () => "fresh")).toBe("fresh");
+	});
+
+	test("an unsettled request older than every client deadline no longer holds the client", async () => {
+		const cache = new RequestReplayCache<string>();
+		const run = deferred<string>();
+		const startedAt = Date.now();
+		setSystemTime(startedAt);
+		try {
+			const stuck = cache.run("page", "stuck", "same", () => run.promise);
+			setSystemTime(startedAt + MAX_REQUEST_TIMEOUT_MS - 1);
+			expect(cache.clearClient("page")).toBe(false);
+			setSystemTime(startedAt + MAX_REQUEST_TIMEOUT_MS);
+			expect(cache.clearClient("page")).toBe(true);
+
+			run.resolve("late");
+			expect(await stuck).toBe("late");
+			expect(await cache.run("page", "stuck", "same", () => "fresh")).toBe("fresh");
+		} finally {
+			setSystemTime();
+		}
+	});
+
+	test("one young unsettled request keeps the client even beside an expired one", () => {
+		const cache = new RequestReplayCache<string>();
+		const startedAt = Date.now();
+		setSystemTime(startedAt);
+		try {
+			cache.run("page", "old", "same", () => new Promise<string>(() => {}));
+			setSystemTime(startedAt + MAX_REQUEST_TIMEOUT_MS);
+			cache.run("page", "young", "same", () => new Promise<string>(() => {}));
+			expect(cache.clearClient("page")).toBe(false);
+			setSystemTime(startedAt + 2 * MAX_REQUEST_TIMEOUT_MS);
+			expect(cache.clearClient("page")).toBe(true);
+		} finally {
+			setSystemTime();
+		}
 	});
 
 	test("retiring a client that was never seen is a no-op, not a retry", () => {

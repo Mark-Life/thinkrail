@@ -806,7 +806,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
   confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
-  pre-dedup host.
+  pre-dedup host. **`MAX_REQUEST_TIMEOUT_MS`** (30 minutes) is the longest deadline a client may give one
+  request (the folder picker uses it); past it the client has dropped the id and never replays it, so the
+  host may forget an unsettled request that old.
 
 ## Chat Resources
 
