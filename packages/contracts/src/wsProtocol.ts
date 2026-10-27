@@ -124,7 +124,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 93;
+export const PROTOCOL_VERSION = 94;
+export const FILE_SAVE_MODE_PROTOCOL_VERSION = 94;
 export const FILE_WRITE_PROTOCOL_VERSION = 93;
 export const USER_THEMES_PROTOCOL_VERSION = 92;
 export const HOST_ENVIRONMENT_PROTOCOL_VERSION = 91;

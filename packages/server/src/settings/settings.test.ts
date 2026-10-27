@@ -326,6 +326,34 @@ test("empty and multi-key valid updates persist and publish", () => {
 	expect(published).toEqual([DEFAULT_CONFIG, next]);
 });
 
+test("file save mode defaults to auto, rejects unknown modes, and falls back from a bad stored value", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(getConfig()).toHaveProperty("fileSaveMode", "auto");
+
+	for (const fileSaveMode of ["afterDelay", "", null, true]) {
+		expect(() => updateConfig({ fileSaveMode } as unknown as AppConfigUpdate)).toThrow(
+			"fileSaveMode must be one of auto, manual",
+		);
+	}
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	expect(updateConfig({ fileSaveMode: "manual" }).fileSaveMode).toBe("manual");
+	expect(published).toHaveLength(1);
+	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toHaveProperty(
+		"fileSaveMode",
+		"manual",
+	);
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, fileSaveMode: "sometimes" }),
+	);
+	resetConfigCache();
+	expect(getConfig()).toHaveProperty("fileSaveMode", "auto");
+});
+
 test("loadConfig replaces an invalid composer growth preset with the default", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
