@@ -367,6 +367,137 @@
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
+/* Presence marks (resource-renderers presenceMarks.ts): who wrote the lines that just landed from disk.
+   A thin bar in the line-decoration lane at a slot per tone, ringed in the editor background so it stays
+   distinct on the review and conflict rails; a short wash, a name flag and a whole-file chip, each in its
+   writer's tone. Inferred writers get a dashed bar. */
+.presence-tone-user {
+	--presence-slot: 12px;
+	--presence-tone: var(--primary);
+	--presence-wash: var(--primary-subtle);
+}
+.presence-tone-agent1 {
+	--presence-slot: 0px;
+	--presence-tone: var(--feedback-info);
+	--presence-wash: var(--feedback-info-subtle);
+}
+.presence-tone-agent2 {
+	--presence-slot: 3px;
+	--presence-tone: var(--feedback-success);
+	--presence-wash: var(--feedback-success-subtle);
+}
+.presence-tone-agent3 {
+	--presence-slot: 6px;
+	--presence-tone: var(--feedback-warning);
+	--presence-wash: var(--feedback-warning-subtle);
+}
+.presence-tone-external {
+	--presence-slot: 9px;
+	--presence-tone: var(--text-subtle);
+	--presence-wash: var(--control-bg-hovered);
+}
+.presence-bar {
+	z-index: 1;
+}
+.presence-bar::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: var(--presence-slot, 0px);
+	width: 2px;
+	background: var(--presence-tone);
+	box-shadow: 0 0 0 1px var(--container-workspace-bg);
+}
+.presence-bar.presence-inferred::after {
+	background: repeating-linear-gradient(to bottom, var(--presence-tone) 0 3px, transparent 3px 5px);
+}
+.presence-wash {
+	background: var(--presence-wash);
+}
+.presence-wash-1 {
+	opacity: 0.6;
+}
+.presence-wash-2 {
+	opacity: 0.3;
+}
+.presence-wash-3 {
+	opacity: 0.12;
+}
+.presence-flag,
+.presence-chip {
+	pointer-events: none;
+	user-select: none;
+	white-space: nowrap;
+	font-family: var(--tr-font-family-interface);
+	font-size: var(--tr-font-size-s10);
+	line-height: 14px;
+}
+.presence-chip {
+	margin: var(--space-8) var(--space-16);
+	padding: var(--space-2) var(--space-8);
+	border: 1px solid var(--presence-tone);
+	border-radius: var(--radius-sm);
+	background: var(--container-elevated-bg);
+	color: var(--text-default);
+}
+.presence-chip.presence-inferred {
+	border-style: dashed;
+}
+.presence-flag {
+	margin-left: var(--space-12);
+	animation: presence-flag 5s ease forwards;
+}
+.presence-flag-body {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	padding: 0 var(--space-8) 0 var(--space-4);
+	background: var(--presence-wash);
+	color: var(--text-default);
+	font-weight: var(--tr-font-weight-medium);
+}
+.presence-flag.presence-tone-external .presence-flag-body {
+	background: var(--media-checker-tile);
+}
+.presence-flag-icon {
+	display: inline-flex;
+	color: var(--presence-tone);
+}
+.presence-flag-icon svg {
+	width: 12px;
+	height: 12px;
+}
+@keyframes presence-flag {
+	0%,
+	70% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.presence-flag {
+		animation: none;
+	}
+	.presence-wash-1,
+	.presence-wash-2,
+	.presence-wash-3 {
+		opacity: 1;
+	}
+}
+@media (forced-colors: active) {
+	.presence-bar::after {
+		background: none;
+		box-shadow: none;
+		width: 0;
+		border-left: 2px solid CanvasText;
+	}
+	.presence-bar.presence-inferred::after {
+		border-left-style: dashed;
+	}
+}
 /* The zone node spans Monaco's content (scroll) width — it stays a transparent, click-through holder;
    the visible composer is the bounded card inside it (width capped in reviewWidgets.ts). */
 .review-composer-zone {
