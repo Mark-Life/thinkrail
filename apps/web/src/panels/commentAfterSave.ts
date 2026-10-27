@@ -1,4 +1,4 @@
-import type { SurfaceReview } from "@thinkrail/resource-renderers";
+import { CommentRefused, type SurfaceReview } from "@thinkrail/resource-renderers";
 
 type Commenting = SurfaceReview["commenting"];
 
@@ -7,19 +7,19 @@ export function commentAfterSave(
 	{
 		dirty,
 		save,
-		refused,
+		refusal,
+		onComposing,
 	}: {
 		dirty(): boolean;
 		save(): Promise<{ dirty: boolean } | null>;
-		refused(): void;
+		refusal(): string;
+		onComposing(open: boolean): void;
 	},
 ): Commenting {
 	const saved = async () => {
 		if (!dirty()) return;
-		const summary = await save();
-		if (!summary?.dirty) return;
-		refused();
-		throw new Error("The file has unsaved edits");
+		const summary = await save().catch(() => ({ dirty: true }));
+		if (summary?.dirty) throw new CommentRefused(refusal());
 	};
 	return {
 		onSave: async (draft, text) => {
@@ -30,5 +30,19 @@ export function commentAfterSave(
 			await saved();
 			await commenting.onSend(draft, text);
 		},
+		onComposing,
 	};
+}
+
+/** Review hides on unsaved text, except while a comment box is open so its text and error stay. */
+export function hidesReview({
+	dirty,
+	autosaving,
+	composing,
+}: {
+	dirty: boolean;
+	autosaving: boolean;
+	composing: boolean;
+}) {
+	return dirty && !autosaving && !composing;
 }

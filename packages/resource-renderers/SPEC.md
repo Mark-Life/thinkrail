@@ -26,7 +26,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
 
 - the registry contract — types, `registerResourceRenderer`, `resolveRenderers`, `describeResource`,
   `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, `rendererImplementationKey`,
-  `CONFLICT_CHOICES`, `CONFLICT_CHOICE_LABELS`, and the content
+  `CommentRefused` (a commenting rejection the composer shows in its box; any other rejection only
+  re-enables it; every composer also reports open and close through the optional
+  `commenting.onComposing`), `CONFLICT_CHOICES`, `CONFLICT_CHOICE_LABELS`, and the content
   rules every surface shares: `resourceContent(text, meta, url)` (no metadata yet is provisional text, a
   missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
   modified)` (a diff is described by its modified side unless that side is absent, and is text only when

@@ -78,3 +78,11 @@ export function outdatedReason(t: Translator, anchor: ReviewAnchor | null | unde
 	}
 	return t("review.outdated.gone");
 }
+
+/** A comment the host refused before saving it; the message is user-facing. */
+export class CommentRefused extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "CommentRefused";
+	}
+}

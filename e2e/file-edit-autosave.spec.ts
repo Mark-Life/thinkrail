@@ -169,6 +169,59 @@ test("a comment added before autosave writes saves the file first, so it anchors
 	expect(quote?.exact).toBe("five");
 });
 
+test("a comment whose save fails keeps its box, text and error, and a retry adds it", async ({
+	page,
+}) => {
+	let writes: "hold" | "pass" = "hold";
+	const held: string[] = [];
+	let failHeld = () => {};
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		const fail = (message: string) => {
+			const { id } = JSON.parse(message) as { id: string };
+			socket.send(JSON.stringify({ id, ok: false, error: "disk full" }));
+		};
+		failHeld = () => {
+			for (const message of held.splice(0)) fail(message);
+		};
+		socket.onMessage((message) => {
+			const text = String(message);
+			if (writes === "hold" && text.includes('"method":"fs.writeFile"')) held.push(text);
+			else server.send(message);
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+	const path = await openFile(page, "comment-fail.ts", BASE);
+	await typeAtLineEnd(page, 3, " // mine");
+	await expect.poll(() => held.length, { timeout: 10_000 }).toBe(1);
+
+	const box = await visibleEditor(page).locator(".view-line").first().boundingBox();
+	if (!box) throw new Error("line 1 has no box");
+	await page.mouse.move(box.x + 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + 120, box.y + box.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await page.locator('[data-testid="review-add-icon"]:visible').click();
+	await page.getByTestId("review-composer-input").fill("Keep this comment");
+	failHeld();
+	await expect(banner(page)).toBeVisible();
+
+	await page.getByTestId("review-composer-save").click();
+	await expect.poll(() => held.length).toBe(1);
+	failHeld();
+	await expect(page.getByTestId("review-composer-error")).toContainText(
+		"the file's edits could not be saved first",
+	);
+	await expect(page.getByTestId("review-composer-input")).toHaveValue("Keep this comment");
+	expect(readFileSync(path, "utf8")).toBe(BASE);
+
+	writes = "pass";
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	expect(readFileSync(path, "utf8")).toBe(BASE.replace("three = 3;", "three = 3; // mine"));
+});
+
 test("closing a file autosave is about to write saves it with no prompt", async ({ page }) => {
 	const path = await openFile(page, "close.ts", BASE);
 	const tab = fileTab(page, "close.ts");

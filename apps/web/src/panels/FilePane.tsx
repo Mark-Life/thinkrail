@@ -13,13 +13,13 @@ import {
 	useRendererSelection,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { canEditFile, saveFile, useFileBuffer, useFileBufferText } from "../editing";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
-import { selectFileAutosaving, selectFileBufferSummary, toast, useAppStore } from "../store";
+import { selectFileAutosaving, selectFileBufferSummary, useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { commentAfterSave } from "./commentAfterSave";
+import { commentAfterSave, hidesReview } from "./commentAfterSave";
 import { FileEditBanner } from "./FileEditBanner";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
@@ -59,6 +59,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const dirty = summary?.dirty === true;
 	const autosaving = useAppStore((state) => selectFileAutosaving(state, tab.workspaceId, tab.path));
 	const saveMode = useAppStore((state) => state.fileSaveMode);
+	const [composers, setComposers] = useState(0);
 	useEffect(() => {
 		if (dirty && isPreview) useAppStore.getState().setActiveTab(tab.id, "keep");
 	}, [dirty, isPreview, tab.id]);
@@ -99,12 +100,13 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					selectFileBufferSummary(useAppStore.getState(), tab.workspaceId, tab.path)?.dirty ===
 					true,
 				save: () => saveFile(tab.workspaceId, tab.path),
-				refused: () => toast.error(t("panels.reviewCommenting.unsavedFile")),
+				refusal: () => t("panels.reviewCommenting.unsavedFile"),
+				onComposing: (open) => setComposers((count) => count + (open ? 1 : -1)),
 			}),
 		}),
 		[review.worktree, tab.workspaceId, tab.path, t],
 	);
-	const reviewHidden = dirty && !autosaving;
+	const reviewHidden = hidesReview({ dirty, autosaving, composing: composers > 0 });
 	const reviewSurface = reviewHidden ? undefined : worktreeReview;
 	const heldFocus = reviewHidden ? review.worktree.focus : null;
 	const dropFocus = review.worktree.onFocusHandled;
