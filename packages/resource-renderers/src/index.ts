@@ -21,6 +21,7 @@ export {
 	anchorLabel,
 	CONFLICT_CHOICE_LABELS,
 	CONFLICT_CHOICES,
+	CommentRefused,
 	type ConflictChoice,
 	canonicalWorkspacePath,
 	describeResource,
