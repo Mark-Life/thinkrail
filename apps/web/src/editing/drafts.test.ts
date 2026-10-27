@@ -71,6 +71,20 @@ test("a quit flush writes the draft of edits typed just before it", async () => 
 	expect([...records.values()].map((draft) => draft.text)).toEqual(["mine one\ntwo\n"]);
 });
 
+test("a quit in auto mode sends the pending autosave and keeps its draft while the host stops", async () => {
+	const { bridge, records } = desktopBridge();
+	const before = setup({
+		drafts: { store: nativeDrafts(bridge), records: new Map() },
+		mode: () => "auto",
+	});
+	before.disk.hold();
+	type(before.handle, 0, "mine ");
+	before.registry.flushAll();
+	await before.registry.flushDrafts();
+	expect([...records.values()].map((draft) => draft.text)).toEqual(["mine one\ntwo\n"]);
+	expect(before.disk.writes.map((write) => write.content)).toEqual(["mine one\ntwo\n"]);
+});
+
 test("a failing bridge reads as no draft instead of breaking the buffer", async () => {
 	const failing: NativeEditingBridge = {
 		...desktopBridge().bridge,
