@@ -310,6 +310,21 @@ export interface FileContent {
 	meta: ResourceMeta;
 }
 
+export type FileAuthor =
+	| { kind: "user"; thisClient: boolean }
+	| { kind: "agent"; sessionId: string; via: "tool"; toolName: string }
+	| { kind: "agent"; sessionId: string; via: "script" }
+	| { kind: "external" };
+
+export interface FileLastWrite {
+	author: FileAuthor;
+	at: number;
+}
+
+export interface FileRead extends FileContent {
+	lastWrite?: FileLastWrite;
+}
+
 export type FileWriteResult =
 	| { status: "written"; meta: ResourceMeta }
 	| { status: "stale"; current: FileContent }

@@ -12,8 +12,8 @@ import type {
 	EditorInfo,
 	ExistingWorktreeCandidate,
 	ExtensionCatalogEntry,
-	FileContent,
 	FileNode,
+	FileRead,
 	FileWriteResult,
 	GitCommit,
 	GitDiffScope,
@@ -723,7 +723,7 @@ export interface WsMethodMap {
 		result: OpenPrResult;
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
-	"fs.readFile": { params: { workspaceId: string; path: string }; result: FileContent };
+	"fs.readFile": { params: { workspaceId: string; path: string }; result: FileRead };
 	"fs.writeFile": {
 		params: {
 			workspaceId: string;
@@ -1113,7 +1113,8 @@ export type WsErrorCode =
 	| "LOGIN_NOT_OWNER"
 	| "MCP_CONFIG_INVALID"
 	| "MCP_PATH_UNSAFE"
-	| "MCP_HANDLED_ELSEWHERE";
+	| "MCP_HANDLED_ELSEWHERE"
+	| "PROVENANCE_RECORD_FAILED";
 
 export interface WsResponse {
 	id: string;
