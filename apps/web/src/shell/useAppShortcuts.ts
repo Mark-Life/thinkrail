@@ -1,14 +1,21 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { saveFocusedFile } from "../editing";
 import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
-import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
+import {
+	claimShortcut,
+	createWebShortcuts,
+	hasWebShortcuts,
+	shortcutPlatform,
+} from "./shortcutCommands";
 import {
 	hasDismissibleLayer,
 	hasLayer,
 	isInTerminal,
 	MODAL_LAYER_SELECTOR,
+	ownsSaveShortcut,
 } from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
@@ -105,6 +112,7 @@ export function useAppShortcuts() {
 				if (!dismissTopLayer()) requestClose();
 			},
 			openSettings: openSettingsUnlessModal,
+			save: saveFocusedFile,
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
 					console.error("[shortcuts] quit failed", error);
@@ -113,6 +121,7 @@ export function useAppShortcuts() {
 			},
 			onQuitHint: setQuitHint,
 			isInTerminal,
+			ownsSave: ownsSaveShortcut,
 			now: () => performance.now(),
 			every: intervals.every,
 		});
@@ -137,6 +146,16 @@ export function useAppShortcuts() {
 			doc.removeEventListener("visibilitychange", onVisibilityChange);
 			intervals.dispose();
 		};
+	}, [bridge]);
+
+	useEffect(() => {
+		if (bridge) return undefined;
+		const options = { platform: "browser", isInTerminal, ownsSave: ownsSaveShortcut } as const;
+		function keydown(event: KeyboardEvent) {
+			if (claimShortcut(event, options) === "save") saveFocusedFile();
+		}
+		window.addEventListener("keydown", keydown, true);
+		return () => window.removeEventListener("keydown", keydown, true);
 	}, [bridge]);
 
 	return bridge ? quitHint : null;

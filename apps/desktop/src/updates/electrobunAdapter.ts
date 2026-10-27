@@ -44,8 +44,23 @@ const electrobunUpdater: NativeUpdaterDependency = {
 export function createElectrobunQuitCoordinator(
 	shutdown: () => Promise<void>,
 	dialogLabels: () => DesktopDialogLabels,
+	hasUnsavedEdits: () => boolean,
 ): DesktopQuitCoordinator {
 	return createDesktopQuitCoordinator({
+		confirmQuit: async () => {
+			if (!hasUnsavedEdits()) return true;
+			const labels = dialogLabels();
+			const { response } = await Utils.showMessageBox({
+				type: "warning",
+				title: labels["desktop.dialog.unsavedQuitTitle"],
+				message: labels["desktop.dialog.unsavedQuit"],
+				detail: labels["desktop.dialog.unsavedQuitDetail"],
+				buttons: [labels["desktop.dialog.quit"], labels["desktop.dialog.cancel"]],
+				defaultId: 1,
+				cancelId: 1,
+			});
+			return response === 0;
+		},
 		shutdown,
 		quit: () => {
 			Utils.quit();

@@ -4,7 +4,7 @@ import {
 	type NativeQuitHint,
 	type QuitConfirmationDependencies,
 } from "@thinkrail/contracts";
-import { platformFamily } from "../lib";
+import { hasPlatformModifier, platformFamily } from "../lib";
 
 export type ShortcutPlatform = Exclude<ReturnType<typeof platformFamily>, "other"> | "browser";
 
@@ -27,12 +27,15 @@ const CLOSE_ITEM_CHORDS: readonly ShortcutChord[] = [
 
 const OPEN_SETTINGS_CHORDS: readonly ShortcutChord[] = [{ code: "Comma", inTerminal: true }];
 
+const SAVE_CHORDS: readonly ShortcutChord[] = [{ code: "KeyS", inTerminal: false }];
+
 const PUNCTUATION: Readonly<Record<string, string>> = { Comma: "," };
 
 export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
 	{ id: "close-item", chords: { windows: CLOSE_ITEM_CHORDS, linux: CLOSE_ITEM_CHORDS } },
 	{ id: "quit", chords: { linux: [{ code: "KeyQ", inTerminal: true }] } },
 	{ id: "open-settings", chords: { windows: OPEN_SETTINGS_CHORDS, linux: OPEN_SETTINGS_CHORDS } },
+	{ id: "save", chords: { windows: SAVE_CHORDS, linux: SAVE_CHORDS, browser: SAVE_CHORDS } },
 ];
 
 export function hasWebShortcuts(platform: ShortcutPlatform) {
@@ -64,11 +67,14 @@ export function matchShortcut(
 	event: ChordEvent,
 	platform: ShortcutPlatform,
 	inTerminal: () => boolean,
+	os?: string,
 ): ShortcutCommandId | null {
-	if (!event.ctrlKey || event.metaKey || event.altKey) return null;
+	const modifier =
+		platform === "browser" ? hasPlatformModifier(event, os) : event.ctrlKey && !event.metaKey;
+	if (!modifier || event.altKey) return null;
 	for (const command of SHORTCUT_COMMANDS) {
 		const chord = command.chords[platform]?.find((candidate) => chordMatches(candidate, event));
-		if (chord && (chord.inTerminal || !inTerminal())) return command.id;
+		if (chord && (chord.inTerminal || !event.ctrlKey || !inTerminal())) return command.id;
 	}
 	return null;
 }
@@ -76,13 +82,27 @@ export function matchShortcut(
 type ShortcutKeyEvent = ChordEvent &
 	Pick<KeyboardEvent, "repeat" | "target" | "preventDefault" | "stopPropagation">;
 
+export function claimShortcut(
+	event: ShortcutKeyEvent,
+	options: Pick<WebShortcutsOptions, "platform" | "isInTerminal" | "ownsSave">,
+	os?: string,
+): ShortcutCommandId | null {
+	const id = matchShortcut(event, options.platform, () => options.isInTerminal(event.target), os);
+	if (!id || (id === "save" && options.ownsSave(event.target))) return null;
+	event.preventDefault();
+	event.stopPropagation();
+	return event.repeat ? null : id;
+}
+
 export interface WebShortcutsOptions extends Pick<QuitConfirmationDependencies, "now" | "every"> {
 	platform: ShortcutPlatform;
 	closeItem(): void;
 	openSettings(): void;
+	save(): void;
 	quit(): void;
 	onQuitHint(hint: NativeQuitHint): void;
 	isInTerminal(target: EventTarget | null): boolean;
+	ownsSave(target: EventTarget | null): boolean;
 }
 
 export function createWebShortcuts(options: WebShortcutsOptions) {
@@ -98,15 +118,13 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 	const handlers: Record<ShortcutCommandId, () => void> = {
 		"close-item": options.closeItem,
 		"open-settings": options.openSettings,
+		save: options.save,
 		quit: () => quitConfirmation.press(true),
 	};
 
 	function keydown(event: ShortcutKeyEvent) {
-		const id = matchShortcut(event, options.platform, () => options.isInTerminal(event.target));
+		const id = claimShortcut(event, options);
 		if (!id) return;
-		event.preventDefault();
-		event.stopPropagation();
-		if (event.repeat) return;
 		if (id === "quit") quitHeldCode = event.code;
 		handlers[id]();
 	}

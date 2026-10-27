@@ -32,6 +32,7 @@ test("ordinary quit shuts the host down once and never applies an update", async
 	let quitCalls = 0;
 	let applyCalls = 0;
 	const coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => true,
 		shutdown: () => {
 			shutdownCalls += 1;
 			return shutdown.promise;
@@ -68,6 +69,7 @@ test("an update attempt that never requests quit cannot arm a later ordinary qui
 	let applyCalls = 0;
 	let quitCalls = 0;
 	const coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => true,
 		shutdown: async () => {},
 		quit: () => {
 			quitCalls += 1;
@@ -94,6 +96,7 @@ test("update intent waits for the vetoed apply to settle before resuming under t
 	let quitCalls = 0;
 	let coordinator: DesktopQuitCoordinator;
 	coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => true,
 		shutdown: () => shutdown.promise,
 		quit: () => {
 			quitCalls += 1;
@@ -136,6 +139,7 @@ test("failed helper arming reports the error and exits the stopped host", async 
 	const failures: string[] = [];
 	let coordinator: DesktopQuitCoordinator;
 	coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => true,
 		shutdown: () => shutdown.promise,
 		quit: () => {
 			quitCalls += 1;
@@ -167,6 +171,7 @@ test("startup failure before quit interception awaits host shutdown before exiti
 	const shutdown = deferred();
 	const calls: string[] = [];
 	const coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => true,
 		shutdown: () => {
 			calls.push("shutdown");
 			return shutdown.promise;
@@ -197,6 +202,7 @@ test("startup failure and native quit share one failed shutdown and permit the f
 	let shutdownCalls = 0;
 	let quitCalls = 0;
 	const coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => true,
 		shutdown: async () => {
 			shutdownCalls += 1;
 			throw failure;
@@ -222,4 +228,64 @@ test("startup failure and native quit share one failed shutdown and permit the f
 	expect(shutdownCalls).toBe(1);
 	expect(quitCalls).toBe(1);
 	expect(errors).toEqual([failure]);
+});
+
+test("a declined quit keeps the host running and the next quit asks again", async () => {
+	const answers = [false, true];
+	let asks = 0;
+	let shutdownCalls = 0;
+	let quitCalls = 0;
+	const coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => {
+			asks += 1;
+			return answers[asks - 1] ?? true;
+		},
+		shutdown: async () => {
+			shutdownCalls += 1;
+		},
+		quit: () => {
+			quitCalls += 1;
+		},
+		applyUpdate: async () => {},
+		getUpdateError: () => "",
+		reportUpdateFailure: async () => {},
+		reportLifecycleError: () => {},
+	});
+	const declined = beforeQuitEvent();
+	coordinator.handleBeforeQuit(declined);
+	coordinator.handleBeforeQuit(beforeQuitEvent());
+	expect(declined.response).toEqual({ allow: false });
+	await settle();
+	expect(asks).toBe(1);
+	expect(shutdownCalls).toBe(0);
+
+	await coordinator.quit();
+	expect(asks).toBe(2);
+	expect(shutdownCalls).toBe(1);
+	expect(quitCalls).toBe(1);
+});
+
+test("an update restart never asks to confirm the quit", async () => {
+	let asks = 0;
+	let applyCalls = 0;
+	let coordinator: DesktopQuitCoordinator;
+	coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => {
+			asks += 1;
+			return false;
+		},
+		shutdown: async () => {},
+		quit: () => {},
+		applyUpdate: async () => {
+			applyCalls += 1;
+			if (applyCalls === 1) coordinator.handleBeforeQuit(beforeQuitEvent());
+		},
+		getUpdateError: () => "",
+		reportUpdateFailure: async () => {},
+		reportLifecycleError: () => {},
+	});
+	expect(await coordinator.restartToUpdate()).toBe(true);
+	await settle();
+	expect(asks).toBe(0);
+	expect(applyCalls).toBe(2);
 });

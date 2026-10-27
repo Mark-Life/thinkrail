@@ -30,3 +30,9 @@ const TERMINAL_ROOT_SELECTOR = ".xterm";
 export function isInTerminal(target: EventTarget | null) {
 	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
 }
+
+const OWN_SAVE_SELECTOR = "[data-save-shortcut]";
+
+export function ownsSaveShortcut(target: EventTarget | null) {
+	return target instanceof Element && target.closest(OWN_SAVE_SELECTOR) !== null;
+}

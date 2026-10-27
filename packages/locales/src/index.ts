@@ -26,13 +26,19 @@ export const DESKTOP_MENU_KEYS = [
 	"desktop.menu.quit",
 	"desktop.menu.window",
 	"desktop.menu.close",
+	"desktop.menu.file",
+	"desktop.menu.save",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
 
 export const DESKTOP_DIALOG_KEYS = [
+	"desktop.dialog.cancel",
 	"desktop.dialog.quit",
 	"desktop.dialog.startFailed",
 	"desktop.dialog.updateRestartFailed",
 	"desktop.dialog.updateRestartFailedTitle",
+	"desktop.dialog.unsavedQuit",
+	"desktop.dialog.unsavedQuitDetail",
+	"desktop.dialog.unsavedQuitTitle",
 	"desktop.splash.finishingUpdate",
 	"desktop.splash.starting",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
