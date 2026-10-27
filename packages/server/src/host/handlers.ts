@@ -74,6 +74,7 @@ import {
 	stopAllSubagents,
 	stopBackgroundCommand,
 	stopSubagent,
+	withFileMutationQueue,
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
@@ -102,7 +103,7 @@ import { listAvailableEditors, openEditor, revealInFileManager } from "../editor
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
-import { readDir, readFile } from "../fs";
+import { readDir, readFile, resolveWorktreeFile, writeTextFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -702,6 +703,13 @@ const handlers: WsHandlers = {
 		void ensureWatch(p.workspaceId);
 		return readFile(p.workspaceId, p.path);
 	},
+	"fs.writeFile": async (p) => {
+		void ensureWatch(p.workspaceId);
+		const abs = resolveWorktreeFile(p.workspaceId, p.path);
+		const { result, changed } = await withFileMutationQueue(abs, async () => writeTextFile(p));
+		if (changed) recordWorkspaceActivity(p.workspaceId);
+		return result;
+	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
@@ -847,11 +855,15 @@ const handlers: WsHandlers = {
 	},
 	"change.revert": (p) => {
 		void ensureWatch(p.workspaceId);
-		return withChangeLock(p.workspaceId, async () => ({ receipt: await revertChange(p) }));
+		return withChangeLock(p.workspaceId, async () => ({
+			receipt: await revertChange(p, withFileMutationQueue),
+		}));
 	},
 	"change.undo": (p) => {
 		void ensureWatch(p.workspaceId);
-		return withChangeLock(p.workspaceId, async () => ({ receipt: await undoChange(p) }));
+		return withChangeLock(p.workspaceId, async () => ({
+			receipt: await undoChange(p, withFileMutationQueue),
+		}));
 	},
 	"terminal.reserve": (p) => {
 		getWorkspace(p.workspaceId);
