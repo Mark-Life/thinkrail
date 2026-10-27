@@ -473,6 +473,7 @@
 	"desktop.menu.window": "Window",
 	"desktop.splash.finishingUpdate": "Finishing update to {{version}}…",
 	"desktop.splash.starting": "Starting ThinkRail…",
+	"editing.draftRestored": "Restored unsaved changes to {{name}}",
 	"lib.compactAge.days_one": "{{count}}d",
 	"lib.compactAge.days_other": "{{count}}d",
 	"lib.compactAge.hours_one": "{{count}}h",
