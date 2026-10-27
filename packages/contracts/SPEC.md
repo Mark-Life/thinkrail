@@ -583,7 +583,13 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   includeDiffStats? }`**, where omitted/true preserves the existing full rows with computed aggregates and
   `false` returns the same authoritative membership/order without the synchronous per-workspace diff-stat
   fan-out used nowhere by navigation restoration / `fs.*` (**`fs.readFile`** answers
-  `FileContent` = `{ content, meta: ResourceMeta }`; **`fs.writeFile`** (`FILE_WRITE_PROTOCOL_VERSION` =
+  `FileRead` = `FileContent` (`{ content, meta: ResourceMeta }`) plus an optional **`lastWrite`**
+  (`FileLastWrite {author, at}`): who wrote this exact version, as far as the host knows. `FileAuthor` is
+  `user{thisClient}`, `agent{sessionId, via:"tool", toolName}`, `agent{sessionId, via:"script"}`
+  or `external`; the last two are inferred from the mtime, so the variant itself says so. The host never puts a clientKey on the wire, only whether the
+  writer is the asking client. The field needs no version gate: a current host also omits it when the
+  author is unknown, so an older host's absence means the same thing to a newer client, and an older
+  client ignores it; **`fs.writeFile`** (`FILE_WRITE_PROTOCOL_VERSION` =
   v93): `{workspaceId, path, content, expect:{hash}}` → `written{meta} | stale{current} | missing |
   readonly`. `content` is editor text (`toEditorText`: one leading BOM dropped, every `\r\n`/`\r`
   folded to `\n`), and the host restores the disk file's form. The host folds line breaks again but
