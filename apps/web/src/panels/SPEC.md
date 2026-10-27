@@ -1697,6 +1697,10 @@ own section. The kebab menu (`plan-menu`, a
   (`node_modules`) matches every tick: the watcher never reports paths under it, so a narrowed row there
   would never refresh. Every folder row, collapsed too, otherwise re-read its chain on any change
   anywhere in the worktree. The root listing keeps reading on every tick.
+  The wiring of this hook and `useLiveTabContent` (ticks during a slow read, a workspace or file switch
+  mid-read, `affectedBy`) is tested in `liveReads.test.tsx` by mounting real hooks through
+  `react-dom/client` on a headless container: a tree that renders no host elements needs only a stub
+  `window`, so the web package needs no DOM library or testing dependency.
   Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via
   `useGitStatus`, feeding both modes),
   `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
