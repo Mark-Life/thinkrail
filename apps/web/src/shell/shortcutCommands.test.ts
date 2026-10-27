@@ -37,6 +37,8 @@ function harness(platform: ShortcutPlatform = "linux") {
 		closeItem: () => log.push("close-item"),
 		openSettings: () => log.push("open-settings"),
 		save: () => log.push("save"),
+		undo: () => log.push("undo"),
+		redo: () => log.push("redo"),
 		quit: () => log.push("quit"),
 		onQuitHint: (hint) => hints.push(hint),
 		isInTerminal: (target) => target === TERMINAL,
@@ -270,6 +272,14 @@ test("Ctrl+, runs open-settings once per press, inside a terminal too", () => {
 	expect(h.log).toEqual(["open-settings"]);
 	h.shortcuts.run("open-settings");
 	expect(h.log).toEqual(["open-settings", "open-settings"]);
+});
+
+test("the native Edit menu's undo and redo run with no key chord of their own", () => {
+	const h = harness("windows");
+	expect(h.keydown("KeyZ", { key: "z" })).toBe(false);
+	h.shortcuts.run("undo");
+	h.shortcuts.run("redo");
+	expect(h.log).toEqual(["undo", "redo"]);
 });
 
 describe("linux quit confirmation", () => {
