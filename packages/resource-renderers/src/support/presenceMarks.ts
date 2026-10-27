@@ -1,5 +1,8 @@
+import { RiChat2Line, RiLoginBoxLine, RiUserLine } from "@remixicon/react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
-import type { PresenceWrite, PresenceWriter } from "../registry";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { PresenceTone, PresenceWrite, PresenceWriter } from "../registry";
 import type { DiskLanding } from "./monacoMirror";
 import {
 	diffFence,
@@ -42,13 +45,36 @@ const pending = (range: monaco.IRange) => ({
 	},
 });
 
-function badge(kind: "flag" | "chip", writer: PresenceWriter, text: string): HTMLElement {
+const kindIcon = (icon: typeof RiUserLine) => renderToStaticMarkup(createElement(icon));
+
+const USER_ICON = kindIcon(RiUserLine);
+const AGENT_ICON = kindIcon(RiChat2Line);
+const EXTERNAL_ICON = kindIcon(RiLoginBoxLine);
+
+const toneIcon = (tone: PresenceTone) =>
+	tone === "user" ? USER_ICON : tone === "external" ? EXTERNAL_ICON : AGENT_ICON;
+
+function badge(kind: "flag" | "chip", writer: PresenceWriter): HTMLElement {
 	const node = document.createElement("div");
 	node.className = `presence-${kind} presence-tone-${writer.tone}${writer.inferred ? " presence-inferred" : ""}`;
 	node.dataset.presence = kind;
 	node.dataset.writer = writer.id;
 	node.setAttribute("aria-hidden", "true");
-	node.textContent = text;
+	return node;
+}
+
+function flagNode(writer: PresenceWriter): HTMLElement {
+	const node = badge("flag", writer);
+	const body = document.createElement("span");
+	body.className = "presence-flag-body rounded-full";
+	const icon = document.createElement("span");
+	icon.className = "presence-flag-icon";
+	icon.innerHTML = toneIcon(writer.tone);
+	const name = document.createElement("span");
+	name.className = "presence-flag-name";
+	name.textContent = writer.label;
+	body.append(icon, name);
+	node.append(body);
 	return node;
 }
 
@@ -109,7 +135,7 @@ export function attachPresence(
 		for (const other of marks) {
 			if (other !== mark && other.ranges.getRange(0)?.startLineNumber === at) clearFlag(other);
 		}
-		const node = badge("flag", writer, writer.label);
+		const node = flagNode(writer);
 		const id = `presence-flag-${++widgetSeq}`;
 		mark.flag = {
 			getId: () => id,
@@ -133,7 +159,8 @@ export function attachPresence(
 			if (other === mark) earlier = false;
 			else if (earlier || other.paint.kind === "file") drop(other);
 		}
-		const node = badge("chip", writer, options.text().file(writer));
+		const node = badge("chip", writer);
+		node.textContent = options.text().file(writer);
 		const id = `presence-chip-${++widgetSeq}`;
 		mark.chip = {
 			getId: () => id,

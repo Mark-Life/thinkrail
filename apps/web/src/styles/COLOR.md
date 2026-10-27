@@ -129,8 +129,9 @@ agents cycle `feedback-info`, `feedback-success`, `feedback-warning` by first ap
 workspace, and an outside writer is `text-subtle`. Washes use the matching `-subtle` step
 (`control-bg-hovered` for the outside writer, since `text-subtle` has no tint). `index.css` sets them
 once as `--presence-tone` / `--presence-wash` on `presence-tone-*` for Monaco's decorations, and
-`panels/FileWriters.tsx` maps the same tones to utilities. Flags and chips put the tone on a border and
-keep `text-default` on `container-elevated-bg`, so a warning tone never carries text. Avatars carry no border: the icon takes the tone and the fill its wash, so two agents differ the way their gutter bars do; an inferred writer keeps the tone icon on a `control-bg-hovered` fill. A fourth agent
+`panels/FileWriters.tsx` maps the same tones to utilities. The name flag is a pill on the tone's wash with the
+kind icon in the tone and `text-default` for the name, with no border, so an inferred writer's flag looks the same (the gutter bar carries the dash); the whole-file chip
+puts the tone on a border and keeps `text-default` on `container-elevated-bg`, so a warning tone never carries text. Avatars carry no border: the icon takes the tone and the fill its wash, so two agents differ the way their gutter bars do; an inferred writer keeps the tone icon on a `control-bg-hovered` fill. A fourth agent
 reuses a tone; the label carries identity.
 
 ## Adding or changing a colour

@@ -42,6 +42,12 @@ const ELSEWHERE: PresenceWriter = {
 	inferred: false,
 };
 
+interface FakeNode {
+	className?: string;
+	innerHTML?: string;
+	textContent?: string;
+}
+
 let collections: Collection[];
 let flags: unknown[];
 let chips: unknown[];
@@ -98,7 +104,14 @@ const bars = () =>
 
 beforeAll(() => {
 	globalThis.document = {
-		createElement: () => ({ dataset: {}, setAttribute() {} }),
+		createElement: () => ({
+			dataset: {},
+			children: [] as unknown[],
+			setAttribute() {},
+			append(...nodes: unknown[]) {
+				this.children.push(...nodes);
+			},
+		}),
 	} as unknown as Document;
 });
 
@@ -184,6 +197,25 @@ describe("attachPresence", () => {
 			[3, "presence-bar presence-tone-agent1"],
 			[6, "presence-bar presence-tone-agent1 presence-inferred"],
 		]);
+		marks.dispose();
+	});
+
+	test("the flag shows the writer's kind icon before its name", () => {
+		const marks = attach();
+		const flagParts = () => {
+			const widget = flags.at(-1) as { getDomNode(): { children: { children: FakeNode[] }[] } };
+			const body = widget.getDomNode().children[0]?.children ?? [];
+			return body.map((part) => [part.className, part.innerHTML ?? part.textContent]);
+		};
+		marks.setLatest({ hash: "a", writer: AGENT });
+		marks.land(editLine(5, "a"));
+		const [icon, name] = flagParts();
+		expect(icon?.[0]).toBe("presence-flag-icon");
+		expect(icon?.[1]).toContain("<svg");
+		expect(name).toEqual(["presence-flag-name", "Agent"]);
+		marks.setLatest({ hash: "b", writer: ELSEWHERE });
+		marks.land(editLine(9, "b"));
+		expect(flagParts()[0]?.[1]).not.toBe(icon?.[1]);
 		marks.dispose();
 	});
 

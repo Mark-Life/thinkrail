@@ -429,28 +429,41 @@
 	pointer-events: none;
 	user-select: none;
 	white-space: nowrap;
-	border: 1px solid var(--presence-tone);
-	background: var(--container-elevated-bg);
-	color: var(--text-default);
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s10);
 	line-height: 14px;
 }
-.presence-flag {
-	margin-left: var(--space-12);
-	padding: 0 var(--space-4);
-	border-radius: var(--radius-sm) var(--radius-sm) var(--radius-sm) 0;
-	box-shadow: inset 3px 0 0 var(--presence-tone);
-	animation: presence-flag 5s ease forwards;
-}
 .presence-chip {
 	margin: var(--space-8) var(--space-16);
 	padding: var(--space-2) var(--space-8);
+	border: 1px solid var(--presence-tone);
 	border-radius: var(--radius-sm);
+	background: var(--container-elevated-bg);
+	color: var(--text-default);
 }
-.presence-flag.presence-inferred,
 .presence-chip.presence-inferred {
 	border-style: dashed;
+}
+.presence-flag {
+	margin-left: var(--space-12);
+	animation: presence-flag 5s ease forwards;
+}
+.presence-flag-body {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	padding: 0 var(--space-8) 0 var(--space-4);
+	background: var(--presence-wash);
+	color: var(--text-default);
+	font-weight: var(--tr-font-weight-medium);
+}
+.presence-flag-icon {
+	display: inline-flex;
+	color: var(--presence-tone);
+}
+.presence-flag-icon svg {
+	width: 12px;
+	height: 12px;
 }
 @keyframes presence-flag {
 	0%,
