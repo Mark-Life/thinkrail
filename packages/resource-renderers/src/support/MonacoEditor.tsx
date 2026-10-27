@@ -204,6 +204,7 @@ export default function MonacoEditor({
 			onConflicts: zones.setConflicts,
 			onDisk: marks.land,
 		});
+		if (!isEditorViewState(latestRef.current.viewState)) binding.adoptSelection();
 		return () => {
 			binding.dispose();
 			marks.dispose();
