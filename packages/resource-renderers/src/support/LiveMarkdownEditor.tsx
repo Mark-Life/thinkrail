@@ -8,22 +8,27 @@ import { useResourceHost } from "../host";
 import type { ConflictChoice, ResourceEditSession, ResourceViewProps } from "../registry";
 import { ConflictLens, ConflictTheirs } from "./conflictLens";
 import { LiveFindBar } from "./LiveFindBar";
-import { bindSession, type SessionBinding } from "./livePreview/binding";
 import {
+	bindSession,
+	continueList,
+	createPortalHost,
+	linkHrefAt,
+	linkTarget,
+	liveFind,
+	livePresence,
+	livePresenceSurface,
 	livePreview,
 	liveText,
+	markdownLanguage,
+	newlineKeepingIndent,
+	type PortalEntry,
 	portalHost,
+	type SessionBinding,
 	setConflicts,
 	setFocused,
 	setThreads,
 	type ThreadAnchor,
-} from "./livePreview/decorations";
-import { liveFind } from "./livePreview/find";
-import { markdownLanguage } from "./livePreview/language";
-import { linkHrefAt, linkTarget } from "./livePreview/links";
-import { continueList, newlineKeepingIndent } from "./livePreview/lists";
-import { createPortalHost, type PortalEntry } from "./livePreview/portals";
-import { livePresence, livePresenceSurface } from "./livePreview/presence";
+} from "./livePreview";
 import { MarkdownDocument } from "./MarkdownPreview";
 import { createPresenceMarks } from "./presenceCore";
 import { presenceKindIcon } from "./presenceIcons";

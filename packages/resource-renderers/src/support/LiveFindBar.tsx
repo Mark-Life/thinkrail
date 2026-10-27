@@ -11,7 +11,7 @@ import { RiArrowDownLine, RiArrowUpLine, RiCloseLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useLayoutEffect, useRef } from "react";
-import { FIND_FIELD } from "./livePreview/find";
+import { FIND_FIELD } from "./livePreview";
 
 export function LiveFindBar({ view }: { view: EditorView }) {
 	const t = useT();
