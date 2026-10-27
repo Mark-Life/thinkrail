@@ -12,9 +12,8 @@ import type {
 	TextChange,
 	TextRange,
 } from "../../registry";
+import { type Composition, classifyEdit } from "../editKind";
 import type { DiskLanding } from "../presenceCore";
-
-type Composition = "idle" | "start" | "active";
 
 interface BindableView {
 	readonly state: EditorState;
@@ -35,23 +34,15 @@ export function localEditKind(
 	changes: readonly TextChange[],
 	composition: Composition,
 ): LocalEditKind {
-	if (tr.isUserEvent("input.type.compose")) {
-		return composition === "active" ? "compose" : "composeStart";
-	}
-	if (tr.isUserEvent("input.paste")) return "paste";
-	if (changes.every((change) => change.insert === "")) return "delete";
-	const typed =
-		tr.isUserEvent("input.type") &&
-		changes.every(
-			(change) =>
-				change.insert !== "" &&
-				!change.insert.includes("\n") &&
-				(change.to === change.from || change.insert.length === 1),
-		);
-	return typed ? "type" : "other";
+	const composing = tr.isUserEvent("input.type.compose");
+	return classifyEdit(changes, {
+		composition: composing ? (composition === "active" ? "active" : "start") : "idle",
+		paste: tr.isUserEvent("input.paste"),
+		typing: tr.isUserEvent("input.type"),
+	});
 }
 
-export function selectionRanges(state: EditorState): TextRange[] {
+function selectionRanges(state: EditorState): TextRange[] {
 	return state.selection.ranges.map((range) => ({ anchor: range.anchor, head: range.head }));
 }
 

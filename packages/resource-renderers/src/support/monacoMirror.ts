@@ -3,32 +3,12 @@ import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import type {
 	EditConflict,
 	EditUpdate,
-	LocalEditKind,
 	ResourceEditSession,
 	TextChange,
 	TextRange,
 } from "../registry";
+import { type Composition, classifyEdit } from "./editKind";
 import type { DiskLanding } from "./presenceCore";
-
-type Composition = "idle" | "start" | "active";
-
-function editKind(
-	changes: readonly editor.IModelContentChange[],
-	composition: Composition,
-	pasting: boolean,
-): LocalEditKind {
-	if (composition === "start") return "composeStart";
-	if (composition === "active") return "compose";
-	if (pasting) return "paste";
-	if (changes.every((change) => change.text === "")) return "delete";
-	const typed = changes.every(
-		(change) =>
-			change.text !== "" &&
-			!change.text.includes("\n") &&
-			(change.rangeLength === 0 || change.text.length === 1),
-	);
-	return typed ? "type" : "other";
-}
 
 function toRange(model: editor.ITextModel, change: TextChange): monaco.IRange {
 	const start = model.getPositionAt(change.from);
@@ -118,13 +98,14 @@ export function mirrorEditSession(
 	const subscriptions = [
 		model.onDidChangeContent((event) => {
 			if (applying || event.isEolChange) return;
+			const changes = event.changes.map((change) => ({
+				from: change.rangeOffset,
+				to: change.rangeOffset + change.rangeLength,
+				insert: change.text,
+			}));
 			session.applyLocal(
-				event.changes.map((change) => ({
-					from: change.rangeOffset,
-					to: change.rangeOffset + change.rangeLength,
-					insert: change.text,
-				})),
-				editKind(event.changes, composition, pasting),
+				changes,
+				classifyEdit(changes, { composition, paste: pasting, typing: true }),
 			);
 			pasting = false;
 			if (composition === "start") composition = "active";
