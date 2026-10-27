@@ -457,6 +457,9 @@
 	color: var(--text-default);
 	font-weight: var(--tr-font-weight-medium);
 }
+.presence-flag.presence-tone-external .presence-flag-body {
+	background: var(--media-checker-tile);
+}
 .presence-flag-icon {
 	display: inline-flex;
 	color: var(--presence-tone);
