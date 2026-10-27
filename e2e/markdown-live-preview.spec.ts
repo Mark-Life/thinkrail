@@ -196,6 +196,97 @@ test("Cmd/Ctrl+F finds text below the rendered part of a long document", async (
 	await expect(live(page).locator(".cm-content")).toBeFocused();
 });
 
+test("find shows matches inside a fence, the front matter and a hidden link URL", async ({
+	page,
+}) => {
+	const source =
+		"---\ntitle: zebra one\n---\n\nIntro\n\n```\nzebra two\n```\n\nSee [x](https://zebra.example) now.\n";
+	await openLive(page, "hidden.md", source);
+	await liveLine(page, "Intro").click();
+	await pressPlatformShortcut(page, "f");
+	await live(page).getByRole("searchbox", { name: "Find in file" }).fill("zebra");
+	const selected = live(page).locator(".cm-searchMatch-selected");
+	for (const line of ["zebra two", "https://zebra.example", "title: zebra one"]) {
+		await page.keyboard.press("Enter");
+		await expect(selected).toHaveText("zebra");
+		await expect(selected).toBeVisible();
+		await expect(liveLine(page, line)).toBeVisible();
+	}
+});
+
+test("a review card on a fence line keeps its focus and typing while the fence shows source", async ({
+	page,
+}) => {
+	await openLive(page, "card.md", "intro\n\n```\nx\ny\nz\n```\n\nend\n");
+	await page.getByTestId("view-toggle-code").click();
+	const line = await visibleEditor(page)
+		.locator(".view-line")
+		.filter({ hasText: /^y$/ })
+		.boundingBox();
+	if (!line) throw new Error("the y line has no box");
+	await page.mouse.move(line.x + 2, line.y + line.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(line.x + 40, line.y + line.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await page.locator('[data-testid="review-add-icon"]:visible').click();
+	await page.getByTestId("review-composer-input").fill("On y");
+	await page.getByTestId("review-composer-save").click();
+	await page.getByTestId("view-toggle-markdown").click();
+
+	await live(page).locator(".md-widget-block").click();
+	await caretAtLineEnd(page, "y");
+	const card = live(page).getByTestId("review-thread-card");
+	await expect(card).toHaveCount(1);
+	await card.evaluate((node) => {
+		node.dataset.probe = "kept";
+	});
+	const edit = card.getByTestId("review-thread-edit");
+	await edit.click();
+	await page.keyboard.type(" more");
+	await expect(edit).toBeFocused();
+	await expect(edit).toHaveValue("On y more");
+	await expect(
+		live(page).locator('[data-testid="review-thread-card"][data-probe="kept"]'),
+	).toHaveCount(1);
+});
+
+test("following a heading anchor puts the caret on the heading", async ({ page }) => {
+	const filler = Array.from({ length: 80 }, (_, index) => `Filler paragraph ${index + 1}.`);
+	const source = `[go](#target)\n\n${filler.join("\n\n")}\n\n## Target\n\nAfter.\n`;
+	const path = await openLive(page, "anchor.md", source);
+	await live(page).locator(".md-link", { hasText: "go" }).click();
+	await pressPlatformShortcut(page, "Enter");
+	await expect(
+		live(page).locator('.cm-line[role="heading"]', { hasText: "Target" }),
+	).toBeInViewport();
+	await page.keyboard.press("End");
+	await page.keyboard.type(" x");
+	await expect.poll(() => readFileSync(path, "utf8")).toContain("## Target x\n");
+});
+
+test("the lock stays clear of the find bar and the text", async ({ page }) => {
+	await openLive(
+		page,
+		"lock.md",
+		`# ${"A long heading that wraps across the pane ".repeat(4)}\n\nbody\n`,
+	);
+	await liveLine(page, "body").click();
+	await pressPlatformShortcut(page, "f");
+	const lock = page.getByTestId("markdown-lock");
+	const close = live(page).getByRole("button", { name: "Close find" });
+	await expect(close).toBeVisible();
+	const [lockBox, closeBox, lineBox] = await Promise.all([
+		lock.boundingBox(),
+		close.boundingBox(),
+		liveLine(page, "A long heading").boundingBox(),
+	]);
+	if (!lockBox || !closeBox || !lineBox) throw new Error("missing box");
+	expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(lockBox.x);
+	expect(lineBox.x + lineBox.width).toBeLessThanOrEqual(lockBox.x);
+	await lock.click();
+	await expect(lock).toHaveAttribute("aria-pressed", "true");
+});
+
 test.describe("manual save", () => {
 	pinFileSaveMode("manual");
 
@@ -282,6 +373,13 @@ test("an outside write marks its lines in the live preview", async ({ page }) =>
 	const bar = live(page).locator(".cm-line.presence-bar.presence-tone-external");
 	await expect(bar).toHaveText(/second from outside/, { timeout: 10_000 });
 	await expect(bar).toHaveAttribute("title", "Changed by External (inferred from timing)");
+	const [barLeft, scrollerLeft] = await bar.evaluate((line) => {
+		const scroller = line.closest(".cm-scroller");
+		if (!scroller) throw new Error("no scroller");
+		const left = Number.parseFloat(getComputedStyle(line, "::after").left);
+		return [line.getBoundingClientRect().left + left, scroller.getBoundingClientRect().left];
+	});
+	expect(barLeft).toBeGreaterThanOrEqual(scrollerLeft);
 	await expect
 		.poll(
 			() =>

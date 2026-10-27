@@ -168,7 +168,7 @@ export default function MarkdownPreview(props: ResourceViewProps) {
 				aria-label={t("viewer.markdown.lock")}
 				title={t("viewer.markdown.lock")}
 				onClick={() => setLocked((value) => !value)}
-				className="absolute top-8 right-12 z-10 bg-container-workspace-bg aria-pressed:text-primary"
+				className="absolute top-8 right-8 z-10 bg-container-workspace-bg aria-pressed:text-primary"
 			>
 				{locked ? <RiLockLine className="size-16" /> : <RiLockUnlockLine className="size-16" />}
 			</Button>
@@ -187,7 +187,14 @@ function BufferReadingView(props: ResourceViewProps & { edit: ResourceEditSessio
 	);
 }
 
-function ReadingView({ resource, content, review, viewState, onViewState }: ResourceViewProps) {
+function ReadingView({
+	resource,
+	content,
+	edit,
+	review,
+	viewState,
+	onViewState,
+}: ResourceViewProps) {
 	const { workspaceId, path } = resource;
 	const text = content.kind === "text" ? content.text : "";
 	const { markdown: Markdown, bytesUrl, openFile } = useResourceHost();
@@ -197,6 +204,7 @@ function ReadingView({ resource, content, review, viewState, onViewState }: Reso
 		[path, workspaceId, links],
 	);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
+	const clearLock = edit ? "pr-16" : undefined;
 	if (!review) {
 		return (
 			<div
@@ -205,13 +213,15 @@ function ReadingView({ resource, content, review, viewState, onViewState }: Reso
 				className="h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal"
 			>
 				<article className="mx-auto max-w-[78ch] px-24 py-16">
-					<MarkdownDocument
-						content={text}
-						workspaceId={workspaceId}
-						path={path}
-						Markdown={Markdown}
-						links={links}
-					/>
+					<div className={clearLock}>
+						<MarkdownDocument
+							content={text}
+							workspaceId={workspaceId}
+							path={path}
+							Markdown={Markdown}
+							links={links}
+						/>
+					</div>
 				</article>
 			</div>
 		);
@@ -251,7 +261,7 @@ function ReadingView({ resource, content, review, viewState, onViewState }: Reso
 				return (
 					<article className="mx-auto max-w-[78ch] px-24 py-16">
 						{segments.map((segment) => (
-							<div key={segment.key}>
+							<div key={segment.key} className={clearLock}>
 								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}
 								{segment.nodes}
 							</div>

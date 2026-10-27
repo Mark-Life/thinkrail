@@ -4,7 +4,6 @@ export {
 	liveText,
 	portalHost,
 	setConflicts,
-	setFocused,
 	setThreads,
 	type ThreadAnchor,
 } from "./decorations";

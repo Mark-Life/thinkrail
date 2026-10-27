@@ -19,7 +19,7 @@ import type { EditConflict } from "../../registry";
 import { conflictSpan } from "../conflictLayout";
 import { frontmatterBlock, type LiveBlock, liveBlocks } from "./blocks";
 import { type InlineStyle, type LineStyle, type LiveMark, liveMarks, type Span } from "./markers";
-import { type PortalContent, type PortalHost, PortalWidget } from "./portals";
+import { type PortalHost, PortalWidget, type WidgetContent } from "./portals";
 
 interface LiveText {
 	task: string;
@@ -42,6 +42,28 @@ const focusField = StateField.define<boolean>({
 		for (const effect of tr.effects) if (effect.is(setFocused)) return effect.value;
 		return focused;
 	},
+});
+
+const focusWithin = ViewPlugin.define((view) => {
+	let live = true;
+	const sync = (event: FocusEvent) => {
+		const next = event.type === "focusin" ? event.target : event.relatedTarget;
+		const focused = next instanceof Node && view.dom.contains(next);
+		queueMicrotask(() => {
+			if (live && view.state.field(focusField) !== focused) {
+				view.dispatch({ effects: setFocused.of(focused) });
+			}
+		});
+	};
+	view.dom.addEventListener("focusin", sync);
+	view.dom.addEventListener("focusout", sync);
+	return {
+		destroy() {
+			live = false;
+			view.dom.removeEventListener("focusin", sync);
+			view.dom.removeEventListener("focusout", sync);
+		},
+	};
 });
 
 function liveSelection(state: EditorState): Span[] | null {
@@ -73,7 +95,7 @@ function conflictDecorations(
 		getLineMaxColumn: (number: number) => doc.line(number).length + 1,
 	};
 	const ranges: Range<Decoration>[] = [];
-	const widget = (content: PortalContent, pos: number, side: number) =>
+	const widget = (content: WidgetContent, pos: number, side: number) =>
 		Decoration.widget({ widget: new PortalWidget(content, host), block: true, side }).range(pos);
 	for (const conflict of conflicts) {
 		const span = conflictSpan(model, conflict);
@@ -91,7 +113,7 @@ function conflictDecorations(
 			}
 		}
 		const after = span.endLine ?? span.startLine - 1;
-		const theirs: PortalContent = { kind: "theirs", conflict, theirsText: span.theirsText };
+		const theirs: WidgetContent = { kind: "theirs", conflict, theirsText: span.theirsText };
 		ranges.push(
 			after < 1
 				? widget(theirs, 0, -1)
@@ -334,7 +356,7 @@ const markPlugin = ViewPlugin.fromClass(
 				update.docChanged ||
 				update.viewportChanged ||
 				update.selectionSet ||
-				update.focusChanged ||
+				update.startState.field(focusField) !== update.state.field(focusField) ||
 				syntaxTree(update.startState) !== syntaxTree(update.state) ||
 				update.startState.field(blockField) !== update.state.field(blockField)
 			) {
@@ -393,4 +415,11 @@ const threadField = StateField.define<DecorationSet>({
 		),
 });
 
-export const livePreview = [focusField, conflictField, blockField, markPlugin, threadField];
+export const livePreview = [
+	focusField,
+	focusWithin,
+	conflictField,
+	blockField,
+	markPlugin,
+	threadField,
+];

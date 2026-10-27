@@ -505,7 +505,7 @@
 	outline: none;
 }
 .md-live.cm-editor .cm-scroller .cm-content {
-	padding: 0;
+	padding: 0 var(--space-16) 0 var(--space-24);
 	caret-color: var(--text-default);
 }
 .md-live .cm-content .cm-line {
@@ -613,6 +613,7 @@
 	color: inherit;
 }
 .md-live.cm-editor .cm-panels.cm-panels-top {
+	padding: 0 var(--space-16) 0 var(--space-24);
 	border-bottom: none;
 }
 .md-live.cm-editor .cm-searchMatch {

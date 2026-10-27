@@ -17,7 +17,7 @@ view and render the React portals; this directory owns everything that runs insi
 ## Boundary
 
 - **Public surface (barrel):** `bindSession`, `SessionBinding`, `livePreview`, `liveText`, `portalHost`,
-  `setConflicts`, `setFocused`, `setThreads`, `ThreadAnchor`, `markdownLanguage`, `linkHrefAt`,
+  `setConflicts`, `setThreads`, `ThreadAnchor`, `markdownLanguage`, `linkHrefAt`,
   `linkTarget`, `continueList`, `newlineKeepingIndent`, `createPortalHost`, `PortalEntry`,
   `livePresence`, `livePresenceSurface`, `liveFind`, `FIND_FIELD`.
 - **Allowed deps:** `@codemirror/state`, `@codemirror/view`, `@codemirror/language`,
@@ -38,7 +38,9 @@ view and render the React portals; this directory owns everything that runs insi
   render as block widgets: the lens above the user's lines (the same **Mine** / **Theirs** / **Both**
   as Monaco, through `ConflictLens` and `ConflictTheirs`) and the disk lines below, with the user's lines washed.
 - **Markers (`markers.ts`, pure).** Syntax markers hide unless the selection touches their node,
-  and only while the editor has focus, so an unfocused page reads like the reading view: inline
+  and only while focus is inside the editor (the text, the find bar or a widget's controls), so an
+  unfocused page reads like the reading view and a click into a thread card or the find bar keeps the
+  source it was opened over: inline
   nodes (emphasis, strong, strikethrough, inline code, links, autolinks, escapes) reveal when the
   selection touches the node, line markers (heading `#`, quote `>`, list bullets, task boxes, rules)
   when it touches the line. A shown marker is mono in `text-muted`, the quiet tier that keeps the 4.5:1 floor, since it is text
@@ -48,7 +50,7 @@ view and render the React portals; this directory owns everything that runs insi
   line by line (CodeMirror refuses a plugin decoration that hides a line break); brackets with no URL
   and no matching reference definition (`array[0]`, `[WIP]`) stay literal text, as in CommonMark.
   Cmd/Ctrl+click, or Cmd/Ctrl+Enter with the caret on a link, follows it: an anchor finds its heading
-  by the reading view's ids (syntax tree headings, `-n` for repeats), and only `http`, `https` and
+  by the reading view's ids (syntax tree headings, `-n` for repeats) and puts the caret on it, and only `http`, `https` and
   `mailto` open outside the app; a bare or `<…>` email autolink opens as `mailto:`, as in the reading view. Inline marks are built only over the visible ranges.
 - **Blocks (`blocks.ts`, pure).** Tables, GitHub alerts, fenced code (Mermaid included), HTML
   blocks, a paragraph that is only an image, and the front matter render as block widgets while the
@@ -72,7 +74,8 @@ view and render the React portals; this directory owns everything that runs insi
   into view. The view is React state, so the threads and the widget labels are pushed once per view
   and once per change of `review` or the locale, never twice on mount.
 - **Presence** uses the shared rules (`presenceCore.ts`) through a CodeMirror surface: a bar and a
-  wash on the changed lines, the flag after the first line (the core's pill, so it matches Monaco's), the chip at the top right, the writer and
+  wash on the changed lines (the bar sits in the content's left padding, since the scroller clips
+  anything left of it), the flag after the first line (the core's pill, so it matches Monaco's), the chip at the top right, the writer and
   diff on hover. Marks are line classes, so two writers on one line show the later one's tone. The
   wash fades a `::before` layer behind the line's text, never the line box, which would fade the text.
 - **Typography** is the `doc` prose system: the editor content carries `tr-prose-doc`; the lens,
@@ -80,12 +83,14 @@ view and render the React portals; this directory owns everything that runs insi
   the reading view; heading and
   code lines carry the classes the generator maps next to the elements (`md-h1`…`md-h6`,
   `md-code`, `md-codeblock`), and spacing is line padding, since CodeMirror measures line boxes and
-  margins between lines break its height map. The measure is the reading view's 78ch.
+  margins between lines break its height map. The measure is the reading view's 78ch; with the lock shown, both
+  views keep a right padding that clears it, so neither text nor the find bar runs under it.
 - **Access.** The content is a labelled multi-line textbox; Tab leaves the editor (no tab binding);
   heading lines carry `role="heading"` and their level. The focused editor rings its pane. Widget controls stay keyboard reachable.
   Reduced motion drops the presence fades. Enter on a list item starts the next one, inside a quote
-  too (an empty item ends the list), outside code. Any other Enter keeps the line's leading
-  whitespace, as Monaco does, so a fence or paragraph inside a list item stays in it.
+  too (an empty item ends the list), outside code. Any other Enter keeps the line's quote marks and
+  leading whitespace, so a fence or paragraph inside a list item or a quote stays in it; an empty
+  quoted line outside code ends one quote level.
 - **Find.** CodeMirror renders only the lines near the viewport, so the browser's find cannot reach
   the rest. Cmd/Ctrl+F in the editor opens a find bar (`find.ts` over `@codemirror/search`, React in
   `LiveFindBar` through the portal host) above the text: Enter and Cmd/Ctrl+G or F3 go to the next

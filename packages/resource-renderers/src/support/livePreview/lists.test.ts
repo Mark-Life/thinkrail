@@ -83,3 +83,32 @@ describe("continueList inside a quote", () => {
 		expect(enter("> - one\n> - ")).toEqual({ text: "> - one\n> ", caret: 10 });
 	});
 });
+
+describe("Enter inside a quote", () => {
+	test("a line in a quoted fence keeps the quote, so the fence stays whole", () => {
+		const doc = "> ```js\n> const a = 1;\n> ```\n\nafter";
+		const at = doc.indexOf("1;") + 2;
+		const { text, caret } = enterKey(doc, at);
+		expect(text).toBe("> ```js\n> const a = 1;\n> \n> ```\n\nafter");
+		const typed = `${text.slice(0, caret)}const b = 2;${text.slice(caret)}`;
+		const top = markdownParser.parse(typed).topNode;
+		expect(top.getChildren("Blockquote")).toHaveLength(1);
+		expect(top.getChild("Blockquote")?.getChildren("FencedCode")).toHaveLength(1);
+		expect(top.getChildren("Paragraph")).toHaveLength(1);
+	});
+	test("a quoted paragraph and a nested quote keep every level", () => {
+		expect(enterKey("> text").text).toBe("> text\n> ");
+		expect(enterKey("> > deep").text).toBe("> > deep\n> > ");
+	});
+	test("an empty quoted line ends one level of the quote", () => {
+		expect(enterKey("> text\n> ")).toEqual({ text: "> text\n", caret: 7 });
+		expect(enterKey("> > deep\n> > ")).toEqual({ text: "> > deep\n> ", caret: 11 });
+	});
+	test("an empty line in a quoted fence stays in the fence", () => {
+		const doc = "> ```\n> a\n> \n> ```";
+		expect(enterKey(doc, doc.indexOf("\n> \n") + 3).text).toBe("> ```\n> a\n> \n> \n> ```");
+	});
+	test("a `>` that is code text, not a quote mark, is not copied", () => {
+		expect(enterKey("```\n> x\n```", 7).text).toBe("```\n> x\n\n```");
+	});
+});

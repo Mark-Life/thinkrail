@@ -9,6 +9,8 @@ export type PortalContent =
 	| { kind: "theirs"; conflict: EditConflict; theirsText: string }
 	| { kind: "find" };
 
+export type WidgetContent = Exclude<PortalContent, { kind: "find" }>;
+
 export interface PortalEntry {
 	key: number;
 	node: HTMLElement;
@@ -17,17 +19,16 @@ export interface PortalEntry {
 
 const CHROME = "md-widget tr-prose-exempt";
 
-const WIDGET_CLASS: Readonly<Record<PortalContent["kind"], string>> = {
+const WIDGET_CLASS: Readonly<Record<WidgetContent["kind"], string>> = {
 	block: "md-widget md-widget-block",
 	thread: `${CHROME} md-widget-thread`,
 	lens: CHROME,
 	theirs: CHROME,
-	find: "md-find",
 };
 
 const INTERACTIVE = "a, button, input, textarea, select, summary, label, [role='button']";
 
-function sameContent(a: PortalContent, b: PortalContent): boolean {
+function sameContent(a: WidgetContent, b: WidgetContent): boolean {
 	switch (a.kind) {
 		case "block":
 			return (
@@ -37,8 +38,6 @@ function sameContent(a: PortalContent, b: PortalContent): boolean {
 			return b.kind === "thread" && a.id === b.id;
 		case "lens":
 			return b.kind === "lens" && a.conflict.id === b.conflict.id;
-		case "find":
-			return b.kind === "find";
 		case "theirs":
 			return (
 				b.kind === "theirs" &&
@@ -91,7 +90,7 @@ export type PortalHost = ReturnType<typeof createPortalHost>;
 
 export class PortalWidget extends WidgetType {
 	constructor(
-		readonly content: PortalContent,
+		readonly content: WidgetContent,
 		readonly host: PortalHost,
 	) {
 		super();

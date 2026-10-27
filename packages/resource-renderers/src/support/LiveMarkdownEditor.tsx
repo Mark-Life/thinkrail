@@ -25,7 +25,6 @@ import {
 	portalHost,
 	type SessionBinding,
 	setConflicts,
-	setFocused,
 	setThreads,
 	type ThreadAnchor,
 } from "./livePreview";
@@ -55,7 +54,6 @@ function threadAnchors(review: ResourceViewProps["review"]): ThreadAnchor[] {
 }
 
 function enter(view: EditorView) {
-	if (view.state.readOnly) return false;
 	view.dispatch(continueList(view.state) ?? newlineKeepingIndent(view.state));
 	return true;
 }
@@ -133,7 +131,11 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			const target = linkTarget(view.state, path, href);
 			if (target?.kind === "line") {
 				const at = view.state.doc.line(target.line).from;
-				view.dispatch({ effects: EditorView.scrollIntoView(at, { y: "start" }) });
+				view.dispatch({
+					selection: { anchor: at },
+					effects: EditorView.scrollIntoView(at, { y: "start" }),
+				});
+				view.focus();
 			} else if (target?.kind === "file") latestRef.current.openFile(workspaceId, target.path);
 			else if (target?.kind === "external")
 				window.open(target.href, "_blank", "noopener,noreferrer");
@@ -159,7 +161,6 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 						class: "tr-prose-doc text-text-default",
 						"aria-label": path,
 					}),
-					EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing)),
 					Prec.highest(
 						keymap.of([
 							{ key: "Mod-z", run: history((bound) => bound.undo()), preventDefault: true },
@@ -272,7 +273,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 				data-mode="live"
 				className="h-full overflow-auto bg-container-workspace-bg ring-control-border-active ring-inset has-[.cm-focused]:ring-1"
 			>
-				<article className="mx-auto max-w-[78ch] px-24 py-16">
+				<article className="mx-auto max-w-[78ch] py-16 pr-24">
 					<div ref={hostRef} />
 				</article>
 			</div>
