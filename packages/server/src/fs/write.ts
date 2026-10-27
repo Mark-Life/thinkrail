@@ -1,8 +1,13 @@
 import { mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname } from "node:path";
-import { FILE_WRITE_MAX_BYTES, type FileWriteResult, type WsParams } from "@thinkrail/contracts";
+import {
+	FILE_WRITE_MAX_BYTES,
+	type FileWriteResult,
+	LFS_POINTER_MIME,
+	type WsParams,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { decodeText, isTextBytes, LFS_POINTER_MIME, resourceMeta } from "./content";
+import { decodeText, isTextBytes, resourceMeta } from "./content";
 import { errnoCode, statOrNull } from "./errno";
 import { resolveWorktreeFile } from "./files";
 import { createFile, replaceFile } from "./replace";

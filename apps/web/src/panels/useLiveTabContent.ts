@@ -26,20 +26,20 @@ export function useLiveTabContent<T>(
 		if (!change) return;
 		const loaded = tab.loadedTick ?? 0;
 		if (change.tick <= loaded) return;
-		const { read, applyFresh, keepCurrent } = opsRef.current;
 		const paths = fsChangedPaths(change);
 		if (change.tick === loaded + 1 && paths !== null && !paths.includes(tab.path)) {
-			keepCurrent(change.tick);
+			opsRef.current.keepCurrent(change.tick);
 			return;
 		}
 		let cancelled = false;
 		const isCurrent = sequencer.begin();
-		read()
+		opsRef.current
+			.read()
 			.then((fresh) => {
-				if (!cancelled && isCurrent()) applyFresh(fresh, change.tick);
+				if (!cancelled && isCurrent()) opsRef.current.applyFresh(fresh, change.tick);
 			})
 			.catch(() => {
-				if (!cancelled && isCurrent()) keepCurrent(change.tick);
+				if (!cancelled && isCurrent()) opsRef.current.keepCurrent(change.tick);
 			});
 		return () => {
 			cancelled = true;
@@ -50,12 +50,12 @@ export function useLiveTabContent<T>(
 	useEffect(() => {
 		if (reloadKey === undefined || reloadKey === lastKey.current) return;
 		lastKey.current = reloadKey;
-		const { read, applyFresh } = opsRef.current;
 		let cancelled = false;
 		const isCurrent = sequencer.begin();
-		read()
+		opsRef.current
+			.read()
 			.then((fresh) => {
-				if (!cancelled && isCurrent()) applyFresh(fresh, tab.loadedTick ?? 0);
+				if (!cancelled && isCurrent()) opsRef.current.applyFresh(fresh, tab.loadedTick ?? 0);
 			})
 			.catch(() => {});
 		return () => {
@@ -66,12 +66,15 @@ export function useLiveTabContent<T>(
 	const reload = useCallback(() => {
 		if (!mountedRef.current) return;
 		const current = tabRef.current;
-		const { read, applyFresh } = opsRef.current;
 		const isCurrent = sequencer.begin();
-		void read()
+		void opsRef.current
+			.read()
 			.then((fresh) => {
 				if (mountedRef.current && isCurrent()) {
-					applyFresh(fresh, selectWorkspaceTick(useAppStore.getState(), current.workspaceId));
+					opsRef.current.applyFresh(
+						fresh,
+						selectWorkspaceTick(useAppStore.getState(), current.workspaceId),
+					);
 				}
 			})
 			.catch(() => {});

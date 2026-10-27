@@ -16,6 +16,7 @@ export type {
 	ResourceContent,
 	ResourceDescriptor,
 	ResourceDiffProps,
+	ResourceEditSession,
 	ResourceEnvironment,
 	ResourceIntent,
 	ResourceRenderer,
@@ -24,4 +25,5 @@ export type {
 	ReviewThread,
 	ReviewThreadActions,
 	SurfaceReview,
+	TextChange,
 } from "./types";

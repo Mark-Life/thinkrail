@@ -513,6 +513,8 @@ export function isBackgroundCommandCompletionMessage(
 
 export const FILE_WRITE_MAX_BYTES = 4 * 1024 * 1024;
 
+export const LFS_POINTER_MIME = "application/vnd.git-lfs";
+
 export function toEditorText(raw: string): string {
 	return (raw.startsWith("\uFEFF") ? raw.slice(1) : raw).replace(/\r\n?/g, "\n");
 }
@@ -1107,6 +1109,7 @@ export type WsErrorCode =
 	| "UNSUPPORTED_CHANGE"
 	| "NOT_EDITABLE"
 	| "FILE_TOO_LARGE"
+	| "FILE_NOT_FOUND"
 	| "LOGIN_NOT_OWNER"
 	| "MCP_CONFIG_INVALID"
 	| "MCP_PATH_UNSAFE"
