@@ -3,10 +3,15 @@ import { i18n } from "@thinkrail/locales/react";
 import type { ResourceRenderer } from "@thinkrail/resource-renderers";
 import { fileName } from "../lib";
 import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "../store";
-import { getTransport, supportsFileWrite } from "../transport";
-import { isEditableMeta } from "./buffer";
+import {
+	clientErrorReport,
+	getTransport,
+	reportClientError,
+	supportsFileWrite,
+} from "../transport";
 import { indexedDbDrafts, nativeDrafts, nativeEditingBridge, pageDraftOwner } from "./drafts";
-import { type BufferRegistry, createBufferRegistry, type FileIo, fileBufferKey } from "./registry";
+import { fileBufferKey, isEditableMeta } from "./keys";
+import type { BufferRegistry, FileIo } from "./registry";
 
 const DRAFT_DELAY_MS = 300;
 
@@ -54,23 +59,15 @@ export function hasUnsavedEdits(state: Pick<AppState, "fileBuffersByWorkspace">)
 }
 
 let registry: BufferRegistry | null = null;
+let loading: Promise<BufferRegistry> | null = null;
+let watching = false;
+const loadListeners = new Set<() => void>();
+const native = nativeEditingBridge();
+const drafts = native ? nativeDrafts(native) : indexedDbDrafts();
 
-export function bufferRegistry(): BufferRegistry {
-	if (registry) return registry;
-	const native = nativeEditingBridge();
-	const created = createBufferRegistry({
-		io,
-		drafts: native ? nativeDrafts(native) : indexedDbDrafts(),
-		draftOwner: pageDraftOwner(),
-		publish: (workspaceId, path, summary) =>
-			useAppStore.getState().setFileBufferSummary(workspaceId, path, summary),
-		hostKey: () => getTransport().httpBase(),
-		canWrite: () => writable(useAppStore.getState().protocolVersion),
-		isConnected: () => useAppStore.getState().status === "connected",
-		onDraftRestored: (path) =>
-			toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
-		draftDelayMs: DRAFT_DELAY_MS,
-	});
+function watchStore() {
+	if (watching) return;
+	watching = true;
 	let unsaved = false;
 	useAppStore.subscribe((state, previous) => {
 		if (native && state.fileBuffersByWorkspace !== previous.fileBuffersByWorkspace) {
@@ -80,21 +77,65 @@ export function bufferRegistry(): BufferRegistry {
 		}
 		if (state.removedWorkspaceIds !== previous.removedWorkspaceIds) {
 			for (const workspaceId of Object.keys(state.removedWorkspaceIds)) {
-				if (!previous.removedWorkspaceIds[workspaceId]) created.forgetWorkspace(workspaceId);
+				if (previous.removedWorkspaceIds[workspaceId]) continue;
+				if (registry) registry.forgetWorkspace(workspaceId);
+				else void drafts.removeWorkspace({ host: getTransport().httpBase(), workspaceId });
 			}
 		}
-		if (state.tabsByWorkspace !== previous.tabsByWorkspace) created.prune(openFileKeys(state));
+		if (!registry) return;
+		if (state.tabsByWorkspace !== previous.tabsByWorkspace) registry.prune(openFileKeys(state));
 		if (state.connectionGeneration !== previous.connectionGeneration) {
-			void created.reconcileAll();
+			void registry.reconcileAll();
 		}
 	});
-	native?.onQuitFlush(() => created.flushDrafts());
-	globalThis.addEventListener?.("pagehide", () => void created.flushDrafts());
-	globalThis.document?.addEventListener("visibilitychange", () => {
-		if (globalThis.document.visibilityState === "hidden") void created.flushDrafts();
+	native?.onQuitFlush(async () => {
+		await registry?.flushDrafts();
 	});
-	registry = created;
-	return created;
+	globalThis.addEventListener?.("pagehide", () => void registry?.flushDrafts());
+	globalThis.document?.addEventListener("visibilitychange", () => {
+		if (globalThis.document.visibilityState === "hidden") void registry?.flushDrafts();
+	});
+}
+
+export function loadedBufferRegistry(): BufferRegistry | null {
+	watchStore();
+	return registry;
+}
+
+export function subscribeBufferRegistry(listener: () => void): () => void {
+	loadListeners.add(listener);
+	return () => loadListeners.delete(listener);
+}
+
+export function loadBufferRegistry(
+	load: () => Promise<Pick<typeof import("./registry"), "createBufferRegistry">> = () =>
+		import("./registry"),
+): Promise<BufferRegistry> {
+	loading ??= load()
+		.then(({ createBufferRegistry }) => {
+			registry = createBufferRegistry({
+				io,
+				drafts,
+				draftOwner: pageDraftOwner(),
+				publish: (workspaceId, path, summary) =>
+					useAppStore.getState().setFileBufferSummary(workspaceId, path, summary),
+				hostKey: () => getTransport().httpBase(),
+				canWrite: () => writable(useAppStore.getState().protocolVersion),
+				isConnected: () => useAppStore.getState().status === "connected",
+				onDraftRestored: (path) =>
+					toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
+				draftDelayMs: DRAFT_DELAY_MS,
+			});
+			watchStore();
+			for (const listener of loadListeners) listener();
+			return registry;
+		})
+		.catch((error: unknown) => {
+			loading = null;
+			reportClientError(clientErrorReport("rejection", error));
+			throw error;
+		});
+	return loading;
 }
 
 export function canEditFile({
@@ -116,7 +157,7 @@ export function canEditFile({
 }
 
 export function saveFile(workspaceId: string, path: string) {
-	return bufferRegistry().save(fileBufferKey(workspaceId, path));
+	return registry ? registry.save(fileBufferKey(workspaceId, path)) : Promise.resolve(null);
 }
 
 export function discardFile(workspaceId: string, path: string): void {
