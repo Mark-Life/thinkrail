@@ -36,7 +36,7 @@ type BufferIssue =
 export interface BufferState {
 	doc: EditorState;
 	base: DiskText;
-	saving: { text: string } | null;
+	saving: { text: string; expect: string | null } | null;
 	unconfirmed: string | null;
 	issue: BufferIssue | null;
 	merges: number;
@@ -138,6 +138,11 @@ function settledOn(state: BufferState, base: DiskText): BufferState {
 	return { ...withDoc(state, clearTypedOn(state.doc)), base, unconfirmed: null, issue: null };
 }
 
+function savedOn(state: BufferState, base: DiskText, sentOn: string | null): BufferState {
+	if (typedOn(state).hash === sentOn) return settledOn(state, base);
+	return { ...state, base, unconfirmed: null, issue: null };
+}
+
 function clearedByRead(issue: BufferIssue | null, disk: DiskText): boolean {
 	if (issue?.kind === "conflict") return issue.disk.hash !== disk.hash;
 	return issue?.kind === "error" && (issue.error === "notEditable" || issue.error === "offline");
@@ -197,26 +202,28 @@ export function beginSave(state: BufferState): { state: BufferState; request: Sa
 	if (utf8Length(bufferText(state)) > FILE_WRITE_MAX_BYTES) {
 		return { state: { ...state, issue: { kind: "error", error: "tooLarge" } }, request: null };
 	}
+	const text = bufferText(state);
+	const expect = typedOn(state).hash;
 	return {
-		state: { ...state, saving: { text: bufferText(state) }, issue: null },
-		request: { content: bufferText(state), expect: { hash: typedOn(state).hash } },
+		state: { ...state, saving: { text, expect }, issue: null },
+		request: { content: text, expect: { hash: expect } },
 	};
 }
 
 export function finishSave(state: BufferState, result: FileWriteResult): BufferState {
 	const sent = state.saving?.text ?? bufferText(state);
+	const sentOn = state.saving ? state.saving.expect : typedOn(state).hash;
 	const settled = { ...state, saving: null };
 	switch (result.status) {
 		case "written":
 			return result.meta.hash === null
 				? settled
-				: settledOn(settled, { text: sent, hash: result.meta.hash });
+				: savedOn(settled, { text: sent, hash: result.meta.hash }, sentOn);
 		case "stale": {
 			const disk = editorDisk(result.current);
 			if (!disk) return markError(settled, "notEditable");
-			if (disk.text === bufferText(state) || disk.text === state.unconfirmed) {
-				return settledOn(settled, disk);
-			}
+			if (disk.text === bufferText(state)) return settledOn(settled, disk);
+			if (disk.text === state.unconfirmed) return savedOn(settled, disk, sentOn);
 			return mergeDisk({ ...settled, unconfirmed: null }, disk);
 		}
 		case "missing":

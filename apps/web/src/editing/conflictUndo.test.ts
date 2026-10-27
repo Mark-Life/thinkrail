@@ -178,3 +178,38 @@ test("undoing Reload of a draft typed on an unknown version reopens the banner o
 	expect(bufferStatus(state)).toBe("stale");
 	expect(bufferText(state)).toBe("mine\n");
 });
+
+test("undoing Reload while a save is in flight keeps the next save merging with the disk", () => {
+	let state = edit(reloaded("a\nb\nc\nmine\n", "theirs\nb\nc\n"), "theirs\nb\nc\nX\n");
+	const { state: saving, request } = beginSave(state);
+	expect(request?.expect.hash).toBe("h:theirs\nb\nc\n");
+	state = undo(undo(saving));
+	expect(bufferText(state)).toBe("a\nb\nc\nmine\n");
+	state = finishSave(state, {
+		status: "written",
+		meta: { hash: "h:written", byteLength: 15, text: true },
+	});
+	expect(state.base).toEqual({ text: "theirs\nb\nc\nX\n", hash: "h:written" });
+	expect(beginSave(state).request?.expect.hash).toBe("h:a\nb\nc\n");
+	const current = {
+		content: "theirs\nb\nc\nX\n",
+		meta: { hash: "h:written", byteLength: 15, text: true },
+	};
+	state = finishSave(beginSave(state).state, { status: "stale", current });
+	expect(bufferText(state)).toBe("theirs\nb\nc\nmine\nX\n");
+});
+
+test("a stale answer that holds an unconfirmed write keeps a Reload undone during the save", () => {
+	let state = edit(reloaded("a\nb\nc\nmine\n", "theirs\nb\nc\n"), "theirs\nb\nc\nX\n");
+	state = beginSave(state).state;
+	state = { ...state, saving: null, unconfirmed: "theirs\nb\nc\nX\n" };
+	const { state: saving } = beginSave(state);
+	state = undo(undo(saving));
+	const current = {
+		content: "theirs\nb\nc\nX\n",
+		meta: { hash: "h:written", byteLength: 15, text: true },
+	};
+	state = finishSave(state, { status: "stale", current });
+	expect(state.base.hash).toBe("h:written");
+	expect(beginSave(state).request?.expect.hash).toBe("h:a\nb\nc\n");
+});

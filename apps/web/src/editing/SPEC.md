@@ -159,7 +159,9 @@ visible step is taken with it, so every Cmd/Ctrl+Z shows a change. A cursor move
   remembers that version (`typedOn`, text unknown for a draft typed elsewhere) through the history, so
   redo forgets it again. While it is set, a save sends `expect` with its hash, the host answers `stale`,
   and the newer disk merges 3-way from that version: disk lines stay, a same-line clash becomes a
-  conflict, and an unknown base reopens the banner. Drafts store its hash. Any new base clears it.
+  conflict, and an unknown base reopens the banner. Drafts store its hash. Any new base clears it,
+  except the answer to a save sent before an undo or redo changed it: that save keeps it, so the next
+  save still merges.
 
 ## Save pipeline
 
