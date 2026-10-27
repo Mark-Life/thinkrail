@@ -41,7 +41,9 @@ export type DesktopRpc = {
 		};
 	};
 	webview: {
-		requests: Record<string, never>;
+		requests: {
+			flushEdits: { params: undefined; response: undefined };
+		};
 		messages: {
 			updateStateChanged: NativeUpdateState;
 			windowChromeChanged: WindowChromeGeometry;

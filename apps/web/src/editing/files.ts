@@ -88,9 +88,10 @@ export function bufferRegistry(): BufferRegistry {
 			void created.reconcileAll();
 		}
 	});
-	globalThis.addEventListener?.("pagehide", () => created.flushDrafts());
+	native?.onQuitFlush(() => created.flushDrafts());
+	globalThis.addEventListener?.("pagehide", () => void created.flushDrafts());
 	globalThis.document?.addEventListener("visibilitychange", () => {
-		if (globalThis.document.visibilityState === "hidden") created.flushDrafts();
+		if (globalThis.document.visibilityState === "hidden") void created.flushDrafts();
 	});
 	registry = created;
 	return created;

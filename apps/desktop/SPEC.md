@@ -367,6 +367,10 @@ Every quit path calls the shared idempotent asynchronous server shutdown once, i
 failure after acquiring the host but before the native window or quit listener is ready. Shutdown ownership
 begins as soon as the host is acquired. It settles/aborts active agent work within its bound, drains
 analytics, disposes server resources and PTYs, and closes sockets.
+Before shutdown starts, the host awaits the web client's pending drafts (`flushEdits`, the webview's one RPC
+request), at most `EDIT_FLUSH_TIMEOUT_MS` (2 s); a failure or timeout still shuts down. The main window's
+`will-close` is vetoed like `before-quit` until shutdown completes, so the native X and the HTML close control
+run the same quit (with its unsaved-edits question) while the webview can still answer.
 Electrobun's synchronous `before-quit` callback cancels quit while that promise is pending and retries
 `Utils.quit()` under a completion guard. Startup failure also requests quit directly through that coordinator
 in the error-dialog finalizer, so even missing quit interception or a failed dialog cannot bypass shutdown.

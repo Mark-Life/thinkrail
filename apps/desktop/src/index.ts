@@ -21,6 +21,7 @@ import {
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { createDraftStore, readDraft, readDraftKey } from "./draftStore";
+import { EDIT_FLUSH_TIMEOUT_MS, flushBeforeShutdown, isVetoableEvent } from "./editFlush";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
@@ -217,8 +218,14 @@ async function start(): Promise<void> {
 	});
 	setDesktopErrorReporter(host.reportError);
 	let unsavedEdits = false;
+	let flushWebEdits = (): Promise<void> => Promise.resolve();
 	const quitCoordinator = createElectrobunQuitCoordinator(
-		() => host.server.shutdown(),
+		flushBeforeShutdown({
+			flush: () => flushWebEdits(),
+			shutdown: () => host.server.shutdown(),
+			timeoutMs: EDIT_FLUSH_TIMEOUT_MS,
+			reportError: (error) => desktopError("drafts", "could not flush file drafts", error),
+		}),
 		() => dialogLabels,
 		() => unsavedEdits,
 	);
@@ -406,7 +413,11 @@ async function start(): Promise<void> {
 						: {}),
 				}),
 	});
+	mainWindow.on("will-close", (event) => {
+		if (isVetoableEvent(event)) quitCoordinator.handleBeforeQuit(event);
+	});
 	if (!neutral) {
+		flushWebEdits = () => rpc.request.flushEdits();
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
 			window: mainWindow,

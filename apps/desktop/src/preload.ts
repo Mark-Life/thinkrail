@@ -42,6 +42,7 @@ windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const windowStateListeners = new Set<(state: NativeWindowState) => void>();
+let flushEdits: () => Promise<void> = () => Promise.resolve();
 let nativeWindowFocused = document.hasFocus();
 window.addEventListener("focus", () => {
 	nativeWindowFocused = true;
@@ -50,7 +51,12 @@ const shortcuts = createShortcutsBridge(() => rpc.request.quitApp());
 const rpc = Electroview.defineRPC<DesktopRpc>({
 	maxRequestTime: 5000,
 	handlers: {
-		requests: {},
+		requests: {
+			flushEdits: async () => {
+				await flushEdits();
+				return undefined;
+			},
+		},
 		messages: {
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
@@ -157,6 +163,9 @@ const editingBridge: NativeEditingBridge = Object.freeze({
 	},
 	setUnsavedEdits: (unsaved: boolean) => {
 		electroview.rpc?.send.unsavedEditsChanged({ unsaved });
+	},
+	onQuitFlush: (flush: () => Promise<void>) => {
+		flushEdits = flush;
 	},
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_EDITING__", {

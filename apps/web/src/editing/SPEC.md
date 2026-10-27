@@ -134,6 +134,9 @@ IndexedDB (private mode, tests) means no drafts.
   quit, crash or update restart. A bridge failure reads as no draft.
 - **Desktop quit guard.** The registry pushes one flag to the same bridge: does any file hold edits that
   will not save on their own (`hasUnsavedEdits`, today any dirty buffer). Quit asks first while it is set.
+- **Quit flush.** Before a quit, a window close or an update restart stops the host, the desktop awaits
+  the bridge's `onQuitFlush` callback, which writes every pending draft at once, so the last keystrokes
+  before Cmd+Q are not lost to the 300 ms delay.
 
 ## Get right
 

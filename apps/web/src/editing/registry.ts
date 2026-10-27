@@ -94,11 +94,8 @@ export function createBufferRegistry(deps: RegistryDeps) {
 	const writeDraft = (entry: Entry) => {
 		if (entry.draftTimer !== null) clearTimeout(entry.draftTimer);
 		entry.draftTimer = null;
-		if (!isDirty(entry.state)) {
-			void deps.drafts.remove(draftKey(entry), deps.draftOwner.id);
-			return;
-		}
-		void deps.drafts.put(draftKey(entry), {
+		if (!isDirty(entry.state)) return deps.drafts.remove(draftKey(entry), deps.draftOwner.id);
+		return deps.drafts.put(draftKey(entry), {
 			text: entry.state.text,
 			baseHash: draftBaseHash(entry.state),
 			owner: deps.draftOwner.id,
@@ -107,11 +104,11 @@ export function createBufferRegistry(deps: RegistryDeps) {
 
 	const scheduleDraft = (entry: Entry) => {
 		if (!isDirty(entry.state)) {
-			writeDraft(entry);
+			void writeDraft(entry);
 			return;
 		}
 		if (entry.draftTimer !== null) clearTimeout(entry.draftTimer);
-		entry.draftTimer = setTimeout(() => writeDraft(entry), deps.draftDelayMs);
+		entry.draftTimer = setTimeout(() => void writeDraft(entry), deps.draftDelayMs);
 	};
 
 	const commit = (entry: Entry, next: BufferState, fromView: boolean) => {
@@ -142,7 +139,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			entry.draftTimer = null;
 			void deps.drafts.remove(draftKey(entry), deps.draftOwner.id);
 		} else if (entry.draftTimer !== null) {
-			writeDraft(entry);
+			void writeDraft(entry);
 		}
 		entry.dropped = true;
 		entries.delete(entry.key);
@@ -254,7 +251,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		const next = restoreDraft(entry.state, draft);
 		if (next === entry.state) return;
 		commit(entry, next, false);
-		writeDraft(entry);
+		void writeDraft(entry);
 		deps.onDraftRestored(entry.path);
 	};
 
@@ -341,10 +338,9 @@ export function createBufferRegistry(deps: RegistryDeps) {
 			}
 		},
 		reconcileAll: () => Promise.all([...entries.values()].map(reread)).then(() => {}),
-		flushDrafts() {
-			for (const entry of entries.values()) {
-				if (entry.draftTimer !== null) writeDraft(entry);
-			}
+		async flushDrafts() {
+			const pending = [...entries.values()].filter((entry) => entry.draftTimer !== null);
+			await Promise.all(pending.map(writeDraft));
 		},
 	};
 }

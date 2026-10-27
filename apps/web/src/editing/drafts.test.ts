@@ -25,6 +25,7 @@ function desktopBridge() {
 				if (draft.workspaceId === workspaceId) records.delete(key);
 		},
 		setUnsavedEdits: () => {},
+		onQuitFlush: () => {},
 	};
 	return { bridge, records };
 }
@@ -51,6 +52,22 @@ test("edits typed before a desktop quit come back after the restart", async () =
 	await settle();
 	expect(after.handle.session.snapshot()).toBe("mine one\ntwo\n");
 	expect(after.restored).toEqual([PATH]);
+});
+
+test("a quit flush writes the draft of edits typed just before it", async () => {
+	const { bridge, records } = desktopBridge();
+	const slow: NativeEditingBridge = {
+		...bridge,
+		putDraft: async (draft) => {
+			await new Promise((resolve) => setTimeout(resolve, 1));
+			await bridge.putDraft(draft);
+		},
+	};
+	const before = setup({ drafts: { store: nativeDrafts(slow), records: new Map() } });
+	type(before.handle, 0, "mine ");
+	expect(records.size).toBe(0);
+	await before.registry.flushDrafts();
+	expect([...records.values()].map((draft) => draft.text)).toEqual(["mine one\ntwo\n"]);
 });
 
 test("a failing bridge reads as no draft instead of breaking the buffer", async () => {

@@ -120,4 +120,6 @@ export interface NativeEditingBridge {
 	removeWorkspaceDrafts(key: Omit<NativeDraftKey, "path">): Promise<void>;
 	/** Whether a file holds edits that will not save on their own, so quit must ask first. */
 	setUnsavedEdits(unsaved: boolean): void;
+	/** Sets what the desktop awaits before a quit, a window close or an update restart stops the host. */
+	onQuitFlush(flush: () => Promise<void>): void;
 }
