@@ -92,6 +92,7 @@ export interface ResourceEditSession {
 	snapshot(): string;
 	applyLocal(changes: readonly TextChange[], kind: LocalEditKind): void;
 	select(ranges: readonly TextRange[]): void;
+	selection(): readonly TextRange[];
 	subscribe(listener: (update: EditUpdate) => void): () => void;
 	undo(): void;
 	redo(): void;

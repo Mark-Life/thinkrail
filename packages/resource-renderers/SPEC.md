@@ -248,7 +248,7 @@ edits with their `LocalEditKind` (type, delete, paste, composition start and ste
 can group undo steps: `type` is only inserts without a line break, each one character when it replaces
 text, so Enter, a copied line or a drag-move is `other`; `paste` is the one change a paste event
 causes; both views name the kind through one pure rule (`classifyEdit`, `support/editKind.ts`), so
-Preview and Source group undo the same way. `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
+Preview and Source group undo the same way. `select(ranges)` reports the selection and `selection()` returns it, so a view that mounts later (the other mode, or Preview after the lock) starts at the same caret, and `subscribe(listener)` delivers every
 other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo, plus `disk {hash}` when
 the change is a disk version the host adopted or merged, so a view can tell who wrote it). The host owns undo:
 `undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
@@ -677,7 +677,8 @@ content's own height.
   ones the mirror applied), cursor moves to `select`, and composition start and end to
   `setComposing`. Subscribed changes, undo and conflict choices land only through `model.applyEdits`,
   never `setValue` or `pushEditOperations`, so cursors and decorations stay. A rebind (new path or session) or unmount
-  disposes the mirror and restores the four methods. Open conflicts render as two view zones each
+  disposes the mirror and restores the four methods. With no saved Monaco view state (the tab last showed
+  Preview) the editor adopts the session's `selection()` and reveals it. Open conflicts render as two view zones each
   (`conflictWidgets.ts`, React portals in `MonacoConflictZones` of the engine-neutral `ConflictLens` and
   `ConflictTheirs` from `conflictLens.tsx`, which the live preview reuses): a lens above the user's lines with
   **Mine** / **Theirs** / **Both**, and the disk lines below them; the user's lines get a whole-line

@@ -79,8 +79,51 @@ describe("live blocks", () => {
 		]);
 	});
 
+	test("syntax that starts inside front matter never runs into the body", () => {
+		const fence = "---\nnote: |\n  ```\n---\n# Heading\n\nSome **bold**\n";
+		const doc = Text.of(fence.split("\n"));
+		const tree = markdownParser.parse(fence);
+		expect(blocks(fence, null).map((block) => block.kind)).toEqual(["frontmatter"]);
+		const list = liveMarks({
+			tree,
+			doc,
+			ranges: [{ from: 0, to: doc.length }],
+			selection: null,
+			skip: blocks(fence, null),
+		});
+		expect(list).toContainEqual({ kind: "line", at: 22, style: "h1" });
+		expect(
+			list.filter((mark) => mark.kind === "hide").map((mark) => fence.slice(mark.from, mark.to)),
+		).toEqual(["# ", "**", "**"]);
+
+		const dots = "---\ntitle: x\n...\nBody **bold** line\n";
+		const dotDoc = Text.of(dots.split("\n"));
+		const hidden = liveMarks({
+			tree: markdownParser.parse(dots),
+			doc: dotDoc,
+			ranges: [{ from: 0, to: dotDoc.length }],
+			selection: null,
+			skip: blocks(dots, null),
+		}).filter((mark) => mark.kind === "hide");
+		expect(hidden.map((mark) => dots.slice(mark.from, mark.to))).toEqual(["**", "**"]);
+	});
+
 	test("an unclosed front matter fence is plain markdown", () => {
 		expect(frontmatterBlock(Text.of(["---", "id: one"]))).toBeNull();
+	});
+});
+
+describe("reference definitions", () => {
+	test("tables, alerts and images carry the document's definitions, code does not", () => {
+		const source =
+			'![shot][s]\n\n| a |\n| - |\n| [site][s] |\n\n> [!NOTE]\n> see [docs][s]\n\n```\n[s]\n```\n\n[s]: https://example.com "Site"';
+		const definition = '[s]: https://example.com "Site"';
+		expect(blocks(source, null).map((block) => block.source)).toEqual([
+			`![shot][s]\n\n${definition}`,
+			`| a |\n| - |\n| [site][s] |\n\n${definition}`,
+			`> [!NOTE]\n> see [docs][s]\n\n${definition}`,
+			"```\n[s]\n```",
+		]);
 	});
 });
 

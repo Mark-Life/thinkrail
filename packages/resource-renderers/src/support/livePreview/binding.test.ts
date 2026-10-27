@@ -9,7 +9,13 @@ import type {
 	TextRange,
 } from "../../registry";
 import type { DiskLanding } from "../presenceCore";
-import { bindSession, localEditKind, remoteSpec, type SessionBinding } from "./binding";
+import {
+	bindSession,
+	editorSelection,
+	localEditKind,
+	remoteSpec,
+	type SessionBinding,
+} from "./binding";
 
 function applyChanges(text: string, changes: readonly TextChange[]) {
 	let out = "";
@@ -24,6 +30,7 @@ function applyChanges(text: string, changes: readonly TextChange[]) {
 function fakeSession(initial: string) {
 	let text = initial;
 	let conflicts: readonly EditConflict[] = [];
+	let selected: readonly TextRange[] = [];
 	const listeners = new Set<(update: EditUpdate) => void>();
 	const log = {
 		local: [] as { changes: readonly TextChange[]; kind: LocalEditKind }[],
@@ -38,7 +45,11 @@ function fakeSession(initial: string) {
 			text = applyChanges(text, changes);
 			log.local.push({ changes, kind });
 		},
-		select: (ranges) => log.selections.push(ranges),
+		select: (ranges) => {
+			selected = ranges;
+			log.selections.push(ranges);
+		},
+		selection: () => selected,
 		subscribe(listener) {
 			listeners.add(listener);
 			return () => listeners.delete(listener);
@@ -124,6 +135,14 @@ describe("localEditKind", () => {
 		expect(
 			kind({ changes: { from: 0, insert: "か" }, userEvent: "input.type.compose" }, "active"),
 		).toBe("compose");
+	});
+});
+
+describe("editorSelection", () => {
+	test("a new view starts at the session's caret, not at the top", () => {
+		const selection = editorSelection([{ anchor: 4, head: 6 }]);
+		expect(selection?.main).toMatchObject({ anchor: 4, head: 6 });
+		expect(editorSelection([])).toBeUndefined();
 	});
 });
 

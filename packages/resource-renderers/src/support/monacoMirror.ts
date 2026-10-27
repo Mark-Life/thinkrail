@@ -148,6 +148,7 @@ export function mirrorEditSession(
 	reportConflicts();
 
 	return {
+		adoptSelection: () => apply({ changes: [], selection: session.selection() }),
 		dispose() {
 			if (disposed) return;
 			disposed = true;

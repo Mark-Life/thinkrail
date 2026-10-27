@@ -16,7 +16,7 @@ view and render the React portals; this directory owns everything that runs insi
 
 ## Boundary
 
-- **Public surface (barrel):** `bindSession`, `SessionBinding`, `livePreview`, `liveText`, `portalHost`,
+- **Public surface (barrel):** `bindSession`, `editorSelection`, `SessionBinding`, `livePreview`, `liveText`, `portalHost`,
   `setConflicts`, `setThreads`, `ThreadAnchor`, `markdownLanguage`, `linkHrefAt`,
   `linkTarget`, `continueList`, `newlineKeepingIndent`, `createPortalHost`, `PortalEntry`,
   `livePresence`, `livePresenceSurface`, `liveFind`, `FIND_FIELD`.
@@ -34,7 +34,8 @@ view and render the React portals; this directory owns everything that runs insi
   transactions go to `applyLocal` with their `LocalEditKind` and the selection to `select`; subscribed
   updates land as one `remote`, `addToHistory: false` transaction, so the view has no history of its
   own: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y and a `beforeinput` `historyUndo`/`historyRedo` (the
-  desktop Edit menu) call the session. Composition start and end go to `setComposing`. Open conflicts
+  desktop Edit menu) call the session. A new view starts at the session's `selection()`, scrolled
+  into view when no scroll position was saved. Composition start and end go to `setComposing`. Open conflicts
   render as block widgets: the lens above the user's lines (the same **Mine** / **Theirs** / **Both**
   as Monaco, through `ConflictLens` and `ConflictTheirs`) and the disk lines below, with the user's lines washed.
 - **Markers (`markers.ts`, pure).** Syntax markers hide unless the selection touches their node,
@@ -51,12 +52,16 @@ view and render the React portals; this directory owns everything that runs insi
   and no matching reference definition (`array[0]`, `[WIP]`) stay literal text, as in CommonMark.
   Cmd/Ctrl+click, or Cmd/Ctrl+Enter with the caret on a link, follows it: an anchor finds its heading
   by the reading view's ids (syntax tree headings, `-n` for repeats) and puts the caret on it, and only `http`, `https` and
-  `mailto` open outside the app; a bare or `<…>` email autolink opens as `mailto:`, as in the reading view. Inline marks are built only over the visible ranges.
+  `mailto` open outside the app; a bare or `<…>` email autolink opens as `mailto:`, as in the reading view.
+  A plain click on an anchor link inside a block widget takes the same path, never the reading view's
+  global id lookup. The quote marks of a fence inside a quote hide off the caret like any other line's. Inline marks are built only over the visible ranges.
 - **Blocks (`blocks.ts`, pure).** Tables, GitHub alerts, fenced code (Mermaid included), HTML
   blocks, a paragraph that is only an image, and the front matter render as block widgets while the
   selection is outside them, reusing the host markdown through `MarkdownDocument` (same sanitizing,
   links, Shiki and Mermaid) in React portals; the front matter shows as a one-line summary. Clicking
-  a widget away from its controls puts the caret in the block and shows its source. A block that holds
+  a widget away from its controls puts the caret in the block and shows its source. A table, alert,
+  HTML or image widget that holds a `[` gets the document's link reference definitions appended to its
+  source, so `[text][ref]` resolves as in the reading view; footnotes are not carried. A block that holds
   an open conflict stays source, so its lens and lines show; a presence mark inside a rendered block
   is not drawn (the chip still names the writer). The block candidates come from one walk per parse,
   cached with the front matter by document, so a caret move only re-filters them and keeps the
@@ -78,6 +83,10 @@ view and render the React portals; this directory owns everything that runs insi
   anything left of it), the flag after the first line (the core's pill, so it matches Monaco's), the chip at the top right, the writer and
   diff on hover. Marks are line classes, so two writers on one line show the later one's tone. The
   wash fades a `::before` layer behind the line's text, never the line box, which would fade the text.
+- **Front matter** (`language.ts`). The parser blanks the front matter lines (`---` open, a `---` or
+  `...` close from line 3 on) before `@lezer/markdown` sees them, so no node starts inside it and runs
+  into the body; positions stay the same. A tree records the blanked length, and an incremental parse
+  reuses only fragments of trees with the same length, since an edit on line 1 can change it.
 - **Typography** is the `doc` prose system: the editor content carries `tr-prose-doc`; the lens,
   disk lines and thread cards mounted inside it carry `tr-prose-exempt`, so they look as in Monaco and
   the reading view; heading and
@@ -85,13 +94,15 @@ view and render the React portals; this directory owns everything that runs insi
   `md-code`, `md-codeblock`), and spacing is line padding, since CodeMirror measures line boxes and
   margins between lines break its height map. The measure is the reading view's 78ch; with the lock shown, both
   views keep a right padding that clears it, so neither text nor the find bar runs under it.
-- **Access.** The content is a labelled multi-line textbox; Tab leaves the editor (no tab binding);
+- **Access.** The content is a labelled multi-line textbox with the browser's spell check and
+  autocorrect on, since it is prose; Tab leaves the editor (no tab binding);
   heading lines carry `role="heading"` and their level. The focused editor rings its pane. Widget controls stay keyboard reachable.
   Reduced motion drops the presence fades. Enter on a list item starts the next one, inside a quote
   too (an empty item ends the list), outside code. Any other Enter keeps the line's quote marks and
   leading whitespace, so a fence or paragraph inside a list item or a quote stays in it; an empty
   quoted line outside code ends one quote level.
-- **Find.** CodeMirror renders only the lines near the viewport, so the browser's find cannot reach
+- **Find.** Matches use Monaco's find roles (`feedback-warning-subtle`, the current one
+  `editor-find-match-bg`), so Source and Preview mark them alike. CodeMirror renders only the lines near the viewport, so the browser's find cannot reach
   the rest. Cmd/Ctrl+F in the editor opens a find bar (`find.ts` over `@codemirror/search`, React in
   `LiveFindBar` through the portal host) above the text: Enter and Cmd/Ctrl+G or F3 go to the next
   match, with Shift the previous one, and Escape closes it and puts focus back in the text.

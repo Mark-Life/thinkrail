@@ -1,4 +1,4 @@
-export { bindSession, type SessionBinding } from "./binding";
+export { bindSession, editorSelection, type SessionBinding } from "./binding";
 export {
 	livePreview,
 	liveText,

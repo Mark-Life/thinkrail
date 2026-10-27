@@ -10,12 +10,12 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
+import { type ResourceMarkdown, useResourceHost } from "../host";
 import type { ResourceEditSession, ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentRehypePlugins } from "./markdownHtml";
-import { documentComponents, remarkHeadingIds } from "./markdownLinks";
+import { type DocumentLinks, documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
@@ -56,7 +56,7 @@ export function MarkdownDocument({
 	workspaceId: string;
 	path: string;
 	Markdown: ResourceMarkdown;
-	links: Pick<ResourceHost, "bytesUrl" | "openFile">;
+	links: DocumentLinks;
 }) {
 	const components = useMemo(
 		() => documentComponents({ workspaceId, path }, links),

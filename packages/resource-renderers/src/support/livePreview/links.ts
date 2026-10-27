@@ -2,7 +2,6 @@ import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import { classifyHref, relativePathname, resolveRelativePath, slugify } from "../markdownLinks";
-import { frontmatterBlock } from "./blocks";
 import { liveMarks } from "./markers";
 
 type LinkTarget =
@@ -51,14 +50,12 @@ function headingText(state: EditorState, heading: SyntaxNode): string {
 
 function headingLine(state: EditorState, slug: string): number | null {
 	const tree = ensureSyntaxTree(state, state.doc.length, 200) ?? syntaxTree(state);
-	const front = frontmatterBlock(state.doc);
 	const seen = new Map<string, number>();
 	let found: number | null = null;
 	tree.iterate({
 		enter: (ref) => {
 			if (found !== null) return false;
 			if (HEADING.test(ref.name)) {
-				if (front && ref.from < front.to) return false;
 				const base = slugify(headingText(state, ref.node));
 				if (!base) return false;
 				const count = seen.get(base) ?? 0;

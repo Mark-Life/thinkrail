@@ -47,7 +47,13 @@ const REFERENCE_CONTAINERS = new Set([
 	"OrderedList",
 	"ListItem",
 ]);
-const referenceCache = new WeakMap<Tree, ReadonlyMap<string, string>>();
+interface Definition {
+	key: string;
+	url: string;
+	line: string;
+}
+
+const definitionCache = new WeakMap<Tree, readonly Definition[]>();
 
 function referenceKey(label: string): string {
 	return label.trim().replace(/\s+/g, " ").toLowerCase();
@@ -57,25 +63,50 @@ function unwrapUrl(url: string): string {
 	return url.startsWith("<") && url.endsWith(">") ? url.slice(1, -1) : url;
 }
 
-function references(tree: Tree, doc: Text): ReadonlyMap<string, string> {
-	const cached = referenceCache.get(tree);
+function definitions(tree: Tree, doc: Text): readonly Definition[] {
+	const cached = definitionCache.get(tree);
 	if (cached) return cached;
-	const found = new Map<string, string>();
+	const found: Definition[] = [];
 	tree.iterate({
 		enter: (ref) => {
 			if (ref.name === "LinkReference") {
 				const label = ref.node.getChild("LinkLabel");
 				const url = ref.node.getChild("URL");
+				const title = ref.node.getChild("LinkTitle");
 				const key = label ? referenceKey(doc.sliceString(label.from + 1, label.to - 1)) : "";
-				if (key && url && !found.has(key))
-					found.set(key, unwrapUrl(doc.sliceString(url.from, url.to)));
+				if (label && key && url) {
+					const raw = doc.sliceString(url.from, url.to);
+					const titled = title ? ` ${doc.sliceString(title.from, title.to)}` : "";
+					found.push({
+						key,
+						url: unwrapUrl(raw),
+						line: `${doc.sliceString(label.from, label.to)}: ${raw}${titled}`,
+					});
+				}
 				return false;
 			}
 			return REFERENCE_CONTAINERS.has(ref.name);
 		},
 	});
+	definitionCache.set(tree, found);
+	return found;
+}
+
+const referenceCache = new WeakMap<Tree, ReadonlyMap<string, string>>();
+
+function references(tree: Tree, doc: Text): ReadonlyMap<string, string> {
+	const cached = referenceCache.get(tree);
+	if (cached) return cached;
+	const found = new Map<string, string>();
+	for (const { key, url } of definitions(tree, doc)) if (!found.has(key)) found.set(key, url);
 	referenceCache.set(tree, found);
 	return found;
+}
+
+export function referenceDefinitions(tree: Tree, doc: Text): string {
+	return definitions(tree, doc)
+		.map((definition) => definition.line)
+		.join("\n");
 }
 
 function plainText(tree: Tree, doc: Text, from: number, to: number): string {
@@ -159,6 +190,14 @@ export function liveMarks({
 		}
 	};
 
+	const quoteMark = (ref: Span) => {
+		if (lineTouched(ref.from)) style(ref.from, ref.to, "marker");
+		else {
+			const spaced = doc.sliceString(ref.to, ref.to + 1) === " " ? 1 : 0;
+			hide(ref.from, ref.to + spaced);
+		}
+	};
+
 	const linkHref = (parts: readonly SyntaxNode[], brackets: readonly SyntaxNode[]) => {
 		const url = parts.find((child) => child.name === "URL");
 		if (url) return unwrapUrl(doc.sliceString(url.from, url.to));
@@ -230,11 +269,7 @@ export function liveMarks({
 					return true;
 				}
 				if (name === "QuoteMark") {
-					if (lineTouched(ref.from)) style(ref.from, ref.to, "marker");
-					else {
-						const spaced = doc.sliceString(ref.to, ref.to + 1) === " " ? 1 : 0;
-						hide(ref.from, ref.to + spaced);
-					}
+					quoteMark(ref);
 					return false;
 				}
 				if (name === "ListMark") {
@@ -265,7 +300,7 @@ export function liveMarks({
 					for (const part of children(ref.node)) {
 						if (part.name === "CodeMark" || part.name === "CodeInfo") {
 							style(part.from, part.to, "marker");
-						}
+						} else if (part.name === "QuoteMark") quoteMark(part);
 					}
 					return false;
 				}
@@ -321,7 +356,9 @@ export function liveMarks({
 		const key =
 			mark.kind === "line"
 				? `line:${mark.at}:${mark.style}`
-				: `${mark.kind}:${mark.from}:${mark.to}`;
+				: mark.kind === "style"
+					? `style:${mark.from}:${mark.to}:${mark.style}`
+					: `${mark.kind}:${mark.from}:${mark.to}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;

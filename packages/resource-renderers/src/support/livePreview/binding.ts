@@ -46,18 +46,20 @@ function selectionRanges(state: EditorState): TextRange[] {
 	return state.selection.ranges.map((range) => ({ anchor: range.anchor, head: range.head }));
 }
 
+export function editorSelection(ranges: readonly TextRange[] = []): EditorSelection | undefined {
+	const [first, ...rest] = ranges;
+	return first
+		? EditorSelection.create(
+				[first, ...rest].map((range) => EditorSelection.range(range.anchor, range.head)),
+			)
+		: undefined;
+}
+
 export function remoteSpec(update: EditUpdate): TransactionSpec {
-	const [first, ...rest] = update.selection ?? [];
+	const selection = editorSelection(update.selection);
 	return {
 		changes: update.changes.map((change) => ({ ...change })),
-		...(first
-			? {
-					selection: EditorSelection.create(
-						[first, ...rest].map((range) => EditorSelection.range(range.anchor, range.head)),
-					),
-					scrollIntoView: true,
-				}
-			: {}),
+		...(selection ? { selection, scrollIntoView: true } : {}),
 		annotations: [Transaction.remote.of(true), Transaction.addToHistory.of(false)],
 	};
 }

@@ -12,6 +12,7 @@ import {
 	bindSession,
 	continueList,
 	createPortalHost,
+	editorSelection,
 	linkHrefAt,
 	linkTarget,
 	liveFind,
@@ -33,7 +34,7 @@ import { createPresenceMarks } from "./presenceCore";
 import { presenceKindIcon } from "./presenceIcons";
 import { usePresenceText } from "./presenceText";
 import { ReviewThreadCard } from "./ReviewThreadCard";
-import { useScrollViewState } from "./useScrollViewState";
+import { useScrollViewState, viewStateScrollTop } from "./useScrollViewState";
 
 const textCompartment = new Compartment();
 
@@ -63,15 +64,17 @@ function LivePortal({
 	props,
 	view,
 	onResolve,
+	onAnchor,
 }: {
 	entry: PortalEntry;
 	props: LiveProps;
 	view: EditorView | null;
 	onResolve(id: number, choice: ConflictChoice): void;
+	onAnchor(href: string): void;
 }) {
 	const t = useT();
 	const { markdown, bytesUrl, openFile } = useResourceHost();
-	const links = useMemo(() => ({ bytesUrl, openFile }), [bytesUrl, openFile]);
+	const links = useMemo(() => ({ bytesUrl, openFile, onAnchor }), [bytesUrl, openFile, onAnchor]);
 	const { content } = entry;
 	switch (content.kind) {
 		case "block":
@@ -116,10 +119,12 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 	const [portals] = useState(createPortalHost);
 	const entries = useSyncExternalStore(portals.subscribe, portals.snapshot);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
-	const latestRef = useRef({ presenceText, presence, openFile });
+	const latestRef = useRef({ presenceText, presence, openFile, viewState });
 	useLayoutEffect(() => {
-		latestRef.current = { presenceText, presence, openFile };
+		latestRef.current = { presenceText, presence, openFile, viewState };
 	});
+	const followRef = useRef<(href: string) => void>(() => {});
+	const [followAnchor] = useState(() => (href: string) => followRef.current(href));
 
 	const { workspaceId, path } = resource;
 	useLayoutEffect(() => {
@@ -144,10 +149,12 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			if (binding) run(binding);
 			return true;
 		};
+		const selection = editorSelection(edit.selection());
 		const view = new EditorView({
 			parent,
 			state: EditorState.create({
 				doc: edit.snapshot(),
+				...(selection ? { selection } : {}),
 				extensions: [
 					markdownLanguage,
 					livePreview,
@@ -160,6 +167,8 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 					EditorView.contentAttributes.of({
 						class: "tr-prose-doc text-text-default",
 						"aria-label": path,
+						spellcheck: "true",
+						autocorrect: "on",
 					}),
 					Prec.highest(
 						keymap.of([
@@ -215,6 +224,11 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 				else target.update(transactions);
 			},
 		});
+		followRef.current = (href) => follow(href, view);
+		const caret = view.state.selection.main.head;
+		if (caret > 0 && viewStateScrollTop(latestRef.current.viewState) === null) {
+			view.dispatch({ effects: EditorView.scrollIntoView(caret, { y: "center" }) });
+		}
 		portals.onResize(() => view.requestMeasure());
 		const marks = createPresenceMarks(livePresenceSurface(view, chipHost), {
 			text: () => latestRef.current.presenceText,
@@ -235,6 +249,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			presenceRef.current = null;
 			setView(null);
 			portals.onResize(() => {});
+			followRef.current = () => {};
 			view.destroy();
 		};
 	}, [edit, portals, path, workspaceId]);
@@ -283,7 +298,13 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			</span>
 			{entries.map((entry) =>
 				createPortal(
-					<LivePortal entry={entry} props={props} view={view} onResolve={resolve} />,
+					<LivePortal
+						entry={entry}
+						props={props}
+						view={view}
+						onResolve={resolve}
+						onAnchor={followAnchor}
+					/>,
 					entry.node,
 					String(entry.key),
 				),

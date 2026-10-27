@@ -1,7 +1,8 @@
 import type { Text } from "@codemirror/state";
 import type { SyntaxNode, Tree } from "@lezer/common";
 import { parseAlertMarker } from "../markdownAlerts";
-import { type Span, touches } from "./markers";
+import { frontmatterClose } from "./language";
+import { referenceDefinitions, type Span, touches } from "./markers";
 
 type LiveBlockKind = "table" | "alert" | "code" | "html" | "image" | "frontmatter";
 
@@ -10,23 +11,16 @@ export interface LiveBlock extends Span {
 	source: string;
 }
 
-const FRONTMATTER_OPEN = /^---[ \t]*$/;
-const FRONTMATTER_CLOSE = /^(?:---|\.\.\.)[ \t]*$/;
 const CONTAINERS = new Set(["BulletList", "OrderedList", "ListItem"]);
 
 const frontmatterCache = new WeakMap<Text, LiveBlock | null>();
 const candidateCache = new WeakMap<Text, { tree: Tree; blocks: readonly LiveBlock[] }>();
 
 function findFrontmatter(doc: Text): LiveBlock | null {
-	if (doc.lines < 3 || !FRONTMATTER_OPEN.test(doc.line(1).text)) return null;
-	for (let number = 3; number <= doc.lines; number += 1) {
-		const line = doc.line(number);
-		if (FRONTMATTER_CLOSE.test(line.text)) {
-			const source = doc.sliceString(doc.line(2).from, doc.line(number - 1).to);
-			return { kind: "frontmatter", from: 0, to: line.to, source };
-		}
-	}
-	return null;
+	const close = frontmatterClose(doc.iterLines());
+	if (close === null) return null;
+	const source = doc.sliceString(doc.line(2).from, doc.line(close).to);
+	return { kind: "frontmatter", from: 0, to: doc.line(close + 1).to, source };
 }
 
 export function frontmatterBlock(doc: Text): LiveBlock | null {
@@ -134,6 +128,7 @@ function blockCandidates(tree: Tree, doc: Text): readonly LiveBlock[] {
 	const blocks: LiveBlock[] = [];
 	const front = frontmatterBlock(doc);
 	if (front) blocks.push(front);
+	const definitions = referenceDefinitions(tree, doc);
 	const place = (node: SyntaxNode, kind: LiveBlockKind, end: SyntaxNode = node) => {
 		const first = doc.lineAt(node.from);
 		const last = doc.lineAt(end.to);
@@ -141,12 +136,13 @@ function blockCandidates(tree: Tree, doc: Text): readonly LiveBlock[] {
 		if (prefix.trim() !== "") return;
 		if (doc.sliceString(end.to, last.to).trim() !== "") return;
 		const columns = indentEnd(prefix, Number.POSITIVE_INFINITY).column;
-		const source = dedent(doc.sliceString(first.from, last.to), columns);
+		const own = dedent(doc.sliceString(first.from, last.to), columns);
+		const source =
+			definitions && kind !== "code" && own.includes("[") ? `${own}\n\n${definitions}` : own;
 		blocks.push({ kind, from: first.from, to: last.to, source });
 	};
 	const visit = (parent: SyntaxNode) => {
 		for (let node = parent.firstChild; node; node = node.nextSibling) {
-			if (front && node.from <= front.to) continue;
 			if (CONTAINERS.has(node.name)) {
 				visit(node);
 				continue;

@@ -197,6 +197,29 @@ describe("line markers", () => {
 	});
 });
 
+describe("nested inline styles", () => {
+	test("code or bold that fills a link label keeps its own style", () => {
+		const code = "See [`run()`](api.md) now";
+		const coded = marks(code, null);
+		expect(styled(code, coded, "link")).toEqual(["`run()`"]);
+		expect(styled(code, coded, "code")).toEqual(["`run()`"]);
+		const bold = "See [**bold**](api.md) now";
+		const bolded = marks(bold, null);
+		expect(styled(bold, bolded, "link")).toEqual(["**bold**"]);
+		expect(styled(bold, bolded, "strong")).toEqual(["**bold**"]);
+	});
+});
+
+describe("quoted fences", () => {
+	test("every quote mark of a fence inside a quote hides off the caret", () => {
+		const source = "> ```js\n> a\n> ```\n";
+		expect(cut(source, marks(source, null))).toEqual(["> ", "> ", "> "]);
+		const onFirst = marks(source, 0);
+		expect(styled(source, onFirst, "marker")).toContain(">");
+		expect(cut(source, onFirst)).toEqual(["> ", "> "]);
+	});
+});
+
 describe("skipped blocks", () => {
 	test("nodes inside a block widget get no marks", () => {
 		const source = "**a**\n\n**b**";

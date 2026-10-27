@@ -108,6 +108,35 @@ test.describe("autosave", () => {
 			.toBe(NOTES.replace("- first", "- first from preview"));
 	});
 
+	test("the caret carries from Source to Preview and across the lock", async ({ page }) => {
+		const lines = Array.from({ length: 60 }, (_, index) => `line ${index + 1} text`);
+		const source = `---\ntitle: t\n---\n\n${lines.join("\n\n")}\n`;
+		const path = await openLive(page, "caret.md", source);
+		await page.getByTestId("view-toggle-code").click();
+		await visibleEditor(page)
+			.locator(".view-line")
+			.filter({ hasText: /^line\s3\stext$/ })
+			.click();
+		await page.keyboard.press("End");
+		await page.getByTestId("view-toggle-markdown").click();
+		await live(page).locator(".cm-content").focus();
+		await page.keyboard.type("P");
+		await expect.poll(() => readFileSync(path, "utf8")).toContain("line 3 textP\n");
+		const lock = page.getByTestId("markdown-lock");
+		await lock.click();
+		await expect(lock).toHaveAttribute("aria-pressed", "true");
+		await lock.click();
+		await live(page).locator(".cm-content").focus();
+		await page.keyboard.type("Q");
+		await expect.poll(() => readFileSync(path, "utf8")).toContain("line 3 textPQ\n");
+		await page.getByTestId("view-toggle-code").click();
+		await expect(visibleEditor(page)).toContainText("line 3 textPQ");
+		await visibleEditor(page).getByRole("textbox", { name: "caret.md" }).focus();
+		await page.keyboard.type("S");
+		await expect.poll(() => readFileSync(path, "utf8")).toContain("line 3 textPQS\n");
+		expect(readFileSync(path, "utf8").startsWith("---\n")).toBe(true);
+	});
+
 	test("a task box toggled from the keyboard keeps focus and is named by its item", async ({
 		page,
 	}) => {
@@ -191,6 +220,18 @@ test("Cmd/Ctrl+F finds text below the rendered part of a long document", async (
 	await page.keyboard.press("Enter");
 	await expect(liveLine(page, "zebrafind")).toBeInViewport();
 	await expect(live(page).locator(".cm-searchMatch-selected")).toHaveText("zebrafind");
+	const findRole = await page.evaluate(() => {
+		const probe = document.createElement("div");
+		probe.style.background = "var(--editor-find-match-bg)";
+		document.body.append(probe);
+		const color = getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		return color;
+	});
+	await expect(live(page).locator(".cm-searchMatch-selected")).toHaveCSS(
+		"background-color",
+		findRole,
+	);
 	await page.keyboard.press("Escape");
 	await expect(find).toHaveCount(0);
 	await expect(live(page).locator(".cm-content")).toBeFocused();
@@ -262,6 +303,31 @@ test("following a heading anchor puts the caret on the heading", async ({ page }
 	await page.keyboard.press("End");
 	await page.keyboard.type(" x");
 	await expect.poll(() => readFileSync(path, "utf8")).toContain("## Target x\n");
+});
+
+test("a plain click on an anchor in a rendered table moves the caret to its heading", async ({
+	page,
+}) => {
+	const filler = Array.from({ length: 80 }, (_, index) => `Filler paragraph ${index + 1}.`);
+	const source = `Intro\n\n| go |\n| - |\n| [jump](#target) |\n\n${filler.join("\n\n")}\n\n## Target\n\nAfter.\n`;
+	const path = await openLive(page, "table-anchor.md", source);
+	await expect(live(page).locator(".cm-content")).toHaveAttribute("spellcheck", "true");
+	await live(page).locator("table a", { hasText: "jump" }).click();
+	await expect(
+		live(page).locator('.cm-line[role="heading"]', { hasText: "Target" }),
+	).toBeInViewport();
+	await page.keyboard.press("End");
+	await page.keyboard.type(" x");
+	await expect.poll(() => readFileSync(path, "utf8")).toContain("## Target x\n");
+});
+
+test("a table cell resolves a reference link defined elsewhere in the file", async ({ page }) => {
+	const source = "Intro\n\n| a |\n| - |\n| [site][s] |\n\n[s]: https://example.com\n";
+	await openLive(page, "refs.md", source);
+	await expect(live(page).locator("table a", { hasText: "site" })).toHaveAttribute(
+		"href",
+		"https://example.com",
+	);
 });
 
 test("the lock stays clear of the find bar and the text", async ({ page }) => {
