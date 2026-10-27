@@ -618,9 +618,11 @@ content's own height.
     is not drawn (the chip still names the writer). The block candidates come from one walk per parse,
     cached with the front matter by document, so a caret move only re-filters them and keeps the
     decorations when no block enters or leaves. A block nested in
-    a list renders dedented; one inside a quote stays source. An HTML block ends at a blank line, as in
-    CommonMark, so a `<details>` whose body is markdown renders as separate widgets; an inline image
-    stays source. A widget keeps its DOM while its source is unchanged, and every widget's size change
+    a list renders dedented by columns (a tab counts to the next stop of 4), so a tab-indented fence
+    stays a fence; one inside a quote stays source. An HTML block ends at a blank line, as in CommonMark,
+    so an element whose first block leaves its tag open (`<details>`, `<div align=center>`) runs to the
+    sibling HTML block that closes it and renders as one widget with its markdown body, as the reading
+    view does; an unclosed or void tag stays one block. An inline image stays source. A widget keeps its DOM while its source is unchanged, and every widget's size change
     asks CodeMirror to measure again. Widgets reset the editor's `white-space: pre`, or the newlines
     react-markdown leaves between elements would render as blank lines.
   - **Review threads** render as block widgets after their end line (`ReviewThreadCard`), or after the

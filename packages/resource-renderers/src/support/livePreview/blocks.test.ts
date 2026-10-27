@@ -83,3 +83,37 @@ describe("live blocks", () => {
 		expect(frontmatterBlock(Text.of(["---", "id: one"]))).toBeNull();
 	});
 });
+
+describe("live blocks across blank lines and tabs", () => {
+	test("an HTML element split by blank lines is one widget with its markdown body", () => {
+		const details = "<details>\n<summary>S</summary>\n\nbody\n\n</details>";
+		expect(blocks(`${details}\n\nafter\n`, null)).toEqual([
+			{ kind: "html", from: 0, to: details.length, source: details },
+		]);
+		const centered = "<div align=center>\n\n![x](a.png)\n\n</div>";
+		expect(blocks(`${centered}\n`, null).map((block) => [block.kind, block.source])).toEqual([
+			["html", centered],
+		]);
+	});
+
+	test("nested same tags close at the matching end, and an unclosed tag stays alone", () => {
+		const nested = "<div>\n<div>\n\ninner\n\n</div>\n\nouter\n\n</div>";
+		expect(blocks(`${nested}\n\n<div>x</div>\n`, null).map((block) => block.source)).toEqual([
+			nested,
+			"<div>x</div>",
+		]);
+		expect(blocks("<details>\n<summary>S</summary>\n\nbody\n", null).map((b) => b.source)).toEqual([
+			"<details>\n<summary>S</summary>",
+		]);
+		expect(blocks("<img src=a.png>\n\ntext\n\n</div>\n", null).map((b) => b.source)).toEqual([
+			"<img src=a.png>",
+			"</div>",
+		]);
+	});
+
+	test("a tab-indented fence in a list item dedents to a fence", () => {
+		expect(blocks("- item\n\t```js\n\tcode\n\t```\n", null)).toEqual([
+			{ kind: "code", from: 7, to: 24, source: "```js\ncode\n```" },
+		]);
+	});
+});
