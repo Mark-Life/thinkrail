@@ -687,8 +687,9 @@ content's own height.
   restart an animation); a name flag (a content widget at the end of the first line) that fades in 5 s; a hover with the
   writer and the diff over the lines, and the writer as the bar's own tooltip (`linesDecorationsTooltip`,
   passed as plain text: Monaco escapes it). By keyboard the hover opens through F1, "Show or Focus Hover": the host's Cmd/Ctrl+K session switcher takes Monaco's Cmd/Ctrl+K Cmd/Ctrl+I chord first. The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
-  writer has one line mark: a new landing takes over the writer's earlier ranges and diff and restarts the
-  timers. One flag shows per line. An update whose hash has no writer yet waits 3 s for the next
+  writer has one line mark per style: a new landing takes over the writer's earlier ranges and diff and restarts the
+  timers. An agent's tool writes and its script writes share one writer id but keep separate marks, so a
+  script write never dashes the lines of an earlier tool edit; the newer mark takes only the lines it covers. One flag shows per line. An update whose hash has no writer yet waits 3 s for the next
   `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame. Flags
   and chips are `aria-hidden`. A polite live region announces a chip, and a writer's line changes (every span the landing
   changed, or only their count past five spans) at most once per flag time, so a burst of saves is one message. Reduced motion drops the fades. The tones are

@@ -147,22 +147,26 @@ export function attachPresence(
 
 	const absorb = (mark: Mark, writer: PresenceWriter) => {
 		if (mark.paint.kind !== "lines") return;
+		const own = mark.ranges.getRanges();
+		const covered = (range: monaco.IRange) =>
+			own.some(
+				(mine) =>
+					mine.startLineNumber <= range.startLineNumber &&
+					mine.endLineNumber >= range.endLineNumber,
+			);
 		for (const other of [...marks]) {
 			if (other === mark || other.writer?.id !== writer.id || other.paint.kind !== "lines")
 				continue;
-			const own = mark.ranges.getRanges();
-			const covered = (range: monaco.IRange) =>
-				own.some(
-					(mine) =>
-						mine.startLineNumber <= range.startLineNumber &&
-						mine.endLineNumber >= range.endLineNumber,
-				);
-			mark.ranges.append(
-				other.ranges
-					.getRanges()
-					.filter((range) => !covered(range))
-					.map(pending),
-			);
+			const rest = other.ranges.getRanges().filter((range) => !covered(range));
+			if (other.writer.inferred !== writer.inferred) {
+				if (rest.length === 0) drop(other);
+				else if (rest.length < other.ranges.getRanges().length) {
+					other.ranges.set(rest.map(pending));
+					render(other, PRESENCE_TIMING.washSteps);
+				}
+				continue;
+			}
+			mark.ranges.append(rest.map(pending));
 			mark.paint = { ...mark.paint, diff: joinDiffs(mark.paint.diff, other.paint.diff) };
 			mark.announcedAt = Math.max(mark.announcedAt, other.announcedAt);
 			drop(other);

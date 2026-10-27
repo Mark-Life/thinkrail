@@ -157,6 +157,36 @@ describe("attachPresence", () => {
 		marks.dispose();
 	});
 
+	test("a script write by the same agent keeps the agent's tool-edited lines solid", () => {
+		const script: PresenceWriter = { ...AGENT, label: "Agent via script", inferred: true };
+		const marks = attach();
+		marks.setLatest({ hash: "tool", writer: AGENT });
+		marks.land(editLine(3, "tool"));
+		marks.land(editLine(6, "tool2"));
+		marks.setLatest({ hash: "tool2", writer: AGENT });
+		marks.setLatest({ hash: "sh", writer: script });
+		marks.land({
+			hash: "sh",
+			before: TEXT,
+			changes: [
+				{ from: lineOffset(6), to: lineOffset(6) + 6, insert: "script 6" },
+				{ from: lineOffset(12), to: lineOffset(12) + 7, insert: "script 12" },
+			],
+		});
+		const lines = collections.flatMap((collection) =>
+			collection.decorations.map((decoration) => [
+				decoration.range.startLineNumber,
+				decoration.options.linesDecorationsClassName,
+			]),
+		);
+		expect(lines.sort()).toEqual([
+			[12, "presence-bar presence-tone-agent1 presence-inferred"],
+			[3, "presence-bar presence-tone-agent1"],
+			[6, "presence-bar presence-tone-agent1 presence-inferred"],
+		]);
+		marks.dispose();
+	});
+
 	test("a second writer on the same line takes the flag", () => {
 		const marks = attach();
 		marks.setLatest({ hash: "a", writer: AGENT });

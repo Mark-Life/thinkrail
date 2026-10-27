@@ -583,7 +583,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   it still prunes, and selectors never read the clock. **`selectFileWrites`** returns the
   stored array (user writes included, so the editor's newest write can be the user's) and
   **`selectFileAgentSlots`** the slot map. The barrel exports what `panels` derives from them:
-  `fileWriters` (the distinct writers other than this client, newest first), `fileWriter` (one author as
+  `fileWriters` (the distinct writers other than this client, newest first; one per agent, so an agent's tool and script writes are one avatar styled by its newest write), `fileWriter` (one author as
   that writer, `null` for this client) and `nextFileActivityExpiry`. This client's saves are never a writer and show
   nothing; a save from another window or device is "You" in the user tone, and one "You" covers them all. `applyWorkspaceRemoved` drops the entry, and a
   removed workspace's frame folds nothing. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
