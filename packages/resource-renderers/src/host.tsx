@@ -25,6 +25,7 @@ export interface ResourceCodeLanguage {
 	extensions: readonly string[];
 	aliases: readonly string[];
 	filenames?: readonly string[];
+	comments?: { line?: string; block?: readonly [string, string] };
 	load: () => Promise<{ default: LanguageRegistration[] }>;
 }
 
