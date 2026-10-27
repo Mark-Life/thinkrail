@@ -3,7 +3,7 @@ import { CLIENT_ERROR_REPORT_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import * as transport from "../transport";
-import { loadBufferRegistry, syncFileTabs } from "./files";
+import { activeTabChanged, loadBufferRegistry, syncFileTabs } from "./files";
 
 const meta = (hash: string, text: string) => ({ hash, byteLength: text.length, text: true });
 
@@ -76,4 +76,15 @@ test("callers waiting on one failed registry load send one error report", async 
 		spy.mockRestore();
 		useAppStore.setState({ protocolVersion: null });
 	}
+});
+
+test("only a change of the active workspace or its active tab counts as a tab switch", () => {
+	const at = (activeWorkspaceId: string | null, ws: string, other = "c") => ({
+		activeWorkspaceId,
+		activeTabByWorkspace: { ws, other },
+	});
+	expect(activeTabChanged(at("ws", "b"), at("ws", "a"))).toBe(true);
+	expect(activeTabChanged(at("other", "a"), at("ws", "a"))).toBe(true);
+	expect(activeTabChanged(at("ws", "a", "d"), at("ws", "a"))).toBe(false);
+	expect(activeTabChanged(at(null, "b"), at(null, "a"))).toBe(false);
 });
