@@ -2128,6 +2128,28 @@ own section. The kebab menu (`plan-menu`, a
   the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
   **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
   (`focusRendererEditor`).
+- **Who changes what (`FileWriters.tsx`).** The store's file activity slice feeds four surfaces, all
+  labeled the same way (`fileWriterLabels.ts`): "You", the agent's chat title ("Agent · <last 4 characters of the session id>" for a session with no known or empty title, so two agents never read the same; titles come from `selectKnownChatTitles`, one map per tab and history snapshot, so a streamed update scans no tabs — the host's `session.list` and `session.created` titles already reach it through history),
+  "External". The chat icon already marks an agent, so a titled agent's visible label is the title alone; its
+  spoken label, used by every accessible name and announcement, is "Agent <chat title>". An agent's script write reads the same
+  as its tool write; only the dashed gutter bar and the hover's "inferred from timing" tell it apart. `useFilePresence` turns the file's newest write into the renderer's
+  `presence` prop (hash plus writer and tone), so an older write never claims a landing; `FilePane` passes it only with `edit`, so a phone or a
+  read-only view gets none. `FileWritersChip` is the pane's status chip, a pill floating over the editor's bottom right
+  corner while the file has writers in the last minute, so it never moves the text: up to three avatars,
+  "+N" for the rest and "N writers". It is a button whose accessible name starts with that visible "N writers" and then lists
+  every name; a click, tap or Enter opens a popover listing them (a tooltip would never open on touch),
+  and it shows on phones too. The Monaco view keeps `--space-40` of bottom padding, so scrolled to the end
+  no line sits under the chip; mid-file the chip can cover the end of a bottom line, like Monaco's own find widget. `FileWriterAvatars` is the same avatars and
+  "+N" in the file tab's adornment (`renderTabAdornment`), never focusable inside the tab, and `FileWriterDot` is a `FileTree` row dot in the last writer's tone (the first of the same writers),
+  named for screen readers. Avatars are borderless: a line icon per writer kind (chat
+  for an agent, person for the user, login box for an outside program) in the writer's tone on its
+  `-subtle` wash; an inferred writer swaps the wash for `control-bg-hovered`. Tones map to roles once: user `primary`, agents `feedback-info` / `feedback-success` /
+  `feedback-warning`, external `text-subtle`; identity is in the label, not the color alone. This
+  client's own writes show nothing: they never count as writers, and `useFilePresence` passes no write
+  for them. A save from another window shows as "You, in another window" in the user tone. `DiffSurface`
+  notes the hash of its own revert and undo receipts the same way, so they show nothing too. There is no workspace-wide writer count: the per-file chip
+  is the status chip. `useFileActivityPrune` is the one timer that fades writers after 60 s; it derives
+  the next expiry only when the slice changes.
 - **Closing an unsaved file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
   **Cancel**. It reads the store's `selectFileSaveIndicator` and `selectFileAutosaving`. In auto mode a

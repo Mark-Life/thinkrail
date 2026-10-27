@@ -21,6 +21,7 @@ import { selectFileAutosaving, selectFileBufferSummary, useAppStore } from "../s
 import { getTransport } from "../transport";
 import { commentAfterSave, hidesReview } from "./commentAfterSave";
 import { FileEditBanner } from "./FileEditBanner";
+import { FileWritersChip, useFilePresence } from "./FileWriters";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
@@ -70,7 +71,10 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			return getTransport()
 				.request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path })
 				.then(
-					(file) => ({ file, token }),
+					(file) => {
+						useAppStore.getState().noteFileRead(tab.workspaceId, tab.path, file);
+						return { file, token };
+					},
 					(error: unknown) => {
 						buffer?.readFailed(error, token);
 						throw error;
@@ -123,6 +127,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		if (first) session.resolveConflict(first.id, choice);
 		if (session.conflicts().length === 0) focusRendererEditor(viewRef.current);
 	};
+	const presence = useFilePresence(tab.workspaceId, tab.path);
 	const reviews = reviewSurface ? [reviewSurface] : [];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
@@ -139,7 +144,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	};
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div className="relative flex h-full min-h-0 flex-col">
 			{showToolbar ? (
 				<div
 					data-testid="resource-view-toggle"
@@ -177,7 +182,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			) : null}
 			<div
 				ref={viewRef}
-				className="min-h-0 flex-1"
+				className="relative min-h-0 flex-1"
 				data-file-buffer={editing ? buffer.key : undefined}
 			>
 				<Suspense fallback={loading}>
@@ -189,12 +194,18 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						content={content}
 						{...(editing ? { edit: buffer.session } : {})}
 						{...(reviewSurface ? { review: reviewSurface } : {})}
+						{...(editing ? { presence } : {})}
 						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}
 					/>
 				</Suspense>
 			</div>
+			<FileWritersChip
+				workspaceId={tab.workspaceId}
+				path={tab.path}
+				className="absolute right-16 bottom-8 z-10"
+			/>
 		</div>
 	);
 }

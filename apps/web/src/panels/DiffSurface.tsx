@@ -46,6 +46,10 @@ export interface DiffSurfaceInput {
 	triage?: HunkTriage;
 }
 
+function noteOwnChange(receipt: ChangeReceipt) {
+	useAppStore.getState().noteOwnFileSave(receipt.workspaceId, receipt.path, receipt.after.hash);
+}
+
 function fileRevertMessage(receipt: ChangeReceipt, base: string): string {
 	return receipt.trashed
 		? i18n.t("panels.diffSurface.movedToTrash", { file: base })
@@ -146,11 +150,12 @@ export function useDiffSurface({
 	const undoReceipt = useCallback(
 		async (receipt: ChangeReceipt) => {
 			try {
-				await getTransport().request("change.undo", {
+				const undone = await getTransport().request("change.undo", {
 					workspaceId,
 					receiptId: receipt.id,
 					expect: { modifiedHash: receipt.after.hash },
 				});
+				noteOwnChange(undone.receipt);
 			} catch (error) {
 				handleMutationError(error, i18n.t("panels.diffSurface.undoFailed"));
 			}
@@ -190,6 +195,7 @@ export function useDiffSurface({
 					target: { kind: "range", original: block.original, modified: block.modified },
 					expect: mutationExpect,
 				});
+				noteOwnChange(receipt);
 				showUndoToast(receipt, i18n.t("panels.diffSurface.revertedHunk", { file: base }));
 			} catch (error) {
 				handleMutationError(error, i18n.t("panels.diffSurface.revertHunkFailed"));
@@ -213,6 +219,7 @@ export function useDiffSurface({
 				target: { kind: "file" },
 				expect: mutationExpect,
 			});
+			noteOwnChange(receipt);
 			showUndoToast(receipt, fileRevertMessage(receipt, base));
 		} catch (error) {
 			handleMutationError(error, i18n.t("panels.diffSurface.revertFileFailed"));

@@ -66,7 +66,7 @@ equals `border-default` is not a second weight, it is a second name).
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`. The standard and High Contrast palettes ship it **equal to their `accent`** — the user bubble wears the brand colour; the Minimal palettes re-point it to a neutral grey so user content does not compete with action/attention colours. That separate key is the knob (per `themes/SPEC.md`): a theme decides how the bubble reads without touching a component |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 | Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
-| Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image" |
+| Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image". The outside writer's presence flag pill reuses it as a neutral fill one step above the `control-bg-hovered` current-line highlight |
 
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
@@ -121,6 +121,19 @@ This is a bounded, accepted gap, not an oversight. Monaco alone exposes ~200 col
 them would be a large and brittle surface, and the base is chosen from the manifest's appearance and
 contrast metadata, so it is never wildly wrong. If a theme ever looks off in one of these widgets, the
 fix is to add that specific key — not to adopt the whole surface.
+
+## Writer tones
+
+Presence (who changed a file) reuses roles; it has no palette keys of its own. The user is `primary`,
+agents cycle `feedback-info`, `feedback-success`, `feedback-warning` by first appearance in the
+workspace, and an outside writer is `text-subtle`. Washes use the matching `-subtle` step
+(`control-bg-hovered` for the outside writer, since `text-subtle` has no tint). `index.css` sets them
+once as `--presence-tone` / `--presence-wash` on `presence-tone-*` for Monaco's decorations, and
+`panels/FileWriters.tsx` maps the same tones to utilities. The name flag is a pill on the tone's wash (the outside writer's pill takes
+`media-checker-tile`, since its `control-bg-hovered` wash vanishes on Monaco's current-line fill) with the
+kind icon in the tone and `text-default` for the name, with no border, so an inferred writer's flag looks the same (the gutter bar carries the dash); the whole-file chip
+puts the tone on a border and keeps `text-default` on `container-elevated-bg`, so a warning tone never carries text. Avatars carry no border: the icon takes the tone and the fill its wash, so two agents differ the way their gutter bars do; an inferred writer keeps the tone icon on a `control-bg-hovered` fill. A fourth agent
+reuses a tone; the label carries identity.
 
 ## Adding or changing a colour
 
