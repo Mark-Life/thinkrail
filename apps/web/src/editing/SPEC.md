@@ -42,7 +42,8 @@ The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-s
   `buffer.ts`; the registry (`registry.ts`) owns side effects.
 - **Status is derived, by precedence:** `stale` (a disk version that could not merge) › `readonly` ›
   `error` › `deleted` (`base.hash` null) › `conflict` (open same-line conflicts) › `saving` › `dirty` ›
-  `clean`, so a disk that turned binary or offline shows over the conflict lens. A failed save of a deleted file shows its reason,
+  `clean`, so a disk that turned binary shows over the conflict lens. `offline` never does: no save is
+  sent while a conflict is open. A failed save of a deleted file shows its reason,
   not `deleted` again. Dirty means `text !== base.text` and is reported apart from
   the status, so a deleted or stale buffer can still be clean or dirty. Only the summary
   (`{status, dirty, error, conflicts, merges}`) reaches the store (`fileBuffersByWorkspace`), never the text.
