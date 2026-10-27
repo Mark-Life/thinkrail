@@ -1,4 +1,5 @@
 export {
+	type FileMutation,
 	type FileMutationQueue,
 	forgetWorkspaceChanges,
 	type RevertChangeParams,

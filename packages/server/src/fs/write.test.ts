@@ -73,13 +73,15 @@ afterEach(() => {
 test("a save writes the content, answers the new hash and leaves no temp file", () => {
 	put("a.ts", "one\n");
 	const outcome = save("a.ts", "two\n", hash("one\n"));
-	expect(outcome).toEqual({
+	expect(outcome).toMatchObject({
 		result: {
 			status: "written",
 			meta: { hash: hash("two\n"), byteLength: 4, text: true },
 		},
 		changed: true,
 	});
+	if (!outcome.changed) throw new Error("expected a changed outcome");
+	expect(Buffer.from(outcome.after)).toEqual(Buffer.from("two\n"));
 	expect(text("a.ts")).toBe("two\n");
 	expect(leftovers()).toEqual([]);
 });
@@ -162,7 +164,10 @@ test("a U+FEFF that starts the content of a BOM-less file is kept behind a BOM",
 	};
 	const disk = Buffer.from([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf, 0x78, 0x0a]);
 	const meta = { hash: hash(disk), byteLength: 8, text: true };
-	expect(writeTextFile(params)).toEqual({ result: { status: "written", meta }, changed: true });
+	expect(writeTextFile(params)).toMatchObject({
+		result: { status: "written", meta },
+		changed: true,
+	});
 	expect(readFileSync(join(root, "plain.ts"))).toEqual(disk);
 	expect(toEditorText(decodeText(disk))).toBe(params.content);
 	expect(save("plain.ts", params.content, meta.hash).changed).toBe(false);

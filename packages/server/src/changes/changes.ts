@@ -41,6 +41,11 @@ export interface RevertChangeParams {
 
 export type FileMutationQueue = <T>(abs: string, run: () => Promise<T>) => Promise<T>;
 
+export interface FileMutation {
+	queue: FileMutationQueue;
+	written?: (write: { abs: string; after: Uint8Array | null; hash?: string }) => void;
+}
+
 export interface UndoChangeParams {
 	workspaceId: string;
 	receiptId: string;
@@ -366,13 +371,28 @@ function applyUndo(params: UndoChangeParams, abs: string, held: ReceiptRecord): 
 	return { before: current, after: held.before, claimed: claimForTrash(abs) };
 }
 
+function sameBytes(a: Uint8Array | null, b: Uint8Array | null): boolean {
+	if (a === null || b === null) return a === b;
+	return Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(b);
+}
+
+function reported(mutation: FileMutation, abs: string, applied: Applied): Applied {
+	const { before, after } = applied;
+	if (!sameBytes(before.bytes, after.bytes)) {
+		mutation.written?.({ abs, after: after.bytes });
+	}
+	return applied;
+}
+
 export async function revertChange(
 	params: RevertChangeParams,
-	queue: FileMutationQueue,
+	mutation: FileMutation,
 ): Promise<ChangeReceipt> {
 	const original = await originalSide(params);
 	const abs = resolveWorktreeFile(params.workspaceId, params.path, { followLeaf: false });
-	const applied = await queue(abs, async () => applyRevert(params, abs, original));
+	const applied = await mutation.queue(abs, async () =>
+		reported(mutation, abs, applyRevert(params, abs, original)),
+	);
 	if (applied.claimed !== undefined) await trashClaim(applied.claimed, abs);
 	return record({
 		kind: "revert",
@@ -386,7 +406,7 @@ export async function revertChange(
 
 export async function undoChange(
 	params: UndoChangeParams,
-	queue: FileMutationQueue,
+	mutation: FileMutation,
 ): Promise<ChangeReceipt> {
 	const ring = rings.get(params.workspaceId) ?? [];
 	const index = ring.findIndex((held) => held.receipt.id === params.receiptId);
@@ -398,7 +418,9 @@ export async function undoChange(
 		);
 	}
 	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path, { followLeaf: false });
-	const applied = await queue(abs, async () => applyUndo(params, abs, held));
+	const applied = await mutation.queue(abs, async () =>
+		reported(mutation, abs, applyUndo(params, abs, held)),
+	);
 	if (applied.claimed !== undefined) await trashClaim(applied.claimed, abs);
 	ring.splice(index, 1);
 	return record({

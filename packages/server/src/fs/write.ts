@@ -15,10 +15,13 @@ import { applyForm, createdBytes, textForm } from "./textForm";
 
 type WriteTextFileParams = WsParams<"fs.writeFile">;
 
-interface WriteTextFileOutcome {
-	result: FileWriteResult;
-	changed: boolean;
-}
+type WriteTextFileOutcome =
+	| { result: FileWriteResult; changed: false }
+	| {
+			result: Extract<FileWriteResult, { status: "written" }>;
+			changed: true;
+			after: Uint8Array;
+	  };
 
 const READONLY_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
 const NOT_A_FOLDER_CODES = new Set(["EEXIST", "ENOTDIR", "ENOENT"]);
@@ -31,8 +34,8 @@ function assertParams(params: WriteTextFileParams): void {
 	}
 }
 
-function written(bytes: Uint8Array, path: string): WriteTextFileOutcome {
-	return { result: { status: "written", meta: resourceMeta(bytes, path) }, changed: true };
+function written(after: Uint8Array, path: string): WriteTextFileOutcome {
+	return { result: { status: "written", meta: resourceMeta(after, path) }, changed: true, after };
 }
 
 function readonlyOrThrow(error: unknown): WriteTextFileOutcome {

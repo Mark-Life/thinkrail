@@ -3,8 +3,8 @@ import type { WsErrorCode } from "@thinkrail/contracts";
 export class CodedError extends Error {
 	readonly code: WsErrorCode;
 
-	constructor(code: WsErrorCode, message: string) {
-		super(message);
+	constructor(code: WsErrorCode, message: string, options?: ErrorOptions) {
+		super(message, options);
 		this.name = "CodedError";
 		this.code = code;
 	}
