@@ -13,6 +13,8 @@
 			"@astrojs/check": "0.9.12",
 			"@changesets/changelog-github": "1.0.1",
 			"@changesets/cli": "3.0.3",
+			"@codemirror/commands": "6.11.1",
+			"@codemirror/state": "6.7.6",
 			"@earendil-works/pi-agent-core": "1.4.0",
 			"@earendil-works/pi-ai": "1.4.0",
 			"@earendil-works/pi-coding-agent": "1.4.0",
