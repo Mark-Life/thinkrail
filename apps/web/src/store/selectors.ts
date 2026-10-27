@@ -4,6 +4,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
+	type FileSaveMode,
 	firstPromptOfTexts,
 	type GitDiffScope,
 	isSessionWorking,
@@ -58,7 +59,12 @@ import type {
 	TerminalTab,
 } from "./appStore";
 import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
-import type { FileBufferSummaries, FileBufferSummary } from "./fileBuffers";
+import {
+	type FileBufferSummaries,
+	type FileBufferSummary,
+	type FileSaveIndicator,
+	fileSaveIndicator,
+} from "./fileBuffers";
 
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
@@ -1017,6 +1023,23 @@ export function selectFileBufferSummary(
 	path: string,
 ): FileBufferSummary | undefined {
 	return state.fileBuffersByWorkspace[workspaceId]?.[path];
+}
+
+export function selectFileSaveIndicator(
+	state: { fileBuffersByWorkspace: FileBufferSummaries },
+	workspaceId: string,
+	path: string,
+): FileSaveIndicator | null {
+	return fileSaveIndicator(selectFileBufferSummary(state, workspaceId, path));
+}
+
+export function selectFileAutosaving(
+	state: { fileBuffersByWorkspace: FileBufferSummaries; fileSaveMode: FileSaveMode },
+	workspaceId: string,
+	path: string,
+): boolean {
+	const indicator = selectFileSaveIndicator(state, workspaceId, path);
+	return state.fileSaveMode === "auto" && (indicator === "pending" || indicator === "saving");
 }
 
 export function fsChangedPaths(change: {

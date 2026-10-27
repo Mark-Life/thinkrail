@@ -1,7 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
-import type { AnchorDraft, SurfaceReview } from "../registry";
+import { type AnchorDraft, CommentRefused, type SurfaceReview } from "../registry";
 import {
 	type ReviewTextBinding,
 	reviewTextState,
@@ -44,6 +44,13 @@ export function ReviewComposer({
 	const { text, busy } = state;
 	const setInput = input?.onChange ?? setLocal;
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const [refusal, setRefusal] = useState<string | null>(null);
+	const onComposing = commenting.onComposing;
+
+	useEffect(() => {
+		onComposing?.(true);
+		return () => onComposing?.(false);
+	}, [onComposing]);
 
 	useEffect(() => {
 		const element = inputRef.current;
@@ -72,13 +79,26 @@ export function ReviewComposer({
 		const body = text.trim();
 		if (busy || !body) return;
 		setInput({ ...state, busy: true });
-		action(draft, body).then(onClose, () => setInput({ ...state, busy: false }));
+		setRefusal(null);
+		action(draft, body).then(onClose, (error: unknown) => {
+			setInput({ ...state, busy: false });
+			if (error instanceof CommentRefused) setRefusal(error.message);
+		});
 	};
 
 	return (
 		<div data-testid="review-composer" className={cn("review-composer", className)}>
 			<span className="review-composer-label tr-code-text">{label}</span>
 			{notice ? <span className="tr-text-metadata text-text-muted">{notice}</span> : null}
+			{refusal ? (
+				<span
+					role="alert"
+					data-testid="review-composer-error"
+					className="tr-text-metadata text-feedback-error"
+				>
+					{refusal}
+				</span>
+			) : null}
 			<textarea
 				ref={inputRef}
 				data-testid="review-composer-input"

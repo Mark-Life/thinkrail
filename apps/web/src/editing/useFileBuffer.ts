@@ -1,5 +1,5 @@
 import type { ResourceMeta } from "@thinkrail/contracts";
-import { useCallback, useLayoutEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useSyncExternalStore } from "react";
 import { loadBufferRegistry, loadedBufferRegistry, subscribeBufferRegistry } from "./files";
 import { fileBufferKey } from "./keys";
 import type { FileBufferHandle } from "./registry";
@@ -21,6 +21,7 @@ export function useFileBuffer(
 		if (registry) registry.ensure({ workspaceId, path, content, meta });
 		else loadBufferRegistry().catch(() => {});
 	}, [registry, editable, workspaceId, path, content, meta]);
+	useEffect(() => (registry ? () => registry.flush(key) : undefined), [registry, key]);
 	return handle;
 }
 

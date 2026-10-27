@@ -8,6 +8,7 @@ import {
 	editorShortcut,
 	fileTab,
 	openFile,
+	pinFileSaveMode,
 	typeAtLineEnd,
 	unmergeableText,
 	visibleEditor,
@@ -27,6 +28,8 @@ function editorText(page: Page) {
 			.join("\n"),
 	);
 }
+
+pinFileSaveMode("manual");
 
 test("an on-disk change to another line merges into unsaved edits, and Save writes both", async ({
 	page,

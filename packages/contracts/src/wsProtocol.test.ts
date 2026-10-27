@@ -20,6 +20,7 @@ import {
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	FILE_SAVE_MODE_PROTOCOL_VERSION,
 	FILE_WRITE_MAX_BYTES,
 	FILE_WRITE_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
@@ -244,10 +245,15 @@ test("client error reports are pinned to v90", () => {
 });
 
 test("editor file writes are pinned to v93 with a 4 MiB cap", () => {
-	expect(PROTOCOL_VERSION).toBe(93);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FILE_WRITE_PROTOCOL_VERSION);
 	expect(FILE_WRITE_PROTOCOL_VERSION).toBe(93);
 	expect(FILE_WRITE_MAX_BYTES).toBe(4 * 1024 * 1024);
 	expect(WS_METHODS.fsWriteFile).toBe("fs.writeFile");
+});
+
+test("the file save mode setting is pinned to v94", () => {
+	expect(PROTOCOL_VERSION).toBe(94);
+	expect(FILE_SAVE_MODE_PROTOCOL_VERSION).toBe(94);
 });
 
 test("toEditorText drops one leading BOM and folds every line break to LF", () => {

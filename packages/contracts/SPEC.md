@@ -395,7 +395,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions }` — an extensible bag; the line-width fields join
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, fileSaveMode }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
   hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
@@ -407,7 +407,11 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   choice — a `session.create` that names a model and every `session.setModel`). Both default to `[]`, so a
   client gates only on the version, never on field presence. Snapshots in either list are re-pointed to the
   live catalog by the client before rendering; a model that left the catalog is simply not offered.
-  `terminalWindowsShell`
+  **`FileSaveMode`** (`"auto" | "manual"`, `isFileSaveMode`) is `fileSaveMode`, default `"auto"`: the
+  web client autosaves edited files about 1 s after the last edit, or only on Cmd/Ctrl+S. It joins the
+  wire at **`FILE_SAVE_MODE_PROTOCOL_VERSION`** (v94), one version after `fs.writeFile`, so a client
+  hides the control from an older host, which rejects the key. A v93 host can write files but sends no
+  `fileSaveMode`; the client then saves manually, as that host's own UI did. `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.

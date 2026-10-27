@@ -48,8 +48,11 @@ export interface ReviewThreadActions {
 export interface SurfaceReview {
 	threads: ReviewThread[];
 	commenting: {
+		/** A rejection with `CommentRefused` keeps the composer open and shows its message there. */
 		onSave(draft: AnchorDraft, text: string): Promise<void>;
 		onSend(draft: AnchorDraft, text: string): Promise<void>;
+		/** Called with true when a composer for this surface opens and false when it closes. */
+		onComposing?(open: boolean): void;
 	};
 	actions: ReviewThreadActions;
 	focus: { id: string; anchor: ReviewAnchor } | null;

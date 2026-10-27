@@ -9,6 +9,7 @@ import {
 	firstPromptOfTexts,
 	IMAGE_MAX_BASE64_BYTES,
 	isDelegationRunDetails,
+	isFileSaveMode,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
 	isLocalePreference,
@@ -117,6 +118,13 @@ describe("config defaults", () => {
 		for (const invalid of [0, 3601, 1.5, "30", null]) {
 			expect(isJbcentralQuotaRefreshSeconds(invalid)).toBe(false);
 		}
+	});
+
+	test("edited files autosave by default", () => {
+		expect(DEFAULT_CONFIG).toHaveProperty("fileSaveMode", "auto");
+		for (const valid of ["auto", "manual"]) expect(isFileSaveMode(valid)).toBe(true);
+		for (const invalid of ["Auto", "afterDelay", null, 1])
+			expect(isFileSaveMode(invalid)).toBe(false);
 	});
 
 	test("chat and file lines default to 120-symbol pane-bounded measures", () => {

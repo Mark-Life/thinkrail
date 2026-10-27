@@ -40,6 +40,7 @@ import {
 } from "@/themes";
 import { errorText, getTransport } from "@/transport";
 import { CustomThemesGroup } from "./CustomThemesSettings";
+import { FileSaveModeControl } from "./FileSaveModeSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
@@ -511,6 +512,7 @@ export function AppearanceSettings() {
 				onRevealFolder={revealThemesFolder}
 			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
+				<FileSaveModeControl />
 				<LineWidthControl kind="file" />
 			</SettingsGroup>
 		</SettingsPageContainer>

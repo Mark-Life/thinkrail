@@ -8,6 +8,7 @@ import {
 	editorShortcut,
 	fileTab,
 	openFile,
+	pinFileSaveMode,
 	typeAtLineEnd,
 	unmergeableText,
 	visibleEditor,
@@ -31,6 +32,8 @@ function draftCount(page: Page) {
 		});
 	});
 }
+
+pinFileSaveMode("manual");
 
 test("typing marks the tab unsaved and Cmd/Ctrl+S writes it, keeping the file's line endings", async ({
 	page,
