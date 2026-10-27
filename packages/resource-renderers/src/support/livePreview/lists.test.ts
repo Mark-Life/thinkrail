@@ -26,8 +26,16 @@ describe("continueList", () => {
 	test("a task item continues as an open task", () => {
 		expect(enter("- [x] done")).toEqual({ text: "- [x] done\n- [ ] ", caret: 17 });
 	});
-	test("Enter on an empty item ends the list", () => {
-		expect(enter("- one\n- ")).toEqual({ text: "- one\n", caret: 6 });
+	test("Enter on an empty item ends the list with a blank line", () => {
+		expect(enter("- one\n- ")).toEqual({ text: "- one\n\n", caret: 7 });
+	});
+	test("text typed after ending the list is a paragraph, not part of the last item", () => {
+		const ended = enter("- one\n- ");
+		if (!ended) throw new Error("no list continuation");
+		const typed = `${ended.text.slice(0, ended.caret)}after${ended.text.slice(ended.caret)}`;
+		const top = markdownParser.parse(typed).topNode;
+		expect(top.getChild("BulletList")?.to).toBeLessThanOrEqual(typed.indexOf("after"));
+		expect(top.getChildren("Paragraph")).toHaveLength(1);
 	});
 	test("Enter inside the marker, outside a list, or in code falls through", () => {
 		expect(enter("- one", 1)).toBeNull();
@@ -80,7 +88,12 @@ describe("continueList inside a quote", () => {
 		expect(enter("> 1. one")).toEqual({ text: "> 1. one\n> 2. ", caret: 14 });
 	});
 	test("Enter on an empty quoted item ends the list and keeps the quote", () => {
-		expect(enter("> - one\n> - ")).toEqual({ text: "> - one\n> ", caret: 10 });
+		const ended = enter("> - one\n> - ");
+		expect(ended).toEqual({ text: "> - one\n>\n> ", caret: 12 });
+		const typed = `${ended?.text ?? ""}after`;
+		const quote = markdownParser.parse(typed).topNode.getChild("Blockquote");
+		expect(quote?.getChild("BulletList")?.to).toBeLessThanOrEqual(typed.indexOf("after"));
+		expect(quote?.getChildren("Paragraph")).toHaveLength(1);
 	});
 });
 

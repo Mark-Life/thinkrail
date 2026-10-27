@@ -69,6 +69,20 @@ test.describe("autosave", () => {
 		await expect(fileTab(page, "notes.md").getByTestId("file-save-pending")).toHaveCount(0);
 	});
 
+	test("Enter on an empty item ends the list, so the text after it saves outside the list", async ({
+		page,
+	}) => {
+		const path = await openLive(page, "list-end.md", NOTES);
+		await caretAtLineEnd(page, "second");
+		await page.keyboard.press("Enter");
+		await page.keyboard.press("Enter");
+		await page.keyboard.type("after");
+		await expect
+			.poll(() => readFileSync(path, "utf8"))
+			.toBe(NOTES.replace("- second\n", "- second\n\nafter\n"));
+		await expect(live(page).locator(".md-bullet")).toHaveCount(2);
+	});
+
 	test("a disk change on another line merges into the live preview while you type", async ({
 		page,
 	}) => {

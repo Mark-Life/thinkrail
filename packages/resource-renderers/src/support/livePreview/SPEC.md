@@ -98,7 +98,8 @@ view and render the React portals; this directory owns everything that runs insi
   autocorrect on, since it is prose; Tab leaves the editor (no tab binding);
   heading lines carry `role="heading"` and their level. The focused editor rings its pane. Widget controls stay keyboard reachable.
   Reduced motion drops the presence fades. Enter on a list item starts the next one, inside a quote
-  too (an empty item ends the list), outside code. Any other Enter keeps the line's quote marks and
+  too (an empty item ends the list with a blank line, a bare `>` in a quote, so text typed after it is a
+  paragraph in the saved file, not a lazy line of the last item), outside code. Any other Enter keeps the line's quote marks and
   leading whitespace, so a fence or paragraph inside a list item or a quote stays in it; an empty
   quoted line outside code ends one quote level.
 - **Find.** Matches use Monaco's find roles (`feedback-warning-subtle`, the current one

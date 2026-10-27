@@ -44,9 +44,10 @@ export function continueList(state: EditorState): TransactionSpec | null {
 	if (tree.resolveInner(markAt, 1).name !== "ListMark") return null;
 	if (main.from - line.from < prefix.length) return null;
 	if (line.text.slice(prefix.length).trim() === "") {
+		const insert = `${quote.trimEnd()}\n${quote}`;
 		return {
-			changes: { from: line.from, to: line.to, insert: quote },
-			selection: EditorSelection.cursor(line.from + quote.length),
+			changes: { from: line.from, to: line.to, insert },
+			selection: EditorSelection.cursor(line.from + insert.length),
 			userEvent: "delete",
 		};
 	}
