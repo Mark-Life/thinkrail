@@ -101,15 +101,15 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 	const presenceText = usePresenceText();
 	const hostRef = useRef<HTMLDivElement>(null);
 	const chipRef = useRef<HTMLDivElement>(null);
-	const viewRef = useRef<EditorView | null>(null);
+	const [view, setView] = useState<EditorView | null>(null);
 	const presenceRef = useRef<ReturnType<typeof createPresenceMarks> | null>(null);
 	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
 	const [portals] = useState(createPortalHost);
 	const entries = useSyncExternalStore(portals.subscribe, portals.snapshot);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
-	const latestRef = useRef({ presenceText, presence, review, openFile, t });
+	const latestRef = useRef({ presenceText, presence, openFile });
 	useLayoutEffect(() => {
-		latestRef.current = { presenceText, presence, review, openFile, t };
+		latestRef.current = { presenceText, presence, openFile };
 	});
 
 	const { workspaceId, path } = resource;
@@ -140,7 +140,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 					livePreview,
 					livePresence,
 					portalHost.of(portals),
-					textCompartment.of(liveTextOf(latestRef.current.t)),
+					textCompartment.of([]),
 					EditorView.lineWrapping,
 					EditorView.editorAttributes.of({ class: "md-live" }),
 					EditorView.contentAttributes.of({
@@ -202,7 +202,6 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 				else target.update(transactions);
 			},
 		});
-		viewRef.current = view;
 		portals.onResize(() => view.requestMeasure());
 		const marks = createPresenceMarks(livePresenceSurface(view, chipHost), {
 			text: () => latestRef.current.presenceText,
@@ -215,13 +214,13 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			onConflicts: (conflicts) => view.dispatch({ effects: setConflicts.of(conflicts) }),
 			onDisk: marks.land,
 		});
-		view.dispatch({ effects: setThreads.of(threadAnchors(latestRef.current.review)) });
+		setView(view);
 		return () => {
 			binding?.dispose();
 			binding = null;
 			marks.dispose();
 			presenceRef.current = null;
-			viewRef.current = null;
+			setView(null);
 			portals.onResize(() => {});
 			view.destroy();
 		};
@@ -232,11 +231,10 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 	}, [presence]);
 
 	useLayoutEffect(() => {
-		viewRef.current?.dispatch({ effects: textCompartment.reconfigure(liveTextOf(t)) });
-	}, [t]);
+		view?.dispatch({ effects: textCompartment.reconfigure(liveTextOf(t)) });
+	}, [t, view]);
 
 	useLayoutEffect(() => {
-		const view = viewRef.current;
 		if (!view) return;
 		view.dispatch({ effects: setThreads.of(threadAnchors(review)) });
 		const focus = review?.focus;
@@ -247,11 +245,11 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			view.dispatch({ effects: EditorView.scrollIntoView(line.to, { y: "center" }) });
 		}
 		review.onFocusHandled();
-	}, [review]);
+	}, [review, view]);
 
 	const resolve = (id: number, choice: ConflictChoice) => {
 		edit.resolveConflict(id, choice);
-		viewRef.current?.focus();
+		view?.focus();
 	};
 
 	return (

@@ -629,7 +629,8 @@ content's own height.
   - **Review threads** render as block widgets after their end line (`ReviewThreadCard`), or after the
     rendered block that holds that line, as the reading view does. Authoring a
     comment needs the lock (the reading view's commenting) or Source. A review focus scrolls its line
-    into view.
+    into view. The view is React state, so the threads and the widget labels are pushed once per view
+    and once per change of `review` or the locale, never twice on mount.
   - **Presence** uses the shared rules (`presenceCore.ts`) through a CodeMirror surface: a bar and a
     wash on the changed lines, the flag after the first line, the chip at the top right, the writer and
     diff on hover. Marks are line classes, so two writers on one line show the later one's tone. The
