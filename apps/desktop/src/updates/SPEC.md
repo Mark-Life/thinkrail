@@ -42,6 +42,13 @@ installation. The UI must not claim cancellation while native work continues. Er
 operation, while a prepared package survives unrelated check failures. **Install & Restart** applies that package
 without re-fetching the feed; Electrobun's native helper owns final payload validation during handoff.
 
+## Quit confirmation
+
+An ordinary quit first awaits the injected `confirmQuit`; a decline keeps the host running and the next
+quit asks again. Concurrent quit requests share one confirmation. The Electrobun adapter asks with a
+native message box only while the web client reports unsaved edits. An update restart never asks: drafts
+outlive the restart.
+
 ## Install attempt and result
 
 One install attempt spans the whole coordinated handoff, not the first SDK call. The quit coordinator's

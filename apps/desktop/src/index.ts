@@ -20,6 +20,7 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { createDraftStore, readDraft, readDraftKey } from "./draftStore";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
@@ -215,9 +216,11 @@ async function start(): Promise<void> {
 			: {}),
 	});
 	setDesktopErrorReporter(host.reportError);
+	let unsavedEdits = false;
 	const quitCoordinator = createElectrobunQuitCoordinator(
 		() => host.server.shutdown(),
 		() => dialogLabels,
+		() => unsavedEdits,
 	);
 	startupQuitCoordinator = quitCoordinator;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
@@ -225,6 +228,9 @@ async function start(): Promise<void> {
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
 	const routes = new RouteStore(join(userData, "routes.json"));
+	const drafts = createDraftStore(join(userData, "drafts"), (error) => {
+		desktopError("drafts", "could not write a file draft", error);
+	});
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
@@ -301,6 +307,23 @@ async function start(): Promise<void> {
 						...(input.silent === undefined ? {} : { silent: input.silent }),
 					});
 				},
+				getDraft: (payload) => {
+					const key = readDraftKey(payload);
+					return key ? drafts.get(key) : null;
+				},
+				putDraft: (payload): undefined => {
+					const draft = readDraft(payload);
+					if (draft) drafts.put(draft);
+				},
+				removeDraft: (payload): undefined => {
+					const key = readDraftKey(payload);
+					const owner: unknown = Reflect.get(Object(payload), "owner");
+					if (key && typeof owner === "string") drafts.remove({ ...key, owner });
+				},
+				removeWorkspaceDrafts: (payload): undefined => {
+					const workspaceId: unknown = Reflect.get(Object(payload), "workspaceId");
+					if (typeof workspaceId === "string") drafts.removeWorkspace({ workspaceId });
+				},
 			},
 			messages: {
 				titleBarDoubleClick: () => {
@@ -321,6 +344,9 @@ async function start(): Promise<void> {
 					if (applicationMenuInstalled) {
 						installDesktopApplicationMenu(ApplicationMenu, process.platform, menuLabels);
 					}
+				},
+				unsavedEditsChanged: ({ unsaved }) => {
+					unsavedEdits = unsaved === true;
 				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);

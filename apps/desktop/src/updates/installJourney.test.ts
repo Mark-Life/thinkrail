@@ -288,6 +288,7 @@ test("the controller and quit coordinator keep one attempt through a delayed shu
 	let applyCalls = 0;
 	let coordinator: DesktopQuitCoordinator;
 	coordinator = createDesktopQuitCoordinator({
+		confirmQuit: async () => true,
 		shutdown: () => shutdown.promise,
 		quit: () => {},
 		applyUpdate: async () => {
@@ -326,6 +327,7 @@ test("the controller and quit coordinator keep one attempt through a delayed shu
 
 test("the quit coordinator reports whether the update handoff continues past the first call", async () => {
 	const dependencies = {
+		confirmQuit: async () => true,
 		shutdown: async () => {},
 		quit: () => {},
 		getUpdateError: () => "",

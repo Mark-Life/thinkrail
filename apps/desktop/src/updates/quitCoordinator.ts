@@ -3,6 +3,8 @@ export interface DesktopBeforeQuitEvent {
 }
 
 export interface DesktopQuitCoordinatorDependencies {
+	/** Resolves false when the user keeps the app open; an update restart never asks. */
+	confirmQuit(): Promise<boolean>;
 	shutdown(): Promise<void>;
 	quit(): void;
 	applyUpdate(): Promise<void>;
@@ -25,6 +27,7 @@ export function createDesktopQuitCoordinator(
 	let completionStarted = false;
 	let completionIntent: "quit" | "update" = "quit";
 	let initialApply: Promise<void> | undefined;
+	let quitRequest: Promise<void> | undefined;
 
 	const ordinaryQuit = (): void => {
 		try {
@@ -77,12 +80,31 @@ export function createDesktopQuitCoordinator(
 		return shutdownPromise;
 	};
 
+	const confirmed = async (): Promise<boolean> => {
+		if (completionIntent !== "quit") return true;
+		try {
+			return await dependencies.confirmQuit();
+		} catch (error) {
+			dependencies.reportLifecycleError(error);
+			return true;
+		}
+	};
+
+	const requestQuit = (): Promise<void> => {
+		if (shutdownPromise) return shutdownPromise;
+		quitRequest ??= confirmed().then((allowed) => {
+			quitRequest = undefined;
+			return allowed ? beginShutdown() : undefined;
+		});
+		return quitRequest;
+	};
+
 	return {
-		quit: beginShutdown,
+		quit: requestQuit,
 		handleBeforeQuit: (event) => {
 			if (shutdownComplete) return;
 			event.response = { allow: false };
-			void beginShutdown();
+			void requestQuit();
 		},
 		restartToUpdate: async () => {
 			completionIntent = "update";

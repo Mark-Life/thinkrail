@@ -5,7 +5,7 @@ import { fileName } from "../lib";
 import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "../store";
 import { getTransport, supportsFileWrite } from "../transport";
 import { isEditableMeta } from "./buffer";
-import { indexedDbDrafts, pageDraftOwner } from "./drafts";
+import { indexedDbDrafts, nativeDrafts, nativeEditingBridge, pageDraftOwner } from "./drafts";
 import { type BufferRegistry, createBufferRegistry, type FileIo, fileBufferKey } from "./registry";
 
 const DRAFT_DELAY_MS = 300;
@@ -46,13 +46,21 @@ function openFileKeys(state: AppState): Set<string> {
 	return keys;
 }
 
+/** Whether any file holds edits that will not reach disk unless the user saves. */
+export function hasUnsavedEdits(state: Pick<AppState, "fileBuffersByWorkspace">): boolean {
+	return Object.values(state.fileBuffersByWorkspace).some((summaries) =>
+		Object.values(summaries).some((summary) => summary.dirty),
+	);
+}
+
 let registry: BufferRegistry | null = null;
 
 export function bufferRegistry(): BufferRegistry {
 	if (registry) return registry;
+	const native = nativeEditingBridge();
 	const created = createBufferRegistry({
 		io,
-		drafts: indexedDbDrafts(),
+		drafts: native ? nativeDrafts(native) : indexedDbDrafts(),
 		draftOwner: pageDraftOwner(),
 		publish: (workspaceId, path, summary) =>
 			useAppStore.getState().setFileBufferSummary(workspaceId, path, summary),
@@ -63,7 +71,13 @@ export function bufferRegistry(): BufferRegistry {
 			toast.info(i18n.t("editing.draftRestored", { name: fileName(path) })),
 		draftDelayMs: DRAFT_DELAY_MS,
 	});
+	let unsaved = false;
 	useAppStore.subscribe((state, previous) => {
+		if (native && state.fileBuffersByWorkspace !== previous.fileBuffersByWorkspace) {
+			const next = hasUnsavedEdits(state);
+			if (next !== unsaved) native.setUnsavedEdits(next);
+			unsaved = next;
+		}
 		if (state.removedWorkspaceIds !== previous.removedWorkspaceIds) {
 			for (const workspaceId of Object.keys(state.removedWorkspaceIds)) {
 				if (!previous.removedWorkspaceIds[workspaceId]) created.forgetWorkspace(workspaceId);

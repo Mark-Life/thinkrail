@@ -1,4 +1,5 @@
 import type {
+	NativeEditingBridge,
 	NativeMenuBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
@@ -137,6 +138,29 @@ const menuBridge: NativeMenuBridge = Object.freeze({
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_MENU__", {
 	value: menuBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
+const editingBridge: NativeEditingBridge = Object.freeze({
+	getDraft: (key: Parameters<NativeEditingBridge["getDraft"]>[0]) => rpc.request.getDraft(key),
+	putDraft: async (draft: Parameters<NativeEditingBridge["putDraft"]>[0]) => {
+		await rpc.request.putDraft(draft);
+	},
+	removeDraft: async (key: Parameters<NativeEditingBridge["removeDraft"]>[0]) => {
+		await rpc.request.removeDraft(key);
+	},
+	removeWorkspaceDrafts: async (
+		key: Parameters<NativeEditingBridge["removeWorkspaceDrafts"]>[0],
+	) => {
+		await rpc.request.removeWorkspaceDrafts(key);
+	},
+	setUnsavedEdits: (unsaved: boolean) => {
+		electroview.rpc?.send.unsavedEditsChanged({ unsaved });
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_EDITING__", {
+	value: editingBridge,
 	writable: false,
 	configurable: false,
 	enumerable: false,

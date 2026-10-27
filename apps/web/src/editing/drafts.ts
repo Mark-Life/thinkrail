@@ -1,3 +1,4 @@
+import type { NativeEditingBridge } from "@thinkrail/contracts";
 import { randomId } from "../lib";
 
 export interface DraftKey {
@@ -129,5 +130,43 @@ export function indexedDbDrafts(
 		removeWorkspace: async (key) => {
 			await run("readwrite", (store) => store.delete(workspaceRange(key)));
 		},
+	};
+}
+
+const EDITING_BRIDGE_GLOBAL = "__THINKRAIL_NATIVE_EDITING__";
+
+export function nativeEditingBridge(): NativeEditingBridge | undefined {
+	const bridge: unknown = Reflect.get(globalThis, EDITING_BRIDGE_GLOBAL);
+	return typeof bridge === "object" &&
+		bridge !== null &&
+		typeof Reflect.get(bridge, "getDraft") === "function"
+		? (bridge as NativeEditingBridge)
+		: undefined;
+}
+
+/** Drafts kept by the desktop shell, so they survive a quit even though the window origin changes. */
+export function nativeDrafts(bridge: NativeEditingBridge): DraftStore {
+	const quiet = async <T>(fallback: T, run: () => Promise<T>): Promise<T> => {
+		try {
+			return await run();
+		} catch (error) {
+			console.warn("[editing] draft storage failed", error);
+			return fallback;
+		}
+	};
+	return {
+		get: ({ workspaceId, path }) =>
+			quiet(null, async () => {
+				const draft = await bridge.getDraft({ workspaceId, path });
+				return draft && isDraft(draft)
+					? { text: draft.text, baseHash: draft.baseHash, owner: draft.owner }
+					: null;
+			}),
+		put: ({ workspaceId, path }, draft) =>
+			quiet(undefined, () => bridge.putDraft({ workspaceId, path, ...draft })),
+		remove: ({ workspaceId, path }, owner) =>
+			quiet(undefined, () => bridge.removeDraft({ workspaceId, path, owner })),
+		removeWorkspace: ({ workspaceId }) =>
+			quiet(undefined, () => bridge.removeWorkspaceDrafts({ workspaceId })),
 	};
 }

@@ -100,3 +100,24 @@ export interface NativeShortcutsBridge {
 export interface NativeMenuBridge {
 	setLabels(labels: Readonly<Record<string, string>>): void;
 }
+
+export interface NativeDraftKey {
+	workspaceId: string;
+	path: string;
+}
+
+export interface NativeDraft extends NativeDraftKey {
+	text: string;
+	baseHash: string | null;
+	owner: string;
+}
+
+/** Drafts kept by the desktop shell under a stable identity, plus the quit guard's input. */
+export interface NativeEditingBridge {
+	getDraft(key: NativeDraftKey): Promise<NativeDraft | null>;
+	putDraft(draft: NativeDraft): Promise<void>;
+	removeDraft(key: NativeDraftKey & { owner: string }): Promise<void>;
+	removeWorkspaceDrafts(key: Omit<NativeDraftKey, "path">): Promise<void>;
+	/** Whether a file holds edits that will not save on their own, so quit must ask first. */
+	setUnsavedEdits(unsaved: boolean): void;
+}

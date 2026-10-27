@@ -22,7 +22,9 @@ engine architecture.
 - **Owns:** Electrobun configuration and lifecycle; native window policy, including the per-platform
   title-bar treatment and the window-chrome geometry it publishes to the web client; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
-  a bounded generic client-preference adapter under stable backend-profile/window identity; and the
+  a bounded generic client-preference adapter under stable backend-profile/window identity; a file-draft
+  store (`draftStore.ts`, one JSON file per draft under `userData/drafts`) behind the editing bridge, plus
+  the quit guard that asks before quitting over unsaved edits; and the
   opt-in live-window test seam. Standalone artifact harnesses belong to [[module-artifact-tests]].
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.

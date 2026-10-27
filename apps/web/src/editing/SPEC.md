@@ -128,9 +128,12 @@ IndexedDB (private mode, tests) means no drafts.
   restored, and a page deletes only records it wrote, so two windows never take over each other's
   edits. A restored draft is rewritten under the new owner at once. Two pages editing one file share the
   record: the last writer wins. Without Web Locks (an insecure origin) every other owner counts as gone.
-- **Desktop quit loses drafts.** The desktop window origin carries the host's per-launch loopback port,
-  and IndexedDB is per origin, so drafts survive a reload but not a quit, crash or update restart. Quit
-  does not ask about dirty buffers.
+- **Desktop drafts.** The desktop window origin carries the host's per-launch loopback port, and
+  IndexedDB is per origin. So on desktop the store is the shell's editing bridge
+  (`__THINKRAIL_NATIVE_EDITING__`), keyed by `(workspaceId, path)` without the host: drafts survive a
+  quit, crash or update restart. A bridge failure reads as no draft.
+- **Desktop quit guard.** The registry pushes one flag to the same bridge: does any file hold edits that
+  will not save on their own (`hasUnsavedEdits`, today any dirty buffer). Quit asks first while it is set.
 
 ## Get right
 
