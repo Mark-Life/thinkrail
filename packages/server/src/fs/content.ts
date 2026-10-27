@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { extname } from "node:path";
-import type { ResourceMeta } from "@thinkrail/contracts";
+import { LFS_POINTER_MIME, type ResourceMeta } from "@thinkrail/contracts";
 
 export const CONTENT_SNIFF_BYTES = 8 * 1024;
 const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -37,7 +37,6 @@ const EXTENSION_MIME: Readonly<Record<string, string>> = {
 
 const SVG_ROOT = /^\s*<svg[\s>]/;
 const XML_PROLOG = /^\s*<\?xml(?:\s|\?>)/;
-export const LFS_POINTER_MIME = "application/vnd.git-lfs";
 const LFS_POINTER_LIMIT = 1024;
 const LFS_POINTER =
 	/^version https:\/\/git-lfs\.github\.com\/spec\/v1\noid sha256:[0-9a-f]{64}\nsize \d{1,15}\n$/;
