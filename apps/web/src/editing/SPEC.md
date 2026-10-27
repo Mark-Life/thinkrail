@@ -283,10 +283,15 @@ IndexedDB (private mode, tests) means no drafts.
   with no write when the bytes already match.
 - **The store slice is status only.** Views read text from the buffer (`useFileBufferText`). An unchanged
   summary is a no-op in the store, so typing wakes no store subscriber.
-- **Cost.** The lazy `registry` chunk is 20 kB (7 kB gzip) and loads one shared CodeMirror chunk of
-  271 kB (88 kB gzip) that the markdown live preview uses too: `@codemirror/commands` imports
-  `@codemirror/view`, and once the live preview puts `view` in the build the bundler keeps that edge,
-  so the first editable file of a session loads about 291 kB (95 kB gzip) where it loaded 93 kB (31 kB
-  gzip). Splitting `view` out needs `codeSplitting.includeDependenciesRecursively: false` with strict
-  execution order for the whole build. The registry uses `historyField`, not `history()`. The entry
-  chunk went from 1,655 to 1,648 kB (524 to 521 kB gzip) because jsdiff left it.
+- **Cost.** The first editable file of a session loads 96 kB (32.5 kB gzip): the lazy `registry` chunk
+  (26 kB, 9.4 kB gzip, with jsdiff and the history half of `@codemirror/commands`) and a shared chunk
+  of `@codemirror/state` and `@lezer/common` (70 kB, 23 kB gzip). No `@codemirror/view` loads for a
+  code file. `@codemirror/commands` is one module: the live preview's `standardKeymap` references
+  `view`, so a single shared copy would drag `view` and `language` into this path. The
+  `bufferHistoryChunk` Vite plugin (build only) therefore gives modules under `editing/` their own copy
+  of `@codemirror/commands`; the build keeps only the history code in it, and a markdown edit session
+  pays about 4 kB (1 kB gzip) for the second copy. The two copies share `@codemirror/state`. This holds
+  while nothing outside `editing/` uses CodeMirror history (`history()`, `historyField`, `undo`).
+  No chunking option fixes this: a `codeSplitting` group for `view` still leaves an import edge from
+  the shared `commands` code. The registry uses `historyField`, not `history()`. jsdiff stays out of
+  the entry chunk.
