@@ -56,7 +56,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
     environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
     providers;
-  - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
+  - the lazy `RendererView` mount, with **`focusRendererEditor(root)`** to put keyboard focus back in the
+    editable view mounted under `root` (a caller whose control unmounts on click), and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
     (`surfaceLineCount`);
@@ -84,8 +85,9 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 
 - `markdown` — the component that renders markdown (`ResourceMarkdownProps`); the document preview, rendered
   diff and notebook cells pass their plugins and components through it.
-- `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
-  the code `theme` resolved from CSS variables). Monaco is page-global: the first preload `warm` or
+- `code` — the code-highlighting host (`languages` with grammar loaders and optional `comments` tokens,
+  `languageId` canonicalization, and the code `theme` resolved from CSS variables). Shiki grammars carry
+  no comment tokens, so Monaco's comment toggle works only for languages whose host entry sets them. Monaco is page-global: the first preload `warm` or
   `MonacoEditor` initializes it from its host's `code` once (`ensureMonaco`, synchronous after the Monaco
   chunk loads), and every later editor reuses that setup. `ensureMonaco` owns the one page-lifetime theme
   watch, so a swap between a preload and the first editor still re-themes, and N open editors cost one
@@ -607,33 +609,39 @@ content's own height.
   The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
   `updateOptions` only when that object changes; the typography and spacing tokens the options read are
   static generated CSS (themes set only colours).
-- **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
+- **The desktop Monaco surface is a text editor, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
-  and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
+  and add read-only messaging (only without an edit session), the path as its accessible label, an 8px top inset, three-character line-number
   gutter, full active-line paint, smooth scrolling, active bracket-pair + indentation guides, single-file
   occurrence highlighting, and ambiguous-Unicode suppression. Opaque `viewState` is restored only after its
   editor-state shape is validated and is saved on unmount, so tab switches round-trip scroll and folding.
   A review focus that arrives with the mount jumps to its line (`revealLineNow`, an immediate scroll): a
   smooth scroll started before the editor's first layout can stop short, and the handled focus is not
   retried, so the card stayed off screen. A focus on a mounted editor still scrolls smoothly.
-  Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
-  context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
-  messaging and Unicode highlighting); keeping word highlighting preserves F7. Each contribution loads through
-  its typed `monaco-editor/features/<name>/register.js` entry, because Monaco's `exports` map closes the deep
-  `esm/vs/...` paths. The editor core loads `coreCommands` itself. `codicon-modifiers.css` is not exported, so
-  codicon spin animations (only hover loading icons here) stay static. The TS/JS/JSON/CSS/HTML
+  Monaco is imported from `editor.api` with the reading contributions (find and replace, folding, bracket matching,
+  context menu/clipboard, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
+  messaging and Unicode highlighting) plus the basic editing ones (line operations, comment toggle, word
+  operations, multi-cursor, cursor undo); undo/redo and typing are core. Keeping word highlighting preserves
+  F7. Each contribution loads through its typed `monaco-editor/features/<name>/register.js` entry, because
+  Monaco's `exports` map closes the deep `esm/vs/...` paths. The editor core loads `coreCommands` itself.
+  `codicon-modifiers.css` is not exported, so codicon spin animations (only hover loading icons here) stay
+  static. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
   ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
   file's tab) never shares a model that one unmount disposes under the other.
 - **`MonacoEditor` mounts Monaco itself.** A layout effect creates the editor and its model in the commit
-  that mounts the view, with no loading state, then restores the view state and attaches review commenting
-  (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
+  that mounts the view, with no loading state, then restores the view state. Review threads and commenting
+  attach while a `review` prop is present and detach (zones, decorations, the comment action) when it goes
+  away, which a host does for an unsaved buffer whose lines no longer match disk. Its layout cleanup saves the view state before it disposes the editor
   and the model, in that order. A path change on a live editor swaps the model in place, and the language
-  follows the path, because `RendererView` is keyed by implementation, not path. New text calls `setValue`
-  only when it differs from the text last applied: the editor is read-only, so the last applied text is
-  the model's text and reading it back (`getValue()`) would only cost a full copy. The model and options
-  effects skip their first run, because the mount just created the editor with exactly those inputs. The
+  follows the path, because `RendererView` is keyed by implementation, not path. Read-only, new text calls `setValue`
+  only when it differs from the text last applied, compared as strings, never through `getValue()`.
+  With an edit session, `bindEditSession` owns the model instead: it is created from `snapshot()` with LF
+  line endings, its content events go to `applyLocal` (except the ones it applied), and subscribed changes
+  land through `pushEditOperations` between undo stops, so cursors, decorations and Monaco's own undo stay
+  coherent. `setValue` never runs on an editable model. A path or session change rebinds in place.
+  The model and options effects skip their first run, because the mount just created the editor with exactly those inputs. The
   editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
   open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
   and its loaded component is cached.

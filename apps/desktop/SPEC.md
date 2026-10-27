@@ -22,7 +22,9 @@ engine architecture.
 - **Owns:** Electrobun configuration and lifecycle; native window policy, including the per-platform
   title-bar treatment and the window-chrome geometry it publishes to the web client; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
-  a bounded generic client-preference adapter under stable backend-profile/window identity; and the
+  a bounded generic client-preference adapter under stable backend-profile/window identity; a file-draft
+  store (`draftStore.ts`, one JSON file per draft under `userData/drafts`) behind the editing bridge, plus
+  the quit guard that asks before quitting over unsaved edits; and the
   opt-in live-window test seam. Standalone artifact harnesses belong to [[module-artifact-tests]].
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
@@ -148,11 +150,11 @@ not browser-level key handlers, own standard editing commands so Command/Ctrl-C,
 flow through the operating-system responder chain across ordinary inputs, Monaco, xterm, and future
 webview surfaces without competing with their local key handling.
 
-macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
+macOS receives the conventional application, File, Edit, and Window menus; File holds only Save (Command-S, a custom-action item). Windows receives the supported
 Edit role menu. Linux skips registration because Electrobun 2.0.5 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
-are custom-action items, not roles; see Confirmed quit and close. Their labels, plus the Edit and Window menu
+are custom-action items, not roles; see Confirmed quit and close. Their labels, plus the File, Edit and Window menu
 titles, are the `DESKTOP_MENU_KEYS` of [[module-locales]]; the native error dialogs (startup failed,
 restart-to-update failed) and the startup splash use its `DESKTOP_DIALOG_KEYS`. The web pushes the active language's labels for both
 through the preload's `__THINKRAIL_NATIVE_MENU__` bridge (`menuLabelsChanged`); the main process sanitizes
@@ -197,10 +199,11 @@ Other menu shortcuts are forwarded `NativeCommand`s: the menu action is the comm
 actions drop until no non-modifier key is down, so key-repeat never fires a command twice. A click with no
 key down, or unreadable key state, always forwards. Command-W (`close-item`) asks the web client to close
 its focused item or do nothing; it never closes the native window. Command-comma (`open-settings`) asks it
-to open Settings; the web decides whether a modal blocks it. The preload exposes hints and commands
+to open Settings; the web decides whether a modal blocks it. Command-S (`save`, the File menu's Save) asks it to
+save the focused file; with nothing to save it does nothing. The preload exposes hints and commands
 as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBridge` (built by
 `shortcutsBridge.ts`) on every desktop platform; only the macOS menu sends events today. On Windows and
-Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) and Ctrl+, (Settings) through its command table.
+Linux the web shell owns Ctrl+W / Ctrl+F4 (close item), Ctrl+, (Settings) and Ctrl+S (save) through its command table.
 
 The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
 `NativeNotificationBridge` ([[module-contracts]]) on every desktop platform. It has two capabilities:
@@ -363,6 +366,10 @@ Every quit path calls the shared idempotent asynchronous server shutdown once, i
 failure after acquiring the host but before the native window or quit listener is ready. Shutdown ownership
 begins as soon as the host is acquired. It settles/aborts active agent work within its bound, drains
 analytics, disposes server resources and PTYs, and closes sockets.
+Before shutdown starts, the host awaits the web client's pending drafts (`flushEdits`, the webview's one RPC
+request), at most `EDIT_FLUSH_TIMEOUT_MS` (2 s); a failure or timeout still shuts down. The main window's
+`will-close` is vetoed like `before-quit` until shutdown completes, so the native X and the HTML close control
+run the same quit (with its unsaved-edits question) while the webview can still answer.
 Electrobun's synchronous `before-quit` callback cancels quit while that promise is pending and retries
 `Utils.quit()` under a completion guard. Startup failure also requests quit directly through that coordinator
 in the error-dialog finalizer, so even missing quit interception or a failed dialog cannot bypass shutdown.
