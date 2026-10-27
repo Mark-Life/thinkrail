@@ -1,4 +1,5 @@
 import type {
+	NativeEditingBridge,
 	NativeMenuBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
@@ -41,6 +42,7 @@ windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const windowStateListeners = new Set<(state: NativeWindowState) => void>();
+let flushEdits: () => Promise<void> = () => Promise.resolve();
 let nativeWindowFocused = document.hasFocus();
 window.addEventListener("focus", () => {
 	nativeWindowFocused = true;
@@ -49,7 +51,12 @@ const shortcuts = createShortcutsBridge(() => rpc.request.quitApp());
 const rpc = Electroview.defineRPC<DesktopRpc>({
 	maxRequestTime: 5000,
 	handlers: {
-		requests: {},
+		requests: {
+			flushEdits: async () => {
+				await flushEdits();
+				return undefined;
+			},
+		},
 		messages: {
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
@@ -137,6 +144,32 @@ const menuBridge: NativeMenuBridge = Object.freeze({
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_MENU__", {
 	value: menuBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
+const editingBridge: NativeEditingBridge = Object.freeze({
+	getDraft: (key: Parameters<NativeEditingBridge["getDraft"]>[0]) => rpc.request.getDraft(key),
+	putDraft: async (draft: Parameters<NativeEditingBridge["putDraft"]>[0]) => {
+		await rpc.request.putDraft(draft);
+	},
+	removeDraft: async (key: Parameters<NativeEditingBridge["removeDraft"]>[0]) => {
+		await rpc.request.removeDraft(key);
+	},
+	removeWorkspaceDrafts: async (
+		key: Parameters<NativeEditingBridge["removeWorkspaceDrafts"]>[0],
+	) => {
+		await rpc.request.removeWorkspaceDrafts(key);
+	},
+	setUnsavedEdits: (unsaved: boolean) => {
+		electroview.rpc?.send.unsavedEditsChanged({ unsaved });
+	},
+	onQuitFlush: (flush: () => Promise<void>) => {
+		flushEdits = flush;
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_EDITING__", {
+	value: editingBridge,
 	writable: false,
 	configurable: false,
 	enumerable: false,

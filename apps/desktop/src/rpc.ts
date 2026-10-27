@@ -1,5 +1,7 @@
 import type {
 	NativeCommand,
+	NativeDraft,
+	NativeDraftKey,
 	NativeNotificationInput,
 	NativeQuitHint,
 	NativeUpdateState,
@@ -22,6 +24,10 @@ export type DesktopRpc = {
 			restartToUpdate: { params: undefined; response: undefined };
 			dismissInstallResult: { params: undefined; response: undefined };
 			showNotification: { params: NativeNotificationInput; response: undefined };
+			getDraft: { params: NativeDraftKey; response: NativeDraft | null };
+			putDraft: { params: NativeDraft; response: undefined };
+			removeDraft: { params: NativeDraftKey & { owner: string }; response: undefined };
+			removeWorkspaceDrafts: { params: Omit<NativeDraftKey, "path">; response: undefined };
 		};
 		messages: {
 			routeChanged: { hash: string };
@@ -31,10 +37,13 @@ export type DesktopRpc = {
 			pageZoomRequested: { action: PageZoomAction };
 			pageZoomGestureRequested: PageZoomGesture;
 			menuLabelsChanged: { labels: Record<string, string> };
+			unsavedEditsChanged: { unsaved: boolean };
 		};
 	};
 	webview: {
-		requests: Record<string, never>;
+		requests: {
+			flushEdits: { params: undefined; response: undefined };
+		};
 		messages: {
 			updateStateChanged: NativeUpdateState;
 			windowChromeChanged: WindowChromeGeometry;
