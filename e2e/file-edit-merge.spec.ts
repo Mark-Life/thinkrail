@@ -9,6 +9,7 @@ import {
 	fileTab,
 	openFile,
 	typeAtLineEnd,
+	unmergeableText,
 	visibleEditor,
 } from "./fixtures/fileEdit";
 
@@ -228,4 +229,19 @@ test("a disk edit to a last line I deleted, with no final newline, shows below t
 	await expect
 		.poll(() => readFileSync(path, "utf8"))
 		.toBe("const one = 1;\nconst two = 2;\nconst three = 33;");
+});
+
+test("Save after undoing Reload keeps the disk lines Reload brought in", async ({ page }) => {
+	const path = await openFile(page, "reload-undo.ts", unmergeableText(""));
+	await typeAtLineEnd(page, 1, " // mine");
+	writeFileSync(path, unmergeableText("agent"));
+	await expect(banner(page)).toHaveAttribute("data-status", "stale", { timeout: 10_000 });
+	await page.getByTestId("file-edit-reload").click();
+	await expect(visibleEditor(page)).toContainText("agent line 0");
+
+	await editorShortcut(page, "z");
+	await expect(visibleEditor(page)).toContainText("line 0 // mine");
+	await pressPlatformShortcut(page, "s");
+	await expect(banner(page)).toHaveAttribute("data-status", "stale", { timeout: 10_000 });
+	expect(readFileSync(path, "utf8")).toBe(unmergeableText("agent"));
 });

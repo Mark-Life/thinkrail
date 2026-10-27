@@ -57,6 +57,22 @@ test("undo of Reload restores the text but no conflict from before the reload", 
 	expect(handle.session.conflicts()).toEqual([]);
 });
 
+test("a save after undoing Reload never writes over the disk lines it had reloaded", async () => {
+	const lines = Array.from({ length: 3000 }, (_, index) => `line ${index}\n`);
+	const context = setup({ text: lines.join("") });
+	const { disk, registry, handle, summaries } = context;
+	type(handle, 0, "mine ");
+	const agent = lines.map((line, index) => (index % 2 ? line : `agent ${line}`)).join("");
+	diskChange(context, agent);
+	expect(summaries.at(-1)?.status).toBe("stale");
+	handle.reload();
+	handle.session.undo();
+	expect(handle.session.snapshot().startsWith("mine line 0\n")).toBe(true);
+	await registry.save(handle.key);
+	expect(disk.text(PATH)).toBe(agent);
+	expect(summaries.at(-1)).toMatchObject({ status: "stale", dirty: true });
+});
+
 test("a conflict the disk did not touch again survives, and undo still reopens it", () => {
 	const context = setup({ text: "one\ntwo\nthree\nfour\n" });
 	const { handle } = context;

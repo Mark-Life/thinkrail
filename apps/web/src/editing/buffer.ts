@@ -9,13 +9,16 @@ import type { ConflictChoice, LocalEditKind, TextChange } from "@thinkrail/resou
 import type { FileBufferError, FileBufferStatus, FileBufferSummary } from "../store";
 import type { Draft } from "./drafts";
 import {
+	clearTypedOn,
 	conflictsOf,
 	createDoc,
 	docText,
 	localChange,
+	reloadText,
 	remoteText,
 	resolveDocConflict,
-	userText,
+	type TypedOn,
+	typedOnOf,
 } from "./history";
 import { isEditableMeta } from "./keys";
 import { type MergeConflict, merge3 } from "./merge3";
@@ -119,8 +122,12 @@ export function resolveConflict(
 	return withDoc(state, resolveDocConflict(state.doc, id, choice));
 }
 
+function typedOn(state: BufferState): TypedOn {
+	return typedOnOf(state.doc) ?? state.base;
+}
+
 export function draftBaseHash(state: BufferState): string | null {
-	return state.issue?.kind === "conflict" ? state.issue.typedOn : state.base.hash;
+	return state.issue?.kind === "conflict" ? state.issue.typedOn : typedOn(state).hash;
 }
 
 function conflict(state: BufferState, disk: DiskText): BufferIssue {
@@ -128,7 +135,7 @@ function conflict(state: BufferState, disk: DiskText): BufferIssue {
 }
 
 function settledOn(state: BufferState, base: DiskText): BufferState {
-	return { ...state, base, unconfirmed: null, issue: null };
+	return { ...withDoc(state, clearTypedOn(state.doc)), base, unconfirmed: null, issue: null };
 }
 
 function clearedByRead(issue: BufferIssue | null, disk: DiskText): boolean {
@@ -137,8 +144,10 @@ function clearedByRead(issue: BufferIssue | null, disk: DiskText): boolean {
 }
 
 function mergeDisk(state: BufferState, disk: DiskText): BufferState {
-	const result = merge3({ base: state.base.text, mine: bufferText(state), theirs: disk.text });
-	if (result.kind === "tooLarge")
+	const { text: base } = typedOn(state);
+	const result =
+		base === null ? null : merge3({ base, mine: bufferText(state), theirs: disk.text });
+	if (result === null || result.kind === "tooLarge")
 		return { ...state, unconfirmed: null, issue: conflict(state, disk) };
 	const merged = remoteText(state.doc, {
 		text: result.text,
@@ -190,7 +199,7 @@ export function beginSave(state: BufferState): { state: BufferState; request: Sa
 	}
 	return {
 		state: { ...state, saving: { text: bufferText(state) }, issue: null },
-		request: { content: bufferText(state), expect: { hash: state.base.hash } },
+		request: { content: bufferText(state), expect: { hash: typedOn(state).hash } },
 	};
 }
 
@@ -224,8 +233,11 @@ export function failSave(state: BufferState, error: FileBufferError): BufferStat
 
 export function reloadFromDisk(state: BufferState): BufferState {
 	if (state.issue?.kind !== "conflict") return state;
-	const { disk } = state.issue;
-	return settledOn(withDoc(state, userText(state.doc, disk.text)), disk);
+	const { disk, typedOn: typedOnHash } = state.issue;
+	const previous =
+		typedOnOf(state.doc) ??
+		(typedOnHash === state.base.hash ? state.base : { text: null, hash: typedOnHash });
+	return settledOn(withDoc(state, reloadText(state.doc, disk.text, previous)), disk);
 }
 
 export function keepMine(state: BufferState): BufferState {

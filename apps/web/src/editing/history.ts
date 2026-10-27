@@ -128,6 +128,47 @@ function touches(conflict: EditConflict, range: MergeRange): boolean {
 	return conflict.from < range.to && range.from < conflict.to;
 }
 
+/** The disk version the text was typed on when it is older than the buffer's base; text null when unknown. */
+export interface TypedOn {
+	text: string | null;
+	hash: string | null;
+}
+
+const setTypedOn = StateEffect.define<TypedOn | null>();
+const reloadedFrom = StateEffect.define<TypedOn>();
+
+const typedOnField = StateField.define<TypedOn | null>({
+	create: () => null,
+	update(value, tr) {
+		let next = value;
+		for (const effect of tr.effects) {
+			if (effect.is(setTypedOn)) next = effect.value;
+			else if (effect.is(reloadedFrom)) next = null;
+		}
+		return next;
+	},
+});
+
+const invertTypedOn = invertedEffects.of((tr) =>
+	tr.effects.flatMap((effect): StateEffect<unknown>[] => {
+		if (effect.is(reloadedFrom)) return [setTypedOn.of(effect.value)];
+		if (effect.is(setTypedOn)) return [setTypedOn.of(tr.startState.field(typedOnField))];
+		return [];
+	}),
+);
+
+export function typedOnOf(doc: EditorState): TypedOn | null {
+	return doc.field(typedOnField);
+}
+
+export function clearTypedOn(doc: EditorState): EditorState {
+	if (doc.field(typedOnField) === null) return doc;
+	return step(doc, {
+		effects: setTypedOn.of(null),
+		annotations: [Transaction.addToHistory.of(false), Transaction.remote.of(true)],
+	});
+}
+
 const NO_CONFLICTS: ConflictState = { open: [], closed: [] };
 const CLOSED_LIMIT = 120;
 
@@ -221,6 +262,8 @@ export function createDoc(text: string): EditorState {
 			historyField,
 			conflictField,
 			invertConflicts,
+			typedOnField,
+			invertTypedOn,
 			closeMatched,
 			EditorState.allowMultipleSelections.of(true),
 		],
@@ -340,12 +383,13 @@ export function remoteText(
 	});
 }
 
-export function userText(doc: EditorState, text: string): EditorState {
+/** Reload: replace the text as one undoable step; undoing it marks the text as typed on `previous`. */
+export function reloadText(doc: EditorState, text: string, previous: TypedOn): EditorState {
 	const current = docText(doc);
-	if (current === text && !hasConflictState(doc)) return doc;
+	if (current === text && !hasConflictState(doc)) return clearTypedOn(doc);
 	return step(doc, {
 		changes: textChanges(current, text),
-		effects: clearConflicts.of(null),
+		effects: [clearConflicts.of(null), reloadedFrom.of(previous)],
 		annotations: [Transaction.userEvent.of("input.replace"), isolateHistory.of("full")],
 	});
 }

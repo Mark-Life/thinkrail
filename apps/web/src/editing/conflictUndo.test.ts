@@ -6,7 +6,10 @@ import {
 	bufferStatus,
 	bufferText,
 	createBuffer,
+	draftBaseHash,
+	finishSave,
 	localEdit,
+	reloadFromDisk,
 	resolveConflict,
 	withDoc,
 } from "./buffer";
@@ -121,4 +124,57 @@ test("a disk text equal to the buffer is a no-op after a conflict was resolved",
 	state = resolveConflict(state, firstId(state), "mine");
 	expect(remoteText(state.doc, { text: bufferText(state) })).toBe(state.doc);
 	expect(remoteText(state.doc, { text: bufferText(state), clear: true })).not.toBe(state.doc);
+});
+
+const reloaded = (mine: string, theirs: string) => {
+	let state = edit(createBuffer(disk("a\nb\nc\n")), mine);
+	state = { ...state, issue: { kind: "conflict", disk: disk(theirs), typedOn: state.base.hash } };
+	return reloadFromDisk(state);
+};
+
+test("a save after undoing Reload merges with the disk instead of overwriting it", () => {
+	let state = undo(reloaded("a\nb\nc\nmine\n", "theirs\nb\nc\n"));
+	expect(bufferText(state)).toBe("a\nb\nc\nmine\n");
+	expect(draftBaseHash(state)).toBe("h:a\nb\nc\n");
+	const { state: saving, request } = beginSave(state);
+	expect(request?.expect.hash).toBe("h:a\nb\nc\n");
+	const current = {
+		content: "theirs\nb\nc\n",
+		meta: { hash: "h:theirs", byteLength: 12, text: true },
+	};
+	state = finishSave(saving, { status: "stale", current });
+	expect(bufferText(state)).toBe("theirs\nb\nc\nmine\n");
+	expect(state.base.hash).toBe("h:theirs");
+	expect(beginSave(state).request?.expect.hash).toBe("h:theirs");
+});
+
+test("undoing Reload over a line the disk also changed opens a conflict on save", () => {
+	const { state: saving } = beginSave(undo(reloaded("A\nb\nc\n", "theirs\nb\nc\n")));
+	const current = {
+		content: "theirs\nb\nc\n",
+		meta: { hash: "h:theirs", byteLength: 12, text: true },
+	};
+	const state = finishSave(saving, { status: "stale", current });
+	expect(bufferStatus(state)).toBe("conflict");
+	expect(conflictsOf(state.doc)).toMatchObject([{ theirs: "theirs\n" }]);
+});
+
+test("redo of Reload puts the text back on the disk version", () => {
+	const state = redo(undo(reloaded("a\nb\nc\nmine\n", "theirs\nb\nc\n")));
+	expect(bufferText(state)).toBe("theirs\nb\nc\n");
+	expect(bufferStatus(state)).toBe("clean");
+	expect(draftBaseHash(state)).toBe("h:theirs\nb\nc\n");
+});
+
+test("undoing Reload of a draft typed on an unknown version reopens the banner on save", () => {
+	let state = edit(createBuffer(disk("theirs\n")), "mine\n");
+	state = { ...state, issue: { kind: "conflict", disk: state.base, typedOn: "h:old" } };
+	state = undo(reloadFromDisk(state));
+	expect(bufferText(state)).toBe("mine\n");
+	const { state: saving, request } = beginSave(state);
+	expect(request?.expect.hash).toBe("h:old");
+	const current = { content: "theirs\n", meta: { hash: "h:theirs\n", byteLength: 7, text: true } };
+	state = finishSave(saving, { status: "stale", current });
+	expect(bufferStatus(state)).toBe("stale");
+	expect(bufferText(state)).toBe("mine\n");
 });

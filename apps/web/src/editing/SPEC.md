@@ -154,6 +154,12 @@ only merges has nothing to undo. An undo or redo step that would change neither 
 conflicts (a resolve whose conflict a later disk change replaced) is skipped, and one left on top after a
 visible step is taken with it, so every Cmd/Ctrl+Z shows a change. A cursor move updates the selection in `doc` without publishing.
 
+- **Undo of Reload.** Undoing a Reload brings back text typed on the disk version before it. The doc
+  remembers that version (`typedOn`, text unknown for a draft typed elsewhere) through the history, so
+  redo forgets it again. While it is set, a save sends `expect` with its hash, the host answers `stale`,
+  and the newer disk merges 3-way from that version: disk lines stay, a same-line clash becomes a
+  conflict, and an unknown base reopens the banner. Drafts store its hash. Any new base clears it.
+
 ## Save pipeline
 
 `save()` is the single entry point of the pipeline.
@@ -165,7 +171,8 @@ visible step is taken with it, so every Cmd/Ctrl+Z shows a change. A cursor move
    always saves; it re-creates the file with `expect.hash: null`, as sent.
 2. Content over `FILE_WRITE_MAX_BYTES` (UTF-8) is refused before sending (issue `tooLarge`); the host
    closes the socket on an oversized frame.
-3. `fs.writeFile {workspaceId, path, content: text, expect: {hash: base.hash}}`.
+3. `fs.writeFile {workspaceId, path, content: text, expect: {hash: base.hash}}` (`typedOn`'s hash after an
+   undo of Reload).
 4. `written`: `base` becomes the sent text and the new hash; edits typed meanwhile stay dirty.
    `stale`: when the current disk version is no longer editable text the buffer gets issue
    `notEditable` and nothing merges. When it equals the buffer text it is adopted. Otherwise it merges
