@@ -1,7 +1,8 @@
 import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, type EditorState, type TransactionSpec } from "@codemirror/state";
 
-const LIST_ITEM = /^(\s*)(?:([-*+])|(\d+)([.)]))(\s+)(\[[ xX]\]\s+)?/;
+const LIST_ITEM = /^((?:[ \t]*>[ \t]?)*)([ \t]*)(?:([-*+])|(\d+)([.)]))([ \t]+)(\[[ xX]\][ \t]+)?/;
+const INDENT = /^[ \t]*/;
 
 export function continueList(state: EditorState): TransactionSpec | null {
 	const { main } = state.selection;
@@ -14,23 +15,39 @@ export function continueList(state: EditorState): TransactionSpec | null {
 	}
 	const match = LIST_ITEM.exec(line.text);
 	if (!match) return null;
-	const markAt = line.from + (match[1]?.length ?? 0);
+	const [prefix, quote = "", indent = "", bullet, number, delimiter = ".", space = " ", task] =
+		match;
+	const markAt = line.from + quote.length + indent.length;
 	if (tree.resolveInner(markAt, 1).name !== "ListMark") return null;
-	const prefix = match[0];
 	if (main.from - line.from < prefix.length) return null;
 	if (line.text.slice(prefix.length).trim() === "") {
 		return {
-			changes: { from: line.from, to: line.to, insert: "" },
-			selection: EditorSelection.cursor(line.from),
+			changes: { from: line.from, to: line.to, insert: quote },
+			selection: EditorSelection.cursor(line.from + quote.length),
 			userEvent: "delete",
 		};
 	}
-	const [, indent = "", bullet, number, delimiter = ".", space = " ", task] = match;
 	const marker = bullet ?? `${Number(number) + 1}${delimiter}`;
-	const insert = `\n${indent}${marker}${space}${task ? "[ ] " : ""}`;
+	const insert = `\n${quote}${indent}${marker}${space}${task ? "[ ] " : ""}`;
 	return {
 		changes: { from: main.from, to: main.to, insert },
 		selection: EditorSelection.cursor(main.from + insert.length),
+		scrollIntoView: true,
+		userEvent: "input",
+	};
+}
+
+export function newlineKeepingIndent(state: EditorState): TransactionSpec {
+	return {
+		...state.changeByRange((range) => {
+			const line = state.doc.lineAt(range.from);
+			const indent = (INDENT.exec(line.text)?.[0] ?? "").slice(0, range.from - line.from);
+			const insert = `\n${indent}`;
+			return {
+				changes: { from: range.from, to: range.to, insert },
+				range: EditorSelection.cursor(range.from + insert.length),
+			};
+		}),
 		scrollIntoView: true,
 		userEvent: "input",
 	};

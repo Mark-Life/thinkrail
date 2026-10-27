@@ -635,8 +635,9 @@ content's own height.
     margins between lines break its height map. The measure is the reading view's 78ch.
   - **Access.** The content is a labelled multi-line textbox; Tab leaves the editor (no tab binding);
     heading lines carry `role="heading"` and their level. The focused editor rings its pane. Widget controls stay keyboard reachable.
-    Reduced motion drops the presence fades. Enter on a list item starts the next one (an empty item
-    ends the list), outside code.
+    Reduced motion drops the presence fades. Enter on a list item starts the next one, inside a quote
+    too (an empty item ends the list), outside code. Any other Enter keeps the line's leading
+    whitespace, as Monaco does, so a fence or paragraph inside a list item stays in it.
   - **Cost.** Entry chunk unchanged (1,663 kB, 527 kB gzip). `MarkdownPreview` grows from 13.1 to
     15.8 kB (5.5 to 6.6 kB gzip). The editor chunk is 58.6 kB (20.9 kB gzip) plus one CodeMirror chunk
     of 270.6 kB (87.6 kB gzip: state, commands, view, language) that it shares with the editing

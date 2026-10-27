@@ -18,7 +18,7 @@ import {
 } from "./livePreview/decorations";
 import { markdownLanguage } from "./livePreview/language";
 import { linkHrefAt, linkTarget } from "./livePreview/links";
-import { continueList } from "./livePreview/lists";
+import { continueList, newlineKeepingIndent } from "./livePreview/lists";
 import { createPortalHost, type PortalEntry } from "./livePreview/portals";
 import { livePresence, livePresenceSurface } from "./livePreview/presence";
 import { MarkdownDocument } from "./MarkdownPreview";
@@ -45,6 +45,12 @@ function threadAnchors(review: ResourceViewProps["review"]): ThreadAnchor[] {
 		const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
 		return range?.kind === "lineRange" ? [{ id: thread.id, line: range.endLine }] : [];
 	});
+}
+
+function enter(view: EditorView) {
+	if (view.state.readOnly) return false;
+	view.dispatch(continueList(view.state) ?? newlineKeepingIndent(view.state));
+	return true;
 }
 
 function LivePortal({
@@ -156,14 +162,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 									return true;
 								},
 							},
-							{
-								key: "Enter",
-								run: (target) => {
-									const spec = continueList(target.state);
-									if (spec) target.dispatch(spec);
-									return spec !== null;
-								},
-							},
+							{ key: "Enter", run: enter, shift: enter },
 						]),
 					),
 					keymap.of(standardKeymap),
