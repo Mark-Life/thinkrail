@@ -1,7 +1,8 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
+import { openFile, setFileSaveMode, typeAtLineEnd } from "./fixtures/fileEdit";
 import { commitFile } from "./fixtures/git";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -177,4 +178,113 @@ test("churn canary: a write storm coalesces to a few frames and the host stays r
 	expect(stormFrames).toBeLessThanOrEqual(8);
 	expect(healthMs).toBeGreaterThanOrEqual(0);
 	expect(healthMs).toBeLessThan(1000);
+});
+
+interface SocketLog {
+	fsChanged: number[];
+	writes: { id: string | null; sent: number; answered?: number }[];
+	holdNextWriteMs: number;
+}
+
+function frameId(raw: string) {
+	try {
+		const frame: unknown = JSON.parse(raw);
+		return frame !== null && typeof frame === "object" && "id" in frame ? String(frame.id) : null;
+	} catch {
+		return null;
+	}
+}
+
+async function logFileSocket(page: Page) {
+	const log: SocketLog = { fsChanged: [], writes: [], holdNextWriteMs: 0 };
+	await page.routeWebSocket(/\/ws(\?|$)/, (browserSocket) => {
+		const serverSocket = browserSocket.connectToServer();
+		const held = new Map<string | null, number>();
+		browserSocket.onMessage((message) => {
+			const raw = message.toString();
+			if (raw.includes('"method":"fs.writeFile"')) {
+				const id = frameId(raw);
+				log.writes.push({ id, sent: Date.now() });
+				if (log.holdNextWriteMs > 0) held.set(id, log.holdNextWriteMs);
+				log.holdNextWriteMs = 0;
+			}
+			serverSocket.send(message);
+		});
+		serverSocket.onMessage((message) => {
+			const raw = message.toString();
+			if (raw.includes('"channel":"workspace.fsChanged"')) log.fsChanged.push(Date.now());
+			const id = frameId(raw);
+			const write = id === null ? undefined : log.writes.find((candidate) => candidate.id === id);
+			if (!write) {
+				browserSocket.send(message);
+				return;
+			}
+			const answer = () => {
+				write.answered = Date.now();
+				browserSocket.send(message);
+			};
+			const holdMs = held.get(write.id);
+			if (holdMs === undefined) answer();
+			else setTimeout(answer, holdMs);
+		});
+	});
+	return log;
+}
+
+async function typeLogged(page: Page, text: string, keys: number[]) {
+	for (const key of text) {
+		keys.push(Date.now());
+		await page.keyboard.type(key);
+		await sleep(120);
+	}
+}
+
+test("churn canary: typing with autosave on stays within the frame budget", async ({
+	page,
+	baseURL,
+}) => {
+	await setFileSaveMode(baseURL, "auto");
+	const log = await logFileSocket(page);
+
+	const path = await openFile(page, "typing.ts", "export const typed = [\n];\n");
+	await sleep(1200);
+	const framesBefore = log.fsChanged.length;
+
+	const bursts = 3;
+	const keys: number[] = [];
+	for (let burst = 0; burst < bursts; burst++) {
+		await typeAtLineEnd(page, 1, "");
+		await typeLogged(page, ` ${burst}, 1, 2, 3, 4,`, keys);
+		await sleep(1600);
+	}
+
+	await page.evaluate(() => {
+		new MutationObserver(() => {
+			if (document.querySelector('[data-testid="file-dirty-dot"]'))
+				document.documentElement.dataset.pausedDotSeen = "true";
+		}).observe(document.body, { childList: true, subtree: true, attributes: true });
+	});
+	log.holdNextWriteMs = 2500;
+	await typeLogged(page, " 3,", keys);
+	await expect.poll(() => log.writes.length).toBe(bursts + 1);
+	await typeLogged(page, " 4,", keys);
+	await expect
+		.poll(() => readFileSync(path, "utf8"), { timeout: 10_000 })
+		.toBe("export const typed = [ 0, 1, 2, 3, 4, 1, 1, 2, 3, 4, 2, 1, 2, 3, 4, 3, 4,\n];\n");
+	await sleep(1500);
+
+	const overlapping = keys.filter((key) =>
+		log.writes.some(
+			(write) => write.sent < key && key < (write.answered ?? Number.POSITIVE_INFINITY),
+		),
+	);
+	const typingFrames = log.fsChanged.length - framesBefore;
+	console.log(
+		`churn canary (typing): ${typingFrames} fsChanged frames, ${log.writes.length} writes, ${overlapping.length} keys during a write`,
+	);
+	expect(overlapping.length).toBeGreaterThan(0);
+	expect(log.writes).toHaveLength(bursts + 2);
+	expect(typingFrames).toBeGreaterThanOrEqual(1);
+	expect(typingFrames).toBeLessThanOrEqual(8);
+	await expect(page.locator("html")).not.toHaveAttribute("data-paused-dot-seen", "true");
 });
