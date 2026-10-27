@@ -259,7 +259,8 @@ edits with their `LocalEditKind` (type, delete, paste, composition start and ste
 can group undo steps: `type` is only inserts without a line break, each one character when it replaces
 text, so Enter, a copied line or a drag-move is `other`; `paste` is the one change a paste event
 causes, `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
-other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo). The host owns undo:
+other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo, plus `disk {hash}` when
+the change is a disk version the host adopted or merged, so a view can tell who wrote it). The host owns undo:
 `undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
 holds remote text back. `conflicts()` lists open same-line conflicts (`EditConflict`: offsets of the
 user's lines and the disk lines, `theirs`), and `resolveConflict(id, "mine" | "theirs" | "both")` picks

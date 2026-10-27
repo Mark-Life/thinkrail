@@ -26,7 +26,9 @@ test("a disk change is diffed once, and an attached editor reuses that diff", as
 	disk.put(PATH, "three\n");
 	handle.adoptRead(disk.content(PATH), handle.readToken());
 	expect(diffs).toBe(2);
-	expect(updates).toEqual([{ changes: [{ from: 1, to: 3, insert: "hree" }] }]);
+	expect(updates).toEqual([
+		{ changes: [{ from: 1, to: 3, insert: "hree" }], disk: { hash: "rev-3" } },
+	]);
 });
 
 test("a merge into a dirty buffer reuses the merge's own changes instead of a second diff", async () => {
@@ -39,4 +41,17 @@ test("a merge into a dirty buffer reuses the merge's own changes instead of a se
 	expect(diffs).toBe(before);
 	expect(handle.session.snapshot()).toBe("mine one\nTWO\n");
 	expect(received.at(-1)).toEqual([{ from: 9, to: 12, insert: "TWO" }]);
+});
+
+test("only changes that came from disk carry the disk hash", async () => {
+	const { PATH, setup, type } = await import("./registryFixtures");
+	const { disk, handle } = setup({ text: "one\ntwo\n" });
+	const updates: { disk?: { hash: string } }[] = [];
+	handle.session.subscribe((update) => updates.push(update));
+	type(handle, 0, "mine ");
+	disk.put(PATH, "one\nTWO\n");
+	const merged = disk.content(PATH);
+	handle.adoptRead(merged, handle.readToken());
+	handle.session.undo();
+	expect(updates.map((update) => update.disk)).toEqual([{ hash: merged.meta.hash }, undefined]);
 });

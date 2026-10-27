@@ -85,6 +85,7 @@ export type ConflictChoice = "mine" | "theirs" | "both";
 export interface EditUpdate {
 	changes: readonly TextChange[];
 	selection?: readonly TextRange[];
+	disk?: { hash: string };
 }
 
 export interface ResourceEditSession {

@@ -99,7 +99,7 @@ interface Entry {
 	handle: FileBufferHandle;
 }
 
-type CommitOrigin = "view" | "history" | "other";
+type CommitOrigin = "view" | "history" | "disk" | "other";
 
 function saveError(error: unknown): FileBufferError {
 	const code = wsErrorCode(error);
@@ -174,8 +174,13 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (origin === "view" || entry.views.size === 0) return;
 		if (!textChanged && conflictsOf(next.doc) === conflictsOf(previous.doc)) return;
 		const changes = textChanged ? docChanges(previous.doc, next.doc) : [];
+		const hash = next.base.hash;
 		const update: EditUpdate =
-			origin === "history" ? { changes, selection: docSelection(next.doc) } : { changes };
+			origin === "history"
+				? { changes, selection: docSelection(next.doc) }
+				: origin === "disk" && textChanged && hash !== null
+					? { changes, disk: { hash } }
+					: { changes };
 		for (const view of entry.views) view(update);
 	};
 
@@ -277,7 +282,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 		if (!lands(entry, token)) return;
 		const disk = editorDisk(file);
 		const next = disk ? adoptDisk(entry.state, disk) : markError(entry.state, "notEditable");
-		commit(entry, next, "other", pausedByDisk(entry.state) && mayResumeAutosave(next));
+		commit(entry, next, "disk", pausedByDisk(entry.state) && mayResumeAutosave(next));
 	};
 
 	const runSave = async (entry: Entry, retried = false): Promise<void> => {
@@ -309,7 +314,7 @@ export function createBufferRegistry(deps: RegistryDeps) {
 				next.issue === null &&
 				conflictsOf(next.doc).length === 0 &&
 				isDirty(next);
-			commit(entry, next, "other");
+			commit(entry, next, result.status === "stale" ? "disk" : "other");
 		} catch (error) {
 			const reason = deps.isConnected() ? saveError(error) : "offline";
 			commit(entry, failSave(entry.state, reason), "other");
