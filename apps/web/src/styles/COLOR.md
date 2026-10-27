@@ -130,7 +130,7 @@ workspace, and an outside writer is `text-subtle`. Washes use the matching `-sub
 (`control-bg-hovered` for the outside writer, since `text-subtle` has no tint). `index.css` sets them
 once as `--presence-tone` / `--presence-wash` on `presence-tone-*` for Monaco's decorations, and
 `panels/FileWriters.tsx` maps the same tones to utilities. Flags and chips put the tone on a border and
-keep `text-default` on `container-elevated-bg`, so a warning tone never carries text. Avatars draw the tone as a solid ring; an inferred writer swaps the fill to `control-bg-hovered` and the initial to `text-muted`. A fourth agent
+keep `text-default` on `container-elevated-bg`, so a warning tone never carries text. Avatars carry no border: the icon takes the tone and the fill its wash, so two agents differ the way their gutter bars do; an inferred writer keeps the tone icon on a `control-bg-hovered` fill. A fourth agent
 reuses a tone; the label carries identity.
 
 ## Adding or changing a colour

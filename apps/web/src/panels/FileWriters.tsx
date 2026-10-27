@@ -1,3 +1,4 @@
+import { RiChat2Line, RiLoginBoxLine, RiUserLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import type { PresenceTone, SurfacePresence } from "@thinkrail/resource-renderers";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
@@ -15,7 +16,7 @@ import {
 	selectKnownChatTitles,
 	useAppStore,
 } from "../store";
-import { writerInitial, writerLabel } from "./fileWriterLabels";
+import { writerLabel } from "./fileWriterLabels";
 
 const TONE_FILL: Record<PresenceTone, string> = {
 	user: "bg-primary",
@@ -25,19 +26,32 @@ const TONE_FILL: Record<PresenceTone, string> = {
 	external: "bg-text-subtle",
 };
 
-const TONE_RING: Record<PresenceTone, string> = {
-	user: "border-primary",
-	agent1: "border-feedback-info",
-	agent2: "border-feedback-success",
-	agent3: "border-feedback-warning",
-	external: "border-text-subtle",
+const TONE_ICON: Record<PresenceTone, string> = {
+	user: "text-primary",
+	agent1: "text-feedback-info",
+	agent2: "text-feedback-success",
+	agent3: "text-feedback-warning",
+	external: "text-text-subtle",
+};
+
+const TONE_WASH: Record<PresenceTone, string> = {
+	user: "bg-primary-subtle",
+	agent1: "bg-feedback-info-subtle",
+	agent2: "bg-feedback-success-subtle",
+	agent3: "bg-feedback-warning-subtle",
+	external: "bg-control-bg-hovered",
+};
+
+const KIND_ICON: Record<ActivityAuthor["kind"], typeof RiUserLine> = {
+	agent: RiChat2Line,
+	user: RiUserLine,
+	external: RiLoginBoxLine,
 };
 
 const MAX_AVATARS = 3;
 
 interface LabeledWriter extends FileWriter {
 	label: string;
-	initial: string;
 }
 
 function chatTitle(state: Parameters<typeof selectKnownChatTitles>[0], author: ActivityAuthor) {
@@ -57,7 +71,6 @@ function useLabeledWriters(workspaceId: string, path: string): readonly LabeledW
 			writers.map((writer, index) => ({
 				...writer,
 				label: writerLabel(t, writer.author, titles[index] ?? ""),
-				initial: writerInitial(t, writer.author, titles[index] ?? ""),
 			})),
 		[writers, titles, t],
 	);
@@ -80,6 +93,7 @@ export function useFilePresence(workspaceId: string, path: string): SurfacePrese
 }
 
 function WriterAvatar({ writer }: { writer: LabeledWriter }) {
+	const Icon = KIND_ICON[writer.author.kind];
 	return (
 		<span
 			data-testid="file-writer-avatar"
@@ -89,15 +103,12 @@ function WriterAvatar({ writer }: { writer: LabeledWriter }) {
 			title={writer.label}
 			aria-hidden
 			className={cn(
-				"ml-2 inline-flex size-18 shrink-0 items-center justify-center rounded-full border-2 first:ml-0 forced-colors:border-[CanvasText]",
-				"tr-text-caption leading-none",
-				TONE_RING[writer.tone],
-				writer.inferred
-					? "bg-control-bg-hovered text-text-muted"
-					: "bg-container-elevated-bg text-text-default",
+				"ml-2 inline-flex size-18 shrink-0 items-center justify-center rounded-full first:ml-0",
+				TONE_ICON[writer.tone],
+				writer.inferred ? "bg-control-bg-hovered" : TONE_WASH[writer.tone],
 			)}
 		>
-			{writer.initial}
+			<Icon className="size-12" />
 		</span>
 	);
 }

@@ -7,11 +7,3 @@ export function writerLabel(t: Translator, author: ActivityAuthor, title: string
 	const name = title ? t("presence.agentNamed", { name: title }) : t("presence.agent");
 	return author.via === "script" ? t("presence.viaScript", { name }) : name;
 }
-
-export function writerInitial(t: Translator, author: ActivityAuthor, title: string): string {
-	const source =
-		author.kind === "agent"
-			? title || t("presence.agent")
-			: t(author.kind === "external" ? "presence.external" : "presence.you");
-	return Array.from(source.trim())[0]?.toUpperCase() ?? "";
-}
