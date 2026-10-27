@@ -58,8 +58,26 @@ test("the pane chip is a focusable button that names every writer", () => {
 	expect(html).toMatch(/<button type="button" data-testid="file-writers"/);
 	expect(html).toContain(">+2<");
 	expect(html).toContain("5 writers");
-	expect(html).toContain('aria-label="5 writers: changed in the last minute by Agent');
+	expect(html).toContain(
+		'aria-label="5 writers: changed in the last minute by Agent · s5, Agent · s4',
+	);
 	expect(html).toContain('aria-haspopup="dialog"');
+});
+
+test("agents read by chat title when known and by session id suffix otherwise", () => {
+	seedWriters(2);
+	const initial = useAppStore.getInitialState();
+	const closed = initial.closedChatsByWorkspace;
+	initial.closedChatsByWorkspace = { ws: [{ sessionId: "s2", title: "Fix auth", closedAt: 0 }] };
+	const undo = restore;
+	restore = () => {
+		undo?.();
+		initial.closedChatsByWorkspace = closed;
+	};
+	const html = render(<FileWriterAvatars workspaceId="ws" path="a.ts" />);
+	expect(html).toContain('title="Fix auth"');
+	expect(html).toContain('title="Agent · s1"');
+	expect(html).toContain('aria-label="Changed in the last minute by Agent Fix auth, Agent · s1"');
 });
 
 test("three writers or fewer show no overflow count", () => {

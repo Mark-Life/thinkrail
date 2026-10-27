@@ -33,11 +33,24 @@ const lineOffset = (line: number) =>
 		.slice(0, line - 1)
 		.join("\n").length + 1;
 
-const AGENT: PresenceWriter = { id: "agent:s1", label: "Agent", tone: "agent1", inferred: false };
-const OTHER: PresenceWriter = { id: "agent:s2", label: "Other", tone: "agent2", inferred: false };
+const AGENT: PresenceWriter = {
+	id: "agent:s1",
+	label: "Agent",
+	spoken: "Agent",
+	tone: "agent1",
+	inferred: false,
+};
+const OTHER: PresenceWriter = {
+	id: "agent:s2",
+	label: "Other",
+	spoken: "Other",
+	tone: "agent2",
+	inferred: false,
+};
 const ELSEWHERE: PresenceWriter = {
 	id: "user:elsewhere",
 	label: "You, in another window",
+	spoken: "You, in another window",
 	tone: "user",
 	inferred: false,
 };
@@ -84,9 +97,9 @@ const attach = () =>
 		text: () => ({
 			hover: (writer) => `Changed by ${writer.label}`,
 			lines: (writer, spans) =>
-				`${writer.label} changed ${spans.map((span) => `${span.startLine}-${span.endLine}`).join(", ")}`,
-			places: (writer, count) => `${writer.label} changed ${count} places`,
-			file: (writer) => `${writer.label} rewrote this file`,
+				`${writer.spoken} changed ${spans.map((span) => `${span.startLine}-${span.endLine}`).join(", ")}`,
+			places: (writer, count) => `${writer.spoken} changed ${count} places`,
+			file: (name) => `${name} rewrote this file`,
 		}),
 		announce: (message) => announced.push(message),
 	});
@@ -171,7 +184,7 @@ describe("attachPresence", () => {
 	});
 
 	test("a script write by the same agent keeps the agent's tool-edited lines solid", () => {
-		const script: PresenceWriter = { ...AGENT, label: "Agent via script", inferred: true };
+		const script: PresenceWriter = { ...AGENT, inferred: true };
 		const marks = attach();
 		marks.setLatest({ hash: "tool", writer: AGENT });
 		marks.land(editLine(3, "tool"));
@@ -249,6 +262,26 @@ describe("attachPresence", () => {
 		expect(flags).toHaveLength(0);
 		marks.setLatest({ hash: "h3", writer: AGENT });
 		expect(bars()).toEqual(["presence-bar presence-tone-agent1"]);
+		marks.dispose();
+	});
+
+	test("flags and chips show the label while announcements use the spoken name", () => {
+		const titled: PresenceWriter = { ...AGENT, label: "Fix auth", spoken: "Agent Fix auth" };
+		const marks = attach();
+		marks.setLatest({ hash: "h1", writer: titled });
+		marks.land(editLine(4, "h1"));
+		const flag = flags.at(-1) as { getDomNode(): { children: { children: FakeNode[] }[] } };
+		expect(flag.getDomNode().children[0]?.children[1]?.textContent).toBe("Fix auth");
+		expect(announced).toEqual(["Agent Fix auth changed 4-4"]);
+		marks.setLatest({ hash: "h2", writer: titled });
+		marks.land({
+			hash: "h2",
+			before: TEXT,
+			changes: [{ from: 0, to: TEXT.length, insert: TEXT.toUpperCase() }],
+		});
+		const chip = chips.at(-1) as { getDomNode(): FakeNode };
+		expect(chip.getDomNode().textContent).toBe("Fix auth rewrote this file");
+		expect(announced.at(-1)).toBe("Agent Fix auth rewrote this file");
 		marks.dispose();
 	});
 

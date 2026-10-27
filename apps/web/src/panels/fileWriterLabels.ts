@@ -1,9 +1,20 @@
 import type { Translator } from "@thinkrail/locales/react";
 import type { ActivityAuthor } from "../store";
 
-export function writerLabel(t: Translator, author: ActivityAuthor, title: string): string {
-	if (author.kind === "user") return author.mine ? t("presence.you") : t("presence.youElsewhere");
-	if (author.kind === "external") return t("presence.external");
-	const name = title ? t("presence.agentNamed", { name: title }) : t("presence.agent");
-	return author.via === "script" ? t("presence.viaScript", { name }) : name;
+const SESSION_SUFFIX_LENGTH = 4;
+
+export function writerLabels(t: Translator, author: ActivityAuthor, title: string) {
+	if (author.kind === "user") {
+		const label = author.mine ? t("presence.you") : t("presence.youElsewhere");
+		return { label, spoken: label };
+	}
+	if (author.kind === "external") {
+		const label = t("presence.external");
+		return { label, spoken: label };
+	}
+	if (title) return { label: title, spoken: t("presence.agentSpoken", { name: title }) };
+	const label = t("presence.agentUntitled", {
+		id: author.sessionId.slice(-SESSION_SUFFIX_LENGTH),
+	});
+	return { label, spoken: label };
 }

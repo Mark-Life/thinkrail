@@ -17,6 +17,7 @@ const AGENT: FsChangeAuthor = {
 	via: "tool",
 	toolName: "edit",
 };
+const AGENT_NAME = "Agent · gent";
 
 const withLine = (text: string, line: number, next: string) =>
 	text
@@ -78,11 +79,11 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 	await expect(page.getByTestId("file-writers")).toBeVisible();
 	expect(await editorTop()).toBe(topBefore);
 	await expect(marks(page, ".presence-bar.presence-tone-agent1")).toHaveCount(1);
-	await expect(marks(page, '[data-presence="flag"]')).toHaveText(["Agent"]);
+	await expect(marks(page, '[data-presence="flag"]')).toHaveText([AGENT_NAME]);
 	await expect(marks(page, ".presence-bar.presence-inferred")).toHaveCount(0);
 	await expect(marks(page, ".presence-bar.presence-tone-agent1")).toHaveAttribute(
 		"title",
-		"Changed by Agent",
+		`Changed by ${AGENT_NAME}`,
 	);
 
 	authors.agentWrites(null);
@@ -103,7 +104,7 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 	await expect(avatars.last()).toHaveAttribute("data-writer", `agent:${AGENT.sessionId}`);
 	await expect(fileTab(page, NAME).getByTestId("file-writer-avatars")).toHaveAttribute(
 		"aria-label",
-		"Changed in the last minute by External, Agent",
+		`Changed in the last minute by External, ${AGENT_NAME}`,
 	);
 
 	const dot = page
@@ -114,12 +115,14 @@ test("an agent write and an outside write show distinct marks, avatars and a tre
 	await expect(dot).toHaveAttribute("aria-label", "Changed by External in the last minute");
 	await expect(page.getByTestId("file-writers")).toContainText("2 writers");
 	await expect(
-		page.getByRole("button", { name: "2 writers: changed in the last minute by External, Agent" }),
+		page.getByRole("button", {
+			name: `2 writers: changed in the last minute by External, ${AGENT_NAME}`,
+		}),
 	).toBeVisible();
 	await page.getByTestId("file-writers").click();
 	await expect(page.getByTestId("file-writers-list").getByRole("listitem")).toHaveText([
 		"External",
-		"Agent",
+		AGENT_NAME,
 	]);
 	await page.keyboard.press("Escape");
 	await expect(page.getByRole("status").filter({ hasText: "External changed line 9" })).toHaveCount(
@@ -177,7 +180,7 @@ test("a touch tap on the writers chip lists the writers", async ({ page }) => {
 		await chip.dispatchEvent(type, { pointerType: "touch", isPrimary: true, button: 0 });
 	}
 	await chip.dispatchEvent("click");
-	await expect(page.getByTestId("file-writers-list")).toContainText("Agent");
+	await expect(page.getByTestId("file-writers-list")).toContainText(AGENT_NAME);
 });
 
 test("scrolled to the end, the writers chip leaves the last line clear", async ({ page }) => {

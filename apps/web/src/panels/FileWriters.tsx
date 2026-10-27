@@ -16,7 +16,7 @@ import {
 	selectKnownChatTitles,
 	useAppStore,
 } from "../store";
-import { writerLabel } from "./fileWriterLabels";
+import { writerLabels } from "./fileWriterLabels";
 
 const TONE_FILL: Record<PresenceTone, string> = {
 	user: "bg-primary",
@@ -50,9 +50,7 @@ const KIND_ICON: Record<ActivityAuthor["kind"], typeof RiUserLine> = {
 
 const MAX_AVATARS = 3;
 
-interface LabeledWriter extends FileWriter {
-	label: string;
-}
+interface LabeledWriter extends FileWriter, ReturnType<typeof writerLabels> {}
 
 function chatTitle(state: Parameters<typeof selectKnownChatTitles>[0], author: ActivityAuthor) {
 	return author.kind === "agent" ? (selectKnownChatTitles(state).get(author.sessionId) ?? "") : "";
@@ -70,7 +68,7 @@ function useLabeledWriters(workspaceId: string, path: string): readonly LabeledW
 		() =>
 			writers.map((writer, index) => ({
 				...writer,
-				label: writerLabel(t, writer.author, titles[index] ?? ""),
+				...writerLabels(t, writer.author, titles[index] ?? ""),
 			})),
 		[writers, titles, t],
 	);
@@ -87,7 +85,7 @@ export function useFilePresence(workspaceId: string, path: string): SurfacePrese
 		if (!writer || hash == null) return {};
 		const { id, tone, inferred, author } = writer;
 		return {
-			latest: { hash, writer: { id, tone, inferred, label: writerLabel(t, author, title) } },
+			latest: { hash, writer: { id, tone, inferred, ...writerLabels(t, author, title) } },
 		};
 	}, [latest, agents, title, t]);
 }
@@ -137,7 +135,7 @@ export function FileWriterAvatars({ workspaceId, path }: { workspaceId: string; 
 			role="img"
 			data-testid="file-writer-avatars"
 			aria-label={t("presence.writersList", {
-				names: writers.map((writer) => writer.label).join(", "),
+				names: writers.map((writer) => writer.spoken).join(", "),
 			})}
 			className="mr-4 inline-flex shrink-0 items-center"
 		>
@@ -161,7 +159,7 @@ export function FileWritersChip({
 	const t = useT();
 	const writers = useLabeledWriters(workspaceId, path);
 	if (writers.length === 0) return null;
-	const names = writers.map((writer) => writer.label).join(", ");
+	const names = writers.map((writer) => writer.spoken).join(", ");
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
@@ -217,7 +215,7 @@ export function FileWriterDot({ workspaceId, path }: { workspaceId: string; path
 			role="img"
 			data-testid="file-writer-dot"
 			data-tone={last.tone}
-			aria-label={t("presence.lastWriter", { name: last.label })}
+			aria-label={t("presence.lastWriter", { name: last.spoken })}
 			title={last.label}
 			className={cn(
 				"mr-4 size-6 shrink-0 rounded-full forced-colors:bg-[CanvasText]",

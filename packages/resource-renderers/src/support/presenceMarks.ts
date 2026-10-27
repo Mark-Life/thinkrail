@@ -18,7 +18,7 @@ export interface PresenceText {
 	hover(writer: PresenceWriter): string;
 	lines(writer: PresenceWriter, spans: readonly PresenceSpan[]): string;
 	places(writer: PresenceWriter, count: number): string;
-	file(writer: PresenceWriter): string;
+	file(name: string): string;
 }
 
 interface Mark {
@@ -160,7 +160,7 @@ export function attachPresence(
 			else if (earlier || other.paint.kind === "file") drop(other);
 		}
 		const node = badge("chip", writer);
-		node.textContent = options.text().file(writer);
+		node.textContent = options.text().file(writer.label);
 		const id = `presence-chip-${++widgetSeq}`;
 		mark.chip = {
 			getId: () => id,
@@ -207,7 +207,7 @@ export function attachPresence(
 		const text = options.text();
 		if (mark.paint.kind === "file") {
 			showChip(mark, writer);
-			options.announce(text.file(writer));
+			options.announce(text.file(writer.spoken));
 			mark.timers = [setTimeout(() => drop(mark), PRESENCE_TIMING.chipMs)];
 			return;
 		}

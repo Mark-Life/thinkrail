@@ -260,7 +260,8 @@ tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor fo
 
 **Presence is an optional prop, like review.** `ResourceViewProps.presence` (`SurfacePresence`) carries the
 newest write the host knows for the file as `latest`: a disk `hash` and a `PresenceWriter` (`id`, `label`,
-`tone`: `user` | `agent1..3` | `external`, `inferred`). The host owns who wrote what; the view owns where.
+`spoken`, `tone`: `user` | `agent1..3` | `external`, `inferred`). `label` is the visible name; `spoken` is the
+screen-reader name, which can add the writer kind the icon shows. The host owns who wrote what; the view owns where.
 A view marks the changes of an `EditUpdate` whose `disk.hash` matches `latest`, so the ranges come from the
 host's own merge diff and only the author from the host. A match with an older write stays unknown: the
 same content can come back from another writer, and a path the host sent no author for must not inherit
@@ -691,8 +692,8 @@ content's own height.
   timers. An agent's tool writes and its script writes share one writer id but keep separate marks, so a
   script write never dashes the lines of an earlier tool edit; the newer mark takes only the lines it covers. One flag shows per line. An update whose hash has no writer yet waits 3 s for the next
   `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame. Flags
-  and chips are `aria-hidden`. A polite live region announces a chip, and a writer's line changes (every span the landing
-  changed, or only their count past five spans) at most once per flag time, so a burst of saves is one message. Reduced motion drops the fades. The tones are
+  and chips are `aria-hidden` and show `label`. A polite live region announces a chip, and a writer's line changes (every span the landing
+  changed, or only their count past five spans) at most once per flag time, so a burst of saves is one message; announcements use `spoken`. Reduced motion drops the fades. The tones are
   CSS classes the host styles (`presence-tone-*`); in forced colors the host draws the bar as a
   `CanvasText` border, dashed when inferred, because forced colors erase backgrounds.
 - **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`:

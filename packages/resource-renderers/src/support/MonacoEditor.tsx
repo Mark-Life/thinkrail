@@ -74,9 +74,9 @@ export default function MonacoEditor({
 			const [only] = spans;
 			if (only && spans.length === 1) {
 				return only.startLine === only.endLine
-					? t("presence.changedLine", { name: writer.label, line: only.startLine })
+					? t("presence.changedLine", { name: writer.spoken, line: only.startLine })
 					: t("presence.changedLines", {
-							name: writer.label,
+							name: writer.spoken,
 							start: only.startLine,
 							end: only.endLine,
 						});
@@ -86,10 +86,10 @@ export default function MonacoEditor({
 					? String(span.startLine)
 					: t("presence.lineRange", { start: span.startLine, end: span.endLine }),
 			);
-			return t("presence.changedSpans", { name: writer.label, lines: lines.join(", ") });
+			return t("presence.changedSpans", { name: writer.spoken, lines: lines.join(", ") });
 		},
-		places: (writer, count) => t("presence.changedPlaces", { name: writer.label, count }),
-		file: (writer) => t("presence.rewrote", { name: writer.label }),
+		places: (writer, count) => t("presence.changedPlaces", { name: writer.spoken, count }),
+		file: (name) => t("presence.rewrote", { name }),
 	};
 	const [announcement, setAnnouncement] = useState({ seq: 0, text: "" });
 	const editable = edit !== undefined;

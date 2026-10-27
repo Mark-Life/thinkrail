@@ -107,6 +107,7 @@ export type PresenceTone = "user" | "agent1" | "agent2" | "agent3" | "external";
 export interface PresenceWriter {
 	id: string;
 	label: string;
+	spoken: string;
 	tone: PresenceTone;
 	inferred: boolean;
 }

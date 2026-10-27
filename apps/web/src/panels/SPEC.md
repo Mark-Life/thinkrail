@@ -2097,8 +2097,10 @@ own section. The kebab menu (`plan-menu`, a
   **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
   (`focusRendererEditor`).
 - **Who changes what (`FileWriters.tsx`).** The store's file activity slice feeds four surfaces, all
-  labeled the same way (`fileWriterLabels.ts`): "You", "Agent · <chat title>" (plain "Agent" for a session with no known chat; titles come from `selectKnownChatTitles`, one map per tab and history snapshot, so a streamed update scans no tabs),
-  "<agent> via script", "External". `useFilePresence` turns the file's newest write into the renderer's
+  labeled the same way (`fileWriterLabels.ts`): "You", the agent's chat title ("Agent · <last 4 characters of the session id>" for a session with no known or empty title, so two agents never read the same; titles come from `selectKnownChatTitles`, one map per tab and history snapshot, so a streamed update scans no tabs — the host's `session.list` and `session.created` titles already reach it through history),
+  "External". The chat icon already marks an agent, so a titled agent's visible label is the title alone; its
+  spoken label, used by every accessible name and announcement, is "Agent <chat title>". An agent's script write reads the same
+  as its tool write; only the dashed gutter bar and the hover's "inferred from timing" tell it apart. `useFilePresence` turns the file's newest write into the renderer's
   `presence` prop (hash plus writer and tone), so an older write never claims a landing; `FilePane` passes it only with `edit`, so a phone or a
   read-only view gets none. `FileWritersChip` is the pane's status chip, a pill floating over the editor's bottom right
   corner while the file has writers in the last minute, so it never moves the text: up to three avatars,
