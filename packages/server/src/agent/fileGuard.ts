@@ -239,8 +239,10 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 			const sessionId = sessionOf(ctx);
 			const { toolCallId, toolName } = event;
 			if (SHELL_TOOLS.has(toolName)) {
-				store.openBashWindow({ sessionId, toolCallId, cwd: ctx.cwd });
-				return undefined;
+				return safely("shell window", () => {
+					store.openBashWindow({ sessionId, toolCallId, cwd: ctx.cwd });
+					return undefined;
+				});
 			}
 			const path = FILE_TOOLS.has(toolName) ? pathInput(event.input) : undefined;
 			if (!path) return undefined;
@@ -248,10 +250,12 @@ export function fileGuardExtension(store: Provenance = fileProvenance): Extensio
 				const abs = agentPath(path, ctx.cwd);
 				return safely("write check", () => guardWrite({ sessionId, toolCallId, path, abs }));
 			}
-			const abs = toolName === "read" ? agentReadPath(path, ctx.cwd) : agentPath(path, ctx.cwd);
-			const hash = toolName === "edit" ? (readSnapshot(abs)?.hash ?? null) : null;
-			store.openClaim({ sessionId, toolCallId, path: abs, mutates: toolName === "edit", hash });
-			return undefined;
+			return safely("claim", () => {
+				const abs = toolName === "read" ? agentReadPath(path, ctx.cwd) : agentPath(path, ctx.cwd);
+				const hash = toolName === "edit" ? (readSnapshot(abs)?.hash ?? null) : null;
+				store.openClaim({ sessionId, toolCallId, path: abs, mutates: toolName === "edit", hash });
+				return undefined;
+			});
 		});
 
 		pi.on("tool_result", async (event, ctx) => {

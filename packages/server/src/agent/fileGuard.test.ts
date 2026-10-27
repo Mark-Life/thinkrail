@@ -551,3 +551,15 @@ test("an edit that a save made ambiguous gets the hint naming that save", async 
 	);
 	expect(hinted[1]).toContain("+const ttl = 60;");
 });
+
+test("a provenance failure when a tool starts never blocks the tool", async () => {
+	writeFileSync(join(root, "a.txt"), "one\n");
+	const failing = (): never => {
+		throw new Error("ledger unavailable");
+	};
+	store = { ...createProvenance(), openClaim: failing, openBashWindow: failing };
+	const { call } = guard();
+	expect(await call("read", "r1", { path: "a.txt" })).toBeUndefined();
+	expect(await call("edit", "e1", { path: "a.txt" })).toBeUndefined();
+	expect(await call("bash", "b1", { command: "ls" })).toBeUndefined();
+});
