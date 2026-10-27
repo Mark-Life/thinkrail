@@ -263,10 +263,12 @@ IndexedDB (private mode, tests) means no drafts.
   (`__THINKRAIL_NATIVE_EDITING__`), keyed by `(workspaceId, path)` without the host: drafts survive a
   quit, crash or update restart. A bridge failure reads as no draft.
 - **Desktop quit guard.** The registry pushes one flag to the same bridge: does any file hold edits that
-  will not save on their own (`hasUnsavedEdits`, today any dirty buffer). Quit asks first while it is set.
+  will not save on their own (`hasUnsavedEdits`): a dirty buffer in manual mode, or one autosave paused
+  (conflict, read-only, offline, error). Quit asks first while it is set; a pending autosave lives on in
+  the draft.
 - **Quit flush.** Before a quit, a window close or an update restart stops the host, the desktop awaits
-  the bridge's `onQuitFlush` callback, which writes every pending draft at once, so the last keystrokes
-  before Cmd+Q are not lost to the 300 ms delay.
+  the bridge's `onQuitFlush` callback. It starts every pending autosave and writes every pending draft at
+  once, so the last keystrokes before Cmd+Q are not lost to the 300 ms draft delay.
 
 ## Get right
 

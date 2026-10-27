@@ -2,7 +2,13 @@ import { FILE_WRITE_MAX_BYTES, type FileContent, type ResourceMeta } from "@thin
 import { i18n } from "@thinkrail/locales/react";
 import type { ResourceRenderer } from "@thinkrail/resource-renderers";
 import { fileName } from "../lib";
-import { selectActiveEditorTab, selectWorkspaceTick, toast, useAppStore } from "../store";
+import {
+	selectActiveEditorTab,
+	selectFileAutosaving,
+	selectWorkspaceTick,
+	toast,
+	useAppStore,
+} from "../store";
 import {
 	clientErrorReport,
 	getTransport,
@@ -51,10 +57,14 @@ function openFileKeys(state: AppState): Set<string> {
 	return keys;
 }
 
-/** Whether any file holds edits that will not reach disk unless the user saves. */
-export function hasUnsavedEdits(state: Pick<AppState, "fileBuffersByWorkspace">): boolean {
-	return Object.values(state.fileBuffersByWorkspace).some((summaries) =>
-		Object.values(summaries).some((summary) => summary.dirty),
+/** Whether any file holds edits that will not reach disk on their own: paused, or manual save. */
+export function hasUnsavedEdits(
+	state: Pick<AppState, "fileBuffersByWorkspace" | "fileSaveMode">,
+): boolean {
+	return Object.entries(state.fileBuffersByWorkspace).some(([workspaceId, summaries]) =>
+		Object.entries(summaries).some(
+			([path, summary]) => summary.dirty && !selectFileAutosaving(state, workspaceId, path),
+		),
 	);
 }
 
@@ -82,7 +92,11 @@ function watchStore() {
 	watching = true;
 	let unsaved = false;
 	useAppStore.subscribe((state, previous) => {
-		if (native && state.fileBuffersByWorkspace !== previous.fileBuffersByWorkspace) {
+		if (
+			native &&
+			(state.fileBuffersByWorkspace !== previous.fileBuffersByWorkspace ||
+				state.fileSaveMode !== previous.fileSaveMode)
+		) {
 			const next = hasUnsavedEdits(state);
 			if (next !== unsaved) native.setUnsavedEdits(next);
 			unsaved = next;

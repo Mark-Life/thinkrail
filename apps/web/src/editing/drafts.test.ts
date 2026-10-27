@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import type { NativeDraft, NativeEditingBridge } from "@thinkrail/contracts";
+import type { FileBufferSummary } from "../store";
 import { nativeDrafts, nativeEditingBridge } from "./drafts";
 import { hasUnsavedEdits } from "./files";
 import { PATH, settle, setup, type, WS } from "./registryFixtures";
@@ -86,12 +87,16 @@ test("the editing bridge is read only when the desktop installed it", () => {
 	expect(nativeEditingBridge()).toBe(bridge);
 });
 
-test("quit must ask only while some file is dirty", () => {
+test("quit asks only for dirty files that will not save on their own", () => {
 	const clean = { status: "clean", dirty: false } as const;
-	const dirty = { status: "stale", dirty: true } as const;
-	expect(hasUnsavedEdits({ fileBuffersByWorkspace: {} })).toBe(false);
-	expect(hasUnsavedEdits({ fileBuffersByWorkspace: { a: { "x.ts": clean } } })).toBe(false);
-	expect(hasUnsavedEdits({ fileBuffersByWorkspace: { a: { "x.ts": clean, "y.ts": dirty } } })).toBe(
-		true,
-	);
+	const pending = { status: "dirty", dirty: true, pending: true } as const;
+	const saving = { status: "saving", dirty: true } as const;
+	const paused = { status: "stale", dirty: true } as const;
+	const ask = (summaries: Record<string, FileBufferSummary>, fileSaveMode: "auto" | "manual") =>
+		hasUnsavedEdits({ fileBuffersByWorkspace: { a: summaries }, fileSaveMode });
+	expect(hasUnsavedEdits({ fileBuffersByWorkspace: {}, fileSaveMode: "manual" })).toBe(false);
+	expect(ask({ "x.ts": clean }, "manual")).toBe(false);
+	expect(ask({ "x.ts": pending, "y.ts": saving }, "auto")).toBe(false);
+	expect(ask({ "x.ts": pending, "y.ts": paused }, "auto")).toBe(true);
+	expect(ask({ "x.ts": pending }, "manual")).toBe(true);
 });
