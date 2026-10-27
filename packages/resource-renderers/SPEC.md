@@ -734,7 +734,8 @@ content's own height.
   `setComposing`. Subscribed changes, undo and conflict choices land only through `model.applyEdits`,
   never `setValue` or `pushEditOperations`, so cursors and decorations stay. A rebind (new path or session) or unmount
   disposes the mirror and restores the four methods. Open conflicts render as two view zones each
-  (`conflictWidgets.ts`, React portals in `MonacoConflictZones`): a lens above the user's lines with
+  (`conflictWidgets.ts`, React portals in `MonacoConflictZones` of the engine-neutral `ConflictLens` and
+  `ConflictTheirs` from `conflictLens.tsx`, which the live preview reuses): a lens above the user's lines with
   **Mine** / **Theirs** / **Both**, and the disk lines below them; the user's lines get a whole-line
   wash. A choice puts focus back in the editor. Monaco marks view zones `aria-hidden`, so the lens
   buttons stay out of the tab order (`tabIndex -1`) and the host offers the same choices outside the

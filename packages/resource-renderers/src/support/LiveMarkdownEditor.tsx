@@ -6,6 +6,7 @@ import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from
 import { createPortal } from "react-dom";
 import { useResourceHost } from "../host";
 import type { ConflictChoice, ResourceEditSession, ResourceViewProps } from "../registry";
+import { ConflictLens, ConflictTheirs } from "./conflictLens";
 import { bindSession, type SessionBinding } from "./livePreview/binding";
 import {
 	livePreview,
@@ -22,7 +23,6 @@ import { continueList, newlineKeepingIndent } from "./livePreview/lists";
 import { createPortalHost, type PortalEntry } from "./livePreview/portals";
 import { livePresence, livePresenceSurface } from "./livePreview/presence";
 import { MarkdownDocument } from "./MarkdownPreview";
-import { ConflictLens, ConflictTheirs } from "./MonacoConflictZones";
 import { createPresenceMarks } from "./presenceCore";
 import { presenceKindIcon } from "./presenceIcons";
 import { usePresenceText } from "./presenceText";
