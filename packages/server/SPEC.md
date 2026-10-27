@@ -139,7 +139,7 @@ the host from env via `bootHost` for dev/e2e.
 - `environment` → `persistence` (`environment.json`), `log` (+ `@thinkrail/shared/shellEnv` for the launch keys and pi's `getAgentDir`, external); never `settings`
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
-- `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
+- `agent` → `provenance` (the `fileGuard` extension), `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
   `trash` (a chat delete's recoverable transcript move), `extensions` (the registry's flattened parent and
   child inline extensions plus, in unbundled dev, its skill roots) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam

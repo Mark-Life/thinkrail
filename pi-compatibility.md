@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-host, submodule-server-fs, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-host, submodule-server-fs, submodule-server-provenance, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
 tags: [pi, compatibility]
 ---
 
@@ -137,6 +137,31 @@ fallback for absent paths; it wraps `edit` and `write`. Run `host/fileWrite.test
 save, and checks that every
 package that depends on pi resolves the same copy. **Removal gate:**
 pi exposes a CAS write (expected hash) for in-process callers.
+
+The `fileGuard` extension ([[submodule-server-agent]], feeding [[submodule-server-provenance]]) leans on
+the same queue and on more pi details. It re-reads a file inside the queue after pi's `read`, `edit` and
+`write` return, so the recorded author and baseline never see a half-written pi edit. It leaves stale
+edits to pi: `edit` re-reads the file and fails when its old text is gone. It recognizes an `edit` that
+may have written by its "Operation aborted" text: every other `edit` error must stay thrown before
+`writeFile` in `core/tools/edit.js`. It resolves a tool's `path` the way pi's `resolveToCwd` does, and a
+`read` path the way `resolveReadPath` does. It relies on `tool_execution_end` firing for every call,
+including the blocked and aborted ones that skip `tool_result`, and on pi's `write` storing its `content`
+as UTF-8 bytes. pi runs every `tool_call` hook of a parallel batch before running any call, so the write
+block checks the file before the write runs. If the path rule drifts, the write block and the author are
+lost for that spelling. **Re-check:** that only the abort follows `writeFile` in `edit`; `utils/paths.js`
+`normalizePath` (`@` prefix, Unicode spaces, the win32 `normalizeWindowsShellPath` and `~\` branches,
+`~`, `file://`) and `core/tools/path-utils.js` `resolveReadPath` variants; that `tool_result` fires for
+thrown tool errors; that a `tool_call` block reason becomes the error result; that an aborted call still
+gets `tool_execution_end`; that `executeToolCallsParallel` still prepares the whole batch before it runs
+any call. `agent/fileGuard.test.ts` drives the installed `edit`, `write` and `read` tools against a temp
+dir and checks the path rules: pi's own `write` and `read` tools take each posix spelling and must land
+on the file `agentPath`/`agentReadPath` names; the win32 forms are literal expectations through
+`path.win32`, so re-check those by hand. `agent/fileGuard.session.test.ts` runs a real
+`createAgentSession` with a faux model: it checks that pi fails a stale edit itself, the block reason as
+the write's error result, the window closed after an abort in a parallel batch, and a write that
+replaced a save made while a sibling hook ran recorded as the agent's. **Removal gate:** pi's `write`
+refuses to overwrite a file changed since the session's last read; the write block goes, the author
+recording stays.
 
 ## Other pi-sensitive host seams
 

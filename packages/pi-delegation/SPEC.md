@@ -472,7 +472,8 @@ run-scoped signal. Non-user paths retain their behavior.
     child — ordinary or resource, opted in or not — loads it ahead of the curated set. It carries
     tool-less infrastructure hooks an embedder needs on every child request (ThinkRail: the
     oversized-image guard, made necessary by decision #31's raw-image settings — PR #657 review:
-    custom agents default to no extensions, so an opt-in guard left them unguarded). A tool
+    custom agents default to no extensions, so an opt-in guard left them unguarded; and the file
+    guard, so a child's writes are attributed and its stale writes are blocked). A tool
     registered there would reach children that never opted in, so keeping the set tool-free is the
     embedder's contract; the core does not police it. Literal "inherit the parent's extensions" is
     rejected: interactive tools (ask_user_question) hang a hidden non-interactive child, and blanket
