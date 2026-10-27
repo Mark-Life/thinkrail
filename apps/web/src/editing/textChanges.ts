@@ -1,8 +1,8 @@
 import type { TextChange } from "@thinkrail/resource-renderers";
 import { diffArrays } from "diff";
 
-const MAX_EDIT_LENGTH = 2000;
-const DIFF_TIMEOUT_MS = 50;
+export const MAX_EDIT_LENGTH = 2000;
+export const DIFF_TIMEOUT_MS = 50;
 
 interface LinePart {
 	value: string[];
@@ -10,15 +10,7 @@ interface LinePart {
 	removed: boolean;
 }
 
-export function applyChanges(text: string, changes: readonly TextChange[]): string {
-	let next = text;
-	for (const change of [...changes].sort((left, right) => right.from - left.from)) {
-		next = next.slice(0, change.from) + change.insert + next.slice(change.to);
-	}
-	return next;
-}
-
-function lines(text: string): string[] {
+export function splitLines(text: string): string[] {
 	return text === "" ? [] : text.split(/(?<=\n)/);
 }
 
@@ -45,7 +37,7 @@ function trimmedChange(previous: string, next: string): TextChange {
 	};
 }
 
-function refined(previous: string, change: TextChange): TextChange {
+export function refined(previous: string, change: TextChange): TextChange {
 	const inner = trimmedChange(previous.slice(change.from, change.to), change.insert);
 	return { from: change.from + inner.from, to: change.from + inner.to, insert: inner.insert };
 }
@@ -65,8 +57,8 @@ function alignedParts(before: string[], after: string[]): LinePart[] | null {
 
 export function textChanges(previous: string, next: string): TextChange[] {
 	if (previous === next) return [];
-	const before = lines(previous);
-	const after = lines(next);
+	const before = splitLines(previous);
+	const after = splitLines(next);
 	const parts =
 		diffArrays(before, after, { maxEditLength: MAX_EDIT_LENGTH, timeout: DIFF_TIMEOUT_MS }) ??
 		alignedParts(before, after);
