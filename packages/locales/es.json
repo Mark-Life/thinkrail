@@ -1,6 +1,9 @@
 {
 	"app.errorBoundary.label": "aplicación",
 	"app.transport.mcpUnavailable": "Los servidores MCP no están disponibles hasta que el host se vuelva a conectar.",
+	"app.transport.replayConflict": "El host rechazó esta solicitud porque su ID ya se había usado. Vuelve a intentarlo. Si sigue ocurriendo, recarga la ventana.",
+	"app.transport.replayOverflow": "El host tiene demasiadas respuestas sin leer para esta ventana y rechazó esta solicitud. Vuelve a intentarlo en un momento. Si sigue ocurriendo, recarga la ventana.",
+	"app.transport.replayUnretained": "El host ejecutó esta solicitud, pero no pudo guardar su respuesta. Comprueba si se aplicó antes de volver a intentarlo. Si sigue ocurriendo, recarga la ventana.",
 	"app.transport.requestFailed": "la solicitud falló",
 	"app.transport.requestFailedFallback": "La solicitud falló.",
 	"app.transport.timedOut": "la solicitud \"{{method}}\" agotó el tiempo de espera",

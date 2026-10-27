@@ -1,6 +1,9 @@
 {
 	"app.errorBoundary.label": "应用",
 	"app.transport.mcpUnavailable": "在 host 重新连接之前，MCP 服务器不可用。",
+	"app.transport.replayConflict": "host 拒绝了此请求，因为它的 ID 已被使用。请重试。如果问题持续出现，请重新加载窗口。",
+	"app.transport.replayOverflow": "此窗口在 host 上有太多未读取的响应，因此 host 拒绝了此请求。请稍后重试。如果问题持续出现，请重新加载窗口。",
+	"app.transport.replayUnretained": "host 已执行此请求，但无法保留其响应。重试前请先确认它是否已生效。如果问题持续出现，请重新加载窗口。",
 	"app.transport.requestFailed": "请求失败",
 	"app.transport.requestFailedFallback": "请求失败。",
 	"app.transport.timedOut": "请求“{{method}}”超时",

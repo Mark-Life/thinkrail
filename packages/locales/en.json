@@ -1,6 +1,9 @@
 {
 	"app.errorBoundary.label": "app",
 	"app.transport.mcpUnavailable": "MCP servers are unavailable until the host reconnects.",
+	"app.transport.replayConflict": "The host refused this request because its ID was already used. Try again. If this keeps happening, reload the window.",
+	"app.transport.replayOverflow": "The host has too many unread answers for this window and refused this request. Try again in a moment. If this keeps happening, reload the window.",
+	"app.transport.replayUnretained": "The host ran this request but could not keep its answer. Check whether it took effect before you try again. If this keeps happening, reload the window.",
 	"app.transport.requestFailed": "request failed",
 	"app.transport.requestFailedFallback": "The request failed.",
 	"app.transport.timedOut": "request \"{{method}}\" timed out",

@@ -1,6 +1,9 @@
 {
 	"app.errorBoundary.label": "アプリ",
 	"app.transport.mcpUnavailable": "ホストが再接続するまで MCP サーバーは利用できません。",
+	"app.transport.replayConflict": "このリクエストの ID はすでに使われているため、ホストが拒否しました。もう一度お試しください。繰り返し発生する場合は、ウィンドウを再読み込みしてください。",
+	"app.transport.replayOverflow": "このウィンドウに未読の応答が多すぎるため、ホストがこのリクエストを拒否しました。しばらくしてからもう一度お試しください。繰り返し発生する場合は、ウィンドウを再読み込みしてください。",
+	"app.transport.replayUnretained": "ホストはこのリクエストを実行しましたが、応答を保持できませんでした。再試行する前に、反映されたかどうかを確認してください。繰り返し発生する場合は、ウィンドウを再読み込みしてください。",
 	"app.transport.requestFailed": "リクエストに失敗しました",
 	"app.transport.requestFailedFallback": "リクエストに失敗しました。",
 	"app.transport.timedOut": "リクエスト「{{method}}」がタイムアウトしました",
