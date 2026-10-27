@@ -15,6 +15,7 @@ test("a parent-relative file link cannot escape into browser navigation", async 
 	const priorPreview = page.getByTestId("editor-tab").filter({ hasText: "LINKS.md" });
 	await expect(priorPreview).toHaveAttribute("data-preview", "true");
 	await page.getByTestId("editor-tab").filter({ hasText: "COLOR.md" }).click();
+	await page.getByTestId("markdown-lock").click();
 	await expect(preview.getByRole("heading", { name: "Colour system" })).toBeVisible();
 
 	const link = preview.getByTestId("markdown-file-link");
@@ -41,6 +42,7 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 	await revealWorkbenchTool(page, "files");
 
 	await page.getByTestId("file-node").filter({ hasText: "LINKS.md" }).dblclick();
+	await page.getByTestId("markdown-lock").click();
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toBeVisible();
 
