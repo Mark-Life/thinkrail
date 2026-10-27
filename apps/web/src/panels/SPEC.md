@@ -2107,7 +2107,8 @@ own section. The kebab menu (`plan-menu`, a
   save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A
   Review panel "go to comment" request that arrives meanwhile is dropped, not held for a scroll jump after
   the save. **`FileEditBanner`** shows one strip per
-  issue: a conflict (**Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
+  issue: open same-line conflicts (status `conflict`, with their count), a disk version that could not
+  merge (status `stale`, **Reload** / **Keep mine**), deleted on disk (Save creates it again), read-only on
   disk, too large to save (with the `FILE_WRITE_MAX_BYTES` limit), no longer editable text, not connected,
   or a failed save. Its live region stays mounted while
   the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.

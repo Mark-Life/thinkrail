@@ -7,6 +7,7 @@ import {
 	fileTab,
 	openFile,
 	typeAtLineEnd,
+	unmergeableText,
 	visibleEditor,
 } from "./fixtures/fileEdit";
 
@@ -101,28 +102,30 @@ test("a clean buffer follows an on-disk change in place and keeps the cursor", a
 		.toBe("const first = 1;!\nconst second = 2;\nconst third = 33;\n");
 });
 
-test("an on-disk change to an unsaved buffer waits behind Reload / Keep mine", async ({ page }) => {
-	const path = await openFile(page, "conflict.ts", "const mine = 1;\n");
+test("an on-disk change too large to merge waits behind Reload / Keep mine", async ({ page }) => {
+	const path = await openFile(page, "conflict.ts", unmergeableText(""));
 	await typeAtLineEnd(page, 1, " // mine");
 
-	writeFileSync(path, "const theirs = 2;\n");
+	writeFileSync(path, unmergeableText("theirs"));
 	await expect(banner(page)).toHaveAttribute("data-status", "stale", { timeout: 10_000 });
 	await expect(visibleEditor(page)).toContainText("// mine");
 	await page.getByTestId("file-edit-keep-mine").click();
 	await expect(banner(page)).toHaveCount(0);
 	await pressPlatformShortcut(page, "s");
-	await expect.poll(() => readFileSync(path, "utf8")).toBe("const mine = 1; // mine\n");
+	await expect
+		.poll(() => readFileSync(path, "utf8"))
+		.toBe(unmergeableText("").replace("line 0\n", "line 0 // mine\n"));
 
 	await typeAtLineEnd(page, 1, " again");
-	writeFileSync(path, "const agent = 3;\n");
+	writeFileSync(path, unmergeableText("agent"));
 	await expect(banner(page)).toHaveAttribute("data-status", "stale", { timeout: 10_000 });
 	await page.getByTestId("file-edit-reload").click();
-	await expect(visibleEditor(page)).toContainText("const agent = 3;");
+	await expect(visibleEditor(page)).toContainText("agent line 0");
 	await expect(banner(page)).toHaveCount(0);
 	await expect(fileTab(page, "conflict.ts").getByTestId("file-dirty-dot")).toHaveCount(0);
 });
 
-test("a save against a file that changed on disk writes nothing and shows the conflict", async ({
+test("a save against a same-line change on disk writes nothing and pauses on the conflict", async ({
 	page,
 }) => {
 	const path = await openFile(page, "stale.ts", "const base = 1;\n");
@@ -130,7 +133,7 @@ test("a save against a file that changed on disk writes nothing and shows the co
 	writeFileSync(path, "const agent = 2;\n");
 	await pressPlatformShortcut(page, "s");
 
-	await expect(banner(page)).toHaveAttribute("data-status", "stale", { timeout: 10_000 });
+	await expect(banner(page)).toHaveAttribute("data-status", "conflict", { timeout: 10_000 });
 	expect(readFileSync(path, "utf8")).toBe("const agent = 2;\n");
 	await expect(fileTab(page, "stale.ts").getByTestId("file-dirty-dot")).toBeVisible();
 });

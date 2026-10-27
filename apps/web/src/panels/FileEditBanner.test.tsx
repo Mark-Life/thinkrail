@@ -20,6 +20,9 @@ test("the live region is mounted before any issue, so its text change is announc
 
 test("a conflict or a failed save is announced assertively", () => {
 	expect(render({ status: "stale", dirty: true })).toContain('aria-live="assertive"');
+	expect(render({ status: "conflict", dirty: true, conflicts: 2 })).toContain(
+		'aria-live="assertive"',
+	);
 	expect(render({ status: "error", dirty: true, error: "failed" })).toContain(
 		'aria-live="assertive"',
 	);

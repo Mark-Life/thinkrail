@@ -12,6 +12,8 @@ function bannerMessage(summary: FileBufferSummary): MessageKey | null {
 	switch (summary.status) {
 		case "stale":
 			return "panels.fileEdit.conflict";
+		case "conflict":
+			return "panels.fileEdit.paused";
 		case "deleted":
 			return "panels.fileEdit.deleted";
 		case "readonly":
@@ -38,9 +40,14 @@ export function FileEditBanner({
 	const t = useT();
 	const message = summary ? bannerMessage(summary) : null;
 	const text = message
-		? t(message, { shortcut: platformShortcutLabel("S"), limit: FILE_WRITE_MAX_BYTES / MEBIBYTE })
+		? t(message, {
+				shortcut: platformShortcutLabel("S"),
+				limit: FILE_WRITE_MAX_BYTES / MEBIBYTE,
+				count: summary?.conflicts ?? 0,
+			})
 		: "";
-	const urgent = summary?.status === "stale" || summary?.status === "error";
+	const urgent =
+		summary?.status === "stale" || summary?.status === "conflict" || summary?.status === "error";
 	return (
 		<>
 			<span role="status" aria-live={urgent ? "assertive" : "polite"} className="sr-only">
