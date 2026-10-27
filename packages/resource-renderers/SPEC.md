@@ -25,7 +25,8 @@ diff panes, the file-comparison diff tab, and extension tool cards (visualize's 
 One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
 
 - the registry contract — types, `registerResourceRenderer`, `resolveRenderers`, `describeResource`,
-  `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, `rendererImplementationKey`, and the content
+  `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, `rendererImplementationKey`,
+  `CONFLICT_CHOICES`, `CONFLICT_CHOICE_LABELS`, and the content
   rules every surface shares: `resourceContent(text, meta, url)` (no metadata yet is provisional text, a
   missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
   modified)` (a diff is described by its modified side unless that side is absent, and is text only when
@@ -646,9 +647,28 @@ content's own height.
   follows the path, because `RendererView` is keyed by implementation, not path. Read-only, new text calls `setValue`
   only when it differs from the text last applied, compared as strings, never through `getValue()`.
   With an edit session, `bindEditSession` owns the model instead: it is created from `snapshot()` with LF
-  line endings, its content events go to `applyLocal` (except the ones it applied), and subscribed changes
-  land through `pushEditOperations` between undo stops, so cursors, decorations and Monaco's own undo stay
-  coherent. `setValue` never runs on an editable model. A path or session change rebinds in place.
+  line endings and handed to one mirror (`monacoMirror.ts`) per model. The mirror patches the model
+  instance's `undo`/`redo`/`canUndo`/`canRedo` to call the session, so every Monaco undo path (the
+  keybinding, the `undo` command, `editor.trigger`) reaches the host's history; it also turns a
+  `beforeinput` `historyUndo`/`historyRedo` on the editor into the session's undo, which is how the
+  desktop Edit menu reaches it. Monaco's own undo stack is never valid after a remote edit: it replays
+  stored offsets and corrupts the text. Typing still records Monaco stack elements, which nothing reads;
+  they cost memory only (about one per typing group) until the model is disposed, and Monaco exposes no
+  typed way to drop them. The bundle loads no Monaco contribution that calls `model.undo()` itself. Content events go to `applyLocal` with their kind (except the
+  ones the mirror applied), cursor moves to `select`, and composition start and end to
+  `setComposing`. Subscribed changes, undo and conflict choices land only through `model.applyEdits`,
+  never `setValue` or `pushEditOperations`, so cursors and decorations stay. A rebind (new path or session) or unmount
+  disposes the mirror and restores the four methods. Open conflicts render as two view zones each
+  (`conflictWidgets.ts`, React portals in `MonacoConflictZones`): a lens above the user's lines with
+  **Mine** / **Theirs** / **Both**, and the disk lines below them; the user's lines get a whole-line
+  wash. A choice puts focus back in the editor. Monaco marks view zones `aria-hidden`, so the lens
+  buttons stay out of the tab order (`tabIndex -1`) and the host offers the same choices outside the
+  editor. The disk lines wrap like the editor, and their zone takes the measured height of its text
+  (a `ResizeObserver`, then one frame), so a long disk line is never cut off. `conflictLayout.ts` places
+  each conflict's lines and the disk text it shows: an empty conflict past a line's start (disk lines
+  after a last line with no newline) sits below that line, and its disk text drops the joining line
+  break. It also decides which zones stay: a conflict on the same lines with the same disk text keeps its zones, and an edit
+  that keeps every conflict that way touches no zone, decoration or React state. A path or session change rebinds in place.
   The model and options effects skip their first run, because the mount just created the editor with exactly those inputs. The
   editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
   open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
