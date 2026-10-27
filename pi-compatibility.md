@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-host, submodule-server-fs, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
 tags: [pi, compatibility]
 ---
 
@@ -123,6 +123,20 @@ The host stores bounded, base64-free presentation details so live and restored c
 **Removal gate:** an equivalent bounded durable representation from pi. Re-check result shapes and
 full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card tests and
 `e2e/mcp-tool-cards.spec.ts`. Never persist the full raw result merely to delete the adapter.
+
+## File mutation
+
+### Shared per-file mutation queue
+
+**Owner:** [[submodule-server-host]] via the `agent` barrel. pi's `edit` is a read-modify-write with no
+CAS. Host saves (`fs.writeFile`, [[submodule-server-fs]]) and reverts stay safe only because they run
+inside the same `withFileMutationQueue` instance. That holds while exactly one pi copy is installed and
+every bundle resolves it once. **Re-check:** the root export exists; it keys by realpath with a lexical
+fallback for absent paths; it wraps `edit` and `write`. Run `host/fileWrite.test.ts`: it holds a pi
+`edit` open against a save, a `change.revert` and a `change.undo`, holds a pi `write` open against a
+save, and checks that every
+package that depends on pi resolves the same copy. **Removal gate:**
+pi exposes a CAS write (expected hash) for in-process callers.
 
 ## Other pi-sensitive host seams
 

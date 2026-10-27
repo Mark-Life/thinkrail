@@ -455,6 +455,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`/`UNSUPPORTED_CHANGE`) through the same `CodedError`
   mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
   and thrown by a feature reaches the client with no host-side allowlist to update.
+- **`fs.writeFile`** runs `writeTextFile` inside pi's `withFileMutationQueue`, taken from the `agent`
+  barrel. The host passes the lexical `resolveWorktreeFile` path, the spelling pi derives from the
+  session cwd. pi keys the queue by its realpath, and by that lexical path only while the file is absent.
+  So the keys agree except in one window: under a worktree path with a symlink, a pi call queued while
+  the file was absent and a save queued after it exists get different keys and do not serialize. It takes no workspace lock. The file queue
+  is the serialization, and a revert's git reads on another file must not delay a save. Workspace
+  activity is stamped only when bytes changed. `change.revert`/`change.undo` pass the same queue into
+  `changes`, under `withChangeLock`. The WebSocket `maxPayloadLength` is 6× `FILE_WRITE_MAX_BYTES` plus 1 MiB:
+  JSON escapes a control character to 6 bytes, so any save under the cap fits in one frame. Other host writers inside worktrees
+  (`agent/mcp/writers.ts`, `templates`) skip the queue; the save's CAS still catches them.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.
