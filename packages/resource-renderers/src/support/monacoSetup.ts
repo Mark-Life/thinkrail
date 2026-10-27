@@ -30,7 +30,7 @@ import onigWasmUrl from "shiki/onig.wasm?url";
 import type { ResourceCodeHost } from "../host";
 import type { EditConflict, ResourceEditSession } from "../registry";
 import { editorWrappingOptions } from "./editorWrapping";
-import { mirrorEditSession } from "./monacoMirror";
+import { type DiskLanding, mirrorEditSession } from "./monacoMirror";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";
 
 declare global {
@@ -105,6 +105,7 @@ export function fileEditorOptions(
 	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
+	const paddingBottom = Number.parseFloat(cssVar("--space-40") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
 		readOnly: !editable,
 		...(editable ? {} : { readOnlyMessage: { value: t("panels.monacoSetup.readOnly") } }),
@@ -133,7 +134,10 @@ export function fileEditorOptions(
 		overviewRulerBorder: false,
 		hideCursorInOverviewRuler: true,
 	};
-	options.padding = { top: Number.isFinite(paddingTop) ? paddingTop : 0 };
+	options.padding = {
+		top: Number.isFinite(paddingTop) ? paddingTop : 0,
+		bottom: Number.isFinite(paddingBottom) ? paddingBottom : 0,
+	};
 	return options;
 }
 
@@ -181,6 +185,7 @@ export function bindEditSession(
 	input: Omit<FileModelInput, "text"> & {
 		session: ResourceEditSession;
 		onConflicts(conflicts: readonly EditConflict[]): void;
+		onDisk(landing: DiskLanding): void;
 	},
 ) {
 	const text = input.session.snapshot();
@@ -194,7 +199,10 @@ export function bindEditSession(
 		model.applyEdits([{ range: model.getFullModelRange(), text }]);
 	}
 	if (model.getEOL() !== "\n") model.setEOL(monaco.editor.EndOfLineSequence.LF);
-	return mirrorEditSession(codeEditor, model, input.session, input.onConflicts);
+	return mirrorEditSession(codeEditor, model, input.session, {
+		onConflicts: input.onConflicts,
+		onDisk: input.onDisk,
+	});
 }
 
 export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {

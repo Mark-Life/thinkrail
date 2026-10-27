@@ -690,6 +690,27 @@ content's own height.
   A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
   before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
   a live editor scrolls smoothly.
+- **Presence marks (`presenceMarks.ts`, pure rules in `presenceDecorations.ts`).** The mirror hands each
+  disk update to `attachPresence` with the text before it. `presencePaint` turns the change set into
+  joined post-change line spans plus a capped diff (12 lines, 160 characters a line). When more than half
+  of a file of 10 or more lines changed, it paints one whole-file chip (an overlay widget at the top right)
+  instead of line marks, and it retires every mark that landed before it, whoever wrote it. Removed lines count, against the longer of the two versions, so a mass deletion
+  gets the chip too. Line marks are tracked decorations (`NeverGrowsWhenTypingAtEdges`): a thin bar in the
+  line-decoration lane, set off from the review and conflict rails by an editor-colored gap, at a slot per
+  tone so two writers on one line both show, and dashed for an inferred writer; a wash that fades in
+  four steps over 2.4 s (static `presence-wash-0..3` classes the mark sets on a timer, never a CSS animation:
+  Monaco rebuilds a line's overlay node when the cursor, a selection or a scroll redraws it, which would
+  restart an animation); a name flag (a content widget at the end of the first line: the writer kind's Remix icon, chat for an agent, person for the user, login box for an outside writer, rendered once to static SVG markup, then the label, on the tone's wash with no border, the same for an inferred writer) that fades in 5 s; a hover with the
+  writer and the diff over the lines, and the writer as the bar's own tooltip (`linesDecorationsTooltip`,
+  passed as plain text: Monaco escapes it). By keyboard the hover opens through F1, "Show or Focus Hover": the host's Cmd/Ctrl+K session switcher takes Monaco's Cmd/Ctrl+K Cmd/Ctrl+I chord first. The bar and hover stay 60 s, the chip 10 s (`PRESENCE_TIMING`). A
+  writer has one line mark per style: a new landing takes over the writer's earlier ranges and diff and restarts the
+  timers. An agent's tool writes and its script writes share one writer id but keep separate marks, so a
+  script write never dashes the lines of an earlier tool edit; the newer mark takes only the lines it covers. One flag shows per line. An update whose hash has no writer yet waits 3 s for the next
+  `presence` prop, since the save answer of a stale write can beat the host's `fsChanged` frame. Flags
+  and chips are `aria-hidden` and show `label`. A polite live region announces a chip, and a writer's line changes (every span the landing
+  changed, or only their count past five spans) at most once per flag time, so a burst of saves is one message; announcements use `spoken`. Reduced motion drops the fades. The tones are
+  CSS classes the host styles (`presence-tone-*`); in forced colors the host draws the bar as a
+  `CanvasText` border, dashed when inferred, because forced colors erase backgrounds.
 - **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`:
   `createFileEditor` applies it and the theme refresh defines it.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
