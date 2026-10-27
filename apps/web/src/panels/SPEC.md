@@ -742,8 +742,10 @@ a project picker, the prompt hero, and the reused
   `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps with a version-pinned link to
   `dark.theme.json`, the `<dataDir>/themes` folder with **Copy path** / **Open folder** (`themes.reveal`),
   and one warning notice per unusable file (`themes`' issue list). The page reads the catalog and issues
-  through `onThemesChange`, so a dropped file appears in the lists without reopening. An **Editor** group hosts the file
-  `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
+  through `onThemesChange`, so a dropped file appears in the lists without reopening. An **Editor** group hosts the
+  **Autosave** switch (`FileSaveModeControl`, `FileSaveModeSettings.tsx`: host `fileSaveMode`, hidden
+  until the host speaks `FILE_SAVE_MODE_PROTOCOL_VERSION` (v94), converges on `settings.changed`, a rejected
+  update raises a toast) and the file `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
   (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from
@@ -2102,11 +2104,19 @@ own section. The kebab menu (`plan-menu`, a
   rich CSV/JSON views) show the buffer text through `useFileBufferText`, not the disk text. The pane
   routes each live-refresh read to the buffer with a read token, and a failed read's error to it
   (`FILE_NOT_FOUND` marks it deleted); the store tab still gets every read. It marks its body `data-file-buffer` so Cmd/Ctrl+S saves
-  the focused file, and its first edit keeps a preview tab. While the buffer is dirty the pane passes no
-  `review` to any renderer (code, Preview, the rich views), so review threads and commenting hide until a
-  save or Reload: the host anchors a comment against disk lines, which no longer match the buffer. A
-  Review panel "go to comment" request that arrives meanwhile is dropped, not held for a scroll jump after
-  the save. **`FileEditBanner`** shows one strip per
+  the focused file, and its first edit keeps a preview tab. While the buffer is dirty and autosave is not
+  writing it (`selectFileAutosaving`), the pane passes no `review` to any renderer (code, Preview, the
+  rich views), so review threads and commenting hide until a save or Reload: the host anchors a comment
+  against disk lines, which no longer match the buffer. A Review panel "go to comment" request that
+  arrives meanwhile is dropped, not held for a scroll jump after the save. In auto mode threads stay up
+  while autosave is pending or writing, so they do not collapse and reopen around the cursor on every pause.
+  Typing keeps that window open, so disk can lag the buffer by any number of lines: adding a comment on a
+  dirty buffer first saves it (`saveFile`) and sends the comment only once the buffer is clean, so the host
+  anchors against the lines the user selected. A save that leaves the buffer dirty (a conflict, offline, a
+  failure, or a save that throws) refuses the comment with `CommentRefused`: the composer stays open
+  with its text and shows the reason, and its Save or Send retries. Review stays shown while any
+  composer of the pane is open (`onComposing`, `hidesReview`), so a pause that starts under an open box
+  never unmounts it. **`FileEditBanner`** shows one strip per
   issue: open same-line conflicts (status `conflict`, with their count and **Mine** / **Theirs** /
   **Both** for the first one: Monaco hides its view zones, and so the editor's lens, from screen
   readers, so the banner is the keyboard and screen-reader path; focus stays on the banner while
@@ -2118,9 +2128,14 @@ own section. The kebab menu (`plan-menu`, a
   the text changes, so screen readers announce each issue; a conflict or a failed save is assertive.
   **Reload** and **Keep mine** unmount their own button, so the pane puts focus back in the editor
   (`focusRendererEditor`).
-- **Closing a dirty file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
+- **Closing an unsaved file asks.** `useFileCloseGuard` (mounted by the workbench next to the terminal close
   confirmation) answers the tab X and Cmd/Ctrl+W for a dirty file with **Save** / **Don't save** /
-  **Cancel**. It reads `dirty` from the store's buffer summary. Save closes only once the save leaves the
+  **Cancel**. It reads the store's `selectFileSaveIndicator` and `selectFileAutosaving`. In auto mode a
+  file autosave is about to write or is writing (`pending` / `saving`) saves first (`saveBeforeClose`) and
+  closes when that leaves it clean. An edit typed during that save is saved too before the close, and a
+  second close request for the same file while this runs does nothing. A save with no answer after 3 s
+  (a slow disk, a dropped socket) opens the dialog instead; its late answer neither closes the tab nor asks
+  again. Otherwise only a paused file gets the dialog. Save closes only once the save leaves the
   buffer clean; any other result (a conflict, offline, read-only, too large, a failure) closes the dialog
   and selects that tab, so its banner says why, even when the tab was in the background. Don't save
   discards the buffer and its draft. While a save runs, Save shows "Saving…" and
