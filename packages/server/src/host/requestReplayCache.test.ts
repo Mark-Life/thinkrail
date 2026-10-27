@@ -81,7 +81,7 @@ describe("request replay cache", () => {
 		expect(() => cache.run("page", "fourth", "four", execute)).toThrow(RequestReplayOverflowError);
 	});
 
-	test("in-flight work is never evicted to make room, and counts against admission", async () => {
+	test("in-flight work is never evicted and does not count against admission", async () => {
 		const cache = new RequestReplayCache<string>(1);
 		const run = deferred<string>();
 		let longExecutions = 0;
@@ -91,7 +91,8 @@ describe("request replay cache", () => {
 		};
 		const inFlight = cache.run("page", "long", "same", longRun);
 
-		expect(() => cache.run("page", "other", "other", () => "no room")).toThrow(
+		expect(await cache.run("page", "other", "other", () => "admitted")).toBe("admitted");
+		expect(() => cache.run("page", "third", "third", () => "no room")).toThrow(
 			RequestReplayOverflowError,
 		);
 		expect(cache.run("page", "long", "same", longRun)).toBe(inFlight);
@@ -99,6 +100,17 @@ describe("request replay cache", () => {
 		run.resolve("long-result");
 		expect(await inFlight).toBe("long-result");
 		expect(longExecutions).toBe(1);
+	});
+
+	test("hundreds of hanging requests never fill the default namespace", async () => {
+		const cache = new RequestReplayCache<string>();
+		const hang = new Promise<string>(() => {});
+		const flights = Array.from({ length: 600 }, (_, i) =>
+			cache.run("page", `hang-${i}`, `f${i}`, () => hang),
+		);
+
+		expect(flights).toHaveLength(600);
+		expect(await cache.run("page", "fresh", "fresh", () => "ok")).toBe("ok");
 	});
 
 	test("the byte budget holds even when every response is admitted before any settles", async () => {
@@ -220,6 +232,85 @@ describe("request replay cache", () => {
 		run.resolve("/picked/path");
 		expect(await inFlight).toBe("/picked/path");
 		expect(executions).toBe(1);
+	});
+
+	test("an in-flight id the resume leaves out is dropped once it settles and frees its slot", async () => {
+		const cache = new RequestReplayCache<string>(1);
+		const run = deferred<string>();
+		let executions = 0;
+		const execute = () => {
+			executions += 1;
+			return run.promise;
+		};
+
+		const abandoned = cache.run("page", "abandoned", "same", execute);
+		await cache.run("page", "settled", "one", () => "one");
+		cache.retain("page", ["settled"]);
+		expect(cache.run("page", "abandoned", "same", execute)).toBe(abandoned);
+
+		run.resolve("late");
+		expect(await abandoned).toBe("late");
+		expect(executions).toBe(1);
+		expect(cache.clearClient("page")).toBe(true);
+	});
+
+	test("an abandoned result holds no slot after it settles", async () => {
+		const cache = new RequestReplayCache<string>(1);
+		const run = deferred<string>();
+
+		const abandoned = cache.run("page", "abandoned", "same", () => run.promise);
+		cache.retain("page", []);
+		run.resolve("late");
+		await abandoned;
+
+		expect(await cache.run("page", "fresh", "fresh", () => "ok")).toBe("ok");
+		cache.acknowledge("page", ["fresh"]);
+		expect(await cache.run("page", "abandoned", "same", () => "reran")).toBe("reran");
+	});
+
+	test("an in-flight id the resume names is kept after it settles", async () => {
+		const cache = new RequestReplayCache<string>();
+		const run = deferred<string>();
+		let executions = 0;
+		const execute = () => {
+			executions += 1;
+			return run.promise;
+		};
+
+		const named = cache.run("page", "named", "same", execute);
+		cache.retain("page", ["named"]);
+		run.resolve("kept");
+		expect(await named).toBe("kept");
+
+		expect(await cache.run("page", "named", "same", execute)).toBe("kept");
+		expect(executions).toBe(1);
+	});
+
+	test("each refusal carries its wire error code", async () => {
+		const cache = new RequestReplayCache<string>(1, 1);
+		await cache.run("page", "big", "big", () => "too large");
+
+		const refusal = (attempt: () => unknown) => {
+			try {
+				attempt();
+			} catch (err) {
+				return err;
+			}
+			throw new Error("expected a refusal");
+		};
+
+		expect(refusal(() => cache.run("page", "big", "other", () => "x"))).toMatchObject({
+			code: "REQUEST_REPLAY_CONFLICT",
+			name: "RequestReplayConflictError",
+		});
+		expect(refusal(() => cache.run("page", "big", "big", () => "x"))).toMatchObject({
+			code: "REQUEST_REPLAY_UNRETAINED",
+			name: "RequestReplayUnretainedError",
+		});
+		expect(refusal(() => cache.run("page", "new", "new", () => "x"))).toMatchObject({
+			code: "REQUEST_REPLAY_OVERFLOW",
+			name: "RequestReplayOverflowError",
+		});
 	});
 
 	test("reconciling an unknown client is a no-op", () => {

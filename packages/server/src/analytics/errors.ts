@@ -1,7 +1,13 @@
 import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
+export type ErrorSource =
+	| "host_crash"
+	| "host_logged"
+	| "request"
+	| "request_replay"
+	| "ui"
+	| "desktop";
 export type FatalErrorKind = "uncaughtException" | "unhandledRejection";
 
 export const EXTERNAL_FRAME = "<external>";

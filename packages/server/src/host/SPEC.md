@@ -58,13 +58,21 @@ channel fan-out, and the process-boot wrapper both launchers share.
   be the one a replay is about to ask for. A result leaves only on the client's own word, via two frames handled
   here and never routed to a handler: `{ ack: [id] }` names responses it has **read** (the steady state), and
   `{ resume: [id] }` on each reconnect names everything it still considers **unresolved**, freeing all other
-  settled results. `resume` is what makes receipts safe to lose — an ack can die in a socket buffer exactly like
+  settled results and marking in-flight ids it does not name as abandoned: each is dropped the moment it settles,
+  since the page sends `resume` from the same pending map it replays from and never replays an id it left out.
+  Without that, a reply settling after the reconnect goes to the dead socket and sits unacknowledged until the
+  next one. Abandonment is still on the client's word, not the host's. `resume` is what makes receipts safe to lose — an ack can die in a socket buffer exactly like
   a response can, and nothing would ever re-send it, so each reconnect restates the whole truth instead of
   confirming the confirmations. Cost is bounded instead by **two hard limits, each enforced where its size becomes
-  known**: the entry count on the way *in* — a full namespace refuses new ids (`RequestReplayOverflowError` → a
-  normal `ok: false`) while still answering every id it holds — and the retained bytes on the way *out* of the
-  handler, since a response's size is unknowable at admission (`fs.readFile` returns a whole file) and in-flight
-  work weighs nothing, so an admission-time byte check would bound the count and nothing else. A result that
+  known**: the entry count on the way *in* — it counts settled-but-unacknowledged results only, and a full
+  namespace refuses new ids (`RequestReplayOverflowError` → a normal `ok: false`) while still answering every id
+  it holds — and the retained bytes on the way *out* of the handler, since a response's size is unknowable at
+  admission (`fs.readFile` returns a whole file), so an admission-time byte check would bound the count and
+  nothing else. In-flight work weighs nothing in either limit: a handler that never settles (the native folder
+  picker, a lock with no timeout) must not refuse every later request, and the page bounds in-flight reads at
+  the source. All three refusals (`RequestReplayConflictError`, `RequestReplayOverflowError`,
+  `RequestReplayUnretainedError`) are `CodedError`s that carry their `errorCode` on the wire and are reported
+  under their own `request_replay` source, so a full namespace cannot spend the `request` budget. A result that
   would breach the byte budget is not retained: the entry stays as proof the work ran, so its replay fails
   (`RequestReplayUnretainedError`) rather than re-executing, and the response the caller was already sent is
   unaffected. Neither limit can cost exactly-once — one refuses work that has not started, the other keeps the

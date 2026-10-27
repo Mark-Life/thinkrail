@@ -118,7 +118,10 @@ and never campaign-enriched. Closed `source`: `host_crash` (crashLog's uncaught/
 of that, and every extra second keeps a faulted host running), `host_logged` (a host
 `log.warn/error` carrying an error, with its `scope`), `request` (every failed WS request, CodedErrors
 included — revisitable; PostHog itself excludes expected 4xx outcomes — with `request_method` only for a
-registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
+registered method), `request_replay` (the replay cache refusing a request before any handler ran:
+`REQUEST_REPLAY_CONFLICT`/`_OVERFLOW`/`_UNRETAINED`, with `request_method` like `request`; its own source
+because a full namespace refuses every method the page calls, which would otherwise spend the `request`
+budget and hide real handler failures for the rest of the launch), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
 (handled desktop main-process errors, with their scope). An error `code` passes only as `^[A-Z][A-Z0-9_]+$`.
 
 The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-node 5.46.1's

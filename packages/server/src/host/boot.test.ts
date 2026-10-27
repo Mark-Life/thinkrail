@@ -39,6 +39,7 @@ interface SocketFrame {
 	data?: unknown;
 	id?: string;
 	ok?: boolean;
+	errorCode?: string;
 }
 
 interface SocketCollector {
@@ -429,6 +430,40 @@ test("boot applies the stored environment before serving, and launch variables w
 		delete process.env.TR_BOOT_LAUNCH;
 		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	}
+});
+
+test("replay refusals report under their own source, not the request budget", async () => {
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
+		additionalEnabled: false,
+		env: {},
+		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}");
+		}) as typeof fetch,
+	});
+	const collector = await collectSocket(b.port, "replay-refusal");
+	try {
+		collector.socket.send(JSON.stringify({ id: "dup", method: "project.list", params: {} }));
+		await collector.waitForFrame((candidate) => candidate.id === "dup");
+		collector.socket.send(
+			JSON.stringify({ id: "dup", method: "project.list", params: { other: true } }),
+		);
+		const refusal = await collector.waitForFrame(
+			(candidate) => candidate.id === "dup" && candidate.ok === false,
+		);
+		expect(refusal.errorCode).toBe("REQUEST_REPLAY_CONFLICT");
+		const exceptions = () => events.filter((event) => event.event === "$exception");
+		const deadline = Date.now() + 2_000;
+		while (exceptions().length < 1 && Date.now() < deadline) await Bun.sleep(5);
+		expect(exceptions().map((event) => event.properties)).toMatchObject([
+			{ source: "request_replay", code: "REQUEST_REPLAY_CONFLICT", request_method: "project.list" },
+		]);
+	} finally {
+		collector.socket.close();
 	}
 });
 

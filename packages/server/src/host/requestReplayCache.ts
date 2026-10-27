@@ -1,22 +1,28 @@
-export class RequestReplayConflictError extends Error {
+import { CodedError } from "@thinkrail/shared/codedError";
+
+export class RequestReplayConflictError extends CodedError {
 	constructor(id: string) {
-		super(`request id "${id}" was reused with a different payload`);
+		super("REQUEST_REPLAY_CONFLICT", `request id "${id}" was reused with a different payload`);
 		this.name = "RequestReplayConflictError";
 	}
 }
 
-export class RequestReplayOverflowError extends Error {
-	constructor(clientKey: string) {
+export class RequestReplayOverflowError extends CodedError {
+	constructor() {
 		super(
-			`replay namespace for client "${clientKey}" is full: unacknowledged results must be read first`,
+			"REQUEST_REPLAY_OVERFLOW",
+			"replay namespace for this client is full: unacknowledged results must be read first",
 		);
 		this.name = "RequestReplayOverflowError";
 	}
 }
 
-export class RequestReplayUnretainedError extends Error {
+export class RequestReplayUnretainedError extends CodedError {
 	constructor(id: string) {
-		super(`request id "${id}" already executed; its response exceeded the retention budget`);
+		super(
+			"REQUEST_REPLAY_UNRETAINED",
+			`request id "${id}" already executed; its response exceeded the retention budget`,
+		);
 		this.name = "RequestReplayUnretainedError";
 	}
 }
@@ -25,11 +31,13 @@ interface ReplayEntry<T> {
 	readonly fingerprint: string;
 	result: Promise<T> | null;
 	settled: boolean;
+	abandoned: boolean;
 	weight: number;
 }
 
 interface ClientNamespace<T> {
 	readonly requests: Map<string, ReplayEntry<T>>;
+	inFlight: number;
 	weight: number;
 }
 
@@ -49,7 +57,7 @@ export class RequestReplayCache<T> {
 	): Promise<T> {
 		let namespace = this.clients.get(clientKey);
 		if (!namespace) {
-			namespace = { requests: new Map(), weight: 0 };
+			namespace = { requests: new Map(), inFlight: 0, weight: 0 };
 			this.clients.set(clientKey, namespace);
 		}
 		const requests = namespace.requests;
@@ -61,16 +69,23 @@ export class RequestReplayCache<T> {
 			return existing.result;
 		}
 
-		if (requests.size >= this.maxRequestsPerClient) {
-			throw new RequestReplayOverflowError(clientKey);
+		if (requests.size - namespace.inFlight >= this.maxRequestsPerClient) {
+			throw new RequestReplayOverflowError();
 		}
 
 		const result = Promise.resolve().then(execute);
-		const entry: ReplayEntry<T> = { fingerprint, result, settled: false, weight: 0 };
+		const entry: ReplayEntry<T> = {
+			fingerprint,
+			result,
+			settled: false,
+			abandoned: false,
+			weight: 0,
+		};
 		requests.set(requestId, entry);
+		namespace.inFlight += 1;
 		result.then(
-			(value) => this.markSettled(clientKey, namespace, entry, this.resultWeight(value)),
-			() => this.markSettled(clientKey, namespace, entry, 1),
+			(value) => this.markSettled(clientKey, namespace, requestId, entry, this.resultWeight(value)),
+			() => this.markSettled(clientKey, namespace, requestId, entry, 1),
 		);
 		return result;
 	}
@@ -85,7 +100,11 @@ export class RequestReplayCache<T> {
 		const namespace = this.clients.get(clientKey);
 		if (!namespace) return;
 		const keep = new Set(unresolvedIds);
-		for (const id of namespace.requests.keys()) if (!keep.has(id)) this.free(namespace, id);
+		for (const [id, entry] of namespace.requests) {
+			if (keep.has(id)) continue;
+			if (entry.settled) this.free(namespace, id);
+			else entry.abandoned = true;
+		}
 	}
 
 	clearClient(clientKey: string): boolean {
@@ -110,11 +129,17 @@ export class RequestReplayCache<T> {
 	private markSettled(
 		clientKey: string,
 		namespace: ClientNamespace<T>,
+		requestId: string,
 		entry: ReplayEntry<T>,
 		weight: number,
 	): void {
 		if (this.clients.get(clientKey) !== namespace) return;
+		namespace.inFlight -= 1;
 		entry.settled = true;
+		if (entry.abandoned) {
+			namespace.requests.delete(requestId);
+			return;
+		}
 
 		if (namespace.weight + weight > this.maxWeightPerClient) {
 			entry.result = null;

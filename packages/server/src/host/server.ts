@@ -415,6 +415,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					.update(JSON.stringify([method, params, sessionId ?? null]))
 					.digest("hex");
 				log.debug(`ws ${methodDiagnostic}`);
+				const failureFrame = (err: unknown, source: "request" | "request_replay") => {
+					log.debug(`ws ${methodDiagnostic} ${source === "request" ? "failed" : "refused"}`);
+					reportError(err, {
+						source,
+						handled: true,
+						...(methodDiagnostic === method ? { requestMethod: method } : {}),
+					});
+					const code = errorCodeOf(err);
+					return JSON.stringify({
+						id: requestId,
+						ok: false,
+						error: err instanceof Error ? err.message : String(err),
+						...(code ? { errorCode: code } : {}),
+					});
+				};
 				try {
 					const response = await requestReplays.run(
 						ws.data.clientKey,
@@ -429,27 +444,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
-								const error = err instanceof Error ? err.message : String(err);
-								log.debug(`ws ${methodDiagnostic} failed`);
-								reportError(err, {
-									source: "request",
-									handled: true,
-									...(methodDiagnostic === method ? { requestMethod: method } : {}),
-								});
-								const code = errorCodeOf(err);
-								return JSON.stringify({
-									id: requestId,
-									ok: false,
-									error,
-									...(code ? { errorCode: code } : {}),
-								});
+								return failureFrame(err, "request");
 							}
 						},
 					);
 					if (ws.send(response) === 0) ws.close();
 				} catch (err) {
-					const error = err instanceof Error ? err.message : String(err);
-					if (ws.send(JSON.stringify({ id: requestId, ok: false, error })) === 0) ws.close();
+					if (ws.send(failureFrame(err, "request_replay")) === 0) ws.close();
 				}
 			},
 			drain(ws) {
