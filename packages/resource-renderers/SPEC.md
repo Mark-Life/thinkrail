@@ -189,7 +189,7 @@ keeps it.
   engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`, and for the markdown live preview `@codemirror/state`, `@codemirror/view`,
-  `@codemirror/language`, `@codemirror/commands`, `@lezer/markdown`, `@lezer/common`).
+  `@codemirror/language`, `@codemirror/commands`, `@codemirror/search`, `@lezer/markdown`, `@lezer/common`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
   pi packages. `scripts/check-module-boundaries.ts` enforces it; only `apps/web` consumes the package today.
 - UI text follows [[architecture]] Decision 23: renderer chrome renders through `useT()`'s translator
@@ -647,8 +647,12 @@ content's own height.
     Reduced motion drops the presence fades. Enter on a list item starts the next one, inside a quote
     too (an empty item ends the list), outside code. Any other Enter keeps the line's leading
     whitespace, as Monaco does, so a fence or paragraph inside a list item stays in it.
+  - **Find.** CodeMirror renders only the lines near the viewport, so the browser's find cannot reach
+    the rest. Cmd/Ctrl+F in the editor opens a find bar (`find.ts` over `@codemirror/search`, React in
+    `LiveFindBar` through the portal host) above the text: Enter and Cmd/Ctrl+G or F3 go to the next
+    match, with Shift the previous one, and Escape closes it and puts focus back in the text.
   - **Cost.** Entry chunk unchanged (1,663 kB, 527 kB gzip). `MarkdownPreview` grows from 13.1 to
-    15.8 kB (5.5 to 6.6 kB gzip). The editor chunk is 58.6 kB (20.9 kB gzip) plus one CodeMirror chunk
+    16.2 kB (5.5 to 6.7 kB gzip). The editor chunk is 83.0 kB (29.2 kB gzip, find included) plus one CodeMirror chunk
     of 270.6 kB (87.6 kB gzip: state, commands, view, language) that it shares with the editing
     registry ([[submodule-web-editing]]).
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path

@@ -178,6 +178,24 @@ test("a link whose title spans lines opens, and Cmd/Ctrl+Enter follows it", asyn
 	await expect(fileTab(page, "other.md")).toBeVisible();
 });
 
+test("Cmd/Ctrl+F finds text below the rendered part of a long document", async ({ page }) => {
+	const lines = Array.from({ length: 600 }, (_, index) => `Line ${index + 1} of filler text.`);
+	await openLive(page, "long.md", `${lines.join("\n\n")}\n\nThe last word is zebrafind.\n`);
+	await liveLine(page, "Line 1 of").click();
+	await expect(liveLine(page, "zebrafind")).toHaveCount(0);
+	await pressPlatformShortcut(page, "f");
+	const find = live(page).getByTestId("markdown-find");
+	const field = find.getByRole("searchbox", { name: "Find in file" });
+	await expect(field).toBeFocused();
+	await field.fill("zebrafind");
+	await page.keyboard.press("Enter");
+	await expect(liveLine(page, "zebrafind")).toBeInViewport();
+	await expect(live(page).locator(".cm-searchMatch-selected")).toHaveText("zebrafind");
+	await page.keyboard.press("Escape");
+	await expect(find).toHaveCount(0);
+	await expect(live(page).locator(".cm-content")).toBeFocused();
+});
+
 test.describe("manual save", () => {
 	pinFileSaveMode("manual");
 

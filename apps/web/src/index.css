@@ -608,6 +608,20 @@
 .md-live .cm-line .presence-flag {
 	display: inline-block;
 }
+.md-live.cm-editor .cm-panels {
+	background: var(--container-workspace-bg);
+	color: inherit;
+}
+.md-live.cm-editor .cm-panels.cm-panels-top {
+	border-bottom: none;
+}
+.md-live.cm-editor .cm-searchMatch {
+	background: var(--editor-selection-highlight-bg);
+	outline: 1px solid var(--editor-selection-bg);
+}
+.md-live.cm-editor .cm-searchMatch.cm-searchMatch-selected {
+	background: var(--selection-bg-muted);
+}
 .md-live .cm-tooltip.cm-tooltip-hover {
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-sm);

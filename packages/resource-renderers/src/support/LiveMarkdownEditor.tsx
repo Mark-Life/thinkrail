@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { useResourceHost } from "../host";
 import type { ConflictChoice, ResourceEditSession, ResourceViewProps } from "../registry";
 import { ConflictLens, ConflictTheirs } from "./conflictLens";
+import { LiveFindBar } from "./LiveFindBar";
 import { bindSession, type SessionBinding } from "./livePreview/binding";
 import {
 	livePreview,
@@ -17,6 +18,7 @@ import {
 	setThreads,
 	type ThreadAnchor,
 } from "./livePreview/decorations";
+import { liveFind } from "./livePreview/find";
 import { markdownLanguage } from "./livePreview/language";
 import { linkHrefAt, linkTarget } from "./livePreview/links";
 import { continueList, newlineKeepingIndent } from "./livePreview/lists";
@@ -56,10 +58,12 @@ function enter(view: EditorView) {
 function LivePortal({
 	entry,
 	props,
+	view,
 	onResolve,
 }: {
 	entry: PortalEntry;
 	props: LiveProps;
+	view: EditorView | null;
 	onResolve(id: number, choice: ConflictChoice): void;
 }) {
 	const t = useT();
@@ -91,6 +95,8 @@ function LivePortal({
 			return <ConflictLens conflict={content.conflict} focusable onResolve={onResolve} />;
 		case "theirs":
 			return <ConflictTheirs conflict={content.conflict} theirsText={content.theirsText} />;
+		case "find":
+			return view ? <LiveFindBar view={view} /> : null;
 	}
 }
 
@@ -139,6 +145,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 					markdownLanguage,
 					livePreview,
 					livePresence,
+					liveFind,
 					portalHost.of(portals),
 					textCompartment.of([]),
 					EditorView.lineWrapping,
@@ -270,7 +277,7 @@ export default function LiveMarkdownEditor(props: LiveProps) {
 			</span>
 			{entries.map((entry) =>
 				createPortal(
-					<LivePortal entry={entry} props={props} onResolve={resolve} />,
+					<LivePortal entry={entry} props={props} view={view} onResolve={resolve} />,
 					entry.node,
 					String(entry.key),
 				),

@@ -6,7 +6,8 @@ export type PortalContent =
 	| { kind: "block"; block: LiveBlock }
 	| { kind: "thread"; id: string }
 	| { kind: "lens"; conflict: EditConflict }
-	| { kind: "theirs"; conflict: EditConflict; theirsText: string };
+	| { kind: "theirs"; conflict: EditConflict; theirsText: string }
+	| { kind: "find" };
 
 export interface PortalEntry {
 	key: number;
@@ -21,6 +22,7 @@ const WIDGET_CLASS: Readonly<Record<PortalContent["kind"], string>> = {
 	thread: `${CHROME} md-widget-thread`,
 	lens: CHROME,
 	theirs: CHROME,
+	find: "md-find",
 };
 
 const INTERACTIVE = "a, button, input, textarea, select, summary, label, [role='button']";
@@ -35,6 +37,8 @@ function sameContent(a: PortalContent, b: PortalContent): boolean {
 			return b.kind === "thread" && a.id === b.id;
 		case "lens":
 			return b.kind === "lens" && a.conflict.id === b.conflict.id;
+		case "find":
+			return b.kind === "find";
 		case "theirs":
 			return (
 				b.kind === "theirs" &&
