@@ -12,8 +12,9 @@ tags: [ui, public-surface-checked]
 
 Own the client side of file editing: one buffer per open file, kept outside any editor; the save
 pipeline over `fs.writeFile` and the autosave that drives it; disk reconcile through a live 3-way merge; the user's own undo history;
-and drafts that survive a reload. Editors
-attach to a buffer through the renderer-neutral `ResourceEditSession` ([[module-resource-renderers]]).
+and drafts that survive a reload. Editors (Monaco Source and the CodeMirror markdown live preview)
+attach to a buffer through the renderer-neutral `ResourceEditSession` ([[module-resource-renderers]]),
+so the two views of a markdown file share its text, undo and save state.
 The host owns the bytes on disk, their BOM, line endings and mode ([[submodule-server-fs]]).
 
 ## Boundary
@@ -282,7 +283,10 @@ IndexedDB (private mode, tests) means no drafts.
   with no write when the bytes already match.
 - **The store slice is status only.** Views read text from the buffer (`useFileBufferText`). An unchanged
   summary is a no-op in the store, so typing wakes no store subscriber.
-- **Cost.** The lazy `registry` chunk is 86 kB (29 kB gzip): `@codemirror/state`, the history from
-  `@codemirror/commands` and jsdiff. It uses `historyField`, not `history()`: `history()` adds an
-  `EditorView` input handler that pulls in `@codemirror/view` (the chunk was 238 kB). The entry chunk
-  went from 1,655 to 1,648 kB (524 to 521 kB gzip) because jsdiff left it.
+- **Cost.** The lazy `registry` chunk is 20 kB (7 kB gzip) and loads one shared CodeMirror chunk of
+  271 kB (88 kB gzip) that the markdown live preview uses too: `@codemirror/commands` imports
+  `@codemirror/view`, and once the live preview puts `view` in the build the bundler keeps that edge,
+  so the first editable file of a session loads about 291 kB (95 kB gzip) where it loaded 93 kB (31 kB
+  gzip). Splitting `view` out needs `codeSplitting.includeDependenciesRecursively: false` with strict
+  execution order for the whole build. The registry uses `historyField`, not `history()`. The entry
+  chunk went from 1,655 to 1,648 kB (524 to 521 kB gzip) because jsdiff left it.

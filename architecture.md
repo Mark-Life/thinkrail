@@ -325,8 +325,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     its own geometry and reports back as placed or unplaced — the host's anchors are the only authority.
     `@pierre/diffs` renders every source diff and every phone-class code surface; rich formats render
     through their own renderers' diffs. Monaco renders files on
-    desktop and never loads on a phone. On desktop a file tab's Monaco view also edits the file
-    ([[submodule-web-editing]]); chat cards, phones and diffs stay read-only. Review mutations (`change.revert`/`change.undo`,
+    desktop and never loads on a phone. On desktop a file tab's Monaco view and its markdown live preview
+    (CodeMirror 6) also edit the file, both bound to one buffer ([[submodule-web-editing]]); chat cards,
+    phones and diffs stay read-only. Review mutations (`change.revert`/`change.undo`,
     [[submodule-server-changes]]) and the editor save `fs.writeFile` ([[submodule-server-fs]]) are
     compare-and-swap guarded on the sha-256 `ResourceMeta.hash` the client last read. Each runs in pi's
     per-file `withFileMutationQueue`, so it waits behind a pi `edit`/`write` of the same file. One

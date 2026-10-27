@@ -2095,10 +2095,11 @@ own section. The kebab menu (`plan-menu`, a
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer
-  behavior, not dispatch policy.
+  behavior, not dispatch policy. With an edit session it is the live preview editor until the user locks
+  it; the lock brings back this reading view and its commenting ([[module-resource-renderers]]).
 - **A file tab edits on desktop.** `FilePane` passes the `edit` session from [[submodule-web-editing]]'s
   `useFileBuffer` only when `canEditFile` holds: a desktop viewport, a renderer with `capabilities.edit`
-  (today only `code`), text metadata that is not an LFS pointer, a size within `FILE_WRITE_MAX_BYTES`, and
+  (`code` and `markdown`), text metadata that is not an LFS pointer, a size within `FILE_WRITE_MAX_BYTES`, and
   `supportsFileWrite` (v93). Every other mount stays read-only, and so do the phone view, chat cards,
   `ResourcePreview` and every diff. While a buffer exists, the other renderers of the tab (Preview, the
   rich CSV/JSON views) show the buffer text through `useFileBufferText`, not the disk text. The pane
