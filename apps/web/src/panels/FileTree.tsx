@@ -9,6 +9,7 @@ import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
+import { FileWriterDot } from "./FileWriters";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -155,13 +156,18 @@ function FileNodeRow({
 					fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
 				}
 				trailing={
-					fileStatus ? (
-						<span
-							data-testid="file-status"
-							className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
-						>
-							{statusLetter(fileStatus)}
-						</span>
+					!isDir ? (
+						<>
+							<FileWriterDot workspaceId={workspaceId} path={node.path} />
+							{fileStatus ? (
+								<span
+									data-testid="file-status"
+									className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
+								>
+									{statusLetter(fileStatus)}
+								</span>
+							) : null}
+						</>
 					) : dirChanged ? (
 						<span
 							data-testid="file-folder-dot"
