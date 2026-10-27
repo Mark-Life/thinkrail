@@ -1,5 +1,5 @@
 import type { FileContent, FileWriteResult, WsParams } from "@thinkrail/contracts";
-import type { TextChange } from "@thinkrail/resource-renderers";
+import type { ResourceEditSession, TextChange } from "@thinkrail/resource-renderers";
 import type { FileBufferSummary } from "../store";
 import { RequestError } from "../transport";
 import type { Draft, DraftKey, DraftStore } from "./drafts";
@@ -124,12 +124,12 @@ export function setup(
 	const handle = registry.ensure({ workspaceId: WS, path: PATH, ...file });
 	if (!handle) throw new Error("buffer not created");
 	const received: (readonly TextChange[])[] = [];
-	if (options.view !== false) handle.session.subscribe((changes) => received.push(changes));
+	if (options.view !== false) handle.session.subscribe((update) => received.push(update.changes));
 	return { disk, drafts, summaries, restored, registry, handle, received };
 }
 
 export const type = (
-	handle: { session: { snapshot(): string; applyLocal(c: TextChange[]): void } },
+	handle: { session: Pick<ResourceEditSession, "applyLocal"> },
 	at: number,
 	text: string,
-) => handle.session.applyLocal([{ from: at, to: at, insert: text }]);
+) => handle.session.applyLocal([{ from: at, to: at, insert: text }], "type");

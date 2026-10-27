@@ -9,6 +9,7 @@ import {
 	openFile,
 	openWorkspaceWithFile,
 	typeAtLineEnd,
+	unmergeableText,
 	visibleEditor,
 } from "./fixtures/fileEdit";
 
@@ -179,15 +180,15 @@ test("Save from the close dialog of a background tab that fails selects that tab
 	await expect(page.getByTestId("file-close-guard")).toBeHidden();
 	await expect(tab).toHaveCount(1);
 	await expect(tab).toHaveAttribute("data-active", "true");
-	await expect(banner(page)).toHaveAttribute("data-status", "stale");
+	await expect(banner(page)).toHaveAttribute("data-status", "conflict");
 	expect(readFileSync(path, "utf8")).toBe("const a = 2; // theirs\n");
 });
 
 test("Reload and Keep mine put keyboard focus back in the editor", async ({ page }) => {
-	const path = await openFile(page, "focus.ts", "const base = 1;\n");
+	const path = await openFile(page, "focus.ts", unmergeableText(""));
 	for (const [action, theirs] of [
-		["file-edit-keep-mine", "const theirs = 2;\n"],
-		["file-edit-reload", "const theirs = 3;\n"],
+		["file-edit-keep-mine", unmergeableText("theirs")],
+		["file-edit-reload", unmergeableText("again")],
 	] as const) {
 		await typeAtLineEnd(page, 1, " // mine");
 		writeFileSync(path, theirs);

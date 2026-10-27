@@ -44,3 +44,9 @@ export async function typeAtLineEnd(page: Page, line: number, text: string) {
 export function editorHasFocus(page: Page) {
 	return page.evaluate(() => document.activeElement?.closest(".monaco-editor") !== null);
 }
+
+export function unmergeableText(tag: string) {
+	return Array.from({ length: 2500 }, (_, index) =>
+		index % 2 === 0 && tag ? `${tag} line ${index}\n` : `line ${index}\n`,
+	).join("");
+}

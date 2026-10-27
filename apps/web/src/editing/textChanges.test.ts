@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { applyChanges, textChanges } from "./textChanges";
+import type { TextChange } from "@thinkrail/resource-renderers";
+import { textChanges } from "./textChanges";
+
+function applyChanges(text: string, changes: readonly TextChange[]): string {
+	let next = text;
+	for (const change of [...changes].sort((left, right) => right.from - left.from)) {
+		next = next.slice(0, change.from) + change.insert + next.slice(change.to);
+	}
+	return next;
+}
 
 function roundTrip(previous: string, next: string) {
 	const changes = textChanges(previous, next);
@@ -38,15 +47,6 @@ test("a rewrite past the edit cap falls back to one trimmed change", () => {
 	const next = `${Array.from({ length: 3000 }, (_, index) => `new ${index}`).join("\n")}\nend\n`;
 	const changes = roundTrip(previous, next);
 	expect(changes).toHaveLength(1);
-});
-
-test("applyChanges reads every offset against the original text", () => {
-	expect(
-		applyChanges("abcdef", [
-			{ from: 0, to: 1, insert: "X" },
-			{ from: 4, to: 6, insert: "" },
-		]),
-	).toBe("Xbcd");
 });
 
 test("a large rewrite that keeps the line count stays per-line and returns quickly", () => {

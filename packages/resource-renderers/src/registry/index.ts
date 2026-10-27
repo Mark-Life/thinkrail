@@ -10,8 +10,12 @@ export { anchorLabel, isPlaceable, outdatedReason, threadLabel } from "./review"
 export { rendererImplementationKey, rendererTestId, selectResourceRenderer } from "./selection";
 export type {
 	AnchorDraft,
+	ConflictChoice,
+	EditConflict,
+	EditUpdate,
 	HunkActions,
 	HunkTriage,
+	LocalEditKind,
 	ResourceAnchorCapability,
 	ResourceContent,
 	ResourceDescriptor,
@@ -26,4 +30,5 @@ export type {
 	ReviewThreadActions,
 	SurfaceReview,
 	TextChange,
+	TextRange,
 } from "./types";

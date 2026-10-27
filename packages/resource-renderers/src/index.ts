@@ -19,13 +19,17 @@ export {
 export {
 	type AnchorDraft,
 	anchorLabel,
+	type ConflictChoice,
 	canonicalWorkspacePath,
 	describeResource,
 	diffRendererCapabilities,
 	diffResourceMeta,
+	type EditConflict,
+	type EditUpdate,
 	type HunkActions,
 	type HunkTriage,
 	isPlaceable,
+	type LocalEditKind,
 	outdatedReason,
 	PENDING_TEXT_META,
 	type ResourceAnchorCapability,
@@ -46,6 +50,7 @@ export {
 	resourceContent,
 	type SurfaceReview,
 	type TextChange,
+	type TextRange,
 	threadLabel,
 } from "./registry";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";

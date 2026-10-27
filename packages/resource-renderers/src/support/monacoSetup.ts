@@ -209,9 +209,10 @@ export function bindEditSession(
 				to: change.rangeOffset + change.rangeLength,
 				insert: change.text,
 			})),
+			"other",
 		);
 	});
-	const unsubscribe = input.session.subscribe((changes) => {
+	const unsubscribe = input.session.subscribe(({ changes }) => {
 		if (changes.length === 0 || bound.isDisposed()) return;
 		applying = true;
 		try {

@@ -251,12 +251,20 @@ control rather than emulate one.
 renderer whose desktop view can edit text; only `code` (Monaco) sets it today. A host that wants an
 editable mount passes `ResourceViewProps.edit`, a `ResourceEditSession`; without it every view is
 read-only, so chat cards, phones and diffs stay read-only by construction. The session is
-editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes)` reports the view's own edits,
-and `subscribe(listener)` delivers every other change. Saving is the host's (its shortcut and menu),
-not the view's. A change set is `TextChange[]` (`{from, to, insert}`), all offsets into the document
+editor-neutral: `snapshot()` is the current LF text, `applyLocal(changes, kind)` reports the view's own
+edits with their `LocalEditKind` (type, delete, paste, composition start and step, other) so the host
+can group undo steps: `type` is only inserts without a line break, each one character when it replaces
+text, so Enter, a copied line or a drag-move is `other`; `paste` is the one change a paste event
+causes, `select(ranges)` reports the selection, and `subscribe(listener)` delivers every
+other change as an `EditUpdate` (`changes`, plus `selection` after an undo or redo). The host owns undo:
+`undo()`/`redo()`/`canUndo()`/`canRedo()`. `setComposing()` tells it an IME composition is open, so it
+holds remote text back. `conflicts()` lists open same-line conflicts (`EditConflict`: offsets of the
+user's lines and the disk lines, `theirs`), and `resolveConflict(id, "mine" | "theirs" | "both")` picks
+a side; `CONFLICT_CHOICES` and `CONFLICT_CHOICE_LABELS` give every surface that offers the choice one
+order and one set of label keys. Saving is the host's (its shortcut and menu), not the view's. A change set is `TextChange[]` (`{from, to, insert}`), all offsets into the document
 before the set, never overlapping: the CodeMirror convention, so a CodeMirror- or CRDT-backed session
 needs no new contract. A view mounts from `snapshot()`, never from `content`, and applies subscribed
-changes as deltas. The package owns no buffer, save or conflict state. An editable Monaco keeps Monaco's
+changes as deltas. The package owns no buffer, save, history or conflict state. An editable Monaco keeps Monaco's
 tab-focus toggle (Ctrl+M, Ctrl+Shift+M on macOS), so Tab can leave the editor for keyboard users.
 
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
