@@ -217,6 +217,24 @@ export function tryCurrentBranch(repoPath: string): string | null {
 	return topLevel.ok && canonicalPath(topLevel.out) === canonicalPath(repoPath) ? "HEAD" : null;
 }
 
+const HEAD_BRANCH_ARGS = ["rev-parse", "--show-toplevel", "--symbolic-full-name", "HEAD"];
+const BRANCH_REF_PREFIX = "refs/heads/";
+
+function rootBranch(repoPath: string, head: GitResult) {
+	if (!head.ok) return null;
+	const [topLevel, ref] = head.out.split("\n");
+	if (!topLevel || canonicalPath(topLevel) !== canonicalPath(repoPath)) return null;
+	return ref?.startsWith(BRANCH_REF_PREFIX) ? ref.slice(BRANCH_REF_PREFIX.length) : null;
+}
+
+export function headBranchAt(repoPath: string): string | null {
+	return rootBranch(repoPath, git(repoPath, HEAD_BRANCH_ARGS));
+}
+
+export async function headBranchAtAsync(repoPath: string): Promise<string | null> {
+	return rootBranch(repoPath, await gitAsync(repoPath, HEAD_BRANCH_ARGS));
+}
+
 export function currentBranch(repoPath: string): string {
 	return tryCurrentBranch(repoPath) ?? "HEAD";
 }

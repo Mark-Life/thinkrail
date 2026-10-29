@@ -87,7 +87,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   convergences for a git-metadata write in a watched worktree: `recordWorkspaceHead` (the settled
   lifecycle's commit proxy — stamps activity only when the sha actually moved, see
   [[submodule-server-workspaces]]),
-  `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
+  `syncWorkspaceBranch` (**re-sync a workspace's branch to its live checkout**, any kind — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
   clients' `HEAD`-relative reads
@@ -418,7 +418,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
     subagent child — gets an error result.
   - `chat_title` → `renameSession(…, { onlyIfUnnamed: true })`. `workspace_name` → only when the workspace
     is managed (not `default`/`external`) and not `renamed`, via `renameWorkspace(id, name, { branch })`
-    (locks it, moves the branch once). There is no branch-shape gate, so records an older host's
+    (locks it; moves the branch only while the workspace is still on its own unnamed branch, never an
+    adopted one; a detached or unreadable HEAD fails the call so naming can retry — see
+    [[submodule-server-workspaces]]). There is no branch-shape gate, so records an older host's
     provisional pass left unlocked are still nameable.
   - The result text states, per target, whether it was applied or kept because it was already named, so
     the agent stops. A `branch` without a usable `workspace_name` is rejected before any write (the slug

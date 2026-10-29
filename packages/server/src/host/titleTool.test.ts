@@ -3,7 +3,13 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
-import { createWorkspace, getWorkspace, listWorkspaces, renameWorkspace } from "../workspaces";
+import {
+	createWorkspace,
+	getWorkspace,
+	listWorkspaces,
+	renameWorkspace,
+	syncWorkspaceBranch,
+} from "../workspaces";
 import { type AgentTitleDeps, applyAgentTitle } from "./titleTool";
 
 let dataDir: string;
@@ -104,6 +110,35 @@ test("a manual rename always wins over the agent", async () => {
 		"Chat title kept: this chat is already named.\nWorkspace name kept: this workspace is already named.",
 	);
 	expect(getWorkspace(ws.id)).toMatchObject({ name: "Mine", branch: ws.branch });
+});
+
+test.each([
+	["before", true],
+	["after", false],
+])("the agent names a workspace whose terminal checked out a branch (nudge %s naming), but never moves that branch", async (_order, nudged) => {
+	const ws = await createWorkspace("p1");
+	git(ws.worktreePath, "switch", "-c", "feature/mine");
+	if (nudged) syncWorkspaceBranch(ws.id);
+	const refs = () =>
+		Bun.spawnSync(["git", "-C", repo, "for-each-ref", "--format=%(refname:short)", "refs/heads"])
+			.stdout.toString()
+			.trim();
+	const before = refs();
+
+	const text = await applyAgentTitle(
+		"s1",
+		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
+		fakeChat(ws.id).deps,
+	);
+
+	expect(text).toContain('Workspace renamed to "Agent name" (branch feature/mine).');
+	expect(getWorkspace(ws.id)).toMatchObject({
+		name: "Agent name",
+		branch: "feature/mine",
+		renamed: true,
+		branchAdopted: true,
+	});
+	expect(refs()).toBe(before);
 });
 
 test("the Default workspace keeps its name while the chat still gets one", async () => {

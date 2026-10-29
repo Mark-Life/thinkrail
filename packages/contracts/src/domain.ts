@@ -131,6 +131,8 @@ export interface Workspace {
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
+	/** The branch was checked out outside ThinkRail; renames never move it. */
+	branchAdopted?: true;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;

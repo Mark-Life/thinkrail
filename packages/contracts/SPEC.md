@@ -260,7 +260,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet named** (a fresh `workspace-N`, or a
   record an older host's provisional pass left unlocked), so the agent's `set_title` may still name it; `true` = named (automatically or by the user), never auto-touched
-  again; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
+  again; its optional **`branchAdopted: true`** marks a managed workspace that adopted a branch checked out
+  outside ThinkRail (terminal, agent shell): a rename may still set its name but never moves that branch;
+  its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
   user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed

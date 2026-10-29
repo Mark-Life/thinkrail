@@ -230,6 +230,37 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 	});
 });
 
+test("branch status measures the branch a managed workspace's terminal switched to", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Switched" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "switched.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	git(workspace.worktreePath, "switch", "-c", "feature/terminal");
+
+	const rows = (await handleRequest(
+		"workspace.list",
+		{ projectId: "p1", includeDiffStats: false },
+		CTX,
+	)) as Workspace[];
+	expect(rows.find((row) => row.id === workspace.id)).toMatchObject({
+		branch: "feature/terminal",
+		branchAdopted: true,
+	});
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: false, review: null });
+});
+
 test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",

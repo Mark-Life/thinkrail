@@ -219,7 +219,10 @@ ref off the workspace-create critical path.
   (`symbolic-ref --short HEAD`, unborn-safe; detached → literal `HEAD`), consumed by the `workspaces`
   module for a user-owned workspace's folder-truth `branch`, with **`tryCurrentBranch`** its fallible form
   (`null` when the path is not a readable worktree root, so a refresh never persists an I/O failure as a
-  detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
+  detach); **`headBranchAt`/`headBranchAtAsync(repoPath)`** — the checked-out branch, `null` when detached,
+  unborn, unreadable, or when `repoPath` is not itself the worktree root (a folder that lost its `.git` would
+  otherwise answer with an enclosing repo's branch), consumed by `workspaces` for managed workspaces;
+  **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
   checks; `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a configured remote ref (via `gitAsync`), so a later `createWorkspace` branches off a
@@ -313,7 +316,8 @@ ref off the workspace-create critical path.
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
   `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originUrls`, `countPushTargetDivergence`,
   `PushTargetStatus`,
-  `gitCommitPaths`, `gitHeadSha`, `headShaAt`, `listCommits`, `listCommitsSince`,
+  `gitCommitPaths`, `gitHeadSha`, `headShaAt`, `headBranchAt`, `headBranchAtAsync`, `listCommits`,
+  `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`,
@@ -341,8 +345,10 @@ ref off the workspace-create critical path.
   the other end — it returns *no* stats (and logs why) rather than a fabricated `+0 −0`. A review surface that
   calls a dirty worktree clean is the worst failure this product can have.
 - `gitStatus` reports the **live** current branch for a user-owned (`kind: "default" | "external"`)
-  workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
-  self-heals only at list time; the Changes header must not lag).
+  workspace, whose branch moves out-of-band (a terminal `git checkout`) and the Changes header must not lag.
+  A managed workspace's branch moves out-of-band too; `gitStatus` deliberately reports its **stored**
+  branch, which converges through `workspaces`' `syncWorkspaceBranch` (repo-metadata nudge, list, rename,
+  push), so between a terminal switch and that nudge the header may show the old branch.
 - **A network git call is bounded by us, not talked out of waiting.** A `fetch` whose remote wants a
   passphrase blocks on `/dev/tty` forever, and the only thing that ever ended that wait was the *client's*
   60s request timeout (`transport.ts` `DEFAULT_TIMEOUT_MS`, not overridden for `workspace.create`) — which

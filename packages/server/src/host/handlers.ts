@@ -215,7 +215,6 @@ import {
 	openExistingWorktree,
 	reclaimWorktree,
 	recordWorkspaceActivity,
-	refreshUserOwnedWorkspace,
 	renameWorkspace,
 	settleWorkspace,
 	setWorkspaceDiffBase,
@@ -728,7 +727,6 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"pr.open": async (p) => {
-		refreshUserOwnedWorkspace(p.workspaceId);
 		recordWorkspaceActivity(p.workspaceId);
 		const { branch, ...result } = await observePrAction(() => openPr(p), p.source ?? "other");
 		if (result.review) {

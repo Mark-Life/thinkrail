@@ -78,15 +78,20 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
   the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
   (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
-  `renameWorkspace` (**sync**; sets the sanitized, casing- and script-preserving display `name` and always
+  `renameWorkspace` (**sync**; first runs `syncWorkspaceBranch`, so it never acts on a stale stored branch;
+  sets the sanitized, casing- and script-preserving display `name` and always
   sets `renamed: true`, so automatic naming never touches it again. **`opts.branch`** is the agent's English
   slug from `set_title`: when present, the branch becomes the slug's ASCII kebab form, clamped to 60 (the display name
   may be any script, so the branch is never derived from it), uniqued against refs + worktree dirs, and moved with
   `git branch -m`, while the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact
-  cwd); a slug that sanitizes to nothing keeps the current branch. The branch-moving path re-points sibling
-  records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry after the Git
-  subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for every changed
-  record. Without `opts.branch` — the manual wire method — only the display label changes: `branch`,
+  cwd); a slug that sanitizes to nothing keeps the current branch. The move runs only on the branch this
+  worktree has checked out right now, on a record that is neither `renamed` nor `branchAdopted` (an adoption
+  inside that first sync sets the latter); otherwise the branch is kept. While `HEAD` is detached or
+  unreadable (mid-rebase `-m` would corrupt the rebase's head-name) a branch-moving call on such a record
+  **throws** instead, leaving `renamed` unset so a later `set_title` can retry. The branch-moving path
+  re-points sibling records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry
+  after the Git subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for
+  every changed record. Without `opts.branch` — the manual wire method — only the display label changes: `branch`,
   `worktreePath`, `baseBranch`, and `diffBase` stay untouched, no Git mutation runs, and one full-snapshot
   `updated` is emitted.
   **`name` and `branch` deliberately differ** after such a rename — the name is display-only and may repeat;
@@ -94,8 +99,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   invalid names still throw; callers decide presentation),
   `listWorkspaces(projectId, { includeDiffStats? })` (**async**; complete authoritative membership/order
   after Default ensure + user-owned folder-truth reconciliation — that sync prologue's load→mutate→save
-  completes before the first await; the diff-stat badges then resolve **in parallel through `gitAsync`**,
-  off the event loop, and **membership is re-read after the awaits** (the same stale-snapshot discipline
+  completes before the first await; then, in one parallel step off the event loop, managed rows read their
+  live branch through `headBranchAtAsync` and the diff-stat badges resolve through `gitAsync` (diff ranges
+  never depend on `branch`). Managed rows adopt the live branch by compare-and-set after the awaits (only
+  while the stored branch still equals the one snapshotted before them, so a rename or nudge that lands
+  meanwhile is never undone), and **membership is re-read after the awaits** (the same stale-snapshot discipline
   as the writers): a workspace created while the badges resolved must appear in this response, because its
   `created` push may reach a client before this reply seeds that client's list, where a push into an
   unlisted project is deliberately not folded — a mid-flight row ships without stats until the next list.
@@ -165,10 +173,16 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
   `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
-  Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
+  Drift is **not** only a list-time discovery: `syncWorkspaceBranch(workspaceId)` is the same
   re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
-  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
-  no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
+  unreadable checkout is never persisted as a fake detached `HEAD`; a managed workspace adopts the live
+  symbolic `HEAD` via `headBranchAt` — detached or unreadable keeps the stored branch — keeping `baseBranch`
+  and the display name, dropping `review`, and setting `branchAdopted: true` so no rename ever
+  `git branch -m`s a branch the user or agent chose, while `renamed` stays untouched so `set_title` can
+  still name the workspace. Adoption never re-points siblings' `baseBranch`/`diffBase`: the old branch stays
+  their base, and if it is gone they fail loudly rather than diff against an unrelated branch; unknown id /
+  no drift → no save, no emit; returns the live branch read, or `null`), which the host wires to `watch`'s
+  **repo-metadata nudge** (host-mediated,
   `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
   them on the old branch until a manual project reload — including a switch that leaves the working tree
@@ -208,9 +222,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   provider refresh is silent while nothing moves, and **only while the record is still on the branch the
   lookup was made for** — a provider answer is a fact about a branch, and an external worktree can be
   switched during the seconds a lookup takes; for the same reason every persisted branch transition drops
-  the `review` snapshot — both user-owned folder-truth refresh and the managed workspace's one-time branch
-  rename — since a merged snapshot that outlived its branch would shelve the new branch and, being merged,
-  never be refreshed passively. Every writer emits
+  the `review` snapshot — both folder-truth refresh (including a managed workspace adopting a branch
+  checked out in a terminal) and the managed workspace's one-time branch rename — since a merged snapshot
+  that outlived its branch would shelve the new branch and, being merged, never be refreshed passively. Every writer emits
   the full-snapshot `updated`.
   `createWorkspace` and `openExistingWorktree` stamp `lastActiveAt` at creation so a brand-new row is
   live by construction. **Migration:** the host backfills records without a stamp from the newest chat's
@@ -250,7 +264,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
-  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `syncWorkspaceBranch`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
