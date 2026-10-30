@@ -1,4 +1,6 @@
 import type { MergeMethod, MergePrResult } from "@thinkrail/contracts";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	findBranchReviewOutcome,
 	forgetOpenBranchReview,
@@ -25,7 +27,12 @@ export interface MergePrParams extends ReviewActionParams {
 	deleteBranch: boolean;
 }
 
-type PrState = "OPEN" | "CLOSED" | "MERGED";
+const PrStateSchema = Type.Union([
+	Type.Literal("OPEN"),
+	Type.Literal("CLOSED"),
+	Type.Literal("MERGED"),
+]);
+type PrState = Static<typeof PrStateSchema>;
 
 const MERGE_FLAGS: Record<MergeMethod, string> = {
 	squash: "--squash",
@@ -59,11 +66,23 @@ function ghFailure(what: string, result: { out: string; err?: string }): Error {
 	);
 }
 
-function headSlug(pr: Record<string, unknown>): string {
-	const owner = pr.headRepositoryOwner as { login?: unknown } | null | undefined;
-	const repo = pr.headRepository as { name?: unknown } | null | undefined;
-	const login = typeof owner?.login === "string" ? owner.login : "";
-	const name = typeof repo?.name === "string" ? repo.name : "";
+const HeadRepositorySchema = Type.Object({
+	headRepositoryOwner: Type.Optional(
+		Type.Union([Type.Object({ login: Type.Optional(Type.String()) }), Type.Null()]),
+	),
+	headRepository: Type.Optional(
+		Type.Union([Type.Object({ name: Type.Optional(Type.String()) }), Type.Null()]),
+	),
+});
+
+const PrViewSchema = Type.Intersect([
+	HeadRepositorySchema,
+	Type.Object({ headRefName: Type.String(), state: PrStateSchema }),
+]);
+
+function headSlug(pr: Static<typeof HeadRepositorySchema>): string {
+	const login = pr.headRepositoryOwner?.login ?? "";
+	const name = pr.headRepository?.name ?? "";
 	return `${login}/${name}`.toLowerCase();
 }
 
@@ -85,8 +104,9 @@ async function viewPr(cwd: string, slug: string, number: number, run: PrCommandR
 	]);
 	if (!viewed.ok) throw ghFailure(`Couldn't read PR #${number}`, viewed);
 	try {
-		const pr = JSON.parse(viewed.out) as Record<string, unknown>;
-		return { headRefName: pr.headRefName, state: String(pr.state) as PrState, head: headSlug(pr) };
+		const pr: unknown = JSON.parse(viewed.out);
+		if (!Check(PrViewSchema, pr)) throw new Error("unexpected gh output");
+		return { headRefName: pr.headRefName, state: pr.state, head: headSlug(pr) };
 	} catch {
 		throw new Error(`Couldn't read PR #${number}: gh answered something unexpected.`);
 	}
@@ -117,12 +137,9 @@ async function headsOpenPr(
 	if (!listed.ok) return null;
 	try {
 		const rows: unknown = JSON.parse(listed.out);
-		if (!Array.isArray(rows)) return null;
+		if (!Check(Type.Array(Type.Unknown()), rows)) return null;
 		return rows.some(
-			(row) =>
-				typeof row === "object" &&
-				row !== null &&
-				headSlug(row as Record<string, unknown>) === slug.toLowerCase(),
+			(row) => Check(HeadRepositorySchema, row) && headSlug(row) === slug.toLowerCase(),
 		);
 	} catch {
 		return null;
