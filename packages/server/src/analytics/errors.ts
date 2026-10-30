@@ -160,7 +160,6 @@ const ExceptionSchema = Type.Object({
 
 const ExceptionListSchema = Type.Array(Type.Unknown());
 const ChunkIdsSchema = Type.Record(Type.String(), Type.String());
-const LevelSchema = Type.String();
 const PassthroughValueSchema = Type.String({ pattern: SAFE_VALUE.source });
 
 type Frame = Static<typeof FrameSchema>;
@@ -288,7 +287,7 @@ export function sanitizeExceptionProperties(
 		$process_person_profile: false,
 	};
 	const level = properties.$exception_level;
-	if (Check(LevelSchema, level) && LEVELS.has(level)) out.$exception_level = level;
+	if (typeof level === "string" && LEVELS.has(level)) out.$exception_level = level;
 	if (handled !== undefined) out.handled = handled;
 	return { ...out, ...passthrough };
 }
