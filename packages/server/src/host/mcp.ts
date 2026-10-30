@@ -11,6 +11,8 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	effectiveMcpServerConfig,
 	getSessionWorkspaceId,
@@ -42,7 +44,11 @@ import { getWorkspace, listAllWorkspaceRecords, listWorkspaceRecords } from "../
 
 const log = logger("host");
 const LIST_WAIT_MS = 1500;
-const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
+const ServerNameSchema = Type.String({ pattern: "^[A-Za-z0-9_-]+$" });
+const ServerScopeSchema = Type.Union([Type.Literal("user"), Type.Literal("project")]);
+const FingerprintSchema = Type.String();
+const ToolNameSchema = Type.String({ minLength: 1 });
+const EnabledSchema = Type.Boolean();
 
 function target(workspaceId: string): { workspace: Workspace; project: Project } {
 	const workspace = getWorkspace(workspaceId);
@@ -114,29 +120,29 @@ function mutateManaged(
 	});
 }
 
-function serverName(name: unknown): string {
-	if (typeof name !== "string" || !SERVER_NAME.test(name)) {
+function serverName(name: string): string {
+	if (!Check(ServerNameSchema, name)) {
 		throw new CodedError("MCP_CONFIG_INVALID", "MCP server names use letters, digits, - and _");
 	}
 	return name;
 }
 
-function serverEnabled(enabled: unknown): boolean {
-	if (typeof enabled !== "boolean") {
+function serverEnabled(enabled: boolean): boolean {
+	if (!Check(EnabledSchema, enabled)) {
 		throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
 	}
 	return enabled;
 }
 
-function serverScope(scope: unknown): McpServerScope {
-	if (scope !== "user" && scope !== "project") throw new Error("Invalid MCP server scope");
+function serverScope(scope: McpServerScope): McpServerScope {
+	if (!Check(ServerScopeSchema, scope)) throw new Error("Invalid MCP server scope");
 	return scope;
 }
 
-function renderedTarget(params: unknown): McpRenderedTarget {
-	const scope = serverScope(isRecord(params) ? params.scope : undefined);
-	const expectedFingerprint = isRecord(params) ? params.expectedFingerprint : undefined;
-	if (typeof expectedFingerprint !== "string") {
+function renderedTarget(params: McpRenderedTarget): McpRenderedTarget {
+	const scope = serverScope(params.scope);
+	const { expectedFingerprint } = params;
+	if (!Check(FingerprintSchema, expectedFingerprint)) {
 		throw new CodedError(
 			"MCP_CONFIG_INVALID",
 			"An entry is rewritten or removed only with the fingerprint it was rendered with.",
@@ -144,9 +150,6 @@ function renderedTarget(params: unknown): McpRenderedTarget {
 	}
 	return { scope, expectedFingerprint };
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
 
 function ownedSession(workspaceId: string, sessionId: string): void {
 	if (getSessionWorkspaceId(sessionId) !== workspaceId) {
@@ -157,7 +160,7 @@ function ownedSession(workspaceId: string, sessionId: string): void {
 function reloadLiveSessions(workspaceIds: readonly string[]): void {
 	const sessionIds = workspaceIds.flatMap((workspaceId) => liveSessionIdsOf(workspaceId));
 	void reconcileMcpSessions(sessionIds).catch((error) => {
-		log.warn("MCP config change was not applied to the open chats", error as Error);
+		log.warn("MCP config change was not applied to the open chats", error);
 	});
 }
 
@@ -199,7 +202,7 @@ export function mcpAdd(params: {
 
 /** A rewrite or removal runs only against the entry the client rendered, at either scope. */
 function renderedEntry(
-	params: { workspaceId: string; name: string },
+	params: { workspaceId: string; name: string } & McpRenderedTarget,
 	write: (
 		options: { scope: McpServerScope; worktree: string; name: string },
 		onDisk: string | undefined,
@@ -217,11 +220,13 @@ function renderedEntry(
 	});
 }
 
-export function mcpUpdate(params: {
-	workspaceId: string;
-	name: string;
-	entry: McpServerEntryInput;
-}): Promise<McpListResult> {
+export function mcpUpdate(
+	params: {
+		workspaceId: string;
+		name: string;
+		entry: McpServerEntryInput;
+	} & McpRenderedTarget,
+): Promise<McpListResult> {
 	return renderedEntry(params, (options, onDisk, project) => {
 		const fingerprint = writeMcpServerEntry({ ...options, entry: params.entry, mode: "update" });
 		if (
@@ -233,7 +238,9 @@ export function mcpUpdate(params: {
 	});
 }
 
-export function mcpRemove(params: { workspaceId: string; name: string }): Promise<McpListResult> {
+export function mcpRemove(
+	params: { workspaceId: string; name: string } & McpRenderedTarget,
+): Promise<McpListResult> {
 	return renderedEntry(params, (options) => removeMcpServerEntry(options));
 }
 
@@ -259,7 +266,7 @@ export function mcpRevokeToolGrant(params: {
 	tool: string;
 }): Promise<McpListResult> {
 	const name = serverName(params.name);
-	if (typeof params.tool !== "string" || params.tool.length === 0) {
+	if (!Check(ToolNameSchema, params.tool)) {
 		throw new CodedError("MCP_CONFIG_INVALID", "Name the MCP tool to stop always allowing.");
 	}
 	const { tool } = params;

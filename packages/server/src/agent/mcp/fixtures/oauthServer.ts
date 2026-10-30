@@ -1,6 +1,16 @@
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
+
 const TOKEN = "fixture-access-token";
 
-function rpc(body: { id?: unknown; method?: string; params?: { protocolVersion?: string } }) {
+const RpcBodySchema = Type.Object({
+	id: Type.Optional(Type.Union([Type.String(), Type.Number()])),
+	method: Type.Optional(Type.String()),
+	params: Type.Optional(Type.Object({ protocolVersion: Type.Optional(Type.String()) })),
+});
+const RegistrationSchema = Type.Record(Type.String(), Type.Unknown());
+
+function rpc(body: Static<typeof RpcBodySchema>) {
 	switch (body.method) {
 		case "initialize":
 			return {
@@ -54,7 +64,8 @@ export function startOAuthMcpFixture(): {
 				});
 			}
 			if (pathname === "/register") {
-				const metadata = (await request.json()) as Record<string, unknown>;
+				const metadata: unknown = await request.json();
+				if (!Check(RegistrationSchema, metadata)) return new Response(null, { status: 400 });
 				return json(
 					{ ...metadata, client_id: "fixture-client", token_endpoint_auth_method: "none" },
 					201,
@@ -79,7 +90,8 @@ export function startOAuthMcpFixture(): {
 				});
 			}
 			if (request.method !== "POST") return new Response(null, { status: 405 });
-			const body = (await request.json()) as { id?: unknown; method?: string };
+			const body: unknown = await request.json();
+			if (!Check(RpcBodySchema, body)) return new Response(null, { status: 400 });
 			if (body.id === undefined) return new Response(null, { status: 202 });
 			return json({ jsonrpc: "2.0", id: body.id, result: rpc(body) });
 		},

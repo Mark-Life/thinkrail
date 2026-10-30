@@ -1,28 +1,30 @@
 import type { McpConfigFileError, McpExposure, McpServerSummary } from "@thinkrail/contracts";
+import { Check } from "typebox/value";
 import {
 	fingerprintMcpEntry,
 	grantedMcpTools,
-	isRecord,
 	type LoadedMcpFiles,
 	loadHostMcpConfig,
 	loadMcpConfigFiles,
 	type McpConfigFileEntry,
+	McpExposureSchema,
+	type McpJsonObject,
+	McpJsonObjectSchema,
 	type McpProjectPolicy,
 	mcpToolLabel,
 	validateMcpServerConfig,
 } from "./config";
 import { maskMcpEndpoint, redactMcpText } from "./redact";
 
-const EXPOSURES: readonly McpExposure[] = ["deferred", "direct", "hidden", "codemode"];
-
-function configuredExposure(raw: Record<string, unknown>): McpExposure {
+function configuredExposure(raw: McpJsonObject): McpExposure {
 	const value = raw.exposure === "codemode-deferred" ? "codemode" : raw.exposure;
-	return EXPOSURES.includes(value as McpExposure) ? (value as McpExposure) : "codemode";
+	return Check(McpExposureSchema, value) ? value : "codemode";
 }
 
-function hasAuthorizationHeader(raw: Record<string, unknown>): boolean {
+function hasAuthorizationHeader(raw: McpJsonObject): boolean {
 	return (
-		isRecord(raw.headers) && Object.keys(raw.headers).some((key) => /^authorization$/i.test(key))
+		Check(McpJsonObjectSchema, raw.headers) &&
+		Object.keys(raw.headers).some((key) => /^authorization$/i.test(key))
 	);
 }
 
@@ -74,7 +76,7 @@ export function summarizeMcpServers(options: {
 	const summaries: McpServerSummary[] = [];
 	for (const entry of written.entries) {
 		if (entry.override && globalNames.has(entry.name)) continue;
-		const raw = isRecord(entry.raw) ? entry.raw : {};
+		const raw = Check(McpJsonObjectSchema, entry.raw) ? entry.raw : {};
 		const live = effective.get(entry.name);
 		const isEffective = live !== undefined && live.scope === entry.scope;
 		const projectOverride = entry.scope === "global" ? policy.overrides[entry.name] : undefined;

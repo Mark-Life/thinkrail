@@ -9,12 +9,22 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { McpProjectOverride, McpToolGrant, Project } from "@thinkrail/contracts";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 
 // Port of pi's `core/mcp-servers.ts` and `extensions/mcp/config.ts` (MIT, Earendil Works).
 
 const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
-const MCP_EXPOSURES: readonly McpExposure[] = ["codemode", "deferred", "direct", "hidden"];
-const MCP_EXPOSURE_ALIASES: Record<string, McpExposure> = { "codemode-deferred": "codemode" };
+export const McpExposureSchema = Type.Union([
+	Type.Literal("codemode"),
+	Type.Literal("deferred"),
+	Type.Literal("direct"),
+	Type.Literal("hidden"),
+]);
+const MCP_EXPOSURES = McpExposureSchema.anyOf.map((entry) => entry.const);
+const MCP_EXPOSURE_ALIASES: Readonly<Record<string, McpExposure>> = {
+	"codemode-deferred": "codemode",
+};
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"] as const;
 
@@ -32,15 +42,85 @@ export function mcpNamespace(server: string): string {
 	return `mcp__${server.replace(/-/g, "_")}`;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const McpJsonSchema = Type.Cyclic(
+	{
+		Json: Type.Union([
+			Type.Null(),
+			Type.Boolean(),
+			Type.Number(),
+			Type.String(),
+			Type.Array(Type.Ref("Json")),
+			Type.Record(Type.String(), Type.Ref("Json")),
+		]),
+	},
+	"Json",
+);
+export type McpJson = Static<typeof McpJsonSchema>;
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-	return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
-}
+export const McpJsonObjectSchema = Type.Record(Type.String(), McpJsonSchema);
+export type McpJsonObject = Static<typeof McpJsonObjectSchema>;
 
-export function isOverrideEntry(value: Record<string, unknown>): boolean {
+export const McpFileSchema = Type.Object({
+	mcpServers: Type.Optional(McpJsonObjectSchema),
+	autoEnableCodemode: Type.Optional(McpJsonSchema),
+});
+export type McpFile = Static<typeof McpFileSchema>;
+
+const StringSchema = Type.String();
+const BooleanSchema = Type.Boolean();
+const NonBlankStringSchema = Type.String({ pattern: "\\S" });
+const StringMapSchema = Type.Record(Type.String(), Type.String());
+const ToolExposureSchema = Type.Record(Type.String(), McpExposureSchema);
+const AuthSchema = Type.Object({ provider: Type.String({ minLength: 1 }) });
+const ArgsSchema = Type.Array(StringSchema);
+const TimeoutSchema = Type.Number({ exclusiveMinimum: 0 });
+const PortSchema = Type.Integer({ minimum: 1, maximum: 65535 });
+const ClientRegistrationSchema = Type.Union([Type.Literal("dcr"), Type.Literal("cimd")]);
+
+const OAuthSchema = Type.Object({
+	clientId: Type.Optional(StringSchema),
+	clientSecret: Type.Optional(StringSchema),
+	callbackPort: Type.Optional(PortSchema),
+	callbackUrl: Type.Optional(StringSchema),
+	scope: Type.Optional(StringSchema),
+	clientName: Type.Optional(NonBlankStringSchema),
+	clientRegistration: Type.Optional(ClientRegistrationSchema),
+	authServerMetadataUrl: Type.Optional(StringSchema),
+});
+
+const CommonFields = {
+	exposure: Type.Optional(McpExposureSchema),
+	toolExposure: Type.Optional(ToolExposureSchema),
+	description: Type.Optional(StringSchema),
+	enabled: Type.Optional(BooleanSchema),
+	timeout: Type.Optional(TimeoutSchema),
+};
+
+const HttpServerSchema = Type.Object({
+	...CommonFields,
+	type: Type.Optional(Type.Literal("http")),
+	url: StringSchema,
+	headers: Type.Optional(StringMapSchema),
+	oauth: Type.Optional(OAuthSchema),
+	auth: Type.Optional(AuthSchema),
+});
+
+const StdioServerSchema = Type.Object({
+	...CommonFields,
+	type: Type.Optional(Type.Literal("stdio")),
+	command: StringSchema,
+	args: Type.Optional(ArgsSchema),
+	env: Type.Optional(StringMapSchema),
+	cwd: Type.Optional(StringSchema),
+});
+
+const OverrideSchema = Type.Object({
+	enabled: CommonFields.enabled,
+	exposure: CommonFields.exposure,
+	toolExposure: CommonFields.toolExposure,
+});
+
+export function isOverrideEntry(value: McpJsonObject): boolean {
 	return value.command === undefined && value.url === undefined && value.type === undefined;
 }
 
@@ -55,47 +135,41 @@ export function isLoopbackRedirectUri(value: string): boolean {
 	);
 }
 
-function validateOAuth(value: unknown): string | undefined {
+function validateOAuth(value: McpJson | undefined): string | undefined {
 	if (value === undefined) return undefined;
-	if (!isRecord(value)) return "oauth must be an object";
-	if (value.clientId !== undefined && typeof value.clientId !== "string") {
+	if (!Check(McpJsonObjectSchema, value)) return "oauth must be an object";
+	const { clientId, clientSecret, callbackUrl, scope, clientName, clientRegistration } = value;
+	const port = value.callbackPort;
+	if (clientId !== undefined && !Check(StringSchema, clientId)) {
 		return "oauth.clientId must be a string";
 	}
-	if (value.clientSecret !== undefined && typeof value.clientSecret !== "string") {
+	if (clientSecret !== undefined && !Check(StringSchema, clientSecret)) {
 		return "oauth.clientSecret must be a string";
 	}
-	const port = value.callbackPort;
-	if (
-		port !== undefined &&
-		(typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535)
-	) {
+	if (port !== undefined && !Check(PortSchema, port)) {
 		return "oauth.callbackPort must be a port number";
 	}
-	if (value.callbackUrl !== undefined) {
-		if (typeof value.callbackUrl !== "string" || !isLoopbackRedirectUri(value.callbackUrl)) {
+	if (callbackUrl !== undefined) {
+		if (!Check(StringSchema, callbackUrl) || !isLoopbackRedirectUri(callbackUrl)) {
 			return "oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment";
 		}
-		const urlPort = new URL(value.callbackUrl).port;
+		const urlPort = new URL(callbackUrl).port;
 		if (urlPort && port !== undefined && Number(urlPort) !== port) {
 			return "oauth.callbackUrl and oauth.callbackPort name different ports";
 		}
 	}
-	if (value.scope !== undefined && typeof value.scope !== "string")
-		return "oauth.scope must be a string";
-	if (
-		value.clientName !== undefined &&
-		(typeof value.clientName !== "string" || !value.clientName.trim())
-	) {
+	if (scope !== undefined && !Check(StringSchema, scope)) return "oauth.scope must be a string";
+	if (clientName !== undefined && !Check(NonBlankStringSchema, clientName)) {
 		return "oauth.clientName must be a non-empty string";
 	}
-	if (value.clientRegistration !== undefined && value.clientRegistration !== "dcr") {
-		if (value.clientRegistration !== "cimd") {
+	if (clientRegistration !== undefined && clientRegistration !== "dcr") {
+		if (clientRegistration !== "cimd") {
 			return 'oauth.clientRegistration must be "dcr" or "cimd"';
 		}
-		if (value.clientId !== undefined || value.clientName !== undefined) {
+		if (clientId !== undefined || clientName !== undefined) {
 			return 'oauth.clientRegistration "cimd" cannot be combined with oauth.clientId or oauth.clientName';
 		}
-		const callback = typeof value.callbackUrl === "string" ? new URL(value.callbackUrl) : undefined;
+		const callback = Check(StringSchema, callbackUrl) ? new URL(callbackUrl) : undefined;
 		if (callback && (callback.hostname === "[::1]" || callback.pathname !== "/callback")) {
 			return 'oauth.clientRegistration "cimd" requires oauth.callbackUrl on localhost or 127.0.0.1 with path /callback';
 		}
@@ -103,7 +177,7 @@ function validateOAuth(value: unknown): string | undefined {
 	const metadataUrl = value.authServerMetadataUrl;
 	if (metadataUrl !== undefined) {
 		const url =
-			typeof metadataUrl === "string" && URL.canParse(metadataUrl)
+			Check(StringSchema, metadataUrl) && URL.canParse(metadataUrl)
 				? new URL(metadataUrl)
 				: undefined;
 		if (
@@ -119,19 +193,15 @@ function validateOAuth(value: unknown): string | undefined {
 	return undefined;
 }
 
-function isExposure(value: unknown): value is McpExposure {
-	return typeof value === "string" && (MCP_EXPOSURES as readonly string[]).includes(value);
+function resolveExposureAlias(value: McpJson): McpJson {
+	return Check(StringSchema, value) ? (MCP_EXPOSURE_ALIASES[value] ?? value) : value;
 }
 
-function resolveExposureAlias(value: unknown): unknown {
-	return typeof value === "string" ? (MCP_EXPOSURE_ALIASES[value] ?? value) : value;
-}
-
-function resolveExposureAliases(value: Record<string, unknown>): Record<string, unknown> {
+function resolveExposureAliases(value: McpJsonObject): McpJsonObject {
 	const { exposure, toolExposure } = value;
 	const resolved = { ...value };
 	if (exposure !== undefined) resolved.exposure = resolveExposureAlias(exposure);
-	if (isRecord(toolExposure)) {
+	if (toolExposure !== undefined && Check(McpJsonObjectSchema, toolExposure)) {
 		resolved.toolExposure = Object.fromEntries(
 			Object.entries(toolExposure).map(([tool, entry]) => [tool, resolveExposureAlias(entry)]),
 		);
@@ -139,84 +209,87 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
 	return resolved;
 }
 
-export function validateMcpServerConfig(name: string, raw: unknown): McpServerConfig | string {
-	if (!SERVER_NAME.test(name))
-		return `invalid server name "${name}" (use letters, digits, "_" and "-")`;
-	if (!isRecord(raw)) return `server "${name}" must be an object`;
-	const value = resolveExposureAliases(raw);
-	const { type, exposure, enabled, timeout, toolExposure, description } = value;
+function validateCommonFields(name: string, value: McpJsonObject): string | undefined {
+	const { exposure, enabled, timeout, toolExposure, description } = value;
 	const exposures = MCP_EXPOSURES.map((entry) => `"${entry}"`).join(", ");
-	if (exposure !== undefined && !isExposure(exposure)) {
+	if (exposure !== undefined && !Check(McpExposureSchema, exposure)) {
 		return `server "${name}": exposure must be one of ${exposures}`;
 	}
 	if (toolExposure !== undefined) {
-		if (!isRecord(toolExposure))
+		if (!Check(McpJsonObjectSchema, toolExposure))
 			return `server "${name}": toolExposure must map tool names to exposures`;
 		for (const [tool, entry] of Object.entries(toolExposure)) {
-			if (!isExposure(entry))
+			if (!Check(McpExposureSchema, entry))
 				return `server "${name}": toolExposure "${tool}" must be one of ${exposures}`;
 		}
 	}
-	if (enabled !== undefined && typeof enabled !== "boolean") {
+	if (enabled !== undefined && !Check(BooleanSchema, enabled)) {
 		return `server "${name}": enabled must be a boolean`;
 	}
-	if (description !== undefined && typeof description !== "string") {
+	if (description !== undefined && !Check(StringSchema, description)) {
 		return `server "${name}": description must be a string`;
 	}
-	if (timeout !== undefined && (typeof timeout !== "number" || !(timeout > 0))) {
+	if (timeout !== undefined && !Check(TimeoutSchema, timeout)) {
 		return `server "${name}": timeout must be a positive number of seconds`;
 	}
+	return undefined;
+}
+
+export function validateMcpServerConfig(name: string, raw: McpJson): McpServerConfig | string {
+	if (!SERVER_NAME.test(name))
+		return `invalid server name "${name}" (use letters, digits, "_" and "-")`;
+	if (!Check(McpJsonObjectSchema, raw)) return `server "${name}" must be an object`;
+	const value = resolveExposureAliases(raw);
+	const commonError = validateCommonFields(name, value);
+	if (commonError) return commonError;
+	const { type } = value;
 	if (type === "sse") {
 		return `server "${name}": legacy SSE transport is not supported; use the streamable HTTP URL`;
 	}
+	const invalidServer = `server "${name}" is not a valid MCP server`;
+	const { url } = value;
 	if (
-		typeof value.url === "string" &&
+		Check(StringSchema, url) &&
 		(type === undefined || type === "http" || type === "streamable-http")
 	) {
-		if (!URL.canParse(value.url) || !/^https?:$/.test(new URL(value.url).protocol)) {
+		if (!URL.canParse(url) || !/^https?:$/.test(new URL(url).protocol)) {
 			return `server "${name}": url must be an http or https URL`;
 		}
-		if (value.headers !== undefined && !isStringRecord(value.headers)) {
+		if (value.headers !== undefined && !Check(StringMapSchema, value.headers)) {
 			return `server "${name}": headers must map names to strings`;
 		}
 		const oauthError = validateOAuth(value.oauth);
 		if (oauthError) return `server "${name}": ${oauthError}`;
 		if (value.auth !== undefined) {
-			if (
-				!isRecord(value.auth) ||
-				typeof value.auth.provider !== "string" ||
-				!value.auth.provider
-			) {
+			if (!Check(AuthSchema, value.auth)) {
 				return `server "${name}": auth.provider must be a provider name`;
 			}
-			const url = new URL(value.url);
-			if (url.protocol !== "https:" && !LOOPBACK_HOSTS.includes(url.hostname)) {
+			const parsedUrl = new URL(url);
+			if (parsedUrl.protocol !== "https:" && !LOOPBACK_HOSTS.includes(parsedUrl.hostname)) {
 				return `server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`;
 			}
 		}
-		return value as unknown as McpServerConfig;
+		const config = type === "streamable-http" ? { ...value, type: "http" } : value;
+		return Check(HttpServerSchema, config) ? config : invalidServer;
 	}
-	if (typeof value.command === "string" && (type === undefined || type === "stdio")) {
-		if (
-			value.args !== undefined &&
-			!(Array.isArray(value.args) && value.args.every((arg) => typeof arg === "string"))
-		) {
+	if (Check(StringSchema, value.command) && (type === undefined || type === "stdio")) {
+		if (value.args !== undefined && !Check(ArgsSchema, value.args)) {
 			return `server "${name}": args must be an array of strings`;
 		}
-		if (value.env !== undefined && !isStringRecord(value.env)) {
+		if (value.env !== undefined && !Check(StringMapSchema, value.env)) {
 			return `server "${name}": env must map names to strings`;
 		}
-		if (value.cwd !== undefined && typeof value.cwd !== "string") {
+		if (value.cwd !== undefined && !Check(StringSchema, value.cwd)) {
 			return `server "${name}": cwd must be a string`;
 		}
-		return value as unknown as McpServerConfig;
+		return Check(StdioServerSchema, value) ? value : invalidServer;
 	}
 	return `server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`;
 }
 
 export interface McpConfigFileEntry {
 	name: string;
-	raw: unknown;
+	raw: McpJson;
 	path: string;
 	scope: McpConfigScope;
 	override: boolean;
@@ -250,31 +323,32 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 		fileError(error instanceof Error ? error.message : String(error));
 		return;
 	}
-	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
+	if (!Check(McpFileSchema, parsed)) {
 		fileError('expected an object with an "mcpServers" object');
 		return;
 	}
-	if (typeof parsed.autoEnableCodemode === "boolean") {
+	if (Check(BooleanSchema, parsed.autoEnableCodemode)) {
 		state.autoEnableCodemode = parsed.autoEnableCodemode;
 	} else if (parsed.autoEnableCodemode !== undefined) {
 		fileError("autoEnableCodemode must be a boolean");
 	}
-	const mcpServers = isRecord(parsed.mcpServers) ? parsed.mcpServers : {};
-	for (const [name, value] of Object.entries(mcpServers)) {
+	for (const [name, value] of Object.entries(parsed.mcpServers ?? {})) {
+		const object = Check(McpJsonObjectSchema, value) ? value : undefined;
+		const override = scope === "project" && object !== undefined && isOverrideEntry(object);
 		const entry: McpConfigFileEntry = {
 			name,
 			raw: value,
 			path,
 			scope,
-			override: scope === "project" && isRecord(value) && isOverrideEntry(value),
+			override,
 		};
 		state.entries.push(entry);
-		if (scope === "project" && isRecord(value) && state.admitProjectEntry?.(entry) === false) {
+		if (object && scope === "project" && state.admitProjectEntry?.(entry) === false) {
 			continue;
 		}
-		if (scope === "project" && isRecord(value) && isOverrideEntry(value)) {
+		if (object && override) {
 			const base = servers.get(name);
-			const extra = Object.keys(value).filter(
+			const extra = Object.keys(object).filter(
 				(key) => !(OVERRIDE_KEYS as readonly string[]).includes(key),
 			);
 			if (!base) {
@@ -286,9 +360,12 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 					`${path}: server "${name}": an override can only set ${OVERRIDE_KEYS.join(", ")}`,
 				);
 			} else {
-				const config = validateMcpServerConfig(name, { ...base.config, ...value });
-				if (typeof config === "string") errors.push(`${path}: ${config}`);
-				else servers.set(name, { ...base, config, override: path });
+				const patch = resolveExposureAliases(object);
+				const patchError = validateCommonFields(name, patch);
+				if (patchError) errors.push(`${path}: ${patchError}`);
+				else if (Check(OverrideSchema, patch)) {
+					servers.set(name, { ...base, config: { ...base.config, ...patch }, override: path });
+				}
 			}
 			continue;
 		}
@@ -340,19 +417,22 @@ export function loadMcpConfigFiles(options: {
 	};
 }
 
-function canonicalJson(value: unknown, preserveOrder = false): string {
+function canonicalJson(value: McpJson, preserveOrder = false): string {
 	if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
-	if (isRecord(value)) {
-		const keys = Object.keys(value);
-		if (!preserveOrder) keys.sort();
-		return `{${keys
-			.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key], key === "toolExposure")}`)
+	if (Check(McpJsonObjectSchema, value)) {
+		const entries = Object.entries(value);
+		if (!preserveOrder)
+			entries.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+		return `{${entries
+			.map(
+				([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry, key === "toolExposure")}`,
+			)
 			.join(",")}}`;
 	}
-	return JSON.stringify(value) ?? "null";
+	return JSON.stringify(value);
 }
 
-export function fingerprintMcpEntry(name: string, raw: unknown): string {
+export function fingerprintMcpEntry(name: string, raw: McpJson): string {
 	return createHash("sha256")
 		.update(`${JSON.stringify(name)}:${canonicalJson(raw)}`)
 		.digest("hex");
