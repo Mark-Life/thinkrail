@@ -11,7 +11,7 @@ const MAX_NAVIGATION_DETAIL_LENGTH = 64 * 1024;
 const NavigationDetailSchema = Type.Object({ url: Type.String() });
 
 export function externalNavigationUrl(value: unknown, origin: string): string | null {
-	let detail: unknown = value;
+	let detail = value;
 	if (typeof detail === "string") {
 		if (detail.length > MAX_NAVIGATION_DETAIL_LENGTH) return null;
 		if (detail.trimStart().startsWith("{")) {

@@ -11,7 +11,7 @@ const RouteDocumentFileSchema = Type.Object({
 	version: Type.Literal(ROUTE_VERSION),
 	routes: Type.Record(Type.String(), Type.Unknown()),
 });
-const RouteSchema = Type.String({ maxLength: MAX_ROUTE_LENGTH });
+const RouteSchema = Type.String();
 
 interface RouteDocument {
 	version: 1;

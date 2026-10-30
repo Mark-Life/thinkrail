@@ -6,7 +6,6 @@ import {
 	isDesktopPreferenceKey,
 	isDesktopPreferenceScopeId,
 	isDesktopPreferenceValue,
-	MAX_DESKTOP_PREFERENCE_VALUE_LENGTH,
 } from "./preferenceAdapter";
 
 const PREFERENCE_VERSION = 1;
@@ -29,7 +28,6 @@ const PreferenceDocumentFileSchema = Type.Object({
 	version: Type.Literal(PREFERENCE_VERSION),
 	preferences: UnknownMapSchema,
 });
-const PreferenceValueSchema = Type.String({ maxLength: MAX_DESKTOP_PREFERENCE_VALUE_LENGTH });
 
 function scopeKey(backendProfileId: string, windowId: string): string | null {
 	if (!isDesktopPreferenceScopeId(backendProfileId) || !isDesktopPreferenceScopeId(windowId)) {
@@ -79,8 +77,7 @@ function readDocument(path: string): PreferenceDocument {
 			const scopeEntries: Array<[string, string]> = [];
 			for (const [key, preferenceValue] of Object.entries(storedPreferences)) {
 				if (totalPreferences >= MAX_PREFERENCES) break;
-				if (!isDesktopPreferenceKey(key) || !Check(PreferenceValueSchema, preferenceValue))
-					continue;
+				if (!isDesktopPreferenceKey(key) || !isDesktopPreferenceValue(preferenceValue)) continue;
 				scopeEntries.push([key, preferenceValue]);
 				totalPreferences += 1;
 			}

@@ -8,8 +8,8 @@ export const MAX_UPDATE_LOG_ENTRIES = 200;
 const MAX_JOURNAL_BYTES = 256 * 1024;
 const MAX_TEXT_LENGTH = 4096;
 
-const TextSchema = Type.String({ maxLength: MAX_TEXT_LENGTH });
-const RequiredTextSchema = Type.String({ minLength: 1, maxLength: MAX_TEXT_LENGTH });
+const TextSchema = Type.String();
+const RequiredTextSchema = Type.String({ minLength: 1 });
 const NullableTextSchema = Type.Union([TextSchema, Type.Null()]);
 const LogEventSchema = Type.Union([
 	Type.Object({
@@ -85,8 +85,39 @@ export interface UpdateJournalStore {
 	clear(): void;
 }
 
+function eventTexts(entry: NativeUpdateLogEntry): Array<string | null> {
+	switch (entry.event.kind) {
+		case "installStarted":
+		case "installed":
+			return [entry.event.version];
+		case "installFailed":
+			return [entry.event.version, entry.event.step, entry.event.detail];
+		case "diagnostic":
+			return [entry.event.text];
+		default:
+			return [];
+	}
+}
+
+function journalTexts(journal: UpdateJournal): Array<string | null> {
+	if (journal.state === "pending") {
+		return [journal.fromVersion, journal.toVersion, ...journal.log.flatMap(eventTexts)];
+	}
+	const { result } = journal;
+	return [
+		result.fromVersion,
+		result.toVersion,
+		result.failedStep,
+		result.detail,
+		...result.log.flatMap(eventTexts),
+	];
+}
+
 export function parseUpdateJournal(value: unknown): UpdateJournal | null {
-	return Check(UpdateJournalSchema, value) ? value : null;
+	if (!Check(UpdateJournalSchema, value)) return null;
+	return journalTexts(value).every((text) => text === null || text.length <= MAX_TEXT_LENGTH)
+		? value
+		: null;
 }
 
 export function createUpdateJournalStore(

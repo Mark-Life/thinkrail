@@ -40,6 +40,14 @@ test("readInstallMeta reads the installers' file and degrades to {} on anything 
 			version: "1.2.3",
 		});
 
+		writeFileSync(
+			installMetaFile(home),
+			JSON.stringify({ channel: "nightly", prefix: 7, path_entry_added: "yes", tag: null }),
+		);
+		expect(readInstallMeta(home)).toEqual({ channel: "nightly" });
+		writeFileSync(installMetaFile(home), "[]");
+		expect(readInstallMeta(home)).toEqual({});
+
 		writeFileSync(installMetaFile(home), "{not json");
 		expect(readInstallMeta(home)).toEqual({});
 		writeFileSync(installMetaFile(home), '"a string"');
