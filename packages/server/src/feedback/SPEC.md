@@ -16,7 +16,7 @@ Own the host-scoped lifecycle of the in-app survey invitation and the survey it 
 
 - **Owns:** validated `feedback.json` (`acceptedMessages`, `nextInvitationAt`, `dismissed`, `submittedSurveyId`, `submittedIteration`, `lastInvitedAt`); the fixed 10-message initial/retry interval; one memory-only claimant client; `recordAcceptedMessage`; `respondToInvitation`; `completeSurvey`; the addressed publisher; the public-survey loader, submission parser and `survey sent` payload builder in `survey.ts`.
 - **Public surface (barrel):** the lifecycle operations, survey source configuration, selection and refresh, submission parsing, the response builder, the publisher installer, and test resets.
-- **Allowed deps:** `persistence` (`dataDir` only); `contracts` survey and invitation types; Node filesystem/path APIs; `fetch` for `GET /api/surveys/` in `survey.ts` only.
+- **Allowed deps:** `persistence` (`dataDir` only); `contracts` survey and invitation types; `typebox` for stored state, PostHog responses and submissions; Node filesystem/path APIs; `fetch` for `GET /api/surveys/` in `survey.ts` only.
 - **Forbidden:** importing `host` or analytics. The host passes in the survey endpoint analytics exposes and captures the payload this module builds. This module does not target people in PostHog or open a calendar.
 
 ## Get right

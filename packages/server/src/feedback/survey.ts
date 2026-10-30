@@ -3,9 +3,10 @@ import {
 	SURVEY_OPEN_TEXT_LIMIT,
 	type SurveyAnswerValue,
 	type SurveyQuestion,
-	type SurveyRatingScale,
 	surveyRatingValues,
 } from "@thinkrail/contracts";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 
 export const IN_APP_SURVEY_NAME = "in-app-feedback";
 export const SURVEY_REFRESH_MS = 15 * 60 * 1000;
@@ -19,9 +20,90 @@ const CHOICE_LIMIT = 500;
 const CHOICE_COUNT_LIMIT = 30;
 const DEFAULT_HOST = "https://eu.i.posthog.com";
 
-const RATING_SCALES: readonly SurveyRatingScale[] = [3, 5, 7, 10];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LANGUAGE_KEY = /^[a-z]{2,3}(-[a-z0-9]{2,8}){0,3}$/;
+
+const MaybeText = Type.Optional(Type.Union([Type.String(), Type.Null()]));
+const MaybeFlag = Type.Optional(Type.Union([Type.Boolean(), Type.Null()]));
+const MaybeNumber = Type.Optional(Type.Union([Type.Number(), Type.Null()]));
+const MaybeChoices = Type.Optional(Type.Union([Type.Array(Type.String()), Type.Null()]));
+const MaybeTranslations = Type.Optional(
+	Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+);
+
+const TranslationSchema = Type.Object({
+	question: MaybeText,
+	description: MaybeText,
+	choices: MaybeChoices,
+	lowerBoundLabel: MaybeText,
+	upperBoundLabel: MaybeText,
+	thankYouMessageHeader: MaybeText,
+});
+
+const QuestionBase = {
+	id: Type.String(),
+	question: Type.String(),
+	description: MaybeText,
+	optional: MaybeFlag,
+	translations: MaybeTranslations,
+};
+
+const QuestionSchema = Type.Union([
+	Type.Object({ ...QuestionBase, type: Type.Literal("open") }),
+	Type.Object({
+		...QuestionBase,
+		type: Type.Union([Type.Literal("single_choice"), Type.Literal("multiple_choice")]),
+		choices: Type.Array(Type.String()),
+		hasOpenChoice: MaybeFlag,
+		shuffleOptions: MaybeFlag,
+	}),
+	Type.Object({
+		...QuestionBase,
+		type: Type.Literal("rating"),
+		scale: Type.Union([Type.Literal(3), Type.Literal(5), Type.Literal(7), Type.Literal(10)]),
+		display: MaybeText,
+		lowerBoundLabel: MaybeText,
+		upperBoundLabel: MaybeText,
+	}),
+]);
+
+const AppearanceSchema = Type.Object({
+	placeholder: MaybeText,
+	displayThankYouMessage: MaybeFlag,
+	thankYouMessageHeader: MaybeText,
+	shuffleQuestions: MaybeFlag,
+});
+
+const ConditionsSchema = Type.Object({ seenSurveyWaitPeriodInDays: MaybeNumber });
+
+const EntrySchema = Type.Object({
+	name: Type.String(),
+	id: Type.String(),
+	archived: MaybeFlag,
+	start_date: MaybeText,
+	end_date: MaybeText,
+	current_iteration: MaybeNumber,
+	questions: Type.Optional(Type.Union([Type.Array(Type.Unknown()), Type.Null()])),
+	appearance: Type.Optional(Type.Unknown()),
+	conditions: Type.Optional(Type.Unknown()),
+	translations: MaybeTranslations,
+});
+
+const SurveyListSchema = Type.Object({ surveys: Type.Array(Type.Unknown()) });
+
+const SubmissionSchema = Type.Object({
+	submissionId: Type.String(),
+	surveyId: Type.String({ minLength: 1, maxLength: 128 }),
+	iteration: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+	language: Type.Optional(Type.String()),
+	answers: Type.Optional(
+		Type.Record(Type.String(), Type.Union([Type.String(), Type.Array(Type.String())])),
+	),
+	others: Type.Optional(Type.Record(Type.String(), Type.String())),
+});
+
+type Question = Static<typeof QuestionSchema>;
+type Translation = Static<typeof TranslationSchema>;
 
 export interface SurveySource {
 	apiKey: string;
@@ -167,19 +249,16 @@ export function selectInAppSurvey(payload: unknown): AppSurvey | null {
 }
 
 export function parseSurveySubmission(value: unknown): ParsedSurveySubmission {
-	if (!isRecord(value)) throw new Error("Invalid survey submission");
-	const { submissionId, surveyId, iteration } = value;
-	if (typeof submissionId !== "string" || !UUID.test(submissionId)) {
-		throw new Error("Invalid survey submission");
-	}
-	if (typeof surveyId !== "string" || !surveyId || surveyId.length > 128) {
-		throw new Error("Invalid survey submission");
-	}
-	if (typeof iteration !== "number" || !Number.isSafeInteger(iteration) || iteration < 0) {
-		throw new Error("Invalid survey submission");
-	}
-	const language = value.language;
-	if (language !== undefined && (typeof language !== "string" || !LANGUAGE_KEY.test(language))) {
+	if (!Check(SubmissionSchema, value)) throw new Error("Invalid survey submission");
+	const { submissionId, surveyId, iteration, language } = value;
+	const answers = value.answers ?? {};
+	const others = value.others ?? null;
+	if (
+		!UUID.test(submissionId) ||
+		(language !== undefined && !LANGUAGE_KEY.test(language)) ||
+		!validIds(answers) ||
+		!validIds(others ?? {})
+	) {
 		throw new Error("Invalid survey submission");
 	}
 	return {
@@ -187,8 +266,8 @@ export function parseSurveySubmission(value: unknown): ParsedSurveySubmission {
 		surveyId,
 		iteration,
 		...(language === undefined ? {} : { language }),
-		answers: parseAnswers(value.answers),
-		others: parseOthers(value.others),
+		answers,
+		others,
 	};
 }
 
@@ -245,7 +324,8 @@ async function fetchSurvey(active: ActiveSource): Promise<AppSurvey | null> {
 		if (!response.ok) throw new Error("survey list failed");
 		const body = await response.text();
 		if (body.length > SURVEY_LIST_LIMIT) throw new Error("survey list too large");
-		return selectInAppSurvey(JSON.parse(body) as unknown);
+		const payload: unknown = JSON.parse(body);
+		return selectInAppSurvey(payload);
 	} finally {
 		clearTimeout(timer);
 	}
@@ -253,12 +333,11 @@ async function fetchSurvey(active: ActiveSource): Promise<AppSurvey | null> {
 
 function surveyList(payload: unknown): unknown[] {
 	if (Array.isArray(payload)) return payload;
-	if (!isRecord(payload) || !Array.isArray(payload.surveys)) return [];
-	return payload.surveys;
+	return Check(SurveyListSchema, payload) ? payload.surveys : [];
 }
 
 function selectOne(entry: unknown): { survey: AppSurvey; started: number } | null {
-	if (!isRecord(entry) || entry.name !== IN_APP_SURVEY_NAME) return null;
+	if (!Check(EntrySchema, entry) || entry.name !== IN_APP_SURVEY_NAME) return null;
 	if (entry.archived === true || typeof entry.end_date === "string") return null;
 	const started = typeof entry.start_date === "string" ? Date.parse(entry.start_date) : Number.NaN;
 	if (!Number.isFinite(started)) return null;
@@ -266,7 +345,8 @@ function selectOne(entry: unknown): { survey: AppSurvey; started: number } | nul
 	if (!id) return null;
 	const questions: SurveyQuestion[] = [];
 	const questionTranslations = new Map<string, Map<string, QuestionTranslation>>();
-	for (const raw of Array.isArray(entry.questions) ? entry.questions : []) {
+	for (const raw of entry.questions ?? []) {
+		if (!Check(QuestionSchema, raw)) continue;
 		const mapped = mapQuestion(raw);
 		if (!mapped) continue;
 		questions.push(mapped);
@@ -274,20 +354,20 @@ function selectOne(entry: unknown): { survey: AppSurvey; started: number } | nul
 		if (translated.size > 0) questionTranslations.set(mapped.id, translated);
 	}
 	if (questions.length === 0) return null;
-	const appearance = isRecord(entry.appearance) ? entry.appearance : {};
-	const placeholder = boundedText(appearance.placeholder, 200);
-	const showThanks = appearance.displayThankYouMessage !== false;
-	const thankYou = plainText(appearance.thankYouMessageHeader, 500) ?? "";
+	const appearance = Check(AppearanceSchema, entry.appearance) ? entry.appearance : null;
+	const placeholder = boundedText(appearance?.placeholder, 200);
+	const showThanks = appearance?.displayThankYouMessage !== false;
+	const thankYou = plainText(appearance?.thankYouMessageHeader, 500) ?? "";
 	const survey: AppSurvey = {
 		id,
 		iteration: iterationOf(entry.current_iteration),
 		questions,
 		...(placeholder ? { placeholder } : {}),
 		...(showThanks ? { thankYou } : {}),
-		...(appearance.shuffleQuestions === true ? { shuffleQuestions: true } : {}),
+		...(appearance?.shuffleQuestions === true ? { shuffleQuestions: true } : {}),
 	};
-	const conditions = isRecord(entry.conditions) ? entry.conditions : {};
-	const waitDays = conditions.seenSurveyWaitPeriodInDays;
+	const conditions = Check(ConditionsSchema, entry.conditions) ? entry.conditions : null;
+	const waitDays = conditions?.seenSurveyWaitPeriodInDays;
 	if (typeof waitDays === "number" && Number.isFinite(waitDays) && waitDays > 0) {
 		waitPeriodOf.set(survey, Math.min(waitDays, WAIT_PERIOD_DAY_LIMIT) * DAY_MS);
 	}
@@ -310,8 +390,7 @@ function selectOne(entry: unknown): { survey: AppSurvey; started: number } | nul
 	return { survey, started };
 }
 
-function mapQuestion(entry: unknown): SurveyQuestion | null {
-	if (!isRecord(entry)) return null;
+function mapQuestion(entry: Question): SurveyQuestion | null {
 	const id = boundedText(entry.id, 80);
 	const question = plainText(entry.question, QUESTION_LIMIT);
 	if (!id || !question) return null;
@@ -337,8 +416,7 @@ function mapQuestion(entry: unknown): SurveyQuestion | null {
 		};
 	}
 	if (entry.type === "rating") {
-		const scale = ratingScale(entry.scale);
-		if (!scale) return null;
+		const scale = entry.scale;
 		const emoji = entry.display === "emoji" && (scale === 3 || scale === 5);
 		return {
 			...base,
@@ -401,7 +479,7 @@ function answerFor(
 	if (base.type !== question.type) throw new Error("Invalid survey answer");
 	if (other !== undefined && !question.hasOpenChoice) throw new Error("Invalid survey answer");
 	const otherText = other === undefined ? undefined : choiceText(other);
-	const toBase = (item: unknown) => {
+	const toBase = (item: string) => {
 		const original = base.choices[question.choices.indexOf(choiceText(item))];
 		if (original === undefined) throw new Error("Invalid survey answer");
 		return original;
@@ -420,8 +498,7 @@ function answerFor(
 	return chosen;
 }
 
-function choiceText(value: unknown): string {
-	if (typeof value !== "string") throw new Error("Invalid survey answer");
+function choiceText(value: string): string {
 	const text = value.trim();
 	if (!text || text.length > SURVEY_OPEN_TEXT_LIMIT) throw new Error("Invalid survey answer");
 	return text;
@@ -453,20 +530,22 @@ function pick<T>(translations: Map<string, T>, key: string): T | undefined {
 	return translations.get(key) ?? translations.get(key.split("-")[0] ?? "");
 }
 
-function translationEntries(value: unknown): [string, Record<string, unknown>][] {
-	if (!isRecord(value)) return [];
-	return Object.entries(value).flatMap(([rawKey, translation]) => {
+function translationEntries(
+	value: Record<string, unknown> | null | undefined,
+): [string, Translation][] {
+	return Object.entries(value ?? {}).flatMap(([rawKey, translation]) => {
 		const key = rawKey.trim().toLowerCase();
-		return LANGUAGE_KEY.test(key) && isRecord(translation) ? [[key, translation]] : [];
+		return LANGUAGE_KEY.test(key) && Check(TranslationSchema, translation)
+			? [[key, translation]]
+			: [];
 	});
 }
 
 function questionTranslationsOf(
-	raw: unknown,
+	raw: Question,
 	question: SurveyQuestion,
 ): Map<string, QuestionTranslation> {
 	const result = new Map<string, QuestionTranslation>();
-	if (!isRecord(raw)) return result;
 	for (const [key, translation] of translationEntries(raw.translations)) {
 		const text = plainText(translation.question, QUESTION_LIMIT);
 		const description = plainText(translation.description, DESCRIPTION_LIMIT);
@@ -510,39 +589,12 @@ function translateQuestion(
 	return { ...question, ...shared, choices: translation.choices ?? question.choices };
 }
 
-function parseOthers(value: unknown): Record<string, string> | null {
-	if (value === undefined) return null;
-	if (!isRecord(value)) throw new Error("Invalid survey submission");
-	const others: Record<string, string> = {};
-	for (const [id, text] of Object.entries(value)) {
-		if (!id || id.length > 80 || typeof text !== "string") {
-			throw new Error("Invalid survey submission");
-		}
-		others[id] = text;
-	}
-	return others;
+function validIds(record: Record<string, unknown>): boolean {
+	return Object.keys(record).every((id) => id.length > 0 && id.length <= 80);
 }
 
-function parseAnswers(value: unknown): Record<string, SurveyAnswerValue> {
-	if (value === undefined) return {};
-	if (!isRecord(value)) throw new Error("Invalid survey submission");
-	const answers: Record<string, SurveyAnswerValue> = {};
-	for (const [id, answer] of Object.entries(value)) {
-		if (!id || id.length > 80) throw new Error("Invalid survey submission");
-		if (typeof answer === "string") {
-			answers[id] = answer;
-			continue;
-		}
-		if (!Array.isArray(answer) || answer.some((item) => typeof item !== "string")) {
-			throw new Error("Invalid survey submission");
-		}
-		answers[id] = answer;
-	}
-	return answers;
-}
-
-function choiceList(value: unknown): string[] | null {
-	if (!Array.isArray(value) || value.length === 0 || value.length > CHOICE_COUNT_LIMIT) return null;
+function choiceList(value: readonly string[] | null | undefined): string[] | null {
+	if (!value || value.length === 0 || value.length > CHOICE_COUNT_LIMIT) return null;
 	const choices: string[] = [];
 	for (const entry of value) {
 		const choice = plainText(entry, CHOICE_LIMIT);
@@ -552,15 +604,11 @@ function choiceList(value: unknown): string[] | null {
 	return choices;
 }
 
-function ratingScale(value: unknown): SurveyRatingScale | null {
-	return RATING_SCALES.some((scale) => scale === value) ? (value as SurveyRatingScale) : null;
-}
-
-function iterationOf(value: unknown): number {
+function iterationOf(value: number | null | undefined): number {
 	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
-function plainText(value: unknown, max: number): string | null {
+function plainText(value: string | null | undefined, max: number): string | null {
 	const raw = boundedText(value, max * 4);
 	if (!raw) return null;
 	const stripped = raw
@@ -570,13 +618,9 @@ function plainText(value: unknown, max: number): string | null {
 	return boundedText(stripped, max);
 }
 
-function boundedText(value: unknown, max: number): string | null {
+function boundedText(value: string | null | undefined, max: number): string | null {
 	if (typeof value !== "string") return null;
 	const text = value.trim();
 	if (!text) return null;
 	return text.length > max ? text.slice(0, max) : text;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

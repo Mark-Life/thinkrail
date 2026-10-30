@@ -1,3 +1,5 @@
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 import { logger } from "../log";
 import {
 	type AcquisitionRecord,
@@ -207,13 +209,15 @@ export interface ErrorReport {
 	chunkIds?: Record<string, string>;
 }
 
-export interface ClientErrorInput {
-	kind?: unknown;
-	type?: unknown;
-	stack?: unknown;
-	boundary?: unknown;
-	chunkIds?: unknown;
-}
+const ClientErrorSchema = Type.Object({
+	kind: Type.Optional(Type.String()),
+	type: Type.Optional(Type.String()),
+	stack: Type.Optional(Type.String()),
+	boundary: Type.Optional(Type.String()),
+	chunkIds: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+});
+
+type ClientErrorInput = Static<typeof ClientErrorSchema>;
 
 const MAX_ERROR_REPORTS = 100;
 const MAX_ERROR_REPORTS_PER_SOURCE = 50;
@@ -318,8 +322,8 @@ export async function reportFatalError(error: unknown, kind?: FatalErrorKind): P
 
 const CLIENT_ERROR_KINDS = new Set(["render", "window", "rejection"]);
 
-function boundedString(value: unknown, max: number): string {
-	return typeof value === "string" ? value.slice(0, max) : "";
+function boundedString(value: string | undefined, max: number): string {
+	return value?.slice(0, max) ?? "";
 }
 
 function clientError(input: ClientErrorInput): Error {
@@ -330,21 +334,22 @@ function clientError(input: ClientErrorInput): Error {
 }
 
 const MAX_CLIENT_CHUNK_IDS = 20;
+const ClientChunkIdSchema = Type.String({ maxLength: 64 });
 
-function clientChunkIds(value: unknown): Record<string, string> | undefined {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-	const entries = Object.entries(value)
+function clientChunkIds(value: ClientErrorInput["chunkIds"]): Record<string, string> | undefined {
+	const entries = Object.entries(value ?? {})
 		.filter(
 			(entry): entry is [string, string] =>
-				entry[0].length <= 2_048 && typeof entry[1] === "string" && entry[1].length <= 64,
+				entry[0].length <= 2_048 && Check(ClientChunkIdSchema, entry[1]),
 		)
 		.slice(0, MAX_CLIENT_CHUNK_IDS);
 	return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
-export function reportClientError(input: ClientErrorInput): void {
+export function reportClientError(value: unknown): void {
+	const input = Check(ClientErrorSchema, value) ? value : {};
 	const kind =
-		typeof input.kind === "string" && CLIENT_ERROR_KINDS.has(input.kind) ? input.kind : "window";
+		input.kind !== undefined && CLIENT_ERROR_KINDS.has(input.kind) ? input.kind : "window";
 	const boundary = boundedString(input.boundary, 64).trim().replace(/\s+/g, "_");
 	const chunkIds = clientChunkIds(input.chunkIds);
 	reportError(clientError(input), {
