@@ -1,5 +1,7 @@
+import type { ToolResultEvent } from "@earendil-works/pi-coding-agent";
 import type { McpContentBlockSummary, McpResultSummary } from "@thinkrail/contracts";
-import { isRecord } from "./config";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
 export const MCP_SUMMARY_BYTES = 64 * 1024;
 const RESOURCE_TOOLS = new Set([
@@ -12,42 +14,60 @@ export function isMcpResultTool(toolName: string): boolean {
 	return toolName.startsWith("mcp__") || RESOURCE_TOOLS.has(toolName);
 }
 
-const text = (value: unknown): string | undefined =>
-	typeof value === "string" ? value : undefined;
+const ResourceSchema = Type.Object({
+	uri: Type.Optional(Type.String()),
+	mimeType: Type.Optional(Type.String()),
+	text: Type.Optional(Type.String()),
+});
+
+const BlockSchema = Type.Union([
+	Type.Object({ type: Type.Literal("text"), text: Type.Optional(Type.String()) }),
+	Type.Object({ type: Type.Literal("image"), mimeType: Type.Optional(Type.String()) }),
+	Type.Object({ type: Type.Literal("audio"), mimeType: Type.Optional(Type.String()) }),
+	Type.Object({
+		type: Type.Literal("resource_link"),
+		uri: Type.Optional(Type.String()),
+		name: Type.Optional(Type.String()),
+		mimeType: Type.Optional(Type.String()),
+	}),
+	Type.Object({ type: Type.Literal("resource"), resource: ResourceSchema }),
+]);
+
+const ResultSchema = Type.Object({
+	content: Type.Optional(Type.Array(Type.Unknown())),
+	contents: Type.Optional(Type.Array(Type.Unknown())),
+	structuredContent: Type.Optional(Type.Unknown()),
+});
 
 function blockSummary(block: unknown): McpContentBlockSummary | null {
-	if (!isRecord(block)) return null;
+	if (!Check(BlockSchema, block)) return null;
 	switch (block.type) {
 		case "text":
-			return { kind: "text", chars: text(block.text)?.length ?? 0 };
+			return { kind: "text", chars: block.text?.length ?? 0 };
 		case "image":
-			return { kind: "image", mimeType: text(block.mimeType) ?? "image/*" };
+			return { kind: "image", mimeType: block.mimeType ?? "image/*" };
 		case "audio":
-			return { kind: "audio", mimeType: text(block.mimeType) ?? "audio/*" };
+			return { kind: "audio", mimeType: block.mimeType ?? "audio/*" };
 		case "resource_link": {
-			const name = text(block.name);
-			const mimeType = text(block.mimeType);
+			const { name, mimeType } = block;
 			return {
 				kind: "resource_link",
-				uri: text(block.uri) ?? "",
+				uri: block.uri ?? "",
 				...(name ? { name } : {}),
 				...(mimeType ? { mimeType } : {}),
 			};
 		}
 		case "resource":
 			return resourceSummary(block.resource);
-		default:
-			return null;
 	}
 }
 
 function resourceSummary(resource: unknown): McpContentBlockSummary | null {
-	if (!isRecord(resource)) return null;
-	const mimeType = text(resource.mimeType);
-	const body = text(resource.text);
+	if (!Check(ResourceSchema, resource)) return null;
+	const { mimeType, text: body } = resource;
 	return {
 		kind: "resource",
-		uri: text(resource.uri) ?? "",
+		uri: resource.uri ?? "",
 		...(mimeType ? { mimeType } : {}),
 		...(body !== undefined ? { chars: body.length } : {}),
 	};
@@ -88,13 +108,13 @@ function boundedStructured(
 
 export function summarizeMcpResult(
 	toolName: string,
-	structured: unknown,
+	structured: ToolResultEvent["structuredContent"],
 	isError: boolean,
 ): McpResultSummary | null {
-	if (!isRecord(structured)) return null;
+	if (!Check(ResultSchema, structured)) return null;
 	const flag = isError ? { isError: true } : {};
 	if (toolName === "read_mcp_resource") {
-		const contents = Array.isArray(structured.contents) ? structured.contents : [];
+		const contents = structured.contents ?? [];
 		const { kept } = boundedBlocks(
 			contents.flatMap((entry) => resourceSummary(entry) ?? []),
 			MCP_SUMMARY_BYTES,
@@ -103,7 +123,7 @@ export function summarizeMcpResult(
 	}
 	if (RESOURCE_TOOLS.has(toolName))
 		return { blocks: [], ...boundedStructured(structured, MCP_SUMMARY_BYTES), ...flag };
-	const content = Array.isArray(structured.content) ? structured.content : [];
+	const content = structured.content ?? [];
 	const { kept, remaining } = boundedBlocks(
 		content.flatMap((block) => blockSummary(block) ?? []),
 		MCP_SUMMARY_BYTES,

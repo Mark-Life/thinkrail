@@ -13,7 +13,15 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
-import { isOverrideEntry, isRecord } from "./config";
+import { Check } from "typebox/value";
+import {
+	isOverrideEntry,
+	type McpFile,
+	McpFileSchema,
+	type McpJson,
+	type McpJsonObject,
+	McpJsonObjectSchema,
+} from "./config";
 
 export class McpConfigPathUnsafeError extends Error {
 	readonly code = "MCP_PATH_UNSAFE" as const;
@@ -50,12 +58,10 @@ export function assertProjectMcpConfigWritable(worktreePath: string, configPath:
 	}
 }
 
-type McpServersObject = Record<string, unknown>;
-
 // `__proto__` is a legal server name: read and write it as an own property, never through the prototype.
-const ownEntry = (servers: McpServersObject | undefined, name: string): unknown =>
+const ownEntry = (servers: McpJsonObject | undefined, name: string): McpJson | undefined =>
 	servers && Object.hasOwn(servers, name) ? servers[name] : undefined;
-function setOwnEntry(servers: McpServersObject, name: string, value: unknown): void {
+function setOwnEntry(servers: McpJsonObject, name: string, value: McpJson): void {
 	Object.defineProperty(servers, name, {
 		value,
 		enumerable: true,
@@ -66,18 +72,17 @@ function setOwnEntry(servers: McpServersObject, name: string, value: unknown): v
 
 function editMcpServers(
 	path: string,
-	edit: (servers: McpServersObject | undefined, parsed: Record<string, unknown>) => boolean,
+	edit: (servers: McpJsonObject | undefined, parsed: McpFile) => boolean,
 ): void {
 	const file = lstatOrNull(path);
 	const target = file?.isSymbolicLink() ? realpathSync(path) : path;
 	const mode = (target === path ? file : lstatSync(target))?.mode;
 	const text = file ? readFileSync(target, "utf8").replace(/^\uFEFF/, "") : undefined;
 	const parsed: unknown = text === undefined ? {} : JSON.parse(text);
-	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
+	if (!Check(McpFileSchema, parsed)) {
 		throw new Error(`${path}: expected an object with an "mcpServers" object`);
 	}
-	const servers = isRecord(parsed.mcpServers) ? parsed.mcpServers : undefined;
-	if (!edit(servers, parsed)) return;
+	if (!edit(parsed.mcpServers, parsed)) return;
 	const indent = (text && /^([ \t]+)\S/m.exec(text)?.[1]) || "  ";
 	mkdirSync(dirname(target), { recursive: true });
 	const temporary = `${target}.${randomUUID()}.tmp`;
@@ -105,14 +110,15 @@ export function updateMcpServerConfig(
 	options: { override?: boolean } = {},
 ): void {
 	editMcpServers(path, (servers, parsed) => {
-		let server = ownEntry(servers, name);
-		if (server === undefined && options.override) {
+		const existing = ownEntry(servers, name);
+		let server = Check(McpJsonObjectSchema, existing) ? existing : undefined;
+		if (existing === undefined && options.override) {
 			server = {};
 			const target = servers ?? {};
 			setOwnEntry(target, name, server);
 			parsed.mcpServers = target;
 		}
-		if (!isRecord(server)) throw new Error(`${path} does not define MCP server "${name}"`);
+		if (!server) throw new Error(`${path} does not define MCP server "${name}"`);
 		const keepDefaults = isOverrideEntry(server);
 		if (patch.enabled !== undefined) {
 			if (patch.enabled && !keepDefaults) delete server.enabled;
@@ -126,11 +132,7 @@ export function updateMcpServerConfig(
 	});
 }
 
-export function addMcpServerConfig(
-	path: string,
-	name: string,
-	entry: Record<string, unknown>,
-): boolean {
+export function addMcpServerConfig(path: string, name: string, entry: McpJsonObject): boolean {
 	let replaced = false;
 	editMcpServers(path, (servers, parsed) => {
 		const target = servers ?? {};

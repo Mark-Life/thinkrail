@@ -10,6 +10,8 @@ import {
 	type ToolCallEvent,
 	type ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { grantedMcpTools, loadHostMcpConfig, type McpProjectPolicy, mcpTargetOf } from "./config";
 import { createMcpEngine } from "./engine";
 import { isMcpResultTool, summarizeMcpResult } from "./results";
@@ -23,6 +25,8 @@ export const MCP_CONFIRM_ALWAYS = "Always allow";
 // Mobile stacks the options vertically: a lasting grant must never sit next to "Deny".
 const CONFIRM_OPTIONS = [MCP_CONFIRM_DENY, MCP_CONFIRM_ONCE, MCP_CONFIRM_CHAT];
 const CONFIRM_OPTIONS_WITH_ALWAYS = [...CONFIRM_OPTIONS, MCP_CONFIRM_ALWAYS];
+
+const DetailsSchema = Type.Record(Type.String(), Type.Unknown());
 
 export interface McpSessionHost {
 	extensions: InlineExtension[];
@@ -127,7 +131,7 @@ export function createMcpSessionHost({
 			if (!isMcpResultTool(event.toolName)) return undefined;
 			const summary = summarizeMcpResult(event.toolName, event.structuredContent, event.isError);
 			if (!summary) return undefined;
-			const details = event.details && typeof event.details === "object" ? event.details : {};
+			const details = Check(DetailsSchema, event.details) ? event.details : {};
 			return { details: { ...details, thinkrail: summary } };
 		});
 	};

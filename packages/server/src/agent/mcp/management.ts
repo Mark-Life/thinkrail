@@ -1,13 +1,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
-import type { McpProjectOverride, McpServerScope } from "@thinkrail/contracts";
+import type { McpProjectOverride, McpServerEntryInput, McpServerScope } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { Check } from "typebox/value";
 import {
 	fingerprintMcpEntry,
 	globalMcpConfigPath,
 	isOverrideEntry,
-	isRecord,
 	loadHostMcpConfig,
+	McpFileSchema,
+	type McpJson,
+	type McpJsonObject,
+	McpJsonObjectSchema,
 	type McpProjectPolicy,
 	projectMcpConfigPath,
 	validateMcpServerConfig,
@@ -44,20 +48,21 @@ function configPath(scope: McpServerScope, worktree: string): string {
 	return path;
 }
 
-function readRawEntry(path: string, name: string): unknown {
+function readRawEntry(path: string, name: string): McpJson | undefined {
 	if (!existsSync(path)) return undefined;
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
-		const servers = isRecord(parsed) ? parsed.mcpServers : undefined;
-		return isRecord(servers) && Object.hasOwn(servers, name) ? servers[name] : undefined;
+		if (!Check(McpFileSchema, parsed)) return undefined;
+		const servers = parsed.mcpServers;
+		return servers && Object.hasOwn(servers, name) ? servers[name] : undefined;
 	} catch {
 		return undefined;
 	}
 }
 
-function readEntry(path: string, name: string): Record<string, unknown> | undefined {
+function readEntry(path: string, name: string): McpJsonObject | undefined {
 	const entry = readRawEntry(path, name);
-	return isRecord(entry) ? entry : undefined;
+	return Check(McpJsonObjectSchema, entry) ? entry : undefined;
 }
 
 function invalid(message: string): CodedError {
@@ -68,10 +73,12 @@ export function writeMcpServerEntry(options: {
 	scope: McpServerScope;
 	worktree: string;
 	name: string;
-	entry: Record<string, unknown>;
+	entry: McpServerEntryInput;
 	mode: "add" | "update";
 }): string | undefined {
-	const { scope, worktree, name, entry, mode } = options;
+	const { scope, worktree, name, mode } = options;
+	const { entry } = options;
+	if (!Check(McpJsonObjectSchema, entry)) throw invalid(`server "${name}" must be a JSON object`);
 	const validated = validateMcpServerConfig(name, entry);
 	if (typeof validated === "string") throw invalid(validated);
 	if (scope === "project" && "url" in validated && validated.auth) {
@@ -81,7 +88,7 @@ export function writeMcpServerEntry(options: {
 	const existing = readRawEntry(path, name);
 	if (mode === "add" && existing !== undefined)
 		throw invalid(`An MCP server named "${name}" already exists`);
-	if (mode === "update" && !isRecord(existing))
+	if (mode === "update" && !Check(McpJsonObjectSchema, existing))
 		throw invalid(`No MCP server named "${name}" in ${path}`);
 	addMcpServerConfig(path, name, entry);
 	return scope === "project" ? fingerprintMcpEntry(name, entry) : undefined;
@@ -122,7 +129,10 @@ export function shareMcpOverrideWithRepo(options: {
 	}
 	const path = configPath("project", options.worktree);
 	const existing = readRawEntry(path, name);
-	if (existing !== undefined && (!isRecord(existing) || !isOverrideEntry(existing))) {
+	if (
+		existing !== undefined &&
+		(!Check(McpJsonObjectSchema, existing) || !isOverrideEntry(existing))
+	) {
 		throw invalid(
 			`The repository's .pi/mcp.json already defines "${name}" — edit that entry instead.`,
 		);
