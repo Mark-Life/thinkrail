@@ -836,6 +836,12 @@ test("a malformed favoriteModels list rejects the whole update before persisting
 	expect(getConfig().favoriteModels).toEqual([]);
 });
 
+test("favoriteModels drops entries that lack the full model shape and keeps the rest", () => {
+	const stale = { id: "old", provider: "p", name: "old", thinkingLevels: [] };
+	const next = updateConfig({ favoriteModels: [wireModel("a"), stale] as never });
+	expect(next.favoriteModels.map((m) => m.id)).toEqual(["a"]);
+});
+
 test("recentModels is host-owned: client writes are ignored, noteRecentModel caps and dedupes", () => {
 	updateConfig({ recentModels: [wireModel("client")] } as AppConfigUpdate);
 	expect(getConfig().recentModels).toEqual([]);

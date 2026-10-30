@@ -1,17 +1,32 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 
 const REVIEWS_SUFFIX = ".reviews.json";
 
-export interface TodoReviewRecord {
-	state: "reviewed" | "changes_requested";
-	reviewedShas: string[];
-	feedback?: string;
-	at: string;
-	reviewedBy?: "agent";
-	requestId?: string;
-}
+const TodoReviewRecordSchema = Type.Object({
+	state: Type.Union([Type.Literal("reviewed"), Type.Literal("changes_requested")]),
+	reviewedShas: Type.Array(Type.String()),
+	feedback: Type.Optional(Type.String()),
+	at: Type.String(),
+	reviewedBy: Type.Optional(Type.Literal("agent")),
+	requestId: Type.Optional(Type.String()),
+});
+
+const PendingAtSchema = Type.Object({ at: Type.String() });
+const PendingShasSchema = Type.Object({ shas: Type.Array(Type.String()) });
+
+const ReviewsFileSchema = Type.Object({
+	items: Type.Optional(Type.Unknown()),
+	pending: Type.Optional(Type.Unknown()),
+	autoCycles: Type.Optional(Type.Unknown()),
+});
+const SectionSchema = Type.Record(Type.String(), Type.Unknown());
+const AutoCycleSchema = Type.Number();
+
+export type TodoReviewRecord = Static<typeof TodoReviewRecordSchema>;
 
 export interface TodoReviewMeta {
 	pending: Record<string, { at: string; shas?: string[] }>;
@@ -33,56 +48,34 @@ function reviewsPath(root: string, sessionId: string): string {
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${REVIEWS_SUFFIX}`);
 }
 
-function isRecord(raw: unknown): raw is TodoReviewRecord {
-	if (typeof raw !== "object" || raw === null) return false;
-	const o = raw as Record<string, unknown>;
-	return (
-		(o.state === "reviewed" || o.state === "changes_requested") &&
-		Array.isArray(o.reviewedShas) &&
-		o.reviewedShas.every((s) => typeof s === "string") &&
-		(o.feedback === undefined || typeof o.feedback === "string") &&
-		(o.reviewedBy === undefined || o.reviewedBy === "agent") &&
-		(o.requestId === undefined || typeof o.requestId === "string") &&
-		typeof o.at === "string"
-	);
-}
-
-function parseAutoCycles(raw: unknown): Record<string, number> | undefined {
-	if (typeof raw !== "object" || raw === null) return undefined;
-	const autoCycles = Object.fromEntries(
-		Object.entries(raw).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
-	);
-	return Object.keys(autoCycles).length > 0 ? autoCycles : undefined;
-}
-
 function readFile(root: string, sessionId: string): ReviewsFile {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(reviewsPath(root, sessionId), "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return { version: 1, items: {} };
-		const o = parsed as Record<string, unknown>;
+		if (!Check(ReviewsFileSchema, parsed)) return { version: 1, items: {} };
 		const items: Record<string, TodoReviewRecord> = {};
-		if (typeof o.items === "object" && o.items !== null) {
-			for (const [id, value] of Object.entries(o.items)) {
-				if (isRecord(value)) items[id] = value;
+		if (Check(SectionSchema, parsed.items)) {
+			for (const [id, value] of Object.entries(parsed.items)) {
+				if (Check(TodoReviewRecordSchema, value)) items[id] = value;
 			}
 		}
 		const file: ReviewsFile = { version: 1, items };
-		if (typeof o.pending === "object" && o.pending !== null) {
-			const pending: ReviewsFile["pending"] = {};
-			for (const [id, value] of Object.entries(o.pending)) {
-				const entry = value as Record<string, unknown> | null;
-				const at = entry?.at;
-				if (typeof at !== "string") continue;
-				const shas =
-					Array.isArray(entry?.shas) && entry.shas.every((s) => typeof s === "string")
-						? (entry.shas as string[])
-						: undefined;
-				pending[id] = { at, ...(shas ? { shas } : {}) };
+		const pending: ReviewsFile["pending"] = {};
+		if (Check(SectionSchema, parsed.pending)) {
+			for (const [id, value] of Object.entries(parsed.pending)) {
+				if (!Check(PendingAtSchema, value)) continue;
+				pending[id] = Check(PendingShasSchema, value)
+					? { at: value.at, shas: value.shas }
+					: { at: value.at };
 			}
-			if (Object.keys(pending).length > 0) file.pending = pending;
 		}
-		const autoCycles = parseAutoCycles(o.autoCycles);
-		if (autoCycles) file.autoCycles = autoCycles;
+		if (Object.keys(pending).length > 0) file.pending = pending;
+		const autoCycles: Record<string, number> = {};
+		if (Check(SectionSchema, parsed.autoCycles)) {
+			for (const [id, value] of Object.entries(parsed.autoCycles)) {
+				if (Check(AutoCycleSchema, value)) autoCycles[id] = value;
+			}
+		}
+		if (Object.keys(autoCycles).length > 0) file.autoCycles = autoCycles;
 		return file;
 	} catch {
 		return { version: 1, items: {} };

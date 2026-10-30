@@ -454,6 +454,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
   `pi-agent-core` package roots (type-only imports are erased at build, keeping the bundle provider-free).
   `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`.
+- Outside data (JSON files, subprocess output, wire params) is parsed once at its boundary with a TypeBox
+  schema (`Check` from `typebox/value`) into a `Static<>` type. No generic record guards, no
+  `as Record<string, unknown>`, no field-by-field `typeof` on unparsed values. Inner code takes the parsed type.
 - One id model: the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
 - The agent runs in-process with **no crash isolation** — wrap session calls and forward errors; a fatal
   fault takes the whole host down (accepted tradeoff vs the subprocess RPC mode).
