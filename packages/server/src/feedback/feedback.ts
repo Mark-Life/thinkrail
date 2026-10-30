@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SurveyInvitationResponse } from "@thinkrail/contracts";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { dataDir } from "../persistence";
 import {
 	currentInAppSurvey,
@@ -35,67 +37,36 @@ let cachedState: FeedbackState | null = null;
 let claimedClient: string | null = null;
 let publishInvitation: FeedbackPublisher | null = null;
 
-function isNonNegativeSafeInteger(value: unknown): value is number {
-	return Number.isSafeInteger(value) && (value as number) >= 0;
-}
+const Count = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
+
+const StoredStateSchema = Type.Object({
+	acceptedMessages: Count,
+	nextInvitationAt: Count,
+	dismissed: Type.Boolean(),
+	submittedSurveyId: Type.Optional(
+		Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()]),
+	),
+	submittedIteration: Type.Optional(Type.Union([Count, Type.Null()])),
+	lastInvitedAt: Type.Optional(Type.Union([Count, Type.Null()])),
+});
 
 function parseState(value: unknown): FeedbackState | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	const candidate = value as Partial<FeedbackState>;
-	if (
-		!isNonNegativeSafeInteger(candidate.acceptedMessages) ||
-		!isNonNegativeSafeInteger(candidate.nextInvitationAt) ||
-		typeof candidate.dismissed !== "boolean"
-	) {
-		return null;
-	}
-	const submittedSurveyId = completionId(value);
-	const submittedIteration = completionIteration(value);
-	const lastInvitedAt = invitedAt(value);
-	if (submittedSurveyId === undefined || submittedIteration === undefined) return null;
-	if (lastInvitedAt === undefined) return null;
+	if (!Check(StoredStateSchema, value)) return null;
 	return {
-		acceptedMessages: candidate.acceptedMessages,
-		nextInvitationAt: candidate.nextInvitationAt,
-		dismissed: candidate.dismissed,
-		submittedSurveyId,
-		submittedIteration,
-		lastInvitedAt,
+		acceptedMessages: value.acceptedMessages,
+		nextInvitationAt: value.nextInvitationAt,
+		dismissed: value.dismissed,
+		submittedSurveyId: value.submittedSurveyId ?? null,
+		submittedIteration: value.submittedIteration ?? null,
+		lastInvitedAt: value.lastInvitedAt ?? null,
 	};
-}
-
-function invitedAt(record: object): number | null | undefined {
-	if (!Object.hasOwn(record, "lastInvitedAt")) return null;
-	const at: unknown = Reflect.get(record, "lastInvitedAt");
-	if (at === null) return null;
-	if (isNonNegativeSafeInteger(at)) return at;
-	return undefined;
-}
-
-function completionId(record: object): string | null | undefined {
-	if (!Object.hasOwn(record, "submittedSurveyId")) return null;
-	const id: unknown = Reflect.get(record, "submittedSurveyId");
-	if (id === null) return null;
-	if (typeof id === "string" && id.length > 0 && id.length <= 128) return id;
-	return undefined;
-}
-
-function completionIteration(record: object): number | null | undefined {
-	if (!Object.hasOwn(record, "submittedIteration")) return null;
-	const iteration: unknown = Reflect.get(record, "submittedIteration");
-	if (iteration === null) return null;
-	if (isNonNegativeSafeInteger(iteration)) return iteration;
-	return undefined;
 }
 
 function loadState(): FeedbackState {
 	if (cachedState) return cachedState;
 	try {
-		cachedState = parseState(
-			JSON.parse(readFileSync(join(dataDir(), "feedback.json"), "utf8")),
-		) ?? {
-			...DEFAULT_STATE,
-		};
+		const stored: unknown = JSON.parse(readFileSync(join(dataDir(), "feedback.json"), "utf8"));
+		cachedState = parseState(stored) ?? { ...DEFAULT_STATE };
 	} catch {
 		cachedState = { ...DEFAULT_STATE };
 	}
@@ -138,7 +109,7 @@ export function surveyIsCompleted(id: string, iteration: number): boolean {
 }
 
 export function completeSurvey(id: string, iteration: number): void {
-	if (!id || !isNonNegativeSafeInteger(iteration)) throw new Error("Invalid survey completion");
+	if (!id || !Check(Count, iteration)) throw new Error("Invalid survey completion");
 	const next = { ...loadState(), submittedSurveyId: id, submittedIteration: iteration };
 	cachedState = next;
 	claimedClient = null;
