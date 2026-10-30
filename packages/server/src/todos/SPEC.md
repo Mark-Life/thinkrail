@@ -346,7 +346,8 @@ before the already-enqueued replacement pass has reconciled the current plan.
   `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the
   pure `renderFixPackage` (the review ops; the send itself is `host`'s composition), and the
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
-- **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
+- **Allowed deps:** `typebox` (schemas for the baseline and review sidecar files);
+  `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head;
   `listCommits` — the `base..HEAD` enumeration behind `adoptedCommits` + the review resolver's

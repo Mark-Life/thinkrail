@@ -1,14 +1,22 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 
 const BASELINE_SUFFIX = ".baselines.json";
 
-export interface Baseline {
-	paths: string[];
-	head: string | null;
-	shared?: boolean;
-}
+const BaselineSchema = Type.Object({
+	paths: Type.Array(Type.String()),
+	head: Type.Union([Type.String(), Type.Null()]),
+	shared: Type.Optional(Type.Boolean()),
+});
+
+const BaselineFileSchema = Type.Object({
+	items: Type.Record(Type.String(), Type.Unknown()),
+});
+
+export type Baseline = Static<typeof BaselineSchema>;
 
 interface BaselineFile {
 	version: 1;
@@ -19,26 +27,13 @@ function baselinePath(root: string, sessionId: string): string {
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${BASELINE_SUFFIX}`);
 }
 
-function isBaseline(raw: unknown): raw is Baseline {
-	if (typeof raw !== "object" || raw === null) return false;
-	const o = raw as Record<string, unknown>;
-	return (
-		Array.isArray(o.paths) &&
-		o.paths.every((p) => typeof p === "string") &&
-		(o.head === null || typeof o.head === "string") &&
-		(o.shared === undefined || typeof o.shared === "boolean")
-	);
-}
-
 export function readBaselines(root: string, sessionId: string): Record<string, Baseline> {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(baselinePath(root, sessionId), "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return {};
-		const items = (parsed as Record<string, unknown>).items;
-		if (typeof items !== "object" || items === null) return {};
+		if (!Check(BaselineFileSchema, parsed)) return {};
 		const out: Record<string, Baseline> = {};
-		for (const [id, value] of Object.entries(items)) {
-			if (isBaseline(value)) out[id] = value;
+		for (const [id, value] of Object.entries(parsed.items)) {
+			if (Check(BaselineSchema, value)) out[id] = value;
 		}
 		return out;
 	} catch {

@@ -45,6 +45,7 @@ Clear, fractal module boundaries are a top-priority requirement:
   the lint gate rejects hardcoded JSX text and text attributes.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
   `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
+- Outside data (JSON files, subprocess output, wire params) is parsed once at its boundary with a TypeBox schema (`Check` from `typebox/value`) into a `Static<>` type; no generic record guards, no `as Record<string, unknown>`, no field-by-field `typeof` on unparsed values.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
 - `pi` owns state. The host exposes what pi reports rather than recomputing cost, stats, or state.
 - Streaming semantics: `text_delta` / `thinking_delta` append;

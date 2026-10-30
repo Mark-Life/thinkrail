@@ -16,6 +16,8 @@ import {
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
@@ -61,42 +63,61 @@ const ACCEPTED_UPDATE_KEYS = {
 	recentModels: true,
 } satisfies Record<keyof RuntimeAppConfigUpdate, true>;
 
+const UpdateShapeSchema = Type.Record(Type.String(), Type.Unknown());
+
 function assertUpdateShape(update: unknown): void {
-	if (typeof update !== "object" || update === null || Array.isArray(update)) {
-		throw new Error("settings update must be an object");
-	}
+	if (!Check(UpdateShapeSchema, update)) throw new Error("settings update must be an object");
 	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
 	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
 }
 
-function isWireModelRef(value: unknown): value is WireModel {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-	const record = value as Record<string, unknown>;
-	return (
-		typeof record.provider === "string" &&
-		record.provider.length > 0 &&
-		typeof record.id === "string" &&
-		record.id.length > 0 &&
-		typeof record.name === "string" &&
-		Array.isArray(record.thinkingLevels)
-	);
-}
+const WireModelSchema = Type.Object({
+	id: Type.String({ minLength: 1 }),
+	name: Type.String(),
+	provider: Type.String({ minLength: 1 }),
+	contextWindow: Type.Number(),
+	reasoning: Type.Boolean(),
+	thinkingLevels: Type.Array(
+		Type.Union([
+			Type.Literal("off"),
+			Type.Literal("minimal"),
+			Type.Literal("low"),
+			Type.Literal("medium"),
+			Type.Literal("high"),
+			Type.Literal("xhigh"),
+			Type.Literal("max"),
+		]),
+	),
+	cost: Type.Optional(Type.Object({ input: Type.Number(), output: Type.Number() })),
+	input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
+	auth: Type.Optional(
+		Type.Object({
+			kind: Type.Union([
+				Type.Literal("oauth"),
+				Type.Literal("api-key"),
+				Type.Literal("env"),
+				Type.Literal("central"),
+				Type.Literal("other"),
+			]),
+			detail: Type.Optional(Type.String()),
+		}),
+	),
+});
+
+const FavoriteModelsSchema = Type.Array(WireModelSchema);
+const DisabledExtensionsSchema = Type.Array(Type.String({ pattern: "\\S" }));
 
 function validateFavoriteModels(value: unknown): WireModel[] {
-	if (!Array.isArray(value) || !value.every(isWireModelRef)) {
+	if (!Check(FavoriteModelsSchema, value))
 		throw new Error("favoriteModels must be a list of models");
-	}
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
 }
 
 function validateDisabledExtensions(value: unknown): string[] {
-	if (
-		!Array.isArray(value) ||
-		!value.every((name) => typeof name === "string" && name.trim().length > 0)
-	) {
+	if (!Check(DisabledExtensionsSchema, value)) {
 		throw new Error("disabledExtensions must be a list of extension names");
 	}
-	return [...new Set(value as string[])];
+	return [...new Set(value)];
 }
 
 let publishSettings: SettingsPublisher | null = null;
@@ -176,7 +197,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["defaultModel", defaultModel],
 		["reviewModel", reviewModel],
 	] as const) {
-		if (value !== undefined && value !== null && !isWireModelRef(value)) {
+		if (value !== undefined && value !== null && !Check(WireModelSchema, value)) {
 			throw new Error(`${name} must be a model or null`);
 		}
 	}
