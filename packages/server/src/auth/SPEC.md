@@ -180,7 +180,7 @@ ourselves and never surface a credential value over the wire.
   `updateJbcentral`, `jbcentralLogin`, the successful-action /
   runtime-changed publisher seams, and the explicit `resetJbcentralStateForTests` lifecycle seam used by
   sibling host tests.
-- **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for the current
+- **Allowed deps:** `contracts` (wire types); `typebox` (schemas for third-party account files); `shared/jbcentral`; the **`agent` barrel** for the current
   runtime/auth facade plus candidate prepare/activate; `@earendil-works/pi-ai` (auth interaction **types** only).
 - **Forbidden:** reaching into `agent` internals (runtime and generation changes only through its barrel); importing `host`,
   `settings`, or any other sibling; deep-importing pi's TUI (`modes/interactive/*`) for its private provider constants;

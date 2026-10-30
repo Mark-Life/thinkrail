@@ -38,25 +38,30 @@ const CLAUDE_SUBSCRIPTION_BILLING = new Set([
 const GROK_API_KEY_SCOPE = "xai::api_key";
 
 const Filled = Type.String({ pattern: "\\S" });
-const AnyObject = Type.Object({});
+const NullableString = Type.Optional(Type.Union([Type.String(), Type.Null()]));
 const Opaque = Type.Optional(Type.Unknown());
 const ClaudeConfigSchema = Type.Object({ oauthAccount: Opaque });
-const ClaudeCredentialsSchema = Type.Object({ claudeAiOauth: Opaque });
 const ClaudeOauthSchema = Type.Object({
 	refreshToken: Filled,
 	scopes: Type.Array(Type.Unknown()),
 	subscriptionType: Type.Optional(Type.String()),
 });
+const ClaudeCredentialsSchema = Type.Object({
+	claudeAiOauth: Type.Optional(Type.Union([ClaudeOauthSchema, Type.Object({})])),
+});
 const ClaudeAccountSchema = Type.Object({ accountUuid: Filled, billingType: Type.String() });
+const CodexTokensSchema = Type.Object({
+	refresh_token: Filled,
+	id_token: Type.Optional(Type.String()),
+});
 const CodexAuthSchema = Type.Object({
-	auth_mode: Opaque,
-	personal_access_token: Opaque,
+	auth_mode: Type.Optional(Type.String()),
+	personal_access_token: NullableString,
 	bedrock_api_key: Opaque,
 	bedrock_access_keys: Opaque,
-	OPENAI_API_KEY: Opaque,
-	tokens: Opaque,
+	OPENAI_API_KEY: NullableString,
+	tokens: Type.Optional(CodexTokensSchema),
 });
-const CodexTokensSchema = Type.Object({ refresh_token: Filled, id_token: Opaque });
 const JwtClaimsSchema = Type.Object({
 	"https://api.openai.com/auth": Type.Optional(
 		Type.Object({ chatgpt_plan_type: Type.Optional(Type.String()) }),
@@ -70,11 +75,9 @@ const CopilotEditorEntrySchema = Type.Union([
 const CopilotCliConfigSchema = Type.Object({ loggedInUsers: Type.Array(Type.Unknown()) });
 const CopilotCliUserSchema = Type.Object({ login: Filled });
 const KimiCredentialsSchema = Type.Object({ refresh_token: Filled });
-const GrokEntrySchema = Type.Object({
-	auth_mode: Opaque,
-	refresh_token: Opaque,
-	expires_at: Type.Optional(Type.Union([Type.Number(), Type.String()])),
-});
+const GrokApiKeyModeSchema = Type.Object({ auth_mode: Type.Literal("api_key") });
+const GrokRefreshSchema = Type.Object({ refresh_token: Filled });
+const GrokExpirySchema = Type.Object({ expires_at: Type.Union([Type.Number(), Type.String()]) });
 
 function envPath(env: NodeJS.ProcessEnv, name: string): string | undefined {
 	const value = env[name]?.trim();
@@ -142,15 +145,8 @@ function jwtClaims(token: string): Static<typeof JwtClaimsSchema> | null {
 	}
 }
 
-function expiresAfter(value: number | string | undefined, now: number): boolean {
-	const at =
-		typeof value === "number"
-			? value < 1e12
-				? value * 1000
-				: value
-			: typeof value === "string"
-				? Date.parse(value)
-				: Number.NaN;
+function expiresAfter(value: number | string, now: number): boolean {
+	const at = typeof value === "number" ? (value < 1e12 ? value * 1000 : value) : Date.parse(value);
 	return at > now;
 }
 
@@ -174,7 +170,7 @@ async function detectClaudeCode(
 		readJson(join(secureDir, ".credentials.json"), ClaudeCredentialsSchema),
 	]);
 	const oauth = credentials?.claudeAiOauth;
-	if (Check(AnyObject, oauth)) {
+	if (oauth !== undefined) {
 		return Check(ClaudeOauthSchema, oauth) && oauth.scopes.includes("user:inference")
 			? signal(plan(oauth.subscriptionType))
 			: null;
@@ -202,9 +198,8 @@ async function detectCodex(env: NodeJS.ProcessEnv, home: string): Promise<Accoun
 		CodexAuthSchema,
 	);
 	if (!auth || !isCodexChatgptMode(auth)) return null;
-	const tokens = auth.tokens;
-	if (!Check(CodexTokensSchema, tokens)) return null;
-	const claims = Check(Type.String(), tokens.id_token) ? jwtClaims(tokens.id_token) : null;
+	if (!auth.tokens) return null;
+	const claims = auth.tokens.id_token === undefined ? null : jwtClaims(auth.tokens.id_token);
 	return {
 		source: "codex",
 		providerIds: ["openai", "openai-codex"],
@@ -270,9 +265,9 @@ async function detectGrokBuild(
 	const signedIn = Object.entries(auth).some(
 		([scope, entry]) =>
 			scope !== GROK_API_KEY_SCOPE &&
-			Check(GrokEntrySchema, entry) &&
-			entry.auth_mode !== "api_key" &&
-			(Check(Filled, entry.refresh_token) || expiresAfter(entry.expires_at, now)),
+			!Check(GrokApiKeyModeSchema, entry) &&
+			(Check(GrokRefreshSchema, entry) ||
+				(Check(GrokExpirySchema, entry) && expiresAfter(entry.expires_at, now))),
 	);
 	return signedIn ? { source: "grok-build", providerIds: ["xai"] } : null;
 }

@@ -15,6 +15,8 @@ import {
 	isTerminalWindowsShell,
 	normalizeThemePreference,
 	type Project,
+	type SessionCompletion,
+	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -155,8 +157,16 @@ const SessionLifecycleSchema = Type.Object({
 	cancelledRunBySession: StringMapSchema,
 });
 
-export type PersistedSessionCompletion = Static<typeof PersistedSessionCompletionSchema>;
-export type SessionLifecycle = Static<typeof SessionLifecycleSchema>;
+export interface PersistedSessionCompletion {
+	runId: string;
+	completion: SessionCompletion;
+}
+
+export interface SessionLifecycle {
+	version: typeof SESSION_LIFECYCLE_VERSION;
+	completionBySession: Record<string, PersistedSessionCompletion>;
+	cancelledRunBySession: Record<string, string>;
+}
 
 function parseSessionLifecycle(raw: unknown): SessionLifecycle | null {
 	return Check(SessionLifecycleSchema, raw) ? raw : null;
@@ -200,7 +210,10 @@ const PersistedTurnsSchema = Type.Object({
 	byWorkspace: Type.Record(Type.String(), Type.Array(TurnChangeSetSchema)),
 });
 
-export type PersistedTurns = Static<typeof PersistedTurnsSchema>;
+export interface PersistedTurns {
+	version: typeof TURNS_VERSION;
+	byWorkspace: Record<string, TurnChangeSet[]>;
+}
 
 function parseTurns(raw: unknown): PersistedTurns | null {
 	return Check(PersistedTurnsSchema, raw) ? raw : null;
@@ -293,7 +306,7 @@ const WireModelSchema = Type.Object({
 	),
 });
 
-/** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
+/** A persisted model list keeps only complete entries; anything else is dropped, not repaired. */
 function storedModels(value: unknown): WireModel[] {
 	if (!Check(ListSchema, value)) return [];
 	return value.filter((entry): entry is Static<typeof WireModelSchema> =>
@@ -392,23 +405,19 @@ export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
 }
 
-const HostEnvironmentFileSchema = Type.Object({
-	agentDir: Type.Optional(Type.Unknown()),
-	vars: Type.Optional(Type.Unknown()),
-});
 const HostEnvironmentVarSchema = Type.Object({ name: Type.String(), value: Type.String() });
-const AgentDirSchema = Type.String({ minLength: 1 });
+const HostEnvironmentAgentDirSchema = Type.Object({ agentDir: Type.String({ minLength: 1 }) });
+const HostEnvironmentVarsSchema = Type.Object({ vars: Type.Array(Type.Unknown()) });
 
 export function loadHostEnvironment(): HostEnvironment {
 	const raw = readJson<unknown>("environment.json", undefined);
-	const value = Check(HostEnvironmentFileSchema, raw) ? raw : {};
-	const vars = Check(ListSchema, value.vars)
-		? value.vars.filter((entry): entry is Static<typeof HostEnvironmentVarSchema> =>
+	const vars = Check(HostEnvironmentVarsSchema, raw)
+		? raw.vars.filter((entry): entry is Static<typeof HostEnvironmentVarSchema> =>
 				Check(HostEnvironmentVarSchema, entry),
 			)
 		: [];
 	return {
-		...(Check(AgentDirSchema, value.agentDir) ? { agentDir: value.agentDir } : {}),
+		...(Check(HostEnvironmentAgentDirSchema, raw) ? { agentDir: raw.agentDir } : {}),
 		vars: vars.map(({ name, value }) => ({ name, value })),
 	};
 }
