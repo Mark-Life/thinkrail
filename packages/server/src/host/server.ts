@@ -19,6 +19,8 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	admissionContextFor,
 	cancelAllMcpProbes,
@@ -209,6 +211,15 @@ const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 
 const log = logger("host");
 
+const AckFrameSchema = Type.Object({ ack: Type.Array(Type.Unknown()) });
+const ResumeFrameSchema = Type.Object({ resume: Type.Array(Type.Unknown()) });
+const RequestFrameSchema = Type.Object({
+	id: Type.String(),
+	method: Type.String(),
+	params: Type.Optional(Type.Unknown()),
+	sessionId: Type.Optional(Type.Unknown()),
+});
+
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
 function clientProtocolVersion(value: string | null): number {
@@ -397,28 +408,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				} catch {
 					return;
 				}
-				if (typeof req !== "object" || req === null) return;
-				if ("ack" in req && Array.isArray(req.ack)) {
+				if (Check(AckFrameSchema, req)) {
 					requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId));
 					return;
 				}
-				if ("resume" in req && Array.isArray(req.resume)) {
+				if (Check(ResumeFrameSchema, req)) {
 					requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId));
 					return;
 				}
-				if (
-					!("id" in req) ||
-					typeof req.id !== "string" ||
-					!("method" in req) ||
-					typeof req.method !== "string"
-				) {
-					return;
-				}
+				if (!Check(RequestFrameSchema, req)) return;
 				const requestId = req.id;
 				const method = req.method;
 				const methodDiagnostic = requestMethodDiagnostic(method);
-				const params = "params" in req ? req.params : undefined;
-				const sessionId = "sessionId" in req ? req.sessionId : undefined;
+				const { params, sessionId } = req;
 				const fingerprint = createHash("sha256")
 					.update(JSON.stringify([method, params, sessionId ?? null]))
 					.digest("hex");

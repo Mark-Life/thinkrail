@@ -9,6 +9,8 @@ import type {
 	HostEnvironmentUpdateResult,
 } from "@thinkrail/contracts";
 import { launchEnvKeys } from "@thinkrail/shared/shellEnv";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { logger } from "../log";
 import { loadHostEnvironment, saveHostEnvironment } from "../persistence";
 
@@ -16,6 +18,11 @@ const AGENT_DIR_VAR = "PI_CODING_AGENT_DIR";
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED_NAMES = new Set(["PATH", "HOME", "USERPROFILE", AGENT_DIR_VAR]);
 const RESERVED_PREFIX = "THINKRAIL_";
+
+const HostEnvironmentSchema = Type.Object({
+	agentDir: Type.Optional(Type.String()),
+	vars: Type.Array(Type.Object({ name: Type.String(), value: Type.String() })),
+});
 
 const log = logger("environment");
 
@@ -65,20 +72,14 @@ export function validateHostEnvironment(environment: HostEnvironment): HostEnvir
 }
 
 function parseHostEnvironment(value: unknown): HostEnvironment | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	const { agentDir, vars } = value as Record<string, unknown>;
-	if (agentDir !== undefined && typeof agentDir !== "string") return null;
-	if (!Array.isArray(vars)) return null;
+	if (!Check(HostEnvironmentSchema, value)) return null;
 	const parsed: HostEnvironment["vars"] = [];
-	for (const entry of vars) {
-		if (typeof entry !== "object" || entry === null) return null;
-		const { name, value: varValue } = entry as Record<string, unknown>;
-		if (typeof name !== "string" || typeof varValue !== "string") return null;
+	for (const { name, value: varValue } of value.vars) {
 		const trimmed = name.trim();
 		if (trimmed.length === 0 && varValue.length === 0) continue;
 		parsed.push({ name: trimmed, value: varValue });
 	}
-	const dir = agentDir?.trim();
+	const dir = value.agentDir?.trim();
 	return { ...(dir ? { agentDir: dir } : {}), vars: parsed };
 }
 

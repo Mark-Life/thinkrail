@@ -1,8 +1,14 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
 export type CompatibilitySkillProvider = "claude" | "codex" | "github-copilot" | "gemini";
+
+const PluginManifestSchema = Type.Object({ plugins: Type.Record(Type.String(), Type.Unknown()) });
+const PluginInstallsSchema = Type.Array(Type.Unknown());
+const PluginInstallSchema = Type.Object({ installPath: Type.String() });
 
 const PROJECT_SKILL_PATH = /^\.(claude|github|gemini|pi|agents)\/skills(?:\/|$)/;
 
@@ -47,15 +53,14 @@ function readClaudePluginSkillDirs(claudeConfigDir: string): { path: string; plu
 	} catch {
 		return [];
 	}
-	const plugins = (parsed as { plugins?: Record<string, unknown> } | null)?.plugins;
-	if (!plugins || typeof plugins !== "object") return [];
+	if (!Check(PluginManifestSchema, parsed)) return [];
 	const dirs: { path: string; plugin: string }[] = [];
-	for (const [key, installs] of Object.entries(plugins)) {
-		if (!Array.isArray(installs)) continue;
+	for (const [key, installs] of Object.entries(parsed.plugins)) {
+		if (!Check(PluginInstallsSchema, installs)) continue;
 		const plugin = key.split("@")[0] || key;
 		for (const install of installs) {
-			const installPath = (install as { installPath?: unknown } | null)?.installPath;
-			if (typeof installPath === "string") dirs.push({ path: join(installPath, "skills"), plugin });
+			if (Check(PluginInstallSchema, install))
+				dirs.push({ path: join(install.installPath, "skills"), plugin });
 		}
 	}
 	return dirs;

@@ -14,6 +14,7 @@ import {
 	type McpServerConfig,
 	type PromptOptions,
 	type RegisteredMcpServer,
+	type SessionContext,
 	type SessionEntry,
 	type SessionInfo,
 	SessionManager,
@@ -60,6 +61,8 @@ import {
 } from "pi-background-commands";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS, type Subagents } from "pi-subagents";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { interactiveTools, registryExtensionName, serverExtensions } from "../extensions";
 import { logger } from "../log";
 import {
@@ -1572,6 +1575,12 @@ function defaultSessionDirectory(cwd: string): string {
 	return join(resolve(getAgentDir()), "sessions", safePath);
 }
 
+const SessionHeaderSchema = Type.Object({
+	type: Type.Literal("session"),
+	id: Type.String(),
+	cwd: Type.Optional(Type.Unknown()),
+});
+
 function hasErrorCode(error: unknown, code: string): boolean {
 	return typeof error === "object" && error !== null && Reflect.get(error, "code") === code;
 }
@@ -1589,15 +1598,13 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 			} catch {
 				continue;
 			}
-			if (typeof entry !== "object" || entry === null) {
+			if (Check(SessionHeaderSchema, entry)) {
+				return { id: entry.id, cwd: Check(Type.String(), entry.cwd) ? entry.cwd : "" };
+			}
+			if (!Check(Type.Object({}), entry)) {
 				throw new Error("first parsed entry is not an object");
 			}
-			const id = Reflect.get(entry, "id");
-			if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
-				return null;
-			}
-			const headerCwd = Reflect.get(entry, "cwd");
-			return { id, cwd: typeof headerCwd === "string" ? headerCwd : "" };
+			return null;
 		}
 		throw new Error("session header is missing");
 	} catch (error) {
@@ -1968,14 +1975,13 @@ function attachDiskSession(
 	return pending;
 }
 
-function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
-	if (typeof model !== "object" || model === null) return undefined;
-	const provider = Reflect.get(model, "provider");
-	const id = Reflect.get(model, "modelId");
+function persistedSessionModelRef(
+	model: SessionContext["model"],
+): { provider: string; id: string } | undefined {
+	if (!model) return undefined;
+	const { provider, modelId: id } = model;
 	if (provider === undefined && id === undefined) return undefined;
-	if (typeof provider !== "string" || !provider || typeof id !== "string" || !id) {
-		throw new Error("The chat's saved model is unavailable.");
-	}
+	if (!provider || !id) throw new Error("The chat's saved model is unavailable.");
 	return { provider, id };
 }
 
