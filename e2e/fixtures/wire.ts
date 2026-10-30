@@ -1,14 +1,15 @@
 import type { WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { E2E_PORT } from "./paths";
 
-export class E2eWireTransientError extends Error {}
+const ResponseFrameSchema = Type.Object({
+	id: Type.String(),
+	ok: Type.Boolean(),
+	result: Type.Optional(Type.Unknown()),
+});
 
-function readResponse(data: unknown, id: string): { ok: boolean; result?: unknown } | null {
-	if (typeof data !== "object" || data === null) return null;
-	const frame = data as Record<string, unknown>;
-	if (frame.id !== id || typeof frame.ok !== "boolean") return null;
-	return frame.ok ? { ok: true, result: frame.result } : { ok: false };
-}
+export class E2eWireTransientError extends Error {}
 
 export class E2eWire {
 	private sequence = 0;
@@ -65,10 +66,9 @@ export class E2eWire {
 				} catch {
 					return;
 				}
-				const response = readResponse(parsed, id);
-				if (!response) return;
+				if (!Check(ResponseFrameSchema, parsed) || parsed.id !== id) return;
 				cleanup();
-				if (response.ok) resolve(response.result as WsResult<M>);
+				if (parsed.ok) resolve(parsed.result as WsResult<M>);
 				else reject(new Error(`${method} failed on the isolated host wire`));
 			};
 			const onClose = () => {

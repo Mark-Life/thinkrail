@@ -20,6 +20,7 @@
         "pi-spec-graph": "workspace:*",
         "pi-todos": "workspace:*",
         "turbo": "2.11.10",
+        "typebox": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -138,6 +139,7 @@
         "@thinkrail/cli": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
+        "typebox": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",

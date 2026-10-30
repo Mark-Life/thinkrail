@@ -23,7 +23,7 @@ It consumes finished artifacts; it does not build the application or supply appl
 - **Public surface:** `locateDesktopLauncher`
 - **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
   release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
-  executable resources;
+  executable resources; `typebox` to parse probe wire frames and collector payloads;
   read-only access to
   `.github/actions/build-binary/action.yml` for executing its packaging invocation and collector in
   isolated fixture directories; Bun/Node and native installer tools.
