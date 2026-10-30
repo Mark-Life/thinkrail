@@ -1,9 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
 const ROUTE_VERSION = 1;
 const FALLBACK_ROUTE = "#/v1";
 const MAX_ROUTE_LENGTH = 4096;
+
+const RouteDocumentFileSchema = Type.Object({
+	version: Type.Literal(ROUTE_VERSION),
+	routes: Type.Record(Type.String(), Type.Unknown()),
+});
+const RouteSchema = Type.String({ maxLength: MAX_ROUTE_LENGTH });
 
 interface RouteDocument {
 	version: 1;
@@ -18,32 +26,17 @@ function hasControlCharacter(value: string): boolean {
 	return false;
 }
 
-function validRoute(value: unknown): value is string {
-	return (
-		typeof value === "string" &&
-		value.startsWith("#") &&
-		value.length <= MAX_ROUTE_LENGTH &&
-		!hasControlCharacter(value)
-	);
+function validRoute(value: string): boolean {
+	return value.startsWith("#") && value.length <= MAX_ROUTE_LENGTH && !hasControlCharacter(value);
 }
 
 function readDocument(path: string): RouteDocument {
 	try {
-		const value = JSON.parse(readFileSync(path, "utf8")) as unknown;
-		if (
-			typeof value !== "object" ||
-			value === null ||
-			Reflect.get(value, "version") !== ROUTE_VERSION ||
-			typeof Reflect.get(value, "routes") !== "object" ||
-			Reflect.get(value, "routes") === null
-		) {
-			return { version: ROUTE_VERSION, routes: {} };
-		}
+		const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+		if (!Check(RouteDocumentFileSchema, value)) return { version: ROUTE_VERSION, routes: {} };
 		const routes: Record<string, string> = {};
-		for (const [key, route] of Object.entries(
-			Reflect.get(value, "routes") as Record<string, unknown>,
-		)) {
-			if (validRoute(route)) routes[key] = route;
+		for (const [key, route] of Object.entries(value.routes)) {
+			if (Check(RouteSchema, route) && validRoute(route)) routes[key] = route;
 		}
 		return { version: ROUTE_VERSION, routes };
 	} catch {
@@ -64,7 +57,7 @@ export class RouteStore {
 		return this.#document.routes[`${backendProfileId}:${windowId}`] ?? FALLBACK_ROUTE;
 	}
 
-	write(backendProfileId: string, windowId: string, route: unknown): boolean {
+	write(backendProfileId: string, windowId: string, route: string): boolean {
 		if (!validRoute(route)) return false;
 		const key = `${backendProfileId}:${windowId}`;
 		if (this.#document.routes[key] === route) return true;

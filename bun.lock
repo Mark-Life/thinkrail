@@ -32,6 +32,7 @@
       "dependencies": {
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
+        "typebox": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -46,6 +47,7 @@
         "@thinkrail/locales": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
+        "typebox": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",

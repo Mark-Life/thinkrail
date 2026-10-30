@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { channel as bakedChannel, version } from "@thinkrail/shared/version";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	type InstallMeta,
 	normalizeWindowsInstallPrefix,
@@ -73,10 +75,7 @@ const spawnUpdateChild: UpdateChildRunner = async (command) => {
 	return await child.exited;
 };
 
-function tagNameOf(value: unknown): string | undefined {
-	if (typeof value !== "object" || value === null || !("tag_name" in value)) return undefined;
-	return typeof value.tag_name === "string" ? value.tag_name : undefined;
-}
+const ReleaseSchema = Type.Object({ tag_name: Type.String() });
 
 function versionFromTag(tag: string | undefined, pattern: RegExp): string | undefined {
 	return tag?.match(pattern)?.[1];
@@ -99,11 +98,14 @@ export async function discoverReleaseVersion(
 		if (!response.ok) throw new Error(RELEASE_CHECK_ERROR);
 		const body: unknown = await response.json();
 		if (channel === "stable") {
-			const candidate = versionFromTag(tagNameOf(body), STABLE_RELEASE_TAG_RE);
+			const candidate = Check(ReleaseSchema, body)
+				? versionFromTag(body.tag_name, STABLE_RELEASE_TAG_RE)
+				: undefined;
 			if (candidate !== undefined) return candidate;
 		} else if (Array.isArray(body)) {
 			for (const release of body) {
-				const candidate = versionFromTag(tagNameOf(release), NIGHTLY_RELEASE_TAG_RE);
+				if (!Check(ReleaseSchema, release)) continue;
+				const candidate = versionFromTag(release.tag_name, NIGHTLY_RELEASE_TAG_RE);
 				if (candidate !== undefined) return candidate;
 			}
 		}
@@ -214,7 +216,7 @@ export interface UpdatePlan {
 
 export function resolveUpdateChannel(
 	args: UpdateArgs,
-	metaChannel: unknown,
+	metaChannel: string | undefined,
 	baked: string,
 ): "stable" | "nightly" {
 	return (
@@ -258,8 +260,8 @@ function inferRunningPrefix(input: UpdateRuntime & { build: string }): string | 
 	return prefix;
 }
 
-function unixMetadataPrefix(value: unknown, home: string): string {
-	const prefix = typeof value === "string" && value ? value : posix.join(home, ".local");
+function unixMetadataPrefix(value: string | undefined, home: string): string {
+	const prefix = value ? value : posix.join(home, ".local");
 	if (hasForbiddenUnixInstallPrefixCharacter(prefix) || !posix.isAbsolute(prefix)) {
 		throw new Error(`Refusing suspicious install prefix from metadata: ${prefix}`);
 	}
@@ -272,7 +274,7 @@ function sameUnixPath(a: string, b: string): boolean {
 }
 
 function trustedUnixMetadata(input: ResolveUpdateInput, runningPrefix: string): boolean {
-	if (typeof input.installMeta.prefix !== "string" || !input.installMeta.prefix) return false;
+	if (!input.installMeta.prefix) return false;
 	try {
 		const prefix = unixMetadataPrefix(input.installMeta.prefix, input.home);
 		return sameUnixPath(prefix, runningPrefix);
@@ -300,9 +302,8 @@ export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
 const DEFAULT_INSTALL_PS1_URL =
 	"https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
 
-export function resolveWindowsInstallPrefix(metaPrefix: unknown, home: string): string {
-	const rawPrefix =
-		typeof metaPrefix === "string" && metaPrefix ? metaPrefix : win32.join(home, ".local");
+export function resolveWindowsInstallPrefix(metaPrefix: string | undefined, home: string): string {
+	const rawPrefix = metaPrefix ? metaPrefix : win32.join(home, ".local");
 	const prefix = normalizeWindowsInstallPrefix(rawPrefix);
 	if (prefix === undefined || WINDOWS_PREFIX_FORBIDDEN_RE.test(prefix)) {
 		throw new Error(`Refusing suspicious install prefix from metadata: ${rawPrefix}`);
@@ -310,14 +311,17 @@ export function resolveWindowsInstallPrefix(metaPrefix: unknown, home: string): 
 	return prefix;
 }
 
-export function resolveWindowsPrefix(metaPrefix: unknown, home: string): string | undefined {
+export function resolveWindowsPrefix(
+	metaPrefix: string | undefined,
+	home: string,
+): string | undefined {
 	const prefix = resolveWindowsInstallPrefix(metaPrefix, home);
 	const defaultPrefix = resolveWindowsInstallPrefix(undefined, home);
 	return sameWindowsPath(prefix, defaultPrefix) ? undefined : prefix;
 }
 
 function trustedWindowsMetadata(input: ResolveUpdateInput, runningPrefix: string): boolean {
-	if (typeof input.installMeta.prefix !== "string" || !input.installMeta.prefix) return false;
+	if (!input.installMeta.prefix) return false;
 	try {
 		const prefix = resolveWindowsInstallPrefix(input.installMeta.prefix, input.home);
 		return sameWindowsPath(prefix, runningPrefix);

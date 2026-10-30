@@ -626,7 +626,6 @@ describe("resolveWindowsInstallPrefix", () => {
 	test("falls back to the installer's own default", () => {
 		expect(resolveWindowsInstallPrefix(undefined, home)).toBe("C:/Users/u/.local");
 		expect(resolveWindowsInstallPrefix("", home)).toBe("C:/Users/u/.local");
-		expect(resolveWindowsInstallPrefix(42, home)).toBe("C:/Users/u/.local");
 	});
 
 	test("keeps a recorded prefix, refuses an unusable one", () => {

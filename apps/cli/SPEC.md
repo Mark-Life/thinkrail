@@ -346,7 +346,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `uninstall` subcommand), `src/paths.ts` (the installed layout:
   `install.json` + the staging cache root), and `src/powershell.ts` (the Windows PowerShell seam). Central
   integration remains a server/auth feature; the launcher has no Central subcommand or protocol implementation.
-- **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support, `dataDir` — the
+- **Allowed deps:** `typebox` (parses `install.json` and the GitHub releases response);
+  `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/startupMark` (the shared boot
   signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
