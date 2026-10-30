@@ -10,6 +10,7 @@ import type {
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { canonicalPath, git } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
@@ -142,7 +143,7 @@ function checkFolder(path: string): Promise<void> {
 		.then(
 			(stats) => !stats.isDirectory(),
 			(error) => {
-				const code = (error as { code?: string }).code;
+				const code = errnoCode(error);
 				return code === "ENOENT" || code === "ENOTDIR";
 			},
 		)
@@ -396,7 +397,7 @@ export function createProject(
 		if (readdirSync(path).length > 0)
 			throw new Error(`Folder already exists and isn't empty: ${path}`);
 	} catch (err) {
-		if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) throw err;
+		if (!(errnoCode(err) === "ENOENT")) throw err;
 		mkdirSync(path);
 		created = true;
 	}

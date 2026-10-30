@@ -42,6 +42,9 @@ export {
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
 } from "./attributionProtocol";
+
+import { errnoCode } from "@thinkrail/shared/errnoCode";
+
 export type { InstallationRecord } from "./installation";
 
 export function dataDir(): string {
@@ -100,7 +103,7 @@ function loadSessionMetadata<T>(
 		if (value !== null) return { kind: "loaded", value };
 		error = new Error(`Invalid ${file}`);
 	} catch (caught) {
-		if ((caught as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+		if (errnoCode(caught) === "ENOENT") return { kind: "missing" };
 		error = caught;
 	}
 	const setAsidePath = `${path}.corrupt-${Date.now()}`;
