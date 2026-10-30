@@ -94,6 +94,8 @@ function agentPath(path: string): string {
 	return path.replaceAll("\\", "/");
 }
 
+const VerdictObjectSchema = Type.Object({});
+
 export function parseVerdict(
 	finalText: string | undefined,
 	itemId: string,
@@ -108,7 +110,7 @@ export function parseVerdict(
 	} catch {
 		return null;
 	}
-	if (!Check(Type.Object({}), parsed)) return null;
+	if (!Check(VerdictObjectSchema, parsed)) return null;
 	const candidate = { ...parsed, itemId, itemTitle };
 	if (!isPlanReviewResult(candidate)) return null;
 	const findings: ReviewFixComment[] = candidate.findings.map((f) => ({

@@ -68,12 +68,20 @@ function ghFailure(what: string, result: { out: string; err?: string }): Error {
 
 const HeadRepositorySchema = Type.Object({
 	headRepositoryOwner: Type.Optional(
-		Type.Union([Type.Object({ login: Type.Optional(Type.String()) }), Type.Null()]),
+		Type.Union([
+			Type.Object({ login: Type.Optional(Type.Union([Type.String(), Type.Null()])) }),
+			Type.Null(),
+		]),
 	),
 	headRepository: Type.Optional(
-		Type.Union([Type.Object({ name: Type.Optional(Type.String()) }), Type.Null()]),
+		Type.Union([
+			Type.Object({ name: Type.Optional(Type.Union([Type.String(), Type.Null()])) }),
+			Type.Null(),
+		]),
 	),
 });
+
+const RowsSchema = Type.Array(Type.Unknown());
 
 const PrViewSchema = Type.Intersect([
 	HeadRepositorySchema,
@@ -137,7 +145,7 @@ async function headsOpenPr(
 	if (!listed.ok) return null;
 	try {
 		const rows: unknown = JSON.parse(listed.out);
-		if (!Check(Type.Array(Type.Unknown()), rows)) return null;
+		if (!Check(RowsSchema, rows)) return null;
 		return rows.some(
 			(row) => Check(HeadRepositorySchema, row) && headSlug(row) === slug.toLowerCase(),
 		);

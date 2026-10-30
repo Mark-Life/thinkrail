@@ -326,11 +326,16 @@ const CheckItemSchema = Type.Object({
 	createdAt: OptText,
 });
 type CheckItem = Static<typeof CheckItemSchema>;
+const isCheckItem = (item: unknown): item is CheckItem => Check(CheckItemSchema, item);
 
 const LatestReviewSchema = Type.Object({
 	author: Type.Optional(Type.Union([Type.Object({ login: OptText }), Type.Null()])),
 	state: OptText,
 });
+type LatestReview = Static<typeof LatestReviewSchema>;
+const isLatestReview = (item: unknown): item is LatestReview => Check(LatestReviewSchema, item);
+
+const ReviewRowsSchema = Type.Array(ReviewRowSchema);
 
 const RepoSettingsSchema = Type.Object({
 	squashMergeAllowed: Type.Optional(Type.Boolean()),
@@ -363,7 +368,7 @@ function reviewRowState(row: ParsedRow): BranchReviewState | undefined {
 
 function reviewRowTime(values: (string | null | undefined)[]): number | undefined {
 	for (const value of values) {
-		if (typeof value !== "string") continue;
+		if (!value) continue;
 		const parsed = Date.parse(value);
 		if (Number.isFinite(parsed)) return parsed;
 	}
@@ -424,10 +429,9 @@ function checkStartedAt(check: CheckItem): string {
 	return text(check.startedAt) || text(check.completedAt) || text(check.createdAt);
 }
 
-function latestChecks(rollup: unknown[]): CheckItem[] {
+function latestChecks(rollup: CheckItem[]): CheckItem[] {
 	const byName = new Map<string, CheckItem>();
 	for (const check of rollup) {
-		if (!Check(CheckItemSchema, check)) continue;
 		const name = checkName(check);
 		if (!name) continue;
 		const key = `${text(check.workflowName)}\u0000${name}`;
@@ -437,7 +441,7 @@ function latestChecks(rollup: unknown[]): CheckItem[] {
 	return [...byName.values()];
 }
 
-function reviewChecks(rollup: unknown[] | null | undefined): ReviewChecks | undefined {
+function reviewChecks(rollup: CheckItem[] | undefined): ReviewChecks | undefined {
 	if (!rollup) return undefined;
 	const checks: ReviewChecks = { passing: 0, pending: 0, failing: 0, failingNames: [] };
 	for (const check of latestChecks(rollup)) {
@@ -451,13 +455,11 @@ function reviewChecks(rollup: unknown[] | null | undefined): ReviewChecks | unde
 	return checks.passing + checks.pending + checks.failing > 0 ? checks : undefined;
 }
 
-function reviewers(latest: unknown[] | null | undefined): ReviewDetails["reviewers"] {
+function reviewers(latest: LatestReview[] | undefined): ReviewDetails["reviewers"] {
 	if (!latest) return [];
 	const found: ReviewDetails["reviewers"] = [];
-	for (const item of latest) {
+	for (const review of latest) {
 		if (found.length >= REVIEWERS_LIMIT) break;
-		if (!Check(LatestReviewSchema, item)) continue;
-		const review = item;
 		const login = text(review.author?.login);
 		const state = text(review.state).toUpperCase();
 		if (!login) continue;
@@ -477,7 +479,7 @@ function reviewRowDetails(row: ParsedRow, ownSlug: string | null): ReviewDetails
 	if (!Check(ReviewDetailsRowSchema, row)) return undefined;
 	if (!ownSlug || headRepositorySlug(row) !== ownSlug.toLowerCase()) return undefined;
 	const mergeState = text(row.mergeStateStatus).toLowerCase();
-	const checks = reviewChecks(row.statusCheckRollup);
+	const checks = reviewChecks(row.statusCheckRollup?.filter(isCheckItem));
 	const decision = REVIEW_DECISIONS[text(row.reviewDecision).toUpperCase()];
 	const base = text(row.baseRefName);
 	return {
@@ -485,7 +487,7 @@ function reviewRowDetails(row: ParsedRow, ownSlug: string | null): ReviewDetails
 		...(base ? { base } : {}),
 		...(checks ? { checks } : {}),
 		...(decision ? { reviewDecision: decision } : {}),
-		reviewers: reviewers(row.latestReviews),
+		reviewers: reviewers(row.latestReviews?.filter(isLatestReview)),
 		mergeState: MERGE_STATES.find((known) => known === mergeState) ?? "unknown",
 	};
 }
@@ -535,7 +537,7 @@ function parseReviewRows(
 ): ParsedReviewRows {
 	try {
 		const rows: unknown = JSON.parse(output);
-		if (!Check(Type.Array(ReviewRowSchema), rows)) return { valid: false };
+		if (!Check(ReviewRowsSchema, rows)) return { valid: false };
 		const parsed: ReviewRow[] = [];
 		for (const row of rows) {
 			const value = row[field];
