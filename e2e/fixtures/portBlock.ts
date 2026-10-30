@@ -12,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 
 export const PORT_BLOCK_BASE = 25000;
 export const PORT_BLOCK_STRIDE = 10;
@@ -19,10 +21,9 @@ export const PORT_BLOCK_SLOTS = 500;
 
 export const PORT_BLOCK_REGISTRY = join(tmpdir(), "thinkrail-e2e-port-blocks");
 
-export interface PortBlockOwner {
-	key: string;
-	livenessPath: string;
-}
+const PortBlockOwnerSchema = Type.Object({ key: Type.String(), livenessPath: Type.String() });
+
+export type PortBlockOwner = Static<typeof PortBlockOwnerSchema>;
 
 type PortBlockOwnerInput = string | PortBlockOwner;
 
@@ -48,15 +49,8 @@ function readClaim(path: string): PortBlockOwner | undefined {
 		return undefined;
 	}
 	try {
-		const parsed = JSON.parse(raw) as unknown;
-		if (
-			parsed !== null &&
-			typeof parsed === "object" &&
-			"key" in parsed &&
-			"livenessPath" in parsed &&
-			typeof parsed.key === "string" &&
-			typeof parsed.livenessPath === "string"
-		) {
+		const parsed: unknown = JSON.parse(raw);
+		if (Check(PortBlockOwnerSchema, parsed)) {
 			return { key: parsed.key, livenessPath: parsed.livenessPath };
 		}
 	} catch {}
@@ -74,18 +68,14 @@ function spinFor(ms: number): void {
 	void noop;
 }
 
-interface LockOwner {
-	pid: number;
-	nonce: string;
-}
+const LockOwnerSchema = Type.Object({ pid: Type.Number(), nonce: Type.String() });
+
+type LockOwner = Static<typeof LockOwnerSchema>;
 
 function readLockOwner(lockPath: string): LockOwner | undefined {
 	try {
-		const parsed = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as unknown;
-		if (parsed !== null && typeof parsed === "object" && "pid" in parsed && "nonce" in parsed) {
-			const { pid, nonce } = parsed;
-			if (typeof pid === "number" && typeof nonce === "string") return { pid, nonce };
-		}
+		const parsed: unknown = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8"));
+		if (Check(LockOwnerSchema, parsed)) return { pid: parsed.pid, nonce: parsed.nonce };
 		return undefined;
 	} catch {
 		return undefined;

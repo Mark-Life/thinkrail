@@ -13,7 +13,8 @@
 	"dependencies": {
 		"@thinkrail/cli": "workspace:*",
 		"@thinkrail/server": "workspace:*",
-		"@thinkrail/shared": "workspace:*"
+		"@thinkrail/shared": "workspace:*",
+		"typebox": "catalog:"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",

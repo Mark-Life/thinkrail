@@ -121,6 +121,7 @@
 		"pi-spec-graph": "workspace:*",
 		"pi-todos": "workspace:*",
 		"turbo": "2.11.10",
+		"typebox": "catalog:",
 		"typescript": "catalog:"
 	},
 	"trustedDependencies": [

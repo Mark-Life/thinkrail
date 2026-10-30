@@ -1,12 +1,16 @@
 import type { Page } from "@playwright/test";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
-function parseFrame(message: unknown): Record<string, unknown> | null {
-	if (typeof message !== "string") return null;
+const FrameSchema = Type.Object({ channel: Type.String() });
+
+function frameChannel(message: string | Buffer) {
+	if (typeof message !== "string") return undefined;
 	try {
 		const value: unknown = JSON.parse(message);
-		return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
+		return Check(FrameSchema, value) ? value.channel : undefined;
 	} catch {
-		return null;
+		return undefined;
 	}
 }
 
@@ -31,7 +35,7 @@ export async function installChannelHold(page: Page) {
 		browserSocket.onMessage((message) => serverSocket.send(message));
 		serverSocket.onMessage((message) => {
 			const pending = armed;
-			if (pending && parseFrame(message)?.channel === pending.channel) {
+			if (pending && frameChannel(message) === pending.channel) {
 				armed = undefined;
 				pending.held.send();
 				void pending.release.received.then(() => browserSocket.send(message));

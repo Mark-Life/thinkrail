@@ -4,24 +4,28 @@ import { join } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	type ArtifactHostAdapter,
 	hostEnvironment,
 	type RunningArtifactHost,
 } from "./artifactProbes";
 
-export interface CollectedEvent {
-	event: string;
-	distinct_id: string;
-	properties: Record<string, unknown>;
-}
+const CollectedEventSchema = Type.Object({
+	event: Type.String(),
+	distinct_id: Type.String(),
+	properties: Type.Record(Type.String(), Type.Unknown()),
+});
+const BatchSchema = Type.Object({
+	api_key: Type.String({ minLength: 1 }),
+	batch: Type.Array(CollectedEventSchema),
+});
+
+export type CollectedEvent = Static<typeof CollectedEventSchema>;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function startAnalyticsCollector() {
@@ -44,13 +48,11 @@ export function startAnalyticsCollector() {
 				assert(request.method === "POST", "collector expected POST");
 				assert(new URL(request.url).pathname === "/batch/", "collector expected /batch/");
 				const body: unknown = await request.json();
-				assert(isRecord(body) && Array.isArray(body.batch), "collector expected a PostHog batch");
-				assert(typeof body.api_key === "string" && body.api_key.length > 0, "missing project key");
+				assert(
+					Check(BatchSchema, body),
+					"collector expected a PostHog batch with a project key and well-formed events",
+				);
 				for (const entry of body.batch) {
-					assert(isRecord(entry), "invalid batch entry");
-					assert(typeof entry.event === "string", "missing event name");
-					assert(typeof entry.distinct_id === "string", "missing installation id");
-					assert(isRecord(entry.properties), "missing event properties");
 					events.push({
 						event: entry.event,
 						distinct_id: entry.distinct_id,
