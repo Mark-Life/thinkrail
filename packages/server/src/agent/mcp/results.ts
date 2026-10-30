@@ -33,9 +33,11 @@ const BlockSchema = Type.Union([
 	Type.Object({ type: Type.Literal("resource"), resource: ResourceSchema }),
 ]);
 
+const EntriesSchema = Type.Array(Type.Unknown());
+
 const ResultSchema = Type.Object({
-	content: Type.Optional(Type.Array(Type.Unknown())),
-	contents: Type.Optional(Type.Array(Type.Unknown())),
+	content: Type.Optional(Type.Unknown()),
+	contents: Type.Optional(Type.Unknown()),
 	structuredContent: Type.Optional(Type.Unknown()),
 });
 
@@ -114,7 +116,7 @@ export function summarizeMcpResult(
 	if (!Check(ResultSchema, structured)) return null;
 	const flag = isError ? { isError: true } : {};
 	if (toolName === "read_mcp_resource") {
-		const contents = structured.contents ?? [];
+		const contents = Check(EntriesSchema, structured.contents) ? structured.contents : [];
 		const { kept } = boundedBlocks(
 			contents.flatMap((entry) => resourceSummary(entry) ?? []),
 			MCP_SUMMARY_BYTES,
@@ -123,7 +125,7 @@ export function summarizeMcpResult(
 	}
 	if (RESOURCE_TOOLS.has(toolName))
 		return { blocks: [], ...boundedStructured(structured, MCP_SUMMARY_BYTES), ...flag };
-	const content = structured.content ?? [];
+	const content = Check(EntriesSchema, structured.content) ? structured.content : [];
 	const { kept, remaining } = boundedBlocks(
 		content.flatMap((block) => blockSummary(block) ?? []),
 		MCP_SUMMARY_BYTES,

@@ -76,8 +76,7 @@ export function writeMcpServerEntry(options: {
 	entry: McpServerEntryInput;
 	mode: "add" | "update";
 }): string | undefined {
-	const { scope, worktree, name, mode } = options;
-	const { entry } = options;
+	const { scope, worktree, name, entry, mode } = options;
 	if (!Check(McpJsonObjectSchema, entry)) throw invalid(`server "${name}" must be a JSON object`);
 	const validated = validateMcpServerConfig(name, entry);
 	if (typeof validated === "string") throw invalid(validated);
