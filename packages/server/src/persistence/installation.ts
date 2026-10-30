@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 
 export interface InstallationRecord {
 	id: string;
@@ -10,19 +12,23 @@ interface PersistedInstallationRecord extends InstallationRecord {
 	appInstalled?: true;
 }
 
-function readInstallation(directory: string): Partial<PersistedInstallationRecord> {
+const InstallationFileSchema = Type.Object({
+	id: Type.Optional(Type.String()),
+	appInstalled: Type.Optional(Type.Boolean()),
+});
+type InstallationFile = Static<typeof InstallationFileSchema>;
+
+function readInstallation(directory: string): InstallationFile {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(join(directory, "installation.json"), "utf8"));
-		return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+		return Check(InstallationFileSchema, parsed) ? parsed : {};
 	} catch {
 		return {};
 	}
 }
 
-function hasInstallationId(
-	record: Partial<PersistedInstallationRecord>,
-): record is PersistedInstallationRecord {
-	return typeof record.id === "string" && record.id.length > 0;
+function hasInstallationId(record: InstallationFile): record is PersistedInstallationRecord {
+	return record.id !== undefined && record.id.length > 0;
 }
 
 function isAlreadyExists(error: unknown): boolean {

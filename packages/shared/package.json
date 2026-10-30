@@ -22,7 +22,8 @@
 		"generate-icons": "bun scripts/generate-icons.ts"
 	},
 	"dependencies": {
-		"@thinkrail/contracts": "workspace:*"
+		"@thinkrail/contracts": "workspace:*",
+		"typebox": "catalog:"
 	},
 	"devDependencies": {
 		"@resvg/resvg-js": "2.6.2",

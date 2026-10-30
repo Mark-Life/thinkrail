@@ -53,7 +53,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `runBounded`, `jbcentral`'s version/quota runner) set it directly.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim); the icon generator's
-  build-only `@resvg/resvg-js` and `resedit`.
+  build-only `@resvg/resvg-js` and `resedit`; `typebox` (parses the Central `quota --json` output).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
 

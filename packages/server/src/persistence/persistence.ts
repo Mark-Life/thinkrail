@@ -15,18 +15,18 @@ import {
 	isTerminalWindowsShell,
 	normalizeThemePreference,
 	type Project,
-	type SessionCompletion,
-	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
 	replaceAcquisitionWithTerminalMarkerIn,
 	saveAcquisitionIn,
 } from "./attribution";
-import { type AcquisitionRecord, isRecord } from "./attributionProtocol";
+import type { AcquisitionRecord } from "./attributionProtocol";
 import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
 
 export {
@@ -37,8 +37,6 @@ export {
 	ATTRIBUTION_POLL_INTERVAL_MS,
 	type AttributionTouch,
 	claimIdPattern,
-	hasExactKeys,
-	isRecord,
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
 } from "./attributionProtocol";
@@ -78,11 +76,7 @@ function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
 	}
 }
 
-function stringRecord(value: unknown): Record<string, string> | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	const entries = Object.entries(value);
-	return entries.every(([, item]) => typeof item === "string") ? Object.fromEntries(entries) : null;
-}
+const StringMapSchema = Type.Record(Type.String(), Type.String());
 
 export type SessionMetadataLoad<T> =
 	| { kind: "loaded"; value: T }
@@ -114,27 +108,16 @@ function loadSessionMetadata<T>(
 
 export const SESSION_RECEIPTS_VERSION = 1;
 
-export interface SessionReceipts {
-	version: typeof SESSION_RECEIPTS_VERSION;
-	baselineComplete: boolean;
-	handledCompletionBySession: Record<string, string>;
-}
+const SessionReceiptsSchema = Type.Object({
+	version: Type.Literal(SESSION_RECEIPTS_VERSION),
+	baselineComplete: Type.Boolean(),
+	handledCompletionBySession: StringMapSchema,
+});
+
+export type SessionReceipts = Static<typeof SessionReceiptsSchema>;
 
 function parseSessionReceipts(raw: unknown): SessionReceipts | null {
-	if (!isRecord(raw)) return null;
-	const handledCompletionBySession = stringRecord(raw.handledCompletionBySession);
-	if (
-		raw.version !== SESSION_RECEIPTS_VERSION ||
-		typeof raw.baselineComplete !== "boolean" ||
-		handledCompletionBySession === null
-	) {
-		return null;
-	}
-	return {
-		version: SESSION_RECEIPTS_VERSION,
-		baselineComplete: raw.baselineComplete,
-		handledCompletionBySession,
-	};
+	return Check(SessionReceiptsSchema, raw) ? raw : null;
 }
 
 export function loadSessionReceipts(): SessionMetadataLoad<SessionReceipts> {
@@ -147,55 +130,36 @@ export function saveSessionReceipts(receipts: SessionReceipts): void {
 
 export const SESSION_LIFECYCLE_VERSION = 1;
 
-export interface PersistedSessionCompletion {
-	runId: string;
-	completion: SessionCompletion;
-}
+const SessionCompletionSchema = Type.Union([
+	Type.Object({
+		completionId: Type.String(),
+		outcome: Type.Union([
+			Type.Literal("succeeded"),
+			Type.Literal("interrupted"),
+			Type.Literal("cancelled"),
+		]),
+	}),
+	Type.Object({
+		completionId: Type.String(),
+		outcome: Type.Literal("failed"),
+		failure: Type.Union([Type.Literal("error"), Type.Literal("length")]),
+	}),
+]);
+const PersistedSessionCompletionSchema = Type.Object({
+	runId: Type.String(),
+	completion: SessionCompletionSchema,
+});
+const SessionLifecycleSchema = Type.Object({
+	version: Type.Literal(SESSION_LIFECYCLE_VERSION),
+	completionBySession: Type.Record(Type.String(), PersistedSessionCompletionSchema),
+	cancelledRunBySession: StringMapSchema,
+});
 
-export interface SessionLifecycle {
-	version: typeof SESSION_LIFECYCLE_VERSION;
-	completionBySession: Record<string, PersistedSessionCompletion>;
-	cancelledRunBySession: Record<string, string>;
-}
-
-function sessionCompletion(value: unknown): PersistedSessionCompletion | null {
-	if (!value || typeof value !== "object") return null;
-	const runId = Reflect.get(value, "runId");
-	const completion = Reflect.get(value, "completion");
-	const completionId = completion && Reflect.get(completion, "completionId");
-	const outcome = completion && Reflect.get(completion, "outcome");
-	if (typeof runId !== "string" || typeof completionId !== "string") return null;
-	if (outcome === "failed") {
-		const failure = Reflect.get(completion, "failure");
-		if (failure !== "error" && failure !== "length") return null;
-		return { runId, completion: { completionId, outcome, failure } };
-	}
-	if (outcome !== "succeeded" && outcome !== "interrupted" && outcome !== "cancelled") return null;
-	return { runId, completion: { completionId, outcome } };
-}
+export type PersistedSessionCompletion = Static<typeof PersistedSessionCompletionSchema>;
+export type SessionLifecycle = Static<typeof SessionLifecycleSchema>;
 
 function parseSessionLifecycle(raw: unknown): SessionLifecycle | null {
-	if (!isRecord(raw)) return null;
-	const cancelledRunBySession = stringRecord(raw.cancelledRunBySession);
-	const rawCompletions = raw.completionBySession;
-	if (
-		raw.version !== SESSION_LIFECYCLE_VERSION ||
-		!isRecord(rawCompletions) ||
-		cancelledRunBySession === null
-	) {
-		return null;
-	}
-	const completionBySession: Record<string, PersistedSessionCompletion> = {};
-	for (const [sessionId, value] of Object.entries(rawCompletions)) {
-		const parsed = sessionCompletion(value);
-		if (!parsed) return null;
-		completionBySession[sessionId] = parsed;
-	}
-	return {
-		version: SESSION_LIFECYCLE_VERSION,
-		completionBySession,
-		cancelledRunBySession,
-	};
+	return Check(SessionLifecycleSchema, raw) ? raw : null;
 }
 
 export function loadSessionLifecycle(): SessionMetadataLoad<SessionLifecycle> {
@@ -208,61 +172,38 @@ export function saveSessionLifecycle(lifecycle: SessionLifecycle): void {
 
 export const TURNS_VERSION = 1;
 
-export interface PersistedTurns {
-	version: typeof TURNS_VERSION;
-	byWorkspace: Record<string, TurnChangeSet[]>;
-}
+const TurnChangeSetSchema = Type.Object({
+	id: Type.String(),
+	workspaceId: Type.String(),
+	sessionId: Type.String(),
+	startedAt: Type.Number(),
+	settledAt: Type.Number(),
+	baseTree: Type.String(),
+	headTree: Type.String(),
+	changes: Type.Array(
+		Type.Object({
+			path: Type.String(),
+			status: Type.Union([
+				Type.Literal("added"),
+				Type.Literal("modified"),
+				Type.Literal("deleted"),
+				Type.Literal("renamed"),
+				Type.Literal("untracked"),
+			]),
+			added: Type.Optional(Type.Number()),
+			removed: Type.Optional(Type.Number()),
+		}),
+	),
+});
+const PersistedTurnsSchema = Type.Object({
+	version: Type.Literal(TURNS_VERSION),
+	byWorkspace: Type.Record(Type.String(), Type.Array(TurnChangeSetSchema)),
+});
 
-const TURN_STATUSES = new Set(["added", "modified", "deleted", "renamed", "untracked"]);
-
-function turnChangeSet(value: unknown): TurnChangeSet | null {
-	if (!isRecord(value) || !Array.isArray(value.changes)) return null;
-	const { id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree } = value;
-	if (
-		typeof id !== "string" ||
-		typeof workspaceId !== "string" ||
-		typeof sessionId !== "string" ||
-		typeof startedAt !== "number" ||
-		typeof settledAt !== "number" ||
-		typeof baseTree !== "string" ||
-		typeof headTree !== "string"
-	) {
-		return null;
-	}
-	const changes: TurnChangeSet["changes"] = [];
-	for (const change of value.changes) {
-		if (
-			!isRecord(change) ||
-			typeof change.path !== "string" ||
-			typeof change.status !== "string" ||
-			!TURN_STATUSES.has(change.status)
-		) {
-			return null;
-		}
-		changes.push({
-			path: change.path,
-			status: change.status as TurnChangeSet["changes"][number]["status"],
-			...(typeof change.added === "number" ? { added: change.added } : {}),
-			...(typeof change.removed === "number" ? { removed: change.removed } : {}),
-		});
-	}
-	return { id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree, changes };
-}
+export type PersistedTurns = Static<typeof PersistedTurnsSchema>;
 
 function parseTurns(raw: unknown): PersistedTurns | null {
-	if (!isRecord(raw) || raw.version !== TURNS_VERSION || !isRecord(raw.byWorkspace)) return null;
-	const byWorkspace: Record<string, TurnChangeSet[]> = {};
-	for (const [workspaceId, list] of Object.entries(raw.byWorkspace)) {
-		if (!Array.isArray(list)) return null;
-		const turns: TurnChangeSet[] = [];
-		for (const item of list) {
-			const turn = turnChangeSet(item);
-			if (!turn) return null;
-			turns.push(turn);
-		}
-		byWorkspace[workspaceId] = turns;
-	}
-	return { version: TURNS_VERSION, byWorkspace };
+	return Check(PersistedTurnsSchema, raw) ? raw : null;
 }
 
 export function loadTurns(): PersistedTurns {
@@ -273,6 +214,15 @@ export function loadTurns(): PersistedTurns {
 export function saveTurns(turns: PersistedTurns): void {
 	writeJsonAtomic("turns.json", turns);
 }
+
+const PersistedTerminalTabSchema = Type.Object({
+	tabKey: Type.String(),
+	title: Type.String(),
+	recorded: Type.Optional(Type.String()),
+});
+const PersistedTerminalTabsSchema = Type.Array(PersistedTerminalTabSchema);
+const ListSchema = Type.Array(Type.Unknown());
+const DictionarySchema = Type.Record(Type.String(), Type.Unknown());
 
 export function loadProjects(): Project[] {
 	return readJson<Project[]>("projects.json", []).map((project) => ({
@@ -296,31 +246,58 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	writeJson("workspaces.json", workspaces);
 }
 
-export interface PersistedTerminalTab {
-	tabKey: string;
-	title: string;
-	recorded?: string;
-}
+export type PersistedTerminalTab = Static<typeof PersistedTerminalTabSchema>;
 
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
 
 export function loadTerminalSessions(): PersistedTerminalSessions {
-	return readJson<PersistedTerminalSessions>("terminals.json", {});
+	const raw = readJson<unknown>("terminals.json", undefined);
+	if (!Check(DictionarySchema, raw)) return {};
+	const sessions: PersistedTerminalSessions = {};
+	for (const [key, tabs] of Object.entries(raw)) {
+		if (Check(PersistedTerminalTabsSchema, tabs)) sessions[key] = tabs;
+	}
+	return sessions;
 }
 
 export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
 	writeJson("terminals.json", sessions);
 }
 
+const WireModelSchema = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	provider: Type.String(),
+	contextWindow: Type.Number(),
+	reasoning: Type.Boolean(),
+	thinkingLevels: Type.Array(
+		Type.Union(
+			["off", "minimal", "low", "medium", "high", "xhigh", "max"].map((level) =>
+				Type.Literal(level),
+			),
+		),
+	),
+	cost: Type.Optional(Type.Object({ input: Type.Number(), output: Type.Number() })),
+	input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
+	auth: Type.Optional(
+		Type.Object({
+			kind: Type.Union([
+				Type.Literal("oauth"),
+				Type.Literal("api-key"),
+				Type.Literal("env"),
+				Type.Literal("central"),
+				Type.Literal("other"),
+			]),
+			detail: Type.Optional(Type.String()),
+		}),
+	),
+});
+
 /** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
 function storedModels(value: unknown): WireModel[] {
-	if (!Array.isArray(value)) return [];
-	return value.filter(
-		(entry): entry is WireModel =>
-			typeof entry === "object" &&
-			entry !== null &&
-			typeof (entry as WireModel).provider === "string" &&
-			typeof (entry as WireModel).id === "string",
+	if (!Check(ListSchema, value)) return [];
+	return value.filter((entry): entry is Static<typeof WireModelSchema> =>
+		Check(WireModelSchema, entry),
 	);
 }
 
@@ -334,9 +311,8 @@ function storedExtensionNames(value: unknown): string[] {
 }
 
 export function loadConfig(): AppConfig {
-	const raw = readJson<unknown>("config.json", {});
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
-	const value = raw as Record<string, unknown>;
+	const value = readJson<unknown>("config.json", undefined);
+	if (!Check(DictionarySchema, value)) return structuredClone(DEFAULT_CONFIG);
 	const extensions = { ...value };
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
@@ -416,19 +392,23 @@ export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
 }
 
+const HostEnvironmentFileSchema = Type.Object({
+	agentDir: Type.Optional(Type.Unknown()),
+	vars: Type.Optional(Type.Unknown()),
+});
+const HostEnvironmentVarSchema = Type.Object({ name: Type.String(), value: Type.String() });
+const AgentDirSchema = Type.String({ minLength: 1 });
+
 export function loadHostEnvironment(): HostEnvironment {
-	const raw = readJson<unknown>("environment.json", {});
-	const value = isRecord(raw) ? raw : {};
-	const vars = Array.isArray(value.vars)
-		? value.vars.filter(
-				(entry): entry is { name: string; value: string } =>
-					isRecord(entry) && typeof entry.name === "string" && typeof entry.value === "string",
+	const raw = readJson<unknown>("environment.json", undefined);
+	const value = Check(HostEnvironmentFileSchema, raw) ? raw : {};
+	const vars = Check(ListSchema, value.vars)
+		? value.vars.filter((entry): entry is Static<typeof HostEnvironmentVarSchema> =>
+				Check(HostEnvironmentVarSchema, entry),
 			)
 		: [];
 	return {
-		...(typeof value.agentDir === "string" && value.agentDir.length > 0
-			? { agentDir: value.agentDir }
-			: {}),
+		...(Check(AgentDirSchema, value.agentDir) ? { agentDir: value.agentDir } : {}),
 		vars: vars.map(({ name, value }) => ({ name, value })),
 	};
 }

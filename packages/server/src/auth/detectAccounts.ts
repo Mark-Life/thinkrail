@@ -2,6 +2,8 @@ import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { DetectedAccount, DetectedAccountSource } from "@thinkrail/contracts";
+import { type Static, type TSchema, Type } from "typebox";
+import { Check } from "typebox/value";
 import { usePiRuntime } from "../agent";
 
 export interface DetectAccountsOptions {
@@ -16,8 +18,6 @@ export interface AccountSignal {
 	providerIds: readonly string[];
 	plan?: string;
 }
-
-type Json = Record<string, unknown>;
 
 const MAX_CONFIG_BYTES = 1024 * 1024;
 const MAX_CLAUDE_CONFIG_BYTES = 32 * 1024 * 1024;
@@ -37,13 +37,44 @@ const CLAUDE_SUBSCRIPTION_BILLING = new Set([
 
 const GROK_API_KEY_SCOPE = "xai::api_key";
 
-function isObject(value: unknown): value is Json {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function filled(value: unknown): value is string {
-	return typeof value === "string" && value.trim() !== "";
-}
+const Filled = Type.String({ pattern: "\\S" });
+const AnyObject = Type.Object({});
+const Opaque = Type.Optional(Type.Unknown());
+const ClaudeConfigSchema = Type.Object({ oauthAccount: Opaque });
+const ClaudeCredentialsSchema = Type.Object({ claudeAiOauth: Opaque });
+const ClaudeOauthSchema = Type.Object({
+	refreshToken: Filled,
+	scopes: Type.Array(Type.Unknown()),
+	subscriptionType: Type.Optional(Type.String()),
+});
+const ClaudeAccountSchema = Type.Object({ accountUuid: Filled, billingType: Type.String() });
+const CodexAuthSchema = Type.Object({
+	auth_mode: Opaque,
+	personal_access_token: Opaque,
+	bedrock_api_key: Opaque,
+	bedrock_access_keys: Opaque,
+	OPENAI_API_KEY: Opaque,
+	tokens: Opaque,
+});
+const CodexTokensSchema = Type.Object({ refresh_token: Filled, id_token: Opaque });
+const JwtClaimsSchema = Type.Object({
+	"https://api.openai.com/auth": Type.Optional(
+		Type.Object({ chatgpt_plan_type: Type.Optional(Type.String()) }),
+	),
+});
+const Dictionary = Type.Record(Type.String(), Type.Unknown());
+const CopilotEditorEntrySchema = Type.Union([
+	Type.Object({ user: Filled }),
+	Type.Object({ oauth_token: Filled }),
+]);
+const CopilotCliConfigSchema = Type.Object({ loggedInUsers: Type.Array(Type.Unknown()) });
+const CopilotCliUserSchema = Type.Object({ login: Filled });
+const KimiCredentialsSchema = Type.Object({ refresh_token: Filled });
+const GrokEntrySchema = Type.Object({
+	auth_mode: Opaque,
+	refresh_token: Opaque,
+	expires_at: Type.Optional(Type.Union([Type.Number(), Type.String()])),
+});
 
 function envPath(env: NodeJS.ProcessEnv, name: string): string | undefined {
 	const value = env[name]?.trim();
@@ -71,19 +102,23 @@ function readConfig(path: string, maxBytes: number): Promise<string | null> {
 	return read;
 }
 
-async function readJson(path: string, maxBytes = MAX_CONFIG_BYTES): Promise<Json | null> {
+async function readJson<Schema extends TSchema>(
+	path: string,
+	schema: Schema,
+	maxBytes = MAX_CONFIG_BYTES,
+): Promise<Static<Schema> | null> {
 	const text = await readConfig(path, maxBytes);
 	if (text === null) return null;
 	try {
 		const parsed: unknown = JSON.parse(text.replace(/^(?:\s*\/\/[^\n]*\n)+/, ""));
-		return isObject(parsed) ? parsed : null;
+		return Check(schema, parsed) ? parsed : null;
 	} catch {
 		return null;
 	}
 }
 
-function plan(value: unknown): { plan?: string } {
-	const name = typeof value === "string" ? value.trim().toLowerCase() : "";
+function plan(value: string | undefined): { plan?: string } {
+	const name = value?.trim().toLowerCase() ?? "";
 	return KNOWN_PLANS.has(name) ? { plan: name } : {};
 }
 
@@ -96,19 +131,18 @@ function within<T>(work: Promise<T | null>, ms: number): Promise<T | null> {
 	return Promise.race([work.catch(() => null), timeout]).finally(() => clearTimeout(timer));
 }
 
-function jwtClaims(token: unknown): Json | null {
-	if (typeof token !== "string") return null;
+function jwtClaims(token: string): Static<typeof JwtClaimsSchema> | null {
 	const payload = token.split(".")[1];
 	if (!payload) return null;
 	try {
 		const parsed: unknown = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-		return isObject(parsed) ? parsed : null;
+		return Check(JwtClaimsSchema, parsed) ? parsed : null;
 	} catch {
 		return null;
 	}
 }
 
-function expiresAfter(value: unknown, now: number): boolean {
+function expiresAfter(value: number | string | undefined, now: number): boolean {
 	const at =
 		typeof value === "number"
 			? value < 1e12
@@ -129,57 +163,52 @@ async function detectClaudeCode(
 		providerIds: ["anthropic"],
 		...extra,
 	});
-	if (filled(env.CLAUDE_CODE_OAUTH_TOKEN)) return signal();
+	if (Check(Filled, env.CLAUDE_CODE_OAUTH_TOKEN)) return signal();
 
 	const configured = envPath(env, "CLAUDE_CONFIG_DIR");
 	const configDir = configured ?? join(home, ".claude");
 	const secureDir = envPath(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR") ?? configDir;
 	const [legacy, global, credentials] = await Promise.all([
-		readJson(join(configDir, ".config.json"), MAX_CLAUDE_CONFIG_BYTES),
-		readJson(join(configured ?? home, ".claude.json"), MAX_CLAUDE_CONFIG_BYTES),
-		readJson(join(secureDir, ".credentials.json")),
+		readJson(join(configDir, ".config.json"), ClaudeConfigSchema, MAX_CLAUDE_CONFIG_BYTES),
+		readJson(join(configured ?? home, ".claude.json"), ClaudeConfigSchema, MAX_CLAUDE_CONFIG_BYTES),
+		readJson(join(secureDir, ".credentials.json"), ClaudeCredentialsSchema),
 	]);
 	const oauth = credentials?.claudeAiOauth;
-	if (isObject(oauth)) {
-		const scopes = Array.isArray(oauth.scopes) ? oauth.scopes : [];
-		return filled(oauth.refreshToken) && scopes.includes("user:inference")
+	if (Check(AnyObject, oauth)) {
+		return Check(ClaudeOauthSchema, oauth) && oauth.scopes.includes("user:inference")
 			? signal(plan(oauth.subscriptionType))
 			: null;
 	}
 	const config = legacy && Object.keys(legacy).length > 0 ? legacy : global;
 	const account = config?.oauthAccount;
-	if (!isObject(account) || !filled(account.accountUuid)) return null;
-	return typeof account.billingType === "string" &&
-		CLAUDE_SUBSCRIPTION_BILLING.has(account.billingType)
+	return Check(ClaudeAccountSchema, account) && CLAUDE_SUBSCRIPTION_BILLING.has(account.billingType)
 		? signal()
 		: null;
 }
 
-function codexMode(auth: Json): unknown {
-	if (auth.auth_mode !== undefined) return auth.auth_mode;
-	if (
-		filled(auth.personal_access_token) ||
+function isCodexChatgptMode(auth: Static<typeof CodexAuthSchema>): boolean {
+	if (auth.auth_mode !== undefined) return auth.auth_mode === "chatgpt";
+	return !(
+		Check(Filled, auth.personal_access_token) ||
 		auth.bedrock_api_key != null ||
 		auth.bedrock_access_keys != null ||
-		filled(auth.OPENAI_API_KEY)
-	) {
-		return "apikey";
-	}
-	return "chatgpt";
+		Check(Filled, auth.OPENAI_API_KEY)
+	);
 }
 
 async function detectCodex(env: NodeJS.ProcessEnv, home: string): Promise<AccountSignal | null> {
 	const auth = await readJson(
 		join(envPath(env, "CODEX_HOME") ?? join(home, ".codex"), "auth.json"),
+		CodexAuthSchema,
 	);
-	if (!auth || codexMode(auth) !== "chatgpt") return null;
+	if (!auth || !isCodexChatgptMode(auth)) return null;
 	const tokens = auth.tokens;
-	if (!isObject(tokens) || !filled(tokens.refresh_token)) return null;
-	const openai = jwtClaims(tokens.id_token)?.["https://api.openai.com/auth"];
+	if (!Check(CodexTokensSchema, tokens)) return null;
+	const claims = Check(Type.String(), tokens.id_token) ? jwtClaims(tokens.id_token) : null;
 	return {
 		source: "codex",
 		providerIds: ["openai", "openai-codex"],
-		...plan(isObject(openai) ? openai.chatgpt_plan_type : undefined),
+		...plan(claims?.["https://api.openai.com/auth"]?.chatgpt_plan_type),
 	};
 }
 
@@ -200,15 +229,12 @@ async function detectCopilotEditor(
 				: join(home, ".config");
 	const dir = join(base, "github-copilot");
 	const files = await Promise.all([
-		readJson(join(dir, "apps.json")),
-		readJson(join(dir, "hosts.json")),
+		readJson(join(dir, "apps.json"), Dictionary),
+		readJson(join(dir, "hosts.json"), Dictionary),
 	]);
 	const signedIn = files.some(
 		(file) =>
-			file !== null &&
-			Object.values(file).some(
-				(entry) => isObject(entry) && (filled(entry.user) || filled(entry.oauth_token)),
-			),
+			file !== null && Object.values(file).some((entry) => Check(CopilotEditorEntrySchema, entry)),
 	);
 	return signedIn ? { source: "github-copilot", providerIds: ["github-copilot"] } : null;
 }
@@ -219,19 +245,16 @@ async function detectCopilotCli(
 ): Promise<AccountSignal | null> {
 	const config = await readJson(
 		join(envPath(env, "COPILOT_HOME") ?? join(home, ".copilot"), "config.json"),
+		CopilotCliConfigSchema,
 	);
-	const users = config?.loggedInUsers;
-	const signedIn =
-		Array.isArray(users) && users.some((user) => isObject(user) && filled(user.login));
+	const signedIn = config?.loggedInUsers.some((user) => Check(CopilotCliUserSchema, user)) ?? false;
 	return signedIn ? { source: "copilot-cli", providerIds: ["github-copilot"] } : null;
 }
 
 async function detectKimiCli(env: NodeJS.ProcessEnv, home: string): Promise<AccountSignal | null> {
 	const share = envPath(env, "KIMI_SHARE_DIR") ?? join(home, ".kimi");
-	const token = await readJson(join(share, "credentials", "kimi-code.json"));
-	return token && filled(token.refresh_token)
-		? { source: "kimi-cli", providerIds: ["kimi-coding"] }
-		: null;
+	const token = await readJson(join(share, "credentials", "kimi-code.json"), KimiCredentialsSchema);
+	return token ? { source: "kimi-cli", providerIds: ["kimi-coding"] } : null;
 }
 
 async function detectGrokBuild(
@@ -242,14 +265,14 @@ async function detectGrokBuild(
 	const path =
 		envPath(env, "GROK_AUTH_PATH") ??
 		join(envPath(env, "GROK_HOME") ?? join(home, ".grok"), "auth.json");
-	const auth = await readJson(path);
+	const auth = await readJson(path, Dictionary);
 	if (!auth) return null;
 	const signedIn = Object.entries(auth).some(
 		([scope, entry]) =>
 			scope !== GROK_API_KEY_SCOPE &&
-			isObject(entry) &&
+			Check(GrokEntrySchema, entry) &&
 			entry.auth_mode !== "api_key" &&
-			(filled(entry.refresh_token) || expiresAfter(entry.expires_at, now)),
+			(Check(Filled, entry.refresh_token) || expiresAfter(entry.expires_at, now)),
 	);
 	return signedIn ? { source: "grok-build", providerIds: ["xai"] } : null;
 }
