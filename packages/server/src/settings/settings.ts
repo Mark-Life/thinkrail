@@ -104,13 +104,22 @@ const WireModelSchema = Type.Object({
 	),
 });
 
-const FavoriteModelsSchema = Type.Array(WireModelSchema);
+const StoredModelListSchema = Type.Array(
+	Type.Object({
+		id: Type.String({ minLength: 1 }),
+		provider: Type.String({ minLength: 1 }),
+		name: Type.String(),
+		thinkingLevels: Type.Array(Type.Unknown()),
+	}),
+);
 const DisabledExtensionsSchema = Type.Array(Type.String({ pattern: "\\S" }));
 
 function validateFavoriteModels(value: unknown): WireModel[] {
-	if (!Check(FavoriteModelsSchema, value))
+	if (!Check(StoredModelListSchema, value)) {
 		throw new Error("favoriteModels must be a list of models");
-	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
+	}
+	const models = value.filter((model) => Check(WireModelSchema, model));
+	return models.filter((model, index) => models.findIndex((m) => sameModel(m, model)) === index);
 }
 
 function validateDisabledExtensions(value: unknown): string[] {
