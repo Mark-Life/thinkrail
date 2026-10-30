@@ -1,4 +1,4 @@
-import type { ImageContent, TextContent, ThinkingContent, ToolCall } from "@earendil-works/pi-ai";
+import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
 	migrateSessionEntries,
@@ -21,9 +21,7 @@ export interface ExtractedSession {
 	entries: HistoryEntry[];
 }
 
-function textOf(
-	content: string | (TextContent | ImageContent | ThinkingContent | ToolCall)[],
-): string {
+function textOf(content: (UserMessage | AssistantMessage)["content"]): string {
 	if (typeof content === "string") return content;
 	return content
 		.map((b) => (b.type === "text" ? b.text : ""))

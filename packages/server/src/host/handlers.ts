@@ -525,12 +525,7 @@ function resourceParams<T extends TObject>(schema: T, params: unknown): Static<T
 }
 
 function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
-	if (!Check(ResourceHistorySchema, params)) {
-		const cursor = typeof params === "object" && params !== null && "before" in params;
-		throw new Error(
-			cursor ? "Invalid resource history cursor" : "Invalid resource history request",
-		);
-	}
+	if (!Check(ResourceHistorySchema, params)) throw new Error("Invalid resource history request");
 	const { workspaceId, sessionId, kind, limit, before } = params;
 	resourceParams(SessionIdsSchema, { workspaceId, sessionId });
 	if (

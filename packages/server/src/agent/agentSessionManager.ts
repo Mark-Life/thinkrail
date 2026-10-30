@@ -1580,6 +1580,8 @@ const SessionHeaderSchema = Type.Object({
 	id: Type.String(),
 	cwd: Type.Optional(Type.Unknown()),
 });
+const CwdSchema = Type.String();
+const NonSessionEntrySchema = Type.Union([Type.Object({}), Type.Array(Type.Unknown())]);
 
 function hasErrorCode(error: unknown, code: string): boolean {
 	return typeof error === "object" && error !== null && Reflect.get(error, "code") === code;
@@ -1599,9 +1601,9 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 				continue;
 			}
 			if (Check(SessionHeaderSchema, entry)) {
-				return { id: entry.id, cwd: Check(Type.String(), entry.cwd) ? entry.cwd : "" };
+				return { id: entry.id, cwd: Check(CwdSchema, entry.cwd) ? entry.cwd : "" };
 			}
-			if (!Check(Type.Object({}), entry)) {
+			if (!Check(NonSessionEntrySchema, entry)) {
 				throw new Error("first parsed entry is not an object");
 			}
 			return null;
