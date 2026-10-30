@@ -8,15 +8,16 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import {
-	type AcquisitionRecord,
-	hasExactKeys,
-	isRecord,
-	parseAcquisitionRecord,
-} from "./attributionProtocol";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
+import { type AcquisitionRecord, parseAcquisitionRecord } from "./attributionProtocol";
 
 const FILE_NAME = "attribution.json";
 
+const AttemptRecordSchema = Type.Object(
+	{ browserClaimAttempted: Type.Literal(true) },
+	{ additionalProperties: false },
+);
 const ATTEMPT_RECORD = { browserClaimAttempted: true } as const;
 type AttemptRecord = typeof ATTEMPT_RECORD;
 
@@ -53,13 +54,7 @@ export function readAcquisitionIn(
 	const target = join(directory, FILE_NAME);
 	try {
 		const value: unknown = JSON.parse(readFileSync(target, "utf8"));
-		if (
-			isRecord(value) &&
-			hasExactKeys(value, ["browserClaimAttempted"]) &&
-			value.browserClaimAttempted === true
-		) {
-			return undefined;
-		}
+		if (Check(AttemptRecordSchema, value)) return undefined;
 		const record = parseAcquisitionRecord(value, now);
 		if (record) return record;
 	} catch {

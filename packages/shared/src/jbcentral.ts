@@ -2,6 +2,8 @@ import { existsSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { JbcentralInstall } from "@thinkrail/contracts";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
 export type ParseEnv = Record<string, string | undefined>;
 
@@ -351,9 +353,14 @@ export function parseJbcentralStatusObservation(output: string): JbcentralStatus
 
 export const JBCENTRAL_STATUS_TTL_MS = 3_000;
 
-function quotaAmount(value: unknown): number | null {
+const QuotaAmountSchema = Type.Union([Type.Number(), Type.String()]);
+const QuotaOutputSchema = Type.Object({
+	tariffQuota: Type.Object({ available: QuotaAmountSchema, maximum: QuotaAmountSchema }),
+});
+
+function quotaAmount(value: number | string): number | null {
 	if (typeof value === "number") return Number.isFinite(value) ? value : null;
-	if (typeof value !== "string" || value.trim() === "") return null;
+	if (value.trim() === "") return null;
 	const amount = Number(value);
 	return Number.isFinite(amount) ? amount : null;
 }
@@ -365,16 +372,11 @@ function parseJbcentralQuota(output: string): JbcentralQuotaReadResult {
 	} catch {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+	if (!Check(QuotaOutputSchema, parsed)) {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
-	const tariffQuota = (parsed as Record<string, unknown>).tariffQuota;
-	if (!tariffQuota || typeof tariffQuota !== "object" || Array.isArray(tariffQuota)) {
-		return { outcome: "failed", reason: "invalid-output" };
-	}
-	const values = tariffQuota as Record<string, unknown>;
-	const remaining = quotaAmount(values.available);
-	const total = quotaAmount(values.maximum);
+	const remaining = quotaAmount(parsed.tariffQuota.available);
+	const total = quotaAmount(parsed.tariffQuota.maximum);
 	if (remaining === null || total === null) {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
