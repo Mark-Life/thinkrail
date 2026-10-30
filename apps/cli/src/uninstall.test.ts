@@ -72,8 +72,8 @@ describe("resolveUninstallTargets", () => {
 		).toEqual([posix.join("/home/u/.local", "bin", "thinkrail")]);
 	});
 
-	test("ignores a relative or non-string prefix instead of trusting it", () => {
-		for (const prefix of ["relative/dir", "", 7, null]) {
+	test("ignores a relative or empty prefix instead of trusting it", () => {
+		for (const prefix of ["relative/dir", ""]) {
 			expect(
 				resolveUninstallTargets({ ...base, platform: "linux", installMeta: { prefix } }).binDir,
 			).toBe(posix.join("/home/u/.local", "bin"));

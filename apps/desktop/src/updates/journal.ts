@@ -1,14 +1,72 @@
 import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import type {
-	NativeUpdateInstallResult,
-	NativeUpdateLogEntry,
-	NativeUpdateLogEvent,
-} from "@thinkrail/contracts";
+import type { NativeUpdateInstallResult, NativeUpdateLogEntry } from "@thinkrail/contracts";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
 export const UPDATE_JOURNAL_FILE = "update-journal.json";
 export const MAX_UPDATE_LOG_ENTRIES = 200;
 const MAX_JOURNAL_BYTES = 256 * 1024;
 const MAX_TEXT_LENGTH = 4096;
+
+const TextSchema = Type.String();
+const RequiredTextSchema = Type.String({ minLength: 1 });
+const NullableTextSchema = Type.Union([TextSchema, Type.Null()]);
+const LogEventSchema = Type.Union([
+	Type.Object({
+		kind: Type.Union([
+			Type.Literal("hostStopping"),
+			Type.Literal("handoffStarted"),
+			Type.Literal("restarting"),
+		]),
+	}),
+	Type.Object({ kind: Type.Literal("hostStopped"), seconds: Type.Number() }),
+	Type.Object({
+		kind: Type.Union([Type.Literal("installStarted"), Type.Literal("installed")]),
+		version: RequiredTextSchema,
+	}),
+	Type.Object({
+		kind: Type.Literal("installFailed"),
+		version: RequiredTextSchema,
+		step: TextSchema,
+		detail: TextSchema,
+	}),
+	Type.Object({ kind: Type.Literal("diagnostic"), text: TextSchema }),
+]);
+const LogSchema = Type.Array(
+	Type.Object({
+		at: Type.Number(),
+		source: Type.Union([Type.Literal("update"), Type.Literal("host"), Type.Literal("installer")]),
+		level: Type.Union([Type.Literal("info"), Type.Literal("error")]),
+		event: LogEventSchema,
+	}),
+	{ maxItems: MAX_UPDATE_LOG_ENTRIES },
+);
+const UpdateJournalSchema = Type.Union([
+	Type.Object({
+		schemaVersion: Type.Literal(1),
+		state: Type.Literal("pending"),
+		fromVersion: RequiredTextSchema,
+		toVersion: RequiredTextSchema,
+		startedAt: Type.Number(),
+		log: LogSchema,
+	}),
+	Type.Object({
+		schemaVersion: Type.Literal(1),
+		state: Type.Literal("resolved"),
+		result: Type.Object({
+			outcome: Type.Union([
+				Type.Literal("installed"),
+				Type.Literal("failed"),
+				Type.Literal("unreported"),
+			]),
+			fromVersion: NullableTextSchema,
+			toVersion: RequiredTextSchema,
+			failedStep: NullableTextSchema,
+			detail: NullableTextSchema,
+			log: LogSchema,
+		}),
+	}),
+]);
 
 export type UpdateJournal =
 	| {
@@ -27,115 +85,39 @@ export interface UpdateJournalStore {
 	clear(): void;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function boundedText(value: unknown): string | null {
-	return typeof value === "string" && value.length <= MAX_TEXT_LENGTH ? value : null;
-}
-
-function nullableText(value: unknown): string | null | undefined {
-	if (value === null) return null;
-	return boundedText(value) ?? undefined;
-}
-
-function readEvent(value: unknown): NativeUpdateLogEvent | null {
-	if (!isRecord(value)) return null;
-	switch (value.kind) {
-		case "hostStopping":
-		case "handoffStarted":
-		case "restarting":
-			return { kind: value.kind };
-		case "hostStopped":
-			return typeof value.seconds === "number" && Number.isFinite(value.seconds)
-				? { kind: "hostStopped", seconds: value.seconds }
-				: null;
+function eventTexts(entry: NativeUpdateLogEntry): Array<string | null> {
+	switch (entry.event.kind) {
 		case "installStarted":
-		case "installed": {
-			const version = boundedText(value.version);
-			return version ? { kind: value.kind, version } : null;
-		}
-		case "installFailed": {
-			const version = boundedText(value.version);
-			const step = boundedText(value.step);
-			const detail = boundedText(value.detail);
-			return version && step !== null && detail !== null
-				? { kind: "installFailed", version, step, detail }
-				: null;
-		}
-		case "diagnostic": {
-			const text = boundedText(value.text);
-			return text === null ? null : { kind: "diagnostic", text };
-		}
+		case "installed":
+			return [entry.event.version];
+		case "installFailed":
+			return [entry.event.version, entry.event.step, entry.event.detail];
+		case "diagnostic":
+			return [entry.event.text];
 		default:
-			return null;
+			return [];
 	}
 }
 
-function readLog(value: unknown): NativeUpdateLogEntry[] | null {
-	if (!Array.isArray(value) || value.length > MAX_UPDATE_LOG_ENTRIES) return null;
-	const entries: NativeUpdateLogEntry[] = [];
-	for (const entry of value) {
-		if (!isRecord(entry)) return null;
-		const event = readEvent(entry.event);
-		const { at, source, level } = entry;
-		if (
-			event === null ||
-			typeof at !== "number" ||
-			!Number.isFinite(at) ||
-			(source !== "update" && source !== "host" && source !== "installer") ||
-			(level !== "info" && level !== "error")
-		) {
-			return null;
-		}
-		entries.push({ at, source, level, event });
+function journalTexts(journal: UpdateJournal): Array<string | null> {
+	if (journal.state === "pending") {
+		return [journal.fromVersion, journal.toVersion, ...journal.log.flatMap(eventTexts)];
 	}
-	return entries;
-}
-
-function readResult(value: unknown): NativeUpdateInstallResult | null {
-	if (!isRecord(value)) return null;
-	const { outcome } = value;
-	const toVersion = boundedText(value.toVersion);
-	const fromVersion = nullableText(value.fromVersion);
-	const failedStep = nullableText(value.failedStep);
-	const detail = nullableText(value.detail);
-	const log = readLog(value.log);
-	if (
-		(outcome !== "installed" && outcome !== "failed" && outcome !== "unreported") ||
-		!toVersion ||
-		fromVersion === undefined ||
-		failedStep === undefined ||
-		detail === undefined ||
-		log === null
-	) {
-		return null;
-	}
-	return { outcome, fromVersion, toVersion, failedStep, detail, log };
+	const { result } = journal;
+	return [
+		result.fromVersion,
+		result.toVersion,
+		result.failedStep,
+		result.detail,
+		...result.log.flatMap(eventTexts),
+	];
 }
 
 export function parseUpdateJournal(value: unknown): UpdateJournal | null {
-	if (!isRecord(value) || value.schemaVersion !== 1) return null;
-	if (value.state === "resolved") {
-		const result = readResult(value.result);
-		return result ? { schemaVersion: 1, state: "resolved", result } : null;
-	}
-	if (value.state !== "pending") return null;
-	const fromVersion = boundedText(value.fromVersion);
-	const toVersion = boundedText(value.toVersion);
-	const log = readLog(value.log);
-	const { startedAt } = value;
-	if (
-		!fromVersion ||
-		!toVersion ||
-		log === null ||
-		typeof startedAt !== "number" ||
-		!Number.isFinite(startedAt)
-	) {
-		return null;
-	}
-	return { schemaVersion: 1, state: "pending", fromVersion, toVersion, startedAt, log };
+	if (!Check(UpdateJournalSchema, value)) return null;
+	return journalTexts(value).every((text) => text === null || text.length <= MAX_TEXT_LENGTH)
+		? value
+		: null;
 }
 
 export function createUpdateJournalStore(

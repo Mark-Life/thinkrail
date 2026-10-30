@@ -26,7 +26,8 @@ engine architecture.
   opt-in live-window test seam. Standalone artifact harnesses belong to [[module-artifact-tests]].
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
-- **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
+- **Allowed deps:** `typebox` to parse stored and wire data in the main process (never in the preload
+  bundle); `server` for the embedded host and build-support manifest; `shared`
   for release identity, its Windows file identity and the early `resolveShellEnv()` start; `contracts`
   for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
   web artifact; Electrobun `2.0.5` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.5

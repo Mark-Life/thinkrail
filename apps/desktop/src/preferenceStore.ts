@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	isDesktopPreferenceKey,
 	isDesktopPreferenceScopeId,
@@ -21,11 +23,13 @@ function emptyDocument(): PreferenceDocument {
 	return { version: PREFERENCE_VERSION, preferences: {} };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const UnknownMapSchema = Type.Record(Type.String(), Type.Unknown());
+const PreferenceDocumentFileSchema = Type.Object({
+	version: Type.Literal(PREFERENCE_VERSION),
+	preferences: UnknownMapSchema,
+});
 
-function scopeKey(backendProfileId: unknown, windowId: unknown): string | null {
+function scopeKey(backendProfileId: string, windowId: string): string | null {
 	if (!isDesktopPreferenceScopeId(backendProfileId) || !isDesktopPreferenceScopeId(windowId)) {
 		return null;
 	}
@@ -57,22 +61,19 @@ function validPersistedScopeKey(value: string): boolean {
 function readDocument(path: string): PreferenceDocument {
 	try {
 		if (statSync(path).size > MAX_PREFERENCE_DOCUMENT_BYTES) return emptyDocument();
-		const value = JSON.parse(readFileSync(path, "utf8")) as unknown;
-		if (!isRecord(value) || Reflect.get(value, "version") !== PREFERENCE_VERSION) {
-			return emptyDocument();
-		}
-		const storedDocumentPreferences = Reflect.get(value, "preferences");
-		if (!isRecord(storedDocumentPreferences)) return emptyDocument();
+		const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+		if (!Check(PreferenceDocumentFileSchema, value)) return emptyDocument();
 		const preferenceEntries: Array<[string, Record<string, string>]> = [];
 		let totalPreferences = 0;
-		for (const [storedScopeKey, storedPreferences] of Object.entries(storedDocumentPreferences)) {
+		for (const [storedScopeKey, storedPreferences] of Object.entries(value.preferences)) {
 			if (
 				preferenceEntries.length >= MAX_PREFERENCE_SCOPES ||
 				totalPreferences >= MAX_PREFERENCES
 			) {
 				break;
 			}
-			if (!validPersistedScopeKey(storedScopeKey) || !isRecord(storedPreferences)) continue;
+			if (!validPersistedScopeKey(storedScopeKey) || !Check(UnknownMapSchema, storedPreferences))
+				continue;
 			const scopeEntries: Array<[string, string]> = [];
 			for (const [key, preferenceValue] of Object.entries(storedPreferences)) {
 				if (totalPreferences >= MAX_PREFERENCES) break;
@@ -133,19 +134,14 @@ export class PreferenceStore {
 		this.#document = existsSync(path) ? readDocument(path) : emptyDocument();
 	}
 
-	read(backendProfileId: unknown, windowId: unknown): Record<string, string> {
+	read(backendProfileId: string, windowId: string): Record<string, string> {
 		const key = scopeKey(backendProfileId, windowId);
 		if (!key) return {};
 		const preferences = this.#document.preferences[key];
 		return preferences ? Object.fromEntries(Object.entries(preferences)) : {};
 	}
 
-	write(
-		backendProfileId: unknown,
-		windowId: unknown,
-		preferenceKey: unknown,
-		value: unknown,
-	): boolean {
+	write(backendProfileId: string, windowId: string, preferenceKey: string, value: string): boolean {
 		const key = scopeKey(backendProfileId, windowId);
 		if (!key || !isDesktopPreferenceKey(preferenceKey) || !isDesktopPreferenceValue(value)) {
 			return false;
@@ -176,7 +172,7 @@ export class PreferenceStore {
 		return true;
 	}
 
-	remove(backendProfileId: unknown, windowId: unknown, preferenceKey: unknown): boolean {
+	remove(backendProfileId: string, windowId: string, preferenceKey: string): boolean {
 		const key = scopeKey(backendProfileId, windowId);
 		if (!key || !isDesktopPreferenceKey(preferenceKey)) return false;
 		const existingScope = this.#document.preferences[key];

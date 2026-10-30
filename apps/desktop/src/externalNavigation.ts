@@ -1,11 +1,14 @@
 import type { EventEmitter } from "node:events";
 import type Electrobun from "electrobun/main";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
 type NavigationEvent = ReturnType<
 	(typeof Electrobun.events.events.webview)["willNavigate" | "newWindowOpen"]
 >;
 
 const MAX_NAVIGATION_DETAIL_LENGTH = 64 * 1024;
+const NavigationDetailSchema = Type.Object({ url: Type.String() });
 
 export function externalNavigationUrl(value: unknown, origin: string): string | null {
 	let detail = value;
@@ -20,15 +23,7 @@ export function externalNavigationUrl(value: unknown, origin: string): string | 
 		}
 	}
 	const raw =
-		typeof detail === "string"
-			? detail
-			: typeof detail === "object" &&
-					detail !== null &&
-					!Array.isArray(detail) &&
-					"url" in detail &&
-					typeof detail.url === "string"
-				? detail.url
-				: null;
+		typeof detail === "string" ? detail : Check(NavigationDetailSchema, detail) ? detail.url : null;
 	if (!raw || raw.length > MAX_NAVIGATION_DETAIL_LENGTH) return null;
 	try {
 		const url = new URL(raw, origin);

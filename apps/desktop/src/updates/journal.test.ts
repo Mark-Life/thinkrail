@@ -109,3 +109,14 @@ test("the journal store round-trips, ignores corrupt files, and clears", () => {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+test("journal text is bounded in UTF-16 code units", () => {
+	const text = "\u{1F600}".repeat(3000);
+	expect(text.length).toBeGreaterThan(4096);
+	expect(
+		parseUpdateJournal({ ...resolved, result: { ...resolved.result, detail: text } }),
+	).toBeNull();
+	expect(
+		parseUpdateJournal({ ...resolved, result: { ...resolved.result, detail: "x".repeat(4096) } }),
+	).not.toBeNull();
+});

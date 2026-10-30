@@ -2,6 +2,8 @@ import { CFunction, dlopen, FFIType, type Pointer, read, toArrayBuffer } from "b
 import { type Dirent, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
 import { windowsProductName } from "@thinkrail/shared/windowsIdentity";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 
 export function desktopAppUserModelId(channel: string): string {
 	return `JetBrains.${windowsProductName(channel).replaceAll(" ", ".")}`;
@@ -22,6 +24,10 @@ export interface WindowsShellApi {
 }
 
 const ELECTROBUN_UNINSTALL_MANIFEST = ".electrobun-uninstall.json";
+const UninstallManifestSchema = Type.Object({
+	schema_version: Type.Literal(1),
+	start_menu_shortcut: Type.String({ minLength: 1 }),
+});
 
 function hasCode(error: unknown, code: string): boolean {
 	return error instanceof Error && "code" in error && error.code === code;
@@ -46,17 +52,7 @@ export function taskbarShortcutCandidates(
 		const manifest: unknown = JSON.parse(
 			readFileSync(join(dirname(appDir), ELECTROBUN_UNINSTALL_MANIFEST), "utf8"),
 		);
-		if (
-			manifest &&
-			typeof manifest === "object" &&
-			"schema_version" in manifest &&
-			manifest.schema_version === 1 &&
-			"start_menu_shortcut" in manifest &&
-			typeof manifest.start_menu_shortcut === "string" &&
-			manifest.start_menu_shortcut
-		) {
-			paths.push(manifest.start_menu_shortcut);
-		}
+		if (Check(UninstallManifestSchema, manifest)) paths.push(manifest.start_menu_shortcut);
 	} catch (error) {
 		if (!hasCode(error, "ENOENT")) failures.push(error);
 	}

@@ -1,10 +1,13 @@
 import type { NativeCommand } from "@thinkrail/contracts";
 import { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { readLabels } from "./nativeLabels";
 
 const MENU_LABEL_KEYS = DESKTOP_MENU_KEYS;
 const MAX_MENU_LABEL_LENGTH = 80;
+const MenuActionEventSchema = Type.Object({ data: Type.Object({ action: Type.String() }) });
 
 export type DesktopMenuLabels = Readonly<Record<(typeof MENU_LABEL_KEYS)[number], string>>;
 
@@ -105,9 +108,5 @@ export function isNativeCommand(action: string | null): action is NativeCommand 
 }
 
 export function readMenuAction(event: unknown) {
-	if (typeof event !== "object" || event === null) return null;
-	const data: unknown = Reflect.get(event, "data");
-	if (typeof data !== "object" || data === null) return null;
-	const action: unknown = Reflect.get(data, "action");
-	return typeof action === "string" ? action : null;
+	return Check(MenuActionEventSchema, event) ? event.data.action : null;
 }

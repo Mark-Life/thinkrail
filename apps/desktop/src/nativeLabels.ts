@@ -1,22 +1,26 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DESKTOP_DIALOG_KEYS, EN, type EnglishCatalog } from "@thinkrail/locales";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { desktopError } from "./errorReporting";
 
 const MAX_DIALOG_LABEL_LENGTH = 200;
+const NativeLabelsSchema = Type.Record(Type.String(), Type.Unknown());
+const LabelSchema = Type.String();
 
 export function readLabels<K extends keyof EnglishCatalog & string>(
 	keys: readonly K[],
 	maxLength: number,
 	raw: unknown,
 ): Readonly<Record<K, string>> {
-	const source = typeof raw === "object" && raw !== null ? raw : {};
+	const source = Check(NativeLabelsSchema, raw) ? raw : {};
 	return Object.fromEntries(
 		keys.map((key) => {
-			const value: unknown = Reflect.get(source, key);
+			const value = source[key];
 			return [
 				key,
-				typeof value === "string" && value.trim() && value.length <= maxLength
+				Check(LabelSchema, value) && value.trim() && value.length <= maxLength
 					? value
 					: (EN[key] ?? key),
 			];
