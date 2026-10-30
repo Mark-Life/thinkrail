@@ -16,7 +16,7 @@ import {
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
-import { userText } from "../lib";
+import { nullProto, userText } from "../lib";
 import {
 	BUILTIN_LAYOUT_PRESETS,
 	emptyWorkspaceView,
@@ -3313,7 +3313,7 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 test("files tree state keeps per-workspace folders and scroll, and drops a removed workspace", () => {
 	useAppStore.setState({
 		filesTreeByWorkspace: {},
-		removedWorkspaceIds: Object.create(null),
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
 		workspaces: { p1: [pushedWorkspace()] },
 	});
 	const view = () => selectFilesTreeView(useAppStore.getState(), "w1");
@@ -3343,7 +3343,10 @@ test("files tree state keeps per-workspace folders and scroll, and drops a remov
 });
 
 test("revealInFiles expands every ancestor folder and records the revealed file", () => {
-	useAppStore.setState({ filesTreeByWorkspace: {}, removedWorkspaceIds: Object.create(null) });
+	useAppStore.setState({
+		filesTreeByWorkspace: {},
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+	});
 	useAppStore.getState().setFilesTreeExpanded("w1", ["docs"], true);
 	useAppStore.getState().revealInFiles("w1", "src/auth/login.ts");
 	const view = selectFilesTreeView(useAppStore.getState(), "w1");

@@ -55,6 +55,10 @@
 					}
 				}
 			}
+		},
+		{
+			"includes": ["apps/web/src/**", "!apps/web/src/lib/nullProto.ts"],
+			"plugins": ["./biome-plugins/nullProto.grit"]
 		}
 	]
 }
