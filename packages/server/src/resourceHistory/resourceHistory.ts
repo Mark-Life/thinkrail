@@ -18,6 +18,8 @@ import {
 	resourceHistoryCursor,
 	resourceRecordId,
 } from "@thinkrail/contracts";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 
@@ -25,8 +27,44 @@ const log = logger("resource-history");
 
 const STORAGE_ID = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,198}[A-Za-z0-9])?$/;
 const CACHED_CHATS = 64;
-const COMMAND_STATUSES = new Set(["running", "stopping", "completed", "error", "stopped"]);
-const SUBAGENT_STATUSES = new Set(["queued", "running", "completed", "error", "aborted"]);
+
+const literals = <const T extends readonly string[]>(values: T) =>
+	Type.Union(values.map((value) => Type.Literal(value)));
+
+const CommandSummarySchema = Type.Object({
+	id: Type.String(),
+	sessionId: Type.String(),
+	name: Type.String(),
+	command: Type.String(),
+	status: literals(["running", "stopping", "completed", "error", "stopped"]),
+	startedAt: Type.Number(),
+	finishedAt: Type.Optional(Type.Number()),
+	exitCode: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+	errorMessage: Type.Optional(Type.String()),
+	interrupted: Type.Optional(Type.Literal(true)),
+});
+const SubagentSummarySchema = Type.Object({
+	childSessionId: Type.String(),
+	parentSessionId: Type.String(),
+	roleName: Type.Optional(Type.String()),
+	task: Type.String(),
+	status: literals(["queued", "running", "completed", "error", "aborted"]),
+	createdAt: Type.String(),
+	detached: Type.Optional(Type.Boolean()),
+	model: Type.Optional(Type.String()),
+	thinkingLevel: Type.Optional(
+		literals(["off", "minimal", "low", "medium", "high", "xhigh", "max"]),
+	),
+	abortReason: Type.Optional(Type.String()),
+	durationMs: Type.Optional(Type.Number()),
+	finishedAt: Type.Optional(Type.Number()),
+	interrupted: Type.Optional(Type.Literal(true)),
+});
+const ResourceRecordSchema = Type.Union([
+	Type.Object({ kind: Type.Literal("command"), summary: CommandSummarySchema }),
+	Type.Object({ kind: Type.Literal("subagent"), summary: SubagentSummarySchema }),
+]);
+const ArchivedOutputSchema = Type.Object({ text: Type.String(), truncated: Type.Boolean() });
 
 export interface ResourceHistoryScope {
 	workspaceId: string;
@@ -60,35 +98,8 @@ function keyOf(record: ResourceRecord): string {
 	return `${record.kind}:${resourceRecordId(record)}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
 function parseRecord(value: unknown): ResourceRecord | null {
-	if (!isRecord(value) || !isRecord(value.summary)) return null;
-	const summary = value.summary;
-	if (
-		value.kind === "command" &&
-		typeof summary.id === "string" &&
-		typeof summary.sessionId === "string" &&
-		typeof summary.name === "string" &&
-		typeof summary.command === "string" &&
-		typeof summary.status === "string" &&
-		COMMAND_STATUSES.has(summary.status) &&
-		typeof summary.startedAt === "number"
-	)
-		return value as ResourceRecord;
-	if (
-		value.kind === "subagent" &&
-		typeof summary.childSessionId === "string" &&
-		typeof summary.parentSessionId === "string" &&
-		typeof summary.task === "string" &&
-		typeof summary.status === "string" &&
-		SUBAGENT_STATUSES.has(summary.status) &&
-		typeof summary.createdAt === "string"
-	)
-		return value as ResourceRecord;
-	return null;
+	return Check(ResourceRecordSchema, value) ? value : null;
 }
 
 function readIndex(dir: string): ChatHistory {
@@ -213,9 +224,7 @@ export function archivedCommandOutput(
 		const parsed: unknown = JSON.parse(
 			readFileSync(join(dir, "logs", `${commandId}.json`), "utf8"),
 		);
-		return isRecord(parsed) &&
-			typeof parsed.text === "string" &&
-			typeof parsed.truncated === "boolean"
+		return Check(ArchivedOutputSchema, parsed)
 			? { text: parsed.text, truncated: parsed.truncated }
 			: undefined;
 	} catch (error) {

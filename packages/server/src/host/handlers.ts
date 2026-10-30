@@ -19,6 +19,8 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { type Static, type TObject, Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	abortSession,
 	acknowledgeCompletion,
@@ -483,49 +485,61 @@ function resourceCwd(workspaceId: string): string {
 	}
 }
 
-function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K, string> {
-	if (!params || typeof params !== "object" || Array.isArray(params))
-		throw new Error("Invalid resource ids");
-	if (Object.keys(params).some((key) => !keys.some((allowed) => allowed === key)))
-		throw new Error("Invalid resource ids");
-	const result = {} as Record<K, string>;
-	for (const key of keys) {
-		const value: unknown = Reflect.get(params, key);
+const SessionIdsSchema = Type.Object(
+	{ workspaceId: Type.String(), sessionId: Type.String() },
+	{ additionalProperties: false },
+);
+const CommandIdsSchema = Type.Object(
+	{ workspaceId: Type.String(), sessionId: Type.String(), commandId: Type.String() },
+	{ additionalProperties: false },
+);
+const SubagentIdsSchema = Type.Object(
+	{ workspaceId: Type.String(), parentSessionId: Type.String(), childSessionId: Type.String() },
+	{ additionalProperties: false },
+);
+const ParentIdsSchema = Type.Object(
+	{ workspaceId: Type.String(), parentSessionId: Type.String() },
+	{ additionalProperties: false },
+);
+const ResourceHistorySchema = Type.Object(
+	{
+		workspaceId: Type.String(),
+		sessionId: Type.String(),
+		kind: Type.Union([Type.Literal("command"), Type.Literal("subagent")]),
+		limit: Type.Optional(Type.Integer({ minimum: 1 })),
+		before: Type.Optional(
+			Type.Object({ at: Type.Number(), id: Type.String() }, { additionalProperties: false }),
+		),
+	},
+	{ additionalProperties: false },
+);
+
+function resourceParams<T extends TObject>(schema: T, params: unknown): Static<T> {
+	if (!Check(schema, params)) throw new Error("Invalid resource ids");
+	for (const [key, value] of Object.entries(params)) {
 		const sessionId = key === "sessionId" || key === "parentSessionId" || key === "childSessionId";
-		if (typeof value !== "string" || !(sessionId ? isPiSessionId(value) : isHostResourceId(value)))
+		if (!(sessionId ? isPiSessionId(value) : isHostResourceId(value)))
 			throw new Error("Invalid resource ids");
-		result[key] = value;
 	}
-	return result;
+	return params;
 }
 
 function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
-	if (!params || typeof params !== "object" || Array.isArray(params))
-		throw new Error("Invalid resource history request");
-	const { kind, before, limit, ...scope } = params as Record<string, unknown>;
-	const { workspaceId, sessionId } = resourceParams(scope, ["workspaceId", "sessionId"]);
-	if (kind !== "command" && kind !== "subagent") throw new Error("Invalid resource history kind");
-	if (limit !== undefined && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1))
-		throw new Error("Invalid resource history limit");
-	const request: WsParams<"session.resourceHistory"> = {
+	if (!Check(ResourceHistorySchema, params)) throw new Error("Invalid resource history request");
+	const { workspaceId, sessionId, kind, limit, before } = params;
+	resourceParams(SessionIdsSchema, { workspaceId, sessionId });
+	if (
+		before !== undefined &&
+		!(kind === "subagent" ? isPiSessionId(before.id) : isHostResourceId(before.id))
+	)
+		throw new Error("Invalid resource history cursor");
+	return {
 		workspaceId,
 		sessionId,
 		kind,
 		...(limit === undefined ? {} : { limit }),
+		...(before === undefined ? {} : { before }),
 	};
-	if (before === undefined) return request;
-	if (!before || typeof before !== "object" || Array.isArray(before))
-		throw new Error("Invalid resource history cursor");
-	const { at, id, ...extra } = before as Record<string, unknown>;
-	if (
-		Object.keys(extra).length > 0 ||
-		typeof at !== "number" ||
-		!Number.isFinite(at) ||
-		typeof id !== "string" ||
-		!(kind === "subagent" ? isPiSessionId(id) : isHostResourceId(id))
-	)
-		throw new Error("Invalid resource history cursor");
-	return { ...request, before: { at, id } };
 }
 
 async function deliverToolResponse(
@@ -1175,7 +1189,7 @@ const handlers: WsHandlers = {
 	"mcp.readLog": (params) => mcpReadLog(params),
 	"mcp.testConnection": (params, ctx) => mcpTestConnection(params, ctx.clientKey),
 	"session.resources": (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId"]);
+		const p = resourceParams(SessionIdsSchema, params);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
 	},
 	"session.resourceHistory": (params) => {
@@ -1183,7 +1197,7 @@ const handlers: WsHandlers = {
 		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
 	},
 	"backgroundCommand.output": (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+		const p = resourceParams(CommandIdsSchema, params);
 		return readBackgroundCommandOutput(
 			p.workspaceId,
 			p.sessionId,
@@ -1192,7 +1206,7 @@ const handlers: WsHandlers = {
 		);
 	},
 	"backgroundCommand.stop": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+		const p = resourceParams(CommandIdsSchema, params);
 		await stopBackgroundCommand(
 			p.workspaceId,
 			p.sessionId,
@@ -1202,7 +1216,7 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"subagent.stop": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "parentSessionId", "childSessionId"]);
+		const p = resourceParams(SubagentIdsSchema, params);
 		await stopSubagent(
 			p.workspaceId,
 			p.parentSessionId,
@@ -1212,7 +1226,7 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"subagent.stopAll": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "parentSessionId"]);
+		const p = resourceParams(ParentIdsSchema, params);
 		const targeted = await stopAllSubagents(
 			p.workspaceId,
 			p.parentSessionId,

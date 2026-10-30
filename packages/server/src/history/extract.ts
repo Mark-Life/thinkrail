@@ -1,3 +1,4 @@
+import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
 	migrateSessionEntries,
@@ -20,15 +21,10 @@ export interface ExtractedSession {
 	entries: HistoryEntry[];
 }
 
-function textOf(content: unknown): string {
+function textOf(content: (UserMessage | AssistantMessage)["content"]): string {
 	if (typeof content === "string") return content;
-	if (!Array.isArray(content)) return "";
 	return content
-		.map((b) =>
-			b && typeof b === "object" && (b as { type?: string }).type === "text"
-				? String((b as { text?: unknown }).text ?? "")
-				: "",
-		)
+		.map((b) => (b.type === "text" ? b.text : ""))
 		.filter(Boolean)
 		.join("\n");
 }

@@ -1,8 +1,13 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import { logger } from "../log";
 
 const log = logger("agent");
+
+const ModelListingSchema = Type.Object({ data: Type.Array(Type.Unknown()) });
+const ModelEntrySchema = Type.Object({ id: Type.String() });
 
 const CHATGPT_SIGN_IN_BASE_URL = "https://api.openai.com/v1";
 const CHATGPT_ALLOWLIST_PROVIDER = "openai-codex";
@@ -135,14 +140,10 @@ async function readProviderListing(
 		signal,
 	});
 	if (!response.ok) return undefined;
-	const body = (await response.json()) as { data?: unknown };
-	if (!Array.isArray(body.data)) return undefined;
+	const body: unknown = await response.json();
+	if (!Check(ModelListingSchema, body)) return undefined;
 	const ids = new Set(
-		body.data.flatMap((entry: unknown) =>
-			entry && typeof entry === "object" && "id" in entry && typeof entry.id === "string"
-				? [entry.id]
-				: [],
-		),
+		body.data.flatMap((entry) => (Check(ModelEntrySchema, entry) ? [entry.id] : [])),
 	);
 	return ids.size > 0 ? { baseUrl, ids } : undefined;
 }
