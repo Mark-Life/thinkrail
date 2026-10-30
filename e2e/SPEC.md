@@ -450,8 +450,8 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   resize and hide the auxiliary stacks.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
   exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper, git,
-  Chromium, Playwright, and `typebox` (parsing fixture wire frames and lock files). Standalone native/installer smoke and shared artifact probes are owned by
-  that test workspace, outside Playwright discovery.
+  Chromium, Playwright, and `typebox` (parsing fixture wire frames and lock files). Standalone native/installer smoke and shared artifact probes are owned
+  by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond
   the explicitly authorized Central artifact, or parallel workers sharing one mutable host.
