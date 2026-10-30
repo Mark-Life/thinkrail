@@ -18,6 +18,7 @@ import {
 	resourceHistoryCursor,
 	resourceRecordId,
 } from "@thinkrail/contracts";
+import { errnoCode, isRecord } from "@thinkrail/shared/guards";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 
@@ -60,10 +61,6 @@ function keyOf(record: ResourceRecord): string {
 	return `${record.kind}:${resourceRecordId(record)}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
 function parseRecord(value: unknown): ResourceRecord | null {
 	if (!isRecord(value) || !isRecord(value.summary)) return null;
 	const summary = value.summary;
@@ -97,8 +94,7 @@ function readIndex(dir: string): ChatHistory {
 	try {
 		text = readFileSync(join(dir, "index.jsonl"), "utf8");
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-			log.warn("resource history index could not be read", error);
+		if (errnoCode(error) !== "ENOENT") log.warn("resource history index could not be read", error);
 		return history;
 	}
 	history.needsNewline = text.length > 0 && !text.endsWith("\n");
@@ -219,8 +215,7 @@ export function archivedCommandOutput(
 			? { text: parsed.text, truncated: parsed.truncated }
 			: undefined;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-			log.warn("resource history log could not be read", error);
+		if (errnoCode(error) !== "ENOENT") log.warn("resource history log could not be read", error);
 		return undefined;
 	}
 }

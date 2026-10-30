@@ -19,6 +19,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { isRecord } from "@thinkrail/shared/guards";
 import {
 	abortSession,
 	acknowledgeCompletion,
@@ -500,9 +501,8 @@ function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K,
 }
 
 function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
-	if (!params || typeof params !== "object" || Array.isArray(params))
-		throw new Error("Invalid resource history request");
-	const { kind, before, limit, ...scope } = params as Record<string, unknown>;
+	if (!isRecord(params)) throw new Error("Invalid resource history request");
+	const { kind, before, limit, ...scope } = params;
 	const { workspaceId, sessionId } = resourceParams(scope, ["workspaceId", "sessionId"]);
 	if (kind !== "command" && kind !== "subagent") throw new Error("Invalid resource history kind");
 	if (limit !== undefined && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1))
@@ -514,9 +514,8 @@ function resourceHistoryParams(params: unknown): WsParams<"session.resourceHisto
 		...(limit === undefined ? {} : { limit }),
 	};
 	if (before === undefined) return request;
-	if (!before || typeof before !== "object" || Array.isArray(before))
-		throw new Error("Invalid resource history cursor");
-	const { at, id, ...extra } = before as Record<string, unknown>;
+	if (!isRecord(before)) throw new Error("Invalid resource history cursor");
+	const { at, id, ...extra } = before;
 	if (
 		Object.keys(extra).length > 0 ||
 		typeof at !== "number" ||

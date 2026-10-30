@@ -368,9 +368,8 @@ function checkStartedAt(check: Record<string, unknown>): string {
 
 function latestChecks(rollup: unknown[]): Record<string, unknown>[] {
 	const byName = new Map<string, Record<string, unknown>>();
-	for (const item of rollup) {
-		if (typeof item !== "object" || item === null) continue;
-		const check = item as Record<string, unknown>;
+	for (const check of rollup) {
+		if (!isRecord(check)) continue;
 		const name = checkName(check);
 		if (!name) continue;
 		const key = `${text(check.workflowName)}\u0000${name}`;
@@ -399,11 +398,9 @@ function reviewers(latest: unknown): ReviewDetails["reviewers"] {
 	const found: ReviewDetails["reviewers"] = [];
 	for (const item of latest) {
 		if (found.length >= REVIEWERS_LIMIT) break;
-		if (typeof item !== "object" || item === null) continue;
-		const review = item as Record<string, unknown>;
-		const author = review.author as Record<string, unknown> | null | undefined;
-		const login = text(author?.login);
-		const state = text(review.state).toUpperCase();
+		if (!isRecord(item)) continue;
+		const login = isRecord(item.author) ? text(item.author.login) : "";
+		const state = text(item.state).toUpperCase();
 		if (!login) continue;
 		if (state === "APPROVED") found.push({ login, state: "approved" });
 		else if (state === "CHANGES_REQUESTED") found.push({ login, state: "changes_requested" });
@@ -412,10 +409,10 @@ function reviewers(latest: unknown): ReviewDetails["reviewers"] {
 }
 
 function headRepositorySlug(row: Record<string, unknown>): string | null {
-	const owner = row.headRepositoryOwner as Record<string, unknown> | null | undefined;
-	const repo = row.headRepository as Record<string, unknown> | null | undefined;
-	const login = text(owner?.login);
-	const name = text(repo?.name);
+	const owner = row.headRepositoryOwner;
+	const repo = row.headRepository;
+	const login = isRecord(owner) ? text(owner.login) : "";
+	const name = isRecord(repo) ? text(repo.name) : "";
 	return login && name ? `${login}/${name}`.toLowerCase() : null;
 }
 
@@ -457,9 +454,8 @@ async function repoMergeSettings(
 	]).catch(() => null);
 	if (!result?.ok) return null;
 	try {
-		const repo: unknown = JSON.parse(result.out);
-		if (typeof repo !== "object" || repo === null) return null;
-		const fields = repo as Record<string, unknown>;
+		const fields: unknown = JSON.parse(result.out);
+		if (!isRecord(fields)) return null;
 		const allowed: [MergeMethod, unknown][] = [
 			["squash", fields.squashMergeAllowed],
 			["merge", fields.mergeCommitAllowed],

@@ -8,6 +8,7 @@ import type {
 	HostEnvironmentStatus,
 	HostEnvironmentUpdateResult,
 } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import { launchEnvKeys } from "@thinkrail/shared/shellEnv";
 import { logger } from "../log";
 import { loadHostEnvironment, saveHostEnvironment } from "../persistence";
@@ -65,14 +66,14 @@ export function validateHostEnvironment(environment: HostEnvironment): HostEnvir
 }
 
 function parseHostEnvironment(value: unknown): HostEnvironment | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	const { agentDir, vars } = value as Record<string, unknown>;
+	if (!isRecord(value)) return null;
+	const { agentDir, vars } = value;
 	if (agentDir !== undefined && typeof agentDir !== "string") return null;
 	if (!Array.isArray(vars)) return null;
 	const parsed: HostEnvironment["vars"] = [];
 	for (const entry of vars) {
-		if (typeof entry !== "object" || entry === null) return null;
-		const { name, value: varValue } = entry as Record<string, unknown>;
+		if (!isRecord(entry)) return null;
+		const { name, value: varValue } = entry;
 		if (typeof name !== "string" || typeof varValue !== "string") return null;
 		const trimmed = name.trim();
 		if (trimmed.length === 0 && varValue.length === 0) continue;

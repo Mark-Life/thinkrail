@@ -1,5 +1,6 @@
 import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isRecord } from "@thinkrail/shared/guards";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
 export type FatalErrorKind = "uncaughtException" | "unhandledRejection";
@@ -132,10 +133,6 @@ const PASSTHROUGH_KEYS = [
 	"scope",
 	"request_method",
 ] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function positiveInt(value: unknown): number | undefined {
 	return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;

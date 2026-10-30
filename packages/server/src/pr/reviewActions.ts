@@ -1,4 +1,5 @@
 import type { MergeMethod, MergePrResult } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 import {
 	findBranchReviewOutcome,
 	forgetOpenBranchReview,
@@ -85,7 +86,8 @@ async function viewPr(cwd: string, slug: string, number: number, run: PrCommandR
 	]);
 	if (!viewed.ok) throw ghFailure(`Couldn't read PR #${number}`, viewed);
 	try {
-		const pr = JSON.parse(viewed.out) as Record<string, unknown>;
+		const pr: unknown = JSON.parse(viewed.out);
+		if (!isRecord(pr)) throw new Error("not an object");
 		return { headRefName: pr.headRefName, state: String(pr.state) as PrState, head: headSlug(pr) };
 	} catch {
 		throw new Error(`Couldn't read PR #${number}: gh answered something unexpected.`);
@@ -118,12 +120,7 @@ async function headsOpenPr(
 	try {
 		const rows: unknown = JSON.parse(listed.out);
 		if (!Array.isArray(rows)) return null;
-		return rows.some(
-			(row) =>
-				typeof row === "object" &&
-				row !== null &&
-				headSlug(row as Record<string, unknown>) === slug.toLowerCase(),
-		);
+		return rows.some((row) => isRecord(row) && headSlug(row) === slug.toLowerCase());
 	} catch {
 		return null;
 	}

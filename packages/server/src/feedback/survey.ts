@@ -6,6 +6,7 @@ import {
 	type SurveyRatingScale,
 	surveyRatingValues,
 } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 
 export const IN_APP_SURVEY_NAME = "in-app-feedback";
 export const SURVEY_REFRESH_MS = 15 * 60 * 1000;
@@ -575,8 +576,4 @@ function boundedText(value: unknown, max: number): string | null {
 	const text = value.trim();
 	if (!text) return null;
 	return text.length > max ? text.slice(0, max) : text;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

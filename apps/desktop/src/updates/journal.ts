@@ -4,6 +4,7 @@ import type {
 	NativeUpdateLogEntry,
 	NativeUpdateLogEvent,
 } from "@thinkrail/contracts";
+import { isRecord } from "@thinkrail/shared/guards";
 
 export const UPDATE_JOURNAL_FILE = "update-journal.json";
 export const MAX_UPDATE_LOG_ENTRIES = 200;
@@ -25,10 +26,6 @@ export interface UpdateJournalStore {
 	read(): UpdateJournal | null;
 	write(journal: UpdateJournal): void;
 	clear(): void;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function boundedText(value: unknown): string | null {

@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Project, WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode } from "@thinkrail/shared/guards";
 import { gitAsync } from "../git";
 import { openProject, resolveProjectPath } from "./projects";
 
@@ -78,7 +79,7 @@ export function inspectCloneDestination(parentPath: string, requestedName: strin
 	try {
 		lstatSync(path);
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return path;
+		if (errnoCode(error) === "ENOENT") return path;
 		throw error;
 	}
 	return invalid(`Destination already exists: ${path}`);
@@ -102,7 +103,7 @@ async function removeIncompleteClone(
 		if (current.dev === reserved.dev && current.ino === reserved.ino && current.isDirectory())
 			await rm(path, { recursive: true, force: true });
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+		if (errnoCode(error) === "ENOENT") return;
 		throw new CodedError(
 			"PROJECT_CLONE_CLEANUP_FAILED",
 			`Could not remove the incomplete clone at ${path}. Remove it manually before retrying.`,
@@ -125,8 +126,7 @@ export async function cloneProject(
 	try {
 		mkdirSync(path);
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "EEXIST")
-			invalid(`Destination already exists: ${path}`);
+		if (errnoCode(error) === "EEXIST") invalid(`Destination already exists: ${path}`);
 		throw error;
 	}
 	const reserved = lstatSync(path);
