@@ -8,6 +8,8 @@ import type {
 	ReviewMergeState,
 	ReviewProvider,
 } from "@thinkrail/contracts";
+import { type Static, Type } from "typebox";
+import { Check } from "typebox/value";
 import { gitAsync, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
@@ -276,18 +278,81 @@ async function lookupOpenBranchReview(
 	}
 }
 
-function reviewRowUrl(row: Record<string, unknown>): string | undefined {
-	for (const key of ["url", "web_url", "webUrl"]) {
-		const value = row[key];
-		if (typeof value === "string" && /^https:\/\/\S+$/.test(value)) return value;
+const OptText = Type.Optional(Type.Union([Type.String(), Type.Null()]));
+
+const RepositoryRefSchema = Type.Object({
+	headRepositoryOwner: Type.Optional(Type.Union([Type.Object({ login: OptText }), Type.Null()])),
+	headRepository: Type.Optional(Type.Union([Type.Object({ name: OptText }), Type.Null()])),
+});
+
+const ReviewRowSchema = Type.Intersect([
+	RepositoryRefSchema,
+	Type.Object({
+		number: Type.Optional(Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })),
+		iid: Type.Optional(Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })),
+		url: OptText,
+		web_url: OptText,
+		webUrl: OptText,
+		state: OptText,
+		mergedAt: OptText,
+		merged_at: OptText,
+		closedAt: OptText,
+		closed_at: OptText,
+		createdAt: OptText,
+		created_at: OptText,
+	}),
+]);
+type ParsedRow = Static<typeof ReviewRowSchema>;
+
+const ReviewDetailsRowSchema = Type.Object({
+	isDraft: Type.Boolean(),
+	mergeStateStatus: OptText,
+	reviewDecision: OptText,
+	baseRefName: OptText,
+	statusCheckRollup: Type.Optional(Type.Union([Type.Array(Type.Unknown()), Type.Null()])),
+	latestReviews: Type.Optional(Type.Union([Type.Array(Type.Unknown()), Type.Null()])),
+});
+
+const CheckItemSchema = Type.Object({
+	__typename: OptText,
+	state: OptText,
+	status: OptText,
+	conclusion: OptText,
+	name: OptText,
+	context: OptText,
+	workflowName: OptText,
+	startedAt: OptText,
+	completedAt: OptText,
+	createdAt: OptText,
+});
+type CheckItem = Static<typeof CheckItemSchema>;
+const isCheckItem = (item: unknown): item is CheckItem => Check(CheckItemSchema, item);
+
+const LatestReviewSchema = Type.Object({
+	author: Type.Optional(Type.Union([Type.Object({ login: OptText }), Type.Null()])),
+	state: OptText,
+});
+type LatestReview = Static<typeof LatestReviewSchema>;
+const isLatestReview = (item: unknown): item is LatestReview => Check(LatestReviewSchema, item);
+
+const ReviewRowsSchema = Type.Array(ReviewRowSchema);
+
+const RepoSettingsSchema = Type.Object({
+	squashMergeAllowed: Type.Optional(Type.Boolean()),
+	mergeCommitAllowed: Type.Optional(Type.Boolean()),
+	rebaseMergeAllowed: Type.Optional(Type.Boolean()),
+	deleteBranchOnMerge: Type.Optional(Type.Boolean()),
+});
+
+function reviewRowUrl(row: ParsedRow): string | undefined {
+	for (const value of [row.url, row.web_url, row.webUrl]) {
+		if (value && /^https:\/\/\S+$/.test(value)) return value;
 	}
 	return undefined;
 }
 
-function reviewRowState(row: Record<string, unknown>): BranchReviewState | undefined {
-	const raw = row.state;
-	if (typeof raw !== "string") return undefined;
-	switch (raw.toLowerCase()) {
+function reviewRowState(row: ParsedRow): BranchReviewState | undefined {
+	switch (row.state?.toLowerCase()) {
 		case "open":
 		case "opened":
 		case "locked":
@@ -301,10 +366,9 @@ function reviewRowState(row: Record<string, unknown>): BranchReviewState | undef
 	}
 }
 
-function reviewRowTime(row: Record<string, unknown>, keys: string[]): number | undefined {
-	for (const key of keys) {
-		const value = row[key];
-		if (typeof value !== "string") continue;
+function reviewRowTime(values: (string | null | undefined)[]): number | undefined {
+	for (const value of values) {
+		if (!value) continue;
 		const parsed = Date.parse(value);
 		if (Number.isFinite(parsed)) return parsed;
 	}
@@ -317,7 +381,7 @@ const REVIEW_DECISIONS: Record<string, ReviewDecision> = {
 	REVIEW_REQUIRED: "review_required",
 };
 
-const MERGE_STATES = new Set<ReviewMergeState>([
+const MERGE_STATES: readonly ReviewMergeState[] = [
 	"clean",
 	"unstable",
 	"has_hooks",
@@ -326,7 +390,7 @@ const MERGE_STATES = new Set<ReviewMergeState>([
 	"dirty",
 	"draft",
 	"unknown",
-]);
+];
 
 const PASSING_CONCLUSIONS = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
 const FAILING_CONCLUSIONS = new Set([
@@ -339,11 +403,11 @@ const FAILING_CONCLUSIONS = new Set([
 
 type CheckVerdict = "passing" | "pending" | "failing";
 
-function text(value: unknown): string {
-	return typeof value === "string" ? value : "";
+function text(value: string | null | undefined): string {
+	return value ?? "";
 }
 
-function checkVerdict(check: Record<string, unknown>): CheckVerdict | null {
+function checkVerdict(check: CheckItem): CheckVerdict | null {
 	if (check.__typename === "StatusContext") {
 		const state = text(check.state).toUpperCase();
 		if (state === "SUCCESS") return "passing";
@@ -357,19 +421,17 @@ function checkVerdict(check: Record<string, unknown>): CheckVerdict | null {
 	return null;
 }
 
-function checkName(check: Record<string, unknown>): string {
+function checkName(check: CheckItem): string {
 	return text(check.name) || text(check.context);
 }
 
-function checkStartedAt(check: Record<string, unknown>): string {
+function checkStartedAt(check: CheckItem): string {
 	return text(check.startedAt) || text(check.completedAt) || text(check.createdAt);
 }
 
-function latestChecks(rollup: unknown[]): Record<string, unknown>[] {
-	const byName = new Map<string, Record<string, unknown>>();
-	for (const item of rollup) {
-		if (typeof item !== "object" || item === null) continue;
-		const check = item as Record<string, unknown>;
+function latestChecks(rollup: CheckItem[]): CheckItem[] {
+	const byName = new Map<string, CheckItem>();
+	for (const check of rollup) {
 		const name = checkName(check);
 		if (!name) continue;
 		const key = `${text(check.workflowName)}\u0000${name}`;
@@ -379,8 +441,8 @@ function latestChecks(rollup: unknown[]): Record<string, unknown>[] {
 	return [...byName.values()];
 }
 
-function reviewChecks(rollup: unknown): ReviewChecks | undefined {
-	if (!Array.isArray(rollup)) return undefined;
+function reviewChecks(rollup: CheckItem[] | undefined): ReviewChecks | undefined {
+	if (!rollup) return undefined;
 	const checks: ReviewChecks = { passing: 0, pending: 0, failing: 0, failingNames: [] };
 	for (const check of latestChecks(rollup)) {
 		const verdict = checkVerdict(check);
@@ -393,15 +455,12 @@ function reviewChecks(rollup: unknown): ReviewChecks | undefined {
 	return checks.passing + checks.pending + checks.failing > 0 ? checks : undefined;
 }
 
-function reviewers(latest: unknown): ReviewDetails["reviewers"] {
-	if (!Array.isArray(latest)) return [];
+function reviewers(latest: LatestReview[] | undefined): ReviewDetails["reviewers"] {
+	if (!latest) return [];
 	const found: ReviewDetails["reviewers"] = [];
-	for (const item of latest) {
+	for (const review of latest) {
 		if (found.length >= REVIEWERS_LIMIT) break;
-		if (typeof item !== "object" || item === null) continue;
-		const review = item as Record<string, unknown>;
-		const author = review.author as Record<string, unknown> | null | undefined;
-		const login = text(author?.login);
+		const login = text(review.author?.login);
 		const state = text(review.state).toUpperCase();
 		if (!login) continue;
 		if (state === "APPROVED") found.push({ login, state: "approved" });
@@ -410,22 +469,17 @@ function reviewers(latest: unknown): ReviewDetails["reviewers"] {
 	return found;
 }
 
-function headRepositorySlug(row: Record<string, unknown>): string | null {
-	const owner = row.headRepositoryOwner as Record<string, unknown> | null | undefined;
-	const repo = row.headRepository as Record<string, unknown> | null | undefined;
-	const login = text(owner?.login);
-	const name = text(repo?.name);
+function headRepositorySlug(row: Static<typeof RepositoryRefSchema>): string | null {
+	const login = text(row.headRepositoryOwner?.login);
+	const name = text(row.headRepository?.name);
 	return login && name ? `${login}/${name}`.toLowerCase() : null;
 }
 
-function reviewRowDetails(
-	row: Record<string, unknown>,
-	ownSlug: string | null,
-): ReviewDetails | undefined {
-	if (typeof row.isDraft !== "boolean") return undefined;
+function reviewRowDetails(row: ParsedRow, ownSlug: string | null): ReviewDetails | undefined {
+	if (!Check(ReviewDetailsRowSchema, row)) return undefined;
 	if (!ownSlug || headRepositorySlug(row) !== ownSlug.toLowerCase()) return undefined;
-	const mergeState = text(row.mergeStateStatus).toLowerCase() as ReviewMergeState;
-	const checks = reviewChecks(row.statusCheckRollup);
+	const mergeState = text(row.mergeStateStatus).toLowerCase();
+	const checks = reviewChecks(row.statusCheckRollup?.filter(isCheckItem));
 	const decision = REVIEW_DECISIONS[text(row.reviewDecision).toUpperCase()];
 	const base = text(row.baseRefName);
 	return {
@@ -433,8 +487,8 @@ function reviewRowDetails(
 		...(base ? { base } : {}),
 		...(checks ? { checks } : {}),
 		...(decision ? { reviewDecision: decision } : {}),
-		reviewers: reviewers(row.latestReviews),
-		mergeState: MERGE_STATES.has(mergeState) ? mergeState : "unknown",
+		reviewers: reviewers(row.latestReviews?.filter(isLatestReview)),
+		mergeState: MERGE_STATES.find((known) => known === mergeState) ?? "unknown",
 	};
 }
 
@@ -457,17 +511,16 @@ async function repoMergeSettings(
 	if (!result?.ok) return null;
 	try {
 		const repo: unknown = JSON.parse(result.out);
-		if (typeof repo !== "object" || repo === null) return null;
-		const fields = repo as Record<string, unknown>;
-		const allowed: [MergeMethod, unknown][] = [
-			["squash", fields.squashMergeAllowed],
-			["merge", fields.mergeCommitAllowed],
-			["rebase", fields.rebaseMergeAllowed],
+		if (!Check(RepoSettingsSchema, repo)) return null;
+		const allowed: [MergeMethod, boolean | undefined][] = [
+			["squash", repo.squashMergeAllowed],
+			["merge", repo.mergeCommitAllowed],
+			["rebase", repo.rebaseMergeAllowed],
 		];
 		const value: RepoMergeSettings = {
 			mergeMethods: allowed.filter(([, on]) => on === true).map(([method]) => method),
-			...(typeof fields.deleteBranchOnMerge === "boolean"
-				? { deleteBranchOnMerge: fields.deleteBranchOnMerge }
+			...(repo.deleteBranchOnMerge !== undefined
+				? { deleteBranchOnMerge: repo.deleteBranchOnMerge }
 				: {}),
 		};
 		repoSettingsCache.set(remoteUrl, { at: Date.now(), value });
@@ -484,26 +537,23 @@ function parseReviewRows(
 ): ParsedReviewRows {
 	try {
 		const rows: unknown = JSON.parse(output);
-		if (!Array.isArray(rows)) return { valid: false };
+		if (!Check(ReviewRowsSchema, rows)) return { valid: false };
 		const parsed: ReviewRow[] = [];
-		for (const item of rows) {
-			if (typeof item !== "object" || item === null) return { valid: false };
-			const row = item as Record<string, unknown>;
+		for (const row of rows) {
 			const value = row[field];
-			if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
-				return { valid: false };
+			if (value === undefined) return { valid: false };
 			const url = reviewRowUrl(row);
 			const state = reviewRowState(row);
 			const changedAt =
 				state === "merged"
-					? reviewRowTime(row, ["mergedAt", "merged_at"])
+					? reviewRowTime([row.mergedAt, row.merged_at])
 					: state === "closed"
-						? reviewRowTime(row, ["closedAt", "closed_at"])
+						? reviewRowTime([row.closedAt, row.closed_at])
 						: undefined;
 			if ((state === "merged" || state === "closed") && changedAt === undefined) {
 				return { valid: false };
 			}
-			const createdAt = reviewRowTime(row, ["createdAt", "created_at"]);
+			const createdAt = reviewRowTime([row.createdAt, row.created_at]);
 			const details = state === "open" ? reviewRowDetails(row, ownSlug) : undefined;
 			const head = headRepositorySlug(row);
 			parsed.push({

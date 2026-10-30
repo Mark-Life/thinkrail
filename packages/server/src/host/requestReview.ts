@@ -6,6 +6,8 @@ import type {
 } from "@thinkrail/contracts";
 import { isPlanReviewResult } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import {
 	getSessionWorkspaceId,
 	notifyExtUi,
@@ -92,6 +94,8 @@ function agentPath(path: string): string {
 	return path.replaceAll("\\", "/");
 }
 
+const VerdictObjectSchema = Type.Object({});
+
 export function parseVerdict(
 	finalText: string | undefined,
 	itemId: string,
@@ -106,8 +110,8 @@ export function parseVerdict(
 	} catch {
 		return null;
 	}
-	if (typeof parsed !== "object" || parsed === null) return null;
-	const candidate = { ...(parsed as object), itemId, itemTitle };
+	if (!Check(VerdictObjectSchema, parsed)) return null;
+	const candidate = { ...parsed, itemId, itemTitle };
 	if (!isPlanReviewResult(candidate)) return null;
 	const findings: ReviewFixComment[] = candidate.findings.map((f) => ({
 		id: f.id,
