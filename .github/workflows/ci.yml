@@ -1,4 +1,5 @@
 name: CI
+# Measurement baseline for the CI-speed stack; do not merge.
 
 # Gates for every PR targeting main and every merge group; the ruleset requires only "CI passed".
 # The @agent specs need a real provider + auth, so they stay out of CI. See .github/SPEC.md → CI.
