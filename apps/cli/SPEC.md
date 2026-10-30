@@ -350,7 +350,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/startupMark` (the shared boot
   signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
-  `@thinkrail/shared/windowsIdentity` (the Windows file properties and ICO the build stamps), Bun/Node;
+  `@thinkrail/shared/windowsIdentity` (the Windows file properties and ICO the build stamps) +
+  `@thinkrail/shared/errnoCode` (error-code reads), Bun/Node;
   the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).

@@ -1,14 +1,18 @@
 import { connect, createServer } from "node:net";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
+import { errnoCode } from "./errnoCode";
 
 const DEFAULT_HOST = "localhost";
 const PROBE_TIMEOUT_MS = 300;
 const DEFAULT_SCAN_ATTEMPTS = 20;
 
+const AggregateCauseSchema = Type.Object({ errors: Type.Array(Type.Unknown(), { minItems: 1 }) });
+
 function isConnectionRefused(err: unknown): boolean {
-	const e = err as NodeJS.ErrnoException & { errors?: NodeJS.ErrnoException[] };
-	if (e.code === "ECONNREFUSED") return true;
-	if (Array.isArray(e.errors) && e.errors.length > 0) {
-		return e.errors.every((inner) => inner.code === "ECONNREFUSED");
+	if (errnoCode(err) === "ECONNREFUSED") return true;
+	if (Check(AggregateCauseSchema, err)) {
+		return err.errors.every((inner) => errnoCode(inner) === "ECONNREFUSED");
 	}
 	return false;
 }

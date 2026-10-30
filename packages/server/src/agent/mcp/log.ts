@@ -2,6 +2,7 @@ import { type FileHandle, open } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { McpServerLog } from "@thinkrail/contracts";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { redactMcpText } from "./redact";
 
 const MCP_LOG_TAIL_LINES = 200;
@@ -29,7 +30,7 @@ async function openIfPresent(path: string): Promise<FileHandle | null> {
 	try {
 		return await open(path, "r");
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+		if (errnoCode(error) === "ENOENT") return null;
 		throw error;
 	}
 }

@@ -431,7 +431,7 @@ A sandboxed home is handed to every host as **both `HOME` and `USERPROFILE`**: `
 resolution — reads `USERPROFILE` on Windows and ignores `HOME`, so `HOME` alone would silently leak a
 Windows lane into the real profile (see `module-shared`). Every spawner — the Playwright web server, the
 artifact and live-restart hosts, the workflow harness, and the artifact probes — takes that home through
-`@thinkrail/shared/toolHomes`' `toolHomeEnv`, so each agent tool's config home (what account detection reads)
+`@thinkrail/shared/toolHomes`' `toolHomeEnv` (and `@thinkrail/shared/errnoCode` for port-probe error codes), so each agent tool's config home (what account detection reads)
 lands in the sandbox and a new detection source is pinned everywhere at once.
 
 ## Boundary

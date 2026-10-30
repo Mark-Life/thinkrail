@@ -8,6 +8,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import {
 	type AcquisitionRecord,
 	hasExactKeys,
@@ -79,7 +80,7 @@ export function claimBrowserAttributionAttemptIn(directory: string): boolean {
 		});
 		return true;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+		if (errnoCode(error) === "EEXIST") return false;
 		throw error;
 	}
 }

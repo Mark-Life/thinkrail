@@ -31,6 +31,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
+  `@thinkrail/shared/errnoCode` → `errnoCode(cause)`, the one parser that reads a string `code` off a caught
+  Node error (`ENOENT`, `EEXIST`, ...) so callers never cast to `NodeJS.ErrnoException`;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
   overrides that would reach outside it — the single list every hermetic host spawner (e2e, workflow
@@ -51,7 +53,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `windowsHide: true`. Bun 1.4.0 maps that option to libuv `UV_PROCESS_WINDOWS_HIDE`; the seam prevents
   background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
   `runBounded`, `jbcentral`'s version/quota runner) set it directly.
-- **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
+- **Allowed deps:** Bun/Node runtime (`@types/bun`); `typebox` for `errnoCode` and `freePort`; `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim); the icon generator's
   build-only `@resvg/resvg-js` and `resedit`.
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
