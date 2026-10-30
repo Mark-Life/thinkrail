@@ -27,7 +27,7 @@ engine architecture.
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
-  for release identity, its Windows file identity the early `resolveShellEnv()` start, and `errnoCode` for error-code reads; `contracts`
+  for release identity, its Windows file identity, the early `resolveShellEnv()` start and `errnoCode` error-code reads; `contracts`
   for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
   web artifact; Electrobun `2.0.5` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.5
   Windows executable-identity gap (below); shared's native icon set as build input; Bun/Node.

@@ -1,4 +1,5 @@
 import { errnoCode } from "@thinkrail/shared/errnoCode";
+
 export interface PollUntilOptions {
 	readonly timeoutMs: number;
 	readonly what: string;

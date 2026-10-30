@@ -397,7 +397,7 @@ export function createProject(
 		if (readdirSync(path).length > 0)
 			throw new Error(`Folder already exists and isn't empty: ${path}`);
 	} catch (err) {
-		if (!(errnoCode(err) === "ENOENT")) throw err;
+		if (errnoCode(err) !== "ENOENT") throw err;
 		mkdirSync(path);
 		created = true;
 	}

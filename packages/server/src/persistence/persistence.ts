@@ -20,6 +20,7 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
@@ -42,8 +43,6 @@ export {
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
 } from "./attributionProtocol";
-
-import { errnoCode } from "@thinkrail/shared/errnoCode";
 
 export type { InstallationRecord } from "./installation";
 
