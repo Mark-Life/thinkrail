@@ -12,7 +12,7 @@
 	"scripts": {
 		"dev": "bun run --watch src/dev.ts",
 		"typecheck": "tsc --noEmit",
-		"test": "bun test"
+		"test": "THINKRAIL_CHECK_WS_RESULTS=1 bun test"
 	},
 	"dependencies": {
 		"@earendil-works/pi-ai": "catalog:",
