@@ -619,6 +619,12 @@ const USER_FONT_FILE_ERROR_CODES = [
 	"unreadable",
 ] as const satisfies readonly UserFontFileErrorCode[];
 
+function isUserFontFileErrorCode(
+	value: unknown,
+): value is SameUnion<UserFontFileErrorCode, (typeof USER_FONT_FILE_ERROR_CODES)[number]> {
+	return USER_FONT_FILE_ERROR_CODES.some((code) => code === value);
+}
+
 function isUserFontFace(value: unknown): value is UserFontFace {
 	if (typeof value !== "object" || value === null) return false;
 	const weight = Reflect.get(value, "weight");
@@ -647,7 +653,7 @@ export function isUserFontFile(value: unknown): value is UserFontFile {
 		);
 	}
 	const error = Reflect.get(value, "error");
-	return ok === false && USER_FONT_FILE_ERROR_CODES.some((code) => code === error);
+	return ok === false && isUserFontFileErrorCode(error);
 }
 
 /** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
