@@ -211,7 +211,7 @@ export function addTodo(params: {
 	note?: string;
 }): Promise<TodoItem> {
 	return enqueueTodoMutation(params.workspaceId, () => {
-		const title = params.title?.trim();
+		const title = params.title.trim();
 		if (!title) throw new Error("A TODO title is required.");
 		const input: { title: string; note?: string; origin: "user" } = {
 			title,
