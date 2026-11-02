@@ -265,14 +265,10 @@ function savedKey(id: string, baseUrl: string): string | undefined {
 export async function probeCustomEndpoint(
 	request: CustomEndpointProbeRequest,
 ): Promise<CustomEndpointProbe> {
-	if (!isObject(request) || typeof request.baseUrl !== "string")
-		throw new Error("The server address must be text.");
-	if (request.apiKey !== undefined && typeof request.apiKey !== "string")
-		throw new Error("The API key must be text.");
 	let baseUrl = parseBaseUrl(request.baseUrl);
 	if (!baseUrl) return { ok: false, reason: "invalid-url" };
 	const key =
-		request.apiKey === undefined && typeof request.endpointId === "string"
+		request.apiKey === undefined && request.endpointId !== undefined
 			? savedKey(request.endpointId, baseUrl)
 			: resolveProbeKey(request.apiKey);
 	let listing = await fetchJson(`${baseUrl}/models`, key, LIST_TIMEOUT_MS);
@@ -359,32 +355,19 @@ function isCount(value: unknown): boolean {
 	return value === null || positiveInt(value) !== null;
 }
 
-function isFlag(value: unknown): boolean {
-	return value === null || typeof value === "boolean";
-}
-
 function validateDraft(draft: CustomEndpointDraft): void {
-	if (!isObject(draft) || typeof draft.name !== "string" || typeof draft.baseUrl !== "string")
-		throw new Error("Name and server address must be text.");
-	if (draft.id !== undefined && typeof draft.id !== "string")
-		throw new Error("That server is no longer in models.json. Reload and retry.");
-	if (draft.apiKey !== undefined && typeof draft.apiKey !== "string")
-		throw new Error("The API key must be text.");
 	if (!draft.name.trim()) throw new Error("Name the server.");
 	if (!parseBaseUrl(draft.baseUrl))
 		throw new Error("Enter a full http:// or https:// address without credentials or a query.");
-	if (!Array.isArray(draft.models) || draft.models.length === 0)
-		throw new Error("Pick at least one model.");
+	if (draft.models.length === 0) throw new Error("Pick at least one model.");
 	if (draft.models.length > MAX_MODELS) throw new Error("Pick fewer models.");
 	const ids = new Set<string>();
 	for (const model of draft.models) {
-		if (!isObject(model) || typeof model.id !== "string" || !model.id.trim() || ids.has(model.id))
+		if (!model.id.trim() || ids.has(model.id))
 			throw new Error("Model ids must be unique and non-empty.");
 		ids.add(model.id);
 		if (!isCount(model.contextWindow) || !isCount(model.maxTokens))
 			throw new Error("Model limits must be whole numbers.");
-		if (!isFlag(model.reasoning) || !isFlag(model.vision))
-			throw new Error("Model capabilities must be on or off.");
 	}
 }
 
