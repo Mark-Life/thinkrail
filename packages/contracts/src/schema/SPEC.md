@@ -14,12 +14,15 @@ Hold each wire shape once, as a `pi-schema` schema with its type derived by `Sta
 and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to its params and result schemas, and
 `WsMethodMap` is the map derived from it, with no hand-written entry. It stays an interface: a generic
 `WsParams<M>` reads the resolved entries, and a type alias would defer to `Static` and read as `unknown`.
+`WS_CHANNEL_SCHEMAS` does the same for push channels: `WsChannelMap` derives from it, and `WsChannelPayload<C>` reads
+that map.
 
 ## Boundary
 
 - **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
-  types, the `*_METHODS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`. From `wire.ts` only `Ack`: `wireObj`,
-  `partialWireObj`, `readonlyArr`, `piOwned` and `NoParams` stay inside this directory. Schema values stay public because
+  types, the `*_METHODS` and `*_CHANNELS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`, `WS_CHANNEL_SCHEMAS`,
+  `WsSchemaChannelMap`. From `wire.ts` only `Ack`: `wireObj`, `partialWireObj`, `readonlyArr`, `piOwned`, `NoParams` and
+  `NoPayload` stay inside this directory. Schema values stay public because
   [[submodule-server-host]] compiles them; web JS stays free of them by tree shaking.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
 - **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
@@ -31,8 +34,8 @@ and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to it
   working together. `obj()` without `open` is closed, so it is not used for wire shapes.
 - **A `Partial` wire type uses `partialWireObj`.** `AppConfigUpdate` takes the fields of `AppConfig`, so a setting is
   declared once. The update stays open here; `updateConfig` owns the closed key set.
-- **One file per method namespace.** A namespace file exports its entity schemas and a `*_METHODS` record;
-  `methods.ts` merges the records. An entity several namespaces share gets its own file.
+- **One file per method namespace.** A namespace file exports its entity schemas, a `*_METHODS` record and, if it owns
+  a push channel, a `*_CHANNELS` record; `methods.ts` and `channels.ts` merge the records. An entity several namespaces share gets its own file.
 - **Schemas check shape only.** A rule that needs host state or gives the user a specific message, such as the
   URL rules of `project.clone`, stays with its handler. A handler does not check the shape again.
 - **A wire change is a schema edit.** It shows in the diff under this directory: decide on a `PROTOCOL_VERSION`
@@ -43,6 +46,9 @@ and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to it
   field pi adds or a field the schema drops fails `tsc` here. `StopReason` lists its values the same way.
 - **A pi shape with no schema is results only.** `piOwned<T>()` carries pi's type with a bare object check, as in
   `Message` inside `TranscriptMessage`. Params never use it: dispatch would not check them.
+- **`pi.event` checks only its tag.** `pi` exports no event schemas, so its schema has `sessionId` and `event.type`, and
+  `WsChannelMap` in `wsProtocol.ts` overrides the entry with `SessionEventPayload`. The interface `extends` the derived
+  map, so the override must stay assignable to the schema's type.
 - **A recursive shape keeps its hand type.** Builders cannot express `FileNode` or `LayoutPresetCenterNode`, so each
   stays a hand type beside a raw JSON Schema annotated `Schema<...>`. `$id` makes its `$ref: "#"` point at the node,
   not at the schema that embeds it.
@@ -54,7 +60,8 @@ and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to it
   `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
-- **A result schema is proven by tests.** Production never checks a result. The host's test harnesses check real replies
-  against it ([[submodule-server-host]]), so a mismatch is a schema bug or a host bug, not a tolerated drift. `piOwned` parts
+- **Result and channel schemas are proven by tests.** Production never checks what the host sends. The host's test
+  harnesses check real replies and pushes against them ([[submodule-server-host]]), so a mismatch is a schema bug or a host
+  bug, not a tolerated drift. `piOwned` parts
   pass by design.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

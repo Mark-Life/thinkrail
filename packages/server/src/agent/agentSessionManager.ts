@@ -30,7 +30,6 @@ import type {
 	RefreshedModels,
 	RemovedQueuedMessage,
 	ReviewFixDetails,
-	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
 	SessionQueueContent,
@@ -359,8 +358,8 @@ export function setSessionPublisher(fn: (payload: SessionEventPayload) => void):
 	publish = fn;
 }
 
-let publishCreated: (payload: SessionCreatedPayload) => void = () => {};
-export function setSessionCreatedPublisher(fn: (payload: SessionCreatedPayload) => void): void {
+let publishCreated: (payload: SessionSummary) => void = () => {};
+export function setSessionCreatedPublisher(fn: (payload: SessionSummary) => void): void {
 	publishCreated = fn;
 }
 

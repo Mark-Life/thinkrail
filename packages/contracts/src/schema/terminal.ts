@@ -4,6 +4,18 @@ import { Ack, wireObj } from "./wire";
 export const TerminalTabInfo = wireObj({ tabKey: str(), title: str() });
 export type TerminalTabInfo = Static<typeof TerminalTabInfo>;
 
+export const TerminalDataPush = wireObj({ id: str(), data: str(), truncated: opt(bool()) });
+export type TerminalDataPush = Static<typeof TerminalDataPush>;
+
+export const TerminalExitPush = wireObj({ id: str(), exitCode: num() });
+export type TerminalExitPush = Static<typeof TerminalExitPush>;
+
+export const TerminalDetachedPush = wireObj({ workspaceId: str(), tabKey: str() });
+export type TerminalDetachedPush = Static<typeof TerminalDetachedPush>;
+
+export const TerminalTabsPush = wireObj({ workspaceId: str(), tabs: arr(TerminalTabInfo) });
+export type TerminalTabsPush = Static<typeof TerminalTabsPush>;
+
 export const TERMINAL_METHODS = {
 	"terminal.reserve": {
 		params: wireObj({ workspaceId: str(), tabKey: str(), title: str() }),
@@ -29,4 +41,11 @@ export const TERMINAL_METHODS = {
 		params: wireObj({ workspaceId: str(), tabKey: str(), force: opt(bool()) }),
 		result: wireObj({ closed: bool(), busy: bool() }),
 	},
+};
+
+export const TERMINAL_CHANNELS = {
+	"terminal.data": TerminalDataPush,
+	"terminal.exit": TerminalExitPush,
+	"terminal.detached": TerminalDetachedPush,
+	"terminal.tabs": TerminalTabsPush,
 };

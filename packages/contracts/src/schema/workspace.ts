@@ -128,6 +128,29 @@ export type WorkspaceCreation = Static<typeof WorkspaceCreation>;
 
 const WorkspaceId = wireObj({ id: str() });
 
+export const WorkspaceRemoved = wireObj({ projectId: str(), id: str() });
+export type WorkspaceRemoved = Static<typeof WorkspaceRemoved>;
+
+export const WorkspaceCreationRemoved = wireObj({
+	id: str(),
+	projectId: str(),
+	workspace: opt(Workspace),
+	sessionId: opt(str()),
+	kickoffError: opt(str()),
+});
+export type WorkspaceCreationRemoved = Static<typeof WorkspaceCreationRemoved>;
+
+export const WorkspaceSkillChange = oneOf(["none", "detected", "unknown"]);
+export type WorkspaceSkillChange = Static<typeof WorkspaceSkillChange>;
+
+export const WorkspaceFsChangedPayload = wireObj({
+	workspaceId: str(),
+	paths: arr(str()),
+	truncated: bool(),
+	skillChange: WorkspaceSkillChange,
+});
+export type WorkspaceFsChangedPayload = Static<typeof WorkspaceFsChangedPayload>;
+
 export const WORKSPACE_METHODS = {
 	"workspace.create": {
 		params: wireObj({ projectId: str(), name: opt(str()), baseRef: opt(str()) }),
@@ -215,4 +238,14 @@ export const WORKSPACE_METHODS = {
 		params: wireObj({ workspaceId: str() }),
 		result: wireObj({ turns: arr(TurnChangeSet) }),
 	},
+};
+
+export const WORKSPACE_CHANNELS = {
+	"workspace.created": Workspace,
+	"workspace.updated": Workspace,
+	"workspace.removed": WorkspaceRemoved,
+	"workspace.fsChanged": WorkspaceFsChangedPayload,
+	"workspace.creationChanged": WorkspaceCreation,
+	"workspace.creationRemoved": WorkspaceCreationRemoved,
+	"turn.changed": TurnChangeSet,
 };

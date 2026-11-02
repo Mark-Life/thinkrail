@@ -1271,7 +1271,8 @@ and what it loaded, never pi's own types.
   Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
   (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
   `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
-  `AppConfig` key. `SpeechModel` and the method schemas live in `schema/speech.ts`; `SPEECH_MODELS` lists its values.
+  `AppConfig` key. `SpeechModel`, `SpeechStatus`, `SpeechErrorCode`, the method schemas and the channel schema live in
+  `schema/speech.ts`; `SPEECH_MODELS` and `SPEECH_ERROR_CODES` list their values.
 - **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
   dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
   request, which cannot absorb 20 ms audio frames.

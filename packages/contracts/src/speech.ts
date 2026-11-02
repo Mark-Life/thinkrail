@@ -1,4 +1,4 @@
-import type { SpeechModel } from "./schema";
+import type { SpeechErrorCode, SpeechModel } from "./schema";
 
 type SameUnion<A extends B, B extends C, C = A> = A;
 
@@ -25,52 +25,12 @@ export const SPEECH_ERROR_CODES = [
 	"SPEECH_ENGINE_FAILED",
 	"SPEECH_BUSY",
 	"SPEECH_PROTOCOL",
-] as const;
-export type SpeechErrorCode = (typeof SPEECH_ERROR_CODES)[number];
+] as const satisfies readonly SpeechErrorCode[];
 
-export function isSpeechErrorCode(value: unknown): value is SpeechErrorCode {
+export function isSpeechErrorCode(
+	value: unknown,
+): value is SameUnion<SpeechErrorCode, (typeof SPEECH_ERROR_CODES)[number]> {
 	return SPEECH_ERROR_CODES.some((code) => code === value);
-}
-
-export type SpeechInstallPhase = "runtime" | "model";
-
-export type SpeechInstallState =
-	| { status: "not-installed" }
-	| {
-			status: "installing";
-			model: SpeechModel;
-			phase: SpeechInstallPhase;
-			receivedBytes: number;
-			totalBytes: number;
-	  }
-	| { status: "ready"; model: SpeechModel }
-	| {
-			status: "failed";
-			model: SpeechModel;
-			code: SpeechErrorCode;
-			/** A previously installed model that still works after a failed switch. */
-			usable: SpeechModel | null;
-	  };
-
-/** `path` is a user-installed `nemo-speech`; ThinkRail never deletes it. */
-export interface SpeechRuntimeInfo {
-	source: "managed" | "path";
-	version: string;
-	backend: string;
-}
-
-export type SpeechEngineState = "stopped" | "starting" | "ready" | "failed";
-
-/** Voice input as the host reports it in `ServerWelcome.speech` and on `speech.changed`. */
-export interface SpeechStatus {
-	supported: boolean;
-	install: SpeechInstallState;
-	runtime: SpeechRuntimeInfo | null;
-	engine: SpeechEngineState;
-	/** Bytes ThinkRail's own speech files occupy on the host. */
-	diskBytes: number;
-	/** What installing each model would download now, given what is already present. */
-	downloadBytes: Record<SpeechModel, number>;
 }
 
 /**

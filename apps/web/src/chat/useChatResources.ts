@@ -261,9 +261,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 			state: useAppStore.getState,
 			read: () => transport.request("session.resources", scope),
 			subscribe: (invalidate) =>
-				transport.subscribe(WS_CHANNELS.sessionResourcesChanged, (payload) =>
-					invalidate(payload as ChatResourceScope),
-				),
+				transport.subscribe(WS_CHANNELS.sessionResourcesChanged, invalidate),
 		});
 		const controller = createChatResourceControls(scope, {
 			state: useAppStore.getState,
