@@ -16,8 +16,11 @@ import {
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import { loadConfig, saveConfig } from "../persistence";
+import { logger } from "../log";
+import { isConfigOverwriteRefused, loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
+
+const log = logger("settings");
 
 export type SettingsPublisher = (config: AppConfig, appliedUpdate: AppConfigUpdate) => void;
 type RuntimeAppConfigUpdate = AppConfigUpdate & {
@@ -97,16 +100,24 @@ export function setSettingsPublisher(fn: SettingsPublisher | null): void {
 }
 
 let cached: AppConfig | null = null;
+let cacheHoldsDefaultsFromFailedRead = false;
 
 export function getConfig(): AppConfig {
 	if (cached) return cached;
 	const loaded = loadConfig();
+	cacheHoldsDefaultsFromFailedRead = isConfigOverwriteRefused();
 	const customLayoutPresets = normalizeStoredCustomLayoutPresets(loaded.customLayoutPresets);
 	cached = { ...loaded, customLayoutPresets };
 	if (JSON.stringify(customLayoutPresets) !== JSON.stringify(loaded.customLayoutPresets)) {
 		saveConfig(cached);
 	}
 	return cached;
+}
+
+function configToOverwrite(): AppConfig {
+	if (cacheHoldsDefaultsFromFailedRead) cached = null;
+	else if (cached && isConfigOverwriteRefused()) loadConfig();
+	return getConfig();
 }
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
@@ -212,7 +223,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
 		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
 	}
-	const current = getConfig();
+	const current = configToOverwrite();
 	if (
 		runtimeUpdate.analyticsEnabled === true &&
 		!current.analyticsEnabled &&
@@ -269,20 +280,24 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	return next;
 }
 
-/** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. */
-export function noteRecentModel(model: WireModel): AppConfig {
-	const current = getConfig();
-	const recentModels = [
-		model,
-		...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
-	].slice(0, RECENT_MODELS_LIMIT);
-	const next: AppConfig = { ...current, recentModels };
-	saveConfig(next);
-	cached = next;
-	publishSettings?.(next, {});
-	return next;
+/** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. Best effort: the choice has already applied. */
+export function noteRecentModel(model: WireModel): void {
+	try {
+		const current = configToOverwrite();
+		const recentModels = [
+			model,
+			...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
+		].slice(0, RECENT_MODELS_LIMIT);
+		const next: AppConfig = { ...current, recentModels };
+		saveConfig(next);
+		cached = next;
+		publishSettings?.(next, {});
+	} catch (error) {
+		log.warn("recent model not noted", error);
+	}
 }
 
 export function resetConfigCache(): void {
 	cached = null;
+	cacheHoldsDefaultsFromFailedRead = false;
 }
