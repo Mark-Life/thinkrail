@@ -16,7 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LoadedMcpConfig } from "@earendil-works/pi-coding-agent";
+import { arr, compile, obj, opt, str } from "@earendil-works/pi-schema";
 import {
 	addMcpServerConfig,
 	assertProjectMcpConfigWritable,
@@ -31,13 +31,32 @@ import {
 } from "./index";
 
 const piDist = dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
-const piConfig = (await import(join(piDist, "extensions", "mcp", "config.js"))) as {
-	loadMcpConfig: (options: {
-		agentDir: string;
-		cwd: string;
-		projectTrusted: boolean;
-	}) => LoadedMcpConfig;
-};
+const piConfigModule: unknown = await import(join(piDist, "extensions", "mcp", "config.js"));
+const PiLoadedConfig = compile(
+	obj(
+		{
+			errors: arr(str()),
+			servers: arr(obj({ config: obj({ url: opt(str()) }, { open: true }) }, { open: true })),
+		},
+		{ open: true },
+	),
+);
+
+function piLoadMcpConfig(options: { agentDir: string; cwd: string; projectTrusted: boolean }) {
+	if (typeof piConfigModule !== "object" || piConfigModule === null) {
+		throw new Error("pi's MCP config module did not load");
+	}
+	const load: unknown = Reflect.get(piConfigModule, "loadMcpConfig");
+	if (typeof load !== "function") throw new Error("pi's MCP config module has no loadMcpConfig");
+	const loaded: unknown = load(options);
+	return loaded;
+}
+
+function piLoadedMcpConfig(options: { agentDir: string; cwd: string; projectTrusted: boolean }) {
+	const loaded = piLoadMcpConfig(options);
+	if (!PiLoadedConfig.check(loaded)) throw new Error("pi's loadMcpConfig changed its result shape");
+	return loaded;
+}
 
 const root = mkdtempSync(join(tmpdir(), "mcp-config-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -162,6 +181,12 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 		global: '\uFEFF{"mcpServers":{"docs":{"url":"https://docs.example/mcp"}}}',
 		project: '\uFEFF{"mcpServers":{"docs":{"enabled":false}}}',
 	},
+	{
+		name: "own __proto__ and constructor keys",
+		global:
+			'{"mcpServers":{"__proto__":{"command":"c"},"constructor":{"url":"https://x/mcp"},"s":{"command":"c","env":{"__proto__":1}}}}',
+		project: '{"__proto__":{"mcpServers":{"x":{"command":"c"}}}}',
+	},
 	{ name: "malformed global file", global: "{ not json" },
 	{ name: "mcpServers that is not an object", global: { mcpServers: [] }, project: "[]" },
 	{ name: "non-object top level", global: "[1,2]" },
@@ -169,13 +194,26 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 	{ name: "no files at all", global: undefined },
 ];
 
+test("the streamable-http alias loads as http, the transport pi gives it", () => {
+	const { agentDir, cwd } = fixture({
+		mcpServers: { s: { type: "streamable-http", url: "https://x/mcp" } },
+	});
+	const ours = loadMcpConfigFiles({ agentDir, cwd, projectTrusted: true });
+	const pis = piLoadedMcpConfig({ agentDir, cwd, projectTrusted: true });
+	expect(ours.errors).toEqual(pis.errors);
+	expect(ours.servers.map((server) => server.config)).toEqual([
+		{ type: "http", url: "https://x/mcp" },
+	]);
+	expect(pis.servers.map(({ config }) => config.url ?? null)).toEqual(["https://x/mcp"]);
+});
+
 for (const { name, global: globalConfig, project } of PARITY_CASES) {
 	test(`parity with pi's loader: ${name}`, () => {
 		const { agentDir, cwd } = fixture(globalConfig, project);
 		for (const projectTrusted of [true, false]) {
 			const ours = loadMcpConfigFiles({ agentDir, cwd, projectTrusted });
 			const { entries: _entries, fileErrors: _fileErrors, ...comparable } = ours;
-			expect(comparable).toEqual(piConfig.loadMcpConfig({ agentDir, cwd, projectTrusted }));
+			expect(piLoadMcpConfig({ agentDir, cwd, projectTrusted })).toEqual(comparable);
 		}
 	});
 }
@@ -250,6 +288,24 @@ test("fingerprints cover the whole entry object, keep toolExposure order semanti
 		}),
 	).toBe(fp);
 	expect(fingerprintMcpEntry("srv", { ...base, env: { B: "!cmd", A: `\${A}` } })).toBe(fp);
+});
+
+test("a timeout too large for a finite number is refused", () => {
+	expect(validateMcpServerConfig("s", JSON.parse('{"command":"c","timeout":1e999}'))).toBe(
+		'server "s": timeout must be a positive number of seconds',
+	);
+});
+
+test("a repo entry named __proto__ needs its own approval", () => {
+	const { agentDir, cwd } = fixture(undefined, '{"mcpServers":{"__proto__":{"command":"repo"}}}');
+	const options = { agentDir, cwd, projectTrusted: true };
+	const empty = { approvals: {}, overrides: {}, toolGrants: {} };
+	expect(loadHostMcpConfig({ ...options, policy: empty }).servers).toEqual([]);
+	const approvals = Object.fromEntries([
+		["__proto__", fingerprintMcpEntry("__proto__", { command: "repo" })],
+	]);
+	const admitted = loadHostMcpConfig({ ...options, policy: { ...empty, approvals } }).servers;
+	expect(admitted.map((server) => server.name)).toEqual(["__proto__"]);
 });
 
 test("host exposure normalization maps codemode and unset to deferred without touching other values", () => {
