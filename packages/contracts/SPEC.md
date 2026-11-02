@@ -152,13 +152,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 - **schema/** — wire schemas and the types derived from them ([[submodule-contracts-schema]]): `Project`,
   `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
-  `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*` and
-  `provider.*` entities, and the methods of these namespaces and `project.*`. The entries below describe these
+  `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*`,
+  `provider.*`, `session.*`, `subagent.*` and `backgroundCommand.*` entities, and the methods of these namespaces
+  and `project.*`. The entries below describe these
   types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
-    `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ImageContent`, `ToolCall`,
-    `AssistantMessageEvent`, `Usage`, `StopReason`;
+    `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ToolCall`,
+    `AssistantMessageEvent`, `Usage`, `StopReason`; `ImageContent` is listed in `schema/`, pinned to pi's type;
   - **`WireModel`** (in `schema/`) = `id`, `name`, `provider`, `contextWindow`, `reasoning` of pi's `Model` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
     client→host params carry it inert) **+ three optional picker-metadata projections** — `cost`

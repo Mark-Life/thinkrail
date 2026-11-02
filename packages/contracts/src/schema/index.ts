@@ -1,4 +1,9 @@
 export {
+	BackgroundCommandOutputResult,
+	BackgroundCommandStatus,
+	BackgroundCommandSummary,
+} from "./backgroundCommand";
+export {
 	CustomEndpoint,
 	CustomEndpointDraft,
 	CustomEndpointModel,
@@ -6,6 +11,8 @@ export {
 	CustomEndpointProbeFailure,
 	CustomEndpointProbeRequest,
 } from "./customEndpoint";
+export { ExtUiRequest, ExtUiResponse } from "./extUi";
+export { McpServerResourceSummary, McpServerState, McpTransportKind } from "./mcp";
 export * from "./methods";
 export {
 	ModelContextSetting,
@@ -42,5 +49,42 @@ export {
 	ProviderStatusReport,
 	ProviderWarning,
 } from "./provider";
-export { SkillCatalogEntry, SkillDecision, SlashCommandSourceInfo } from "./skill";
+export {
+	ResourceHistoryCursor,
+	ResourceHistoryPage,
+	ResourceKind,
+	ResourceRecord,
+	ResourceTally,
+	SessionResourceHistory,
+	SessionResources,
+} from "./resource";
+export {
+	AgentSettlement,
+	ContextUsage,
+	QueuedMessageContent,
+	QueueLane,
+	RemovedQueuedMessage,
+	SessionCompletion,
+	SessionInputState,
+	SessionQueueContent,
+	SessionQueueState,
+	SessionState,
+	SessionStateRecord,
+	SessionStats,
+	SessionSummary,
+} from "./session";
+export {
+	SkillCatalogEntry,
+	SkillDecision,
+	SlashCommandInfo,
+	SlashCommandSource,
+	SlashCommandSourceInfo,
+} from "./skill";
+export { DelegationRunStatus, SubagentResourceSummary } from "./subagent";
+export {
+	ImageContent,
+	TranscriptMessage,
+	WireCompactionSummary,
+	WireCustomMessage,
+} from "./transcript";
 export { Ack } from "./wire";

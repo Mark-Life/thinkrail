@@ -2,7 +2,6 @@ export type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 export type {
 	AssistantMessage,
 	AssistantMessageEvent,
-	ImageContent,
 	Message,
 	Model,
 	StopReason,
@@ -15,8 +14,13 @@ export type {
 } from "@earendil-works/pi-ai";
 
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ImageContent, Message, StopReason, TextContent } from "@earendil-works/pi-ai";
-import type { ProviderWarning, SlashCommandSourceInfo, ThinkingLevel, WireModel } from "./schema";
+import type {
+	AgentSettlement,
+	SessionState,
+	ThinkingLevel,
+	TranscriptMessage,
+	WireModel,
+} from "./schema";
 
 const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
 	"error",
@@ -36,34 +40,7 @@ export function sameModel(
 	return !!a && !!b && a.provider === b.provider && a.id === b.id;
 }
 
-export interface AgentSettlement {
-	stopReason: StopReason;
-	errorMessage?: string;
-}
-
 export type SessionInputKind = "tool-response" | "dialog";
-
-export type SessionInputState =
-	| { interactionId: string; kind: "tool-response"; toolCallId: string }
-	| {
-			interactionId: string;
-			kind: "dialog";
-			request: Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }>;
-	  };
-
-export type SessionCompletion =
-	| { completionId: string; outcome: "succeeded" | "interrupted" | "cancelled" }
-	| { completionId: string; outcome: "failed"; failure: "error" | "length" };
-
-export interface SessionState {
-	execution: "idle" | "running";
-	runId: string | null;
-	needsInput: SessionInputState | null;
-	completion: SessionCompletion | null;
-	completionUnread: boolean;
-	queuedCount: number;
-	backgroundWork: boolean;
-}
 
 export function isSessionWorking(state: SessionState): boolean {
 	return state.execution === "running" || state.backgroundWork === true;
@@ -139,123 +116,6 @@ export interface SessionEventPayload {
 	event: PiEvent;
 }
 
-export interface ContextUsage {
-	tokens: number | null;
-	contextWindow: number;
-	percent: number | null;
-}
-
-export interface SessionStats {
-	sessionId: string;
-	totalMessages: number;
-	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
-	cost: number;
-	contextUsage?: ContextUsage;
-}
-
-export type QueueLane = "steering" | "followUp";
-
-export interface SessionQueueState {
-	steering: readonly string[];
-	followUp: readonly string[];
-	hasImages?: true;
-}
-
-export interface QueuedMessageContent {
-	text: string;
-	images?: readonly ImageContent[];
-}
-
-export interface SessionQueueContent {
-	steering: readonly QueuedMessageContent[];
-	followUp: readonly QueuedMessageContent[];
-}
-
-export interface RemovedQueuedMessage {
-	removed: QueuedMessageContent | null;
-	queue: SessionQueueState;
-}
-
-export interface SessionSummary {
-	sessionId: string;
-	workspaceId: string;
-	title: string;
-	firstPrompt?: string;
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
-	isStreaming: boolean;
-	messageCount: number;
-	updatedAt: number;
-	live: boolean;
-	openTodos?: number;
-	lastSettlement?: AgentSettlement | null;
-	queue?: SessionQueueState;
-	state?: SessionState;
-}
-
-export type SlashCommandSource = "extension" | "prompt" | "skill";
-
-export interface SlashCommandInfo {
-	name: string;
-	description?: string;
-	source: SlashCommandSource;
-	sourceInfo: SlashCommandSourceInfo;
-}
-
-/** The tool call a dialog is about; absent when it is not tied to one (a command, startup, parallel calls). */
-interface ExtUiDialogAnchor {
-	toolCallId?: string;
-	/** The input that call will run with, as the asking host saw it — shown in full inside the prompt. */
-	toolInput?: Record<string, unknown>;
-}
-
-export type ExtUiRequest =
-	| ({
-			id: string;
-			sessionId: string;
-			kind: "select";
-			title: string;
-			options: string[];
-	  } & ExtUiDialogAnchor)
-	| ({
-			id: string;
-			sessionId: string;
-			kind: "confirm";
-			title: string;
-			message: string;
-	  } & ExtUiDialogAnchor)
-	| ({
-			id: string;
-			sessionId: string;
-			kind: "input";
-			title: string;
-			placeholder?: string;
-	  } & ExtUiDialogAnchor)
-	| ({
-			id: string;
-			sessionId: string;
-			kind: "editor";
-			title: string;
-			prefill?: string;
-	  } & ExtUiDialogAnchor)
-	| {
-			id: string;
-			sessionId: string;
-			kind: "notify";
-			message: string;
-			level: "info" | "warning" | "error";
-	  }
-	| { id: string; sessionId: string; kind: "setStatus"; key: string; text: string | null }
-	| { id: string; sessionId: string; kind: "setWidget"; key: string; content: string[] | null }
-	| { id: string; sessionId: string; kind: "setTitle"; title: string }
-	| { id: string; sessionId: string; kind: "notice"; notice: ProviderWarning }
-	| { id: string; sessionId: string; kind: "dismiss" };
-
-export interface ExtUiResponse {
-	id: string;
-	value: string | boolean | null;
-}
-
 export interface ToolResponsePendingDetails {
 	kind: "ack";
 }
@@ -264,24 +124,6 @@ export interface ToolResponseDetails {
 	toolCallId: string;
 	response: unknown;
 }
-
-export interface WireCustomMessage<T = unknown> {
-	role: "custom";
-	customType: string;
-	content: string | (TextContent | ImageContent)[];
-	display: boolean;
-	details?: T;
-	timestamp: number;
-}
-
-export interface WireCompactionSummary {
-	role: "compactionSummary";
-	summary: string;
-	tokensBefore: number;
-	timestamp: number;
-}
-
-export type TranscriptMessage = Message | WireCustomMessage | WireCompactionSummary;
 
 export interface WireBranchSummary {
 	role: "branchSummary";

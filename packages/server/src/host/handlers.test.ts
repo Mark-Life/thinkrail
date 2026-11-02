@@ -1303,31 +1303,34 @@ test("resource handlers scope every read/control to a registered workspace and a
 		await expect(
 			handleRequest("session.resources", { ...scope, sessionId: "unknown-parent" }, CTX),
 		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
-		for (const params of [
-			undefined,
-			null,
-			{},
-			{ ...scope, sessionId: "../secret" },
-			{ ...scope, sessionId: 123 },
-			{ ...scope, path: "/tmp/secret" },
-			{ ...scope, pid: 123 },
-		]) {
-			await expect(handleRequest("session.resources", params, CTX)).rejects.toThrow(
-				"Invalid resource ids",
-			);
+		for (const params of [undefined, null, {}, { ...scope, sessionId: 123 }]) {
+			await expect(handleRequest("session.resources", params, CTX)).rejects.toMatchObject({
+				code: "INVALID_PARAMS",
+			});
 		}
+		await expect(
+			handleRequest("session.resources", { ...scope, sessionId: "../secret" }, CTX),
+		).rejects.toThrow("Invalid resource ids");
+		expect(
+			await handleRequest("session.resources", { ...scope, path: "/tmp/secret" }, CTX),
+		).toEqual(await handleRequest("session.resources", scope, CTX));
 		for (const params of [
 			{ ...scope, kind: "terminal" },
 			{ ...scope, kind: "command", limit: 0 },
 			{ ...scope, kind: "command", limit: 1.5 },
-			{ ...scope, kind: "command", before: { at: 1, id: "../secret" } },
 			{ ...scope, kind: "command", before: { at: "1", id: "older" } },
-			{ ...scope, kind: "command", before: { at: 1, id: "older", path: "/tmp" } },
-			{ ...scope, kind: "subagent", path: "/tmp/secret" },
 		]) {
-			await expect(handleRequest("session.resourceHistory", params, CTX)).rejects.toThrow(
-				/Invalid resource (?:history|ids)/,
-			);
+			await expect(handleRequest("session.resourceHistory", params, CTX)).rejects.toMatchObject({
+				code: "INVALID_PARAMS",
+			});
+		}
+		for (const before of [
+			{ at: 1, id: "../secret" },
+			{ at: Number.POSITIVE_INFINITY, id: "older" },
+		]) {
+			await expect(
+				handleRequest("session.resourceHistory", { ...scope, kind: "command", before }, CTX),
+			).rejects.toThrow("Invalid resource history cursor");
 		}
 		for (const commandId of ["/tmp/output", "..", "C:\\output", "bad\u0000id"]) {
 			await expect(
@@ -1383,6 +1386,26 @@ test("a context window of the wrong shape is refused, and a number out of range 
 	await expect(
 		handleRequest("model.setContextWindow", { target: "available", contextWindow: 1 }, CTX),
 	).rejects.toThrow("Context window must be a whole number");
+});
+
+test("a tool response without a value is refused, and null is a value", async () => {
+	const target = { sessionId: "no-such-session", toolCallId: "call" };
+	await expect(handleRequest("session.respondToTool", target, CTX)).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+	});
+	await expect(
+		handleRequest("session.respondToTool", { ...target, response: null }, CTX),
+	).rejects.toThrow("Unknown session");
+});
+
+test("a prompt image that is not an image is refused before it reaches pi", async () => {
+	await expect(
+		handleRequest(
+			"session.prompt",
+			{ sessionId: "s", text: "hi", images: [{ type: "text", text: "x" }] },
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 });
 
 test("a custom endpoint draft of the wrong shape is refused, and a blank name keeps its own message", async () => {
