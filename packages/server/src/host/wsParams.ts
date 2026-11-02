@@ -1,20 +1,14 @@
 import { compile, type Validator } from "@earendil-works/pi-schema";
-import {
-	WS_METHOD_SCHEMAS as S,
-	type WsMethodName,
-	type WsParams,
-	type WsSchemaMethodMap,
-} from "@thinkrail/contracts";
+import { WS_METHOD_SCHEMAS, type WsMethodName, type WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 
 const MAX_REPORTED_ERRORS = 5;
 
-type ParamsValidators = {
-	[M in keyof WsSchemaMethodMap]: Validator<WsSchemaMethodMap[M]["params"]>;
-};
-type MethodValidators = { [M in WsMethodName]?: Validator<WsParams<M>> };
+const S = WS_METHOD_SCHEMAS;
 
-const SCHEMA_VALIDATORS: ParamsValidators = {
+type ParamsValidators = { [M in WsMethodName]: Validator<WsParams<M>> };
+
+const VALIDATORS: ParamsValidators = {
 	"project.open": compile(S["project.open"].params),
 	"project.list": compile(S["project.list"].params),
 	"project.close": compile(S["project.close"].params),
@@ -176,13 +170,43 @@ const SCHEMA_VALIDATORS: ParamsValidators = {
 	"mcp.reconnect": compile(S["mcp.reconnect"].params),
 	"mcp.readOutput": compile(S["mcp.readOutput"].params),
 	"mcp.readLog": compile(S["mcp.readLog"].params),
+	"packages.list": compile(S["packages.list"].params),
+	"packages.install": compile(S["packages.install"].params),
+	"packages.remove": compile(S["packages.remove"].params),
+	"packages.update": compile(S["packages.update"].params),
+	"packages.checkUpdates": compile(S["packages.checkUpdates"].params),
+	"packages.setResourceEnabled": compile(S["packages.setResourceEnabled"].params),
+	"packages.reveal": compile(S["packages.reveal"].params),
+	"fonts.list": compile(S["fonts.list"].params),
+	"fonts.installed": compile(S["fonts.installed"].params),
+	"fonts.reveal": compile(S["fonts.reveal"].params),
+	"speech.install": compile(S["speech.install"].params),
+	"speech.cancelInstall": compile(S["speech.cancelInstall"].params),
+	"speech.remove": compile(S["speech.remove"].params),
+	"feedback.respond": compile(S["feedback.respond"].params),
+	"feedback.survey": compile(S["feedback.survey"].params),
+	"feedback.survey.submit": compile(S["feedback.survey.submit"].params),
+	"themes.list": compile(S["themes.list"].params),
+	"themes.reveal": compile(S["themes.reveal"].params),
+	"locales.list": compile(S["locales.list"].params),
+	"locales.reveal": compile(S["locales.reveal"].params),
+	"environment.get": compile(S["environment.get"].params),
+	"environment.update": compile(S["environment.update"].params),
+	"skill.list": compile(S["skill.list"].params),
+	"skills.state": compile(S["skills.state"].params),
+	"settings.update": compile(S["settings.update"].params),
+	"host.update": compile(S["host.update"].params),
+	"history.search": compile(S["history.search"].params),
+	"search.query": compile(S["search.query"].params),
+	"search.preview": compile(S["search.preview"].params),
+	"extension.list": compile(S["extension.list"].params),
+	"dialog.selectDirectory": compile(S["dialog.selectDirectory"].params),
+	"client.reportError": compile(S["client.reportError"].params),
 };
-const VALIDATORS: MethodValidators = SCHEMA_VALIDATORS;
 
 /** Checks a request's params before its handler runs. @throws `CodedError` `INVALID_PARAMS`. */
 export function parseWsParams<M extends WsMethodName>(method: M, raw: unknown): WsParams<M> {
-	const validator: MethodValidators[M] = VALIDATORS[method];
-	if (!validator) return raw as WsParams<M>;
+	const validator: ParamsValidators[M] = VALIDATORS[method];
 	if (validator.check(raw)) return raw;
 	const reasons = validator
 		.errors(raw)

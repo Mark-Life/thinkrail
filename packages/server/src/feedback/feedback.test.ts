@@ -305,20 +305,6 @@ test("reconnect redelivers only to the claimed client and releases a failed rede
 	expect(attempts).toEqual(["client-a", "client-a", "client-a", "client-b"]);
 });
 
-test("invalid responses do not mutate state or release the claim", () => {
-	const delivered: string[] = [];
-	setFeedbackPublisher((clientKey) => {
-		delivered.push(clientKey);
-		return true;
-	});
-	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
-
-	expect(() => respondToInvitation("later" as "postpone")).toThrow("Invalid invitation response");
-	recordAcceptedMessage("client-b");
-	expect(delivered).toEqual(["client-a"]);
-	expect(stored()).toEqual(feedback({ acceptedMessages: 21, lastInvitedAt: expect.any(Number) }));
-});
-
 test("an old feedback file without survey completion still counts", () => {
 	writeFileSync(
 		join(directory, "feedback.json"),

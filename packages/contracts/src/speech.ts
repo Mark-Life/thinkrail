@@ -1,5 +1,6 @@
-export const SPEECH_MODELS = ["multilingual", "english"] as const;
-export type SpeechModel = (typeof SPEECH_MODELS)[number];
+import type { SpeechModel } from "./schema";
+
+export const SPEECH_MODELS = ["multilingual", "english"] as const satisfies readonly SpeechModel[];
 
 export function isSpeechModel(value: unknown): value is SpeechModel {
 	return SPEECH_MODELS.some((model) => model === value);

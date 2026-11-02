@@ -59,7 +59,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   labels), the optional shell-local desktop capabilities);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
-  `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
+  `match` (`MatchTier` is the `search.*` schema's, which `MATCH_TIER` names) (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
   bounded subsequence of at least three characters > `content` for a body or message match, every term
   required, a quoted `MatchTerm` (`literal`) matched contiguously only, the ranges always indexing the
   original text, a secondary field never above substring and, at an equal tier, never chosen over a primary
@@ -154,8 +154,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
   `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*`,
   `provider.*`, `session.*`, `subagent.*`, `backgroundCommand.*`, `workspace.*`, `editor.*`, `terminal.*`, `git.*`,
-  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*`, `template.*` and `mcp.*` entities, and the methods of these namespaces and
-  `project.*`. The entries below describe these
+  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*`, `template.*`, `mcp.*`, `packages.*`, `fonts.*`,
+  `speech.*`, `feedback.*`, `themes.*`, `locales.*`, `environment.*`, `settings.*`, `history.*`, `search.*`, `extension.*`
+  and `client.*` entities,
+  and every WS method. The entries below describe these
   types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
@@ -584,7 +586,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`transcript` / `file` /
   `spec` / `plan` — chats and workspaces are the palette's own rows), **`SearchContext`** (the active workspace + context project the
-  host turns into its one file/spec root), **`SearchHit`** (a union per kind over **`SearchHitBase`** — a stable
+  host turns into its one file/spec root), **`SearchHit`** (a union per kind over shared base fields — a stable
   `kind:id[:locator]` id, title / subtitle, the shared matcher's `MatchTier` + `score` and highlight `ranges`
   so the browser merges host hits with its local ones by the same rule, and the `projectId` / `workspaceId`
   every hit opens in — with each kind's own required target: a file's root-relative `path` and byte `size`
@@ -873,7 +875,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers, others? }` → ack;
   `language` echoes `AppSurvey.language`; `answers` hold only picked choices (as shown), ratings and open text,
   while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
-  one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
+  one call when the user presses Send, whatever the analytics setting; dispatch refuses a wrong shape with `INVALID_PARAMS`; a value rule fails with `SURVEY_INVALID`, and it also fails with
   `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
   and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
   invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
@@ -966,7 +968,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
-  The `WsMethodMap` typed request/result map +
+  The `WsMethodMap` typed request/result map, derived whole from `WS_METHOD_SCHEMAS` +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
   in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
@@ -1269,7 +1271,7 @@ and what it loaded, never pi's own types.
   Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
   (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
   `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
-  `AppConfig` key.
+  `AppConfig` key. `SpeechModel` and the method schemas live in `schema/speech.ts`; `SPEECH_MODELS` lists its values.
 - **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
   dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
   request, which cannot absorb 20 ms audio frames.

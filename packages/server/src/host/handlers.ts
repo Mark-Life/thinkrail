@@ -18,8 +18,8 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
-	isSpeechModel,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHODS,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -1050,7 +1050,6 @@ const handlers: WsHandlers = {
 	"fonts.installed": () => listInstalledFonts(),
 	"fonts.reveal": () => revealDataFolder(fontsDir()),
 	"speech.install": (p) => {
-		if (!isSpeechModel(p.model)) throw new Error("unknown voice model");
 		installSpeech(p.model);
 		return { ok: true };
 	},
@@ -1393,9 +1392,7 @@ const handlers: WsHandlers = {
 		const survey = currentInAppSurvey();
 		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
 		const language =
-			typeof params?.language === "string" && params.language.length <= 35
-				? params.language
-				: undefined;
+			params.language !== undefined && params.language.length <= 35 ? params.language : undefined;
 		return { survey: localizeSurvey(survey, language) };
 	},
 	"feedback.survey.submit": async (params) => {
@@ -1425,7 +1422,7 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"client.reportError": (params) => {
-		reportClientError(typeof params === "object" && params !== null ? params : {});
+		reportClientError(params);
 		return { ok: true } as const;
 	},
 	"history.search": (p) => {
@@ -1558,6 +1555,11 @@ export function requestErrorReport(method: string): ErrorReport {
 		handled: true,
 		...(isWsMethod(method) ? { requestMethod: method } : {}),
 	};
+}
+
+/** A refused `client.reportError` is not reported again: a bad report must not raise another report. */
+export function reportsRequestFailure(method: string): boolean {
+	return method !== WS_METHODS.clientReportError;
 }
 
 function supportsBranchStatus(protocolVersion: number | undefined): boolean {

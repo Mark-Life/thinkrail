@@ -83,7 +83,6 @@ export type {
 	MatchRange,
 	MatchResult,
 	MatchTerm,
-	MatchTier,
 	PreparedContent,
 } from "./match";
 export {

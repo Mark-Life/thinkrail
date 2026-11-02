@@ -66,11 +66,6 @@ test("a missing or non-directory agent dir is named", () => {
 	});
 });
 
-test("a malformed record is a thrown request error, not a validation result", () => {
-	expect(() => updateHostEnvironment({ vars: [{ name: 1, value: "x" }] })).toThrow();
-	expect(() => updateHostEnvironment(null)).toThrow();
-});
-
 test("a saved update is private on disk, drops blank rows and requires a restart", () => {
 	const result = updateHostEnvironment({
 		agentDir: ` ${agentDir} `,

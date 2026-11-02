@@ -263,8 +263,6 @@ export function respondToInvitation(action: SurveyInvitationResponse): void {
 		case "never":
 			next = { ...current, dismissed: true };
 			break;
-		default:
-			throw new Error("Invalid invitation response");
 	}
 	saveState(next);
 	claimedClient = null;

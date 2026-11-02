@@ -1,49 +1,23 @@
 import type {
-	AppConfig,
-	AppConfigUpdate,
-	AppSurvey,
 	BackgroundCommandCompletionDetails,
 	CompletionDelivery,
-	ExtensionCatalogEntry,
-	HistoryScope,
-	HistorySearchResult,
-	HostEnvironment,
-	HostEnvironmentStatus,
-	HostEnvironmentUpdateResult,
-	InstalledFontsResult,
-	LocalLocalesSnapshot,
-	PiPackageResourceType,
-	PiPackageScope,
-	PiPackageSummary,
-	PiPackagesCatalog,
 	ReviewFixDetails,
-	SearchContext,
-	SearchKind,
-	SearchPreviewResult,
-	SearchPreviewTarget,
-	SearchQueryResult,
 	SubagentCompletionDetails,
-	SurveyInvitationResponse,
-	SurveySubmitParams,
-	UserFontsSnapshot,
-	UserThemesSnapshot,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
 import type { ToolResponseDetails, ToolResponsePendingDetails } from "./piProtocol";
 import type {
-	Ack,
+	AppConfig,
 	McpStatusSnapshot,
 	ModelContextSetting,
 	Project,
 	SessionSummary,
-	SkillCatalogEntry,
-	SlashCommandInfo,
 	TerminalTabInfo,
 	WireCustomMessage,
 	Workspace,
 	WsSchemaMethodMap,
 } from "./schema";
-import type { SpeechErrorCode, SpeechModel, SpeechStatus } from "./speech";
+import type { SpeechErrorCode, SpeechStatus } from "./speech";
 
 export interface TerminalDataPush {
 	id: string;
@@ -535,16 +509,6 @@ export function customMessageText(content: WireCustomMessage["content"]): string
 		.join("");
 }
 
-export type ClientErrorKind = "render" | "window" | "rejection";
-
-export interface ClientErrorReport {
-	kind: ClientErrorKind;
-	type: string;
-	stack?: string;
-	boundary?: string;
-	chunkIds?: Record<string, string>;
-}
-
 export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
 
 export function isModelContextWindow(value: unknown): value is number {
@@ -569,78 +533,7 @@ export function isSharedModelContextTarget(
 	return setting.override === null || isModelContextWindow(setting.override);
 }
 
-export interface WsMethodMap extends WsSchemaMethodMap {
-	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
-	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
-	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
-	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
-	"packages.list": { params: { workspaceId?: string }; result: PiPackagesCatalog };
-	"packages.install": {
-		params: { source: string; scope: PiPackageScope; workspaceId?: string };
-		result: PiPackageSummary;
-	};
-	"packages.remove": {
-		params: { source: string; scope: PiPackageScope; workspaceId?: string };
-		result: Ack;
-	};
-	"packages.update": {
-		params: { packages: { source: string; scope: PiPackageScope }[]; workspaceId?: string };
-		result: Ack;
-	};
-	"packages.checkUpdates": {
-		params: { workspaceId?: string; force?: boolean };
-		result: { source: string; scope: PiPackageScope }[];
-	};
-	"packages.setResourceEnabled": {
-		params: {
-			path: string;
-			type: PiPackageResourceType;
-			scope: PiPackageScope;
-			enabled: boolean;
-			workspaceId?: string;
-		};
-		result: Ack;
-	};
-	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
-	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
-	"locales.reveal": { params: Record<string, never>; result: Ack };
-	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
-	"themes.reveal": { params: Record<string, never>; result: Ack };
-	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
-	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
-	"fonts.reveal": { params: Record<string, never>; result: Ack };
-	"speech.install": { params: { model: SpeechModel }; result: Ack };
-	"speech.cancelInstall": { params: Record<string, never>; result: Ack };
-	"speech.remove": { params: Record<string, never>; result: Ack };
-	"host.update": { params: Record<string, never>; result: Ack };
-	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
-	"environment.get": { params: Record<string, never>; result: HostEnvironmentStatus };
-	"environment.update": {
-		params: { environment: HostEnvironment };
-		result: HostEnvironmentUpdateResult;
-	};
-	"feedback.respond": { params: { action: SurveyInvitationResponse }; result: Ack };
-	"feedback.survey": {
-		params: { language?: string };
-		result: { survey: AppSurvey | null };
-	};
-	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };
-	"client.reportError": { params: ClientErrorReport; result: Ack };
-	"history.search": {
-		params: { query: string; scope: HistoryScope; limit?: number };
-		result: HistorySearchResult;
-	};
-	"search.query": {
-		params: {
-			query: string;
-			kinds?: SearchKind[];
-			context: SearchContext;
-			limit?: number;
-		};
-		result: SearchQueryResult;
-	};
-	"search.preview": { params: SearchPreviewTarget; result: SearchPreviewResult };
-}
+export interface WsMethodMap extends WsSchemaMethodMap {}
 
 /** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
 export type McpStatusPayload = McpStatusSnapshot;
