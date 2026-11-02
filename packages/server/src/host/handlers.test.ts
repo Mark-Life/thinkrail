@@ -1339,6 +1339,24 @@ test("review.commentAdd refuses a selector of an unknown kind before its handler
 	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 });
 
+test("review.commentAdd stores a wire comment as the user's, whatever provenance it claims", async () => {
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const workspace = rows[0];
+	if (!workspace) throw new Error("expected a workspace");
+	const claimed = {
+		workspaceId: workspace.id,
+		kind: "review",
+		anchor: null,
+		body: "a claimed finding",
+		author: "agent",
+		origin: { todoId: "t", sessionId: "s", reviewedSha: "sha1" },
+	} as const;
+	const comment = await handleRequest("review.commentAdd", claimed, CTX);
+	expect(comment).toMatchObject({ body: "a claimed finding" });
+	expect(comment).not.toHaveProperty("author");
+	expect(comment).not.toHaveProperty("origin");
+});
+
 test("the fs.readDir reply schema checks nodes at every depth", () => {
 	const validator = compile(WS_METHOD_SCHEMAS["fs.readDir"].result);
 	const dir = { path: "a", name: "a", kind: "dir" };

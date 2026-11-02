@@ -71,7 +71,8 @@ re-anchoring, and package rendering.
   dismissed); **`author`** — the human (default, absent) or `"agent"`: the plan's reviewer agent files
   findings through the same `addComment` (worktree-side anchors), badged in the panel and picked up by
   the same send machinery (the TODO fix package rides `buildSendPackage`, see [[submodule-server-todos]]
-  §agent reviewer). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
+  §agent reviewer). `review.commentAdd` passes named fields only, so a wire comment is always the human's: `author`
+  and `origin` come from the host. The wire (`review.commentUpdate`) may only land the terminal manual outcomes
   (resolved/dismissed, from draft or sent); `draft`↔`sent` moves are owned exclusively by the send
   path (`markCommentsSent`/`rollbackSend`) — a client that could un-send a comment could rewrite or
   delete a remark whose id an agent chat already quotes;
