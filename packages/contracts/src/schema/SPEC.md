@@ -17,8 +17,10 @@ and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to it
 
 ## Boundary
 
-- **Public surface (`index.ts`):** the entity schemas with their types, `Ack`, `WS_METHOD_SCHEMAS`,
-  `WsSchemaMethodMap`. `wireObj`, `partialWireObj` and `NoParams` stay inside this directory.
+- **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
+  types, the `*_METHODS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`. From `wire.ts` only `Ack`: `wireObj`,
+  `partialWireObj`, `readonlyArr`, `piOwned` and `NoParams` stay inside this directory. Schema values stay public because
+  [[submodule-server-host]] compiles them; web JS stays free of them by tree shaking.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
 - **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
   a schema here, because each side owns the check at its own edge ([[submodule-server-host]] for requests).

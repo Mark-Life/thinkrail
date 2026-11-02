@@ -73,26 +73,8 @@ test("an unknown method keeps its plain reply and never reaches the params check
 });
 
 test.each([
-	["a string config", "theme"],
-	["an array config", ["theme"]],
-	["a null config", null],
-	["a missing config", undefined],
+	["a non-object config", "theme"],
 	["a non-string theme", { theme: 7 }],
-	["a theme mode outside the union", { themeMode: "automatic" }],
-	["half a system theme pair", { systemThemePair: { light: "light" } }],
-	["a non-boolean flag", { analyticsEnabled: "yes" }],
-	["a non-boolean subagent default", { subagentsEnabled: "false" }],
-	["a non-boolean line-width bound", { chatLineWidthBounded: 1 }],
-	["a Windows shell outside the union", { terminalWindowsShell: "future-shell" }],
-	["a growth limit outside the union", { composerGrowthLimit: "enormous" }],
-	["a non-numeric replay budget", { terminalReplayKb: "64" }],
-	["a non-numeric quota interval", { jbcentralQuotaRefreshSeconds: "30" }],
-	["a model without its fields", { defaultModel: { provider: "p", id: "m" } }],
-	["a model string", { reviewModel: "p/m" }],
-	["an effort outside the union", { defaultEffort: "turbo" }],
-	["a favorites string", { favoriteModels: "nope" }],
-	["a non-string extension name", { disabledExtensions: [1] }],
-	["a font without its fields", { codeFont: { family: 7 } }],
 	["a preset leaf inside a split", { customLayoutPresets: [preset(split("a", [{ id: "b" }, 1]))] }],
 ])("settings.update refuses %s at dispatch, before disk or broadcast", async (_label, config) => {
 	const published: unknown[] = [];

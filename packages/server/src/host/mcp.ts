@@ -9,6 +9,7 @@ import type {
 	McpServerScope,
 	Project,
 	Workspace,
+	WsParams,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -190,9 +191,7 @@ function renderedEntry(
 	});
 }
 
-export function mcpUpdate(
-	params: { workspaceId: string; name: string; entry: McpServerEntryInput } & McpRenderedTarget,
-): Promise<McpListResult> {
+export function mcpUpdate(params: WsParams<"mcp.update">): Promise<McpListResult> {
 	return renderedEntry(params, (options, onDisk, project) => {
 		const fingerprint = writeMcpServerEntry({ ...options, entry: params.entry, mode: "update" });
 		if (
@@ -204,9 +203,7 @@ export function mcpUpdate(
 	});
 }
 
-export function mcpRemove(
-	params: { workspaceId: string; name: string } & McpRenderedTarget,
-): Promise<McpListResult> {
+export function mcpRemove(params: WsParams<"mcp.remove">): Promise<McpListResult> {
 	return renderedEntry(params, (options) => removeMcpServerEntry(options));
 }
 

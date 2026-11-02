@@ -25,6 +25,8 @@ import type {
 	UserFontFileErrorCode,
 } from "./schema";
 
+type SameUnion<A extends B, B extends C, C = A> = A;
+
 export const FIRST_PROMPT_MAX_LENGTH = 200;
 
 const SKILL_BLOCK = /^\s*<skill name="([^"]+)"[^>]*>[\s\S]*?<\/skill>\s*/;
@@ -438,7 +440,9 @@ export type ThemeId = string;
 
 export const THEME_MODES = ["fixed", "system"] as const satisfies readonly ThemeMode[];
 
-export function isThemeMode(value: unknown): value is ThemeMode {
+export function isThemeMode(
+	value: unknown,
+): value is SameUnion<ThemeMode, (typeof THEME_MODES)[number]> {
 	return THEME_MODES.some((mode) => mode === value);
 }
 
@@ -480,7 +484,9 @@ export function isFontFamilyName(value: unknown): value is string {
 	);
 }
 
-export function isFontRole(value: unknown): value is FontRole {
+export function isFontRole(
+	value: unknown,
+): value is SameUnion<FontRole, (typeof FONT_ROLES)[number]> {
 	return FONT_ROLES.some((role) => role === value);
 }
 
@@ -534,7 +540,9 @@ export const COMPOSER_GROWTH_LIMITS = [
 	"half-chat",
 ] as const satisfies readonly ComposerGrowthLimit[];
 
-export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLimit {
+export function isComposerGrowthLimit(
+	value: unknown,
+): value is SameUnion<ComposerGrowthLimit, (typeof COMPOSER_GROWTH_LIMITS)[number]> {
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
@@ -568,7 +576,9 @@ export const TERMINAL_WINDOWS_SHELLS = [
 	"cmd",
 ] as const satisfies readonly TerminalWindowsShell[];
 
-export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
+export function isTerminalWindowsShell(
+	value: unknown,
+): value is SameUnion<TerminalWindowsShell, (typeof TERMINAL_WINDOWS_SHELLS)[number]> {
 	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
 }
 

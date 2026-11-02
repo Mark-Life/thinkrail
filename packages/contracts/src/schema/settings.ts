@@ -97,13 +97,8 @@ export const LayoutPresetSideRegion = wireObj({
 });
 export type LayoutPresetSideRegion = Static<typeof LayoutPresetSideRegion>;
 
-export const LayoutPresetBottomGroup = wireObj({
-	id: str(),
-	weight: num(),
-	folded: bool(),
-	tools: arr(LayoutToolId),
-});
-export type LayoutPresetBottomGroup = Static<typeof LayoutPresetBottomGroup>;
+export const LayoutPresetBottomGroup = LayoutPresetSideGroup;
+export type LayoutPresetBottomGroup = LayoutPresetSideGroup;
 
 export const LayoutPresetBottomRegion = wireObj({
 	visible: bool(),
