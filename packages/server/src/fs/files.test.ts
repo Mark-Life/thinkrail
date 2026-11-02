@@ -16,7 +16,16 @@ beforeEach(() => {
 	writeFileSync(join(root, "src", "auth", "login.ts"), "export {};\n");
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
-		JSON.stringify([{ id: "w1", projectId: "p1", name: "w1", worktreePath: root, createdAt: 1 }]),
+		JSON.stringify([
+			{
+				id: "w1",
+				projectId: "p1",
+				name: "w1",
+				branch: "main",
+				baseBranch: "main",
+				worktreePath: root,
+			},
+		]),
 	);
 });
 

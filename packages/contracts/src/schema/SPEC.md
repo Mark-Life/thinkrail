@@ -31,13 +31,17 @@ that map.
 ## Rules
 
 - **Wire objects are open.** `wireObj` allows unknown fields, so a UI and a host of different versions keep
-  working together. `obj()` without `open` is closed, so it is not used for wire shapes.
-- **A `Partial` wire type uses `partialWireObj`.** `AppConfigUpdate` takes the fields of `AppConfig`, so a setting is
-  declared once. The update stays open here; `updateConfig` owns the closed key set.
+  working together. `obj()` without `open` is closed, so it is not used for wire shapes, except `FontFamilyRef`:
+  each branch holds one key, and a ref with both keys would read as two fonts.
+- **A `Partial` wire type uses `partialWireObj`.** `AppConfigUpdate` and `PartialAppConfig` take the fields of `AppConfig`,
+  so a setting is declared once. The update stays open here; `updateConfig` owns the closed key set. `PartialAppConfig`
+  is what a reader of a stored or older config checks field by field.
 - **One file per method namespace.** A namespace file exports its entity schemas, a `*_METHODS` record and, if it owns
   a push channel, a `*_CHANNELS` record; `methods.ts` and `channels.ts` merge the records. An entity several namespaces share gets its own file.
-- **Schemas check shape only.** A rule that needs host state or gives the user a specific message, such as the
-  URL rules of `project.clone`, stays with its handler. A handler does not check the shape again.
+- **Schemas check shape and fixed bounds.** A setting's range (`LineWidth`, `CodeFontSize`, `SettleIdleDays`, ...), a
+  font family name's pattern and a fallback list's size live in the schema, with the constant that names them. A rule
+  that needs host state, crosses fields, or gives the user a specific message, such as the URL rules of `project.clone`
+  or a canonical locale tag, stays with its handler. A handler does not check the shape again.
 - **A wire change is a schema edit.** It shows in the diff under this directory: decide on a `PROTOCOL_VERSION`
   bump in the same change.
 - **A `pi` union is listed by value.** `ThinkingLevel` and `WireModel.input` copy pi's values, with no type
@@ -82,4 +86,5 @@ that map.
 - **A reply is a union on `ok`.** A failure always carries `error`. Its `errorCode` is any string: a newer host may send a
   code this client has no name for. `WS_ERROR_CODES` lists the names, and the client reads a code outside it as no code.
   `INVALID_REPLY` is never sent: the client mints it.
+- **One object check.** `checks.ts` exports `JsonObject`, for a reader that checks fields one by one.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

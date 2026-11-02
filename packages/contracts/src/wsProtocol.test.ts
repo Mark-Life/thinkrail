@@ -5,9 +5,8 @@ import {
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
-	SETTLE_IDLE_DAYS,
-	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
+import { SETTLE_IDLE_DAYS, SUBAGENT_MAX_CONCURRENT } from "./schema";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
@@ -254,6 +253,10 @@ test("voice input is pinned to v107", () => {
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
 	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
+});
+
+test("the welcome's config read notice advances the protocol to v108", () => {
+	expect(PROTOCOL_VERSION).toBe(108);
 });
 
 test("user-selectable fonts are pinned to v102", () => {

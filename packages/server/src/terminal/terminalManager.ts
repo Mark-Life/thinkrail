@@ -5,7 +5,7 @@ import type {
 	TerminalExitPush,
 	TerminalTabInfo,
 } from "@thinkrail/contracts";
-import { TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import {
 	loadConfig,
@@ -81,11 +81,7 @@ const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
 
 function replayBudgetChars(): number {
-	const configured = loadConfig().terminalReplayKb;
-	const kb = Number.isFinite(configured)
-		? Math.min(Math.max(Math.trunc(configured), TERMINAL_REPLAY_KB.min), TERMINAL_REPLAY_KB.max)
-		: TERMINAL_REPLAY_KB.default;
-	return kb * 1024;
+	return loadConfig().terminalReplayKb * 1024;
 }
 
 function tabsFor(workspaceId: string): TabRecord[] {
@@ -406,13 +402,12 @@ export function persistTerminalSessions(): void {
 
 export function reviveTerminalSessions(): void {
 	for (const [workspaceId, tabs] of Object.entries(loadTerminalSessions())) {
-		if (!Array.isArray(tabs)) continue;
 		const restored: TabRecord[] = [];
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
-			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
+			if (!isValidTerminalTabKey(tab.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
 			restored.push({ tabKey: tab.tabKey, title });
-			if (typeof tab.recorded === "string" && tab.recorded !== "") {
+			if (tab.recorded) {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}
 		}

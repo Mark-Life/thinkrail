@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
-	CODE_FONT_SIZE,
 	clampToCodePoints,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
@@ -23,7 +22,6 @@ import {
 	isLocalePreference,
 	isPlanReviewResult,
 	isRetriedAttempt,
-	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	normalizeFontSettings,
 	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -33,7 +31,7 @@ import {
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 } from "./domain";
-import type { ResourceRecord } from "./schema";
+import { CODE_FONT_SIZE, JBCENTRAL_QUOTA_REFRESH_SECONDS, type ResourceRecord } from "./schema";
 
 describe("isRetriedAttempt", () => {
 	const failed = { role: "assistant", stopReason: "error" };

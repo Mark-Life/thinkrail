@@ -11,22 +11,19 @@ import {
 	resetClientErrorReportsForTests,
 	supportsClientErrorReports,
 } from "./errorReports";
-import type { WsTransport } from "./transport";
+import { type FakeRequest, fakeTransport } from "./transportFixtures.test";
 import * as wireTransport from "./wireTransport";
 
-const requests: Array<{ method: string; params: unknown }> = [];
+const requests: FakeRequest[] = [];
 let spy: ReturnType<typeof spyOn> | null = null;
 
 beforeEach(() => {
 	requests.length = 0;
 	resetClientErrorReportsForTests();
 	useAppStore.setState({ protocolVersion: null });
-	spy = spyOn(wireTransport, "getTransport").mockReturnValue({
-		request: (method: string, params: unknown) => {
-			requests.push({ method, params });
-			return Promise.resolve({ ok: true });
-		},
-	} as unknown as WsTransport);
+	spy = spyOn(wireTransport, "getTransport").mockReturnValue(
+		fakeTransport(() => ({ ok: true }), requests),
+	);
 });
 
 afterEach(() => {
@@ -73,7 +70,7 @@ test("a report carries the error's class, stack and boundary, never its message"
 	expect(clientErrorReport("render", error, "chat")).toEqual({
 		kind: "render",
 		type: "TypeError",
-		stack: (error.stack as string).replace("bad", ""),
+		stack: (error.stack ?? "").replace("bad", ""),
 		boundary: "chat",
 	});
 	expect(clientErrorReport("rejection", { secret: true })).toEqual({
@@ -127,7 +124,7 @@ test("a page sends at most 50 reports", () => {
 
 test("window errors and unhandled rejections are forwarded until uninstalled", () => {
 	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
-	const target = new EventTarget() as unknown as Window;
+	const target = new EventTarget();
 	const uninstall = installClientErrorReporting(target);
 	const error = Object.assign(new Event("error"), {
 		error: new RangeError("boom"),

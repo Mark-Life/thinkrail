@@ -8,18 +8,15 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { compile, lit, obj } from "@earendil-works/pi-schema";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
-import {
-	type AcquisitionRecord,
-	hasExactKeys,
-	isRecord,
-	parseAcquisitionRecord,
-} from "./attributionProtocol";
+import { type AcquisitionRecord, parseAcquisitionRecord } from "./attributionProtocol";
 
 const FILE_NAME = "attribution.json";
 
 const ATTEMPT_RECORD = { browserClaimAttempted: true } as const;
 type AttemptRecord = typeof ATTEMPT_RECORD;
+const AttemptFile = compile(obj({ browserClaimAttempted: lit(true) }));
 
 function replaceRecordIn(
 	directory: string,
@@ -54,13 +51,7 @@ export function readAcquisitionIn(
 	const target = join(directory, FILE_NAME);
 	try {
 		const value: unknown = JSON.parse(readFileSync(target, "utf8"));
-		if (
-			isRecord(value) &&
-			hasExactKeys(value, ["browserClaimAttempted"]) &&
-			value.browserClaimAttempted === true
-		) {
-			return undefined;
-		}
+		if (AttemptFile.check(value)) return undefined;
 		const record = parseAcquisitionRecord(value, now);
 		if (record) return record;
 	} catch {

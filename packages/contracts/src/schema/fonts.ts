@@ -9,6 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
+import { FontFamilyName } from "./settings";
 import { Ack, NoParams, NoPayload, wireObj } from "./wire";
 
 export const USER_FONT_FILE_ERROR_CODES = [
@@ -23,9 +24,9 @@ export type UserFontFileErrorCode = Static<typeof UserFontFileErrorCode>;
 
 /** What a user font file declares in its own tables. */
 export const UserFontFace = wireObj({
-	family: str(),
+	family: FontFamilyName,
 	style: oneOf(["normal", "italic"]),
-	/** One value for a static face; the `wght` axis range for a variable one. */
+	/** One value for a static face; the `wght` axis range for a variable one. `parseUserFontFile` refuses `min > max`. */
 	weight: wireObj({ min: num(), max: num() }),
 	monospace: bool(),
 });

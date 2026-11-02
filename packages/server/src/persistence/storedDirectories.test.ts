@@ -66,15 +66,10 @@ test("the next save persists the healed spelling", () => {
 
 test("a value that is not an absolute path on this host is left as stored", () => {
 	const foreign = process.platform === "win32" ? "relative/repo" : "C:\\Users\\me\\repo";
-	writeFileSync(
-		join(root, "projects.json"),
-		JSON.stringify([project(foreign), { id: "no-path", name: "x", slug: "x", lastOpened: 1 }]),
-	);
+	writeFileSync(join(root, "projects.json"), JSON.stringify([project(foreign)]));
 	writeFileSync(join(root, "workspaces.json"), JSON.stringify([workspace(foreign)]));
 
-	const [stored, pathless] = loadProjects();
-	expect(stored?.path).toBe(foreign);
-	expect(pathless?.path).toBeUndefined();
+	expect(loadProjects().map((stored) => stored.path)).toEqual([foreign]);
 	expect(loadWorkspaces()[0]?.worktreePath).toBe(foreign);
 });
 

@@ -130,6 +130,30 @@ test("settings.update takes a nested layout preset and clears overrides with nul
 	expect(cleared).not.toHaveProperty("defaultEffort");
 });
 
+test("settings.update refuses a value outside its range before disk or broadcast", async () => {
+	const published: unknown[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	for (const config of [
+		{ chatLineWidth: 39 },
+		{ fileLineWidth: 80.5 },
+		{ terminalReplayKb: 1025 },
+		{ subagentMaxConcurrent: 17 },
+		{ jbcentralQuotaRefreshSeconds: 0 },
+		{ settleIdleDays: 2.5 },
+		{ codeFontSize: 9 },
+		{ fontWeightOffset: 25 },
+		{ codeFont: { family: { name: 'Fira"; x' }, fallbacks: [] } },
+		{ codeFont: { family: { name: "Fira", builtin: "code" }, fallbacks: [] } },
+		{ interfaceFont: { family: null, fallbacks: [{ name: "A" }, { name: "A" }] } },
+	]) {
+		await expect(handleRequest("settings.update", { config }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
+	}
+	expect(published).toEqual([]);
+	expect(existsSync(configPath())).toBe(false);
+});
+
 test("environment.update refuses a malformed record at dispatch", async () => {
 	for (const environment of [null, { vars: [{ name: 1, value: "x" }] }, { vars: "x" }]) {
 		const refusal = handleRequest("environment.update", { environment }, CTX);

@@ -1,37 +1,44 @@
-import type {
-	AppConfig,
-	BackgroundCommandSummary,
-	ComposerGrowthLimit,
-	DelegationRunStatus,
-	FontChoice,
-	FontFamilyRef,
-	FontRole,
-	JbcentralStatus,
-	PlanReviewVerdict,
-	ResourceHistoryCursor,
-	ResourceRecord,
-	ResourceTally,
-	ReviewCommentKind,
-	ReviewReadingStep,
-	SurveyRatingScale,
-	SystemThemePair,
-	TerminalWindowsShell,
-	ThemeMode,
-	ThemePreference,
-	ThinkingLevel,
-	UserFontFace,
-	UserFontFile,
-	UserFontFileErrorCode,
-} from "./schema";
+import { compile } from "@earendil-works/pi-schema";
+import { keepValidFields } from "./fieldwise";
 import {
-	COMPOSER_GROWTH_LIMITS,
+	type AppConfig,
+	type BackgroundCommandSummary,
+	CODE_FONT_SIZE,
+	CodeFontSize,
 	DELEGATION_RUN_STATUSES,
-	FONT_ROLES,
+	type DelegationRunStatus,
+	FONT_WEIGHT_OFFSET,
+	FontChoice,
+	FontFamilyName,
+	FontFamilyRef,
+	FontWeightOffset,
+	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	JbcentralQuotaRefreshSeconds,
+	type JbcentralStatus,
+	JsonObject,
+	LINE_WIDTH_COLUMNS,
+	LineWidth,
+	PartialAppConfig,
 	PLAN_REVIEW_VERDICTS,
+	type PlanReviewVerdict,
 	REVIEW_COMMENT_KINDS,
-	TERMINAL_WINDOWS_SHELLS,
+	type ResourceHistoryCursor,
+	type ResourceRecord,
+	type ResourceTally,
+	type ReviewCommentKind,
+	type ReviewReadingStep,
+	SETTLE_IDLE_DAYS,
+	SettleIdleDays,
+	SUBAGENT_MAX_CONCURRENT,
+	SubagentMaxConcurrent,
+	type SurveyRatingScale,
+	type SystemThemePair,
+	TERMINAL_REPLAY_KB,
 	THEME_MODES,
-	USER_FONT_FILE_ERROR_CODES,
+	type ThemeMode,
+	type ThemePreference,
+	type ThinkingLevel,
+	UserFontFile,
 } from "./schema";
 
 export const FIRST_PROMPT_MAX_LENGTH = 200;
@@ -419,14 +426,6 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export const FONT_FAMILY_NAME_MAX_LENGTH = 128;
-export const FONT_FALLBACKS_MAX = 8;
-/** `editorDelta`: the editor and diffs render this many px below the code size. */
-export const CODE_FONT_SIZE = { min: 10, max: 24, default: 13, editorDelta: 2 } as const;
-export const FONT_WEIGHT_OFFSET = { min: -70, max: 130, step: 10, default: 0 } as const;
-
-const FONT_NAME_DELIMITERS = /["\\;{}]/;
-
 export function hasControlCharacter(text: string): boolean {
 	return [...text].some((char) => {
 		const code = char.codePointAt(0) ?? 0;
@@ -434,79 +433,18 @@ export function hasControlCharacter(text: string): boolean {
 	});
 }
 
-export function isFontFamilyName(value: unknown): value is string {
-	return (
-		typeof value === "string" &&
-		value.length > 0 &&
-		value.length <= FONT_FAMILY_NAME_MAX_LENGTH &&
-		value.trim() === value &&
-		!FONT_NAME_DELIMITERS.test(value) &&
-		!hasControlCharacter(value)
-	);
-}
-
-export function isFontRole(value: unknown): value is FontRole {
-	return FONT_ROLES.some((role) => role === value);
-}
-
-export function isFontFamilyRef(value: unknown): value is FontFamilyRef {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-	const keys = Object.keys(value);
-	if (keys.length !== 1) return false;
-	if (keys[0] === "builtin") return isFontRole(Reflect.get(value, "builtin"));
-	return keys[0] === "name" && isFontFamilyName(Reflect.get(value, "name"));
-}
+export const isFontFamilyName = compile(FontFamilyName).check;
+export const isFontFamilyRef = compile(FontFamilyRef).check;
 
 export function fontFamilyRefKey(ref: FontFamilyRef): string {
 	return "builtin" in ref ? `builtin:${ref.builtin}` : `name:${ref.name}`;
 }
 
-export function isFontChoice(value: unknown): value is FontChoice {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-	const family = Reflect.get(value, "family");
-	const fallbacks = Reflect.get(value, "fallbacks");
-	return (
-		(family === null || isFontFamilyRef(family)) &&
-		Array.isArray(fallbacks) &&
-		fallbacks.length <= FONT_FALLBACKS_MAX &&
-		fallbacks.every(isFontFamilyRef) &&
-		new Set(fallbacks.map(fontFamilyRefKey)).size === fallbacks.length
-	);
-}
+export const isFontChoice = compile(FontChoice).check;
+export const isCodeFontSize = compile(CodeFontSize).check;
+export const isFontWeightOffset = compile(FontWeightOffset).check;
 
-export function isCodeFontSize(value: unknown): value is number {
-	return (
-		typeof value === "number" &&
-		Number.isInteger(value) &&
-		value >= CODE_FONT_SIZE.min &&
-		value <= CODE_FONT_SIZE.max
-	);
-}
-
-export function isFontWeightOffset(value: unknown): value is number {
-	return (
-		typeof value === "number" &&
-		Number.isInteger(value) &&
-		value >= FONT_WEIGHT_OFFSET.min &&
-		value <= FONT_WEIGHT_OFFSET.max &&
-		value % FONT_WEIGHT_OFFSET.step === 0
-	);
-}
-
-export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLimit {
-	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
-}
-
-export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
-
-export function isLineWidth(value: unknown): value is number {
-	return (
-		typeof value === "number" &&
-		Number.isInteger(value) &&
-		value >= LINE_WIDTH_COLUMNS.min &&
-		value <= LINE_WIDTH_COLUMNS.max
-	);
-}
+export const isLineWidth = compile(LineWidth).check;
 
 /** How many recently chosen models the host remembers. */
 export const RECENT_MODELS_LIMIT = 5;
@@ -534,23 +472,7 @@ export function surveyRatingValues(scale: SurveyRatingScale): number[] {
 	return Array.from({ length: scale }, (_, index) => index + 1);
 }
 
-export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
-
-export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
-	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
-}
-
-export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
-
-export function isSettleIdleDays(value: unknown): value is number | null {
-	return (
-		value === null ||
-		(typeof value === "number" &&
-			Number.isInteger(value) &&
-			value >= SETTLE_IDLE_DAYS.min &&
-			value <= SETTLE_IDLE_DAYS.max)
-	);
-}
+export const isSettleIdleDays = compile(SettleIdleDays).check;
 
 export const SYSTEM_LOCALE_PREFERENCE = "system";
 
@@ -564,39 +486,13 @@ export function isLocalePreference(value: unknown): value is string {
 	}
 }
 
-function isUserFontFileErrorCode(value: unknown): value is UserFontFileErrorCode {
-	return USER_FONT_FILE_ERROR_CODES.some((code) => code === value);
-}
+const UserFontFileShape = compile(UserFontFile);
 
-function isUserFontFace(value: unknown): value is UserFontFace {
-	if (typeof value !== "object" || value === null) return false;
-	const weight = Reflect.get(value, "weight");
-	const style = Reflect.get(value, "style");
-	if (typeof weight !== "object" || weight === null) return false;
-	const min = Reflect.get(weight, "min");
-	const max = Reflect.get(weight, "max");
-	return (
-		isFontFamilyName(Reflect.get(value, "family")) &&
-		(style === "normal" || style === "italic") &&
-		typeof min === "number" &&
-		typeof max === "number" &&
-		min <= max &&
-		typeof Reflect.get(value, "monospace") === "boolean"
-	);
-}
-
-/** The shape `fonts.list` and a `/fonts/` upload report for one file. */
-export function isUserFontFile(value: unknown): value is UserFontFile {
-	if (typeof value !== "object" || value === null) return false;
-	if (typeof Reflect.get(value, "fileName") !== "string") return false;
-	const ok = Reflect.get(value, "ok");
-	if (ok === true) {
-		return (
-			typeof Reflect.get(value, "url") === "string" && isUserFontFace(Reflect.get(value, "face"))
-		);
-	}
-	const error = Reflect.get(value, "error");
-	return ok === false && isUserFontFileErrorCode(error);
+/** One file as `fonts.list` or a `/fonts/` upload reports it, with its weight range in order; `null` when it fails. */
+export function parseUserFontFile(value: unknown) {
+	if (!UserFontFileShape.check(value)) return null;
+	if (value.ok && value.face.weight.min > value.face.weight.max) return null;
+	return value;
 }
 
 /** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
@@ -608,27 +504,8 @@ export const USER_FONT_UPLOAD_HEADER = {
 } as const;
 export const USER_FONT_EXTENSIONS = [".ttf", ".otf", ".woff", ".woff2"] as const;
 
-export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
-
-export function isSubagentMaxConcurrent(value: unknown): value is number {
-	return (
-		typeof value === "number" &&
-		Number.isInteger(value) &&
-		value >= SUBAGENT_MAX_CONCURRENT.min &&
-		value <= SUBAGENT_MAX_CONCURRENT.max
-	);
-}
-
-export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
-
-export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number {
-	return (
-		typeof value === "number" &&
-		Number.isInteger(value) &&
-		value >= JBCENTRAL_QUOTA_REFRESH_SECONDS.min &&
-		value <= JBCENTRAL_QUOTA_REFRESH_SECONDS.max
-	);
-}
+export const isSubagentMaxConcurrent = compile(SubagentMaxConcurrent).check;
+export const isJbcentralQuotaRefreshSeconds = compile(JbcentralQuotaRefreshSeconds).check;
 
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
@@ -667,6 +544,13 @@ export const DEFAULT_CONFIG: AppConfig = {
 	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 };
 
+const PartialAppConfigFields = compile(PartialAppConfig);
+
+/** The fields of a config from a file or a host of any version that pass on their own. */
+export function parseAppConfigFields(value: unknown) {
+	return keepValidFields(value, PartialAppConfigFields);
+}
+
 export type FontSettings = Pick<
 	AppConfig,
 	"interfaceFont" | "codeFont" | "codeFontSize" | "codeLigatures" | "fontWeightOffset"
@@ -674,12 +558,8 @@ export type FontSettings = Pick<
 
 /** Each font field independently: a malformed one falls back to its own default. */
 export function normalizeFontSettings(value: unknown): FontSettings {
-	const record = typeof value === "object" && value !== null ? value : {};
-	const interfaceFont = Reflect.get(record, "interfaceFont");
-	const codeFont = Reflect.get(record, "codeFont");
-	const codeFontSize = Reflect.get(record, "codeFontSize");
-	const codeLigatures = Reflect.get(record, "codeLigatures");
-	const fontWeightOffset = Reflect.get(record, "fontWeightOffset");
+	const record = JsonObject.check(value) ? value : {};
+	const { interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset } = record;
 	return {
 		interfaceFont: isFontChoice(interfaceFont) ? interfaceFont : DEFAULT_CONFIG.interfaceFont,
 		codeFont: isFontChoice(codeFont) ? codeFont : DEFAULT_CONFIG.codeFont,

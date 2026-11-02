@@ -111,7 +111,8 @@ export const WorkspaceKickoff = wireObj({
 });
 export type WorkspaceKickoff = Static<typeof WorkspaceKickoff>;
 
-export const WorkspaceCreation = wireObj({
+/** The `WorkspaceCreation` properties, so a stored creation record can extend the wire shape. */
+export const WorkspaceCreationFields = {
 	id: str(),
 	projectId: str(),
 	name: str(),
@@ -123,7 +124,8 @@ export const WorkspaceCreation = wireObj({
 	failure: opt(wireObj({ message: str(), code: opt(str()), cleanedUp: opt(lit(true)) })),
 	kickoff: opt(wireObj({ text: str(), imageCount: num() })),
 	startedAt: num(),
-});
+};
+export const WorkspaceCreation = wireObj(WorkspaceCreationFields);
 export type WorkspaceCreation = Static<typeof WorkspaceCreation>;
 
 const WorkspaceId = wireObj({ id: str() });

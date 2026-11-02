@@ -574,10 +574,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
   (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
   (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`jbcentralQuotaEnabled: boolean`**,
-  **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
-  defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
-  the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
-  `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
+  **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned).
+  The welcome config arrives already parsed field by field through `parseAppConfigFields` ([[submodule-web-transport]]), and
+  each field it lacks keeps its default, so a welcome from an older host cannot poison the store. The fold then applies the rules a
+  schema cannot hold: a known locale tag and a system theme mode with its pair. `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
@@ -611,7 +611,9 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   never coalesces actionable receipts whose callbacks name different inverses, and applies the **5-toast cap
   only by evicting the oldest actionless notifications**. Actionable receipts remain until their own bounded
   duration closes them or the user dismisses them; if actions already exceed five, a new actionless toast is
-  the cap's eviction candidate rather than an Undo receipt.
+  the cap's eviction candidate rather than an Undo receipt. **`syncConfigReadNotice(failed)`** owns the one warning
+  toast for a `config.json` the host could not read (`configReadNoticeId`): it stays until dismissed, a repeat welcome
+  does not raise it again, and a good read removes it and lets a later failure show it again.
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
   complementing `appendErrorTurn` (which handles the in-chat case).
   **`packagesVersion`** + **`bumpPackagesVersion()`** is the same shape for installed pi packages: the

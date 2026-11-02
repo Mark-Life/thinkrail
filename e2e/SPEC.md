@@ -505,6 +505,12 @@ artifact and live-restart hosts, the workflow harness, and the artifact probes â
 `@thinkrail/shared/toolHomes`' `toolHomeEnv`, so each agent tool's config home (what account detection reads)
 lands in the sandbox and a new detection source is pinned everywhere at once.
 
+## Failed config read
+
+`config-read-notice.spec.ts` boots a private host, reusing the restart port and data directory, with a directory at
+`config.json`, because the shared host has already read its config. It proves the notice appears once, stays out of the way,
+and goes when the file is fixed: on the open page through `settings.changed`, and on a new page through the welcome.
+
 ## Reply and push checks
 
 The host of `playwright.config.ts` runs with `THINKRAIL_CHECK_WS_RESULTS=1`: a reply that breaks its result schema

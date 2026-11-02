@@ -1,10 +1,12 @@
 import {
 	arr,
 	bool,
+	int,
 	lit,
 	map,
 	nullable,
 	num,
+	obj,
 	oneOf,
 	opt,
 	type Schema,
@@ -38,16 +40,66 @@ export const FONT_ROLES = ["interface", "code"] as const;
 export const FontRole = oneOf(FONT_ROLES);
 export type FontRole = Static<typeof FontRole>;
 
-/** A bundled face named by the role it ships for, or a family name the client resolves. */
-export const FontFamilyRef = union([wireObj({ builtin: FontRole }), wireObj({ name: str() })]);
+export const FONT_FAMILY_NAME_MAX_LENGTH = 128;
+export const FONT_FALLBACKS_MAX = 8;
+/** `editorDelta`: the editor and diffs render this many px below the code size. */
+export const CODE_FONT_SIZE = { min: 10, max: 24, default: 13, editorDelta: 2 } as const;
+export const FONT_WEIGHT_OFFSET = { min: -70, max: 130, step: 10, default: 0 } as const;
+
+const FONT_NAME_CHAR = String.raw`[^"\\;{}\u0000-\u001f\u007f]`;
+const FONT_NAME_EDGE = String.raw`[^\s"\\;{}\u0000-\u001f\u007f]`;
+
+/** A CSS family name: no surrounding space, quote, backslash, `;`, braces or control character. */
+export const FontFamilyName = str({
+	maxLength: FONT_FAMILY_NAME_MAX_LENGTH,
+	pattern: `^${FONT_NAME_EDGE}(?:${FONT_NAME_CHAR}*${FONT_NAME_EDGE})?$`,
+});
+
+/** A bundled face named by the role it ships for, or a family name the client resolves. Exactly one key. */
+export const FontFamilyRef = union([obj({ builtin: FontRole }), obj({ name: FontFamilyName })]);
 export type FontFamilyRef = Static<typeof FontFamilyRef>;
 
 /** One role's font: `family: null` is the role's bundled default; fallbacks draw what it lacks. */
 export const FontChoice = wireObj({
 	family: nullable(FontFamilyRef),
-	fallbacks: arr(FontFamilyRef),
+	fallbacks: arr(FontFamilyRef, { maxItems: FONT_FALLBACKS_MAX, uniqueItems: true }),
 });
 export type FontChoice = Static<typeof FontChoice>;
+
+export const CodeFontSize = int({ minimum: CODE_FONT_SIZE.min, maximum: CODE_FONT_SIZE.max });
+
+export const FontWeightOffset = int({
+	minimum: FONT_WEIGHT_OFFSET.min,
+	maximum: FONT_WEIGHT_OFFSET.max,
+	multipleOf: FONT_WEIGHT_OFFSET.step,
+});
+
+export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
+export const LineWidth = int({ minimum: LINE_WIDTH_COLUMNS.min, maximum: LINE_WIDTH_COLUMNS.max });
+
+export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
+export const TerminalReplayKb = int({
+	minimum: TERMINAL_REPLAY_KB.min,
+	maximum: TERMINAL_REPLAY_KB.max,
+});
+
+export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
+export const SubagentMaxConcurrent = int({
+	minimum: SUBAGENT_MAX_CONCURRENT.min,
+	maximum: SUBAGENT_MAX_CONCURRENT.max,
+});
+
+export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
+export const JbcentralQuotaRefreshSeconds = int({
+	minimum: JBCENTRAL_QUOTA_REFRESH_SECONDS.min,
+	maximum: JBCENTRAL_QUOTA_REFRESH_SECONDS.max,
+});
+
+export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
+/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
+export const SettleIdleDays = nullable(
+	int({ minimum: SETTLE_IDLE_DAYS.min, maximum: SETTLE_IDLE_DAYS.max }),
+);
 
 export const LAYOUT_TOOL_IDS = ["projects", "specs", "files", "review", "plan"] as const;
 export const LayoutToolId = oneOf(LAYOUT_TOOL_IDS);
@@ -139,10 +191,10 @@ const APP_CONFIG_FIELDS = {
 	analyticsConsentConfirmed: bool(),
 	/** When true, the client may raise out-of-app attention notifications (still gated by browser permission). */
 	notificationsEnabled: bool(),
-	terminalReplayKb: num(),
+	terminalReplayKb: TerminalReplayKb,
 	composerGrowthLimit: ComposerGrowthLimit,
-	chatLineWidth: num(),
-	fileLineWidth: num(),
+	chatLineWidth: LineWidth,
+	fileLineWidth: LineWidth,
 	chatLineWidthBounded: bool(),
 	fileLineWidthBounded: bool(),
 	/** When false, no text field shows the dictation mic and the chord does nothing. */
@@ -155,13 +207,12 @@ const APP_CONFIG_FIELDS = {
 	agentReviewEnabled: bool(),
 	subagentsEnabled: bool(),
 	/** How many subagents one chat may run at once; more spawns queue FIFO. */
-	subagentMaxConcurrent: num(),
+	subagentMaxConcurrent: SubagentMaxConcurrent,
 	jbcentralQuotaEnabled: bool(),
-	jbcentralQuotaRefreshSeconds: num(),
+	jbcentralQuotaRefreshSeconds: JbcentralQuotaRefreshSeconds,
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
 	terminalWindowsShell: TerminalWindowsShell,
-	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
-	settleIdleDays: nullable(num()),
+	settleIdleDays: SettleIdleDays,
 	disabledExtensions: arr(str()),
 	extensionSettings: ExtensionSettingValues,
 	/** Load skills from other agents' user directories and Claude plugins in projects that do not decide for themselves. */
@@ -177,11 +228,11 @@ const APP_CONFIG_FIELDS = {
 	/** The editor, diffs, code blocks and the terminal. */
 	codeFont: FontChoice,
 	/** Terminal and code blocks, in px; the editor and diffs render 2 px smaller. */
-	codeFontSize: num(),
+	codeFontSize: CodeFontSize,
 	/** Ligatures in the editor, diffs and code in chat and documents; the terminal never draws them. */
 	codeLigatures: bool(),
 	/** Shifts every text weight but the brand face's together. */
-	fontWeightOffset: num(),
+	fontWeightOffset: FontWeightOffset,
 };
 
 const APP_CONFIG_RESULT_FIELDS = {
@@ -202,7 +253,7 @@ const APP_CONFIG_RESULT_FIELDS = {
 export const AppConfig = wireObj(APP_CONFIG_RESULT_FIELDS);
 export type AppConfig = Static<typeof AppConfig>;
 
-/** An `AppConfig` of any host version: an older host omits later fields or sends older shapes. */
+/** Every `AppConfig` field optional: a stored config or any host's welcome keeps each field that passes alone. */
 export const PartialAppConfig = partialWireObj(APP_CONFIG_RESULT_FIELDS);
 export type PartialAppConfig = Static<typeof PartialAppConfig>;
 

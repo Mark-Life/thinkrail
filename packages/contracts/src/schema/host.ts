@@ -1,4 +1,14 @@
-import { arr, map, num, oneOf, opt, type Static, str, unknown } from "@earendil-works/pi-schema";
+import {
+	arr,
+	bool,
+	map,
+	num,
+	oneOf,
+	opt,
+	type Static,
+	str,
+	unknown,
+} from "@earendil-works/pi-schema";
 import { Project } from "./project";
 import { AppConfig } from "./settings";
 import { SpeechStatus } from "./speech";
@@ -22,6 +32,7 @@ export const ServerWelcome = wireObj({
 	appVersion: opt(str()),
 	hostPlatform: opt(HostPlatform),
 	hostUpdate: opt(HostUpdateNotice),
+	configReadFailed: opt(bool()),
 	projects: arr(Project),
 	recentProjects: arr(Project),
 	config: AppConfig,
@@ -38,6 +49,7 @@ export const AnyHostWelcome = wireObj({
 	appVersion: opt(str()),
 	hostPlatform: opt(str()),
 	hostUpdate: opt(AnyObject),
+	configReadFailed: opt(bool()),
 	projects: arr(AnyObject),
 	recentProjects: opt(arr(AnyObject)),
 	config: opt(AnyObject),

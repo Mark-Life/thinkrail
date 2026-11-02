@@ -3,26 +3,35 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import {
+	arr,
+	bool,
+	compile,
+	lit,
+	map,
+	obj,
+	opt,
+	type Static,
+	str,
+	type Validator,
+} from "@earendil-works/pi-schema";
+import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	type ExtensionSettingValues,
 	type HostEnvironment,
-	isComposerGrowthLimit,
-	isJbcentralQuotaRefreshSeconds,
-	isLineWidth,
+	HostEnvironmentVar,
 	isLocalePreference,
-	isSettleIdleDays,
-	isSubagentMaxConcurrent,
-	isTerminalWindowsShell,
-	normalizeFontSettings,
-	normalizeThemePreference,
-	type Project,
-	type SessionCompletion,
-	type TurnChangeSet,
-	type WireModel,
-	type Workspace,
-	type WorkspaceCreation,
-	type WorkspaceKickoff,
+	JsonObject,
+	LayoutPreset,
+	PartialAppConfig,
+	Project,
+	SessionCompletion,
+	ThinkingLevel,
+	TurnChangeSet,
+	WireModel,
+	Workspace,
+	WorkspaceCreationFields,
+	WorkspaceKickoff,
 } from "@thinkrail/contracts";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
 import {
@@ -31,8 +40,16 @@ import {
 	replaceAcquisitionWithTerminalMarkerIn,
 	saveAcquisitionIn,
 } from "./attribution";
-import { type AcquisitionRecord, isRecord } from "./attributionProtocol";
+import type { AcquisitionRecord } from "./attributionProtocol";
 import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
+import {
+	assertOverwriteAllowed,
+	isOverwriteRefused,
+	parseEntries,
+	parseFields,
+	readStateFile,
+	type StateFile,
+} from "./stateFile";
 
 export {
 	type AcquisitionRecord,
@@ -42,31 +59,32 @@ export {
 	ATTRIBUTION_POLL_INTERVAL_MS,
 	type AttributionTouch,
 	claimIdPattern,
-	hasExactKeys,
-	isRecord,
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
 } from "./attributionProtocol";
 export type { InstallationRecord } from "./installation";
+export { observeStateFileProblems } from "./stateFile";
 
 export function dataDir(): string {
 	return resolve(process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail"));
 }
 
 function storedDirectory(path: string): string {
-	if (typeof path !== "string" || !isAbsolute(path)) return path;
-	return resolve(path);
+	return isAbsolute(path) ? resolve(path) : path;
 }
 
-function readJson<T>(file: string, fallback: T): T {
-	try {
-		return JSON.parse(readFileSync(join(dataDir(), file), "utf8")) as T;
-	} catch {
-		return fallback;
-	}
+function openStateFile(file: string): StateFile {
+	return readStateFile(join(dataDir(), file));
+}
+
+function readStoredObject(file: StateFile): Record<string, unknown> {
+	if (JsonObject.check(file.value)) return file.value;
+	if (file.value !== undefined) file.setAside("not an object");
+	return {};
 }
 
 function writeJson(file: string, value: unknown): void {
+	assertOverwriteAllowed(join(dataDir(), file));
 	mkdirSync(dataDir(), { recursive: true });
 	writeFileSync(join(dataDir(), file), `${JSON.stringify(value, null, "\t")}\n`);
 }
@@ -74,6 +92,7 @@ function writeJson(file: string, value: unknown): void {
 function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
 	mkdirSync(dataDir(), { recursive: true });
 	const target = join(dataDir(), file);
+	assertOverwriteAllowed(target);
 	const temporary = `${target}.${randomUUID()}.tmp`;
 	try {
 		writeFileSync(temporary, `${JSON.stringify(value, null, "\t")}\n`, mode ? { mode } : undefined);
@@ -83,26 +102,17 @@ function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
 	}
 }
 
-function stringRecord(value: unknown): Record<string, string> | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	const entries = Object.entries(value);
-	return entries.every(([, item]) => typeof item === "string") ? Object.fromEntries(entries) : null;
-}
-
 export type SessionMetadataLoad<T> =
 	| { kind: "loaded"; value: T }
 	| { kind: "missing" }
 	| { kind: "set-aside"; file: string; error: unknown; setAsidePath: string | null };
 
-function loadSessionMetadata<T>(
-	file: string,
-	parse: (raw: unknown) => T | null,
-): SessionMetadataLoad<T> {
+function loadSessionMetadata<T>(file: string, validator: Validator<T>): SessionMetadataLoad<T> {
 	const path = join(dataDir(), file);
 	let error: unknown;
 	try {
-		const value = parse(JSON.parse(readFileSync(path, "utf8")));
-		if (value !== null) return { kind: "loaded", value };
+		const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+		if (validator.check(value)) return { kind: "loaded", value };
 		error = new Error(`Invalid ${file}`);
 	} catch (caught) {
 		if (hasErrno(caught, "ENOENT")) return { kind: "missing" };
@@ -119,31 +129,19 @@ function loadSessionMetadata<T>(
 
 export const SESSION_RECEIPTS_VERSION = 1;
 
-export interface SessionReceipts {
-	version: typeof SESSION_RECEIPTS_VERSION;
-	baselineComplete: boolean;
-	handledCompletionBySession: Record<string, string>;
-}
-
-function parseSessionReceipts(raw: unknown): SessionReceipts | null {
-	if (!isRecord(raw)) return null;
-	const handledCompletionBySession = stringRecord(raw.handledCompletionBySession);
-	if (
-		raw.version !== SESSION_RECEIPTS_VERSION ||
-		typeof raw.baselineComplete !== "boolean" ||
-		handledCompletionBySession === null
-	) {
-		return null;
-	}
-	return {
-		version: SESSION_RECEIPTS_VERSION,
-		baselineComplete: raw.baselineComplete,
-		handledCompletionBySession,
-	};
-}
+const SessionReceipts = obj(
+	{
+		version: lit(SESSION_RECEIPTS_VERSION),
+		baselineComplete: bool(),
+		handledCompletionBySession: map(str()),
+	},
+	{ open: true },
+);
+export type SessionReceipts = Static<typeof SessionReceipts>;
+const SessionReceiptsFile = compile(SessionReceipts);
 
 export function loadSessionReceipts(): SessionMetadataLoad<SessionReceipts> {
-	return loadSessionMetadata("session-receipts.json", parseSessionReceipts);
+	return loadSessionMetadata("session-receipts.json", SessionReceiptsFile);
 }
 
 export function saveSessionReceipts(receipts: SessionReceipts): void {
@@ -152,59 +150,24 @@ export function saveSessionReceipts(receipts: SessionReceipts): void {
 
 export const SESSION_LIFECYCLE_VERSION = 1;
 
-export interface PersistedSessionCompletion {
-	runId: string;
-	completion: SessionCompletion;
-}
+const PersistedSessionCompletion = obj(
+	{ runId: str(), completion: SessionCompletion },
+	{ open: true },
+);
 
-export interface SessionLifecycle {
-	version: typeof SESSION_LIFECYCLE_VERSION;
-	completionBySession: Record<string, PersistedSessionCompletion>;
-	cancelledRunBySession: Record<string, string>;
-}
-
-function sessionCompletion(value: unknown): PersistedSessionCompletion | null {
-	if (!value || typeof value !== "object") return null;
-	const runId = Reflect.get(value, "runId");
-	const completion = Reflect.get(value, "completion");
-	const completionId = completion && Reflect.get(completion, "completionId");
-	const outcome = completion && Reflect.get(completion, "outcome");
-	if (typeof runId !== "string" || typeof completionId !== "string") return null;
-	if (outcome === "failed") {
-		const failure = Reflect.get(completion, "failure");
-		if (failure !== "error" && failure !== "length") return null;
-		return { runId, completion: { completionId, outcome, failure } };
-	}
-	if (outcome !== "succeeded" && outcome !== "interrupted" && outcome !== "cancelled") return null;
-	return { runId, completion: { completionId, outcome } };
-}
-
-function parseSessionLifecycle(raw: unknown): SessionLifecycle | null {
-	if (!isRecord(raw)) return null;
-	const cancelledRunBySession = stringRecord(raw.cancelledRunBySession);
-	const rawCompletions = raw.completionBySession;
-	if (
-		raw.version !== SESSION_LIFECYCLE_VERSION ||
-		!isRecord(rawCompletions) ||
-		cancelledRunBySession === null
-	) {
-		return null;
-	}
-	const completionBySession: Record<string, PersistedSessionCompletion> = {};
-	for (const [sessionId, value] of Object.entries(rawCompletions)) {
-		const parsed = sessionCompletion(value);
-		if (!parsed) return null;
-		completionBySession[sessionId] = parsed;
-	}
-	return {
-		version: SESSION_LIFECYCLE_VERSION,
-		completionBySession,
-		cancelledRunBySession,
-	};
-}
+const SessionLifecycle = obj(
+	{
+		version: lit(SESSION_LIFECYCLE_VERSION),
+		completionBySession: map(PersistedSessionCompletion),
+		cancelledRunBySession: map(str()),
+	},
+	{ open: true },
+);
+export type SessionLifecycle = Static<typeof SessionLifecycle>;
+const SessionLifecycleFile = compile(SessionLifecycle);
 
 export function loadSessionLifecycle(): SessionMetadataLoad<SessionLifecycle> {
-	return loadSessionMetadata("session-lifecycle.json", parseSessionLifecycle);
+	return loadSessionMetadata("session-lifecycle.json", SessionLifecycleFile);
 }
 
 export function saveSessionLifecycle(lifecycle: SessionLifecycle): void {
@@ -213,65 +176,15 @@ export function saveSessionLifecycle(lifecycle: SessionLifecycle): void {
 
 export const TURNS_VERSION = 1;
 
-export interface PersistedTurns {
-	version: typeof TURNS_VERSION;
-	byWorkspace: Record<string, TurnChangeSet[]>;
-}
-
-const TURN_STATUSES = new Set(["added", "modified", "deleted", "renamed", "untracked"]);
-
-function turnChangeSet(value: unknown): TurnChangeSet | null {
-	if (!isRecord(value) || !Array.isArray(value.changes)) return null;
-	const { id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree } = value;
-	if (
-		typeof id !== "string" ||
-		typeof workspaceId !== "string" ||
-		typeof sessionId !== "string" ||
-		typeof startedAt !== "number" ||
-		typeof settledAt !== "number" ||
-		typeof baseTree !== "string" ||
-		typeof headTree !== "string"
-	) {
-		return null;
-	}
-	const changes: TurnChangeSet["changes"] = [];
-	for (const change of value.changes) {
-		if (
-			!isRecord(change) ||
-			typeof change.path !== "string" ||
-			typeof change.status !== "string" ||
-			!TURN_STATUSES.has(change.status)
-		) {
-			return null;
-		}
-		changes.push({
-			path: change.path,
-			status: change.status as TurnChangeSet["changes"][number]["status"],
-			...(typeof change.added === "number" ? { added: change.added } : {}),
-			...(typeof change.removed === "number" ? { removed: change.removed } : {}),
-		});
-	}
-	return { id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree, changes };
-}
-
-function parseTurns(raw: unknown): PersistedTurns | null {
-	if (!isRecord(raw) || raw.version !== TURNS_VERSION || !isRecord(raw.byWorkspace)) return null;
-	const byWorkspace: Record<string, TurnChangeSet[]> = {};
-	for (const [workspaceId, list] of Object.entries(raw.byWorkspace)) {
-		if (!Array.isArray(list)) return null;
-		const turns: TurnChangeSet[] = [];
-		for (const item of list) {
-			const turn = turnChangeSet(item);
-			if (!turn) return null;
-			turns.push(turn);
-		}
-		byWorkspace[workspaceId] = turns;
-	}
-	return { version: TURNS_VERSION, byWorkspace };
-}
+const PersistedTurns = obj(
+	{ version: lit(TURNS_VERSION), byWorkspace: map(arr(TurnChangeSet)) },
+	{ open: true },
+);
+type PersistedTurns = Static<typeof PersistedTurns>;
+const PersistedTurnsFile = compile(PersistedTurns);
 
 export function loadTurns(): PersistedTurns {
-	const loaded = loadSessionMetadata("turns.json", parseTurns);
+	const loaded = loadSessionMetadata("turns.json", PersistedTurnsFile);
 	return loaded.kind === "loaded" ? loaded.value : { version: TURNS_VERSION, byWorkspace: {} };
 }
 
@@ -279,8 +192,28 @@ export function saveTurns(turns: PersistedTurns): void {
 	writeJsonAtomic("turns.json", turns);
 }
 
+function readStoredList<T>(
+	file: string,
+	validator: Validator<T>,
+	prepare?: (entry: unknown) => unknown,
+) {
+	const state = openStateFile(file);
+	if (Array.isArray(state.value)) {
+		return parseEntries(state, prepare ? state.value.map(prepare) : state.value, validator);
+	}
+	if (state.value !== undefined) state.setAside("not a list");
+	return [];
+}
+
+const ProjectEntry = compile(Project);
+const WorkspaceEntry = compile(Workspace);
+
+function withStoredSlug(entry: unknown): unknown {
+	return JsonObject.check(entry) ? { slug: "", ...entry } : entry;
+}
+
 export function loadProjects(): Project[] {
-	return readJson<Project[]>("projects.json", []).map((project) => ({
+	return readStoredList("projects.json", ProjectEntry, withStoredSlug).map((project) => ({
 		...project,
 		path: storedDirectory(project.path),
 	}));
@@ -291,7 +224,7 @@ export function saveProjects(projects: Project[]): void {
 }
 
 export function loadWorkspaces(): Workspace[] {
-	return readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
+	return readStoredList("workspaces.json", WorkspaceEntry).map((workspace) => ({
 		...workspace,
 		worktreePath: storedDirectory(workspace.worktreePath),
 	}));
@@ -301,15 +234,22 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	writeJson("workspaces.json", workspaces);
 }
 
-export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
-	worktreePath: string;
-	renamed?: true;
-	baseOid?: string;
-	kickoff?: WorkspaceKickoff;
-};
+const { kickoff: _kickoffSummary, ...StoredCreationFields } = WorkspaceCreationFields;
+const WorkspaceCreationRecord = obj(
+	{
+		...StoredCreationFields,
+		kickoff: opt(WorkspaceKickoff),
+		worktreePath: str(),
+		renamed: opt(lit(true)),
+		baseOid: opt(str()),
+	},
+	{ open: true },
+);
+export type WorkspaceCreationRecord = Static<typeof WorkspaceCreationRecord>;
+const WorkspaceCreationEntry = compile(WorkspaceCreationRecord);
 
 export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {
-	return readJson<WorkspaceCreationRecord[]>("workspace-creations.json", []).map((creation) => ({
+	return readStoredList("workspace-creations.json", WorkspaceCreationEntry).map((creation) => ({
 		...creation,
 		worktreePath: storedDirectory(creation.worktreePath),
 	}));
@@ -319,141 +259,187 @@ export function saveWorkspaceCreations(creations: WorkspaceCreationRecord[]): vo
 	writeJsonAtomic("workspace-creations.json", creations);
 }
 
-export interface PersistedTerminalTab {
-	tabKey: string;
-	title: string;
-	recorded?: string;
-}
+const PersistedTerminalTab = obj(
+	{ tabKey: str(), title: str(), recorded: opt(str()) },
+	{ open: true },
+);
+type PersistedTerminalTab = Static<typeof PersistedTerminalTab>;
+const TerminalTabEntry = compile(PersistedTerminalTab);
 
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
 
 export function loadTerminalSessions(): PersistedTerminalSessions {
-	return readJson<PersistedTerminalSessions>("terminals.json", {});
+	const state = openStateFile("terminals.json");
+	const sessions: PersistedTerminalSessions = {};
+	for (const [workspaceId, tabs] of Object.entries(readStoredObject(state))) {
+		if (Array.isArray(tabs)) sessions[workspaceId] = parseEntries(state, tabs, TerminalTabEntry);
+		else state.setAside("a workspace entry is not a list");
+	}
+	return sessions;
 }
 
 export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
 	writeJson("terminals.json", sessions);
 }
 
-/** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
-function storedModels(value: unknown): WireModel[] {
-	if (!Array.isArray(value)) return [];
-	return value.filter(
-		(entry): entry is WireModel =>
-			typeof entry === "object" &&
-			entry !== null &&
-			typeof (entry as WireModel).provider === "string" &&
-			typeof (entry as WireModel).id === "string",
-	);
+const ModelEntry = compile(WireModel);
+const EffortEntry = compile(ThinkingLevel);
+const NameEntry = compile(str({ pattern: "\\S" }));
+const AgentDirEntry = compile(str({ minLength: 1 }));
+const VarEntry = compile(HostEnvironmentVar);
+const LayoutPresetEntry = compile(LayoutPreset);
+const StoredConfigFields = compile(PartialAppConfig);
+
+function storedList(file: StateFile, field: string, value: unknown): unknown[] {
+	if (Array.isArray(value)) return value;
+	if (value !== undefined) file.setAside(`${field} is not a list`);
+	return [];
 }
 
-function storedNameList(value: unknown): string[] {
-	if (!Array.isArray(value)) return [];
-	return [
-		...new Set(
-			value.filter((name): name is string => typeof name === "string" && name.trim().length > 0),
-		),
-	];
+/** A model's identity is `{provider, id}`; the rest is a catalog snapshot older hosts wrote only in part. */
+function withModelSnapshot(entry: unknown): unknown {
+	if (!JsonObject.check(entry)) return entry;
+	return { name: entry.id, contextWindow: 0, reasoning: false, thinkingLevels: [], ...entry };
 }
 
-function storedExtensionSettings(value: unknown): ExtensionSettingValues {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+function storedModels(file: StateFile, field: string, value: unknown): WireModel[] {
+	return parseEntries(file, storedList(file, field, value).map(withModelSnapshot), ModelEntry);
+}
+
+function storedModel(file: StateFile, value: unknown): WireModel | undefined {
+	return value === undefined ? undefined : storedModels(file, "a model", [value])[0];
+}
+
+function storedEffort(file: StateFile, value: unknown): ThinkingLevel | undefined {
+	return value === undefined ? undefined : parseEntries(file, [value], EffortEntry)[0];
+}
+
+function storedNameList(file: StateFile, field: string, value: unknown): string[] {
+	return [...new Set(parseEntries(file, storedList(file, field, value), NameEntry))];
+}
+
+function storedExtensionSettings(file: StateFile, value: unknown): ExtensionSettingValues {
+	if (value === undefined) return {};
+	if (!JsonObject.check(value)) {
+		file.setAside("extensionSettings is not an object");
+		return {};
+	}
 	const result: ExtensionSettingValues = {};
-	for (const [name, settings] of Object.entries(value)) {
-		if (!settings || typeof settings !== "object" || Array.isArray(settings)) continue;
-		const flags = Object.entries(settings).filter(
+	for (const [name, flags] of Object.entries(value)) {
+		if (!JsonObject.check(flags)) {
+			file.setAside("an extensionSettings entry is not an object");
+			continue;
+		}
+		const kept = Object.entries(flags).filter(
 			(entry): entry is [string, boolean] => typeof entry[1] === "boolean",
 		);
-		if (flags.length > 0) result[name] = Object.fromEntries(flags);
+		if (kept.length < Object.keys(flags).length) file.setAside("dropped extensionSettings flags");
+		if (kept.length > 0) result[name] = Object.fromEntries(kept);
 	}
 	return result;
 }
 
-export function loadConfig(): AppConfig {
-	const raw = readJson<unknown>("config.json", null);
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
-	const value = raw as Record<string, unknown>;
-	const extensions = { ...value };
-	delete extensions.chatMessageOrder;
-	delete extensions.layout;
-	delete extensions.themeMode;
-	delete extensions.systemThemePair;
-	return {
-		...extensions,
-		...normalizeThemePreference(value),
-		analyticsEnabled:
-			typeof value.analyticsEnabled === "boolean"
-				? value.analyticsEnabled
-				: DEFAULT_CONFIG.analyticsEnabled,
-		analyticsConsentConfirmed: value.analyticsConsentConfirmed === true,
-		notificationsEnabled:
-			typeof value.notificationsEnabled === "boolean"
-				? value.notificationsEnabled
-				: DEFAULT_CONFIG.notificationsEnabled,
-		terminalReplayKb:
-			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
-				? value.terminalReplayKb
-				: DEFAULT_CONFIG.terminalReplayKb,
-		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
-			? value.composerGrowthLimit
-			: DEFAULT_CONFIG.composerGrowthLimit,
-		chatLineWidth: isLineWidth(value.chatLineWidth)
-			? value.chatLineWidth
-			: DEFAULT_CONFIG.chatLineWidth,
-		fileLineWidth: isLineWidth(value.fileLineWidth)
-			? value.fileLineWidth
-			: DEFAULT_CONFIG.fileLineWidth,
-		chatLineWidthBounded:
-			typeof value.chatLineWidthBounded === "boolean"
-				? value.chatLineWidthBounded
-				: DEFAULT_CONFIG.chatLineWidthBounded,
-		fileLineWidthBounded:
-			typeof value.fileLineWidthBounded === "boolean"
-				? value.fileLineWidthBounded
-				: DEFAULT_CONFIG.fileLineWidthBounded,
-		voiceInputEnabled:
-			typeof value.voiceInputEnabled === "boolean"
-				? value.voiceInputEnabled
-				: DEFAULT_CONFIG.voiceInputEnabled,
-		reviewAutoFix:
-			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
-		agentReviewEnabled:
-			typeof value.agentReviewEnabled === "boolean"
-				? value.agentReviewEnabled
-				: DEFAULT_CONFIG.agentReviewEnabled,
-		subagentsEnabled:
-			typeof value.subagentsEnabled === "boolean"
-				? value.subagentsEnabled
-				: DEFAULT_CONFIG.subagentsEnabled,
-		subagentMaxConcurrent: isSubagentMaxConcurrent(value.subagentMaxConcurrent)
-			? value.subagentMaxConcurrent
-			: DEFAULT_CONFIG.subagentMaxConcurrent,
-		jbcentralQuotaEnabled:
-			typeof value.jbcentralQuotaEnabled === "boolean"
-				? value.jbcentralQuotaEnabled
-				: DEFAULT_CONFIG.jbcentralQuotaEnabled,
-		jbcentralQuotaRefreshSeconds: isJbcentralQuotaRefreshSeconds(value.jbcentralQuotaRefreshSeconds)
-			? value.jbcentralQuotaRefreshSeconds
-			: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
-		customLayoutPresets: Array.isArray(value.customLayoutPresets)
-			? value.customLayoutPresets
-			: DEFAULT_CONFIG.customLayoutPresets,
-		favoriteModels: storedModels(value.favoriteModels),
-		recentModels: storedModels(value.recentModels),
-		terminalWindowsShell: isTerminalWindowsShell(value.terminalWindowsShell)
-			? value.terminalWindowsShell
-			: DEFAULT_CONFIG.terminalWindowsShell,
-		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
-			? value.settleIdleDays
-			: DEFAULT_CONFIG.settleIdleDays,
-		disabledExtensions: storedNameList(value.disabledExtensions),
-		extensionSettings: storedExtensionSettings(value.extensionSettings),
-		otherAgentSkills: typeof value.otherAgentSkills === "boolean" ? value.otherAgentSkills : true,
-		disabledPackages: storedNameList(value.disabledPackages),
-		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
-		onboardingDismissed: value.onboardingDismissed === true,
-		...normalizeFontSettings(value),
+/** Older hosts stored a separate `changes` tool, which is now part of `files`. */
+function withChangesMergedIntoFiles(candidate: unknown): unknown {
+	if (!JsonObject.check(candidate)) return candidate;
+	const regions = ["left", "right", "bottom"];
+	const groupsOf = (region: unknown): unknown[] => {
+		const groups = JsonObject.check(region) ? region.groups : undefined;
+		return Array.isArray(groups) ? groups : [];
 	};
+	const toolsOf = (group: unknown): unknown[] => {
+		const tools = JsonObject.check(group) ? group.tools : undefined;
+		return Array.isArray(tools) ? tools : [];
+	};
+	let filesPlaced = regions.some((region) =>
+		groupsOf(candidate[region]).some((group) => toolsOf(group).includes("files")),
+	);
+	const merged = { ...candidate };
+	for (const region of regions) {
+		const stored = candidate[region];
+		if (!JsonObject.check(stored) || !Array.isArray(stored.groups)) continue;
+		const groups = stored.groups.map((group) => {
+			if (!JsonObject.check(group)) return group;
+			const tools = toolsOf(group).flatMap((tool) => {
+				if (tool !== "changes") return [tool];
+				if (filesPlaced) return [];
+				filesPlaced = true;
+				return ["files"];
+			});
+			return { ...group, tools };
+		});
+		merged[region] = { ...stored, groups };
+	}
+	return merged;
+}
+
+function storedLayoutPresets(file: StateFile, value: unknown): LayoutPreset[] {
+	const presets = storedList(file, "customLayoutPresets", value).map(withChangesMergedIntoFiles);
+	return parseEntries(file, presets, LayoutPresetEntry);
+}
+
+let lastConfigReadFailed = false;
+
+export function loadConfig(): AppConfig {
+	const state = openStateFile("config.json");
+	const {
+		chatMessageOrder: _retiredOrder,
+		layout: _retiredLayout,
+		defaultModel: storedDefaultModel,
+		defaultEffort: storedDefaultEffort,
+		reviewModel: storedReviewModel,
+		reviewEffort: storedReviewEffort,
+		...stored
+	} = readStoredObject(state);
+	lastConfigReadFailed =
+		state.failed || (state.value !== undefined && !JsonObject.check(state.value));
+	const fields = parseFields(
+		state,
+		{
+			...stored,
+			customLayoutPresets: storedLayoutPresets(state, stored.customLayoutPresets),
+			favoriteModels: storedModels(state, "favoriteModels", stored.favoriteModels),
+			recentModels: storedModels(state, "recentModels", stored.recentModels),
+			disabledExtensions: storedNameList(state, "disabledExtensions", stored.disabledExtensions),
+			disabledPackages: storedNameList(state, "disabledPackages", stored.disabledPackages),
+			extensionSettings: storedExtensionSettings(state, stored.extensionSettings),
+		},
+		StoredConfigFields,
+	);
+	const defaultModel = storedModel(state, storedDefaultModel);
+	const defaultEffort = storedEffort(state, storedDefaultEffort);
+	const reviewModel = storedModel(state, storedReviewModel);
+	const reviewEffort = storedEffort(state, storedReviewEffort);
+	const config: AppConfig = {
+		...DEFAULT_CONFIG,
+		otherAgentSkills: JsonObject.check(state.value),
+		...fields,
+		...(defaultModel && { defaultModel }),
+		...(defaultEffort && { defaultEffort }),
+		...(reviewModel && { reviewModel }),
+		...(reviewEffort && { reviewEffort }),
+	};
+	if (!isLocalePreference(config.locale)) {
+		state.setAside("locale is not a language tag");
+		config.locale = DEFAULT_CONFIG.locale;
+	}
+	if (config.themeMode === "system" && !config.systemThemePair) {
+		state.setAside("system themeMode has no systemThemePair");
+		config.themeMode = "fixed";
+	}
+	return config;
+}
+
+export function setConfigAside(reason: string): void {
+	openStateFile("config.json").setAside(reason);
+}
+
+export function isConfigOverwriteRefused(): boolean {
+	return isOverwriteRefused(join(dataDir(), "config.json"));
+}
+
+export function didLastConfigReadFail(): boolean {
+	return lastConfigReadFailed || isConfigOverwriteRefused();
 }
 
 export function saveConfig(config: AppConfig): void {
@@ -461,18 +447,13 @@ export function saveConfig(config: AppConfig): void {
 }
 
 export function loadHostEnvironment(): HostEnvironment {
-	const raw = readJson<unknown>("environment.json", {});
-	const value = isRecord(raw) ? raw : {};
-	const vars = Array.isArray(value.vars)
-		? value.vars.filter(
-				(entry): entry is { name: string; value: string } =>
-					isRecord(entry) && typeof entry.name === "string" && typeof entry.value === "string",
-			)
-		: [];
+	const state = openStateFile("environment.json");
+	const value = readStoredObject(state);
+	const vars = parseEntries(state, storedList(state, "vars", value.vars), VarEntry);
+	const [agentDir] =
+		value.agentDir === undefined ? [] : parseEntries(state, [value.agentDir], AgentDirEntry);
 	return {
-		...(typeof value.agentDir === "string" && value.agentDir.length > 0
-			? { agentDir: value.agentDir }
-			: {}),
+		...(agentDir === undefined ? {} : { agentDir }),
 		vars: vars.map(({ name, value }) => ({ name, value })),
 	};
 }
