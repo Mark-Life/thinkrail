@@ -1,4 +1,5 @@
 import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
+import type { McpProjectOverride } from "./schema";
 
 export interface SessionStateRecord {
 	sessionId: string;
@@ -55,59 +56,6 @@ export function firstPromptOfTexts(texts: Iterable<string>): string | undefined 
 		if (head) return head;
 	}
 	return undefined;
-}
-
-export interface Project {
-	id: string;
-	name: string;
-	path: string;
-	slug: string;
-	lastOpened: number;
-	closed?: true;
-	trusted?: boolean;
-	acknowledgedSkills?: string[];
-	disabledSkills?: string[];
-	disabledGroups?: string[];
-	/**
-	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
-	 * grant; absent (a record that predates pi-level trust) reads as untrusted. Never enables MCP servers by itself.
-	 */
-	piResourceTrust?: "granted" | "untrusted";
-	/** Approved repo-defined MCP entries: server name → fingerprint of the original project-file entry. */
-	mcpApprovals?: Record<string, string>;
-	/** Per-project enablement/exposure of user-level MCP servers (never written to `.pi/mcp.json`). */
-	mcpOverrides?: Record<string, McpProjectOverride>;
-	/** "Always allow" MCP tools per server name (never written to `.pi/mcp.json`). */
-	mcpToolGrants?: Record<string, McpToolGrant>;
-}
-
-/** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */
-export interface McpToolGrant {
-	target: string;
-	tools: string[];
-}
-
-export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
-
-/** A kind of the project's own pi resources; `extensions` and `settings` run code on the host. */
-export type ProjectResourceKind =
-	| "extensions"
-	| "settings"
-	| "skills"
-	| "prompts"
-	| "themes"
-	| "systemPrompt"
-	| "subagents";
-
-/**
- * What a project's trust grant would load, for the trust notice; alias skill names show only after trust.
- * `mcpServers` counts the entries of the project's `.pi/mcp.json`, each approved separately.
- */
-export interface ProjectTrustSummary {
-	aliasSkills: string[];
-	/** The kinds of the project's own pi resources a pi-level grant would load; empty when none. */
-	piResources: ProjectResourceKind[];
-	mcpServers?: number;
 }
 
 export interface DiffStats {
@@ -649,11 +597,6 @@ export type McpServerScope = "user" | "project";
 export type McpExposure = "deferred" | "direct" | "hidden" | "codemode";
 
 export type McpTransportKind = "stdio" | "http";
-
-export interface McpProjectOverride {
-	enabled?: boolean;
-	exposure?: Exclude<McpExposure, "codemode">;
-}
 
 /** The session-independent view of one configured server; secret literal values are masked. */
 export interface McpServerSummary {

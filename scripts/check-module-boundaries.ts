@@ -17,6 +17,8 @@ interface ModuleRule {
 	allowed: readonly string[];
 }
 
+const BROWSER_SAFE_PI_PACKAGE = /^@earendil-works\/pi-schema(?:\/|$)/;
+
 const MODULE_RULES: readonly ModuleRule[] = [
 	{
 		root: "packages/artifact-tests",
@@ -328,7 +330,8 @@ function sourceViolation(
 		(extension && half === "web");
 	const piPackage =
 		target?.root.startsWith("pi-extensions/") ||
-		/^(?:@[^/]+\/)?pi-[^/]+(?:\/|$)/.test(target?.name ?? specifier);
+		(/^(?:@[^/]+\/)?pi-[^/]+(?:\/|$)/.test(target?.name ?? specifier) &&
+			!BROWSER_SAFE_PI_PACKAGE.test(specifier));
 	if (browserSafe && !typeOnly && piPackage)
 		return "creates forbidden pi value import in browser-safe sources";
 	return undefined;

@@ -15,7 +15,7 @@ function invalid(message: string): never {
 }
 
 function repositoryUrl(value: string): string {
-	if (typeof value !== "string" || value.length > 8192) invalid("Enter a Git repository URL.");
+	if (value.length > 8192) invalid("Enter a Git repository URL.");
 	const url = value.trim();
 	if (!url || /[\\\s\p{Cc}]/u.test(url)) invalid("Enter a valid Git repository URL.");
 	if (!url.includes("://") && /^(?:[\w.-]+@)?[a-zA-Z0-9][\w.-]*:[^\s]+$/.test(url)) {
@@ -52,9 +52,8 @@ function repositoryUrl(value: string): string {
 }
 
 export function inspectCloneDestination(parentPath: string, requestedName: string): string {
-	if (typeof parentPath !== "string" || !parentPath.trim() || parentPath.includes("\0"))
+	if (!parentPath.trim() || parentPath.includes("\0"))
 		invalid("Choose a parent folder on the host.");
-	if (typeof requestedName !== "string") invalid("Enter a folder name.");
 	const name = requestedName.trim();
 	if (
 		!name ||
@@ -187,8 +186,7 @@ export async function startProjectClone(
 	input: WsParams<"project.clone">,
 	clientKey: string,
 ): Promise<Project | null> {
-	if (typeof input.operationId !== "string" || !/^[\w-]{1,100}$/.test(input.operationId))
-		invalid("Invalid clone operation id.");
+	if (!/^[\w-]{1,100}$/.test(input.operationId)) invalid("Invalid clone operation id.");
 	let owned = activeClones.get(clientKey);
 	if (!owned) {
 		owned = new Map();
