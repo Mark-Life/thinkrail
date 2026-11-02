@@ -4,12 +4,8 @@ import type {
 	AppSurvey,
 	BackgroundCommandCompletionDetails,
 	BranchList,
-	BranchStatus,
 	ChangeReceipt,
 	CompletionDelivery,
-	DiffStats,
-	EditorInfo,
-	ExistingWorktreeCandidate,
 	ExtensionCatalogEntry,
 	FileNode,
 	GitCommit,
@@ -30,9 +26,7 @@ import type {
 	McpServerLog,
 	McpServerScope,
 	McpStatusSnapshot,
-	MergeMethod,
 	MergePrResult,
-	OpenBranchReview,
 	OpenPrResult,
 	PiPackageResourceType,
 	PiPackageScope,
@@ -50,7 +44,6 @@ import type {
 	ReviewSnapshot,
 	SpecGraphSnapshot,
 	SubagentCompletionDetails,
-	SubagentOverride,
 	SurveyInvitationResponse,
 	SurveySubmitParams,
 	Template,
@@ -59,21 +52,20 @@ import type {
 	TodoItem,
 	TodoPlan,
 	TodoStatus,
-	TurnChangeSet,
 	UserFontsSnapshot,
 	UserThemesSnapshot,
-	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
 import type { ToolResponseDetails, ToolResponsePendingDetails } from "./piProtocol";
 import type {
 	Ack,
+	MergeMethod,
 	ModelContextSetting,
 	Project,
-	SessionStateRecord,
 	SessionSummary,
 	SkillCatalogEntry,
 	SlashCommandInfo,
+	TerminalTabInfo,
 	ThinkingLevel,
 	WireCustomMessage,
 	WireModel,
@@ -97,11 +89,6 @@ export interface TerminalDetachedPush {
 }
 
 export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
-
-export interface TerminalTabInfo {
-	tabKey: string;
-	title: string;
-}
 
 export interface TerminalTabsPush {
 	workspaceId: string;
@@ -568,10 +555,6 @@ export interface ReviewSendResult {
 	reused: boolean;
 }
 
-export interface WorkspaceWatchReadyResult {
-	startupNudge: boolean;
-}
-
 export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
 
 export function isModelContextWindow(value: unknown): value is number {
@@ -606,65 +589,6 @@ export interface McpRenderedTarget {
 }
 
 export interface WsMethodMap extends WsSchemaMethodMap {
-	"workspace.create": {
-		params: { projectId: string; name?: string; baseRef?: string };
-		result: Workspace;
-	};
-	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
-	"workspace.listExisting": {
-		params: { projectId: string };
-		result: ExistingWorktreeCandidate[];
-	};
-	"workspace.openExisting": {
-		params: { projectId: string; path: string };
-		result: Workspace;
-	};
-	"workspace.list": {
-		params: { projectId: string; includeDiffStats?: boolean };
-		result: Workspace[];
-	};
-	"workspace.openReview": {
-		params: { workspaceId: string; allowCached?: boolean };
-		result: OpenBranchReview | null;
-	};
-	"workspace.branchStatus": {
-		params: { workspaceId: string; allowCached?: boolean; skipFetch?: boolean };
-		result: BranchStatus;
-	};
-	"workspace.push": {
-		params: { workspaceId: string; branch: string; confirmBase?: boolean };
-		result: { dirtyFiles: number };
-	};
-	"workspace.deleteRemoteBranch": {
-		params: { workspaceId: string; branch: string };
-		result: Ack;
-	};
-	"workspace.remove": { params: { id: string }; result: Ack };
-	"workspace.diffStats": { params: { id: string }; result: DiffStats };
-	"workspace.setSkillOverride": {
-		params: { id: string; name: string; override: "on" | "off" | null };
-		result: Workspace;
-	};
-	"workspace.setSubagentsOverride": {
-		params: { id: string; override: SubagentOverride | null };
-		result: Workspace;
-	};
-	"workspace.setSubagentMaxConcurrent": {
-		params: { id: string; value: number | null };
-		result: Workspace;
-	};
-	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
-	"workspace.settle": { params: { id: string }; result: Workspace };
-	"workspace.unsettle": { params: { id: string }; result: Workspace };
-	"workspace.markUnread": { params: { id: string }; result: { record: SessionStateRecord | null } };
-	"workspace.markRead": { params: { id: string }; result: { records: SessionStateRecord[] } };
-	"workspace.watchReady": {
-		params: { workspaceId: string; prewarm?: boolean };
-		result: WorkspaceWatchReadyResult;
-	};
-	"workspace.openIn": { params: { id: string; editor: string }; result: Ack };
-	"workspace.reveal": { params: { id: string }; result: Ack };
-	"editor.list": { params: Record<string, never>; result: EditorInfo[] };
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
 	"git.prefetch": { params: { projectId: string; ref: string }; result: { ok: boolean } };
 	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
@@ -774,7 +698,6 @@ export interface WsMethodMap extends WsSchemaMethodMap {
 		};
 	};
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
-	"workspace.turns": { params: { workspaceId: string }; result: { turns: TurnChangeSet[] } };
 	"change.revert": {
 		params: {
 			workspaceId: string;
@@ -788,24 +711,6 @@ export interface WsMethodMap extends WsSchemaMethodMap {
 	"change.undo": {
 		params: { workspaceId: string; receiptId: string; expect: { modifiedHash: string | null } };
 		result: { receipt: ChangeReceipt };
-	};
-	"terminal.reserve": {
-		params: { workspaceId: string; tabKey: string; title: string };
-		result: { tab: TerminalTabInfo };
-	};
-	"terminal.attach": {
-		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
-		result: { id: string; created: boolean; replay?: string };
-	};
-	"terminal.list": {
-		params: { workspaceId: string };
-		result: { tabs: TerminalTabInfo[] };
-	};
-	"terminal.write": { params: { id: string; data: string }; result: Ack };
-	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
-	"terminal.close": {
-		params: { workspaceId: string; tabKey: string; force?: boolean };
-		result: { closed: boolean; busy: boolean };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
