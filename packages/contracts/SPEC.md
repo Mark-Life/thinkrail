@@ -154,7 +154,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
   `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*`,
   `provider.*`, `session.*`, `subagent.*`, `backgroundCommand.*`, `workspace.*`, `editor.*`, `terminal.*`, `git.*`,
-  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*` and `template.*` entities, and the methods of these namespaces and
+  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*`, `template.*` and `mcp.*` entities, and the methods of these namespaces and
   `project.*`. The entries below describe these
   types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
@@ -1124,7 +1124,7 @@ contracts only.
   `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it
   carries into the latest stored override atomically (a client sends only what changed, so concurrent
   clients do not overwrite each other's setting). Enablement must be boolean and exposure one of
-  `deferred`, `direct`, `hidden`; malformed runtime values fail with `MCP_CONFIG_INVALID`. `setSessionOverride` is the chat-resources
+  `deferred`, `direct`, `hidden`; dispatch refuses other values with `INVALID_PARAMS`. `setSessionOverride` is the chat-resources
   "Disable in this chat": it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
   `registered: true` is a server an extension registered (its `transport` is that registration's), and
   disabling it fails with `MCP_CONFIG_INVALID`; where MCP is handled elsewhere it fails with
@@ -1143,8 +1143,9 @@ contracts only.
   longer has it — so a stale Edit or Remove never rewrites or deletes content the user has not seen,
   whether a checkout changed the repository entry or another client or editor replaced the user entry
   under an open dialog. The field is required rather than optional on the wire: the MCP surface ships
-  whole at `MCP_PROTOCOL_VERSION`, so there is no older host or client to tolerate. The
-  host validates `scope` itself; anything but `user` / `project` is rejected before any path is chosen. `shareWithRepo` refuses when the project file already defines that name or
+  whole at `MCP_PROTOCOL_VERSION`, so there is no older host or client to tolerate. Dispatch refuses a
+  missing fingerprint, and a `scope` other than `user` / `project`, before any path is chosen. Fields a method
+  does not declare are never written: only `entry` is free-form, and it reaches the file as given. `shareWithRepo` refuses when the project file already defines that name or
   holds an override that is not approved at its current fingerprint.
 - `mcp.login` / `mcp.testConnection` check MCP ownership in the same synchronous step that starts the
   probe, like the mutations; they return a `loginId` and reuse the `provider.login` frame family

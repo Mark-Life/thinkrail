@@ -13,9 +13,11 @@ import {
 import { SkillCatalogEntry } from "./skill";
 import { Ack, NoParams, wireObj } from "./wire";
 
+export const McpActiveExposure = oneOf(["deferred", "direct", "hidden"]);
+
 export const McpProjectOverride = wireObj({
 	enabled: opt(bool()),
-	exposure: opt(oneOf(["deferred", "direct", "hidden"])),
+	exposure: opt(McpActiveExposure),
 });
 export type McpProjectOverride = Static<typeof McpProjectOverride>;
 

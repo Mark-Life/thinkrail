@@ -12,13 +12,6 @@ import type {
 	HostEnvironmentUpdateResult,
 	InstalledFontsResult,
 	LocalLocalesSnapshot,
-	McpExposure,
-	McpListResult,
-	McpReadOutputResult,
-	McpServerEntryInput,
-	McpServerLog,
-	McpServerScope,
-	McpStatusSnapshot,
 	PiPackageResourceType,
 	PiPackageScope,
 	PiPackageSummary,
@@ -39,6 +32,7 @@ import { isDelegationRunDetails } from "./domain";
 import type { ToolResponseDetails, ToolResponsePendingDetails } from "./piProtocol";
 import type {
 	Ack,
+	McpStatusSnapshot,
 	ModelContextSetting,
 	Project,
 	SessionSummary,
@@ -575,15 +569,6 @@ export function isSharedModelContextTarget(
 	return setting.override === null || isModelContextWindow(setting.override);
 }
 
-/**
- * The entry a rewrite or removal was rendered from: its scope and the `McpServerSummary.fingerprint` the
- * client rendered it with. The host refuses the write when the entry on disk no longer has it.
- */
-export interface McpRenderedTarget {
-	scope: McpServerScope;
-	expectedFingerprint: string;
-}
-
 export interface WsMethodMap extends WsSchemaMethodMap {
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
@@ -655,61 +640,6 @@ export interface WsMethodMap extends WsSchemaMethodMap {
 		result: SearchQueryResult;
 	};
 	"search.preview": { params: SearchPreviewTarget; result: SearchPreviewResult };
-	"mcp.list": { params: { workspaceId: string }; result: McpListResult };
-	"mcp.add": {
-		params: {
-			workspaceId: string;
-			scope: McpServerScope;
-			name: string;
-			entry: McpServerEntryInput;
-		};
-		result: McpListResult;
-	};
-	"mcp.update": {
-		params: { workspaceId: string; name: string; entry: McpServerEntryInput } & McpRenderedTarget;
-		result: McpListResult;
-	};
-	"mcp.remove": {
-		params: { workspaceId: string; name: string } & McpRenderedTarget;
-		result: McpListResult;
-	};
-	"mcp.setProjectOverride": {
-		params: {
-			workspaceId: string;
-			name: string;
-			enabled?: boolean;
-			exposure?: Exclude<McpExposure, "codemode">;
-		};
-		result: McpListResult;
-	};
-	"mcp.setSessionOverride": {
-		params: { workspaceId: string; sessionId: string; name: string; enabled: boolean };
-		result: Ack;
-	};
-	"mcp.approve": {
-		params: { workspaceId: string; name: string; fingerprint: string };
-		result: McpListResult;
-	};
-	"mcp.revokeToolGrant": {
-		params: { workspaceId: string; name: string; tool: string };
-		result: McpListResult;
-	};
-	"mcp.shareWithRepo": { params: { workspaceId: string; name: string }; result: McpListResult };
-	"mcp.login": { params: { workspaceId: string; name: string }; result: { loginId: string } };
-	"mcp.logout": { params: { workspaceId: string; name: string }; result: Ack };
-	"mcp.testConnection": {
-		params: { workspaceId: string; name: string };
-		result: { loginId: string };
-	};
-	"mcp.reconnect": {
-		params: { workspaceId: string; sessionId: string; name: string };
-		result: Ack;
-	};
-	"mcp.readOutput": {
-		params: { workspaceId: string; sessionId: string; toolCallId: string };
-		result: McpReadOutputResult;
-	};
-	"mcp.readLog": { params: { workspaceId: string; name: string }; result: McpServerLog };
 }
 
 /** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
