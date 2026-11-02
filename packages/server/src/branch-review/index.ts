@@ -7,3 +7,4 @@ export {
 	reviewNumber,
 	runProviderCommand,
 } from "./branchReview";
+export { headRepositorySlug, PR_HEAD_FIELDS, parseProviderJson } from "./providerReply";
