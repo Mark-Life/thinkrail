@@ -1489,6 +1489,49 @@ test("project replies match their wire schemas", async () => {
 	expect(compile(list.result).errors(listed)).toEqual([]);
 });
 
+test.skipIf(process.platform === "win32")(
+	"workspace creation retry and dismiss replies match their wire schemas",
+	async () => {
+		const hook = join(repo, ".git", "hooks", "post-checkout");
+		writeFileSync(hook, "#!/bin/sh\nexit 1\n");
+		chmodSync(hook, 0o755);
+		const { "workspace.retryCreation": retry, "workspace.dismissCreation": dismiss } =
+			WS_METHOD_SCHEMAS;
+		const started = (await handleRequest(
+			"workspace.startCreate",
+			{ projectId: "p1", kickoff: { text: "keep me" } },
+			CTX,
+		)) as WorkspaceCreation;
+		await awaitWorkspaceCreation(started.id).catch(() => {});
+		const retried = await handleRequest("workspace.retryCreation", { id: started.id }, CTX);
+		expect(compile(retry.result).errors(retried)).toEqual([]);
+		await awaitWorkspaceCreation(started.id).catch(() => {});
+		const dismissed = await handleRequest("workspace.dismissCreation", { id: started.id }, CTX);
+		expect(compile(dismiss.result).errors(dismissed)).toEqual([]);
+		expect(dismissed).toEqual({ kickoff: { text: "keep me" } });
+	},
+);
+
+test("search replies match their wire schemas", async () => {
+	const { "search.query": query, "search.preview": preview } = WS_METHOD_SCHEMAS;
+	const found = await handleRequest(
+		"search.query",
+		{ query: "readme", context: { projectId: "p1" } },
+		CTX,
+	);
+	expect(compile(query.result).errors(found)).toEqual([]);
+	const shown = await handleRequest("search.preview", { kind: "chat", sessionId: "gone" }, CTX);
+	expect(compile(preview.result).errors(shown)).toEqual([]);
+});
+
+test("speech cancel and remove replies match their wire schemas", async () => {
+	const { "speech.cancelInstall": cancel, "speech.remove": remove } = WS_METHOD_SCHEMAS;
+	expect(
+		compile(cancel.result).errors(await handleRequest("speech.cancelInstall", {}, CTX)),
+	).toEqual([]);
+	expect(compile(remove.result).errors(await handleRequest("speech.remove", {}, CTX))).toEqual([]);
+});
+
 test("an unknown diff scope or revert target is refused before a handler runs", async () => {
 	const base = { workspaceId: "missing", path: "a.txt" };
 	await expect(
