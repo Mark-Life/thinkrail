@@ -106,8 +106,25 @@ export const Review = wireObj({
 });
 export type Review = Static<typeof Review>;
 
-export const ReviewSnapshot = wireObj({ review: Review, comments: arr(ReviewComment) });
+const ReviewSnapshotFields = { review: Review, comments: arr(ReviewComment) };
+
+export const ReviewSnapshot = wireObj(ReviewSnapshotFields);
 export type ReviewSnapshot = Static<typeof ReviewSnapshot>;
+
+export const ReviewChangedPayload = wireObj({ ...ReviewSnapshotFields, workspaceId: str() });
+export type ReviewChangedPayload = Static<typeof ReviewChangedPayload>;
+
+/** A plan review that failed after `todo.startReview` acknowledged — the detached button/auto path has no
+ * chat of its own, so the owning plan session raises the failure as a toast. `sessionId` routes it to that
+ * plan only; duplicate views of one session dedupe on the toast body. See apps/web/src/panels/SPEC.md. */
+export const ReviewFailedPayload = wireObj({
+	workspaceId: str(),
+	sessionId: str(),
+	itemId: str(),
+	itemTitle: str(),
+	message: str(),
+});
+export type ReviewFailedPayload = Static<typeof ReviewFailedPayload>;
 
 export const ReviewSendResult = wireObj({
 	sessionId: str(),
@@ -164,4 +181,9 @@ export const REVIEW_METHODS = {
 		result: wireObj({ sessions: arr(ReviewSendResult) }),
 	},
 	"review.close": { params: ReviewRef, result: Ack },
+};
+
+export const REVIEW_CHANNELS = {
+	"review.changed": ReviewChangedPayload,
+	"review.failed": ReviewFailedPayload,
 };

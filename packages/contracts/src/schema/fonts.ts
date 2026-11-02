@@ -9,7 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
-import { Ack, NoParams, wireObj } from "./wire";
+import { Ack, NoParams, NoPayload, wireObj } from "./wire";
 
 export const UserFontFileErrorCode = oneOf([
 	"too-large",
@@ -70,4 +70,8 @@ export const FONTS_METHODS = {
 	"fonts.list": { params: NoParams, result: UserFontsSnapshot },
 	"fonts.installed": { params: NoParams, result: InstalledFontsResult },
 	"fonts.reveal": { params: NoParams, result: Ack },
+};
+
+export const FONTS_CHANNELS = {
+	"fonts.changed": NoPayload,
 };

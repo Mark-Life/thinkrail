@@ -14,19 +14,13 @@ import {
 	type PersistedTerminalSessions,
 	saveTerminalSessions,
 } from "../persistence";
-import { createTerminalCompletionQueue } from "./completionQueue";
-import {
-	createOutputBatcher,
-	type OutputBatcher,
-	type TerminalDeliveryResult,
-} from "./outputBatcher";
+import { createTerminalCompletionQueue, type PushToClient } from "./completionQueue";
+import { createOutputBatcher, type OutputBatcher } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
 import { terminalPtyEnv } from "./ptyEnv";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
-
-type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
 
 interface TerminalEntry {
 	pty: IPty;
