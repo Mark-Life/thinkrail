@@ -10,7 +10,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
-import { Ack, wireObj } from "./wire";
+import { Ack, NoPayload, wireObj } from "./wire";
 
 export const SurveyInvitationResponse = oneOf(["postpone", "never"]);
 export type SurveyInvitationResponse = Static<typeof SurveyInvitationResponse>;
@@ -85,4 +85,8 @@ export const FEEDBACK_METHODS = {
 		result: wireObj({ survey: nullable(AppSurvey) }),
 	},
 	"feedback.survey.submit": { params: SurveySubmitParams, result: Ack },
+};
+
+export const FEEDBACK_CHANNELS = {
+	"feedback.interview": NoPayload,
 };

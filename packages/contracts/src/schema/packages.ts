@@ -1,5 +1,5 @@
 import { arr, bool, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
-import { Ack, wireObj } from "./wire";
+import { Ack, NoPayload, wireObj } from "./wire";
 
 export const PiPackageScope = oneOf(["user", "project"]);
 export type PiPackageScope = Static<typeof PiPackageScope>;
@@ -117,4 +117,8 @@ export const PACKAGES_METHODS = {
 		result: Ack,
 	},
 	"packages.reveal": { params: wireObj({ path: str(), workspaceId: opt(str()) }), result: Ack },
+};
+
+export const PACKAGES_CHANNELS = {
+	"packages.changed": NoPayload,
 };

@@ -9,7 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
-import { Ack, NoParams, wireObj } from "./wire";
+import { Ack, NoParams, NoPayload, wireObj } from "./wire";
 
 export const LocalLocaleFileOk = wireObj({
 	fileName: str(),
@@ -50,4 +50,8 @@ export type LocalLocalesSnapshot = Static<typeof LocalLocalesSnapshot>;
 export const LOCALES_METHODS = {
 	"locales.list": { params: NoParams, result: LocalLocalesSnapshot },
 	"locales.reveal": { params: NoParams, result: Ack },
+};
+
+export const LOCALES_CHANNELS = {
+	"locales.changed": NoPayload,
 };
