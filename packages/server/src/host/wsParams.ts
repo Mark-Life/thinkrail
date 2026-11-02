@@ -157,6 +157,21 @@ const SCHEMA_VALIDATORS: ParamsValidators = {
 	"template.get": compile(S["template.get"].params),
 	"template.save": compile(S["template.save"].params),
 	"template.delete": compile(S["template.delete"].params),
+	"mcp.list": compile(S["mcp.list"].params),
+	"mcp.add": compile(S["mcp.add"].params),
+	"mcp.update": compile(S["mcp.update"].params),
+	"mcp.remove": compile(S["mcp.remove"].params),
+	"mcp.setProjectOverride": compile(S["mcp.setProjectOverride"].params),
+	"mcp.setSessionOverride": compile(S["mcp.setSessionOverride"].params),
+	"mcp.approve": compile(S["mcp.approve"].params),
+	"mcp.revokeToolGrant": compile(S["mcp.revokeToolGrant"].params),
+	"mcp.shareWithRepo": compile(S["mcp.shareWithRepo"].params),
+	"mcp.login": compile(S["mcp.login"].params),
+	"mcp.logout": compile(S["mcp.logout"].params),
+	"mcp.testConnection": compile(S["mcp.testConnection"].params),
+	"mcp.reconnect": compile(S["mcp.reconnect"].params),
+	"mcp.readOutput": compile(S["mcp.readOutput"].params),
+	"mcp.readLog": compile(S["mcp.readLog"].params),
 };
 const VALIDATORS: MethodValidators = SCHEMA_VALIDATORS;
 

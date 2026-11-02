@@ -25,7 +25,22 @@ export {
 	RemoteBranchGroup,
 } from "./git";
 export { GithubAuthStatus } from "./github";
-export { McpServerResourceSummary, McpServerState, McpTransportKind } from "./mcp";
+export {
+	McpConfigFileError,
+	McpExposure,
+	McpListResult,
+	McpReadOutputResult,
+	McpRenderedTarget,
+	McpServerEntryInput,
+	McpServerLog,
+	McpServerResourceSummary,
+	McpServerScope,
+	McpServerState,
+	McpServerStatus,
+	McpServerSummary,
+	McpStatusSnapshot,
+	McpTransportKind,
+} from "./mcp";
 export * from "./methods";
 export {
 	ModelContextSetting,

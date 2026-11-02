@@ -2,9 +2,6 @@ import type {
 	BackgroundCommandSummary,
 	DelegationRunStatus,
 	JbcentralStatus,
-	McpProjectOverride,
-	McpServerState,
-	McpTransportKind,
 	PlanReviewVerdict,
 	ResourceHistoryCursor,
 	ResourceRecord,
@@ -251,61 +248,6 @@ export function compareResourceHistory(a: ResourceHistoryCursor, b: ResourceHist
 	return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 }
 
-export type McpServerScope = "user" | "project";
-
-/** Configured exposure; `codemode` is accepted from files and treated as `deferred` while codemode is not shipped. */
-export type McpExposure = "deferred" | "direct" | "hidden" | "codemode";
-
-/** The session-independent view of one configured server; secret literal values are masked. */
-export interface McpServerSummary {
-	name: string;
-	scope: McpServerScope;
-	/** Defining `mcp.json` path. */
-	source: string;
-	/** Fingerprint of the defining file's entry as rendered; `mcp.update` / `mcp.remove` name their target with it. */
-	fingerprint: string;
-	transport: McpTransportKind;
-	/** Command + args, or URL, with literal credential values masked. */
-	endpoint: string;
-	exposure: McpExposure;
-	effectiveExposure: Exclude<McpExposure, "codemode">;
-	effective?: boolean;
-	enabled: boolean;
-	description?: string;
-	/** HTTP server without an `Authorization` header: sign-in applies. */
-	oauth: boolean;
-	/** Project entry that shadows a user-level server of the same name. */
-	replacesGlobal?: boolean;
-	projectOverride?: McpProjectOverride;
-	/** Repository content only: the project entry, or the repo override folded into a user row. */
-	approval?: { state: "approved" | "pending" | "changed"; fingerprint: string };
-	/** pi-equivalent validation message when the entry is rejected; credential-looking values are masked by the host. */
-	configError?: string;
-	/** Always-allowed tools still valid for the effective entry: pi's tool name and its display label. */
-	alwaysAllowed?: { tool: string; label: string }[];
-}
-
-export interface McpServerStatus {
-	name: string;
-	state: McpServerState;
-	/** Server-reported count from pi's status text; absent when not connected. */
-	toolCount?: number;
-	/**
-	 * pi's status line(s) for this server. pi does not redact them (connection errors, a stdio server's
-	 * stderr tail), so the host masks credential-looking values before they leave it.
-	 */
-	detail?: string;
-	updatedAt: number;
-}
-
-export interface McpStatusSnapshot {
-	workspaceId: string;
-	sessionId: string;
-	/** Monotonic per session; a stale snapshot never overwrites a newer one. */
-	generation: number;
-	servers: McpServerStatus[];
-}
-
 /** Mirror of pi's `McpToolDetails` as it arrives in `mcp__*` and the three MCP resource tools' results. */
 export interface McpToolDetails {
 	server: string;
@@ -331,37 +273,6 @@ export interface McpResultSummary {
 	structuredContent?: unknown;
 	structuredContentTruncated?: boolean;
 	isError?: boolean;
-}
-
-export type McpReadOutputResult =
-	| { available: true; text: string; truncated: boolean }
-	| { available: false; reason: "expired" | "unavailable" };
-
-/** One server's lines from pi's shared MCP log (the messages servers send it), masked by the host. */
-export interface McpServerLog {
-	/** The file pi appends to: `mcp.log` in pi's agent directory. */
-	path: string;
-	/** The server's latest lines, oldest first and at most 200; empty when it logged nothing there. */
-	text: string;
-}
-
-/** One raw `mcpServers` entry as written in a config file; validated by the host with pi-equivalent rules. */
-export type McpServerEntryInput = Record<string, unknown>;
-
-/** A problem with a whole `mcp.json` (unparsable JSON, `mcpServers` not an object, a mistyped top-level key), masked by the host. */
-export interface McpConfigFileError {
-	/** The file's path. */
-	source: string;
-	message: string;
-}
-
-export interface McpListResult {
-	servers: McpServerSummary[];
-	statuses: McpStatusSnapshot[];
-	/** File-level problems of the files `servers` came from; absent when there are none or the host predates them. */
-	configErrors?: McpConfigFileError[];
-	/** MCP is provided by a user-installed extension or disabled through pi settings; management is read-only. */
-	handledElsewhere?: { by: string };
 }
 
 export type PiPackageScope = "user" | "project";

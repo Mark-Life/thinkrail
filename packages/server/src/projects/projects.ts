@@ -231,22 +231,6 @@ export function setProjectMcpOverride(
 	name: string,
 	patch: McpProjectOverride | null,
 ): Project {
-	if (patch !== null) {
-		if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") {
-			throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
-		}
-		if (
-			patch.exposure !== undefined &&
-			patch.exposure !== "deferred" &&
-			patch.exposure !== "direct" &&
-			patch.exposure !== "hidden"
-		) {
-			throw new CodedError(
-				"MCP_CONFIG_INVALID",
-				"MCP server exposure must be deferred, direct or hidden",
-			);
-		}
-	}
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);

@@ -83,8 +83,7 @@ bootstrap it into one so it can be opened.
   changed; `revokeProjectMcpTool` drops one and removes the server, then the field, once empty. Both store
   server names as own properties, so a server named `__proto__` is just a name. `setProjectMcpOverride` synchronously merges only supplied fields into the
   latest stored override, so overlapping enablement and exposure patches do not lose each other. An empty
-  patch is a no-op; `null` clears the override. It rejects non-boolean enablement and exposure outside
-  `deferred`, `direct`, `hidden` before persistence. `setProjectTrust(id, trusted, acknowledged?,
+  patch is a no-op; `null` clears the override. `setProjectTrust(id, trusted, acknowledged?,
   { resources? })` keeps the two grants separate because they consent to different things: pi-level
   resources include code (extensions, settings packages), so only a surface that names them asks for them.
   `trusted: true` sets the alias grant and sets `piResourceTrust: "granted"` only with `resources: true`,
