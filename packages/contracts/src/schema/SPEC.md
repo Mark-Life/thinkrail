@@ -21,9 +21,9 @@ that map.
 
 - **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
   types, the `*_METHODS` and `*_CHANNELS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`, `WS_CHANNEL_SCHEMAS`,
-  `WsSchemaChannelMap`. From `wire.ts` only `Ack`: `wireObj`, `partialWireObj`, `readonlyArr`, `piOwned`, `NoParams` and
-  `NoPayload` stay inside this directory. Schema values stay public because
-  [[submodule-server-host]] compiles them; web JS stays free of them by tree shaking.
+  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `AnyHostWelcome`. From `wire.ts` only `Ack`: `wireObj`,
+  `partialWireObj`, `readonlyArr`, `piOwned`, `NoParams` and `NoPayload` stay inside this directory. Schema values stay
+  public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they ship in web JS.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
 - **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
   a schema here, because each side owns the check at its own edge ([[submodule-server-host]] for requests).
@@ -60,8 +60,12 @@ that map.
   `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
-- **Result and channel schemas are proven by tests.** Production never checks what the host sends. The host's test
-  harnesses check real replies and pushes against them ([[submodule-server-host]]), so a mismatch is a schema bug or a host
-  bug, not a tolerated drift. `piOwned` parts
-  pass by design.
+- **Result and channel schemas are proven by tests.** The host's test harnesses check real replies and pushes against
+  them ([[submodule-server-host]]), so a mismatch is a schema bug or a host bug, not a tolerated drift. `piOwned` parts
+  pass by design. A wrong schema reaches users: [[submodule-web-transport]] refuses what fails it.
+- **`server.welcome` has a floor.** The client checks `AnyHostWelcome`, not `ServerWelcome`: it is the only frame that names
+  the host's version, and refusing it would leave the app with no projects. Older hosts omit later fields, so entries are
+  bare objects. `ServerWelcome` must stay assignable to it. The test harness still checks `ServerWelcome`.
+- **`errorCode` is any string.** A newer host may send a code this client has no name for, and `WsErrorCode` carries the
+  names by type only. `INVALID_REPLY` is never sent: the client mints it.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

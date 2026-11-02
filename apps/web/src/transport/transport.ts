@@ -1,15 +1,16 @@
 import type {
 	WsChannel,
 	WsChannelPayload,
+	WsEnvelope,
 	WsMethodName,
 	WsParams,
 	WsResult,
-	WsServerMessage,
 } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
 import { RequestError, RequestTimeoutError } from "./requestError";
+import { parseEnvelope, pushFailure, resultFailure } from "./wireChecks";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 type PushHandler = (data: unknown) => void;
@@ -20,7 +21,8 @@ export interface TransportOptions {
 }
 
 interface TransportDispatchHooks {
-	beforeDispatch?: (message: WsServerMessage) => void;
+	beforeDispatch?: (message: WsEnvelope) => void;
+	onInvalidReply?: (method: WsMethodName) => void;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -59,11 +61,12 @@ export class WsTransport {
 	private ws: WebSocket | null = null;
 	private readonly url: string;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
-	private readonly beforeDispatch: ((message: WsServerMessage) => void) | undefined;
+	private readonly hooks: TransportDispatchHooks;
 	private seq = 0;
 	private readonly pending = new Map<
 		string,
 		{
+			method: WsMethodName;
 			frame: string;
 			resolve: (v: unknown) => void;
 			reject: (e: Error) => void;
@@ -72,6 +75,7 @@ export class WsTransport {
 	>();
 	private readonly subscribers = new Map<string, Set<PushHandler>>();
 	private readonly latest = new Map<string, unknown>();
+	private readonly warnedChannels = new Set<string>();
 	private ackQueue: string[] = [];
 	private ackScheduled = false;
 	private backoff = 500;
@@ -79,7 +83,7 @@ export class WsTransport {
 	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
 		this.onStatus = opts.onStatus;
-		this.beforeDispatch = dispatchHooks.beforeDispatch;
+		this.hooks = dispatchHooks;
 	}
 
 	httpBase(): string {
@@ -129,6 +133,7 @@ export class WsTransport {
 				reject(new RequestTimeoutError(t("app.transport.timedOut", { method })));
 			}, timeoutMs);
 			this.pending.set(id, {
+				method,
 				frame,
 				resolve: resolve as (v: unknown) => void,
 				reject,
@@ -183,30 +188,53 @@ export class WsTransport {
 
 	private handleMessage(raw: unknown): void {
 		if (typeof raw !== "string") return;
-		let msg: WsServerMessage;
-		try {
-			msg = JSON.parse(raw) as WsServerMessage;
-		} catch {
+		const msg = parseEnvelope(raw);
+		if (!msg) {
+			console.warn("dropped a host frame that is not a valid envelope");
 			return;
 		}
-		this.beforeDispatch?.(msg);
 		if ("channel" in msg) {
+			const failure = pushFailure(msg.channel, msg.data);
+			if (failure) {
+				this.warnDroppedPush(msg.channel, failure);
+				return;
+			}
+			this.hooks.beforeDispatch?.(msg);
 			if (!NON_REPLAYABLE_CHANNELS.has(msg.channel)) this.latest.set(msg.channel, msg.data);
 			const set = this.subscribers.get(msg.channel);
 			if (set) for (const handler of set) handler(msg.data);
 			return;
 		}
+		this.hooks.beforeDispatch?.(msg);
 		this.queueAck(msg.id);
 		const entry = this.pending.get(msg.id);
 		if (!entry) return;
 		clearTimeout(entry.timer);
 		this.pending.delete(msg.id);
 		if (msg.ok) {
-			entry.resolve(msg.result);
+			const failure = resultFailure(entry.method, msg.result);
+			if (!failure) {
+				entry.resolve(msg.result);
+				return;
+			}
+			console.warn(`refused the reply to ${entry.method}:`, failure);
+			this.hooks.onInvalidReply?.(entry.method);
+			entry.reject(
+				new RequestError(
+					"INVALID_REPLY",
+					t("app.transport.invalidReply", { method: entry.method }),
+				),
+			);
 			return;
 		}
 		const message = msg.error ?? t("app.transport.requestFailed");
 		entry.reject(msg.errorCode ? new RequestError(msg.errorCode, message) : new Error(message));
+	}
+
+	private warnDroppedPush(channel: string, failure: string): void {
+		if (this.warnedChannels.has(channel)) return;
+		this.warnedChannels.add(channel);
+		console.warn(`dropped a push on ${channel}:`, failure);
 	}
 }
 
