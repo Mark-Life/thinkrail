@@ -78,7 +78,7 @@ working files. It is the agent's working plan for that conversation; the user ca
 the UI), and the agent picks them up on its next turn (`todo_list`) and progresses those exact items via
 `todo_update`. The file is the source of truth — `TodoStore` re-reads it on every op — so the agent's
 in-session writes and the user's UI edits converge
-with no staleness window; a missing or corrupt file reads as an empty list. Ephemeral per chat
+with no staleness window; a missing or corrupt file reads as an empty list, and its bytes stay in `<file>.corrupt-<hash>`. Ephemeral per chat
 (gitignored), not committed with the repo.
 
 ## Status ownership & provenance
@@ -119,8 +119,8 @@ The on-disk file `version` is `6` (`3` added artifacts, `4` added the `commit` k
 ## Boundary
 
 - **Allowed deps:** `@earendil-works/pi-coding-agent` — types/public truncation helpers, as a peer
-  dep — and `typebox`, and Node built-ins.
-  `core/` uses Node built-ins only. The tool layer's response-only temporary files do not change
+  dep — `typebox`, Node built-ins, and `@earendil-works/pi-schema` as a real `dependency` (see [[submodule-pi-todos-core]]).
+  `core/` uses Node built-ins and `pi-schema` only. The tool layer's response-only temporary files do not change
   ownership of the canonical TODO store (see [[submodule-pi-todos-tools]]).
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
   tool *name*, never by import. The host reaches this package one way only: `pi-todos/core`

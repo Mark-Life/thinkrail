@@ -15,7 +15,10 @@ dir), read and written by read-modify-write. The
 file is the source of truth; the store holds no mutable state, so every method re-reads and stale reads
 are impossible (the agent's in-session writes and the UI's edits converge on the same file). Robust by
 construction: a missing or corrupt file reads as an empty list, and unknown/invalid fields are dropped on
-read (`sanitize`), so a hand-edited file never crashes a session.
+read (`sanitize`), so a hand-edited file never crashes a session. Private `pi-schema` checks parse the file, each item and
+each artifact; a bad field keeps its entry, as above. When a read loses more than a field — not JSON, not an object, a
+dropped item or group — the bytes go to `<file>.corrupt-<content hash>` first, so the next write cannot destroy the plan. The
+host's state-file rules do not apply here: this package takes no `@thinkrail/*` dep, and its copies have no limit.
 
 **Artifacts.** An item may carry `artifacts` — links to what the work produced: `kind: "file" | "change" |
 "spec" | "commit"`, an optional `label`, and per kind either a worktree-relative `path`
@@ -197,8 +200,9 @@ reload.
 
 ## Boundary
 
-- **Allowed deps:** Node built-ins only (`node:fs`, `node:path`, `node:crypto`).
-- **Forbidden:** any `@earendil-works/*` **and any `@thinkrail/*`** import — this is the pi-free,
+- **Allowed deps:** Node built-ins (`node:fs`, `node:path`, `node:crypto`) and `@earendil-works/pi-schema`, a real
+  `dependency` of this package: `pi install` skips peers and pi's extension loader does not provide it.
+- **Forbidden:** any other `@earendil-works/*` **and any `@thinkrail/*`** import — this is the pi-free,
   thinkrail-free layer the host can value-import without pulling pi into its bundle, and that stays
   installable under vanilla `pi`. Consequence: `STORE_DIR` (`.thinkrail/context/todos`) carries a **local
   mirror** of `@thinkrail/shared`'s `WORKSPACE_CONTEXT_DIR` rather than importing it — the shared constant
