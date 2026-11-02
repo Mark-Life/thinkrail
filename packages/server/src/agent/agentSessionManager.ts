@@ -2622,25 +2622,15 @@ function sessionFileSize(file: string | undefined): number | undefined {
 	}
 }
 
-function rollBackUsageAppend(
-	sessionId: string,
-	sessionManager: SessionManager,
-	leaf: string | null,
-	file: string | undefined,
-	size: number | undefined,
-): boolean {
-	const incorporated = sessionManager.getLeafId() !== leaf;
+function cutTornUsageAppend(sessionId: string, file: string | undefined, size: number | undefined) {
 	try {
-		if (incorporated && leaf) sessionManager.branch(leaf);
-		else if (incorporated) sessionManager.resetLeaf();
 		if (file && size !== undefined && statSync(file).size > size) truncateSync(file, size);
 	} catch (error) {
-		log.warn(`a failed usage append was not rolled back for ${sessionId}`, error as Error);
+		log.warn(`a torn usage append was not cut back for ${sessionId}`, error as Error);
 	}
-	return incorporated;
 }
 
-/** Returns whether pi took the usage into its session totals; persisting it is best-effort. */
+/** Returns whether pi recorded the usage; a failed write records nothing. */
 export function recordSessionUsage(
 	sessionId: string,
 	record: { kind: string; provider: string; model: string; usage: Usage; note?: string },
@@ -2649,17 +2639,15 @@ export function recordSessionUsage(
 	if (!entry) return false;
 	const { sessionManager } = entry.session;
 	const { kind, provider, model, usage, note } = record;
-	const leaf = sessionManager.getLeafId();
 	const file = sessionManager.getSessionFile();
 	const size = sessionFileSize(file);
-	let incorporated = true;
 	try {
 		sessionManager.appendUsage(kind, provider, model, usage, note);
 	} catch (error) {
-		incorporated = rollBackUsageAppend(sessionId, sessionManager, leaf, file, size);
+		cutTornUsageAppend(sessionId, file, size);
 		log.warn(`${kind} usage was not persisted for ${sessionId}`, error as Error);
+		return false;
 	}
-	if (!incorporated) return false;
 	try {
 		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
 	} catch (error) {

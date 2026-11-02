@@ -70,6 +70,7 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 		global: {
 			mcpServers: {
 				fs: { command: "npx", args: ["-y", "server"], env: { TOKEN: `\${TOKEN}` }, cwd: "~/x" },
+				autoreg: { url: "https://auto.example/mcp", oauth: { clientRegistration: "auto" } },
 				docs: {
 					url: "https://example.com/mcp",
 					headers: { Authorization: `Bearer \${DOCS}` },
@@ -98,6 +99,7 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 				neither: { description: "no transport" },
 				callback: { url: "https://x/mcp", oauth: { callbackUrl: "https://evil.example/cb" } },
 				cimd: { url: "https://x/mcp", oauth: { clientRegistration: "cimd", clientId: "a" } },
+				badregistration: { url: "https://x/mcp", oauth: { clientRegistration: "nope" } },
 				auth: { url: "http://x.example/mcp", auth: { provider: "anthropic" } },
 			},
 		},

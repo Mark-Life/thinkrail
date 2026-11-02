@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
@@ -21,13 +20,15 @@ const parameters = Type.Object({
 			"Root-relative path for the new spec file, ending in .md (e.g. src/foo/SPEC.md). Must stay inside the project root.",
 	}),
 	id: Type.String({ description: "Unique spec id." }),
-	type: StringEnum(SPEC_TYPES, {
+	type: Type.Enum(SPEC_TYPES, {
+		type: "string",
 		description:
 			"Spec type: goal-and-requirements | architecture-design | module-design | submodule-design | task-spec.",
 	}),
 	title: Type.String({ description: "Human-readable title." }),
 	status: Type.Optional(
-		StringEnum(SPEC_STATUSES, {
+		Type.Enum(SPEC_STATUSES, {
+			type: "string",
 			description: "Lifecycle status: draft | active | stale | done | deprecated.",
 		}),
 	),

@@ -739,22 +739,19 @@ re-opened transcripts provider-valid.
     appends the remainder, so the toolbar follows a running subagent and pi's own session totals include
     delegated spend for every outcome and consumer (Agent, `request_review`), independent of completion
     delivery. The watermark (`subagentUsage`'s run recorder) is in-memory, lives from a run's first record
-    until its `run-terminal`, and advances whenever pi took the increment into its session (even if
-    persisting it failed), so a write is never counted twice; an increment pi did not take is carried by
-    the next one, but one dropped
+    until its `run-terminal`, and advances only when pi recorded the increment, so a write is never
+    counted twice; an increment pi did not record is carried by the next one, but one dropped
     at `run-terminal` is not carried into the child's next run — reconciliation recovers it. Increments
     record any positive token count or a cost above 1e-9. Progress events skip the listener's
     resource/state publishes (resource summaries carry status, not usage). Progress only freshens the
     readout; crash recovery still comes from child transcripts and reconciliation. This is
     delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
     which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
-    logged and never fails the child run. `recordSessionUsage` reports only whether pi took the usage into
-    its session; persistence stays uncertain. pi moves the leaf to a new entry before persisting it, so a
-    failed append restores the previous leaf (later entries must never chain to an unpersisted id, or a
-    reopened chat loses its history before it) and truncates an existing transcript back to its pre-append
-    size (a torn partial line would swallow the next entry); pi's initial file creation is outside this
-    repair. A usage entry pi kept only in memory counts in this process and is restored on disk by
-    reconciliation after the chat is reopened. Closing
+    logged and never fails the child run. `recordSessionUsage` reports whether pi recorded the usage. Pi
+    drops an entry it could not write, so failed spend stays out of the live totals until a later
+    increment or reconciliation records it. The host only truncates an existing transcript back to its
+    pre-append size (a torn partial line would swallow the next entry); pi's initial file creation is
+    outside this repair. Closing
     a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
     still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
     tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
@@ -1211,7 +1208,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.4.0.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.5.0.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 
