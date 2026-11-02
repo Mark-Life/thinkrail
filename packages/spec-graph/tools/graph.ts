@@ -1,4 +1,3 @@
-import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type GraphSlice, graphSlice, LINK_KINDS, SLICE_DIRECTIONS } from "../core/index.ts";
@@ -6,13 +5,15 @@ import { errorResult, getIndex, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
 	root: Type.String({ description: "Id of the node to start from." }),
-	direction: StringEnum(SLICE_DIRECTIONS, {
+	direction: Type.Enum(SLICE_DIRECTIONS, {
+		type: "string",
 		description:
 			"subtree = down the parent tree; ancestors = up the parent chain; neighbors = across an edge and its reverse.",
 	}),
 	depth: Type.Optional(Type.Number({ description: "How many hops to expand (default: 1)." })),
 	edge: Type.Optional(
-		StringEnum(LINK_KINDS, {
+		Type.Enum(LINK_KINDS, {
+			type: "string",
 			description: "For direction=neighbors: which edge kind to traverse (default: depends-on).",
 		}),
 	),
