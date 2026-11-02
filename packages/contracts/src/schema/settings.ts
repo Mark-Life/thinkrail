@@ -109,15 +109,20 @@ export const LayoutPresetBottomRegion = wireObj({
 });
 export type LayoutPresetBottomRegion = Static<typeof LayoutPresetBottomRegion>;
 
-export const LayoutPreset = wireObj({
+const LAYOUT_PRESET_FIELDS = {
 	id: str(),
 	name: str(),
-	center: LayoutPresetCenterNode,
 	left: LayoutPresetSideRegion,
 	right: LayoutPresetSideRegion,
 	bottom: LayoutPresetBottomRegion,
-});
+};
+
+export const LayoutPreset = wireObj({ ...LAYOUT_PRESET_FIELDS, center: LayoutPresetCenterNode });
 export type LayoutPreset = Static<typeof LayoutPreset>;
+
+const LayoutPresetParamsCenter: Schema<LayoutPresetCenterNode> = { type: "object" };
+
+const LayoutPresetParams = wireObj({ ...LAYOUT_PRESET_FIELDS, center: LayoutPresetParamsCenter });
 
 export const ComposerGrowthLimit = oneOf(["compact", "roomy", "half-chat"]);
 export type ComposerGrowthLimit = Static<typeof ComposerGrowthLimit>;
@@ -139,7 +144,6 @@ const APP_CONFIG_FIELDS = {
 	fileLineWidthBounded: bool(),
 	/** When false, no text field shows the dictation mic and the chord does nothing. */
 	voiceInputEnabled: bool(),
-	customLayoutPresets: arr(LayoutPreset),
 	/** Models the user starred in the picker, in display order; identity is `{provider, id}`. */
 	favoriteModels: arr(WireModel),
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
@@ -177,6 +181,7 @@ const APP_CONFIG_FIELDS = {
 
 export const AppConfig = wireObj({
 	...APP_CONFIG_FIELDS,
+	customLayoutPresets: arr(LayoutPreset),
 	/** The model new chats start with; unset uses the first available model. */
 	defaultModel: opt(WireModel),
 	/** New-chat effort; unset defaults to medium. */
@@ -193,6 +198,7 @@ export type AppConfig = Static<typeof AppConfig>;
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export const AppConfigUpdate = partialWireObj({
 	...APP_CONFIG_FIELDS,
+	customLayoutPresets: arr(LayoutPresetParams),
 	defaultModel: nullable(WireModel),
 	defaultEffort: nullable(ThinkingLevel),
 	reviewModel: nullable(WireModel),

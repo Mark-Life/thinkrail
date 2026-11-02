@@ -1447,7 +1447,13 @@ const handlers: WsHandlers = {
 	"review.commentAdd": (p) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
-			const comment = await addComment(p);
+			const comment = await addComment({
+				workspaceId: p.workspaceId,
+				kind: p.kind,
+				anchor: p.anchor,
+				body: p.body,
+				...(p.scope ? { scope: p.scope } : {}),
+			});
 			captureReviewCommentAdded(capture, comment);
 			return comment;
 		});
