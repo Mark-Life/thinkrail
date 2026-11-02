@@ -1,4 +1,10 @@
-import type { SpeechErrorCode, SpeechModel } from "./schema";
+import { compile } from "@earendil-works/pi-schema";
+import {
+	SpeechClientMessage,
+	type SpeechErrorCode,
+	type SpeechModel,
+	SpeechServerMessage,
+} from "./schema";
 
 type SameUnion<A extends B, B extends C, C = A> = A;
 
@@ -33,50 +39,24 @@ export function isSpeechErrorCode(
 	return SPEECH_ERROR_CODES.some((code) => code === value);
 }
 
-/**
- * Client → host over the speech socket. `start` opens one dictation; PCM16 binary frames follow;
- * `stop` commits the buffered audio and waits for the last final.
- */
-export type SpeechClientMessage = { type: "start" } | { type: "stop" };
+const clientMessage = compile(SpeechClientMessage);
+const serverMessage = compile(SpeechServerMessage);
 
-/** Host → client over the speech socket; `partial` replaces the previous partial, `final` commits it. */
-export type SpeechServerMessage =
-	| { type: "ready" }
-	| { type: "partial"; text: string }
-	| { type: "final"; text: string }
-	| { type: "error"; code: SpeechErrorCode }
-	| { type: "ended" };
+function parseJson(raw: string): unknown {
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return undefined;
+	}
+}
 
 export function parseSpeechServerMessage(raw: unknown): SpeechServerMessage | null {
 	if (typeof raw !== "string") return null;
-	let value: unknown;
-	try {
-		value = JSON.parse(raw);
-	} catch {
-		return null;
-	}
-	if (typeof value !== "object" || value === null) return null;
-	const type = Reflect.get(value, "type");
-	if (type === "ready" || type === "ended") return { type };
-	if (type === "partial" || type === "final") {
-		const text = Reflect.get(value, "text");
-		return typeof text === "string" ? { type, text } : null;
-	}
-	if (type === "error") {
-		const code = Reflect.get(value, "code");
-		return isSpeechErrorCode(code) ? { type, code } : null;
-	}
-	return null;
+	const value = parseJson(raw);
+	return serverMessage.check(value) ? value : null;
 }
 
 export function parseSpeechClientMessage(raw: string): SpeechClientMessage | null {
-	let value: unknown;
-	try {
-		value = JSON.parse(raw);
-	} catch {
-		return null;
-	}
-	if (typeof value !== "object" || value === null) return null;
-	const type = Reflect.get(value, "type");
-	return type === "stop" || type === "start" ? { type } : null;
+	const value = parseJson(raw);
+	return clientMessage.check(value) ? value : null;
 }

@@ -6,6 +6,7 @@ import {
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,
+	reportInvalidReply,
 	resetClientErrorReportsForTests,
 	supportsClientErrorReports,
 } from "./errorReports";
@@ -31,6 +32,23 @@ afterEach(() => {
 	spy?.mockRestore();
 	resetClientErrorReportsForTests();
 	useAppStore.setState({ protocolVersion: null });
+});
+
+test("an invalid reply reports its method and code only, and a report's own reply never reports", () => {
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	reportInvalidReply("client.reportError");
+	expect(requests).toEqual([]);
+	reportInvalidReply("project.list");
+	expect(requests).toEqual([
+		{
+			method: "client.reportError",
+			params: {
+				kind: "rejection",
+				type: "RequestError",
+				boundary: "INVALID_REPLY:project.list",
+			},
+		},
+	]);
 });
 
 test("reports are offered only to a host at or beyond the v90 capability", () => {

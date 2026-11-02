@@ -2,6 +2,7 @@ export {
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,
+	reportInvalidReply,
 } from "./errorReports";
 export { errorText } from "./errorText";
 export { hostUrl, uploadUserFont } from "./fonts";

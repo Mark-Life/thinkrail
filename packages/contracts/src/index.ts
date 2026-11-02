@@ -108,7 +108,6 @@ export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export * from "./schema";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
-export type * from "./speech";
 export {
 	isSpeechErrorCode,
 	isSpeechModel,

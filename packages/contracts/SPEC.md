@@ -49,7 +49,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
   code, so it needs no protocol bump — and **`INVALID_PARAMS`** — dispatch refused params that do not match
-  the method's schema, which only a client bug or a version mismatch produces.
+  the method's schema, which only a client bug or a version mismatch produces. **`INVALID_REPLY`** is the reverse, and
+  only the client mints it: a successful reply failed its result schema ([[submodule-web-transport]]).
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -1271,7 +1272,7 @@ and what it loaded, never pi's own types.
   Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
   (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
   `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
-  `AppConfig` key. `SpeechModel`, `SpeechStatus`, `SpeechErrorCode`, the method schemas and the channel schema live in
+  `AppConfig` key. `SpeechModel`, `SpeechStatus`, `SpeechErrorCode`, the socket frame schemas, the method schemas and the channel schema live in
   `schema/speech.ts`; `SPEECH_MODELS` and `SPEECH_ERROR_CODES` list their values.
 - **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
   dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
@@ -1281,8 +1282,9 @@ and what it loaded, never pi's own types.
     **`SPEECH_SAMPLE_RATE`** (16 kHz) in between.
   - Host to client: `SpeechServerMessage` JSON (`ready`, `partial` replacing the previous partial,
     `final` committing it, `error {code}`, `ended`).
-  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Both reject anything
-    outside these closed shapes.
+  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Each checks a frame
+    against its `schema/speech.ts` schema, as the `/ws` transport checks its frames: an unknown `type`,
+    a missing field, or an unknown error code is rejected; extra fields pass.
 - Transcripts never enter the main wire, persistence, or error reports.
 
 ## Normalized session state

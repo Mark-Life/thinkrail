@@ -39,7 +39,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. Reconnect/backoff;
   `inferUrl` defaults to
-  same-origin; **`httpBase()`** derives the host's HTTP origin
+  same-origin; `wireChecks.ts` (see **Wire checks** under Get right); **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `piEventBatcher.ts`
   (the browser-side bounded queue for consecutive `pi.event` frames: exact arrival order, no dropped events,
@@ -172,7 +172,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
-  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
+  `installClientErrorReporting`, `reportClientError`, `reportInvalidReply`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
   (`supportsToolResponses`), for one compatibility window — [[module-contracts]]. `runHostUpdate` is the typed empty host action
@@ -204,9 +204,9 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
   and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
   client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.
-- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
+- **Allowed deps:** `@earendil-works/pi-schema` (`compile` only, in `wireChecks.ts`); `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
-  `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
+  `WorkspaceRemoved` for `workspace.removed`, `WS_METHOD_SCHEMAS` + `WS_CHANNEL_SCHEMAS` + `WsEnvelope` + `AnyHostWelcome` for the wire checks,
   `SessionDeletedPayload` for `session.deleted`,
   `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
   `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
@@ -219,10 +219,21 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); `@thinkrail/locales` (user-visible request-failure messages); the browser `WebSocket`.
-- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
+- **Forbidden:** `server`/`shared`/any `pi` package other than `pi-schema`; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
 
 ## Get right
 
+- **Wire checks live in one place.** `handleMessage` parses the envelope, then each push by its channel and each
+  successful reply by its method. Everything past it trusts the type. Checks run in production: measured against the bare
+  transport, they add about 81 KB raw and 24 KB gzip of initial JS and about 0.1 µs per `pi.event`. Each schema compiles on
+  first use, and `pi-schema` generates no code, so a CSP without `unsafe-eval` does not refuse it.
+  - A push that fails, or names an unknown channel, is dropped and warned once per channel. It does not flush the Pi
+    event barrier or enter the replay cache. A new channel or a bad event must not stop the UI.
+  - A reply that fails rejects that request with `INVALID_REPLY` and calls `onInvalidReply`. `main.tsx` wires that hook to
+    `reportInvalidReply`, whose report carries the method and code in `boundary`, never the reply. Its receipt is still sent.
+  - A frame that is no valid envelope is dropped; a request it would have answered ends at its own timeout.
+  - Objects are open, so extra fields from a newer host pass. A required field that an older host lacks fails. Only
+    `server.welcome` has a floor ([[submodule-contracts-schema]]).
 - **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**
   The server bounds network `git` at 55s precisely so its own error — naming the ref, carrying git's
   stderr — wins the race against the causeless `request "…" timed out` this side raises at 60s (issue #209;
