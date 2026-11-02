@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { compile } from "@earendil-works/pi-schema";
-import { WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
-import { checkWsResult, wireChecksOn } from "./wsResults";
+import { WS_CHANNEL_SCHEMAS, WS_CHANNELS, WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
+import { checkWsPush, checkWsResult, pushFrame, wireChecksOn } from "./wsResults";
 
 test("a reply that breaks its schema fails with the method and the field", () => {
 	expect(() => checkWsResult("workspace.diffStats", { added: "1", removed: 0 })).toThrow(
@@ -27,4 +27,29 @@ test("the check reads the JSON the client gets, not the object the handler made"
 test("every result schema compiles", () => {
 	for (const { result } of Object.values(WS_METHOD_SCHEMAS))
 		expect(() => compile(result)).not.toThrow();
+});
+
+test("a push that breaks its schema fails with the channel and the field", () => {
+	expect(() => checkWsPush("workspace.removed", { projectId: 1, id: "w" })).toThrow(
+		/ws push check failed: workspace\.removed: \/projectId /,
+	);
+});
+
+test("pi.event checks only the type tag", () => {
+	const push = { sessionId: "s", event: { type: "from_a_newer_pi", anything: 1 } };
+	expect(() => checkWsPush("pi.event", push)).not.toThrow();
+	expect(() => checkWsPush("pi.event", { sessionId: "s", event: {} })).toThrow(/\/event\/type /);
+});
+
+test("pushFrame sends the channel and payload the client reads", () => {
+	const frame = pushFrame(WS_CHANNELS.workspaceRemoved, { projectId: "p", id: "w" });
+	expect(JSON.parse(frame)).toEqual({
+		channel: "workspace.removed",
+		data: { projectId: "p", id: "w" },
+	});
+});
+
+test("every channel has a schema that compiles", () => {
+	for (const channel of Object.values(WS_CHANNELS))
+		expect(() => compile(WS_CHANNEL_SCHEMAS[channel])).not.toThrow();
 });

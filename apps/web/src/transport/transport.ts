@@ -1,4 +1,11 @@
-import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
+import type {
+	WsChannel,
+	WsChannelPayload,
+	WsMethodName,
+	WsParams,
+	WsResult,
+	WsServerMessage,
+} from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
@@ -132,16 +139,20 @@ export class WsTransport {
 		});
 	}
 
-	subscribe(channel: string, handler: PushHandler): () => void {
+	subscribe<C extends WsChannel>(
+		channel: C,
+		handler: (data: WsChannelPayload<C>) => void,
+	): () => void {
+		const untyped = handler as PushHandler;
 		let set = this.subscribers.get(channel);
 		if (!set) {
 			set = new Set();
 			this.subscribers.set(channel, set);
 		}
-		set.add(handler);
-		if (this.latest.has(channel)) handler(this.latest.get(channel));
+		set.add(untyped);
+		if (this.latest.has(channel)) untyped(this.latest.get(channel));
 		return () => {
-			this.subscribers.get(channel)?.delete(handler);
+			this.subscribers.get(channel)?.delete(untyped);
 		};
 	}
 

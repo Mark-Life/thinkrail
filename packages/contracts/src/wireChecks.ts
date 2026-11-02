@@ -1,6 +1,13 @@
-import { compile, type JsonSchema, type Static, type Validator } from "@earendil-works/pi-schema";
-import { WS_METHOD_SCHEMAS as M } from "./schema";
-import type { WsMethodName, WsResult } from "./wsProtocol";
+import {
+	compile,
+	type JsonSchema,
+	type Schema,
+	type Static,
+	type Validator,
+} from "@earendil-works/pi-schema";
+import type { SessionEventPayload } from "./piProtocol";
+import { WS_CHANNEL_SCHEMAS as C, WS_METHOD_SCHEMAS as M } from "./schema";
+import type { WsChannel, WsChannelPayload, WsMethodName, WsResult } from "./wsProtocol";
 
 const MAX_DESCRIBED_ERRORS = 5;
 
@@ -224,4 +231,50 @@ const RESULTS: ResultValidators = {
 /** The compiled result schema of `method`, built on first use. */
 export function wsResultValidator<K extends WsMethodName>(method: K) {
 	return RESULTS[method]();
+}
+
+/** pi owns its events: the wire checks `sessionId` and `event.type`, and the reducer reads the rest as pi typed it. */
+const PiEventPush: Schema<SessionEventPayload> = { allOf: [C["pi.event"]] };
+
+type PushValidators = { readonly [K in WsChannel]: () => Validator<WsChannelPayload<K>> };
+
+const PUSHES: PushValidators = {
+	"server.welcome": lazyValidator(C["server.welcome"]),
+	"project.updated": lazyValidator(C["project.updated"]),
+	"pi.event": lazyValidator(PiEventPush),
+	"pi.extensionUi": lazyValidator(C["pi.extensionUi"]),
+	"session.created": lazyValidator(C["session.created"]),
+	"session.deleted": lazyValidator(C["session.deleted"]),
+	"session.resourcesChanged": lazyValidator(C["session.resourcesChanged"]),
+	"session.state": lazyValidator(C["session.state"]),
+	"provider.login": lazyValidator(C["provider.login"]),
+	"provider.changed": lazyValidator(C["provider.changed"]),
+	"terminal.data": lazyValidator(C["terminal.data"]),
+	"terminal.exit": lazyValidator(C["terminal.exit"]),
+	"terminal.detached": lazyValidator(C["terminal.detached"]),
+	"terminal.tabs": lazyValidator(C["terminal.tabs"]),
+	"workspace.created": lazyValidator(C["workspace.created"]),
+	"workspace.updated": lazyValidator(C["workspace.updated"]),
+	"workspace.removed": lazyValidator(C["workspace.removed"]),
+	"workspace.fsChanged": lazyValidator(C["workspace.fsChanged"]),
+	"workspace.creationChanged": lazyValidator(C["workspace.creationChanged"]),
+	"workspace.creationRemoved": lazyValidator(C["workspace.creationRemoved"]),
+	"settings.changed": lazyValidator(C["settings.changed"]),
+	"host.updateAvailable": lazyValidator(C["host.updateAvailable"]),
+	"feedback.interview": lazyValidator(C["feedback.interview"]),
+	"feedback.githubStar": lazyValidator(C["feedback.githubStar"]),
+	"review.changed": lazyValidator(C["review.changed"]),
+	"review.failed": lazyValidator(C["review.failed"]),
+	"turn.changed": lazyValidator(C["turn.changed"]),
+	"mcp.status": lazyValidator(C["mcp.status"]),
+	"locales.changed": lazyValidator(C["locales.changed"]),
+	"themes.changed": lazyValidator(C["themes.changed"]),
+	"packages.changed": lazyValidator(C["packages.changed"]),
+	"fonts.changed": lazyValidator(C["fonts.changed"]),
+	"speech.changed": lazyValidator(C["speech.changed"]),
+};
+
+/** The compiled payload schema of `channel`, as the host sends it, built on first use. */
+export function wsPushValidator<K extends WsChannel>(channel: K) {
+	return PUSHES[channel]();
 }

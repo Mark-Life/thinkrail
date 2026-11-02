@@ -232,3 +232,7 @@ export const MCP_METHODS = {
 	},
 	"mcp.readLog": { params: wireObj({ workspaceId: str(), name: str() }), result: McpServerLog },
 };
+
+export const MCP_CHANNELS = {
+	"mcp.status": McpStatusSnapshot,
+};

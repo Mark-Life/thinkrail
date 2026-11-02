@@ -125,7 +125,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions);
-  from `wireChecks`, `describeFailure` and `wsResultValidator`.
+  from `wireChecks`, `describeFailure`, `wsResultValidator` and `wsPushValidator`.
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).
@@ -686,6 +686,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   wording of a schema refusal: up to five `path message` pairs, with `root` naming the value itself.
   `wsResultValidator(method)` is the result schema of a method, compiled on first use and typed `Validator<WsResult<M>>`
   through a table with one row per method, so no caller casts what it checked.
+  `wsPushValidator(channel)` does the same per push channel. `pi.event` is the one row that types more than it checks:
+  pi owns its event shapes, so the wire checks `sessionId` and `event.type` and `PiEventPush` carries
+  `SessionEventPayload`, as `WsChannelMap` does.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
@@ -1287,7 +1290,8 @@ and what it loaded, never pi's own types.
   Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
   (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
   `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
-  `AppConfig` key. `SpeechModel` and the method schemas live in `schema/speech.ts`; `SPEECH_MODELS` lists its values.
+  `AppConfig` key. `SpeechModel`, `SpeechStatus`, `SpeechErrorCode`, the method schemas and the channel schema live in
+  `schema/speech.ts`, with the `SPEECH_MODELS` and `SPEECH_ERROR_CODES` tuples their schemas are built from.
 - **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
   dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
   request, which cannot absorb 20 ms audio frames.

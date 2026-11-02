@@ -1,24 +1,8 @@
 import type {
 	Ack,
-	AppConfig,
-	ExtUiRequest,
-	HostUpdateNotice,
-	LoginPush,
-	McpStatusPayload,
-	Project,
-	ReviewChangedPayload,
 	ServerWelcome,
-	SessionCreatedPayload,
-	SessionDeletedPayload,
-	SessionEventPayload,
 	SessionStateRecord,
-	SpeechStatus,
-	TurnChangeSet,
 	Workspace,
-	WorkspaceCreation,
-	WorkspaceCreationRemoved,
-	WorkspaceFsChangedPayload,
-	WorkspaceRemoved,
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
@@ -330,7 +314,7 @@ export function initTransport(): WsTransport {
 	);
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
-		const welcome = data as Partial<ServerWelcome>;
+		const welcome: Partial<ServerWelcome> = data;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
 		useAppStore.getState().hideSurveyInvitation();
 		useAppStore
@@ -367,23 +351,22 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
-		useAppStore.getState().applyHostUpdate(data as HostUpdateNotice);
+		useAppStore.getState().applyHostUpdate(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {
-		useAppStore.getState().applyProjectUpdated(data as Project);
+		useAppStore.getState().applyProjectUpdated(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
-		piEvents.enqueue(data as SessionEventPayload);
+		piEvents.enqueue(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
-		useAppStore.getState().applyExtUi(data as ExtUiRequest);
+		useAppStore.getState().applyExtUi(data);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
-		const summary = data as SessionCreatedPayload;
+	transport.subscribe(WS_CHANNELS.sessionCreated, (summary) => {
 		useAppStore.getState().noteClosedChats(summary.workspaceId, [
 			{
 				sessionId: summary.sessionId,
@@ -394,13 +377,11 @@ export function initTransport(): WsTransport {
 		]);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
-		const { workspaceId, sessionId } = data as SessionDeletedPayload;
+	transport.subscribe(WS_CHANNELS.sessionDeleted, ({ workspaceId, sessionId }) => {
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionState, (data) => {
-		const record = data as SessionStateRecord;
+	transport.subscribe(WS_CHANNELS.sessionState, (record) => {
 		const hydration = sessionStateHydration;
 		const current = useAppStore.getState();
 		if (hydration && hydration.generation !== current.connectionGeneration) return;
@@ -416,8 +397,7 @@ export function initTransport(): WsTransport {
 		applySessionStateRecord(record);
 	});
 
-	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
-		const push = data as LoginPush;
+	transport.subscribe(WS_CHANNELS.providerLogin, (push) => {
 		const state = useAppStore.getState();
 		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
 			void getTransport()
@@ -429,7 +409,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.mcpStatus, (data) => {
-		useAppStore.getState().applyMcpStatus(data as McpStatusPayload);
+		useAppStore.getState().applyMcpStatus(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerChanged, () => {
@@ -458,7 +438,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.speechChanged, (data) => {
-		useAppStore.getState().installSpeechStatus(data as SpeechStatus);
+		useAppStore.getState().installSpeechStatus(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
@@ -473,7 +453,7 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
 		const store = useAppStore.getState();
-		store.addWorkspace(data as Workspace);
+		store.addWorkspace(data);
 		if (
 			store.protocolVersion !== null &&
 			store.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION &&
@@ -484,37 +464,35 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreationChanged, (data) => {
-		useAppStore.getState().applyWorkspaceCreation(data as WorkspaceCreation);
+		useAppStore.getState().applyWorkspaceCreation(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreationRemoved, (data) => {
-		useAppStore.getState().applyWorkspaceCreationRemoved(data as WorkspaceCreationRemoved);
+		useAppStore.getState().applyWorkspaceCreationRemoved(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {
-		useAppStore.getState().updateWorkspace(data as Workspace);
+		useAppStore.getState().updateWorkspace(data);
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
-		const { projectId, id } = data as WorkspaceRemoved;
+	transport.subscribe(WS_CHANNELS.workspaceRemoved, ({ projectId, id }) => {
 		retireWorkspace(projectId, id);
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
-		const payload = data as ReviewChangedPayload;
-		useAppStore.getState().applyReviewChanged(payload);
+		useAppStore.getState().applyReviewChanged(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
-		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+		useAppStore.getState().noteFsChanged(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {
-		useAppStore.getState().applyTurnChanged(data as TurnChangeSet);
+		useAppStore.getState().applyTurnChanged(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
-		useAppStore.getState().applyConfig(data as AppConfig);
+		useAppStore.getState().applyConfig(data);
 	});
 
 	transport.connect();

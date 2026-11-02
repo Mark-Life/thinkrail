@@ -1,10 +1,4 @@
-import type {
-	PiEvent,
-	ReviewChangedPayload,
-	ReviewFailedPayload,
-	SessionEventPayload,
-	TodoPlan,
-} from "@thinkrail/contracts";
+import type { PiEvent, TodoPlan } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { t as translate } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
@@ -94,8 +88,7 @@ export function useAutoPlanSummary(workspaceId: string, sessionId: string): void
 			if (cancelled || !res?.summary) return;
 			signalTodoRefetch(identity);
 		};
-		const unsub = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
-			const event = payload as SessionEventPayload;
+		const unsub = getTransport().subscribe(WS_CHANNELS.piEvent, (event) => {
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) void check();
 		});
@@ -186,8 +179,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (refetch) clearTimeout(refetch);
 			refetch = setTimeout(() => load(false), 250);
 		};
-		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
-			const event = payload as SessionEventPayload;
+		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (event) => {
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
@@ -198,14 +190,13 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		// The same broadcast fires for any review edit (a finding deleted/resolved can clear a step's
 		// host-derived changes_requested decoration), so this one subscription covers those too.
 		const unsubscribeReview = getTransport().subscribe(WS_CHANNELS.reviewChanged, (payload) => {
-			if ((payload as ReviewChangedPayload).workspaceId === workspaceId) scheduleRefetch();
+			if (payload.workspaceId === workspaceId) scheduleRefetch();
 		});
 		// A detached review has no chat to carry a failure; the owning plan raises it as a toast (routed by
 		// sessionId, deduped across split views by the toast body). See panels/SPEC.md.
 		const unsubscribeReviewFailed = getTransport().subscribe(
 			WS_CHANNELS.reviewFailed,
-			(payload) => {
-				const failure = payload as ReviewFailedPayload;
+			(failure) => {
 				if (failure.workspaceId !== workspaceId || failure.sessionId !== sessionId) return;
 				toast.error(
 					failure.message,
