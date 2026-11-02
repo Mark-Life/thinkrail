@@ -2007,6 +2007,7 @@
 	"shell.workbench.reviewFlag": "Revisión",
 	"shell.workbench.terminalCreateFailed": "No se pudo crear la terminal",
 	"store.chatTab.defaultName": "Chat",
+	"store.config.readFailed": "No se pudieron leer los ajustes de config.json. Se usan los valores predeterminados hasta que se corrija el archivo.",
 	"store.settled.byYou": "por ti",
 	"store.settled.byYouTitle": "Archivado por ti",
 	"store.settled.byYouTitleAt": "Archivado por ti {{time}}",

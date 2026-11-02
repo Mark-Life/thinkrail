@@ -1117,6 +1117,7 @@ interface AppState {
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
+	configReadNoticeId: string | null;
 	setStatus: (status: ConnectionStatus) => void;
 	setOnboardingWizard: (gate: OnboardingWizardGate) => void;
 	installWelcomeSnapshot: (
@@ -1434,6 +1435,7 @@ interface AppState {
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
+	syncConfigReadNotice: (failed: boolean) => void;
 	dismissToast: (id: string) => void;
 }
 
@@ -2410,6 +2412,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
+	configReadNoticeId: null,
 	resourceSnapshots: {},
 	resourceRevision: 0,
 	mcpByWorkspace: {},
@@ -4630,6 +4633,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		});
 		return id;
+	},
+	syncConfigReadNotice: (failed) => {
+		const { configReadNoticeId, dismissToast, pushToast } = get();
+		if (failed === (configReadNoticeId !== null)) return;
+		if (configReadNoticeId !== null) dismissToast(configReadNoticeId);
+		set({
+			configReadNoticeId: failed
+				? pushToast({
+						variant: "warning",
+						message: t("store.config.readFailed"),
+						durationMs: Number.POSITIVE_INFINITY,
+					})
+				: null,
+		});
 	},
 	dismissToast: (id) =>
 		set((s) =>

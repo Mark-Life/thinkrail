@@ -1,4 +1,13 @@
-import { arr, num, oneOf, opt, type Schema, type Static, str } from "@earendil-works/pi-schema";
+import {
+	arr,
+	bool,
+	num,
+	oneOf,
+	opt,
+	type Schema,
+	type Static,
+	str,
+} from "@earendil-works/pi-schema";
 import { Project } from "./project";
 import { AppConfig } from "./settings";
 import { Ack, NoParams, wireObj } from "./wire";
@@ -21,6 +30,7 @@ export const ServerWelcome = wireObj({
 	appVersion: opt(str()),
 	hostPlatform: opt(HostPlatform),
 	hostUpdate: opt(HostUpdateNotice),
+	configReadFailed: opt(bool()),
 	projects: arr(Project),
 	recentProjects: arr(Project),
 	config: AppConfig,
@@ -37,6 +47,7 @@ export const AnyHostWelcome = wireObj({
 	appVersion: opt(str()),
 	hostPlatform: opt(str()),
 	hostUpdate: opt(bareObject<HostUpdateNotice>()),
+	configReadFailed: opt(bool()),
 	projects: arr(bareObject<Project>()),
 	recentProjects: opt(arr(bareObject<Project>())),
 	config: opt(bareObject<AppConfig>()),

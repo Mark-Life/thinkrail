@@ -111,7 +111,7 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
-import { getConfig, setSettingsPublisher } from "../settings";
+import { configReadFailed, getConfig, setSettingsPublisher } from "../settings";
 import {
 	clearTerminalClient,
 	closeAllTerminals,
@@ -435,6 +435,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						? process.platform
 						: "linux";
 				const setupCapture = additionalCapture();
+				const configUnreadable = configReadFailed();
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					hostPlatform,
@@ -443,6 +444,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
+					...(configUnreadable ? { configReadFailed: true } : {}),
 				};
 				setupObservation.observe(setupCapture, {
 					project_present: welcome.projects.length > 0 ? "yes" : "no",

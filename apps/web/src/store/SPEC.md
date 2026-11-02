@@ -594,7 +594,9 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   never coalesces actionable receipts whose callbacks name different inverses, and applies the **5-toast cap
   only by evicting the oldest actionless notifications**. Actionable receipts remain until their own bounded
   duration closes them or the user dismisses them; if actions already exceed five, a new actionless toast is
-  the cap's eviction candidate rather than an Undo receipt.
+  the cap's eviction candidate rather than an Undo receipt. **`syncConfigReadNotice(failed)`** owns the one warning
+  toast for a `config.json` the host could not read (`configReadNoticeId`): it stays until dismissed, a repeat welcome
+  does not raise it again, and a good read removes it and lets a later failure show it again.
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
   complementing `appendErrorTurn` (which handles the in-chat case).
   **`packagesVersion`** + **`bumpPackagesVersion()`** is the same shape for installed pi packages: the

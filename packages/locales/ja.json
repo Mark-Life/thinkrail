@@ -1860,6 +1860,7 @@
 	"shell.workbench.reviewFlag": "レビュー",
 	"shell.workbench.terminalCreateFailed": "ターミナルを作成できませんでした",
 	"store.chatTab.defaultName": "チャット",
+	"store.config.readFailed": "config.json から設定を読み取れませんでした。ファイルが修正されるまで既定の設定を使用します。",
 	"store.settled.byYou": "手動",
 	"store.settled.byYouTitle": "手動で整理済みにしました",
 	"store.settled.byYouTitleAt": "{{time}}に手動で整理済みにしました",

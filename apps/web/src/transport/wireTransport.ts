@@ -268,6 +268,7 @@ export function initTransport(onInvalidReply?: (method: WsMethodName) => void): 
 				welcome.hostUpdate,
 				welcome.appVersion,
 			);
+		useAppStore.getState().syncConfigReadNotice(welcome.configReadFailed === true);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);
@@ -416,6 +417,7 @@ export function initTransport(onInvalidReply?: (method: WsMethodName) => void): 
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data);
+		useAppStore.getState().syncConfigReadNotice(false);
 	});
 
 	transport.connect();

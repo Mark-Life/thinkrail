@@ -2951,6 +2951,36 @@ test("welcome replaces and clears the synchronized host update notice", () => {
 	expect(useAppStore.getState().hostUpdate).toBeNull();
 });
 
+test("the config read notice shows once across welcomes and a good read removes it", () => {
+	const store = useAppStore.getState();
+	const notices = () =>
+		useAppStore.getState().toasts.filter((toast) => toast.message.includes("config.json"));
+
+	store.syncConfigReadNotice(false);
+	expect(notices()).toEqual([]);
+
+	store.syncConfigReadNotice(true);
+	store.syncConfigReadNotice(true);
+	expect(notices()).toHaveLength(1);
+	expect(notices()[0]).toMatchObject({
+		variant: "warning",
+		durationMs: Number.POSITIVE_INFINITY,
+	});
+
+	const [shown] = notices();
+	if (!shown) throw new Error("the notice was not shown");
+	store.dismissToast(shown.id);
+	store.syncConfigReadNotice(true);
+	expect(notices()).toEqual([]);
+
+	store.syncConfigReadNotice(false);
+	store.syncConfigReadNotice(true);
+	expect(notices()).toHaveLength(1);
+	store.syncConfigReadNotice(false);
+	expect(notices()).toEqual([]);
+	expect(useAppStore.getState().configReadNoticeId).toBeNull();
+});
+
 test("host update pushes replace the same slot with each optional lifecycle snapshot", () => {
 	useAppStore.getState().applyHostUpdate(hostNotice("0.2.0", "available"));
 	useAppStore.getState().applyHostUpdate(hostNotice("0.2.0", "running"));
