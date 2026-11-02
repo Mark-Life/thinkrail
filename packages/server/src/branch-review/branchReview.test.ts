@@ -654,6 +654,104 @@ test("a failed repository read leaves merge methods out without failing the look
 	expect(outcome.value?.details).toEqual({ draft: false, reviewers: [], mergeState: "clean" });
 });
 
+test("a field gh adds, at any depth, changes nothing", async () => {
+	const cwd = repo("git@github.com:acme/new-fields.git");
+	const { run } = githubRunner(
+		openPrRow("acme/new-fields", {
+			autoMergeRequest: { enabledAt: "2026-10-01T08:00:00Z" },
+			headRepositoryOwner: { id: "U_1", login: "acme", isBot: false },
+			headRepository: { id: "R_1", name: "new-fields", visibility: "PRIVATE" },
+			statusCheckRollup: [
+				{
+					__typename: "CheckRun",
+					name: "unit",
+					status: "COMPLETED",
+					conclusion: "SUCCESS",
+					detailsUrl: "https://ci.example/1",
+				},
+			],
+			latestReviews: [{ author: { login: "cy", name: "Cy" }, state: "APPROVED", body: "ok" }],
+		}),
+		JSON.stringify({ squashMergeAllowed: true, viewerCanAdminister: false }),
+	);
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", run);
+	expect(review?.details).toEqual({
+		draft: false,
+		checks: { passing: 1, pending: 0, failing: 0, failingNames: [] },
+		reviewers: [{ login: "cy", state: "approved" }],
+		mergeState: "clean",
+		mergeMethods: ["squash"],
+	});
+});
+
+test("fields an older gh leaves out or sends as null read as not reported", async () => {
+	const cwd = repo("git@github.com:acme/older.git");
+	const { run } = githubRunner(
+		{
+			number: 128,
+			state: "OPEN",
+			isDraft: true,
+			headRepositoryOwner: { login: "acme" },
+			headRepository: { name: "older" },
+			reviewDecision: null,
+			statusCheckRollup: null,
+			latestReviews: null,
+			baseRefName: null,
+		},
+		JSON.stringify({ mergeCommitAllowed: true, rebaseMergeAllowed: null }),
+	);
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", run);
+	expect(review?.details).toEqual({
+		draft: true,
+		reviewers: [],
+		mergeState: "unknown",
+		mergeMethods: ["merge"],
+	});
+});
+
+test("one unreadable check or review is skipped and the rest still count", async () => {
+	const cwd = repo("git@github.com:acme/bad-entry.git");
+	const { run } = githubRunner(
+		openPrRow("acme/bad-entry", {
+			statusCheckRollup: [
+				"not a check",
+				{ name: 5, status: "COMPLETED", conclusion: "FAILURE" },
+				{ name: "unit", status: "COMPLETED", conclusion: "FAILURE" },
+			],
+			latestReviews: [null, { author: { login: "cy" }, state: "APPROVED" }],
+		}),
+		"{}",
+	);
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", run);
+	expect(review?.details?.checks).toEqual({
+		passing: 0,
+		pending: 0,
+		failing: 1,
+		failingNames: ["unit"],
+	});
+	expect(review?.details?.reviewers).toEqual([{ login: "cy", state: "approved" }]);
+});
+
+test("a row with a wrong field reads as no answer, and is asked again", async () => {
+	const cwd = repo("git@github.com:acme/wrong-field.git");
+	const { run, commands } = githubRunner(openPrRow("acme/wrong-field", { isDraft: "no" }), "{}");
+	const outcome = await findBranchReviewOutcomeWithRunner(cwd, "feature", run);
+	expect(outcome).toEqual({ value: null, reliable: false });
+	await findBranchReviewOutcomeWithRunner(cwd, "feature", run);
+	expect(commands).toHaveLength(2);
+});
+
+test("an unreadable repository reply leaves merge methods out without failing the lookup", async () => {
+	const cwd = repo("git@github.com:acme/bad-settings.git");
+	const { run } = githubRunner(
+		openPrRow("acme/bad-settings"),
+		JSON.stringify({ squashMergeAllowed: "yes" }),
+	);
+	const outcome = await findBranchReviewOutcomeWithRunner(cwd, "feature", run);
+	expect(outcome.reliable).toBe(true);
+	expect(outcome.value?.details).toEqual({ draft: false, reviewers: [], mergeState: "clean" });
+});
+
 test("a same-named branch's PR from a fork carries no details, so nothing offers to act on it", async () => {
 	const cwd = repo("git@github.com:acme/forked.git");
 	const { run, commands } = githubRunner(openPrRow("contributor/forked", { isDraft: true }), "{}");

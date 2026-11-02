@@ -118,3 +118,9 @@ test("parseVerdict defaults a finding's kind and drops absent location fields", 
 	);
 	expect(result?.findings[0]).toEqual({ id: "f1", kind: "inline", body: "no location" });
 });
+
+test("parseVerdict refuses JSON that is not an object", () => {
+	for (const text of ["[]", "null", '"approve"', "3"]) {
+		expect(parseVerdict(text, ID, TITLE)).toBeNull();
+	}
+});
