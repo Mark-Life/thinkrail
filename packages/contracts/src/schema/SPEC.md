@@ -39,6 +39,9 @@ runtime form yet.
   field pi adds or a field the schema drops fails `tsc` here. `StopReason` lists its values the same way.
 - **A pi shape with no schema is results only.** `piOwned<T>()` carries pi's type with a bare object check, as in
   `Message` inside `TranscriptMessage`. Params never use it: dispatch would not check them.
+- **A recursive shape keeps its hand type.** Builders cannot express `FileNode`, so it stays an interface beside a
+  raw JSON Schema annotated `Schema<FileNode>`. `$id` makes its `$ref: "#"` point at the node, not at the schema
+  that embeds it.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

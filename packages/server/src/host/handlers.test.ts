@@ -1278,3 +1278,30 @@ test("project replies match their wire schemas", async () => {
 	const listed = await handleRequest("project.list", {}, CTX);
 	expect(compile(list.result).errors(listed)).toEqual([]);
 });
+
+test("an unknown diff scope or revert target is refused before a handler runs", async () => {
+	const base = { workspaceId: "missing", path: "a.txt" };
+	await expect(
+		handleRequest("git.status", { workspaceId: "missing", scope: { kind: "typo" } }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	await expect(
+		handleRequest(
+			"change.revert",
+			{
+				...base,
+				scope: { kind: "branch" },
+				target: { kind: "typo" },
+				expect: { originalHash: null, modifiedHash: null },
+			},
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+});
+
+test("the fs.readDir reply schema checks nodes at every depth", () => {
+	const validator = compile(WS_METHOD_SCHEMAS["fs.readDir"].result);
+	const dir = { path: "a", name: "a", kind: "dir" };
+	const nested = (child: object) => [{ ...dir, children: [{ ...dir, children: [child] }] }];
+	expect(validator.errors(nested({ path: "a/a/b", name: "b", kind: "file" }))).toEqual([]);
+	expect(validator.errors(nested({ path: "a/a/b", name: "b", kind: "socket" }))).not.toEqual([]);
+});
