@@ -69,7 +69,7 @@ list for registry extensions.
   extension outside `registry.ts`. The one tool name the host knows is `web_search`, in `agent`'s
   headless-search policy: it compensates for the host's UI for any copy of `pi-web-access`, so it is not
   the extension's to own.
-- **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
+- **Allowed deps:** `pi-schema`, `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
   Node `module`/`fs`/`path`.
 - **Forbidden:** `host`; `settings` (the disabled set arrives as a parameter); sibling features; resolving extension-owned packages from the host's own

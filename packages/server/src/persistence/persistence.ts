@@ -65,7 +65,12 @@ export {
 	type RedeemedAttribution,
 } from "./attributionProtocol";
 export type { InstallationRecord } from "./installation";
-export { observeStateFileProblems } from "./stateFile";
+export {
+	assertOverwriteAllowed,
+	observeStateFileProblems,
+	parseEntryRecord,
+	readStateFile,
+} from "./stateFile";
 
 export function dataDir(): string {
 	return resolve(process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail"));
