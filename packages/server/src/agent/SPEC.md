@@ -1661,10 +1661,10 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   one `readAvailableWireModels` read so the projection can't be bypassed by adding a caller; every inbound
   model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
-  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels +
-  cost{input,output} + input + auth` is an
-  **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit test pins the
-  exact key set). `thinkingLevels` is a computed field: pi-ai's `getSupportedThinkingLevels(model)`
+  `WireModel` is a schema in `contracts/src/schema/model.ts`: `id`, `name`, `provider`, `contextWindow`,
+  `reasoning`, `thinkingLevels`, `cost{input,output}`, `input`, `auth`. `toWireModel` copies those fields by name,
+  so the projection is an **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit
+  test pins the exact key set). `thinkingLevels` is a computed field: pi-ai's `getSupportedThinkingLevels(model)`
   mapped at the same choke point, so the effort picker renders pi's per-model support truth without the
   client re-deriving it. `cost` keeps only the two list prices (pi's `ModelCost` tiers and cache rates stay
   host-side) and `input` the modality list. **`auth`** is the per-provider connection kind projected onto

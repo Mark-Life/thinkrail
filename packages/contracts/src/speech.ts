@@ -1,8 +1,12 @@
 import type { SpeechModel } from "./schema";
 
+type SameUnion<A extends B, B extends C, C = A> = A;
+
 export const SPEECH_MODELS = ["multilingual", "english"] as const satisfies readonly SpeechModel[];
 
-export function isSpeechModel(value: unknown): value is SpeechModel {
+export function isSpeechModel(
+	value: unknown,
+): value is SameUnion<SpeechModel, (typeof SPEECH_MODELS)[number]> {
 	return SPEECH_MODELS.some((model) => model === value);
 }
 
