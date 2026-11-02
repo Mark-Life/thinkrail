@@ -9,7 +9,6 @@ import type {
 	ChangeReceipt,
 	CompletionDelivery,
 	DelegationRunStatus,
-	DetectedAccount,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -25,12 +24,7 @@ import type {
 	HostEnvironmentStatus,
 	HostEnvironmentUpdateResult,
 	InstalledFontsResult,
-	JbcentralActionResult,
-	JbcentralConnectResult,
-	JbcentralLoginResult,
-	JbcentralQuotaSnapshot,
 	LocalLocalesSnapshot,
-	LoginReply,
 	McpExposure,
 	McpListResult,
 	McpReadOutputResult,
@@ -47,8 +41,6 @@ import type {
 	PiPackageSummary,
 	PiPackagesCatalog,
 	PrBodySource,
-	ProviderStatusReport,
-	ProviderWarning,
 	PrPreview,
 	ResourceHistoryCursor,
 	ResourceHistoryPage,
@@ -89,20 +81,25 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	QueueLane,
-	RefreshedModels,
 	RemovedQueuedMessage,
 	SessionQueueContent,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
-	ThinkingLevel,
 	ToolResponseDetails,
 	ToolResponsePendingDetails,
 	TranscriptMessage,
 	WireCustomMessage,
-	WireModel,
 } from "./piProtocol";
-import type { Ack, Project, SkillCatalogEntry, WsSchemaMethodMap } from "./schema";
+import type {
+	Ack,
+	ModelContextSetting,
+	Project,
+	SkillCatalogEntry,
+	ThinkingLevel,
+	WireModel,
+	WsSchemaMethodMap,
+} from "./schema";
 import type { SpeechErrorCode, SpeechModel, SpeechStatus } from "./speech";
 
 export interface TerminalDataPush {
@@ -650,11 +647,6 @@ export interface WorkspaceWatchReadyResult {
 	startupNudge: boolean;
 }
 
-export interface ModelDefault {
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
-}
-
 export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
 
 export function isModelContextWindow(value: unknown): value is number {
@@ -666,67 +658,11 @@ export function isModelContextWindow(value: unknown): value is number {
 	);
 }
 
-export type ModelContextTarget = "available" | Pick<WireModel, "provider" | "id">;
-
-export interface ModelContextSetting
-	extends Pick<WireModel, "provider" | "id" | "name" | "contextWindow"> {
-	override: number | null;
-}
-
 /** Provider ids the custom-endpoint form owns in pi's `models.json`; every other provider is left alone. */
 export const CUSTOM_ENDPOINT_ID_PREFIX = "custom-";
 
 export function isCustomEndpointId(id: string): boolean {
 	return id.startsWith(CUSTOM_ENDPOINT_ID_PREFIX);
-}
-
-/** What the server reported about a model; `null` means it did not say, so pi's default applies. */
-export interface CustomEndpointModel {
-	id: string;
-	contextWindow: number | null;
-	maxTokens: number | null;
-	reasoning: boolean | null;
-	vision: boolean | null;
-	/** Whether the server says the model takes tool calls; never saved, so a listed endpoint reports null. */
-	tools: boolean | null;
-}
-
-/** An OpenAI-compatible `custom-*` provider in pi's `models.json`. The key itself never crosses the wire. */
-export interface CustomEndpoint {
-	id: string;
-	name: string;
-	baseUrl: string;
-	hasApiKey: boolean;
-	models: CustomEndpointModel[];
-}
-
-export interface CustomEndpointProbeRequest {
-	baseUrl: string;
-	/** Omitted together with `endpointId` to reuse that endpoint's saved key for its unchanged address. */
-	apiKey?: string;
-	endpointId?: string;
-}
-
-export type CustomEndpointProbeFailure =
-	| "invalid-url"
-	| "unauthorized"
-	| "timeout"
-	| "unreachable"
-	| "not-openai"
-	| "no-models";
-
-export type CustomEndpointProbe =
-	| { ok: true; baseUrl: string; models: CustomEndpointModel[] }
-	| { ok: false; reason: CustomEndpointProbeFailure; status?: number };
-
-export interface CustomEndpointDraft {
-	/** Present to replace an existing endpoint; absent to add a new one. */
-	id?: string;
-	name: string;
-	baseUrl: string;
-	/** Omitted to keep the saved key; an empty string removes it. */
-	apiKey?: string;
-	models: CustomEndpointModel[];
 }
 
 export function isSharedModelContextTarget(
@@ -1096,38 +1032,6 @@ export interface WsMethodMap extends WsSchemaMethodMap {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
 		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
 	};
-	"model.list": { params: Record<string, never>; result: WireModel[] };
-	"model.clampThinking": {
-		params: { provider: string; id: string; level: ThinkingLevel };
-		result: { level: ThinkingLevel };
-	};
-	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
-	"model.default": { params: Record<string, never>; result: ModelDefault };
-	"model.contextSettings": { params: Record<string, never>; result: ModelContextSetting[] };
-	"model.setContextWindow": {
-		params: { target: ModelContextTarget; contextWindow: number | null };
-		result: ModelContextSetting[];
-	};
-	"customEndpoints.list": { params: Record<string, never>; result: CustomEndpoint[] };
-	"customEndpoints.probe": { params: CustomEndpointProbeRequest; result: CustomEndpointProbe };
-	"customEndpoints.save": { params: CustomEndpointDraft; result: CustomEndpoint[] };
-	"customEndpoints.remove": { params: { id: string }; result: CustomEndpoint[] };
-	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
-	"provider.detect": { params: Record<string, never>; result: { accounts: DetectedAccount[] } };
-	"provider.loginStart": {
-		params: { providerId: string; type?: "oauth" | "api_key" };
-		result: { loginId: string };
-	};
-	"provider.loginReply": { params: LoginReply; result: Ack };
-	"provider.loginCancel": { params: { loginId: string }; result: Ack };
-	"provider.logout": { params: { providerId: string }; result: Ack };
-	"provider.disableWarning": { params: { warning: ProviderWarning }; result: Ack };
-	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
-	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
-	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
-	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
-	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
-	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"host.update": { params: Record<string, never>; result: Ack };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"environment.get": { params: Record<string, never>; result: HostEnvironmentStatus };

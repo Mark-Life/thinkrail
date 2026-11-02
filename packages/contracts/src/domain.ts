@@ -1,6 +1,6 @@
 import type { MatchTier } from "./match";
-import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
-import type { McpProjectOverride } from "./schema";
+import type { SessionState } from "./piProtocol";
+import type { JbcentralStatus, McpProjectOverride, ThinkingLevel, WireModel } from "./schema";
 
 export interface SessionStateRecord {
 	sessionId: string;
@@ -1011,109 +1011,9 @@ export interface BranchList {
 	defaultBranch: string;
 }
 
-export type ProviderAuthKind = "oauth" | "api-key" | "env" | "central" | "other";
-
-export interface ProviderStatus {
-	id: string;
-	name: string;
-	configured: boolean;
-	kind?: ProviderAuthKind;
-	detail?: string;
-	canOAuth?: boolean;
-	canApiKey?: boolean;
-	canLogout?: boolean;
-}
-
-export type DetectedAccountSource =
-	| "claude-code"
-	| "codex"
-	| "github-copilot"
-	| "copilot-cli"
-	| "kimi-cli"
-	| "grok-build";
-
-export interface DetectedAccount {
-	providerId: string;
-	source: DetectedAccountSource;
-	plan?: string;
-}
-
-export interface JbcentralInstall {
-	platform: string;
-	shell: "bash" | "powershell";
-	command: string;
-}
-
-export type JbcentralAction = "connect" | "disconnect" | "start-proxy" | "update";
-
-export type JbcentralProbeFailureReason =
-	| "launch-failed"
-	| "timed-out"
-	| "output-too-large"
-	| "nonzero-exit";
-
-export type JbcentralActionFailureReason =
-	| "not-installed"
-	| "unsupported-version"
-	| "version-probe-failed"
-	| "central-action-failed"
-	| "artifact-missing"
-	| "artifact-present"
-	| "candidate-failed";
-
-export type JbcentralStatus =
-	| { state: "absent" }
-	| { state: "outdated"; version: string }
-	| { state: "supported"; version: string; signedOut: boolean }
-	| {
-			state: "configured";
-			version: string;
-			signedOut: boolean;
-			proxyStopped: boolean;
-	  }
-	| { state: "malformed-version" }
-	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
-	| { state: "configuring"; action?: JbcentralAction }
-	| {
-			state: "load-failed";
-			configured: boolean;
-			action?: JbcentralAction;
-			reason: "candidate-failed";
-	  };
-
 export function isJbcentralConnected(status: JbcentralStatus): boolean {
 	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
 }
-
-/** A pi `warnings.*` setting the host surfaces; `anthropicExtraUsage` warns that Claude subscription auth bills per token. */
-export type ProviderWarning = "anthropicExtraUsage";
-
-export interface ProviderStatusReport {
-	providers: ProviderStatus[];
-	jbcentral: JbcentralStatus;
-	jbcentralInstall: JbcentralInstall;
-	/** pi's global `warnings.*` switches (default on); absent from hosts older than v99. */
-	warnings?: Record<ProviderWarning, boolean>;
-}
-
-export type JbcentralActionResult =
-	| { outcome: "applied" }
-	| { outcome: "failed"; reason: JbcentralActionFailureReason };
-
-export type JbcentralConnectResult = JbcentralActionResult;
-
-export type JbcentralLoginResult =
-	| { outcome: "launched" }
-	| {
-			outcome: "failed";
-			reason: "not-installed" | "unsupported-version" | "version-probe-failed" | "launch-failed";
-	  };
-
-export type JbcentralQuotaSnapshot =
-	| { state: "hidden" }
-	| { state: "available"; remaining: number; total: number; observedAt: number }
-	| { state: "stale"; remaining: number; total: number; observedAt: number }
-	| { state: "unavailable" };
 
 export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
@@ -1136,11 +1036,6 @@ export interface LoginPush {
 	frame: LoginFrame;
 	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
 	target?: { kind: "mcp"; workspaceId: string; serverName: string };
-}
-
-export interface LoginReply {
-	loginId: string;
-	value: string;
 }
 
 export interface GithubAuthStatus {
