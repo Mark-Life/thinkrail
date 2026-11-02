@@ -1,8 +1,13 @@
+import { arr, compile, lit, obj, type Static, str, union } from "@earendil-works/pi-schema";
 import type { MergeMethod, MergePrResult } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	findBranchReviewOutcome,
 	forgetOpenBranchReview,
 	githubSlug,
+	headRepositorySlug,
+	PR_HEAD_FIELDS,
+	parseProviderJson,
 	runProviderCommand,
 } from "../branch-review";
 import { git, gitAsync, originUrls, remoteRefOid } from "../git";
@@ -25,7 +30,13 @@ export interface MergePrParams extends ReviewActionParams {
 	deleteBranch: boolean;
 }
 
-type PrState = "OPEN" | "CLOSED" | "MERGED";
+const PrState = union([lit("OPEN"), lit("CLOSED"), lit("MERGED")]);
+type PrState = Static<typeof PrState>;
+
+const isPrView = compile(
+	obj({ ...PR_HEAD_FIELDS, headRefName: str(), state: PrState }, { open: true }),
+).check;
+const isOpenPrRows = compile(arr(obj(PR_HEAD_FIELDS, { open: true }))).check;
 
 const MERGE_FLAGS: Record<MergeMethod, string> = {
 	squash: "--squash",
@@ -59,14 +70,6 @@ function ghFailure(what: string, result: { out: string; err?: string }): Error {
 	);
 }
 
-function headSlug(pr: Record<string, unknown>): string {
-	const owner = pr.headRepositoryOwner as { login?: unknown } | null | undefined;
-	const repo = pr.headRepository as { name?: unknown } | null | undefined;
-	const login = typeof owner?.login === "string" ? owner.login : "";
-	const name = typeof repo?.name === "string" ? repo.name : "";
-	return `${login}/${name}`.toLowerCase();
-}
-
 async function pushRepository(cwd: string): Promise<string | null> {
 	const origin = (await originUrls(cwd)).push;
 	return origin ? githubSlug(origin) : null;
@@ -84,12 +87,14 @@ async function viewPr(cwd: string, slug: string, number: number, run: PrCommandR
 		`headRefName,state,${HEAD_FIELDS}`,
 	]);
 	if (!viewed.ok) throw ghFailure(`Couldn't read PR #${number}`, viewed);
-	try {
-		const pr = JSON.parse(viewed.out) as Record<string, unknown>;
-		return { headRefName: pr.headRefName, state: String(pr.state) as PrState, head: headSlug(pr) };
-	} catch {
-		throw new Error(`Couldn't read PR #${number}: gh answered something unexpected.`);
+	const pr = parseProviderJson(viewed.out, isPrView);
+	if (!pr) {
+		throw new CodedError(
+			"GH_REPLY_INVALID",
+			`Couldn't read PR #${number}: gh answered something unexpected.`,
+		);
 	}
+	return { headRefName: pr.headRefName, state: pr.state, head: headRepositorySlug(pr) };
 }
 
 /** `null` when gh could not answer — never read as "no open PR". */
@@ -115,18 +120,9 @@ async function headsOpenPr(
 		"20",
 	]);
 	if (!listed.ok) return null;
-	try {
-		const rows: unknown = JSON.parse(listed.out);
-		if (!Array.isArray(rows)) return null;
-		return rows.some(
-			(row) =>
-				typeof row === "object" &&
-				row !== null &&
-				headSlug(row as Record<string, unknown>) === slug.toLowerCase(),
-		);
-	} catch {
-		return null;
-	}
+	const rows = parseProviderJson(listed.out, isOpenPrRows);
+	if (!rows) return null;
+	return rows.some((row) => headRepositorySlug(row) === slug.toLowerCase());
 }
 
 async function mutate(
