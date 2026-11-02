@@ -456,7 +456,20 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 
 		await expect(
 			handleRequest("template.list", { workspaceId: "unused", projectId: "p1" }, CTX),
-		).rejects.toThrow("either workspaceId or projectId");
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+		await expect(
+			handleRequest(
+				"template.get",
+				{ workspaceId: "unused", projectId: "p1", name: "kickoff" },
+				CTX,
+			),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+		await expect(handleRequest("template.get", { projectId: "p1" }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
+		await expect(handleRequest("template.list", { projectId: 7 }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
 	} finally {
 		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
@@ -1292,6 +1305,21 @@ test("an unknown diff scope or revert target is refused before a handler runs", 
 				scope: { kind: "branch" },
 				target: { kind: "typo" },
 				expect: { originalHash: null, modifiedHash: null },
+			},
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+});
+
+test("review.commentAdd refuses a selector of an unknown kind before its handler runs", async () => {
+	await expect(
+		handleRequest(
+			"review.commentAdd",
+			{
+				workspaceId: "w",
+				kind: "inline",
+				anchor: { path: "a.ts", side: "worktree", selectors: [{ kind: "squiggle", at: 3 }] },
+				body: "note",
 			},
 			CTX,
 		),

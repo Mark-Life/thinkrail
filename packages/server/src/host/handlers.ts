@@ -363,9 +363,6 @@ function revealDataFolder(dir: string) {
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
 	const { workspaceId, projectId } = params;
-	if (workspaceId !== undefined && projectId !== undefined) {
-		throw new Error("Template reads accept either workspaceId or projectId, not both");
-	}
 	if (workspaceId !== undefined) return templateDirs(getWorkspace(workspaceId).worktreePath);
 	if (projectId === undefined) return templateDirs();
 	const project = listProjects().find((candidate) => candidate.id === projectId);
