@@ -3,6 +3,7 @@ export {
 	BackgroundCommandStatus,
 	BackgroundCommandSummary,
 } from "./backgroundCommand";
+export { ChangeReceipt, LineSpan, RevertTarget } from "./change";
 export {
 	CustomEndpoint,
 	CustomEndpointDraft,
@@ -11,9 +12,19 @@ export {
 	CustomEndpointProbeFailure,
 	CustomEndpointProbeRequest,
 } from "./customEndpoint";
+export { GitDiffScope } from "./diffScope";
 export { EditorInfo } from "./editor";
 export { ExtUiRequest, ExtUiResponse } from "./extUi";
-export { GitFileChange, GitFileStatus } from "./git";
+export { FileKind, FileNode } from "./fs";
+export {
+	BranchList,
+	GitCommit,
+	GitFileChange,
+	GitFileStatus,
+	GitStatus,
+	RemoteBranchGroup,
+} from "./git";
+export { GithubAuthStatus } from "./github";
 export { McpServerResourceSummary, McpServerState, McpTransportKind } from "./mcp";
 export * from "./methods";
 export {
@@ -27,8 +38,14 @@ export {
 } from "./model";
 export {
 	BranchReviewState,
+	GhSetupProblem,
 	MergeMethod,
+	MergePrResult,
 	OpenBranchReview,
+	OpenPrResult,
+	PrBodySource,
+	PrDraft,
+	PrPreview,
 	ReviewChecks,
 	ReviewDecision,
 	ReviewDetails,
@@ -70,6 +87,7 @@ export {
 	SessionResourceHistory,
 	SessionResources,
 } from "./resource";
+export { ResourceMeta } from "./resourceMeta";
 export {
 	AgentSettlement,
 	ContextUsage,
@@ -92,6 +110,7 @@ export {
 	SlashCommandSource,
 	SlashCommandSourceInfo,
 } from "./skill";
+export { SpecGraphNode, SpecGraphSnapshot } from "./spec";
 export { DelegationRunStatus, SubagentResourceSummary } from "./subagent";
 export { TerminalTabInfo } from "./terminal";
 export {
