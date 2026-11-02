@@ -11,7 +11,9 @@ export {
 	CustomEndpointProbeFailure,
 	CustomEndpointProbeRequest,
 } from "./customEndpoint";
+export { EditorInfo } from "./editor";
 export { ExtUiRequest, ExtUiResponse } from "./extUi";
+export { GitFileChange, GitFileStatus } from "./git";
 export { McpServerResourceSummary, McpServerState, McpTransportKind } from "./mcp";
 export * from "./methods";
 export {
@@ -23,6 +25,16 @@ export {
 	WireModel,
 	WireModelAuth,
 } from "./model";
+export {
+	BranchReviewState,
+	MergeMethod,
+	OpenBranchReview,
+	ReviewChecks,
+	ReviewDecision,
+	ReviewDetails,
+	ReviewMergeState,
+	ReviewProvider,
+} from "./pr";
 export {
 	McpProjectOverride,
 	McpToolGrant,
@@ -81,6 +93,7 @@ export {
 	SlashCommandSourceInfo,
 } from "./skill";
 export { DelegationRunStatus, SubagentResourceSummary } from "./subagent";
+export { TerminalTabInfo } from "./terminal";
 export {
 	ImageContent,
 	TranscriptMessage,
@@ -88,3 +101,17 @@ export {
 	WireCustomMessage,
 } from "./transcript";
 export { Ack } from "./wire";
+export {
+	BranchStatus,
+	DiffStats,
+	ExistingWorktreeCandidate,
+	SettledOverride,
+	SubagentOverride,
+	TurnChangeSet,
+	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationPhase,
+	WorkspaceCreationState,
+	WorkspaceKickoff,
+	WorkspaceWatchReadyResult,
+} from "./workspace";

@@ -296,14 +296,8 @@ test("reservations and attachments reject malformed or excessive catalog entries
 	);
 });
 
-test("terminal input and grid reject malformed values before reaching the PTY", () => {
-	for (const data of [42, [104, 105], { text: "hi" }]) {
-		expect(() => writeTerminal("missing", data as unknown as string, "client-1")).toThrow(
-			"Invalid terminal input",
-		);
-	}
-	for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "80", 32_768]) {
-		const size = bad as unknown as number;
+test("terminal grid rejects out-of-range sizes before reaching the PTY", () => {
+	for (const size of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 32_768]) {
 		expect(() => resizeTerminal("missing", size, 24, "client-1")).toThrow("Invalid terminal size");
 		expect(() => resizeTerminal("missing", 80, size, "client-1")).toThrow("Invalid terminal size");
 		expect(() => attachTerminal(WS, "tab-a", "client-1", { cols: size })).toThrow(

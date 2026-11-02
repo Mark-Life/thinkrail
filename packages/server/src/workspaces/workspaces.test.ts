@@ -589,13 +589,9 @@ test("setWorkspaceSubagentsOverride persists explicit values and null restores i
 	).toBeUndefined();
 });
 
-test("setWorkspaceSubagentsOverride rejects unknown workspaces and values outside the wire union", async () => {
-	const ws = await createWorkspace("p1");
+test("setWorkspaceSubagentsOverride rejects unknown workspaces", () => {
 	expect(() => setWorkspaceSubagentsOverride("missing", "on")).toThrow(
 		"Unknown workspace: missing",
-	);
-	expect(() => setWorkspaceSubagentsOverride(ws.id, "sometimes" as "on")).toThrow(
-		"Invalid subagent override",
 	);
 });
 

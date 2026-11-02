@@ -1368,6 +1368,30 @@ test("a refusal reports only the first few bad fields, so its size stays bounded
 	expect(String(message).split("; ")).toHaveLength(5);
 });
 
+test("terminal input that is not a string is refused before it reaches a PTY", async () => {
+	for (const data of [42, [104, 105], { text: "hi" }]) {
+		await expect(
+			handleRequest("terminal.write", { id: "missing", data }, CTX),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	}
+});
+
+test("a subagent override outside the wire union is refused and nothing is stored", async () => {
+	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
+	await expect(
+		handleRequest("workspace.setSubagentsOverride", { id: created.id, override: "sometimes" }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	expect(rows.find((row) => row.id === created.id)?.subagentsOverride).toBeUndefined();
+});
+
+test("a workspace kickoff whose text is not a string is refused before a creation starts", async () => {
+	await expect(
+		handleRequest("workspace.startCreate", { projectId: "p1", kickoff: { text: 42 } }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	expect(await handleRequest("workspace.listCreations", {}, CTX)).toEqual([]);
+});
+
 test("a request with no params object is refused", async () => {
 	await expect(handleRequest("project.list", undefined, CTX)).rejects.toMatchObject({
 		code: "INVALID_PARAMS",

@@ -546,9 +546,6 @@ export function setWorkspaceSubagentsOverride(
 	const all = loadWorkspaces();
 	const ws = all.find((workspace) => workspace.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
-	if (override !== null && override !== "on" && override !== "off") {
-		throw new Error("Invalid subagent override");
-	}
 	if (override === null) delete ws.subagentsOverride;
 	else ws.subagentsOverride = override;
 	saveWorkspaces(all);

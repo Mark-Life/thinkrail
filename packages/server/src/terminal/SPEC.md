@@ -121,9 +121,9 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   and at most 500 characters, and a title is non-empty and at most 1000 characters. Reservation and new attach
   share those checks. Revival truncates oversized catalogs, drops invalid keys, and repairs invalid titles
   before exposing host-authoritative membership.
-- **Terminal input and grid sizes are validated before any PTY or catalog work.** Terminal input must be a
-  string, because the PTY `write` turns a number into a raw `TypeError` and an array of numbers into raw bytes.
-  Attach, when it supplies a size, and resize require `cols` and `rows` to be integers from 1 through 32,767.
+- **Terminal input and grid sizes are validated before any PTY or catalog work.** Dispatch refuses terminal
+  input that is not a string, because the PTY `write` turns a number into a raw `TypeError` and an array of
+  numbers into raw bytes. Attach, when it supplies a size, and resize require `cols` and `rows` to be integers from 1 through 32,767.
   xterm's fit sends at least 2x1, and 32,767 is the largest value Windows ConPTY's signed 16-bit size field can
   hold, so real screens never hit either end. This is not a security bound: a client that can resize can also
   type commands.
@@ -220,7 +220,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   leaked variables and no `USER` sees only the filtered environment, its account checked through `id -u`
   rather than the implementation's own lookup.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
-  of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
+  of out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
   revive, and a real shell whose `USER`/`LOGNAME` map back to the host uid despite a leaked `LOGNAME=root` and
   which still sees the host's `PI_CODING_AGENT_DIR`.
