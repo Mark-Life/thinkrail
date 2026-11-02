@@ -13,6 +13,7 @@ import {
 import { grantedMcpTools, loadHostMcpConfig, type McpProjectPolicy, mcpTargetOf } from "./config";
 import { createMcpEngine } from "./engine";
 import { isMcpResultTool, summarizeMcpResult } from "./results";
+import { isJsonObject } from "./schemas";
 
 const MCP_TOOL_PREFIX = "mcp__";
 
@@ -127,7 +128,7 @@ export function createMcpSessionHost({
 			if (!isMcpResultTool(event.toolName)) return undefined;
 			const summary = summarizeMcpResult(event.toolName, event.structuredContent, event.isError);
 			if (!summary) return undefined;
-			const details = event.details && typeof event.details === "object" ? event.details : {};
+			const details = isJsonObject(event.details) ? event.details : {};
 			return { details: { ...details, thinkrail: summary } };
 		});
 	};
