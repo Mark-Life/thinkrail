@@ -1,5 +1,6 @@
 {
 	"app.errorBoundary.label": "приложение",
+	"app.transport.invalidReply": "Хост прислал ответ на «{{method}}», который это приложение не может прочитать. Обновите приложение или хост.",
 	"app.transport.mcpUnavailable": "MCP-серверы недоступны, пока хост не подключится снова.",
 	"app.transport.requestFailed": "не удалось выполнить запрос",
 	"app.transport.requestFailedFallback": "Не удалось выполнить запрос.",

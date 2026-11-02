@@ -21,12 +21,13 @@ import {
 	initTransport,
 	installClientErrorReporting,
 	reportClientError,
+	reportInvalidReply,
 } from "./transport";
 
 initializeThemes();
 applyThemePreference(readThemeHint());
 initializeFonts();
-initTransport();
+initTransport(reportInvalidReply);
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>
 	reportClientError(clientErrorReport("render", error, reportId)),

@@ -1,4 +1,4 @@
-import { arr, num, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
+import { arr, num, oneOf, opt, type Schema, type Static, str } from "@earendil-works/pi-schema";
 import { Project } from "./project";
 import { AppConfig } from "./settings";
 import { Ack, NoParams, wireObj } from "./wire";
@@ -26,6 +26,22 @@ export const ServerWelcome = wireObj({
 	config: AppConfig,
 });
 export type ServerWelcome = Static<typeof ServerWelcome>;
+
+function bareObject<T>(): Schema<T> {
+	return { type: "object" };
+}
+
+/** What a client needs from a welcome of any host version. Older hosts omit later fields and send older shapes. */
+export const AnyHostWelcome = wireObj({
+	protocolVersion: num(),
+	appVersion: opt(str()),
+	hostPlatform: opt(str()),
+	hostUpdate: opt(bareObject<HostUpdateNotice>()),
+	projects: arr(bareObject<Project>()),
+	recentProjects: opt(arr(bareObject<Project>())),
+	config: opt(bareObject<AppConfig>()),
+});
+export type AnyHostWelcome = Static<typeof AnyHostWelcome>;
 
 export const HOST_METHODS = {
 	"host.update": { params: NoParams, result: Ack },

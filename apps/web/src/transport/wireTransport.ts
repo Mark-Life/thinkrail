@@ -1,7 +1,8 @@
 import type {
 	Ack,
-	ServerWelcome,
+	AnyHostWelcome,
 	SessionStateRecord,
+	WsMethodName,
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
@@ -228,7 +229,7 @@ function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	}
 }
 
-export function initTransport(): WsTransport {
+export function initTransport(onInvalidReply?: (method: WsMethodName) => void): WsTransport {
 	if (transport) return transport;
 	const piEvents = createPiEventBatcher((payloads) =>
 		useAppStore.getState().handlePiEvents(payloads),
@@ -245,19 +246,19 @@ export function initTransport(): WsTransport {
 			beforeDispatch: (message) => {
 				if (shouldFlushPiEventsBefore(message)) piEvents.flush();
 			},
+			...(onInvalidReply ? { onInvalidReply } : {}),
 		},
 	);
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
-		const welcome: Partial<ServerWelcome> = data;
-		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
+		const welcome: AnyHostWelcome = data;
 		useAppStore.getState().hideSurveyInvitation();
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(
 				welcome.protocolVersion,
 				welcome.projects,
-				Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
+				welcome.recentProjects ?? welcome.projects,
 				welcome.config,
 				welcome.hostPlatform === "darwin" ||
 					welcome.hostPlatform === "linux" ||
@@ -265,7 +266,7 @@ export function initTransport(): WsTransport {
 					? welcome.hostPlatform
 					: undefined,
 				welcome.hostUpdate,
-				typeof welcome.appVersion === "string" ? welcome.appVersion : undefined,
+				welcome.appVersion,
 			);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);

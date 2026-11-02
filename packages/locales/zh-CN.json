@@ -1,5 +1,6 @@
 {
 	"app.errorBoundary.label": "应用",
+	"app.transport.invalidReply": "host 对“{{method}}”的回复无法被此应用读取。请更新应用或 host。",
 	"app.transport.mcpUnavailable": "在 host 重新连接之前，MCP 服务器不可用。",
 	"app.transport.requestFailed": "请求失败",
 	"app.transport.requestFailedFallback": "请求失败。",

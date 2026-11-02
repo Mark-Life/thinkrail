@@ -1,4 +1,4 @@
-import type { SessionEventPayload, WsServerMessage } from "@thinkrail/contracts";
+import type { SessionEventPayload, WsEnvelope } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 
 const DEFAULT_DELAY_MS = 32;
@@ -62,6 +62,6 @@ export function createPiEventBatcher(
 	};
 }
 
-export function shouldFlushPiEventsBefore(message: WsServerMessage): boolean {
+export function shouldFlushPiEventsBefore(message: WsEnvelope): boolean {
 	return !("channel" in message) || message.channel !== WS_CHANNELS.piEvent;
 }

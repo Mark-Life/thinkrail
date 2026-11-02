@@ -6,6 +6,7 @@ export * from "./customEndpoint";
 export * from "./dialog";
 export * from "./diffScope";
 export * from "./editor";
+export * from "./envelope";
 export * from "./environment";
 export * from "./extension";
 export * from "./extUi";

@@ -46,7 +46,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   for it or Error Tracking must tell it apart (it never sees `message`): **`REQUEST_REPLAY_OVERFLOW`** is the
   latter — the host's replay namespace for this page is full ([[submodule-server-host]]), and the page treats
   it as an ordinary retryable failure. **`INVALID_PARAMS`** is the same: dispatch refused params that do not
-  match the method's schema, which only a client bug or a version mismatch produces. Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
+  match the method's schema, which only a client bug or a version mismatch produces. **`INVALID_REPLY`** is the
+  reverse, and only the client mints it: a successful reply failed its result schema ([[submodule-web-transport]]). Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
