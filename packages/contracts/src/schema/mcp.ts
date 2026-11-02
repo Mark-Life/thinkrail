@@ -11,8 +11,19 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
-import { McpActiveExposure, McpProjectOverride } from "./project";
 import { Ack, wireObj } from "./wire";
+
+export const McpActiveExposure = oneOf(["deferred", "direct", "hidden"]);
+
+export const McpProjectOverride = wireObj({
+	enabled: opt(bool()),
+	exposure: opt(McpActiveExposure),
+});
+export type McpProjectOverride = Static<typeof McpProjectOverride>;
+
+/** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */
+export const McpToolGrant = wireObj({ target: str(), tools: arr(str()) });
+export type McpToolGrant = Static<typeof McpToolGrant>;
 
 export const McpTransportKind = oneOf(["stdio", "http"]);
 export type McpTransportKind = Static<typeof McpTransportKind>;

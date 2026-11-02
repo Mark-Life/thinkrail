@@ -4,6 +4,7 @@ import {
 	type SurveyAnswerValue,
 	type SurveyQuestion,
 	type SurveyRatingScale,
+	type SurveySubmitParams,
 	surveyRatingValues,
 } from "@thinkrail/contracts";
 
@@ -166,20 +167,18 @@ export function selectInAppSurvey(payload: unknown): AppSurvey | null {
 	return best?.survey ?? null;
 }
 
-export function parseSurveySubmission(value: unknown): ParsedSurveySubmission {
-	if (!isRecord(value)) throw new Error("Invalid survey submission");
-	const { submissionId, surveyId, iteration } = value;
-	if (typeof submissionId !== "string" || !UUID.test(submissionId)) {
+export function parseSurveySubmission(value: SurveySubmitParams): ParsedSurveySubmission {
+	const { submissionId, surveyId, iteration, language } = value;
+	if (!UUID.test(submissionId)) {
 		throw new Error("Invalid survey submission");
 	}
-	if (typeof surveyId !== "string" || !surveyId || surveyId.length > 128) {
+	if (!surveyId || surveyId.length > 128) {
 		throw new Error("Invalid survey submission");
 	}
-	if (typeof iteration !== "number" || !Number.isSafeInteger(iteration) || iteration < 0) {
+	if (!Number.isSafeInteger(iteration) || iteration < 0) {
 		throw new Error("Invalid survey submission");
 	}
-	const language = value.language;
-	if (language !== undefined && (typeof language !== "string" || !LANGUAGE_KEY.test(language))) {
+	if (language !== undefined && !LANGUAGE_KEY.test(language)) {
 		throw new Error("Invalid survey submission");
 	}
 	return {
@@ -187,8 +186,8 @@ export function parseSurveySubmission(value: unknown): ParsedSurveySubmission {
 		surveyId,
 		iteration,
 		...(language === undefined ? {} : { language }),
-		answers: parseAnswers(value.answers),
-		others: parseOthers(value.others),
+		answers: parseAnswerIds(value.answers),
+		others: value.others === undefined ? null : parseAnswerIds(value.others),
 	};
 }
 
@@ -510,35 +509,13 @@ function translateQuestion(
 	return { ...question, ...shared, choices: translation.choices ?? question.choices };
 }
 
-function parseOthers(value: unknown): Record<string, string> | null {
-	if (value === undefined) return null;
-	if (!isRecord(value)) throw new Error("Invalid survey submission");
-	const others: Record<string, string> = {};
-	for (const [id, text] of Object.entries(value)) {
-		if (!id || id.length > 80 || typeof text !== "string") {
-			throw new Error("Invalid survey submission");
-		}
-		others[id] = text;
-	}
-	return others;
-}
-
-function parseAnswers(value: unknown): Record<string, SurveyAnswerValue> {
-	if (value === undefined) return {};
-	if (!isRecord(value)) throw new Error("Invalid survey submission");
-	const answers: Record<string, SurveyAnswerValue> = {};
+function parseAnswerIds<T>(value: Record<string, T>): Record<string, T> {
+	const parsed: Record<string, T> = {};
 	for (const [id, answer] of Object.entries(value)) {
 		if (!id || id.length > 80) throw new Error("Invalid survey submission");
-		if (typeof answer === "string") {
-			answers[id] = answer;
-			continue;
-		}
-		if (!Array.isArray(answer) || answer.some((item) => typeof item !== "string")) {
-			throw new Error("Invalid survey submission");
-		}
-		answers[id] = answer;
+		parsed[id] = answer;
 	}
-	return answers;
+	return parsed;
 }
 
 function choiceList(value: unknown): string[] | null {

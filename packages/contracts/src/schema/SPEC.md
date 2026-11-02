@@ -11,14 +11,16 @@ tags: [wire]
 ## Responsibility
 
 Hold each wire shape once, as a `pi-schema` schema with its type derived by `Static`, so the compile-time type
-and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps a method to its params and result schemas, and
-`WsMethodMap` extends the entries derived from it. Methods still written by hand in `WsMethodMap` have no
-runtime form yet.
+and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to its params and result schemas, and
+`WsMethodMap` is the map derived from it, with no hand-written entry. It stays an interface: a generic
+`WsParams<M>` reads the resolved entries, and a type alias would defer to `Static` and read as `unknown`.
 
 ## Boundary
 
-- **Public surface (`index.ts`):** the entity schemas with their types, `Ack`, `WS_METHOD_SCHEMAS`,
-  `WsSchemaMethodMap`. `wireObj` and `NoParams` stay inside this directory.
+- **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
+  types, the `*_METHODS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`. From `wire.ts` only `Ack`: `wireObj`,
+  `partialWireObj`, `readonlyArr`, `piOwned` and `NoParams` stay inside this directory. Schema values stay public because
+  [[submodule-server-host]] compiles them; web JS stays free of them by tree shaking.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
 - **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
   a schema here, because each side owns the check at its own edge ([[submodule-server-host]] for requests).
@@ -27,6 +29,8 @@ runtime form yet.
 
 - **Wire objects are open.** `wireObj` allows unknown fields, so a UI and a host of different versions keep
   working together. `obj()` without `open` is closed, so it is not used for wire shapes.
+- **A `Partial` wire type uses `partialWireObj`.** `AppConfigUpdate` takes the fields of `AppConfig`, so a setting is
+  declared once. The update stays open here; `updateConfig` owns the closed key set.
 - **One file per method namespace.** A namespace file exports its entity schemas and a `*_METHODS` record;
   `methods.ts` merges the records. An entity several namespaces share gets its own file.
 - **Schemas check shape only.** A rule that needs host state or gives the user a specific message, such as the
@@ -39,9 +43,9 @@ runtime form yet.
   field pi adds or a field the schema drops fails `tsc` here. `StopReason` lists its values the same way.
 - **A pi shape with no schema is results only.** `piOwned<T>()` carries pi's type with a bare object check, as in
   `Message` inside `TranscriptMessage`. Params never use it: dispatch would not check them.
-- **A recursive shape keeps its hand type.** Builders cannot express `FileNode`, so it stays an interface beside a
-  raw JSON Schema annotated `Schema<FileNode>`. `$id` makes its `$ref: "#"` point at the node, not at the schema
-  that embeds it.
+- **A recursive shape keeps its hand type.** Builders cannot express `FileNode` or `LayoutPresetCenterNode`, so each
+  stays a hand type beside a raw JSON Schema annotated `Schema<...>`. `$id` makes its `$ref: "#"` point at the node,
+  not at the schema that embeds it.
 - **An exclusive union keeps its hand type.** Builders cannot express the `?: never` branches of
   `TemplateReadLocation`, so it stays a type beside a raw JSON Schema annotated `Schema<TemplateReadLocation>`:
   `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.

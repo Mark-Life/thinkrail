@@ -143,7 +143,12 @@ import {
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest, requestErrorReport, requestMethodDiagnostic } from "./handlers";
+import {
+	handleRequest,
+	reportsRequestFailure,
+	requestErrorReport,
+	requestMethodDiagnostic,
+} from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -498,7 +503,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
 								log.debug(`ws ${methodDiagnostic} failed`);
-								reportError(err, requestErrorReport(method));
+								if (reportsRequestFailure(method)) reportError(err, requestErrorReport(method));
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,

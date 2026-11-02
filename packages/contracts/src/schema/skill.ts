@@ -1,4 +1,4 @@
-import { bool, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
+import { arr, bool, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
 import { wireObj } from "./wire";
 
 export const SlashCommandSourceInfo = wireObj({
@@ -34,3 +34,8 @@ export const SkillCatalogEntry = wireObj({
 	decision: SkillDecision,
 });
 export type SkillCatalogEntry = Static<typeof SkillCatalogEntry>;
+
+export const SKILL_METHODS = {
+	"skill.list": { params: wireObj({ projectId: str() }), result: arr(SlashCommandInfo) },
+	"skills.state": { params: wireObj({ workspaceId: str() }), result: arr(SkillCatalogEntry) },
+};
