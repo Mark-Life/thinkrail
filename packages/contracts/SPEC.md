@@ -135,13 +135,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 - **schema/** — wire schemas and the types derived from them ([[submodule-contracts-schema]]): `Project`,
   `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
-  `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, and the `project.*` methods. The
-  entries below describe these types where they sit in their feature.
+  `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*` and
+  `provider.*` entities, and the methods of these namespaces and `project.*`. The entries below describe these
+  types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
     `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ImageContent`, `ToolCall`,
     `AssistantMessageEvent`, `Usage`, `StopReason`;
-  - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
+  - **`WireModel`** (in `schema/`) = `id`, `name`, `provider`, `contextWindow`, `reasoning` of pi's `Model` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
     client→host params carry it inert) **+ three optional picker-metadata projections** — `cost`
     (`{input, output}` list prices per Mtok, a subset of pi's `ModelCost`), `input` (accepted modalities) and
@@ -157,8 +158,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
     can neither read the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC).
     **`sameModel(a, b)`** is the one identity test — `{provider, id}` — every ring uses; no other field is
     identity, since name, context, prices and levels are catalog snapshots that may lag a refresh;
-  - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
-    `off`-inclusive one);
+  - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`; `ThinkingLevel` (the
+    `off`-inclusive one) is listed in `schema/`;
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
     `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `agent_settled` /
     `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /

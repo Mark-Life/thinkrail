@@ -1207,6 +1207,30 @@ test("a newer client's unknown param does not fail the request", async () => {
 	expect(project).toHaveProperty("id");
 });
 
+test("a context window of the wrong shape is refused, and a number out of range keeps its own message", async () => {
+	await expect(
+		handleRequest("model.setContextWindow", { target: "some", contextWindow: null }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	await expect(
+		handleRequest("model.setContextWindow", { target: "available", contextWindow: 1 }, CTX),
+	).rejects.toThrow("Context window must be a whole number");
+});
+
+test("a custom endpoint draft of the wrong shape is refused, and a blank name keeps its own message", async () => {
+	const draft = { name: "Local", baseUrl: "http://localhost:1234/v1", models: [{ id: "m" }] };
+	await expect(handleRequest("customEndpoints.save", draft, CTX)).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+	});
+	const model = { id: "m", contextWindow: null, maxTokens: null, reasoning: null, vision: null };
+	await expect(
+		handleRequest(
+			"customEndpoints.save",
+			{ ...draft, name: " ", models: [{ ...model, tools: null }] },
+			CTX,
+		),
+	).rejects.toThrow("Name the server.");
+});
+
 test("project replies match their wire schemas", async () => {
 	const { "project.open": open, "project.list": list } = WS_METHOD_SCHEMAS;
 	const opened = await handleRequest("project.open", { path: repo }, CTX);
