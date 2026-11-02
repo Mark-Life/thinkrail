@@ -47,9 +47,6 @@ import type {
 	PiPackageSummary,
 	PiPackagesCatalog,
 	PrBodySource,
-	Project,
-	ProjectPathStatus,
-	ProjectTrustSummary,
 	ProviderStatusReport,
 	ProviderWarning,
 	PrPreview,
@@ -92,7 +89,6 @@ import type {
 	SessionQueueContent,
 	SessionStats,
 	SessionSummary,
-	SkillCatalogEntry,
 	SlashCommandInfo,
 	ThinkingLevel,
 	ToolResponseDetails,
@@ -101,6 +97,7 @@ import type {
 	WireCustomMessage,
 	WireModel,
 } from "./piProtocol";
+import type { Ack, Project, SkillCatalogEntry, WsSchemaMethodMap } from "./schema";
 
 export interface TerminalDataPush {
 	id: string;
@@ -583,10 +580,6 @@ export interface ClientErrorReport {
 	chunkIds?: Record<string, string>;
 }
 
-export interface Ack {
-	ok: true;
-}
-
 export interface ReviewSendResult {
 	sessionId: string;
 	model: WireModel | null;
@@ -692,43 +685,7 @@ export interface McpRenderedTarget {
 	expectedFingerprint: string;
 }
 
-export interface WsMethodMap {
-	"project.open": { params: { path: string }; result: Project };
-	"project.list": { params: Record<string, never>; result: Project[] };
-	"project.close": { params: { id: string }; result: Ack };
-	"project.rename": { params: { id: string; name: string }; result: Project };
-	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
-	"project.init": { params: { path: string }; result: Project };
-	"project.create": {
-		params: { parentPath: string; name: string; displayName?: string };
-		result: Project;
-	};
-	"project.cloneDestination": {
-		params: { parentPath: string; name: string };
-		result: { path: string };
-	};
-	"project.clone": {
-		params: { operationId: string; url: string; parentPath: string; name: string; depth?: number };
-		result: Project | null;
-	};
-	"project.cancelClone": { params: { operationId: string }; result: Ack };
-	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
-	"project.setTrust": {
-		params: { id: string; trusted: boolean; resources?: boolean };
-		result: Project;
-	};
-	"project.acknowledgeSkills": { params: { id: string; names: string[] }; result: Project };
-	"project.setSkillEnabled": {
-		params: { id: string; name: string; enabled: boolean };
-		result: Project;
-	};
-	"project.aliasSkills": { params: { projectId: string }; result: string[] };
-	"project.trustSummary": { params: { projectId: string }; result: ProjectTrustSummary };
-	"project.setGroupEnabled": {
-		params: { id: string; group: string; enabled: boolean };
-		result: Project;
-	};
-	"project.skills": { params: { projectId: string }; result: SkillCatalogEntry[] };
+export interface WsMethodMap extends WsSchemaMethodMap {
 	"workspace.create": {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
@@ -1293,7 +1250,8 @@ export type WsErrorCode =
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
-	| "INSTALLED_FONTS_UNAVAILABLE";
+	| "INSTALLED_FONTS_UNAVAILABLE"
+	| "INVALID_PARAMS";
 
 export interface WsResponse {
 	id: string;

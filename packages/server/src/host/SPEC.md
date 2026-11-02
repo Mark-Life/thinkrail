@@ -220,8 +220,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   except a session blocked on `ask_user_question`: shutdown deliberately leaves that call dangling and the
   next attach repairs it to an answerable ack; explicit user Stop remains the terminal-abort path); `handlers.ts` (the WS method→handler
   registry, typed `WsHandlers = { [M in WsMethodName]: WsHandler<M> }`, so a missing, extra, or mistyped
-  handler fails typecheck; `handleRequest` narrows the wire's `unknown` params once, at dispatch, and
-  params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
+  handler fails typecheck; `handleRequest` checks the wire's `unknown` params once, at dispatch, through `wsParams.ts`, which
+  compiles each method's schema from `WS_METHOD_SCHEMAS` at startup and refuses a mismatch with
+  `INVALID_PARAMS`, naming the failing fields but never their values. A method with no schema yet passes
+  unchecked, and a handler does not check the shape of checked params again. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
