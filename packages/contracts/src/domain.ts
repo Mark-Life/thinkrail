@@ -2,12 +2,12 @@ import type { MatchTier } from "./match";
 import type {
 	BackgroundCommandSummary,
 	DelegationRunStatus,
+	GitDiffScope,
 	GitFileChange,
 	JbcentralStatus,
 	McpProjectOverride,
 	McpServerState,
 	McpTransportKind,
-	OpenBranchReview,
 	ResourceHistoryCursor,
 	ResourceRecord,
 	ResourceTally,
@@ -65,45 +65,6 @@ export function firstPromptOfTexts(texts: Iterable<string>): string | undefined 
 
 export const DEFAULT_WORKSPACE_NAME = "Default";
 
-export interface MergePrResult {
-	/** `false` when GitHub queued the PR (merge queue / auto-merge) instead of merging it now. */
-	merged: boolean;
-	/** `deleteBranch` only: whether `origin/<branch>` is gone — never deleted for a queued PR. */
-	branchDeleted: boolean;
-	/** Why the deletion after a successful merge failed. */
-	deleteError?: string;
-}
-
-export type GhSetupProblem = "missing" | "unauthenticated";
-
-export interface PrDraft {
-	title: string;
-	body: string;
-}
-
-export type PrBodySource = "plan" | "commits" | "template" | "empty";
-
-export interface PrPreview extends PrDraft {
-	/** v87: worktree-relative PR/MR templates the host found, in discovery order. */
-	templates?: string[];
-	/** v87: whether the session (when one was given) has a plan body to render. */
-	planAvailable?: boolean;
-	/** v87: the source the body was rendered from. */
-	source?: PrBodySource;
-}
-
-export interface OpenPrResult {
-	action: "created" | "updated" | "pushed" | "compare";
-	review?: OpenBranchReview;
-	url?: string;
-	compareUrl?: string;
-	/** `updated` only: whether the `gh pr edit --body` refresh actually succeeded. */
-	bodyRefreshed?: boolean;
-	/** `compare` only: why the direct gh path was unavailable, when the host could tell. */
-	ghProblem?: GhSetupProblem;
-	dirtyFiles: number;
-}
-
 export type WorkspaceSkillChange = "none" | "detected" | "unknown";
 
 export interface WorkspaceFsChangedPayload {
@@ -111,40 +72,6 @@ export interface WorkspaceFsChangedPayload {
 	paths: string[];
 	truncated: boolean;
 	skillChange: WorkspaceSkillChange;
-}
-
-export type FileKind = "file" | "dir";
-
-export interface FileNode {
-	path: string;
-	name: string;
-	kind: FileKind;
-	gitignored?: boolean;
-	children?: FileNode[];
-}
-
-export interface ResourceMeta {
-	hash: string | null;
-	byteLength: number | null;
-	text: boolean;
-	mime?: string;
-}
-
-export interface SpecGraphNode {
-	id: string;
-	type: string;
-	title: string;
-	status?: string;
-	path: string;
-	parent?: string;
-	dependsOn: string[];
-	references: string[];
-	implements: string[];
-	tags: string[];
-}
-
-export interface SpecGraphSnapshot {
-	nodes: SpecGraphNode[];
 }
 
 export type TodoStatus = "pending" | "in_progress" | "done";
@@ -709,58 +636,6 @@ export interface PiPackagesCatalog {
 	builtins: PiBuiltinExtension[];
 }
 
-export interface GitStatus {
-	branch: string;
-	changes: GitFileChange[];
-}
-
-export type GitDiffScope =
-	| { kind: "branch" }
-	| { kind: "uncommitted" }
-	| { kind: "commit"; sha: string }
-	| { kind: "pinned"; baseRef: string }
-	| { kind: "turn"; id: string; baseTree: string; headTree: string; startedAt: number };
-
-export interface GitCommit {
-	sha: string;
-	shortSha: string;
-	subject: string;
-	author: string;
-	committedAt: string;
-}
-
-export interface LineSpan {
-	start: number;
-	count: number;
-}
-
-export type RevertTarget =
-	| { kind: "file" }
-	| { kind: "range"; original: LineSpan; modified: LineSpan };
-
-export interface ChangeReceipt {
-	id: string;
-	workspaceId: string;
-	path: string;
-	kind: "revert" | "undo";
-	at: number;
-	before: { hash: string | null; byteLength: number | null; mode: number | null };
-	after: { hash: string | null; byteLength: number | null; mode: number | null };
-	trashed?: string;
-}
-
-export interface RemoteBranchGroup {
-	remote: string | null;
-	branches: { ref: string; branch: string }[];
-}
-
-export interface BranchList {
-	local: string[];
-	remote: string[];
-	remoteGroups?: RemoteBranchGroup[];
-	defaultBranch: string;
-}
-
 export function isJbcentralConnected(status: JbcentralStatus): boolean {
 	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
 }
@@ -786,12 +661,6 @@ export interface LoginPush {
 	frame: LoginFrame;
 	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
 	target?: { kind: "mcp"; workspaceId: string; serverName: string };
-}
-
-export interface GithubAuthStatus {
-	connected: boolean;
-	login?: string;
-	scopes?: string[];
 }
 
 export interface HostEnvironmentVar {
