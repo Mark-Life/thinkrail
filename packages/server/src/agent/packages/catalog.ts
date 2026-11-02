@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
+import { compile, obj, opt, unknown } from "@earendil-works/pi-schema";
 import type {
 	PiBuiltinExtension,
 	PiLooseExtension,
@@ -231,9 +232,8 @@ export async function listPiPackageRevealTargets(options: {
 	});
 	const packageRoots = packageManager
 		.listConfiguredPackages()
-		.filter((entry) => entry.installedPath !== undefined)
 		.filter((entry) => !(entry.scope === "project" && !options.projectTrusted))
-		.map((entry) => entry.installedPath as string);
+		.flatMap((entry) => (entry.installedPath === undefined ? [] : [entry.installedPath]));
 	const resolved = await packageManager.resolve(async () => "skip");
 	const looseFiles = resolved.extensions
 		.filter((r) => r.metadata.origin !== "package" && r.metadata.source !== "builtin")
@@ -249,6 +249,13 @@ function resourceDisplayName(path: string, type: PiPackageResourceType): string 
 	return fileName;
 }
 
+const PackageManifest = compile(
+	obj(
+		{ name: opt(unknown()), version: opt(unknown()), description: opt(unknown()) },
+		{ open: true },
+	),
+);
+
 function readPackageMetadata(
 	installedPath: string,
 	source: string,
@@ -256,9 +263,8 @@ function readPackageMetadata(
 	const fallback = { name: fallbackName(installedPath, source) };
 	try {
 		if (!statSync(installedPath).isDirectory()) return fallback;
-		const parsed: unknown = JSON.parse(readFileSync(join(installedPath, "package.json"), "utf8"));
-		if (!parsed || typeof parsed !== "object") return fallback;
-		const manifest = parsed as Record<string, unknown>;
+		const manifest: unknown = JSON.parse(readFileSync(join(installedPath, "package.json"), "utf8"));
+		if (!PackageManifest.check(manifest)) return fallback;
 		return {
 			name: typeof manifest.name === "string" && manifest.name ? manifest.name : fallback.name,
 			...(typeof manifest.version === "string" ? { version: manifest.version } : {}),

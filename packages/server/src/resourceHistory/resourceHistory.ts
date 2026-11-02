@@ -8,13 +8,14 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join, sep } from "node:path";
+import { bool, compile, obj, str } from "@earendil-works/pi-schema";
 import {
 	compareResourceHistory,
 	interruptedResource,
 	isLiveResource,
 	type ResourceHistoryCursor,
 	type ResourceKind,
-	type ResourceRecord,
+	ResourceRecord,
 	resourceHistoryCursor,
 	resourceRecordId,
 } from "@thinkrail/contracts";
@@ -26,8 +27,8 @@ const log = logger("resource-history");
 
 const STORAGE_ID = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,198}[A-Za-z0-9])?$/;
 const CACHED_CHATS = 64;
-const COMMAND_STATUSES = new Set(["running", "stopping", "completed", "error", "stopped"]);
-const SUBAGENT_STATUSES = new Set(["queued", "running", "completed", "error", "aborted"]);
+const IndexLine = compile(ResourceRecord);
+const ArchivedLog = compile(obj({ text: str(), truncated: bool() }, { open: true }));
 
 export interface ResourceHistoryScope {
 	workspaceId: string;
@@ -47,6 +48,11 @@ interface ChatHistory {
 
 const cache = new Map<string, ChatHistory>();
 
+/** Drops every loaded index, as a host restart does. */
+export function resetResourceHistoryForTests(): void {
+	cache.clear();
+}
+
 export function resourceHistoryRoot(): string {
 	return join(dataDir(), "resource-history");
 }
@@ -61,35 +67,13 @@ function keyOf(record: ResourceRecord): string {
 	return `${record.kind}:${resourceRecordId(record)}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseRecord(value: unknown): ResourceRecord | null {
-	if (!isRecord(value) || !isRecord(value.summary)) return null;
-	const summary = value.summary;
-	if (
-		value.kind === "command" &&
-		typeof summary.id === "string" &&
-		typeof summary.sessionId === "string" &&
-		typeof summary.name === "string" &&
-		typeof summary.command === "string" &&
-		typeof summary.status === "string" &&
-		COMMAND_STATUSES.has(summary.status) &&
-		typeof summary.startedAt === "number"
-	)
-		return value as ResourceRecord;
-	if (
-		value.kind === "subagent" &&
-		typeof summary.childSessionId === "string" &&
-		typeof summary.parentSessionId === "string" &&
-		typeof summary.task === "string" &&
-		typeof summary.status === "string" &&
-		SUBAGENT_STATUSES.has(summary.status) &&
-		typeof summary.createdAt === "string"
-	)
-		return value as ResourceRecord;
-	return null;
+function parseLine(line: string): ResourceRecord | null {
+	try {
+		const value: unknown = JSON.parse(line);
+		return IndexLine.check(value) ? value : null;
+	} catch {
+		return null;
+	}
 }
 
 function readIndex(dir: string): ChatHistory {
@@ -102,18 +86,18 @@ function readIndex(dir: string): ChatHistory {
 		return history;
 	}
 	history.needsNewline = text.length > 0 && !text.endsWith("\n");
+	let skipped = 0;
 	for (const line of text.split("\n")) {
 		if (!line) continue;
-		let record: ResourceRecord | null;
-		try {
-			record = parseRecord(JSON.parse(line));
-		} catch {
-			record = null;
+		const record = parseLine(line);
+		if (!record) {
+			skipped += 1;
+			continue;
 		}
-		if (!record) continue;
 		history.records.set(keyOf(record), record);
 		history.serialized.set(keyOf(record), JSON.stringify(record.summary));
 	}
+	if (skipped > 0) log.warn(`resource history index skipped ${skipped} lines`);
 	return history;
 }
 
@@ -213,9 +197,7 @@ export function archivedCommandOutput(
 		const parsed: unknown = JSON.parse(
 			readFileSync(join(dir, "logs", `${commandId}.json`), "utf8"),
 		);
-		return isRecord(parsed) &&
-			typeof parsed.text === "string" &&
-			typeof parsed.truncated === "boolean"
+		return ArchivedLog.check(parsed)
 			? { text: parsed.text, truncated: parsed.truncated }
 			: undefined;
 	} catch (error) {

@@ -1,14 +1,30 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import {
+	arr,
+	bool,
+	compile,
+	map,
+	nullable,
+	obj,
+	opt,
+	type Static,
+	str,
+	unknown,
+} from "@earendil-works/pi-schema";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
+import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
 
 const BASELINE_SUFFIX = ".baselines.json";
 
-export interface Baseline {
-	paths: string[];
-	head: string | null;
-	shared?: boolean;
-}
+const BaselineSchema = obj(
+	{ paths: arr(str()), head: nullable(str()), shared: opt(bool()) },
+	{ open: true },
+);
+export type Baseline = Static<typeof BaselineSchema>;
+
+const BaselineEntry = compile(BaselineSchema);
+const StoredBaselines = compile(obj({ items: opt(map(unknown())) }, { open: true }));
 
 interface BaselineFile {
 	version: 1;
@@ -19,31 +35,13 @@ function baselinePath(root: string, sessionId: string): string {
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${BASELINE_SUFFIX}`);
 }
 
-function isBaseline(raw: unknown): raw is Baseline {
-	if (typeof raw !== "object" || raw === null) return false;
-	const o = raw as Record<string, unknown>;
-	return (
-		Array.isArray(o.paths) &&
-		o.paths.every((p) => typeof p === "string") &&
-		(o.head === null || typeof o.head === "string") &&
-		(o.shared === undefined || typeof o.shared === "boolean")
-	);
-}
-
 export function readBaselines(root: string, sessionId: string): Record<string, Baseline> {
-	try {
-		const parsed: unknown = JSON.parse(readFileSync(baselinePath(root, sessionId), "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return {};
-		const items = (parsed as Record<string, unknown>).items;
-		if (typeof items !== "object" || items === null) return {};
-		const out: Record<string, Baseline> = {};
-		for (const [id, value] of Object.entries(items)) {
-			if (isBaseline(value)) out[id] = value;
-		}
-		return out;
-	} catch {
-		return {};
-	}
+	const file = readStateFile(baselinePath(root, sessionId));
+	if (file.value === undefined) return {};
+	if (StoredBaselines.check(file.value))
+		return parseEntryRecord(file, file.value.items ?? {}, BaselineEntry);
+	file.setAside("not a baselines file");
+	return {};
 }
 
 export function otherSessionWindows(root: string, sessionId: string): boolean {
@@ -94,6 +92,7 @@ export function writeBaselines(
 	items: Record<string, Baseline>,
 ): void {
 	const path = baselinePath(root, sessionId);
+	assertOverwriteAllowed(path);
 	if (Object.keys(items).length === 0) {
 		rmSync(path, { force: true });
 		return;

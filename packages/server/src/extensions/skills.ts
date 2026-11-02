@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
+import { arr, compile, obj, opt, str } from "@earendil-works/pi-schema";
 import type { ServerExtensionEntry } from "./registry";
 
-interface SkillPackageManifest {
-	pi?: { skills?: string[] };
-}
+const SkillPackageManifest = compile(
+	obj({ pi: opt(obj({ skills: opt(arr(str())) }, { open: true })) }, { open: true }),
+);
 
 export function resolveExtensionSkillRoots(entry: ServerExtensionEntry): string[] {
 	const skillPackages = entry.extension.skillPackages ?? [];
@@ -14,8 +15,8 @@ export function resolveExtensionSkillRoots(entry: ServerExtensionEntry): string[
 	const requireFromExtension = createRequire(extensionEntry);
 	return skillPackages.flatMap((specifier) => {
 		const manifestPath = requireFromExtension.resolve(`${specifier}/package.json`);
-		const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as SkillPackageManifest;
-		const skills = manifest.pi?.skills ?? [];
+		const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+		const skills = SkillPackageManifest.check(manifest) ? (manifest.pi?.skills ?? []) : [];
 		if (skills.length === 0) {
 			throw new Error(
 				`${entry.extension.name}: skill package ${specifier} declares no pi.skills directories`,

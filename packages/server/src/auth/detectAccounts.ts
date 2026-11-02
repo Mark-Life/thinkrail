@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { DetectedAccount, DetectedAccountSource } from "@thinkrail/contracts";
+import { JsonObject } from "@thinkrail/contracts";
 import { usePiRuntime } from "../agent";
 
 export interface DetectAccountsOptions {
@@ -38,7 +39,7 @@ const CLAUDE_SUBSCRIPTION_BILLING = new Set([
 const GROK_API_KEY_SCOPE = "xai::api_key";
 
 function isObject(value: unknown): value is Json {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+	return JsonObject.check(value);
 }
 
 function filled(value: unknown): value is string {

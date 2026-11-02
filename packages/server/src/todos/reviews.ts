@@ -1,26 +1,50 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import {
+	arr,
+	compile,
+	lit,
+	num,
+	obj,
+	oneOf,
+	opt,
+	type Static,
+	str,
+} from "@earendil-works/pi-schema";
+import { JsonObject } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
+import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
 
 const REVIEWS_SUFFIX = ".reviews.json";
 
-export interface TodoReviewRecord {
-	state: "reviewed" | "changes_requested";
-	reviewedShas: string[];
-	feedback?: string;
-	at: string;
-	reviewedBy?: "agent";
-	requestId?: string;
-}
+const TodoReviewRecordSchema = obj(
+	{
+		state: oneOf(["reviewed", "changes_requested"]),
+		reviewedShas: arr(str()),
+		feedback: opt(str()),
+		at: str(),
+		reviewedBy: opt(lit("agent")),
+		requestId: opt(str()),
+	},
+	{ open: true },
+);
+export type TodoReviewRecord = Static<typeof TodoReviewRecordSchema>;
+
+const PendingReviewSchema = obj({ at: str(), shas: opt(arr(str())) }, { open: true });
+type PendingReview = Static<typeof PendingReviewSchema>;
+
+const TodoReviewEntry = compile(TodoReviewRecordSchema);
+const PendingEntry = compile(PendingReviewSchema);
+const AutoCycleEntry = compile(num());
 
 export interface TodoReviewMeta {
-	pending: Record<string, { at: string; shas?: string[] }>;
+	pending: Record<string, PendingReview>;
 }
 
 interface ReviewsFile {
 	version: 1;
 	items: Record<string, TodoReviewRecord>;
-	pending?: Record<string, { at: string; shas?: string[] }>;
+	pending?: Record<string, PendingReview>;
 	// Auto fix→re-review cycles spent per item, kept OUTSIDE `items` on purpose: a redo that can't be
 	// committed (shared window / foreign dirt) drops the item's `items` entry entirely so the item reads
 	// `unreviewed` again (no sha to watermark a path-list delta against — see `todos/artifacts.ts`), but
@@ -33,64 +57,34 @@ function reviewsPath(root: string, sessionId: string): string {
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${REVIEWS_SUFFIX}`);
 }
 
-function isRecord(raw: unknown): raw is TodoReviewRecord {
-	if (typeof raw !== "object" || raw === null) return false;
-	const o = raw as Record<string, unknown>;
-	return (
-		(o.state === "reviewed" || o.state === "changes_requested") &&
-		Array.isArray(o.reviewedShas) &&
-		o.reviewedShas.every((s) => typeof s === "string") &&
-		(o.feedback === undefined || typeof o.feedback === "string") &&
-		(o.reviewedBy === undefined || o.reviewedBy === "agent") &&
-		(o.requestId === undefined || typeof o.requestId === "string") &&
-		typeof o.at === "string"
-	);
-}
-
-function parseAutoCycles(raw: unknown): Record<string, number> | undefined {
-	if (typeof raw !== "object" || raw === null) return undefined;
-	const autoCycles = Object.fromEntries(
-		Object.entries(raw).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
-	);
-	return Object.keys(autoCycles).length > 0 ? autoCycles : undefined;
-}
-
 function readFile(root: string, sessionId: string): ReviewsFile {
-	try {
-		const parsed: unknown = JSON.parse(readFileSync(reviewsPath(root, sessionId), "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return { version: 1, items: {} };
-		const o = parsed as Record<string, unknown>;
-		const items: Record<string, TodoReviewRecord> = {};
-		if (typeof o.items === "object" && o.items !== null) {
-			for (const [id, value] of Object.entries(o.items)) {
-				if (isRecord(value)) items[id] = value;
-			}
-		}
-		const file: ReviewsFile = { version: 1, items };
-		if (typeof o.pending === "object" && o.pending !== null) {
-			const pending: ReviewsFile["pending"] = {};
-			for (const [id, value] of Object.entries(o.pending)) {
-				const entry = value as Record<string, unknown> | null;
-				const at = entry?.at;
-				if (typeof at !== "string") continue;
-				const shas =
-					Array.isArray(entry?.shas) && entry.shas.every((s) => typeof s === "string")
-						? entry.shas
-						: undefined;
-				pending[id] = { at, ...(shas ? { shas } : {}) };
-			}
-			if (Object.keys(pending).length > 0) file.pending = pending;
-		}
-		const autoCycles = parseAutoCycles(o.autoCycles);
-		if (autoCycles) file.autoCycles = autoCycles;
-		return file;
-	} catch {
+	const stored = readStateFile(reviewsPath(root, sessionId));
+	if (stored.value === undefined) return { version: 1, items: {} };
+	if (!JsonObject.check(stored.value)) {
+		stored.setAside("not a reviews file");
 		return { version: 1, items: {} };
 	}
+	const { items, pending: storedPending, autoCycles: storedCycles } = stored.value;
+	const section = (name: string, value: unknown) => {
+		if (value === undefined) return {};
+		if (JsonObject.check(value)) return value;
+		stored.setAside(`${name} is not an object`);
+		return {};
+	};
+	const file: ReviewsFile = {
+		version: 1,
+		items: parseEntryRecord(stored, section("items", items), TodoReviewEntry),
+	};
+	const pending = parseEntryRecord(stored, section("pending", storedPending), PendingEntry);
+	if (Object.keys(pending).length > 0) file.pending = pending;
+	const autoCycles = parseEntryRecord(stored, section("autoCycles", storedCycles), AutoCycleEntry);
+	if (Object.keys(autoCycles).length > 0) file.autoCycles = autoCycles;
+	return file;
 }
 
 function writeFile(root: string, sessionId: string, file: ReviewsFile): void {
 	const path = reviewsPath(root, sessionId);
+	assertOverwriteAllowed(path);
 	const empty =
 		Object.keys(file.items).length === 0 &&
 		Object.keys(file.pending ?? {}).length === 0 &&

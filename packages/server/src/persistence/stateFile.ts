@@ -116,21 +116,37 @@ function entryProblem(entry: unknown): string | null {
 	return null;
 }
 
+function keepValid<K extends number | string, T>(
+	file: StateFile,
+	entries: Iterable<readonly [K, unknown]>,
+	validator: Validator<T>,
+): [K, T][] {
+	const kept: [K, T][] = [];
+	const dropped: string[] = [];
+	for (const [key, entry] of entries) {
+		const problem = entryProblem(entry);
+		if (problem) dropped.push(`${key} ${problem}`);
+		else if (validator.check(entry)) kept.push([key, entry]);
+		else dropped.push(`${key}${validator.errors(entry)[0]?.path ?? ""}`);
+	}
+	if (dropped.length > 0) file.setAside(`dropped entries ${dropped.join(", ")}`);
+	return kept;
+}
+
 export function parseEntries<T>(
 	file: StateFile,
 	entries: readonly unknown[],
 	validator: Validator<T>,
 ): T[] {
-	const kept: T[] = [];
-	const dropped: string[] = [];
-	for (const [index, entry] of entries.entries()) {
-		const problem = entryProblem(entry);
-		if (problem) dropped.push(`${index} ${problem}`);
-		else if (validator.check(entry)) kept.push(entry);
-		else dropped.push(`${index}${validator.errors(entry)[0]?.path ?? ""}`);
-	}
-	if (dropped.length > 0) file.setAside(`dropped entries ${dropped.join(", ")}`);
-	return kept;
+	return keepValid(file, entries.entries(), validator).map(([, entry]) => entry);
+}
+
+export function parseEntryRecord<T>(
+	file: StateFile,
+	entries: Readonly<Record<string, unknown>>,
+	validator: Validator<T>,
+): Record<string, T> {
+	return Object.fromEntries(keepValid(file, Object.entries(entries), validator));
 }
 
 /** One bad field costs one field: drops each top-level field the validator refuses. */

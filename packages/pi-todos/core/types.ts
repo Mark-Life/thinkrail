@@ -94,3 +94,9 @@ export interface WriteItem {
 export interface WritePlan {
 	groups?: { title: string; todos: WriteItem[] }[];
 }
+
+/** A read that lost data or could not run; the codes are the host's state-file codes. */
+export interface TodoStoreProblem {
+	code: "STATE_FILE_SET_ASIDE" | "STATE_FILE_UNREADABLE";
+	message: string;
+}

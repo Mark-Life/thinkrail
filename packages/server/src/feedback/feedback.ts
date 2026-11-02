@@ -1,7 +1,8 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { bool, compile, int, nullable, obj, opt, str } from "@earendil-works/pi-schema";
 import type { GithubStarAsk, SurveyInvitationResponse } from "@thinkrail/contracts";
-import { dataDir } from "../persistence";
+import { assertOverwriteAllowed, dataDir, readStateFile } from "../persistence";
 import { fetchGithubStars } from "./githubStars";
 import {
 	currentInAppSurvey,
@@ -27,6 +28,23 @@ interface GithubStarPublisher {
 	ask: (clientKey: string, ask: GithubStarAsk) => boolean;
 }
 
+const Count = int({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
+const SurveyIteration = compile(Count);
+const StoredState = compile(
+	obj(
+		{
+			acceptedMessages: Count,
+			nextInvitationAt: Count,
+			dismissed: bool(),
+			submittedSurveyId: opt(nullable(str({ minLength: 1, maxLength: 128 }))),
+			submittedIteration: opt(nullable(Count)),
+			lastInvitedAt: opt(nullable(Count)),
+			githubStarAsked: opt(bool()),
+		},
+		{ open: true },
+	),
+);
+
 const INVITATION_INTERVAL = 10;
 const FIRST_INVITATION_AT = 20;
 const GITHUB_STAR_ASK_AT = 10;
@@ -46,78 +64,33 @@ let publishInvitation: FeedbackPublisher | null = null;
 let publishGithubStar: GithubStarPublisher | null = null;
 let githubStarAskInFlight = false;
 
-function isNonNegativeSafeInteger(value: unknown): value is number {
-	return Number.isSafeInteger(value) && (value as number) >= 0;
-}
-
-function parseState(value: unknown): FeedbackState | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	const candidate = value as Partial<FeedbackState>;
-	if (
-		!isNonNegativeSafeInteger(candidate.acceptedMessages) ||
-		!isNonNegativeSafeInteger(candidate.nextInvitationAt) ||
-		typeof candidate.dismissed !== "boolean"
-	) {
-		return null;
+function readState(): FeedbackState {
+	const file = readStateFile(join(dataDir(), "feedback.json"));
+	if (StoredState.check(file.value)) {
+		const { acceptedMessages, nextInvitationAt, dismissed } = file.value;
+		return {
+			acceptedMessages,
+			nextInvitationAt,
+			dismissed,
+			submittedSurveyId: file.value.submittedSurveyId ?? null,
+			submittedIteration: file.value.submittedIteration ?? null,
+			lastInvitedAt: file.value.lastInvitedAt ?? null,
+			githubStarAsked: file.value.githubStarAsked ?? false,
+		};
 	}
-	const submittedSurveyId = completionId(value);
-	const submittedIteration = completionIteration(value);
-	const lastInvitedAt = invitedAt(value);
-	const githubStarAsked = candidate.githubStarAsked ?? false;
-	if (submittedSurveyId === undefined || submittedIteration === undefined) return null;
-	if (lastInvitedAt === undefined || typeof githubStarAsked !== "boolean") return null;
-	return {
-		acceptedMessages: candidate.acceptedMessages,
-		nextInvitationAt: candidate.nextInvitationAt,
-		dismissed: candidate.dismissed,
-		submittedSurveyId,
-		submittedIteration,
-		lastInvitedAt,
-		githubStarAsked,
-	};
-}
-
-function invitedAt(record: object): number | null | undefined {
-	if (!Object.hasOwn(record, "lastInvitedAt")) return null;
-	const at: unknown = Reflect.get(record, "lastInvitedAt");
-	if (at === null) return null;
-	if (isNonNegativeSafeInteger(at)) return at;
-	return undefined;
-}
-
-function completionId(record: object): string | null | undefined {
-	if (!Object.hasOwn(record, "submittedSurveyId")) return null;
-	const id: unknown = Reflect.get(record, "submittedSurveyId");
-	if (id === null) return null;
-	if (typeof id === "string" && id.length > 0 && id.length <= 128) return id;
-	return undefined;
-}
-
-function completionIteration(record: object): number | null | undefined {
-	if (!Object.hasOwn(record, "submittedIteration")) return null;
-	const iteration: unknown = Reflect.get(record, "submittedIteration");
-	if (iteration === null) return null;
-	if (isNonNegativeSafeInteger(iteration)) return iteration;
-	return undefined;
+	if (file.value !== undefined) file.setAside("not a feedback state");
+	return { ...DEFAULT_STATE };
 }
 
 function loadState(): FeedbackState {
-	if (cachedState) return cachedState;
-	try {
-		cachedState = parseState(
-			JSON.parse(readFileSync(join(dataDir(), "feedback.json"), "utf8")),
-		) ?? {
-			...DEFAULT_STATE,
-		};
-	} catch {
-		cachedState = { ...DEFAULT_STATE };
-	}
+	cachedState ??= readState();
 	return cachedState;
 }
 
 function writeState(next: FeedbackState): void {
 	const directory = dataDir();
 	const file = join(directory, "feedback.json");
+	assertOverwriteAllowed(file);
 	const temporary = `${file}.${process.pid}.tmp`;
 	mkdirSync(directory, { recursive: true });
 	try {
@@ -155,7 +128,7 @@ export function surveyIsCompleted(id: string, iteration: number): boolean {
 }
 
 export function completeSurvey(id: string, iteration: number): void {
-	if (!id || !isNonNegativeSafeInteger(iteration)) throw new Error("Invalid survey completion");
+	if (!id || !SurveyIteration.check(iteration)) throw new Error("Invalid survey completion");
 	const next = { ...loadState(), submittedSurveyId: id, submittedIteration: iteration };
 	cachedState = next;
 	claimedClient = null;
