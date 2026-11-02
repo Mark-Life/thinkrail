@@ -124,7 +124,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions);
+  from `wireChecks`, `describeFailure`.
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).
@@ -681,6 +682,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
   `host.update`; no output, arbitrary diagnostic, feed URL, artifact, platform path, or shell command crosses
   the wire.
+- **wireChecks.ts** — the checks every side runs on wire values. `describeFailure(validator, value, root)` is the one
+  wording of a schema refusal: up to five `path message` pairs, with `root` naming the value itself.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;

@@ -115,4 +115,5 @@ export {
 	SPEECH_SAMPLE_RATE,
 	SPEECH_SOCKET_ROUTE,
 } from "./speech";
+export { describeFailure } from "./wireChecks";
 export * from "./wsProtocol";

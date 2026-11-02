@@ -26,7 +26,7 @@ import {
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	admissionContextFor,
 	bumpPackageSwitchGeneration,
@@ -266,6 +266,16 @@ const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
+
+function requestFingerprint(method: string, params: unknown, sessionId: unknown): string {
+	try {
+		return createHash("sha256")
+			.update(JSON.stringify([method, params, sessionId ?? null]))
+			.digest("hex");
+	} catch {
+		throw new CodedError("INVALID_PARAMS", `Invalid ${method}`);
+	}
+}
 
 function formatReplayLoad(load: ReplayLoad): string {
 	const occupancy = ({ pending, settled, abandoned }: ReplayLoad[string]) =>
@@ -536,15 +546,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				const methodDiagnostic = requestMethodDiagnostic(method);
 				const params = "params" in req ? req.params : undefined;
 				const sessionId = "sessionId" in req ? req.sessionId : undefined;
-				const fingerprint = createHash("sha256")
-					.update(JSON.stringify([method, params, sessionId ?? null]))
-					.digest("hex");
 				log.debug(`ws ${methodDiagnostic}`);
 				try {
 					const response = await requestReplays.run(
 						ws.data.clientKey,
 						requestId,
-						fingerprint,
+						requestFingerprint(method, params, sessionId),
 						async () => {
 							try {
 								const result = await handleRequest(method, params, {

@@ -2,6 +2,7 @@ import {
 	arr,
 	bool,
 	lit,
+	map,
 	nullable,
 	num,
 	oneOf,
@@ -11,6 +12,7 @@ import {
 	str,
 	tuple,
 	union,
+	unknown,
 } from "@earendil-works/pi-schema";
 import { ExtensionSettingValues } from "./extension";
 import { ThinkingLevel, WireModel } from "./model";
@@ -59,13 +61,13 @@ export type LayoutPresetCenterGroup = Static<typeof LayoutPresetCenterGroup>;
 
 const LayoutDirection = oneOf(["horizontal", "vertical"]);
 
-export interface LayoutPresetCenterSplit {
+export type LayoutPresetCenterSplit = {
 	kind: "split";
 	id: string;
 	direction: "horizontal" | "vertical";
 	weights: [number, number];
 	children: [LayoutPresetCenterNode, LayoutPresetCenterNode];
-}
+};
 export type LayoutPresetCenterNode = LayoutPresetCenterGroup | LayoutPresetCenterSplit;
 
 const LayoutPresetCenterNodeRef: Schema<LayoutPresetCenterNode> = { $ref: "#" };
@@ -110,15 +112,18 @@ export const LayoutPresetBottomRegion = wireObj({
 });
 export type LayoutPresetBottomRegion = Static<typeof LayoutPresetBottomRegion>;
 
-export const LayoutPreset = wireObj({
+const LAYOUT_PRESET_FIELDS = {
 	id: str(),
 	name: str(),
-	center: LayoutPresetCenterNode,
 	left: LayoutPresetSideRegion,
 	right: LayoutPresetSideRegion,
 	bottom: LayoutPresetBottomRegion,
-});
+};
+
+export const LayoutPreset = wireObj({ ...LAYOUT_PRESET_FIELDS, center: LayoutPresetCenterNode });
 export type LayoutPreset = Static<typeof LayoutPreset>;
+
+const LayoutPresetParams = wireObj({ ...LAYOUT_PRESET_FIELDS, center: map(unknown()) });
 
 export const COMPOSER_GROWTH_LIMITS = ["compact", "roomy", "half-chat"] as const;
 export const ComposerGrowthLimit = oneOf(COMPOSER_GROWTH_LIMITS);
@@ -142,7 +147,6 @@ const APP_CONFIG_FIELDS = {
 	fileLineWidthBounded: bool(),
 	/** When false, no text field shows the dictation mic and the chord does nothing. */
 	voiceInputEnabled: bool(),
-	customLayoutPresets: arr(LayoutPreset),
 	/** Models the user starred in the picker, in display order; identity is `{provider, id}`. */
 	favoriteModels: arr(WireModel),
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
@@ -182,6 +186,7 @@ const APP_CONFIG_FIELDS = {
 
 export const AppConfig = wireObj({
 	...APP_CONFIG_FIELDS,
+	customLayoutPresets: arr(LayoutPreset),
 	/** The model new chats start with; unset uses the first available model. */
 	defaultModel: opt(WireModel),
 	/** New-chat effort; unset defaults to medium. */
@@ -198,6 +203,7 @@ export type AppConfig = Static<typeof AppConfig>;
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export const AppConfigUpdate = partialWireObj({
 	...APP_CONFIG_FIELDS,
+	customLayoutPresets: arr(LayoutPresetParams),
 	defaultModel: nullable(WireModel),
 	defaultEffort: nullable(ThinkingLevel),
 	reviewModel: nullable(WireModel),
