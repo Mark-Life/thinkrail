@@ -137,8 +137,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
   `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*`,
   `provider.*`, `session.*`, `subagent.*`, `backgroundCommand.*`, `workspace.*`, `editor.*`, `terminal.*`, `git.*`,
-  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*`, `template.*` and `mcp.*` entities, and the methods of these namespaces and
-  `project.*`. The entries below describe these
+  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*`, `template.*`, `mcp.*`, `packages.*`, `fonts.*`,
+  `feedback.*`, `themes.*`, `locales.*`, `environment.*`, `settings.*`, `history.*`, `extension.*` and `client.*` entities,
+  and every WS method. The entries below describe these
   types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
@@ -810,7 +811,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers, others? }` → ack;
   `language` echoes `AppSurvey.language`; `answers` hold only picked choices (as shown), ratings and open text,
   while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
-  one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
+  one call when the user presses Send, whatever the analytics setting; dispatch refuses a wrong shape with `INVALID_PARAMS`; a value rule fails with `SURVEY_INVALID`, and it also fails with
   `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
   and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
   invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
@@ -891,7 +892,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
-  The `WsMethodMap` typed request/result map +
+  The `WsMethodMap` typed request/result map, derived whole from `WS_METHOD_SCHEMAS` +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
   in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for

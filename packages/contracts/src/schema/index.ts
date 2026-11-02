@@ -4,6 +4,7 @@ export {
 	BackgroundCommandSummary,
 } from "./backgroundCommand";
 export { ChangeReceipt, LineSpan, RevertTarget } from "./change";
+export { ClientErrorKind, ClientErrorReport } from "./client";
 export {
 	CustomEndpoint,
 	CustomEndpointDraft,
@@ -14,7 +15,36 @@ export {
 } from "./customEndpoint";
 export { GitDiffScope } from "./diffScope";
 export { EditorInfo } from "./editor";
+export {
+	HostEnvironment,
+	HostEnvironmentIssue,
+	HostEnvironmentStatus,
+	HostEnvironmentUpdateResult,
+	HostEnvironmentVar,
+} from "./environment";
+export { ExtensionCatalogEntry } from "./extension";
 export { ExtUiRequest, ExtUiResponse } from "./extUi";
+export {
+	AppSurvey,
+	SurveyAnswerValue,
+	SurveyChoiceQuestion,
+	SurveyInvitationResponse,
+	SurveyOpenQuestion,
+	SurveyQuestion,
+	SurveyRatingQuestion,
+	SurveyRatingScale,
+	SurveySubmitParams,
+} from "./feedback";
+export {
+	InstalledFontFamily,
+	InstalledFontsResult,
+	UserFontFace,
+	UserFontFile,
+	UserFontFileError,
+	UserFontFileErrorCode,
+	UserFontFileOk,
+	UserFontsSnapshot,
+} from "./fonts";
 export { FileKind, FileNode } from "./fs";
 export {
 	BranchList,
@@ -25,6 +55,14 @@ export {
 	RemoteBranchGroup,
 } from "./git";
 export { GithubAuthStatus } from "./github";
+export { HistoryScope, HistorySearchResult, MessageHit, PromptHit } from "./history";
+export {
+	LocalLocaleFile,
+	LocalLocaleFileError,
+	LocalLocaleFileErrorCode,
+	LocalLocaleFileOk,
+	LocalLocalesSnapshot,
+} from "./locales";
 export {
 	McpConfigFileError,
 	McpExposure,
@@ -51,6 +89,16 @@ export {
 	WireModel,
 	WireModelAuth,
 } from "./model";
+export {
+	PiBuiltinExtension,
+	PiLooseExtension,
+	PiPackageResource,
+	PiPackageResourceType,
+	PiPackageScope,
+	PiPackageSourceKind,
+	PiPackageSummary,
+	PiPackagesCatalog,
+} from "./packages";
 export {
 	BranchReviewState,
 	GhSetupProblem,
@@ -132,6 +180,28 @@ export {
 	SessionStats,
 	SessionSummary,
 } from "./session";
+export type { LayoutPresetCenterSplit } from "./settings";
+export {
+	AppConfig,
+	AppConfigUpdate,
+	ComposerGrowthLimit,
+	FontChoice,
+	FontFamilyRef,
+	FontRole,
+	LayoutBottomAlignment,
+	LayoutPreset,
+	LayoutPresetBottomGroup,
+	LayoutPresetBottomRegion,
+	LayoutPresetCenterGroup,
+	LayoutPresetCenterNode,
+	LayoutPresetSideGroup,
+	LayoutPresetSideRegion,
+	LayoutToolId,
+	SystemThemePair,
+	TerminalWindowsShell,
+	ThemeMode,
+	ThemePreference,
+} from "./settings";
 export {
 	SkillCatalogEntry,
 	SkillDecision,
@@ -143,6 +213,13 @@ export { SpecGraphNode, SpecGraphSnapshot } from "./spec";
 export { DelegationRunStatus, SubagentResourceSummary } from "./subagent";
 export { Template, TemplateInfo, TemplateReadLocation, TemplateScope } from "./template";
 export { TerminalTabInfo } from "./terminal";
+export {
+	UserThemeFile,
+	UserThemeFileError,
+	UserThemeFileErrorCode,
+	UserThemeFileOk,
+	UserThemesSnapshot,
+} from "./themes";
 export {
 	TodoArtifact,
 	TodoArtifactKind,

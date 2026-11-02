@@ -687,6 +687,18 @@ test("feedback.survey.submit refuses a different survey version without completi
 	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
 });
 
+test("feedback.survey.submit refuses a wrong shape at dispatch, before reading the survey", async () => {
+	for (const overrides of [
+		{ surveyId: 7 },
+		{ iteration: "0" },
+		{ answers: { q1: 3 } },
+		{ others: 3 },
+		{ answers: undefined },
+	]) {
+		await expect(submitSurvey(overrides)).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	}
+});
+
 test("feedback.survey.submit re-reads PostHog instead of trusting the displayed copy", async () => {
 	const sent: string[] = [];
 	bootSurveyAnalytics(sent);
@@ -777,10 +789,11 @@ test("feedback.survey.submit does not complete a survey whose answers were not s
 
 test("feedback.respond rejects an action outside the wire union", async () => {
 	for (const action of ["later", "book"]) {
-		await expect(handleRequest("feedback.respond", { action }, CTX)).rejects.toThrow(
-			"Invalid invitation response",
-		);
+		await expect(handleRequest("feedback.respond", { action }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
 	}
+	expect(existsSync(join(dataDir, "feedback.json"))).toBe(false);
 });
 
 test("project.setTrust grants pi-level resource trust only when the request asks for resources", async () => {

@@ -20,7 +20,7 @@ const COLD_BUILD_BUDGET_MS = 150;
 const SNIPPET_RADIUS = 60;
 
 export function clampLimit(limit: number | undefined): number {
-	if (typeof limit !== "number" || !Number.isFinite(limit)) return 50;
+	if (limit === undefined || !Number.isFinite(limit)) return 50;
 	return Math.max(0, Math.min(MAX_HISTORY_LIMIT, Math.floor(limit)));
 }
 
