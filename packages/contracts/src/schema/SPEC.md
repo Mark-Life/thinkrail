@@ -31,6 +31,6 @@ runtime form yet.
   `methods.ts` merges the records. An entity several namespaces share gets its own file.
 - **Schemas check shape only.** A rule that needs host state or gives the user a specific message, such as the
   URL rules of `project.clone`, stays with its handler. A handler does not check the shape again.
-- **Wire changes are visible.** `methods.test.ts` snapshots `WS_METHOD_SCHEMAS`. A changed snapshot is a wire
-  change: decide on a `PROTOCOL_VERSION` bump in the same change.
+- **A wire change is a schema edit.** It shows in the diff under this directory: decide on a `PROTOCOL_VERSION`
+  bump in the same change.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.
