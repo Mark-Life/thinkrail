@@ -10,18 +10,9 @@ import {
 	type Static,
 	str,
 } from "@earendil-works/pi-schema";
+import { McpProjectOverride, McpToolGrant } from "./mcp";
 import { SkillCatalogEntry } from "./skill";
 import { Ack, NoParams, wireObj } from "./wire";
-
-export const McpProjectOverride = wireObj({
-	enabled: opt(bool()),
-	exposure: opt(oneOf(["deferred", "direct", "hidden"])),
-});
-export type McpProjectOverride = Static<typeof McpProjectOverride>;
-
-/** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */
-export const McpToolGrant = wireObj({ target: str(), tools: arr(str()) });
-export type McpToolGrant = Static<typeof McpToolGrant>;
 
 export const Project = wireObj({
 	id: str(),

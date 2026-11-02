@@ -166,15 +166,15 @@ test("a user entry is rewritten or removed only as rendered: a stale or missing 
 	);
 	const replaced = readFileSync(file, "utf8");
 	const stale = { workspaceId: "w1", scope: "user", name: "docs" };
-	for (const params of [
-		{ ...stale, expectedFingerprint: rendered?.fingerprint },
-		stale,
-		{ ...stale, expectedFingerprint: 42 },
-	]) {
+	for (const [params, code] of [
+		[{ ...stale, expectedFingerprint: rendered?.fingerprint }, "MCP_CONFIG_INVALID"],
+		[stale, "INVALID_PARAMS"],
+		[{ ...stale, expectedFingerprint: 42 }, "INVALID_PARAMS"],
+	] as const) {
 		expect(
 			await codeOf(request("mcp.update", { ...params, entry: { url: "https://docs.example/v2" } })),
-		).toBe("MCP_CONFIG_INVALID");
-		expect(await codeOf(request("mcp.remove", params))).toBe("MCP_CONFIG_INVALID");
+		).toBe(code);
+		expect(await codeOf(request("mcp.remove", params))).toBe(code);
 		expect(readFileSync(file, "utf8")).toBe(replaced);
 	}
 	await expect(
@@ -380,9 +380,11 @@ test("an update never approves a pending or changed repository entry, and carrie
 	expect(reenabled?.approval?.fingerprint).not.toBe(toggled?.approval?.fingerprint);
 
 	writeRepo(["-y", "evil"]);
-	expect(await codeOf(update({ command: "npx", args: ["-y", "evil"], enabled: false }))).toBe(
-		"MCP_CONFIG_INVALID",
-	);
+	expect(
+		await codeOf(
+			update({ command: "npx", args: ["-y", "evil"], enabled: false }, reenabled?.fingerprint),
+		),
+	).toBe("MCP_CONFIG_INVALID");
 	const changed = find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo");
 	const rewritten = await update(
 		{ command: "npx", args: ["-y", "evil"], enabled: false },
@@ -392,9 +394,15 @@ test("an update never approves a pending or changed repository entry, and carrie
 	for (const method of ["mcp.add", "mcp.update", "mcp.remove"]) {
 		expect(
 			await codeOf(
-				request(method, { workspaceId: "w1", scope: "repo", name: "x", entry: { command: "x" } }),
+				request(method, {
+					workspaceId: "w1",
+					scope: "repo",
+					name: "x",
+					entry: { command: "x" },
+					expectedFingerprint: "x",
+				}),
 			),
-		).toBe("uncoded");
+		).toBe("INVALID_PARAMS");
 	}
 	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.x).toBeUndefined();
 });
@@ -474,6 +482,9 @@ test("always-allowed tools are listed on their server row and revoked one by one
 	expect(getProjects()[0]?.mcpToolGrants?.linear?.tools).toEqual(["mcp__linear__comment"]);
 	expect(
 		await codeOf(request("mcp.revokeToolGrant", { workspaceId: "w1", name: "linear", tool: 7 })),
+	).toBe("INVALID_PARAMS");
+	expect(
+		await codeOf(request("mcp.revokeToolGrant", { workspaceId: "w1", name: "linear", tool: "" })),
 	).toBe("MCP_CONFIG_INVALID");
 });
 
@@ -763,10 +774,15 @@ test("an untrusted project refuses writes to the MCP servers its repository defi
 		["mcp.approve", { name: "repo", fingerprint: pending?.approval?.fingerprint }],
 		[
 			"mcp.update",
-			{ scope: "project", name: "repo", entry: { command: "npx", args: ["-y", "y"] } },
+			{
+				scope: "project",
+				name: "repo",
+				entry: { command: "npx", args: ["-y", "y"] },
+				expectedFingerprint: pending?.fingerprint,
+			},
 		],
 		["mcp.add", { scope: "project", name: "fresh", entry: { command: "npx" } }],
-		["mcp.remove", { scope: "project", name: "repo" }],
+		["mcp.remove", { scope: "project", name: "repo", expectedFingerprint: pending?.fingerprint }],
 		["mcp.shareWithRepo", { name: "linear" }],
 	];
 	for (const [method, params] of refused) {
@@ -975,7 +991,7 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 	for (const enabled of ["false", 0, 1, null, {}, []]) {
 		expect(
 			await codeOf(request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", enabled })),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("INVALID_PARAMS");
 		expect(
 			await codeOf(
 				request("mcp.setSessionOverride", {
@@ -985,7 +1001,7 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 					enabled,
 				}),
 			),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("INVALID_PARAMS");
 		expect(readFileSync(projectsPath, "utf8")).toBe(before);
 	}
 	for (const exposure of ["codemode", "codemode-deferred", "DIRECT", "", true, 0, null, {}, []]) {
@@ -998,15 +1014,51 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 					exposure,
 				}),
 			),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("INVALID_PARAMS");
 		expect(readFileSync(projectsPath, "utf8")).toBe(before);
 	}
 	expect(
 		await codeOf(
 			request("mcp.setSessionOverride", { workspaceId: "w1", sessionId: "missing", name: "docs" }),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("INVALID_PARAMS");
 });
+
+test("an undeclared param field reaches neither the project record nor the repository file", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
+	);
+	const extra = { command: "evil", auth: { provider: "anthropic" }, approval: "approved" };
+	await request("mcp.setProjectOverride", {
+		workspaceId: "w1",
+		name: "linear",
+		enabled: false,
+		exposure: "direct",
+		...extra,
+	});
+	expect(getProjects()[0]?.mcpOverrides?.linear).toEqual({ enabled: false, exposure: "direct" });
+	await request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear", ...extra });
+	await request("mcp.add", {
+		workspaceId: "w1",
+		scope: "project",
+		name: "fresh",
+		entry: { command: "npx" },
+		...extra,
+	});
+	const written = JSON.parse(readFileSync(join(repo, ".pi", "mcp.json"), "utf8")).mcpServers;
+	expect(written.linear).toEqual({ enabled: false, exposure: "direct" });
+	expect(written.fresh).toEqual({ command: "npx" });
+});
+
+test.each([[[]], [null], ["npx"]])(
+	"an entry that is not an object is refused before any write: %j",
+	async (entry) => {
+		const params = { workspaceId: "w1", scope: "user", name: "docs", entry };
+		expect(await codeOf(request("mcp.add", params))).toBe("INVALID_PARAMS");
+		expect(existsSync(join(agentDir, "mcp.json"))).toBe(false);
+	},
+);
 
 test("probes refuse trust revoked while ownership is resolving", async () => {
 	await request("mcp.add", {

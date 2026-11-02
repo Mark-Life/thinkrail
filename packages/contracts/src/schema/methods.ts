@@ -6,6 +6,7 @@ import { EDITOR_METHODS } from "./editor";
 import { FS_METHODS } from "./fs";
 import { GIT_METHODS } from "./git";
 import { GITHUB_METHODS } from "./github";
+import { MCP_METHODS } from "./mcp";
 import { MODEL_METHODS } from "./model";
 import { PR_METHODS } from "./pr";
 import { PROJECT_METHODS } from "./project";
@@ -40,6 +41,7 @@ export const WS_METHOD_SCHEMAS = {
 	...TODO_METHODS,
 	...REVIEW_METHODS,
 	...TEMPLATE_METHODS,
+	...MCP_METHODS,
 };
 
 type WsMethodSchemas = typeof WS_METHOD_SCHEMAS;
