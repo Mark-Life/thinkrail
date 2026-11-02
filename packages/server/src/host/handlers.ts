@@ -2,6 +2,8 @@ import { mkdirSync } from "node:fs";
 import type {
 	Ack,
 	OpenBranchReview,
+	ResourceHistoryCursor,
+	ResourceKind,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
@@ -506,49 +508,14 @@ function resourceCwd(workspaceId: string): string {
 	}
 }
 
-function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K, string> {
-	if (!params || typeof params !== "object" || Array.isArray(params))
+function checkResourceIds(hostIds: string[], sessionIds: string[]) {
+	if (!hostIds.every(isHostResourceId) || !sessionIds.every(isPiSessionId))
 		throw new Error("Invalid resource ids");
-	if (Object.keys(params).some((key) => !keys.some((allowed) => allowed === key)))
-		throw new Error("Invalid resource ids");
-	const result = {} as Record<K, string>;
-	for (const key of keys) {
-		const value: unknown = Reflect.get(params, key);
-		const sessionId = key === "sessionId" || key === "parentSessionId" || key === "childSessionId";
-		if (typeof value !== "string" || !(sessionId ? isPiSessionId(value) : isHostResourceId(value)))
-			throw new Error("Invalid resource ids");
-		result[key] = value;
-	}
-	return result;
 }
 
-function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
-	if (!params || typeof params !== "object" || Array.isArray(params))
-		throw new Error("Invalid resource history request");
-	const { kind, before, limit, ...scope } = params as Record<string, unknown>;
-	const { workspaceId, sessionId } = resourceParams(scope, ["workspaceId", "sessionId"]);
-	if (kind !== "command" && kind !== "subagent") throw new Error("Invalid resource history kind");
-	if (limit !== undefined && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1))
-		throw new Error("Invalid resource history limit");
-	const request: WsParams<"session.resourceHistory"> = {
-		workspaceId,
-		sessionId,
-		kind,
-		...(limit === undefined ? {} : { limit }),
-	};
-	if (before === undefined) return request;
-	if (!before || typeof before !== "object" || Array.isArray(before))
-		throw new Error("Invalid resource history cursor");
-	const { at, id, ...extra } = before as Record<string, unknown>;
-	if (
-		Object.keys(extra).length > 0 ||
-		typeof at !== "number" ||
-		!Number.isFinite(at) ||
-		typeof id !== "string" ||
-		!(kind === "subagent" ? isPiSessionId(id) : isHostResourceId(id))
-	)
-		throw new Error("Invalid resource history cursor");
-	return { ...request, before: { at, id } };
+function checkResourceHistoryCursor(kind: ResourceKind, before: ResourceHistoryCursor) {
+	const idValid = kind === "subagent" ? isPiSessionId(before.id) : isHostResourceId(before.id);
+	if (!Number.isFinite(before.at) || !idValid) throw new Error("Invalid resource history cursor");
 }
 
 async function deliverToolResponse(
@@ -557,7 +524,6 @@ async function deliverToolResponse(
 	response: unknown,
 ): Promise<Ack> {
 	if (!hasSession(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
-	if (response === undefined) throw new Error("A tool response must carry a value");
 	await ackSend(respondToTool(sessionId, toolCallId, response));
 	return { ok: true };
 }
@@ -1197,16 +1163,17 @@ const handlers: WsHandlers = {
 	"mcp.readOutput": (params) => mcpReadOutput(params),
 	"mcp.readLog": (params) => mcpReadLog(params),
 	"mcp.testConnection": (params, ctx) => mcpTestConnection(params, ctx.clientKey),
-	"session.resources": (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId"]);
+	"session.resources": (p) => {
+		checkResourceIds([p.workspaceId], [p.sessionId]);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
 	},
-	"session.resourceHistory": (params) => {
-		const { workspaceId, sessionId, ...request } = resourceHistoryParams(params);
+	"session.resourceHistory": ({ workspaceId, sessionId, ...request }) => {
+		checkResourceIds([workspaceId], [sessionId]);
+		if (request.before) checkResourceHistoryCursor(request.kind, request.before);
 		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
 	},
-	"backgroundCommand.output": (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+	"backgroundCommand.output": (p) => {
+		checkResourceIds([p.workspaceId, p.commandId], [p.sessionId]);
 		return readBackgroundCommandOutput(
 			p.workspaceId,
 			p.sessionId,
@@ -1214,8 +1181,8 @@ const handlers: WsHandlers = {
 			resourceCwd(p.workspaceId),
 		);
 	},
-	"backgroundCommand.stop": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+	"backgroundCommand.stop": async (p) => {
+		checkResourceIds([p.workspaceId, p.commandId], [p.sessionId]);
 		await stopBackgroundCommand(
 			p.workspaceId,
 			p.sessionId,
@@ -1224,8 +1191,8 @@ const handlers: WsHandlers = {
 		);
 		return { ok: true } as const;
 	},
-	"subagent.stop": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "parentSessionId", "childSessionId"]);
+	"subagent.stop": async (p) => {
+		checkResourceIds([p.workspaceId], [p.parentSessionId, p.childSessionId]);
 		await stopSubagent(
 			p.workspaceId,
 			p.parentSessionId,
@@ -1234,8 +1201,8 @@ const handlers: WsHandlers = {
 		);
 		return { ok: true } as const;
 	},
-	"subagent.stopAll": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "parentSessionId"]);
+	"subagent.stopAll": async (p) => {
+		checkResourceIds([p.workspaceId], [p.parentSessionId]);
 		const targeted = await stopAllSubagents(
 			p.workspaceId,
 			p.parentSessionId,

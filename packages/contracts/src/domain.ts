@@ -1,14 +1,16 @@
-import type { SessionState } from "./piProtocol";
-import type { JbcentralStatus, McpProjectOverride, ThinkingLevel, WireModel } from "./schema";
-
-export interface SessionStateRecord {
-	sessionId: string;
-	workspaceId: string;
-	projectId: string;
-	state: SessionState;
-	title?: string;
-	firstPrompt?: string;
-}
+import type {
+	BackgroundCommandSummary,
+	DelegationRunStatus,
+	JbcentralStatus,
+	McpProjectOverride,
+	McpServerState,
+	McpTransportKind,
+	ResourceHistoryCursor,
+	ResourceRecord,
+	ResourceTally,
+	ThinkingLevel,
+	WireModel,
+} from "./schema";
 
 export const FIRST_PROMPT_MAX_LENGTH = 200;
 
@@ -347,8 +349,6 @@ export interface TodoPlan {
 	adoptedCommits?: TodoItem[];
 }
 
-export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
-
 const THINKING_LEVEL_SET = {
 	off: true,
 	minimal: true,
@@ -423,22 +423,6 @@ export interface SubagentCompletionDetails extends DelegationRunDetails {
 	delivery?: CompletionDelivery;
 }
 
-export type BackgroundCommandStatus = "running" | "stopping" | "completed" | "error" | "stopped";
-
-export interface BackgroundCommandSummary {
-	id: string;
-	sessionId: string;
-	name: string;
-	command: string;
-	status: BackgroundCommandStatus;
-	startedAt: number;
-	finishedAt?: number;
-	exitCode?: number | null;
-	errorMessage?: string;
-	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
-	interrupted?: true;
-}
-
 export interface BackgroundCommandCompletionDetails
 	extends Omit<BackgroundCommandSummary, "command"> {
 	status: "completed" | "error" | "stopped";
@@ -447,46 +431,7 @@ export interface BackgroundCommandCompletionDetails
 	delivery?: CompletionDelivery;
 }
 
-export interface SubagentResourceSummary {
-	childSessionId: string;
-	parentSessionId: string;
-	roleName?: string;
-	task: string;
-	status: DelegationRunStatus;
-	createdAt: string;
-	detached?: boolean;
-	model?: string;
-	thinkingLevel?: ThinkingLevel;
-	abortReason?: string;
-	durationMs?: number;
-	finishedAt?: number;
-	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
-	interrupted?: true;
-}
-
-export type ResourceRecord =
-	| { kind: "command"; summary: BackgroundCommandSummary }
-	| { kind: "subagent"; summary: SubagentResourceSummary };
-
-export type ResourceKind = ResourceRecord["kind"];
-
-export type ResourceOutcome = "done" | "failed" | "stopped" | "interrupted";
-
-export type ResourceTally = Record<ResourceOutcome, number>;
-
-export interface SessionResourceHistory {
-	commands: ResourceTally;
-	subagents: ResourceTally;
-}
-
-export interface ResourceHistoryCursor {
-	at: number;
-	id: string;
-}
-
-export type ResourceHistoryPage =
-	| { kind: "command"; items: BackgroundCommandSummary[]; hasMore: boolean }
-	| { kind: "subagent"; items: SubagentResourceSummary[]; hasMore: boolean };
+export type ResourceOutcome = keyof ResourceTally;
 
 export const RESOURCE_HISTORY_PAGE_LIMIT = 20;
 export const RESOURCE_HISTORY_MAX_PAGE_LIMIT = 100;
@@ -580,23 +525,10 @@ export function compareResourceHistory(a: ResourceHistoryCursor, b: ResourceHist
 	return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 }
 
-export interface SessionResources {
-	workspaceId: string;
-	sessionId: string;
-	commands: BackgroundCommandSummary[];
-	subagents: SubagentResourceSummary[];
-	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */
-	mcpServers?: McpServerResourceSummary[];
-	/** Every finished record of this chat by outcome; absent before `RESOURCE_HISTORY_PROTOCOL_VERSION`. */
-	history?: SessionResourceHistory;
-}
-
 export type McpServerScope = "user" | "project";
 
 /** Configured exposure; `codemode` is accepted from files and treated as `deferred` while codemode is not shipped. */
 export type McpExposure = "deferred" | "direct" | "hidden" | "codemode";
-
-export type McpTransportKind = "stdio" | "http";
 
 /** The session-independent view of one configured server; secret literal values are masked. */
 export interface McpServerSummary {
@@ -627,22 +559,6 @@ export interface McpServerSummary {
 	alwaysAllowed?: { tool: string; label: string }[];
 }
 
-export type McpServerState =
-	| "starting"
-	| "connected"
-	| "needs-sign-in"
-	| "failed"
-	| "disconnected"
-	| "disabled"
-	| "disabled-in-project"
-	| "disabled-in-chat"
-	| "pending-approval"
-	| "invalid-config"
-	| "pending-reload"
-	| "not-running"
-	| "handled-elsewhere"
-	| "unknown";
-
 export interface McpServerStatus {
 	name: string;
 	state: McpServerState;
@@ -662,15 +578,6 @@ export interface McpStatusSnapshot {
 	/** Monotonic per session; a stale snapshot never overwrites a newer one. */
 	generation: number;
 	servers: McpServerStatus[];
-}
-
-export interface McpServerResourceSummary {
-	name: string;
-	state: McpServerState;
-	toolCount?: number;
-	transport: McpTransportKind;
-	/** Registered by an extension (`pi.registerMcpServer()`), not an `mcp.json` entry: it cannot be disabled per chat. */
-	registered?: true;
 }
 
 /** Mirror of pi's `McpToolDetails` as it arrives in `mcp__*` and the three MCP resource tools' results. */
@@ -927,14 +834,6 @@ export interface PiPackagesCatalog {
 	loose: PiLooseExtension[];
 	builtins: PiBuiltinExtension[];
 }
-
-export type BackgroundCommandOutputResult =
-	| {
-			available: true;
-			command: BackgroundCommandSummary;
-			output: { text: string; truncated: boolean };
-	  }
-	| { available: false };
 
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 

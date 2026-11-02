@@ -1,4 +1,5 @@
 import {
+	arr,
 	lit,
 	obj,
 	type Properties,
@@ -18,3 +19,11 @@ export const NoParams: Schema<Record<string, never>> = wireObj({});
 /** The result of a method that reports only success. */
 export const Ack = wireObj({ ok: lit(true) });
 export type Ack = Static<typeof Ack>;
+
+export function readonlyArr<T>(items: Schema<T>): Schema<readonly T[]> {
+	return arr(items);
+}
+
+export function piOwned<T>(): Schema<T> {
+	return { type: "object" };
+}
