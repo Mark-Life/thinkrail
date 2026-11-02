@@ -1,5 +1,16 @@
+import {
+	arr,
+	compile,
+	lit,
+	obj,
+	opt,
+	type Static,
+	str,
+	union,
+	unknown,
+} from "@earendil-works/pi-schema";
 import type { McpContentBlockSummary, McpResultSummary } from "@thinkrail/contracts";
-import { isRecord } from "./config";
+import { isJsonObject } from "./schemas";
 
 export const MCP_SUMMARY_BYTES = 64 * 1024;
 const RESOURCE_TOOLS = new Set([
@@ -12,44 +23,53 @@ export function isMcpResultTool(toolName: string): boolean {
 	return toolName.startsWith("mcp__") || RESOURCE_TOOLS.has(toolName);
 }
 
-const text = (value: unknown): string | undefined =>
-	typeof value === "string" ? value : undefined;
+const Resource = obj({ uri: opt(str()), mimeType: opt(str()), text: opt(str()) }, { open: true });
+const isResource = compile(Resource).check;
 
-function blockSummary(block: unknown): McpContentBlockSummary | null {
-	if (!isRecord(block)) return null;
+const ContentBlock = union([
+	obj({ type: lit("text"), text: opt(str()) }, { open: true }),
+	obj({ type: lit("image"), mimeType: opt(str()) }, { open: true }),
+	obj({ type: lit("audio"), mimeType: opt(str()) }, { open: true }),
+	obj(
+		{ type: lit("resource_link"), uri: opt(str()), name: opt(str()), mimeType: opt(str()) },
+		{ open: true },
+	),
+	obj({ type: lit("resource"), resource: Resource }, { open: true }),
+]);
+const isContentBlock = compile(ContentBlock).check;
+const isEntryList = compile(arr(unknown())).check;
+const hasFullOutputPath = compile(obj({ fullOutputPath: str() }, { open: true })).check;
+
+export function mcpFullOutputPath(details: unknown): string | undefined {
+	return hasFullOutputPath(details) ? details.fullOutputPath : undefined;
+}
+
+function blockSummary(block: Static<typeof ContentBlock>): McpContentBlockSummary {
 	switch (block.type) {
 		case "text":
-			return { kind: "text", chars: text(block.text)?.length ?? 0 };
+			return { kind: "text", chars: block.text?.length ?? 0 };
 		case "image":
-			return { kind: "image", mimeType: text(block.mimeType) ?? "image/*" };
+			return { kind: "image", mimeType: block.mimeType ?? "image/*" };
 		case "audio":
-			return { kind: "audio", mimeType: text(block.mimeType) ?? "audio/*" };
-		case "resource_link": {
-			const name = text(block.name);
-			const mimeType = text(block.mimeType);
+			return { kind: "audio", mimeType: block.mimeType ?? "audio/*" };
+		case "resource_link":
 			return {
 				kind: "resource_link",
-				uri: text(block.uri) ?? "",
-				...(name ? { name } : {}),
-				...(mimeType ? { mimeType } : {}),
+				uri: block.uri ?? "",
+				...(block.name ? { name: block.name } : {}),
+				...(block.mimeType ? { mimeType: block.mimeType } : {}),
 			};
-		}
 		case "resource":
 			return resourceSummary(block.resource);
-		default:
-			return null;
 	}
 }
 
-function resourceSummary(resource: unknown): McpContentBlockSummary | null {
-	if (!isRecord(resource)) return null;
-	const mimeType = text(resource.mimeType);
-	const body = text(resource.text);
+function resourceSummary(resource: Static<typeof Resource>): McpContentBlockSummary {
 	return {
 		kind: "resource",
-		uri: text(resource.uri) ?? "",
-		...(mimeType ? { mimeType } : {}),
-		...(body !== undefined ? { chars: body.length } : {}),
+		uri: resource.uri ?? "",
+		...(resource.mimeType ? { mimeType: resource.mimeType } : {}),
+		...(resource.text !== undefined ? { chars: resource.text.length } : {}),
 	};
 }
 
@@ -91,21 +111,21 @@ export function summarizeMcpResult(
 	structured: unknown,
 	isError: boolean,
 ): McpResultSummary | null {
-	if (!isRecord(structured)) return null;
+	if (!isJsonObject(structured)) return null;
 	const flag = isError ? { isError: true } : {};
 	if (toolName === "read_mcp_resource") {
-		const contents = Array.isArray(structured.contents) ? structured.contents : [];
+		const contents = isEntryList(structured.contents) ? structured.contents : [];
 		const { kept } = boundedBlocks(
-			contents.flatMap((entry) => resourceSummary(entry) ?? []),
+			contents.filter(isResource).map(resourceSummary),
 			MCP_SUMMARY_BYTES,
 		);
 		return { ...kept, ...flag };
 	}
 	if (RESOURCE_TOOLS.has(toolName))
 		return { blocks: [], ...boundedStructured(structured, MCP_SUMMARY_BYTES), ...flag };
-	const content = Array.isArray(structured.content) ? structured.content : [];
+	const content = isEntryList(structured.content) ? structured.content : [];
 	const { kept, remaining } = boundedBlocks(
-		content.flatMap((block) => blockSummary(block) ?? []),
+		content.filter(isContentBlock).map(blockSummary),
 		MCP_SUMMARY_BYTES,
 	);
 	return { ...kept, ...boundedStructured(structured.structuredContent, remaining), ...flag };

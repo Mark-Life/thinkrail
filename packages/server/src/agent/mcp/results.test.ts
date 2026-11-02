@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { MCP_SUMMARY_BYTES, summarizeMcpResult } from "./results";
+import { MCP_SUMMARY_BYTES, mcpFullOutputPath, summarizeMcpResult } from "./results";
 
 test("tool results keep block kinds, URIs, types and sizes but never block data", () => {
 	const summary = summarizeMcpResult(
@@ -63,6 +63,50 @@ test("structured content is bounded, resource reads drop blobs, listings keep th
 			blocks: [],
 			structuredContent,
 		});
+	}
+});
+
+test("a wrong-type block is dropped, its neighbours stay, and absent fields keep their defaults", () => {
+	expect(
+		summarizeMcpResult(
+			"mcp__s__t",
+			{
+				content: [
+					{ type: "text", text: 5 },
+					{ type: "image", data: "x" },
+					{ type: "resource", resource: { uri: 7 } },
+					{ type: "resource_link" },
+					{ type: "new_kind" },
+				],
+			},
+			false,
+		),
+	).toEqual({
+		blocks: [
+			{ kind: "image", mimeType: "image/*" },
+			{ kind: "resource_link", uri: "" },
+		],
+	});
+	expect(
+		summarizeMcpResult(
+			"read_mcp_resource",
+			{ contents: [{ uri: "file:///a" }, { uri: 7 }, null] },
+			false,
+		),
+	).toEqual({ blocks: [{ kind: "resource", uri: "file:///a" }] });
+});
+
+test("a wrong-type block list reads as empty and keeps structured content", () => {
+	expect(
+		summarizeMcpResult("mcp__s__t", { content: 5, structuredContent: { a: 1 } }, true),
+	).toEqual({ blocks: [], structuredContent: { a: 1 }, isError: true });
+	expect(summarizeMcpResult("read_mcp_resource", { contents: 5 }, false)).toEqual({ blocks: [] });
+});
+
+test("only a string full output path is read from tool details", () => {
+	expect(mcpFullOutputPath({ fullOutputPath: "/tmp/o.txt", other: 1 })).toBe("/tmp/o.txt");
+	for (const details of [undefined, null, [], {}, { fullOutputPath: 5 }]) {
+		expect(mcpFullOutputPath(details)).toBeUndefined();
 	}
 });
 

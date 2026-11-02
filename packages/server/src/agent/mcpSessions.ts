@@ -36,6 +36,7 @@ import {
 	deriveMcpServerStatuses,
 	isMcpResultTool,
 	loadHostMcpConfig,
+	mcpFullOutputPath,
 	mcpPolicyOf,
 	type ParsedMcpStatus,
 	parseMcpAttentionNotice,
@@ -522,10 +523,8 @@ export async function readMcpToolOutput(
 	if (result?.role !== "toolResult" || !isMcpResultTool(result.toolName)) {
 		return { available: false, reason: "unavailable" };
 	}
-	const details = result.details as { fullOutputPath?: unknown } | undefined;
-	const path = details?.fullOutputPath;
-	if (typeof path !== "string" || !isAbsolute(path))
-		return { available: false, reason: "unavailable" };
+	const path = mcpFullOutputPath(result.details);
+	if (path === undefined || !isAbsolute(path)) return { available: false, reason: "unavailable" };
 	try {
 		return { available: true, ...readBounded(path) };
 	} catch {
