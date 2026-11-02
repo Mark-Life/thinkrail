@@ -54,4 +54,7 @@ and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to it
   `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
+- **A result schema is proven by tests.** Production never checks a result. The host's test harnesses check real replies
+  against it ([[submodule-server-host]]), so a mismatch is a schema bug or a host bug, not a tolerated drift. `piOwned` parts
+  pass by design.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

@@ -109,6 +109,7 @@ export const E2E_CENTRAL_LOG = join(E2E_DATA_DIR, "central-invocations.log");
 export const E2E_SCREENSHOT_DIR = join(repoRoot, "e2e", "screenshots");
 
 export const E2E_EDITOR_LOG = join(E2E_DATA_DIR, "editor-invocations.log");
+export const E2E_WS_RESULT_LOG = join(E2E_DATA_DIR, "ws-result-failures.log");
 
 export const E2E_PI_AGENT_DIR = join(E2E_DATA_DIR, "pi-agent");
 

@@ -487,6 +487,12 @@ artifact and live-restart hosts, the workflow harness, and the artifact probes â
 `@thinkrail/shared/toolHomes`' `toolHomeEnv`, so each agent tool's config home (what account detection reads)
 lands in the sandbox and a new detection source is pinned everywhere at once.
 
+## Reply checks
+
+The host of `playwright.config.ts` runs with `THINKRAIL_CHECK_WS_RESULTS=1`: a reply that breaks its result schema
+fails that request and lands in `E2E_WS_RESULT_LOG`. `globalTeardown` fails the run on any line there, so a spec that
+tolerates an error reply still cannot hide a mismatch. Artifact hosts do not set it: they test the shipped build.
+
 ## Boundary
 
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,

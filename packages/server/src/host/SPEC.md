@@ -234,7 +234,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `INVALID_PARAMS`, naming the failing fields but never their values. Params whose JSON is over 64 KB, or that cannot be
   serialized, get the method name alone: building a report for them costs more than the request should. The replay
   fingerprint of a frame too deep to serialize gets the same code, as a reply and with nothing retained. Every method has a schema, and a handler
-  does not check the shape of its params again. A method name off the wire can still be unknown: `handleRequest` refuses it first, with the plain `Unknown method` error. The registry includes `workspace.rename` as the direct manual door into
+  does not check the shape of its params again. A method name off the wire can still be unknown: `handleRequest` refuses it first, with the plain `Unknown method` error. In the unit and e2e harnesses, which set `THINKRAIL_CHECK_WS_RESULTS=1`, `wsResults.ts` also checks each reply's JSON form against the method's result schema and turns a mismatch into a failed request naming the method and field; e2e also writes it to `THINKRAIL_E2E_WS_RESULT_LOG`. Without the variable nothing compiles and nothing is checked, so result schemas stay types only in production. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
