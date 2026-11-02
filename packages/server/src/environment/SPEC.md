@@ -47,7 +47,7 @@ ThinkRail terminal uses the same config folder.
   expansion and an existing directory; names match `[A-Za-z_][A-Za-z0-9_]*`, no duplicates; reserved
   (case-insensitive) are `PATH` (shellEnv owns it), `HOME` / `USERPROFILE` (Bun caches `homedir()`),
   `PI_CODING_AGENT_DIR` (its own field) and `THINKRAIL_*` (data dir, port and host are read before or
-  outside the record). Blank rows are dropped; a structurally malformed record is a thrown request error.
+  outside the record). Blank rows are dropped; dispatch refuses a malformed record with `INVALID_PARAMS`.
 - **Names follow the platform's case rule.** On Windows environment names are case-insensitive (Bun's
   `process.env` too), so launch-key membership, duplicate detection and override reporting compare an
   upper-cased key there and exact names elsewhere; display keeps the user's spelling. `applyHostEnvironment`

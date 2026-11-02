@@ -1,5 +1,4 @@
-export const SPEECH_MODELS = ["multilingual", "english"] as const;
-export type SpeechModel = (typeof SPEECH_MODELS)[number];
+import { SPEECH_MODELS, type SpeechModel } from "./schema";
 
 export function isSpeechModel(value: unknown): value is SpeechModel {
 	return SPEECH_MODELS.some((model) => model === value);

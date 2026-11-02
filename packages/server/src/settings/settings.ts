@@ -2,11 +2,9 @@ import {
 	type AppConfig,
 	type AppConfigUpdate,
 	CODE_FONT_SIZE,
-	COMPOSER_GROWTH_LIMITS,
 	type ExtensionSettingValues,
 	FONT_WEIGHT_OFFSET,
 	isCodeFontSize,
-	isComposerGrowthLimit,
 	isFontChoice,
 	isFontWeightOffset,
 	isJbcentralQuotaRefreshSeconds,
@@ -14,9 +12,6 @@ import {
 	isLocalePreference,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
-	isSystemThemePair,
-	isTerminalWindowsShell,
-	isThemeMode,
 	LINE_WIDTH_COLUMNS,
 	RECENT_MODELS_LIMIT,
 	sameModel,
@@ -76,53 +71,29 @@ const ACCEPTED_UPDATE_KEYS = {
 	recentModels: true,
 } satisfies Record<keyof RuntimeAppConfigUpdate, true>;
 
-function assertUpdateShape(update: unknown): void {
-	if (typeof update !== "object" || update === null || Array.isArray(update)) {
-		throw new Error("settings update must be an object");
-	}
+function assertKnownKeys(update: AppConfigUpdate): void {
 	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
 	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
 }
 
-function isWireModelRef(value: unknown): value is WireModel {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-	const record = value as Record<string, unknown>;
-	return (
-		typeof record.provider === "string" &&
-		record.provider.length > 0 &&
-		typeof record.id === "string" &&
-		record.id.length > 0 &&
-		typeof record.name === "string" &&
-		Array.isArray(record.thinkingLevels)
-	);
+function identifiesModel(model: WireModel): boolean {
+	return model.provider.length > 0 && model.id.length > 0;
 }
 
-function validateFavoriteModels(value: unknown): WireModel[] {
-	if (!Array.isArray(value) || !value.every(isWireModelRef)) {
+function validateFavoriteModels(value: WireModel[]): WireModel[] {
+	if (!value.every(identifiesModel)) {
 		throw new Error("favoriteModels must be a list of models");
 	}
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function validateExtensionSettings(value: unknown): ExtensionSettingValues {
-	const invalid = () => new Error("extensionSettings must map extension names to boolean settings");
-	if (!isPlainObject(value)) throw invalid();
-	const result: ExtensionSettingValues = {};
-	for (const [name, settings] of Object.entries(value)) {
-		if (name.trim().length === 0 || !isPlainObject(settings)) throw invalid();
-		const entries = Object.entries(settings);
-		const flags = entries.filter(
-			(entry): entry is [string, boolean] =>
-				entry[0].trim().length > 0 && typeof entry[1] === "boolean",
-		);
-		if (flags.length !== entries.length) throw invalid();
-		result[name] = Object.fromEntries(flags);
-	}
-	return result;
+function validateExtensionSettings(value: ExtensionSettingValues): ExtensionSettingValues {
+	const named = Object.entries(value).every(
+		([name, settings]) =>
+			name.trim().length > 0 && Object.keys(settings).every((key) => key.trim().length > 0),
+	);
+	if (!named) throw new Error("extensionSettings must map extension names to boolean settings");
+	return value;
 }
 
 function mergeExtensionSettings(
@@ -136,14 +107,11 @@ function mergeExtensionSettings(
 	return next;
 }
 
-function validateNameList(value: unknown, setting: string, noun: string): string[] {
-	if (
-		!Array.isArray(value) ||
-		!value.every((name) => typeof name === "string" && name.trim().length > 0)
-	) {
+function validateNameList(value: string[], setting: string, noun: string): string[] {
+	if (!value.every((name) => name.trim().length > 0)) {
 		throw new Error(`${setting} must be a list of ${noun}`);
 	}
-	return [...new Set(value as string[])];
+	return [...new Set(value)];
 }
 
 let publishSettings: SettingsPublisher | null = null;
@@ -166,7 +134,7 @@ export function getConfig(): AppConfig {
 }
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
-	assertUpdateShape(partial);
+	assertKnownKeys(partial);
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
@@ -178,23 +146,6 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			throw new Error(
 				`${name} must be a whole number from ${LINE_WIDTH_COLUMNS.min} to ${LINE_WIDTH_COLUMNS.max}`,
 			);
-		}
-	}
-	for (const [name, value] of [
-		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],
-		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
-		["voiceInputEnabled", runtimeUpdate.voiceInputEnabled],
-		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
-		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
-		["notificationsEnabled", runtimeUpdate.notificationsEnabled],
-		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
-		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
-		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
-		["codeLigatures", runtimeUpdate.codeLigatures],
-		["otherAgentSkills", runtimeUpdate.otherAgentSkills],
-	] as const) {
-		if (value !== undefined && typeof value !== "boolean") {
-			throw new Error(`${name} must be a boolean`);
 		}
 	}
 	for (const [name, value] of [
@@ -257,12 +208,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["defaultModel", defaultModel],
 		["reviewModel", reviewModel],
 	] as const) {
-		if (value !== undefined && value !== null && !isWireModelRef(value)) {
+		if (value !== undefined && value !== null && !identifiesModel(value)) {
 			throw new Error(`${name} must be a model or null`);
 		}
-	}
-	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
-		throw new Error("subagentsEnabled must be a boolean");
 	}
 	if (
 		runtimeUpdate.subagentMaxConcurrent !== undefined &&
@@ -270,26 +218,11 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	) {
 		throw new Error("subagentMaxConcurrent must be a whole number from 1 to 16");
 	}
-	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
-		throw new Error("jbcentralQuotaEnabled must be a boolean");
-	}
-	if (
-		runtimeUpdate.terminalWindowsShell !== undefined &&
-		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
-	) {
-		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
-	}
 	if (
 		runtimeUpdate.terminalReplayKb !== undefined &&
 		!Number.isFinite(runtimeUpdate.terminalReplayKb)
 	) {
 		throw new Error("terminalReplayKb must be a finite number");
-	}
-	if (
-		runtimeUpdate.composerGrowthLimit !== undefined &&
-		!isComposerGrowthLimit(runtimeUpdate.composerGrowthLimit)
-	) {
-		throw new Error(`composerGrowthLimit must be one of ${COMPOSER_GROWTH_LIMITS.join(", ")}`);
 	}
 	if (
 		jbcentralQuotaRefreshSeconds !== undefined &&
@@ -305,12 +238,6 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
 		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
-	}
-	if (themeMode !== undefined && !isThemeMode(themeMode)) {
-		throw new Error("themeMode must be fixed or system");
-	}
-	if (systemThemePair !== undefined && !isSystemThemePair(systemThemePair)) {
-		throw new Error("systemThemePair must contain light and dark theme ids");
 	}
 	const current = getConfig();
 	if (

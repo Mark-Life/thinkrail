@@ -59,7 +59,9 @@ export function clientErrorReport(
 	const chunkIds = stack ? chunkIdsForStack(stack) : undefined;
 	return {
 		kind,
-		type: real?.name || (kind === "rejection" ? "UnhandledRejection" : "Error"),
+		type:
+			(typeof real?.name === "string" && real.name) ||
+			(kind === "rejection" ? "UnhandledRejection" : "Error"),
 		...(stack ? { stack } : {}),
 		...(boundary ? { boundary } : {}),
 		...(chunkIds ? { chunkIds } : {}),

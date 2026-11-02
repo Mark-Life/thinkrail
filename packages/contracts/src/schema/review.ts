@@ -15,7 +15,8 @@ import { GitDiffScope } from "./diffScope";
 import { ThinkingLevel, WireModel } from "./model";
 import { Ack, wireObj } from "./wire";
 
-export const ReviewCommentKind = oneOf(["inline", "diff", "file", "review"]);
+export const REVIEW_COMMENT_KINDS = ["inline", "diff", "file", "review"] as const;
+export const ReviewCommentKind = oneOf(REVIEW_COMMENT_KINDS);
 export type ReviewCommentKind = Static<typeof ReviewCommentKind>;
 
 export const ReviewCommentStatus = oneOf(["draft", "sent", "resolved", "dismissed"]);
@@ -76,7 +77,8 @@ export type ReviewComment = Static<typeof ReviewComment>;
 export const ReviewReadingStep = wireObj({ path: str(), why: str() });
 export type ReviewReadingStep = Static<typeof ReviewReadingStep>;
 
-export const PlanReviewVerdict = oneOf(["approve", "request_changes"]);
+export const PLAN_REVIEW_VERDICTS = ["approve", "request_changes"] as const;
+export const PlanReviewVerdict = oneOf(PLAN_REVIEW_VERDICTS);
 export type PlanReviewVerdict = Static<typeof PlanReviewVerdict>;
 
 /** The newest reviewer verdict's narrative for the workspace: its one-paragraph summary and the order it
