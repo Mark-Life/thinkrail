@@ -10,10 +10,13 @@ import { MODEL_METHODS } from "./model";
 import { PR_METHODS } from "./pr";
 import { PROJECT_METHODS } from "./project";
 import { PROVIDER_METHODS } from "./provider";
+import { REVIEW_METHODS } from "./review";
 import { SESSION_METHODS } from "./session";
 import { SPEC_METHODS } from "./spec";
 import { SUBAGENT_METHODS } from "./subagent";
+import { TEMPLATE_METHODS } from "./template";
 import { TERMINAL_METHODS } from "./terminal";
+import { TODO_METHODS } from "./todo";
 import { WORKSPACE_METHODS } from "./workspace";
 
 /** Params and result schemas of each WS method that has a runtime form. */
@@ -34,6 +37,9 @@ export const WS_METHOD_SCHEMAS = {
 	...SPEC_METHODS,
 	...GITHUB_METHODS,
 	...PR_METHODS,
+	...TODO_METHODS,
+	...REVIEW_METHODS,
+	...TEMPLATE_METHODS,
 };
 
 type WsMethodSchemas = typeof WS_METHOD_SCHEMAS;

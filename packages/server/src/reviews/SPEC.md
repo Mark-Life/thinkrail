@@ -91,12 +91,11 @@ re-anchoring, and package rendering.
   resource, not the comment: a **text** side (`fs.classifyBytes` — no recognized binary magic number, no
   NUL byte in the first 8 KiB, and a strict UTF-8 decode; a BOM is text, an SVG is text)
   derives `textQuote` from `lineRange` as before, while a **byte-only** side hashes the bytes and keeps
-  the renderer's selectors **as given**, never a derived quote — there is no text to quote. `addComment`
-  **narrows the wire's selectors** before either capture — every element an object of a known `kind`
-  with every declared field type-checked (`region` components finite and in `[0, 1]`, `page` a positive
-  integer; `structural.ref` a non-empty string and `scheme` matching `/^[a-z][a-z0-9-]*$/`; `lineRange`
-  integral, 1-based, non-inverted) — and stores *that* narrowed value, so an undeclared field cannot ride
-  the wire into the store. It checks nothing beyond shape: an unknown structural scheme belongs to a
+  the renderer's selectors **as given**, never a derived quote — there is no text to quote. Dispatch checks the selectors' shape. `addComment`
+  then **narrows them** before either capture (`region` components finite and in `[0, 1]`, `page` a positive
+  integer; `structural.ref` non-empty and `scheme` matching `/^[a-z][a-z0-9-]*$/`; `lineRange`
+  integral, 1-based, non-inverted) and stores *that* narrowed value, so an undeclared field cannot ride
+  the wire into the store. An unknown structural scheme belongs to a
   renderer this host has never heard of and is preserved, not refused.
 - **The two diff sides are two anchor spaces.** A `side: "worktree"` anchor is captured from the
   worktree file; a `side: "base"` anchor is captured from the blob the diff's ORIGINAL editor is
