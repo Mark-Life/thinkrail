@@ -761,6 +761,35 @@ test("stored custom presets keep only complete current-schema entries", () => {
 	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
 });
 
+test("a stored preset from before Changes joined Files keeps its layout", () => {
+	const withTools = (name: string, left: string[], right: string[]) => {
+		const base = preset(name);
+		const group = (id: string, tools: string[]) => ({ id, weight: 1, folded: false, tools });
+		return {
+			...base,
+			left: { visible: true, width: 0.2, groups: [group(`${name}-l`, left)] },
+			right: { visible: true, width: 0.2, groups: [group(`${name}-r`, right)] },
+		};
+	};
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			customLayoutPresets: [
+				withTools("alone", ["projects", "changes"], ["review"]),
+				withTools("both", ["changes"], ["files", "review"]),
+			],
+		}),
+	);
+	resetConfigCache();
+	const [alone, both] = getConfig().customLayoutPresets;
+	expect(alone?.left.groups[0]?.tools).toEqual(["projects", "files"]);
+	expect(both?.left.groups[0]?.tools).toEqual([]);
+	expect(both?.right.groups[0]?.tools).toEqual(["files", "review"]);
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk.customLayoutPresets).toHaveLength(2);
+});
+
 const wireModel = (id: string, provider = "p") => ({
 	id,
 	name: id.toUpperCase(),

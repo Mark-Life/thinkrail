@@ -31,7 +31,7 @@ Current workbench frame, workspace resource placement, current/default preset se
 
 A numeric setting is bounded by its consumer when that domain owns the safety cap—for example `terminal`
 clamps `terminalReplayKb`, so a hand-edited config cannot exhaust memory. Settings validates the shared
-40–240 line-width contract and custom layout presets because it owns their cross-frontend storage contract.
+40–240 line-width contract and custom layout presets because it owns their cross-frontend storage contract. A stored preset's retired `changes` tool becomes `files`; `updateConfig` still refuses it.
 It also validates the global `jbcentralQuotaEnabled` boolean and whole `jbcentralQuotaRefreshSeconds`
 interval (`1–3600`, default 30), because those values govern host process cadence across every frontend.
 

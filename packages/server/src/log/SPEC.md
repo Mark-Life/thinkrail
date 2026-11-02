@@ -82,4 +82,4 @@ it on stop, so `log` stays free of any analytics edge.
   `setLogLevel`, `logsDir`, `describeError`, `observeLoggedErrors`.
 - **Allowed deps:** `persistence` (`dataDir`); `pino`, `pino-pretty`, `pino-roll`; Node path/streams.
 - **Forbidden:** importing any other sibling module or `host`; being imported by `persistence` (the one
-  module below it — a `persistence → log` edge would be a cycle).
+  module below it — a `persistence → log` edge would be a cycle; `host` wires `observeStateFileProblems` to a logger instead).
