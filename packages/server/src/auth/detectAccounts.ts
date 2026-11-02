@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { compile, map, unknown } from "@earendil-works/pi-schema";
 import type { DetectedAccount, DetectedAccountSource } from "@thinkrail/contracts";
 import { usePiRuntime } from "../agent";
 
@@ -37,8 +38,10 @@ const CLAUDE_SUBSCRIPTION_BILLING = new Set([
 
 const GROK_API_KEY_SCOPE = "xai::api_key";
 
+const JsonObject = compile(map(unknown()));
+
 function isObject(value: unknown): value is Json {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+	return JsonObject.check(value);
 }
 
 function filled(value: unknown): value is string {

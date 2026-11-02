@@ -1,3 +1,4 @@
+import { compile, map, unknown } from "@earendil-works/pi-schema";
 import type { LayoutPreset, LayoutToolId } from "@thinkrail/contracts";
 
 const MAX_PRESETS = 32;
@@ -9,10 +10,10 @@ const MAX_NAME_LENGTH = 200;
 const MAX_BOTTOM_HEIGHT = 0.7;
 const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "review", "plan"]);
 
+const PresetObject = compile(map(unknown()));
+
 function record(value: unknown): Record<string, unknown> | null {
-	return value !== null && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: null;
+	return PresetObject.check(value) ? value : null;
 }
 
 function nonEmptyString(value: unknown, max = MAX_NAME_LENGTH): value is string {

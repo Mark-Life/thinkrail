@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: todos — a chat's per-session TODO plan (read/write)
 parent: module-server
-depends-on: [module-contracts, submodule-server-git, submodule-server-assist]
+depends-on: [module-contracts, submodule-server-git, submodule-server-assist, submodule-server-persistence]
 references: [module-pi-todos, submodule-server-pr, submodule-web-chat]
 tags: [todos]
 ---
@@ -332,6 +332,14 @@ until some unrelated event. Awaiting makes the read **causally after** the write
 it resolves immediately when nothing is in flight, and never rejects. The barrier follows any newer
 workspace queue tail installed while it waits, so a stale pass aborted by plan drift cannot release readers
 before the already-enqueued replacement pass has reconciled the current plan.
+
+## Sidecar files
+
+`baselines.ts` and `reviews.ts` parse their files once at the read with private schemas and the
+[[submodule-server-persistence]] state-file rules: a bad entry is dropped, the file is copied to
+`.corrupt-<hash>` beside it first, and a file that could not be read is not replaced. A copy never ends in a
+sidecar suffix, so the owner scans skip it. The plan file itself stays with `pi-todos`, whose `sanitize` repairs
+field by field.
 
 ## Boundary
 

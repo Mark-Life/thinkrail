@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { compile, map, unknown } from "@earendil-works/pi-schema";
 import type {
 	PiPackageResourceType,
 	PiPackageScope,
@@ -199,12 +200,13 @@ export async function piPackagesRevealTarget(
 	);
 }
 
+const SettingsObject = compile(map(unknown()));
 const RESOURCE_KEYS = ["packages", "extensions", "skills", "prompts"] as const;
 
 function resourceFingerprint(path: string): string {
 	try {
 		const raw: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
-		const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+		const record = SettingsObject.check(raw) ? raw : {};
 		return JSON.stringify(RESOURCE_KEYS.map((key) => record[key] ?? null));
 	} catch {
 		return "";
