@@ -1392,6 +1392,14 @@ test("a workspace kickoff whose text is not a string is refused before a creatio
 	expect(await handleRequest("workspace.listCreations", {}, CTX)).toEqual([]);
 });
 
+test("a file read cap that is not a whole byte count is refused", async () => {
+	for (const maxBytes of [-1, 1.5, "1024"]) {
+		await expect(
+			handleRequest("fs.readFile", { workspaceId: "missing", path: "a.txt", maxBytes }, CTX),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	}
+});
+
 test("a request with no params object is refused", async () => {
 	await expect(handleRequest("project.list", undefined, CTX)).rejects.toMatchObject({
 		code: "INVALID_PARAMS",
@@ -1453,4 +1461,31 @@ test("project replies match their wire schemas", async () => {
 	expect(compile(open.result).errors(opened)).toEqual([]);
 	const listed = await handleRequest("project.list", {}, CTX);
 	expect(compile(list.result).errors(listed)).toEqual([]);
+});
+
+test("an unknown diff scope or revert target is refused before a handler runs", async () => {
+	const base = { workspaceId: "missing", path: "a.txt" };
+	await expect(
+		handleRequest("git.status", { workspaceId: "missing", scope: { kind: "typo" } }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	await expect(
+		handleRequest(
+			"change.revert",
+			{
+				...base,
+				scope: { kind: "branch" },
+				target: { kind: "typo" },
+				expect: { originalHash: null, modifiedHash: null },
+			},
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+});
+
+test("the fs.readDir reply schema checks nodes at every depth", () => {
+	const validator = compile(WS_METHOD_SCHEMAS["fs.readDir"].result);
+	const dir = { path: "a", name: "a", kind: "dir" };
+	const nested = (child: object) => [{ ...dir, children: [{ ...dir, children: [child] }] }];
+	expect(validator.errors(nested({ path: "a/a/b", name: "b", kind: "file" }))).toEqual([]);
+	expect(validator.errors(nested({ path: "a/a/b", name: "b", kind: "socket" }))).not.toEqual([]);
 });

@@ -153,8 +153,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **schema/** — wire schemas and the types derived from them ([[submodule-contracts-schema]]): `Project`,
   `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
   `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*`,
-  `provider.*`, `session.*`, `subagent.*`, `backgroundCommand.*`, `workspace.*`, `editor.*` and `terminal.*`
-  entities, the branch review and `GitFileChange` shapes they hold, and the methods of these namespaces and
+  `provider.*`, `session.*`, `subagent.*`, `backgroundCommand.*`, `workspace.*`, `editor.*`, `terminal.*`, `git.*`,
+  `change.*`, `fs.*`, `spec.*`, `github.*` and `pr.*` entities, and the methods of these namespaces and
   `project.*`. The entries below describe these
   types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):

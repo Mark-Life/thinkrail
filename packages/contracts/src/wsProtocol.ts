@@ -3,15 +3,8 @@ import type {
 	AppConfigUpdate,
 	AppSurvey,
 	BackgroundCommandCompletionDetails,
-	BranchList,
-	ChangeReceipt,
 	CompletionDelivery,
 	ExtensionCatalogEntry,
-	FileNode,
-	GitCommit,
-	GitDiffScope,
-	GithubAuthStatus,
-	GitStatus,
 	HistoryScope,
 	HistorySearchResult,
 	HostEnvironment,
@@ -26,16 +19,10 @@ import type {
 	McpServerLog,
 	McpServerScope,
 	McpStatusSnapshot,
-	MergePrResult,
-	OpenPrResult,
 	PiPackageResourceType,
 	PiPackageScope,
 	PiPackageSummary,
 	PiPackagesCatalog,
-	PrBodySource,
-	PrPreview,
-	ResourceMeta,
-	RevertTarget,
 	ReviewAnchor,
 	ReviewComment,
 	ReviewCommentKind,
@@ -47,7 +34,6 @@ import type {
 	SearchPreviewResult,
 	SearchPreviewTarget,
 	SearchQueryResult,
-	SpecGraphSnapshot,
 	SubagentCompletionDetails,
 	SurveyInvitationResponse,
 	SurveySubmitParams,
@@ -64,7 +50,7 @@ import { isDelegationRunDetails } from "./domain";
 import type { ToolResponseDetails, ToolResponsePendingDetails } from "./piProtocol";
 import type {
 	Ack,
-	MergeMethod,
+	GitDiffScope,
 	ModelContextSetting,
 	Project,
 	SessionSummary,
@@ -625,61 +611,6 @@ export interface McpRenderedTarget {
 }
 
 export interface WsMethodMap extends WsSchemaMethodMap {
-	"git.listBranches": { params: { projectId: string }; result: BranchList };
-	"git.prefetch": { params: { projectId: string; ref: string }; result: { ok: boolean } };
-	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
-	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
-	"pr.preview": {
-		params: {
-			workspaceId: string;
-			sessionId?: string;
-			title?: string;
-			source?: PrBodySource;
-			template?: string;
-		};
-		result: PrPreview;
-	};
-	"pr.generate": {
-		params: { workspaceId: string; sessionId?: string; template?: string };
-		result: { body: string | null };
-	};
-	"pr.ready": {
-		params: { workspaceId: string; branch: string; number: number };
-		result: Ack;
-	};
-	"pr.merge": {
-		params: {
-			workspaceId: string;
-			branch: string;
-			number: number;
-			method: MergeMethod;
-			deleteBranch: boolean;
-		};
-		result: MergePrResult;
-	};
-	"pr.reopen": {
-		params: { workspaceId: string; branch: string; number: number };
-		result: Ack;
-	};
-	"pr.open": {
-		params: {
-			workspaceId: string;
-			sessionId?: string;
-			branch?: string;
-			title?: string;
-			titleEdited?: boolean;
-			body?: string;
-			draft?: boolean;
-			source?: "plan_page";
-		};
-		result: OpenPrResult;
-	};
-	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
-	"fs.readFile": {
-		params: { workspaceId: string; path: string; maxBytes?: number };
-		result: { content: string; meta: ResourceMeta };
-	};
-	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string; opened?: "page" | "rail" };
 		result: TodoPlan;
@@ -722,31 +653,6 @@ export interface WsMethodMap extends WsSchemaMethodMap {
 	"todo.generateSummary": {
 		params: { workspaceId: string; sessionId: string };
 		result: { summary: string | null };
-	};
-	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
-	"git.diffFile": {
-		params: { workspaceId: string; path: string; scope?: GitDiffScope };
-		result: {
-			original: string;
-			modified: string;
-			originalOid: string | null;
-			meta: { original: ResourceMeta; modified: ResourceMeta };
-		};
-	};
-	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
-	"change.revert": {
-		params: {
-			workspaceId: string;
-			path: string;
-			scope: GitDiffScope;
-			target: RevertTarget;
-			expect: { originalHash: string | null; modifiedHash: string | null };
-		};
-		result: { receipt: ChangeReceipt };
-	};
-	"change.undo": {
-		params: { workspaceId: string; receiptId: string; expect: { modifiedHash: string | null } };
-		result: { receipt: ChangeReceipt };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
