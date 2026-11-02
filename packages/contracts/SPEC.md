@@ -137,7 +137,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
   `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*`,
   `provider.*`, `session.*`, `subagent.*`, `backgroundCommand.*`, `workspace.*`, `editor.*`, `terminal.*`, `git.*`,
-  `change.*`, `fs.*`, `spec.*`, `github.*` and `pr.*` entities, and the methods of these namespaces and
+  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*` and `template.*` entities, and the methods of these namespaces and
   `project.*`. The entries below describe these
   types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):

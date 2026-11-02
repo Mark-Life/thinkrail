@@ -89,6 +89,20 @@ export {
 } from "./resource";
 export { ResourceMeta } from "./resourceMeta";
 export {
+	PlanReviewVerdict,
+	Review,
+	ReviewAnchor,
+	ReviewAnchorState,
+	ReviewComment,
+	ReviewCommentKind,
+	ReviewCommentStatus,
+	ReviewGuide,
+	ReviewReadingStep,
+	ReviewSelector,
+	ReviewSendResult,
+	ReviewSnapshot,
+} from "./review";
+export {
 	AgentSettlement,
 	ContextUsage,
 	QueuedMessageContent,
@@ -112,7 +126,20 @@ export {
 } from "./skill";
 export { SpecGraphNode, SpecGraphSnapshot } from "./spec";
 export { DelegationRunStatus, SubagentResourceSummary } from "./subagent";
+export { Template, TemplateInfo, TemplateReadLocation, TemplateScope } from "./template";
 export { TerminalTabInfo } from "./terminal";
+export {
+	TodoArtifact,
+	TodoArtifactKind,
+	TodoGroupItem,
+	TodoGroupStatus,
+	TodoItem,
+	TodoOrigin,
+	TodoPlan,
+	TodoReviewInfo,
+	TodoReviewState,
+	TodoStatus,
+} from "./todo";
 export {
 	ImageContent,
 	TranscriptMessage,
