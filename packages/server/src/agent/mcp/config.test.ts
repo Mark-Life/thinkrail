@@ -162,6 +162,16 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 		global: '\uFEFF{"mcpServers":{"docs":{"url":"https://docs.example/mcp"}}}',
 		project: '\uFEFF{"mcpServers":{"docs":{"enabled":false}}}',
 	},
+	{
+		name: "the streamable-http alias stays as written",
+		global: { mcpServers: { s: { type: "streamable-http", url: "https://x/mcp" } } },
+	},
+	{
+		name: "own __proto__ and constructor keys",
+		global:
+			'{"mcpServers":{"__proto__":{"command":"c"},"constructor":{"url":"https://x/mcp"},"s":{"command":"c","env":{"__proto__":1}}}}',
+		project: '{"__proto__":{"mcpServers":{"x":{"command":"c"}}}}',
+	},
 	{ name: "malformed global file", global: "{ not json" },
 	{ name: "mcpServers that is not an object", global: { mcpServers: [] }, project: "[]" },
 	{ name: "non-object top level", global: "[1,2]" },
@@ -250,6 +260,24 @@ test("fingerprints cover the whole entry object, keep toolExposure order semanti
 		}),
 	).toBe(fp);
 	expect(fingerprintMcpEntry("srv", { ...base, env: { B: "!cmd", A: `\${A}` } })).toBe(fp);
+});
+
+test("a timeout too large for a finite number is refused", () => {
+	expect(validateMcpServerConfig("s", JSON.parse('{"command":"c","timeout":1e999}'))).toBe(
+		'server "s": timeout must be a positive number of seconds',
+	);
+});
+
+test("a repo entry named __proto__ needs its own approval", () => {
+	const { agentDir, cwd } = fixture(undefined, '{"mcpServers":{"__proto__":{"command":"repo"}}}');
+	const options = { agentDir, cwd, projectTrusted: true };
+	const empty = { approvals: {}, overrides: {}, toolGrants: {} };
+	expect(loadHostMcpConfig({ ...options, policy: empty }).servers).toEqual([]);
+	const approvals = Object.fromEntries([
+		["__proto__", fingerprintMcpEntry("__proto__", { command: "repo" })],
+	]);
+	const admitted = loadHostMcpConfig({ ...options, policy: { ...empty, approvals } }).servers;
+	expect(admitted.map((server) => server.name)).toEqual(["__proto__"]);
 });
 
 test("host exposure normalization maps codemode and unset to deferred without touching other values", () => {

@@ -9,11 +9,24 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { McpProjectOverride, McpToolGrant, Project } from "@thinkrail/contracts";
+import {
+	isAuth,
+	isClientName,
+	isExposure,
+	isJsonObject,
+	isMcpFile,
+	isPort,
+	isStringList,
+	isStringMap,
+	isTimeout,
+	MCP_EXPOSURES,
+	parseHttpServer,
+	parseStdioServer,
+} from "./schemas";
 
 // Port of pi's `core/mcp-servers.ts` and `extensions/mcp/config.ts` (MIT, Earendil Works).
 
 const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
-const MCP_EXPOSURES: readonly McpExposure[] = ["codemode", "deferred", "direct", "hidden"];
 const MCP_EXPOSURE_ALIASES: Record<string, McpExposure> = { "codemode-deferred": "codemode" };
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"] as const;
@@ -30,14 +43,6 @@ export function projectMcpConfigPath(cwd: string): string {
 
 export function mcpNamespace(server: string): string {
 	return `mcp__${server.replace(/-/g, "_")}`;
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-	return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
 }
 
 export function isOverrideEntry(value: Record<string, unknown>): boolean {
@@ -57,7 +62,7 @@ export function isLoopbackRedirectUri(value: string): boolean {
 
 function validateOAuth(value: unknown): string | undefined {
 	if (value === undefined) return undefined;
-	if (!isRecord(value)) return "oauth must be an object";
+	if (!isJsonObject(value)) return "oauth must be an object";
 	if (value.clientId !== undefined && typeof value.clientId !== "string") {
 		return "oauth.clientId must be a string";
 	}
@@ -65,10 +70,7 @@ function validateOAuth(value: unknown): string | undefined {
 		return "oauth.clientSecret must be a string";
 	}
 	const port = value.callbackPort;
-	if (
-		port !== undefined &&
-		(typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535)
-	) {
+	if (port !== undefined && !isPort(port)) {
 		return "oauth.callbackPort must be a port number";
 	}
 	if (value.callbackUrl !== undefined) {
@@ -82,10 +84,7 @@ function validateOAuth(value: unknown): string | undefined {
 	}
 	if (value.scope !== undefined && typeof value.scope !== "string")
 		return "oauth.scope must be a string";
-	if (
-		value.clientName !== undefined &&
-		(typeof value.clientName !== "string" || !value.clientName.trim())
-	) {
+	if (value.clientName !== undefined && !isClientName(value.clientName)) {
 		return "oauth.clientName must be a non-empty string";
 	}
 	const registration = value.clientRegistration;
@@ -120,10 +119,6 @@ function validateOAuth(value: unknown): string | undefined {
 	return undefined;
 }
 
-function isExposure(value: unknown): value is McpExposure {
-	return typeof value === "string" && (MCP_EXPOSURES as readonly string[]).includes(value);
-}
-
 function resolveExposureAlias(value: unknown): unknown {
 	return typeof value === "string" ? (MCP_EXPOSURE_ALIASES[value] ?? value) : value;
 }
@@ -132,7 +127,7 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
 	const { exposure, toolExposure } = value;
 	const resolved = { ...value };
 	if (exposure !== undefined) resolved.exposure = resolveExposureAlias(exposure);
-	if (isRecord(toolExposure)) {
+	if (isJsonObject(toolExposure)) {
 		resolved.toolExposure = Object.fromEntries(
 			Object.entries(toolExposure).map(([tool, entry]) => [tool, resolveExposureAlias(entry)]),
 		);
@@ -140,10 +135,12 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
 	return resolved;
 }
 
+const notAServer = (name: string) => `server "${name}" is not a valid MCP server`;
+
 export function validateMcpServerConfig(name: string, raw: unknown): McpServerConfig | string {
 	if (!SERVER_NAME.test(name))
 		return `invalid server name "${name}" (use letters, digits, "_" and "-")`;
-	if (!isRecord(raw)) return `server "${name}" must be an object`;
+	if (!isJsonObject(raw)) return `server "${name}" must be an object`;
 	const value = resolveExposureAliases(raw);
 	const { type, exposure, enabled, timeout, toolExposure, description } = value;
 	const exposures = MCP_EXPOSURES.map((entry) => `"${entry}"`).join(", ");
@@ -151,7 +148,7 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
 		return `server "${name}": exposure must be one of ${exposures}`;
 	}
 	if (toolExposure !== undefined) {
-		if (!isRecord(toolExposure))
+		if (!isJsonObject(toolExposure))
 			return `server "${name}": toolExposure must map tool names to exposures`;
 		for (const [tool, entry] of Object.entries(toolExposure)) {
 			if (!isExposure(entry))
@@ -164,7 +161,7 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
 	if (description !== undefined && typeof description !== "string") {
 		return `server "${name}": description must be a string`;
 	}
-	if (timeout !== undefined && (typeof timeout !== "number" || !(timeout > 0))) {
+	if (timeout !== undefined && !isTimeout(timeout)) {
 		return `server "${name}": timeout must be a positive number of seconds`;
 	}
 	if (type === "sse") {
@@ -177,17 +174,13 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
 		if (!URL.canParse(value.url) || !/^https?:$/.test(new URL(value.url).protocol)) {
 			return `server "${name}": url must be an http or https URL`;
 		}
-		if (value.headers !== undefined && !isStringRecord(value.headers)) {
+		if (value.headers !== undefined && !isStringMap(value.headers)) {
 			return `server "${name}": headers must map names to strings`;
 		}
 		const oauthError = validateOAuth(value.oauth);
 		if (oauthError) return `server "${name}": ${oauthError}`;
 		if (value.auth !== undefined) {
-			if (
-				!isRecord(value.auth) ||
-				typeof value.auth.provider !== "string" ||
-				!value.auth.provider
-			) {
+			if (!isAuth(value.auth)) {
 				return `server "${name}": auth.provider must be a provider name`;
 			}
 			const url = new URL(value.url);
@@ -195,22 +188,19 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
 				return `server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`;
 			}
 		}
-		return value as unknown as McpServerConfig;
+		return parseHttpServer(value) ?? notAServer(name);
 	}
 	if (typeof value.command === "string" && (type === undefined || type === "stdio")) {
-		if (
-			value.args !== undefined &&
-			!(Array.isArray(value.args) && value.args.every((arg) => typeof arg === "string"))
-		) {
+		if (value.args !== undefined && !isStringList(value.args)) {
 			return `server "${name}": args must be an array of strings`;
 		}
-		if (value.env !== undefined && !isStringRecord(value.env)) {
+		if (value.env !== undefined && !isStringMap(value.env)) {
 			return `server "${name}": env must map names to strings`;
 		}
 		if (value.cwd !== undefined && typeof value.cwd !== "string") {
 			return `server "${name}": cwd must be a string`;
 		}
-		return value as unknown as McpServerConfig;
+		return parseStdioServer(value) ?? notAServer(name);
 	}
 	return `server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`;
 }
@@ -251,7 +241,7 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 		fileError(error instanceof Error ? error.message : String(error));
 		return;
 	}
-	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
+	if (!isMcpFile(parsed)) {
 		fileError('expected an object with an "mcpServers" object');
 		return;
 	}
@@ -260,20 +250,19 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 	} else if (parsed.autoEnableCodemode !== undefined) {
 		fileError("autoEnableCodemode must be a boolean");
 	}
-	const mcpServers = isRecord(parsed.mcpServers) ? parsed.mcpServers : {};
-	for (const [name, value] of Object.entries(mcpServers)) {
+	for (const [name, value] of Object.entries(parsed.mcpServers ?? {})) {
 		const entry: McpConfigFileEntry = {
 			name,
 			raw: value,
 			path,
 			scope,
-			override: scope === "project" && isRecord(value) && isOverrideEntry(value),
+			override: scope === "project" && isJsonObject(value) && isOverrideEntry(value),
 		};
 		state.entries.push(entry);
-		if (scope === "project" && isRecord(value) && state.admitProjectEntry?.(entry) === false) {
+		if (scope === "project" && isJsonObject(value) && state.admitProjectEntry?.(entry) === false) {
 			continue;
 		}
-		if (scope === "project" && isRecord(value) && isOverrideEntry(value)) {
+		if (scope === "project" && isJsonObject(value) && isOverrideEntry(value)) {
 			const base = servers.get(name);
 			const extra = Object.keys(value).filter(
 				(key) => !(OVERRIDE_KEYS as readonly string[]).includes(key),
@@ -343,7 +332,7 @@ export function loadMcpConfigFiles(options: {
 
 function canonicalJson(value: unknown, preserveOrder = false): string {
 	if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
-	if (isRecord(value)) {
+	if (isJsonObject(value)) {
 		const keys = Object.keys(value);
 		if (!preserveOrder) keys.sort();
 		return `{${keys

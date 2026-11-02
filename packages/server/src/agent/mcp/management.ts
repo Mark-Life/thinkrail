@@ -6,12 +6,12 @@ import {
 	fingerprintMcpEntry,
 	globalMcpConfigPath,
 	isOverrideEntry,
-	isRecord,
 	loadHostMcpConfig,
 	type McpProjectPolicy,
 	projectMcpConfigPath,
 	validateMcpServerConfig,
 } from "./config";
+import { isJsonObject, isMcpFile } from "./schemas";
 import {
 	addMcpServerConfig,
 	assertProjectMcpConfigWritable,
@@ -48,8 +48,8 @@ function readRawEntry(path: string, name: string): unknown {
 	if (!existsSync(path)) return undefined;
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
-		const servers = isRecord(parsed) ? parsed.mcpServers : undefined;
-		return isRecord(servers) && Object.hasOwn(servers, name) ? servers[name] : undefined;
+		const servers = isMcpFile(parsed) ? parsed.mcpServers : undefined;
+		return servers && Object.hasOwn(servers, name) ? servers[name] : undefined;
 	} catch {
 		return undefined;
 	}
@@ -57,7 +57,7 @@ function readRawEntry(path: string, name: string): unknown {
 
 function readEntry(path: string, name: string): Record<string, unknown> | undefined {
 	const entry = readRawEntry(path, name);
-	return isRecord(entry) ? entry : undefined;
+	return isJsonObject(entry) ? entry : undefined;
 }
 
 function invalid(message: string): CodedError {
@@ -81,7 +81,7 @@ export function writeMcpServerEntry(options: {
 	const existing = readRawEntry(path, name);
 	if (mode === "add" && existing !== undefined)
 		throw invalid(`An MCP server named "${name}" already exists`);
-	if (mode === "update" && !isRecord(existing))
+	if (mode === "update" && !isJsonObject(existing))
 		throw invalid(`No MCP server named "${name}" in ${path}`);
 	addMcpServerConfig(path, name, entry);
 	return scope === "project" ? fingerprintMcpEntry(name, entry) : undefined;
@@ -122,7 +122,7 @@ export function shareMcpOverrideWithRepo(options: {
 	}
 	const path = configPath("project", options.worktree);
 	const existing = readRawEntry(path, name);
-	if (existing !== undefined && (!isRecord(existing) || !isOverrideEntry(existing))) {
+	if (existing !== undefined && (!isJsonObject(existing) || !isOverrideEntry(existing))) {
 		throw invalid(
 			`The repository's .pi/mcp.json already defines "${name}" — edit that entry instead.`,
 		);
