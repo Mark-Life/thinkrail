@@ -48,10 +48,11 @@ Each file is parsed once, at the load. A file that holds a wire shape reuses the
 schema in this directory. The rest of the host trusts the type. A file any released version wrote must keep loading whole, so a
 new required wire field on `Project`, `Workspace` or a model needs a default at the load.
 
-`stateFile.ts` owns the failure rules for `projects`, `workspaces`, `workspace-creations`, `terminals`, `config` and
-`environment`:
+`stateFile.ts` owns the failure rules for `projects`, `workspaces`, `workspace-creations`, `terminals`, `config`,
+`environment`, and, through the barrel (`readStateFile`, `parseEntryRecord`, `assertOverwriteAllowed`, and
+`isConfigOverwriteRefused` for `settings`), the `todos` sidecars and `feedback.json`:
 
-- **One bad entry costs one entry.** `parseEntries` keeps what passes and drops the rest. A record that passes also passes
+- **One bad entry costs one entry.** `parseEntries` and, for a keyed map, `parseEntryRecord` keep what passes and drops the rest. A record that passes also passes
   the web's reply check, so a bad entry never refuses the whole `project.list`.
 - **Nothing is lost silently.** Before a drop or a whole-file failure can reach a save, the raw bytes go to
   `<file>.corrupt-<content hash>`, mode `0600` because `environment.json` holds secrets. The hash makes this once per content
