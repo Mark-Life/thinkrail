@@ -13,7 +13,8 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
-import { isOverrideEntry, isRecord } from "./config";
+import { isOverrideEntry } from "./config";
+import { isJsonObject, isMcpFile, type McpFile } from "./schemas";
 
 export class McpConfigPathUnsafeError extends Error {
 	readonly code = "MCP_PATH_UNSAFE" as const;
@@ -66,18 +67,17 @@ function setOwnEntry(servers: McpServersObject, name: string, value: unknown): v
 
 function editMcpServers(
 	path: string,
-	edit: (servers: McpServersObject | undefined, parsed: Record<string, unknown>) => boolean,
+	edit: (servers: McpServersObject | undefined, parsed: McpFile) => boolean,
 ): void {
 	const file = lstatOrNull(path);
 	const target = file?.isSymbolicLink() ? realpathSync(path) : path;
 	const mode = (target === path ? file : lstatSync(target))?.mode;
 	const text = file ? readFileSync(target, "utf8").replace(/^\uFEFF/, "") : undefined;
 	const parsed: unknown = text === undefined ? {} : JSON.parse(text);
-	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
+	if (!isMcpFile(parsed)) {
 		throw new Error(`${path}: expected an object with an "mcpServers" object`);
 	}
-	const servers = isRecord(parsed.mcpServers) ? parsed.mcpServers : undefined;
-	if (!edit(servers, parsed)) return;
+	if (!edit(parsed.mcpServers, parsed)) return;
 	const indent = (text && /^([ \t]+)\S/m.exec(text)?.[1]) || "  ";
 	mkdirSync(dirname(target), { recursive: true });
 	const temporary = `${target}.${randomUUID()}.tmp`;
@@ -112,7 +112,7 @@ export function updateMcpServerConfig(
 			setOwnEntry(target, name, server);
 			parsed.mcpServers = target;
 		}
-		if (!isRecord(server)) throw new Error(`${path} does not define MCP server "${name}"`);
+		if (!isJsonObject(server)) throw new Error(`${path} does not define MCP server "${name}"`);
 		const keepDefaults = isOverrideEntry(server);
 		if (patch.enabled !== undefined) {
 			if (patch.enabled && !keepDefaults) delete server.enabled;
