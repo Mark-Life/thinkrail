@@ -46,6 +46,9 @@ and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to it
 - **A recursive shape keeps its hand type.** Builders cannot express `FileNode` or `LayoutPresetCenterNode`, so each
   stays a hand type beside a raw JSON Schema annotated `Schema<...>`. `$id` makes its `$ref: "#"` point at the node,
   not at the schema that embeds it.
+- **A preset center in params is a shallow object.** `AppConfigUpdate` types `center` as `LayoutPresetCenterNode` over a
+  bare `{ type: "object" }`, because a recursive `$ref` walks the input with no depth limit. `validateCenter` owns its shape
+  and depth. `AppConfig` results keep the recursive schema.
 - **An exclusive union keeps its hand type.** Builders cannot express the `?: never` branches of
   `TemplateReadLocation`, so it stays a type beside a raw JSON Schema annotated `Schema<TemplateReadLocation>`:
   `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.

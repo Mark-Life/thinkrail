@@ -75,7 +75,7 @@ test("an unknown method keeps its plain reply and never reaches the params check
 test.each([
 	["a non-object config", "theme"],
 	["a non-string theme", { theme: 7 }],
-	["a preset leaf inside a split", { customLayoutPresets: [preset(split("a", [{ id: "b" }, 1]))] }],
+	["a preset center that is not an object", { customLayoutPresets: [preset(7)] }],
 ])("settings.update refuses %s at dispatch, before disk or broadcast", async (_label, config) => {
 	const published: unknown[] = [];
 	setSettingsPublisher((next) => published.push(next));
@@ -148,6 +148,44 @@ test("a client report with the wrong shape never reaches the sanitizer", async (
 	});
 });
 
+async function withHostSocket(
+	analytics: NonNullable<Parameters<typeof createServer>[0]>["analytics"],
+	run: (socket: WebSocket, reply: (id: string) => Promise<unknown>) => Promise<void>,
+) {
+	let server: RunningServer | undefined;
+	let socket: WebSocket | undefined;
+	try {
+		server = await createServer({
+			port: 0,
+			host: "127.0.0.1",
+			appVersion: "0.0.0-dev",
+			...(analytics ? { analytics } : {}),
+		});
+		socket = new WebSocket(`ws://127.0.0.1:${server.port}/ws?client=host-params`);
+		const welcomed = Promise.withResolvers<void>();
+		const replies = new Map<string, (message: unknown) => void>();
+		socket.addEventListener("message", (event) => {
+			const message = JSON.parse(String(event.data));
+			if (message.channel === WS_CHANNELS.serverWelcome) welcomed.resolve();
+			if (typeof message.id === "string") replies.get(message.id)?.(message);
+		});
+		await welcomed.promise;
+		await run(
+			socket,
+			(id) =>
+				new Promise((resolve) => {
+					replies.set(id, resolve);
+				}),
+		);
+	} finally {
+		socket?.close();
+		await server?.shutdown();
+		await resetJbcentralStateForTests();
+		configurePiRuntimeFactory();
+		configurePiRuntime(null);
+	}
+}
+
 test("a refused client report raises no error report; another refused method does", async () => {
 	const batches: string[] = [];
 	const fetchImpl = Object.assign(
@@ -157,47 +195,101 @@ test("a refused client report raises no error report; another refused method doe
 		},
 		{ preconnect: fetch.preconnect },
 	);
-	let server: RunningServer | undefined;
-	const sockets: WebSocket[] = [];
-	try {
-		server = await createServer({
-			port: 0,
-			host: "127.0.0.1",
-			appVersion: "0.0.0-dev",
-			analytics: { posthogApiKey: "phc_test", channel: "dev", build: "source", env: {}, fetchImpl },
-		});
-		const socket = new WebSocket(`ws://127.0.0.1:${server.port}/ws?client=host-params`);
-		sockets.push(socket);
-		const welcomed = Promise.withResolvers<void>();
-		const replies = new Map<string, (message: unknown) => void>();
-		const reply = (id: string) =>
-			new Promise<unknown>((resolve) => {
-				replies.set(id, resolve);
-			});
-		socket.addEventListener("message", (event) => {
-			const message = JSON.parse(String(event.data));
-			if (message.channel === WS_CHANNELS.serverWelcome) welcomed.resolve();
-			if (typeof message.id === "string") replies.get(message.id)?.(message);
-		});
-		await welcomed.promise;
+	await withHostSocket(
+		{ posthogApiKey: "phc_test", channel: "dev", build: "source", env: {}, fetchImpl },
+		async (socket, reply) => {
+			const refusedReport = reply("report");
+			socket.send(
+				JSON.stringify({ id: "report", method: "client.reportError", params: { kind: "bogus" } }),
+			);
+			expect(await refusedReport).toMatchObject({ errorCode: "INVALID_PARAMS" });
 
-		const refusedReport = reply("report");
-		socket.send(
-			JSON.stringify({ id: "report", method: "client.reportError", params: { kind: "bogus" } }),
-		);
-		expect(await refusedReport).toMatchObject({ errorCode: "INVALID_PARAMS" });
+			const refusedOpen = reply("open");
+			socket.send(JSON.stringify({ id: "open", method: "project.open", params: { path: 7 } }));
+			expect(await refusedOpen).toMatchObject({ errorCode: "INVALID_PARAMS" });
+			await shutdownAnalytics();
+			expect(batches.filter((body) => body.includes("project.open"))).not.toEqual([]);
+			expect(batches.filter((body) => body.includes("client.reportError"))).toEqual([]);
+		},
+	);
+});
 
-		const refusedOpen = reply("open");
-		socket.send(JSON.stringify({ id: "open", method: "project.open", params: { path: 7 } }));
-		expect(await refusedOpen).toMatchObject({ errorCode: "INVALID_PARAMS" });
-		await shutdownAnalytics();
-		expect(batches.filter((body) => body.includes("project.open"))).not.toEqual([]);
-		expect(batches.filter((body) => body.includes("client.reportError"))).toEqual([]);
-	} finally {
-		for (const socket of sockets) socket.close();
-		await server?.shutdown();
-		await resetJbcentralStateForTests();
-		configurePiRuntimeFactory();
-		configurePiRuntime(null);
+test("params too deep to fingerprint get a coded reply, and the host keeps serving", async () => {
+	const depth = 200_000;
+	const deepFrame = `{"id":"deep","method":"session.respondToTool","params":${"[".repeat(depth)}${"]".repeat(depth)}}`;
+	await withHostSocket(undefined, async (socket, reply) => {
+		const refused = reply("deep");
+		socket.send(deepFrame);
+		expect(await refused).toMatchObject({ id: "deep", ok: false, errorCode: "INVALID_PARAMS" });
+
+		const refusedAgain = reply("deep");
+		socket.send(deepFrame);
+		expect(await refusedAgain).toMatchObject({ id: "deep", errorCode: "INVALID_PARAMS" });
+
+		const reused = reply("deep");
+		socket.send(JSON.stringify({ id: "deep", method: "project.open", params: { path: 7 } }));
+		expect(await reused).toMatchObject({
+			id: "deep",
+			errorCode: "INVALID_PARAMS",
+			error: expect.stringContaining("Invalid project.open"),
+		});
+
+		const served = reply("after");
+		socket.send(JSON.stringify({ id: "after", method: "settings.update", params: { config: {} } }));
+		expect(await served).toMatchObject({ id: "after", ok: true });
+	});
+});
+
+function nestedCenter(depth: number): unknown {
+	let node: unknown = { kind: "group", id: 7 };
+	for (let level = depth; level > 0; level -= 1) {
+		node = split(`s${level}`, [{ kind: "group", id: `g${level}` }, node]);
 	}
+	return node;
+}
+
+test("a malformed preset center is refused by its own guard, before disk", async () => {
+	const config = { customLayoutPresets: [preset(split("a", [{ id: "b" }, 1]))] };
+	await expect(handleRequest("settings.update", { config }, CTX)).rejects.toThrow(
+		"Malformed layout preset center",
+	);
+	expect(existsSync(configPath())).toBe(false);
+});
+
+test("a preset center too deep and malformed at the bottom stops at the depth guard", async () => {
+	const config = { customLayoutPresets: [preset(nestedCenter(4000))] };
+	expect(JSON.stringify(config).length).toBeGreaterThan(400 * 1024);
+	expect(JSON.stringify(config).length).toBeLessThan(512 * 1024);
+	await expect(handleRequest("settings.update", { config }, CTX)).rejects.toThrow(
+		"Layout preset center is too deep",
+	);
+	expect(existsSync(configPath())).toBe(false);
+});
+
+test("oversized refused params never build a per-element report", async () => {
+	const commentIds = Array.from({ length: 20_000 }, (_, index) => index);
+	const params = { workspaceId: "w", commentIds };
+	expect(JSON.stringify(params).length).toBeGreaterThan(64 * 1024);
+	const refusal = handleRequest("review.sendBatch", params, CTX);
+	await expect(refusal).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+		message: "Invalid review.sendBatch",
+	});
+});
+
+test("params too deep to measure are refused with the same coded error", async () => {
+	const depth = 200_000;
+	const workspaceId = JSON.parse(`${"[".repeat(depth)}${"]".repeat(depth)}`);
+	const refusal = handleRequest("review.sendBatch", { workspaceId, commentIds: [] }, CTX);
+	await expect(refusal).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+		message: "Invalid review.sendBatch",
+	});
+});
+
+test("small refused params keep their reasons, and a missing params object is one of them", async () => {
+	const refusal = handleRequest("review.sendBatch", { workspaceId: "w", commentIds: [1] }, CTX);
+	await expect(refusal).rejects.toThrow(/^Invalid review\.sendBatch: /);
+	const missing = handleRequest("review.sendBatch", undefined, CTX);
+	await expect(missing).rejects.toThrow(/^Invalid review\.sendBatch: /);
 });
