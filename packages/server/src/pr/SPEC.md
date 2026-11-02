@@ -157,7 +157,8 @@ Every PR mutation is bound to what the user saw: the refreshed live branch must 
 `branch` (a terminal switch changes nothing) and must not be its own base, and `gh pr view <number>`
 must still show that number heading this branch **from origin's own repository** (`headRepositoryOwner`
 / `headRepository` against the slug of origin's push URL) in the state the action needs (open for
-ready/merge, closed for reopen). `gh pr list --head` matches by branch name alone, so a fork's PR from a
+ready/merge, closed for reopen). A view reply that fails its private schema, a state the host does not know included,
+throws `GH_REPLY_INVALID` and changes nothing; an unreadable open-PR list counts as an unanswered check. `gh pr list --head` matches by branch name alone, so a fork's PR from a
 same-named branch (`contributor:main`, `patch-1`) is otherwise indistinguishable — and the base-branch
 refusal keeps the Default workspace on `main` from ever acting on one. The merge passes
 **`--match-head-commit <HEAD>`** so GitHub merges exactly the head the user looked at (the client offers
@@ -201,7 +202,7 @@ an update, a create, or an ambiguous create result.
 - **Allowed deps:** `workspaces` (workspace record, `syncWorkspaceBranch`), `git` (exec + status), `todos` (`listTodos` for
   the body), `branch-review` (provider detection, `githubSlug`, existing-PR lookup, the fresh open-review
   check before a remote deletion, the shared command runner, `forgetOpenBranchReview`),
-  `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types;
+  `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types; `pi-schema` for reply schemas;
   `shared/codedError` (`PUSH_AUTH_FAILED`).
 - **Forbidden:** `host`; provider HTTP APIs or stored tokens (auth stays external — the user's `gh`
   only); persisting PR state (that would duplicate `workspace.openReview`'s derivation).

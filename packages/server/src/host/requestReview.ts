@@ -1,3 +1,4 @@
+import { compile, obj } from "@earendil-works/pi-schema";
 import type {
 	PlanReviewResult,
 	ReviewComment,
@@ -88,6 +89,8 @@ export function itemTitleOf(
 	});
 }
 
+const isVerdictObject = compile(obj({}, { open: true })).check;
+
 function agentPath(path: string): string {
 	return path.replaceAll("\\", "/");
 }
@@ -106,7 +109,7 @@ export function parseVerdict(
 	} catch {
 		return null;
 	}
-	if (typeof parsed !== "object" || parsed === null) return null;
+	if (!isVerdictObject(parsed)) return null;
 	const candidate = { ...parsed, itemId, itemTitle };
 	if (!isPlanReviewResult(candidate)) return null;
 	const findings: ReviewFixComment[] = candidate.findings.map((f) => ({
