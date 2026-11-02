@@ -10,6 +10,17 @@ export const SlashCommandSourceInfo = wireObj({
 });
 export type SlashCommandSourceInfo = Static<typeof SlashCommandSourceInfo>;
 
+export const SlashCommandSource = oneOf(["extension", "prompt", "skill"]);
+export type SlashCommandSource = Static<typeof SlashCommandSource>;
+
+export const SlashCommandInfo = wireObj({
+	name: str(),
+	description: opt(str()),
+	source: SlashCommandSource,
+	sourceInfo: SlashCommandSourceInfo,
+});
+export type SlashCommandInfo = Static<typeof SlashCommandInfo>;
+
 export const SkillDecision = oneOf(["load", "untrusted", "pending-ack", "disabled"]);
 export type SkillDecision = Static<typeof SkillDecision>;
 

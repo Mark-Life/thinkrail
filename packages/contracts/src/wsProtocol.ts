@@ -3,12 +3,10 @@ import type {
 	AppConfigUpdate,
 	AppSurvey,
 	BackgroundCommandCompletionDetails,
-	BackgroundCommandOutputResult,
 	BranchList,
 	BranchStatus,
 	ChangeReceipt,
 	CompletionDelivery,
-	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -42,9 +40,6 @@ import type {
 	PiPackagesCatalog,
 	PrBodySource,
 	PrPreview,
-	ResourceHistoryCursor,
-	ResourceHistoryPage,
-	ResourceKind,
 	ResourceMeta,
 	RevertTarget,
 	ReviewAnchor,
@@ -58,8 +53,6 @@ import type {
 	SearchPreviewResult,
 	SearchPreviewTarget,
 	SearchQueryResult,
-	SessionResources,
-	SessionStateRecord,
 	SpecGraphSnapshot,
 	SubagentCompletionDetails,
 	SubagentOverride,
@@ -77,26 +70,18 @@ import type {
 	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
-import type {
-	ExtUiResponse,
-	ImageContent,
-	QueueLane,
-	RemovedQueuedMessage,
-	SessionQueueContent,
-	SessionStats,
-	SessionSummary,
-	SlashCommandInfo,
-	ToolResponseDetails,
-	ToolResponsePendingDetails,
-	TranscriptMessage,
-	WireCustomMessage,
-} from "./piProtocol";
+import type { ToolResponseDetails, ToolResponsePendingDetails } from "./piProtocol";
 import type {
 	Ack,
+	ImageContent,
 	ModelContextSetting,
 	Project,
+	SessionStateRecord,
+	SessionSummary,
 	SkillCatalogEntry,
+	SlashCommandInfo,
 	ThinkingLevel,
+	WireCustomMessage,
 	WireModel,
 	WsSchemaMethodMap,
 } from "./schema";
@@ -935,104 +920,6 @@ export interface WsMethodMap extends WsSchemaMethodMap {
 	"speech.install": { params: { model: SpeechModel }; result: Ack };
 	"speech.cancelInstall": { params: Record<string, never>; result: Ack };
 	"speech.remove": { params: Record<string, never>; result: Ack };
-	"session.create": {
-		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
-		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
-	};
-	"session.prompt": {
-		params: { sessionId: string; text: string; images?: ImageContent[] };
-		result: Ack;
-	};
-	"session.steer": {
-		params: { sessionId: string; text: string; images?: ImageContent[] };
-		result: Ack;
-	};
-	"session.followUp": {
-		params: { sessionId: string; text: string; images?: ImageContent[] };
-		result: Ack;
-	};
-	"session.clearQueue": {
-		params: { sessionId: string; requireTextOnly?: boolean };
-		result: SessionQueueContent;
-	};
-	"session.removeQueued": {
-		params: { sessionId: string; kind: QueueLane; index: number };
-		result: RemovedQueuedMessage;
-	};
-	"session.abort": {
-		params: { sessionId: string; restoreQueue?: boolean };
-		result: Ack & { restoredQueue?: SessionQueueContent };
-	};
-	"session.dispose": { params: { sessionId: string }; result: Ack };
-	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };
-	"session.rename": {
-		params: { workspaceId: string; sessionId: string; title: string };
-		result: Ack;
-	};
-	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
-	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
-	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
-	"session.getStats": { params: { sessionId: string }; result: SessionStats };
-	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
-	"session.reloadResources": { params: { sessionId: string }; result: Ack };
-	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
-	"session.respondToTool": {
-		params: { sessionId: string; toolCallId: string; response: unknown };
-		result: Ack;
-	};
-	"session.answerQuestion": {
-		params: { sessionId: string; toolCallId: string; result: unknown };
-		result: Ack;
-	};
-	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
-	"session.stateList": { params: Record<string, never>; result: SessionStateRecord[] };
-	"session.acknowledgeCompletion": {
-		params: { sessionId: string; completionId: string };
-		result: { acknowledged: boolean; record: SessionStateRecord };
-	};
-	"session.nudge": {
-		params: { workspaceId: string; sessionId: string; text: string; images?: ImageContent[] };
-		result: { disposition: "needs_input" | "queued" | "prompted" };
-	};
-	"session.activityList": { params: Record<string, never>; result: [] };
-	"session.getMessages": {
-		params: { sessionId: string; workspaceId: string };
-		result: { summary: SessionSummary; messages: TranscriptMessage[] };
-	};
-	"session.resources": {
-		params: { workspaceId: string; sessionId: string };
-		result: SessionResources;
-	};
-	"session.resourceHistory": {
-		params: {
-			workspaceId: string;
-			sessionId: string;
-			kind: ResourceKind;
-			before?: ResourceHistoryCursor;
-			limit?: number;
-		};
-		result: ResourceHistoryPage;
-	};
-	"backgroundCommand.output": {
-		params: { workspaceId: string; sessionId: string; commandId: string };
-		result: BackgroundCommandOutputResult;
-	};
-	"backgroundCommand.stop": {
-		params: { workspaceId: string; sessionId: string; commandId: string };
-		result: Ack;
-	};
-	"subagent.stop": {
-		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
-		result: Ack;
-	};
-	"subagent.stopAll": {
-		params: { workspaceId: string; parentSessionId: string };
-		result: Ack & { targeted: number };
-	};
-	"subagent.getTranscript": {
-		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
-		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
-	};
 	"host.update": { params: Record<string, never>; result: Ack };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"environment.get": { params: Record<string, never>; result: HostEnvironmentStatus };

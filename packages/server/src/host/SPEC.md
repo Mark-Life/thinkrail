@@ -615,11 +615,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
 - **Chat Resources:** the scoped resource read, command output/stop and direct-child stop/stop-all
-  handlers enforce each request's exact key set before resolving workspace membership and passing ids plus
-  the registry-owned cwd to the agent barrel. Parent/child ids follow Pi's canonical session grammar
+  handlers check id grammar before resolving workspace membership and passing ids plus the registry-owned
+  cwd to the agent barrel. Dispatch checks the shape; wire objects are open, so an unknown key passes and no
+  handler reads it. Parent/child ids follow Pi's canonical session grammar
   (including internal dots); workspace and command ids retain their owner-specific grammar and authority.
   Missing parents/resources use `RESOURCE_UNAVAILABLE`; output's missing-command result is
-  `available:false` only after validating its parent. No client path/PID field is accepted.
+  `available:false` only after validating its parent. No client path/PID field is read.
   The agent's resource publisher maps to `session.resourcesChanged`, subscribed in the WS open handler;
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes

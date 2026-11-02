@@ -1,11 +1,11 @@
 import type {
-	AssistantMessage,
 	BackgroundCommandCompletionDetails,
 	ExtUiRequest,
 	ImageContent,
 	ReviewFixDetails,
 	SubagentCompletionDetails,
 	UserMessage,
+	WireAssistantMessage,
 } from "@thinkrail/contracts";
 import type { ToolStatus } from "@thinkrail/extension-api/web";
 import type { AssistantFailure } from "./assistantFailure";
@@ -24,7 +24,7 @@ export type FailureRecovery = "try-again";
 
 export type ChatTurn =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
-	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
+	| { kind: "assistant"; id: string; message: WireAssistantMessage; streaming: boolean }
 	| { kind: "system"; id: string; text?: string; endedAt?: number }
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| {

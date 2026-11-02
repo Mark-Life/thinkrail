@@ -1,4 +1,5 @@
 import {
+	arr,
 	lit,
 	map,
 	obj,
@@ -20,3 +21,7 @@ export const NoParams = map(unknown());
 /** The result of a method that reports only success. */
 export const Ack = wireObj({ ok: lit(true) });
 export type Ack = Static<typeof Ack>;
+
+export function readonlyArr<T>(items: Schema<T>): Schema<readonly T[]> {
+	return arr(items);
+}
