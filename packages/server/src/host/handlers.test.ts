@@ -680,6 +680,43 @@ test("settings.update merges extension settings per key and rejects a malformed 
 	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 });
 
+test("session.create and session.setModel answer ok when the recent model cannot be saved", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "recent-model-refused" }));
+	try {
+		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const selected = models.find((model) => model.provider === "handler");
+		if (!selected) throw new Error("handler test model was not available");
+		const workspace = (await handleRequest(
+			"workspace.create",
+			{ projectId: "p1" },
+			CTX,
+		)) as Workspace;
+
+		mkdirSync(join(dataDir, "config.json"));
+		resetConfigCache();
+		const created = (await handleRequest(
+			"session.create",
+			{ workspaceId: workspace.id, model: selected },
+			CTX,
+		)) as CreateSessionResult;
+		expect(created.model).toEqual(selected);
+		expect(
+			await handleRequest(
+				"session.setModel",
+				{ sessionId: created.sessionId, model: selected },
+				CTX,
+			),
+		).toEqual({ ok: true });
+		rmSync(join(dataDir, "config.json"), { recursive: true });
+	} finally {
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
+	}
+});
+
 test("extension.list reflects disabledExtensions written through settings.update", async () => {
 	expect(await handleRequest("extension.list", {}, CTX)).toEqual([
 		{

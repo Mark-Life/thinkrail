@@ -63,6 +63,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
   re-listing the watched creation's project when the creation is gone, so a create that finished while
   disconnected lands on its workspace instead of racing the list refresh;
+  the welcome's `configReadFailed` and every `settings.changed` (a good read) via `syncConfigReadNotice`,
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,

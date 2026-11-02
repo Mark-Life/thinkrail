@@ -248,11 +248,15 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("voice input is pinned to v107", () => {
 	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
-	expect(PROTOCOL_VERSION).toBe(107);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
 	expect(WS_METHODS.speechInstall).toBe("speech.install");
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
 	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
+});
+
+test("the welcome's config read notice advances the protocol to v108", () => {
+	expect(PROTOCOL_VERSION).toBe(108);
 });
 
 test("user-selectable fonts are pinned to v102", () => {

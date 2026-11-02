@@ -406,13 +406,12 @@ export function persistTerminalSessions(): void {
 
 export function reviveTerminalSessions(): void {
 	for (const [workspaceId, tabs] of Object.entries(loadTerminalSessions())) {
-		if (!Array.isArray(tabs)) continue;
 		const restored: TabRecord[] = [];
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
-			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
+			if (!isValidTerminalTabKey(tab.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
 			restored.push({ tabKey: tab.tabKey, title });
-			if (typeof tab.recorded === "string" && tab.recorded !== "") {
+			if (tab.recorded) {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}
 		}

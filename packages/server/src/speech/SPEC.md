@@ -30,15 +30,16 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
     SHA-256 from NVIDIA's `SHA256SUMS`, and both models pinned to a Hugging Face revision with their
     LFS SHA-256. Windows on Arm uses the x64 build; any other platform is `supported: false`.
   - The layout under `<dataDir>/speech/`: `runtime/<version>-<target>/`, `models/<file>`,
-    `.staging/`, and the `installed.json` marker, written last.
+    `.staging/`, and the `installed.json` marker, written last. A marker that fails its private schema
+    reads as not installed; the next install rewrites it.
   - The install state machine.
   - The status store and its publisher.
 - **Public surface (barrel):** `initSpeech`, `installSpeech`, `cancelSpeechInstall`, `stopSpeechInstall`, `removeSpeech`,
   `speechStatus`, `setSpeechPublisher`, `stopEngine`, `createSpeechRelay`, `SpeechRelay`,
   `SpeechClientSocket`.
 - **Allowed deps:** `persistence` (`dataDir`), `subprocess` (the PATH probe and archive unpacking run
-  bounded; the engine is supervised), `log`, `@thinkrail/contracts`, `@thinkrail/shared/codedError` and
-  `/freePort`.
+  bounded; the engine is supervised), `log`, `pi-schema`, `@thinkrail/contracts`,
+  `@thinkrail/shared/codedError` and `/freePort`.
 - **Forbidden:**
   - Deleting anything outside `<dataDir>/speech/`, which includes a PATH install.
   - Logging, persisting or reporting transcripts or audio.

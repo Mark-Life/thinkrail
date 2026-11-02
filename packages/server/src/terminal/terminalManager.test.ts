@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
@@ -138,7 +138,16 @@ beforeEach(() => {
 	process.env.ZDOTDIR = dataDir;
 	const worktreePath = join(dataDir, "worktree");
 	mkdirSync(worktreePath);
-	saveWorkspaces([{ id: WS, worktreePath } as Workspace]);
+	saveWorkspaces([
+		{
+			id: WS,
+			projectId: "project-1",
+			name: "Workspace",
+			branch: "main",
+			baseBranch: "main",
+			worktreePath,
+		},
+	]);
 	pushed = [];
 	terminalFrameSignals.clear();
 	setTerminalPublisher((clientKey, channel, data) => {

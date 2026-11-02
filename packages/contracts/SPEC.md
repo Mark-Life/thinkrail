@@ -916,7 +916,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed, minus closed records whose
   folder is definitively gone), plus optional
-  **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
+  **`hostUpdate: HostUpdateNotice`**, **`configReadFailed: true`** (v108: the host's `config` is defaults because
+  its `config.json` could not be read; absent otherwise and from an older host, so it needs no gate) and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
   the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially

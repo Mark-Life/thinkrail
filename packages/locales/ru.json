@@ -2440,6 +2440,7 @@
 	"speech.offer.retry": "Повторить",
 	"speech.offer.title": "Настройка голосового ввода",
 	"store.chatTab.defaultName": "Чат",
+	"store.config.readFailed": "Не удалось прочитать настройки из config.json. Пока файл не исправлен, используются настройки по умолчанию.",
 	"store.settled.byYou": "вами",
 	"store.settled.byYouTitle": "Завершено вами",
 	"store.settled.byYouTitleAt": "Завершено вами {{time}}",

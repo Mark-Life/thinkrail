@@ -31,7 +31,7 @@ Current workbench frame, workspace resource placement, current/default preset se
 
 A numeric setting is bounded by its consumer when that domain owns the safety cap—for example `terminal`
 clamps `terminalReplayKb`, so a hand-edited config cannot exhaust memory. Settings validates the shared
-40–240 line-width contract and custom layout presets because it owns their cross-frontend storage contract.
+40–240 line-width contract and custom layout presets because it owns their cross-frontend storage contract. A stored preset's retired `changes` tool becomes `files`; `updateConfig` still refuses it.
 It also validates the global `jbcentralQuotaEnabled` boolean and whole `jbcentralQuotaRefreshSeconds`
 interval (`1–3600`, default 30), because those values govern host process cadence across every frontend.
 
@@ -41,13 +41,15 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject an unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
-- **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
+- **Public surface (barrel):** `getConfig`, `configReadFailed`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Allowed deps:** `log`; `persistence` (`loadConfig`/`saveConfig`/`isConfigOverwriteRefused`/`didLastConfigReadFail`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
 
+- **A save never writes defaults over a file it could not read.** When the first load failed, or any later read did, `updateConfig` and `noteRecentModel` read again first: the save merges onto the real values, or throws `STATE_FILE_UNREADABLE` if the read still fails. `noteRecentModel` is best effort, because the session has its new model by then: any failure in it, read, save or publish, logs and does not fail `session.create` or `session.setModel`.
+- **A failed read is told, not hidden.** `configReadFailed()` is true while the live config holds defaults because `config.json` could not be read or held no JSON object. A bad field in a good object, a missing file, and a failed read after a good load (the live values are still real) do not count. It reads again first, so a file fixed by hand takes effect at the next welcome: the stored values go out through the publisher, and that `settings.changed` is what clears a connected client's notice. No separate push exists because every publish follows a good read or a save.
 - **Converge on broadcast, no client optimism.** `updateConfig` persists before replacing the live cache or publishing; a failed write changes neither runtime reads nor frontends. The publisher receives the full merged config for broadcast and the applied partial update so host consumers can distinguish an explicit field write from an unrelated merge. Every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
 - `terminalWindowsShell` defaults to `"auto"`; persisted values fall back through persistence's shared
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete

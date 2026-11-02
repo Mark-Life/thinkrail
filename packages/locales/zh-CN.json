@@ -1966,6 +1966,7 @@
 	"shell.workbench.reviewFlag": "评审",
 	"shell.workbench.terminalCreateFailed": "无法创建终端",
 	"store.chatTab.defaultName": "会话",
+	"store.config.readFailed": "无法从 config.json 读取设置。在文件修复之前，将使用默认设置。",
 	"store.settled.byYou": "由你",
 	"store.settled.byYouTitle": "由您停留",
 	"store.settled.byYouTitleAt": "由您停留于 {{time}}",
