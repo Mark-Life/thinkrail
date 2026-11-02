@@ -14,6 +14,7 @@ import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { compile } from "@earendil-works/pi-schema";
 import type {
 	AppConfig,
 	Project,
@@ -28,6 +29,7 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHOD_SCHEMAS,
 	WS_METHODS,
 } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
@@ -1344,4 +1346,40 @@ test("resource handlers scope every read/control to a registered workspace and a
 		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 		else process.env.PI_OFFLINE = priorOffline;
 	}
+});
+
+test("a request with bad params reaches no handler and names the field, not the value", async () => {
+	const secret = "sk-not-for-the-reply";
+	const rejection = handleRequest("project.setTrust", { id: "p1", trusted: secret }, CTX);
+	await expect(rejection).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	const message = await rejection.catch((err: Error) => err.message);
+	expect(message).toContain("/trusted");
+	expect(message).not.toContain(secret);
+});
+
+test("a refusal reports only the first few bad fields, so its size stays bounded", async () => {
+	const names = Array.from({ length: 1_000 }, (_, index) => index);
+	const message = await handleRequest("project.acknowledgeSkills", { id: "p1", names }, CTX).catch(
+		(err: Error) => err.message,
+	);
+	expect(String(message).split("; ")).toHaveLength(5);
+});
+
+test("a request with no params object is refused", async () => {
+	await expect(handleRequest("project.list", undefined, CTX)).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+	});
+});
+
+test("a newer client's unknown param does not fail the request", async () => {
+	const project = await handleRequest("project.open", { path: repo, sentByNewerClient: 1 }, CTX);
+	expect(project).toHaveProperty("id");
+});
+
+test("project replies match their wire schemas", async () => {
+	const { "project.open": open, "project.list": list } = WS_METHOD_SCHEMAS;
+	const opened = await handleRequest("project.open", { path: repo }, CTX);
+	expect(compile(open.result).errors(opened)).toEqual([]);
+	const listed = await handleRequest("project.list", {}, CTX);
+	expect(compile(list.result).errors(listed)).toEqual([]);
 });

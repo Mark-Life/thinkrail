@@ -313,6 +313,7 @@ import {
 	markClientStale,
 	releaseItemFix,
 } from "./todoReview";
+import { parseWsParams } from "./wsParams";
 
 const log = logger("host");
 
@@ -1631,5 +1632,5 @@ export async function handleRequest(
 	ctx: RequestContext,
 ): Promise<unknown> {
 	if (!isWsMethod(method)) throw new Error(`Unknown method: ${method}`);
-	return dispatch(method, params as WsParams<typeof method>, ctx);
+	return dispatch(method, parseWsParams(method, params), ctx);
 }

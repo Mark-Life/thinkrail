@@ -12,8 +12,8 @@ tags: [wire]
 ## Responsibility
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
-dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
+runtime: the wire schemas ([[submodule-contracts-schema]]), the WS method/channel constants, protocol/feature
+versions, the small config default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
 the palette ranks with — kept here so host-side search can rank with the same copy. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
@@ -44,11 +44,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
   differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
+  for it or Error Tracking must tell it apart (it never sees `message`). Three codes exist for the latter:
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
-  ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
+  ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
-  code, so it needs no protocol bump.
+  code, so it needs no protocol bump — and **`INVALID_PARAMS`** — dispatch refused params that do not match
+  the method's schema, which only a client bug or a version mismatch produces.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -122,10 +123,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
-  would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
+  would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
-- **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
-  `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
+- **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
+  **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
+  package roots** (type-only → erased at build).
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
   or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
@@ -141,13 +143,17 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
   channel, version, URL, restart, or feed authority.
-- **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
+- **Forbidden:** any *value* import of another `pi` package; **any** import (even `type`) of
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
 
 ## Contents
 
+- **schema/** — wire schemas and the types derived from them ([[submodule-contracts-schema]]): `Project`,
+  `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
+  `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, and the `project.*` methods. The
+  entries below describe these types where they sit in their feature.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
     `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ImageContent`, `ToolCall`,
@@ -302,7 +308,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
     findings) is what the chat card renders — the host resolves each finding's `path`/lines from its
     anchor at send time so the client re-parses nothing. See [[submodule-server-todos]] +
     [[submodule-web-chat]].
-- **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
+- **domain.ts** — the rules and constants over the app entities. Their schemas live in `schema/` (`Project` and
+  `ProjectPathStatus` in `schema/project.ts`, `Workspace` in `schema/workspace.ts`): `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
   changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and

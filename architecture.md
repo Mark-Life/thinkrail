@@ -86,10 +86,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
    adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
    then transformed by each packager. The same behavior and artifact suites run through every launcher, so
    reuse is enforced by boundaries and conformance rather than parallel implementations.
-3. **The wire is versioned.** `contracts` is types plus a small dependency-free runtime: wire constants,
-   versions, the config default, and guards. Any other runtime is a named exception in its spec, today
-   the quit-confirmation rule and the search matcher (the palette's ranking, kept in `contracts` so host-side
-   search can rank with the same copy); adding one updates this decision. `server.welcome` carries a
+3. **The wire is versioned.** `contracts` is types plus a small runtime whose one dependency is
+   `@earendil-works/pi-schema`: wire schemas, wire constants, versions, the config default, and guards. A converted
+   wire type derives from its schema, and the host checks its params at dispatch. Any other runtime
+   is a named exception in its spec, today the quit-confirmation rule and the search matcher (the palette's
+   ranking, kept in `contracts` so host-side search can rank with the same copy); adding one updates this
+   decision. `server.welcome` carries a
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
@@ -492,7 +494,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
 
 ## Invariants
 
-- Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
+- Never **value**-import `pi` in browser-bundled code, except `@earendil-works/pi-schema`, which has no
+  dependencies; import types only, from the `pi-ai` /
   `pi-agent-core` package roots (type-only imports are erased at build, keeping the bundle provider-free).
   `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`.
 - TypeScript stays type-strippable: `erasableSyntaxOnly` in `tsconfig.base.json` plus Biome

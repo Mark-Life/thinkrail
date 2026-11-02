@@ -17,6 +17,7 @@ export type {
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Message, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
 import type { ProviderAuthKind, ProviderWarning } from "./domain";
+import type { SlashCommandSourceInfo } from "./schema";
 
 const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
 	"error",
@@ -219,33 +220,11 @@ export interface SessionSummary {
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";
 
-export interface SlashCommandSourceInfo {
-	path: string;
-	source: string;
-	scope: "user" | "project" | "temporary";
-	origin: "package" | "top-level";
-	baseDir?: string;
-}
-
 export interface SlashCommandInfo {
 	name: string;
 	description?: string;
 	source: SlashCommandSource;
 	sourceInfo: SlashCommandSourceInfo;
-}
-
-export type SkillDecision = "load" | "untrusted" | "pending-ack" | "disabled";
-
-export interface SkillCatalogEntry {
-	name: string;
-	description?: string;
-	sourceInfo: SlashCommandSourceInfo;
-	gated: boolean;
-	plugin?: string;
-	group: string;
-	decision: SkillDecision;
-	/** pi's `disable-model-invocation`: callable only as `/skill:`, never listed in the prompt. */
-	manualOnly?: boolean;
 }
 
 /** The tool call a dialog is about; absent when it is not tied to one (a command, startup, parallel calls). */
