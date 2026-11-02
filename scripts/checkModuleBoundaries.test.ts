@@ -438,6 +438,16 @@ const runtimePiImports = [
 	'import "pi-web-access";',
 ];
 
+test("browser-safe sources may value-import pi-schema, which has no dependencies", () => {
+	const root = sdkFixture();
+	write(
+		root,
+		"packages/contracts/src/schema.ts",
+		'import { obj } from "@earendil-works/pi-schema";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+});
+
 test.each([
 	"apps/web/src/leak.ts",
 	"packages/ui/src/leak.ts",

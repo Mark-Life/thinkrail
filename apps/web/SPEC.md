@@ -382,7 +382,7 @@ themselves.
 
 ## Get right
 
-- **`apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only.** Never value-import `pi`; never import `server`/`shared`.
+- **`apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only.** Never value-import `pi`, except `pi-schema`; never import `server`/`shared`.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.

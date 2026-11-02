@@ -879,3 +879,17 @@ test.skipIf(process.platform === "win32")(
 		});
 	},
 );
+
+test("a request with bad params gets an INVALID_PARAMS reply over the socket", async () => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "invalid-params");
+	try {
+		collector.socket.send(
+			JSON.stringify({ id: "bad", method: "project.open", params: { path: 1 } }),
+		);
+		const frame = await collector.waitForFrame((candidate) => candidate.id === "bad");
+		expect(frame).toMatchObject({ ok: false, errorCode: "INVALID_PARAMS" });
+	} finally {
+		collector.socket.close();
+	}
+});

@@ -81,7 +81,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
 - Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,
-  host imports, or pi runtime values.
+  host imports, or pi runtime values beyond the `pi-schema` that `contracts` depends on.
 - `ToolSummary` is `(props, t) => string`: the host passes the render-time `Translator` from `useT()`
   (`getToolSummary(t, name, props)`), so a collapsed card or routine row recomputes its summary on a
   language change; a summary translates only through that `t`, never the global translator
