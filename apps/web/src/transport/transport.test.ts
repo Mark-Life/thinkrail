@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { arr, compile, obj, opt, str } from "@earendil-works/pi-schema";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
-import { WsTransport } from "./transport";
+import { RequestError, wsErrorCode } from "./requestError";
+import { type DroppedFrame, WsTransport } from "./transport";
 
 class TestWebSocket {
 	static readonly CONNECTING = 0;
@@ -47,14 +49,18 @@ class TestWebSocket {
 const originalWebSocket = globalThis.WebSocket;
 const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-interface ClientFrame {
-	id?: string;
-	method?: string;
-	ack?: string[];
-	resume?: string[];
-}
-const parse = (frame: string): ClientFrame => JSON.parse(frame) as ClientFrame;
-const requestsIn = (sent: readonly string[]): ClientFrame[] =>
+const ClientFrame = compile(
+	obj(
+		{ id: opt(str()), method: opt(str()), ack: opt(arr(str())), resume: opt(arr(str())) },
+		{ open: true },
+	),
+);
+const parse = (frame: string) => {
+	const value: unknown = JSON.parse(frame);
+	if (!ClientFrame.check(value)) throw new Error(`not a client frame: ${frame}`);
+	return value;
+};
+const requestsIn = (sent: readonly string[]) =>
 	sent.map(parse).filter((frame) => frame.method !== undefined);
 const acksIn = (sent: readonly string[]): string[] =>
 	sent.flatMap((frame) => parse(frame).ack ?? []);
@@ -63,7 +69,7 @@ const resumesIn = (sent: readonly string[]): string[][] =>
 
 beforeEach(() => {
 	TestWebSocket.instances = [];
-	globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
+	Reflect.set(globalThis, "WebSocket", TestWebSocket);
 });
 
 afterEach(() => {
@@ -104,7 +110,7 @@ describe("WsTransport channel replay", () => {
 		[
 			"does not replay the addressed GitHub star ask to a late subscriber",
 			WS_CHANNELS.feedbackGithubStar,
-			{},
+			{ stars: 12 },
 		],
 	])("%s", (_name, channel, data) => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
@@ -128,12 +134,12 @@ describe("WsTransport dispatch barriers", () => {
 			{ url: "ws://localhost:24242/ws" },
 			{ beforeDispatch: () => order.push("barrier") },
 		);
-		transport.subscribe(WS_CHANNELS.projectUpdated, () => order.push("push"));
+		transport.subscribe(WS_CHANNELS.fontsChanged, () => order.push("push"));
 		transport.connect();
 		const socket = TestWebSocket.instances[0];
 		socket?.open();
 
-		socket?.message(JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: {} }));
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.fontsChanged, data: {} }));
 		expect(order).toEqual(["barrier", "push"]);
 
 		order.length = 0;
@@ -263,7 +269,9 @@ describe("WsTransport response receipts", () => {
 		expect(resumesIn(replacement?.sent ?? [])[0]).not.toContain(resolvedId);
 
 		replacement?.message(JSON.stringify({ id: stillOpenId, ok: true, result: [] }));
-		replacement?.message(JSON.stringify({ id: queuedId, ok: true, result: { files: [] } }));
+		replacement?.message(
+			JSON.stringify({ id: queuedId, ok: true, result: { branch: "main", changes: [] } }),
+		);
 		await Promise.all([stillOpen, queued]);
 	});
 
@@ -302,5 +310,164 @@ describe("WsTransport response receipts", () => {
 		replacement?.open();
 		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
 		expect(requestsIn(replacement?.sent ?? [])).toEqual([]);
+	});
+});
+
+describe("WsTransport wire checks", () => {
+	const connected = (hooks: ConstructorParameters<typeof WsTransport>[1] = {}) => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" }, hooks);
+		transport.connect();
+		const socket = TestWebSocket.instances.at(-1);
+		socket?.open();
+		return { transport, socket };
+	};
+	let warn: ReturnType<typeof spyOn>;
+
+	beforeEach(() => {
+		warn = spyOn(console, "warn").mockImplementation(() => {});
+	});
+
+	afterEach(() => {
+		warn.mockRestore();
+	});
+
+	test("a reply that breaks its schema rejects with a code, reports the method and is still acknowledged", async () => {
+		const invalid: string[] = [];
+		const { transport, socket } = connected({ onInvalidReply: (method) => invalid.push(method) });
+
+		const result = transport.request("project.list", {});
+		const id = requestsIn(socket?.sent ?? [])[0]?.id ?? "";
+		socket?.message(JSON.stringify({ id, ok: true, result: { secret: "text" } }));
+
+		const failure = await result.catch((error: unknown) => error);
+		expect(wsErrorCode(failure)).toBe("INVALID_REPLY");
+		expect(invalid).toEqual(["project.list"]);
+		await tick(0);
+		expect(acksIn(socket?.sent ?? [])).toEqual([id]);
+	});
+
+	test("a reply that is no valid envelope rejects its request at once and is still acknowledged", async () => {
+		const invalid: string[] = [];
+		const dropped: DroppedFrame[] = [];
+		const { transport, socket } = connected({
+			onInvalidReply: (method) => invalid.push(method),
+			onDroppedFrame: (frame) => dropped.push(frame),
+		});
+
+		const result = transport.request("project.list", {});
+		const id = requestsIn(socket?.sent ?? [])[0]?.id ?? "";
+		socket?.message(JSON.stringify({ id, ok: "yes" }));
+
+		const failure = await result.catch((error: unknown) => error);
+		expect(wsErrorCode(failure)).toBe("INVALID_REPLY");
+		expect(invalid).toEqual(["project.list"]);
+		expect(dropped).toEqual([]);
+		await tick(0);
+		expect(acksIn(socket?.sent ?? [])).toEqual([id]);
+	});
+
+	test("a failed reply is not checked against the result schema", async () => {
+		const invalid: string[] = [];
+		const { transport, socket } = connected({ onInvalidReply: (method) => invalid.push(method) });
+
+		const result = transport.request("project.list", {});
+		const id = requestsIn(socket?.sent ?? [])[0]?.id;
+		socket?.message(
+			JSON.stringify({ id, ok: false, error: "nope", errorCode: "FROM_A_NEWER_HOST" }),
+		);
+
+		const failure = await result.catch((error: unknown) => error);
+		expect(failure).not.toBeInstanceOf(RequestError);
+		expect(failure).toMatchObject({ message: "nope" });
+		expect(wsErrorCode(failure)).toBeUndefined();
+		expect(invalid).toEqual([]);
+	});
+
+	test("a bad push is dropped and reported once, and later pushes still arrive, without a barrier or a cached value", () => {
+		const barriers: unknown[] = [];
+		const dropped: DroppedFrame[] = [];
+		const { transport, socket } = connected({
+			beforeDispatch: (message) => barriers.push(message),
+			onDroppedFrame: (frame) => dropped.push(frame),
+		});
+		const good = { channel: WS_CHANNELS.workspaceRemoved, data: { projectId: "p1", id: "w1" } };
+		const bad = { channel: WS_CHANNELS.workspaceRemoved, data: { projectId: "p1", id: 7 } };
+		const seen: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => seen.push(data));
+
+		socket?.message(JSON.stringify(bad));
+		socket?.message(JSON.stringify(bad));
+		expect(seen).toEqual([]);
+		expect(barriers).toEqual([]);
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(dropped).toEqual([{ code: "INVALID_PUSH", channel: WS_CHANNELS.workspaceRemoved }]);
+
+		const late: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => late.push(data));
+		expect(late).toEqual([]);
+
+		socket?.message(JSON.stringify(good));
+		expect(seen).toEqual([good.data]);
+	});
+
+	test("a frame that is not an envelope, or a channel this client does not know, is dropped and reported once", () => {
+		const barriers: unknown[] = [];
+		const dropped: DroppedFrame[] = [];
+		const { socket } = connected({
+			beforeDispatch: (message) => barriers.push(message),
+			onDroppedFrame: (frame) => dropped.push(frame),
+		});
+		const frames = [
+			"not json",
+			"null",
+			"7",
+			JSON.stringify({ id: 7, ok: true }),
+			JSON.stringify({ channel: 7, data: {} }),
+			JSON.stringify({ channel: "constructor", data: {} }),
+			JSON.stringify({ channel: "from.a.newer.host", data: {} }),
+		];
+		for (const frame of frames) expect(() => socket?.message(frame)).not.toThrow();
+		expect(barriers).toEqual([]);
+		expect(dropped).toEqual([{ code: "INVALID_ENVELOPE" }, { code: "UNKNOWN_PUSH" }]);
+	});
+
+	test("a newer host's extra fields pass on every level of a reply and a push", async () => {
+		const { transport, socket } = connected();
+		const seen: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => seen.push(data));
+		const data = { projectId: "p1", id: "w1", extra: 1 };
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.workspaceRemoved, data, extra: 1 }));
+		expect(seen).toEqual([data]);
+
+		const result = transport.request("host.update", {});
+		const id = requestsIn(socket?.sent ?? [])[0]?.id;
+		socket?.message(JSON.stringify({ id, ok: true, result: { ok: true, extra: 1 }, extra: 1 }));
+		const value: unknown = await result;
+		expect(value).toEqual({ ok: true, extra: 1 });
+	});
+
+	test("a welcome from an older host passes, and one with no version is dropped", () => {
+		const { transport, socket } = connected();
+		const seen: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.serverWelcome, (data) => seen.push(data));
+		const older = { protocolVersion: 60, projects: [{ id: "p1" }] };
+
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: older }));
+		expect(seen).toEqual([older]);
+
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: { projects: [] } }));
+		expect(seen).toEqual([older]);
+	});
+
+	test("a pi event with an unknown type passes: only its tag is checked", () => {
+		const { transport, socket } = connected();
+		const seen: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.piEvent, (data) => seen.push(data));
+		const data = { sessionId: "s1", event: { type: "from_a_newer_pi", detail: {} } };
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.piEvent, data }));
+		socket?.message(
+			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: { sessionId: "s1", event: {} } }),
+		);
+		expect(seen).toEqual([data]);
 	});
 });

@@ -106,7 +106,6 @@ export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export * from "./schema";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
-export type * from "./speech";
 export {
 	isSpeechErrorCode,
 	isSpeechModel,
@@ -115,5 +114,13 @@ export {
 	SPEECH_SAMPLE_RATE,
 	SPEECH_SOCKET_ROUTE,
 } from "./speech";
-export { describeFailure, wsPushValidator, wsResultValidator } from "./wireChecks";
+export type { Parsed, WsClientChannelMap, WsClientPayload } from "./wireChecks";
+export {
+	describeFailure,
+	parseWsPush,
+	parseWsResult,
+	wsChannelOf,
+	wsPushValidator,
+	wsResultValidator,
+} from "./wireChecks";
 export * from "./wsProtocol";

@@ -4053,21 +4053,12 @@ test("applyConfig folds and normalizes the server-synced theme preference", () =
 	});
 });
 
-test("applyConfig projects and validates the Windows terminal shell", () => {
+test("applyConfig projects the Windows terminal shell", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,
 		terminalWindowsShell: "cmd",
 	});
 	expect(useAppStore.getState()).toHaveProperty("terminalWindowsShell", "cmd");
-
-	useAppStore.getState().applyConfig({
-		...DEFAULT_CONFIG,
-		terminalWindowsShell: "future-shell",
-	} as unknown as AppConfig);
-	expect(useAppStore.getState()).toHaveProperty(
-		"terminalWindowsShell",
-		DEFAULT_CONFIG.terminalWindowsShell,
-	);
 });
 
 test("applyConfig projects the composer growth limit", () => {
@@ -4094,15 +4085,14 @@ test("applyConfig projects synchronized chat and file line-width settings", () =
 	});
 });
 
-test("applyConfig defaults absent or malformed line-width fields independently", () => {
-	const config = {
+test("installWelcomeSnapshot defaults absent or out-of-range line-width fields independently", () => {
+	const { chatLineWidthBounded: _absent, ...config } = {
 		...DEFAULT_CONFIG,
 		chatLineWidth: 999,
 		fileLineWidth: 160,
 		fileLineWidthBounded: false,
 	};
-	Reflect.set(config, "chatLineWidthBounded", "yes");
-	useAppStore.getState().applyConfig(config);
+	useAppStore.getState().installWelcomeSnapshot(1, [], [], config);
 	expect(useAppStore.getState()).toMatchObject({
 		chatLineWidth: 120,
 		fileLineWidth: 160,

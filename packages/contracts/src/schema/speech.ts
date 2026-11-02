@@ -90,3 +90,23 @@ export const SPEECH_METHODS = {
 export const SPEECH_CHANNELS = {
 	"speech.changed": SpeechStatus,
 };
+
+/**
+ * Client to host over the speech socket. `start` opens one dictation; PCM16 binary frames follow;
+ * `stop` commits the buffered audio and waits for the last final.
+ */
+export const SpeechClientMessage = union([
+	wireObj({ type: lit("start") }),
+	wireObj({ type: lit("stop") }),
+]);
+export type SpeechClientMessage = Static<typeof SpeechClientMessage>;
+
+/** Host to client over the speech socket; `partial` replaces the previous partial, `final` commits it. */
+export const SpeechServerMessage = union([
+	wireObj({ type: lit("ready") }),
+	wireObj({ type: lit("partial"), text: str() }),
+	wireObj({ type: lit("final"), text: str() }),
+	wireObj({ type: lit("error"), code: SpeechErrorCode }),
+	wireObj({ type: lit("ended") }),
+]);
+export type SpeechServerMessage = Static<typeof SpeechServerMessage>;

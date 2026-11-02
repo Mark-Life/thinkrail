@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { PiEvent, SessionEventPayload, WsServerMessage } from "@thinkrail/contracts";
+import type { PiEvent, SessionEventPayload, WsEnvelope } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 
@@ -67,15 +67,15 @@ test("the queue ceiling forces a flush and disposal drops pending work", () => {
 });
 
 test("responses and non-Pi pushes form dispatch barriers", () => {
-	const piPush = {
+	const piPush: WsEnvelope = {
 		channel: WS_CHANNELS.piEvent,
 		data: payload("a", "agent_start"),
-	} as WsServerMessage;
-	const otherPush = {
+	};
+	const otherPush: WsEnvelope = {
 		channel: WS_CHANNELS.workspaceFsChanged,
 		data: {},
-	} as WsServerMessage;
-	const response = { id: "r1", ok: true, result: {} } as WsServerMessage;
+	};
+	const response: WsEnvelope = { id: "r1", ok: true, result: {} };
 
 	expect(shouldFlushPiEventsBefore(piPush)).toBe(false);
 	expect(shouldFlushPiEventsBefore(otherPush)).toBe(true);

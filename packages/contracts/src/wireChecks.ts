@@ -6,10 +6,28 @@ import {
 	type Validator,
 } from "@earendil-works/pi-schema";
 import type { SessionEventPayload } from "./piProtocol";
-import { WS_CHANNEL_SCHEMAS as C, WS_METHOD_SCHEMAS as M } from "./schema";
-import type { WsChannel, WsChannelPayload, WsMethodName, WsResult } from "./wsProtocol";
+import { AnyHostWelcome, WS_CHANNEL_SCHEMAS as C, WS_METHOD_SCHEMAS as M } from "./schema";
+import {
+	WS_CHANNELS,
+	type WsChannel,
+	type WsChannelMap,
+	type WsChannelPayload,
+	type WsMethodName,
+	type WsResult,
+} from "./wsProtocol";
 
 const MAX_DESCRIBED_ERRORS = 5;
+
+/** A checked wire value, or why its schema refused it. */
+export type Parsed<T> =
+	| { readonly ok: true; readonly value: T }
+	| { readonly ok: false; readonly problem: string };
+
+/** What a client may receive: a welcome from a host of any version only meets its floor. */
+export interface WsClientChannelMap extends Omit<WsChannelMap, "server.welcome"> {
+	"server.welcome": AnyHostWelcome;
+}
+export type WsClientPayload<K extends WsChannel> = WsClientChannelMap[K];
 
 /** Why `value` fails `validator`: up to five `path message` pairs. `root` names the value itself. */
 export function describeFailure<T>(validator: Validator<T>, value: unknown, root: string) {
@@ -277,4 +295,45 @@ const PUSHES: PushValidators = {
 /** The compiled payload schema of `channel`, as the host sends it, built on first use. */
 export function wsPushValidator<K extends WsChannel>(channel: K) {
 	return PUSHES[channel]();
+}
+
+type ClientPushValidators = { readonly [K in WsChannel]: () => Validator<WsClientPayload<K>> };
+
+const CLIENT_PUSHES: ClientPushValidators = {
+	...PUSHES,
+	"server.welcome": lazyValidator(AnyHostWelcome),
+};
+
+const CHANNELS = new Map<string, WsChannel>(
+	Object.values(WS_CHANNELS).map((channel) => [channel, channel]),
+);
+
+/** The channel a push names, when this client knows it. */
+export function wsChannelOf(name: string) {
+	return CHANNELS.get(name);
+}
+
+export function parseWsResult<K extends WsMethodName>(
+	method: K,
+	value: unknown,
+): Parsed<WsResult<K>> {
+	const validator = wsResultValidator(method);
+	if (validator.check(value)) return { ok: true, value };
+	return {
+		ok: false,
+		problem: `${method} replied with a shape its schema refuses: ${describeFailure(validator, value, "result")}`,
+	};
+}
+
+/** Checks a push as a client reads it, with the welcome floor in place of the full welcome. */
+export function parseWsPush<K extends WsChannel>(
+	channel: K,
+	data: unknown,
+): Parsed<WsClientPayload<K>> {
+	const validator = CLIENT_PUSHES[channel]();
+	if (validator.check(data)) return { ok: true, value: data };
+	return {
+		ok: false,
+		problem: `${channel} pushed a shape its schema refuses: ${describeFailure(validator, data, "data")}`,
+	};
 }

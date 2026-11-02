@@ -184,7 +184,7 @@ const APP_CONFIG_FIELDS = {
 	fontWeightOffset: num(),
 };
 
-export const AppConfig = wireObj({
+const APP_CONFIG_RESULT_FIELDS = {
 	...APP_CONFIG_FIELDS,
 	customLayoutPresets: arr(LayoutPreset),
 	/** The model new chats start with; unset uses the first available model. */
@@ -197,8 +197,14 @@ export const AppConfig = wireObj({
 	reviewEffort: opt(ThinkingLevel),
 	/** Models most recently chosen for a chat, newest first; host-maintained, never client-written. */
 	recentModels: arr(WireModel),
-});
+};
+
+export const AppConfig = wireObj(APP_CONFIG_RESULT_FIELDS);
 export type AppConfig = Static<typeof AppConfig>;
+
+/** An `AppConfig` of any host version: an older host omits later fields or sends older shapes. */
+export const PartialAppConfig = partialWireObj(APP_CONFIG_RESULT_FIELDS);
+export type PartialAppConfig = Static<typeof PartialAppConfig>;
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export const AppConfigUpdate = partialWireObj({

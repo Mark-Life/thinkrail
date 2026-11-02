@@ -2,8 +2,11 @@ import {
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	type ClientErrorKind,
 	type ClientErrorReport,
+	WS_METHODS,
+	type WsMethodName,
 } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
+import { type DroppedFrame, droppedFrameCode } from "./transport";
 import { getTransport } from "./wireTransport";
 
 const MAX_REPORTS_PER_PAGE = 50;
@@ -68,6 +71,28 @@ export function clientErrorReport(
 	};
 }
 
+export function reportInvalidReply(method: WsMethodName): void {
+	if (method === WS_METHODS.clientReportError) return;
+	reportClientError({
+		kind: "rejection",
+		type: "RequestError",
+		boundary: `INVALID_REPLY:${method}`,
+	});
+}
+
+const reportedFrames = new Set<string>();
+
+export function reportDroppedFrame(frame: DroppedFrame): void {
+	const boundary = droppedFrameCode(frame);
+	if (reportedFrames.has(boundary)) return;
+	reportedFrames.add(boundary);
+	reportClientError({
+		kind: "window",
+		type: "WireError",
+		boundary,
+	});
+}
+
 function deliver(report: ClientErrorReport, protocolVersion: number): void {
 	if (!supportsClientErrorReports(protocolVersion) || sent >= MAX_REPORTS_PER_PAGE) return;
 	sent++;
@@ -116,6 +141,7 @@ export function installClientErrorReporting(target: Window = window): () => void
 
 export function resetClientErrorReportsForTests(): void {
 	sent = 0;
+	reportedFrames.clear();
 	pending = [];
 	unsubscribe?.();
 	unsubscribe = null;
