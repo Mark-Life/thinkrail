@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compile, int, obj, type Static, str } from "@earendil-works/pi-schema";
 import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { removeTree } from "@thinkrail/shared/removeTree";
 
@@ -20,10 +21,13 @@ export const PORT_BLOCK_SLOTS = 500;
 
 export const PORT_BLOCK_REGISTRY = join(tmpdir(), "thinkrail-e2e-port-blocks");
 
-export interface PortBlockOwner {
-	key: string;
-	livenessPath: string;
-}
+const PortBlockOwner = obj({ key: str(), livenessPath: str() }, { open: true });
+export type PortBlockOwner = Static<typeof PortBlockOwner>;
+const claimFile = compile(PortBlockOwner);
+
+const LockOwner = obj({ pid: int(), nonce: str() }, { open: true });
+type LockOwner = Static<typeof LockOwner>;
+const lockOwnerFile = compile(LockOwner);
 
 type PortBlockOwnerInput = string | PortBlockOwner;
 
@@ -49,17 +53,8 @@ function readClaim(path: string): PortBlockOwner | undefined {
 		return undefined;
 	}
 	try {
-		const parsed = JSON.parse(raw) as unknown;
-		if (
-			parsed !== null &&
-			typeof parsed === "object" &&
-			"key" in parsed &&
-			"livenessPath" in parsed &&
-			typeof parsed.key === "string" &&
-			typeof parsed.livenessPath === "string"
-		) {
-			return { key: parsed.key, livenessPath: parsed.livenessPath };
-		}
+		const parsed: unknown = JSON.parse(raw);
+		if (claimFile.check(parsed)) return parsed;
 	} catch {}
 	return { key: raw, livenessPath: raw };
 }
@@ -75,19 +70,10 @@ function spinFor(ms: number): void {
 	void noop;
 }
 
-interface LockOwner {
-	pid: number;
-	nonce: string;
-}
-
 function readLockOwner(lockPath: string): LockOwner | undefined {
 	try {
-		const parsed = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8")) as unknown;
-		if (parsed !== null && typeof parsed === "object" && "pid" in parsed && "nonce" in parsed) {
-			const { pid, nonce } = parsed;
-			if (typeof pid === "number" && typeof nonce === "string") return { pid, nonce };
-		}
-		return undefined;
+		const parsed: unknown = JSON.parse(readFileSync(join(lockPath, "owner"), "utf8"));
+		return lockOwnerFile.check(parsed) ? parsed : undefined;
 	} catch {
 		return undefined;
 	}
