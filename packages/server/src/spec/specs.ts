@@ -1,10 +1,10 @@
-import type { SpecGraphNode, SpecGraphSnapshot } from "@thinkrail/contracts";
+import type { SpecGraphNode, SpecGraphSnapshot, WorkspaceId } from "@thinkrail/contracts";
 import { FIELDS, list, SpecIndex, scalar } from "pi-spec-graph/core";
 import { loadWorkspaces } from "../persistence";
 
 const indexes = new Map<string, SpecIndex>();
 
-function indexFor(workspaceId: string, root: string): SpecIndex {
+function indexFor(workspaceId: WorkspaceId, root: string): SpecIndex {
 	let index = indexes.get(workspaceId);
 	if (!index) {
 		index = new SpecIndex(root);
@@ -13,7 +13,7 @@ function indexFor(workspaceId: string, root: string): SpecIndex {
 	return index;
 }
 
-export function evictSpecIndex(workspaceId: string): void {
+export function evictSpecIndex(workspaceId: WorkspaceId): void {
 	indexes.delete(workspaceId);
 }
 
@@ -121,7 +121,7 @@ export function projectHasSpecs(root: string): boolean {
 	}
 }
 
-export function specGraph(workspaceId: string): SpecGraphSnapshot {
+export function specGraph(workspaceId: WorkspaceId): SpecGraphSnapshot {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 

@@ -1,4 +1,4 @@
-import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
+import type { GitFileChange, GitStatus, WorkspaceId } from "@thinkrail/contracts";
 import {
 	type RefObject,
 	useCallback,
@@ -18,7 +18,7 @@ const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as 
 type SettleTarget = { path: string; commentId?: string };
 
 interface ReviewRevealInput {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	tabId: string;
 	files: readonly GitFileChange[];
 	status: GitStatus | null;

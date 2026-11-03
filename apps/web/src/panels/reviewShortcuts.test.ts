@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout/types";
 import { createChangesTab, useAppStore } from "../store";
 import { ownsReviewShortcut } from "./reviewShortcuts";
@@ -11,10 +12,17 @@ const modal = { querySelector: () => ({}) as Element };
 const key = (target: EventTarget | null = null) => ({ target }) as KeyboardEvent;
 
 test("a review tab answers its shortcuts only while it is the tab the center is looking at", () => {
-	const branch = createChangesTab("ws1", "ws1:changes:branch", "Changes", { kind: "branch" });
-	const uncommitted = createChangesTab("ws1", "ws1:changes:uncommitted", "Changes · uncommitted", {
-		kind: "uncommitted",
+	const branch = createChangesTab(asWorkspaceId("ws1"), "ws1:changes:branch", "Changes", {
+		kind: "branch",
 	});
+	const uncommitted = createChangesTab(
+		asWorkspaceId("ws1"),
+		"ws1:changes:uncommitted",
+		"Changes · uncommitted",
+		{
+			kind: "uncommitted",
+		},
+	);
 	const layout: WorkspaceLayoutDocument = {
 		version: 2,
 		center: {
@@ -48,7 +56,7 @@ test("a review tab answers its shortcuts only while it is the tab the center is 
 		toolRestoreTargets: {},
 	};
 	useAppStore.setState({
-		activeWorkspaceId: "ws1",
+		activeWorkspaceId: asWorkspaceId("ws1"),
 		tabsByWorkspace: { ws1: [branch, uncommitted] },
 		layoutDocumentsByWorkspace: { ws1: layout },
 		layoutAttentionByWorkspace: {

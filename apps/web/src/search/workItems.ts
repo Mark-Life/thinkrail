@@ -5,7 +5,14 @@ import {
 	RiHome4Line,
 	RiLoader4Line,
 } from "@remixicon/react";
-import type { BranchReviewState, Workspace } from "@thinkrail/contracts";
+import type {
+	BranchReviewState,
+	ProjectId,
+	SessionId,
+	Workspace,
+	WorkspaceId,
+} from "@thinkrail/contracts";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import { chatLabel } from "../lib";
@@ -34,11 +41,14 @@ export type WorkItemsState = Pick<
 export interface WorkItemsInput {
 	t: Translator;
 	state: WorkItemsState;
-	contextProjectId: string | null;
+	contextProjectId: ProjectId | null;
 	firstPrompts: Readonly<Record<string, string>>;
 	transcriptPreviews: boolean;
-	navigateToProject: (projectId: string) => void;
-	navigateToWorkspace: (workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) => void;
+	navigateToProject: (projectId: ProjectId) => void;
+	navigateToWorkspace: (
+		workspace: Pick<Workspace, "id" | "projectId">,
+		sessionId?: SessionId,
+	) => void;
 }
 
 const CONTEXT_PROJECT_BOOST = 30;
@@ -61,8 +71,8 @@ function strongest(
 }
 
 function contextBoost(
-	projectId: string,
-	workspaceId: string | null,
+	projectId: ProjectId,
+	workspaceId: WorkspaceId | null,
 	input: WorkItemsInput,
 ): number {
 	return (
@@ -103,20 +113,25 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			}),
 		});
 	}
-	const workspaceById = new Map<string, Workspace>();
+	const workspaceById = new Map<WorkspaceId, Workspace>();
 	for (const project of state.projects) {
 		for (const workspace of state.workspaces[project.id] ?? []) {
 			workspaceById.set(workspace.id, workspace);
 		}
 	}
-	const attentionByWorkspace = new Map<string, SessionAttention>();
+	const attentionByWorkspace = new Map<WorkspaceId, SessionAttention>();
 	const projectOrder = new Map(state.projects.map((project, index) => [project.id, index]));
-	const orderOf = (records: Readonly<Record<string, { projectId: string }>>) =>
-		projectOrder.get(Object.values(records)[0]?.projectId ?? "") ?? state.projects.length;
+	const orderOf = (records: Readonly<Record<string, { projectId: ProjectId }>>) => {
+		const projectId = Object.values(records)[0]?.projectId;
+		return (
+			(projectId === undefined ? undefined : projectOrder.get(projectId)) ?? state.projects.length
+		);
+	};
 	const byProject = Object.entries(state.sessionStateByWorkspace).sort(
 		([, a], [, b]) => orderOf(a) - orderOf(b),
 	);
-	for (const [workspaceId, records] of byProject) {
+	for (const [rawWorkspaceId, records] of byProject) {
+		const workspaceId = asWorkspaceId(rawWorkspaceId);
 		const workspace = workspaceById.get(workspaceId);
 		let attention: SessionAttention | undefined;
 		for (const record of Object.values(records)) {

@@ -20,7 +20,11 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import {
+	asSessionId,
+	asWorkspaceId,
+	type SessionId,
 	SUBAGENT_COMPLETION_CUSTOM_TYPE,
 	type DelegationRunDetails as WireRunDetails,
 } from "@thinkrail/contracts";
@@ -132,17 +136,17 @@ afterAll(() => {
 
 test("host embedding: projection, per-workspace service, transcript store, cascades, retention", async () => {
 	const cwd = tmpDir("trdel-ws-");
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-del" });
+	const { sessionId } = await createSession({ cwd, workspaceId: asWorkspaceId("ws-del") });
 
 	const parent = liveParentContext(sessionId);
 	expect(parent?.cwd).toBe(cwd);
 	expect(parent?.model?.provider).toBe("faux");
 	expect(parent?.modelRuntime).toBe(baseRuntime);
-	expect(liveParentContext("not-a-session")).toBeUndefined();
+	expect(liveParentContext(asSessionId("not-a-session"))).toBeUndefined();
 
-	const service = delegationServiceFor("ws-del");
-	expect(delegationServiceFor("ws-del")).toBe(service);
-	expect(delegationServiceFor("ws-other")).not.toBe(service);
+	const service = delegationServiceFor(asWorkspaceId("ws-del"));
+	expect(delegationServiceFor(asWorkspaceId("ws-del"))).toBe(service);
+	expect(delegationServiceFor(asWorkspaceId("ws-other"))).not.toBe(service);
 
 	faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
 	const child = await service.createChild({
@@ -155,7 +159,11 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	expect(outcome.status).toBe("completed");
 	expect(child.record.sessionFile.startsWith(join(delegationRootDir(), "ws-del"))).toBe(true);
 
-	const read = readChildTranscript("ws-del", sessionId, child.sessionId);
+	const read = readChildTranscript(
+		asWorkspaceId("ws-del"),
+		sessionId,
+		asSessionId(child.sessionId),
+	);
 	expect(JSON.stringify(read.messages)).toContain("CHILD_DONE");
 	expect(read.status).toBe("completed");
 
@@ -163,7 +171,11 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	const lastEntryId = childManager.getEntries().at(-1)?.id;
 	if (!lastEntryId) throw new Error("expected child entries");
 	childManager.appendCompaction("COMPACTED_CONTEXT", lastEntryId, 12_345);
-	const compacted = readChildTranscript("ws-del", sessionId, child.sessionId);
+	const compacted = readChildTranscript(
+		asWorkspaceId("ws-del"),
+		sessionId,
+		asSessionId(child.sessionId),
+	);
 	expect(
 		compacted.messages.some(
 			(message) => message.role === "compactionSummary" && message.summary === "COMPACTED_CONTEXT",
@@ -172,14 +184,18 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 
 	await removeSession(sessionId);
 	expect(service.findChild(child.sessionId)).toBeUndefined();
-	const afterDispose = readChildTranscript("ws-del", sessionId, child.sessionId);
+	const afterDispose = readChildTranscript(
+		asWorkspaceId("ws-del"),
+		sessionId,
+		asSessionId(child.sessionId),
+	);
 	expect(afterDispose.messages.length).toBeGreaterThan(0);
 	expect(afterDispose.status).toBeUndefined();
 
-	await removeWorkspaceSessions("ws-del");
+	await removeWorkspaceSessions(asWorkspaceId("ws-del"));
 	let missing: unknown;
 	try {
-		readChildTranscript("ws-del", sessionId, child.sessionId);
+		readChildTranscript(asWorkspaceId("ws-del"), sessionId, asSessionId(child.sessionId));
 	} catch (err) {
 		missing = err;
 	}
@@ -229,7 +245,7 @@ test("a child run's usage delta lands in the parent's pi totals and invalidates 
 			parentManager = SessionManager.inMemory(dir);
 			return parentManager;
 		},
-		{ cwd, workspaceId: "ws-usage" },
+		{ cwd, workspaceId: asWorkspaceId("ws-usage") },
 	);
 	const published: unknown[] = [];
 	setSessionPublisher((payload) => {
@@ -238,7 +254,7 @@ test("a child run's usage delta lands in the parent's pi totals and invalidates 
 	try {
 		expect(getSessionStats(sessionId).tokens.total).toBe(0);
 		faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
-		const child = await delegationServiceFor("ws-usage").createChild({
+		const child = await delegationServiceFor(asWorkspaceId("ws-usage")).createChild({
 			parent: sessionId,
 			visibility: "hidden",
 			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
@@ -262,7 +278,7 @@ test("a child run's usage delta lands in the parent's pi totals and invalidates 
 
 		await child.dispose();
 		expect(
-			childFileUsage(child.sessionId, readFileSync(child.record.sessionFile, "utf8")),
+			childFileUsage(asSessionId(child.sessionId), readFileSync(child.record.sessionFile, "utf8")),
 		).toMatchObject({
 			usage: {
 				input: usage.input,
@@ -272,7 +288,9 @@ test("a child run's usage delta lands in the parent's pi totals and invalidates 
 				cost: { total: usage.cost },
 			},
 		});
-		await reconcileSessionSubagentUsage("ws-usage", sessionId, () => parentManager?.getEntries());
+		await reconcileSessionSubagentUsage(asWorkspaceId("ws-usage"), sessionId, () =>
+			parentManager?.getEntries(),
+		);
 		expect(parentManager?.getEntries().filter((entry) => entry.type === "usage")).toHaveLength(1);
 	} finally {
 		setSessionPublisher(() => {});
@@ -315,13 +333,16 @@ test("the subagent totals mirror matches pi's own totals for every spend source"
 
 	const { sessionId } = await createSessionWith(() => SessionManager.open(file), {
 		cwd,
-		workspaceId: "ws-parity",
+		workspaceId: asWorkspaceId("ws-parity"),
 	});
 	try {
 		const pi = getSessionStats(sessionId);
 		expect(pi.tokens).toMatchObject({ input: 150, output: 155, cacheRead: 160, cacheWrite: 165 });
 		expect(pi.cost).toBeCloseTo(0.165, 12);
-		const mirror = childFileUsage(transcript.getSessionId(), readFileSync(file, "utf8"));
+		const mirror = childFileUsage(
+			asSessionId(transcript.getSessionId()),
+			readFileSync(file, "utf8"),
+		);
 		expect(mirror?.usage).toMatchObject({
 			input: pi.tokens.input,
 			output: pi.tokens.output,
@@ -334,7 +355,7 @@ test("the subagent totals mirror matches pi's own totals for every spend source"
 	}
 });
 
-async function parentWithGatedChild(workspaceId: string) {
+async function parentWithGatedChild(workspaceId: WorkspaceId) {
 	let parentManager: SessionManager | undefined;
 	const cwd = tmpDir(`trdel-${workspaceId}-`);
 	const { sessionId } = await createSessionWith(
@@ -386,7 +407,7 @@ test("attaching a chat recovers the spend of children a crashed host never recor
 			orphanId = orphan.getSessionId();
 			return parentManager;
 		},
-		{ cwd, workspaceId: "ws-crash" },
+		{ cwd, workspaceId: asWorkspaceId("ws-crash") },
 	);
 	try {
 		await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
@@ -398,7 +419,9 @@ test("attaching a chat recovers the spend of children a crashed host never recor
 		expect(usageEntries()).toMatchObject([
 			{ kind: "subagent", provider: "faux", model: "faux", note: orphanId },
 		]);
-		await reconcileSessionSubagentUsage("ws-crash", sessionId, () => parentManager?.getEntries());
+		await reconcileSessionSubagentUsage(asWorkspaceId("ws-crash"), sessionId, () =>
+			parentManager?.getEntries(),
+		);
 		expect(usageEntries()).toHaveLength(1);
 	} finally {
 		await removeSession(sessionId);
@@ -406,7 +429,9 @@ test("attaching a chat recovers the spend of children a crashed host never recor
 });
 
 test("closing a chat still records the usage of a child its cascade stops", async () => {
-	const { sessionId, child, run, release, usageEntries } = await parentWithGatedChild("ws-close");
+	const { sessionId, child, run, release, usageEntries } = await parentWithGatedChild(
+		asWorkspaceId("ws-close"),
+	);
 	const closed = removeSession(sessionId);
 	await waitFor(() => liveParentContext(sessionId) === undefined);
 	release();
@@ -415,8 +440,10 @@ test("closing a chat still records the usage of a child its cascade stops", asyn
 });
 
 test("deleting a chat never appends usage to its trashed transcript", async () => {
-	const { cwd, sessionId, run, release, usageEntries } = await parentWithGatedChild("ws-delusage");
-	const deleted = deleteSession(sessionId, "ws-delusage", cwd);
+	const { cwd, sessionId, run, release, usageEntries } = await parentWithGatedChild(
+		asWorkspaceId("ws-delusage"),
+	);
+	const deleted = deleteSession(sessionId, asWorkspaceId("ws-delusage"), cwd);
 	await waitFor(() => liveParentContext(sessionId) === undefined);
 	release();
 	await Promise.all([deleted, run]);
@@ -425,7 +452,7 @@ test("deleting a chat never appends usage to its trashed transcript", async () =
 
 test("a failed usage write never fails the child run", async () => {
 	const { sessionId, child, run, release, usageEntries, parentManager } =
-		await parentWithGatedChild("ws-enospc");
+		await parentWithGatedChild(asWorkspaceId("ws-enospc"));
 	if (!parentManager) throw new Error("expected a parent session manager");
 	parentManager.appendUsage = () => {
 		throw new Error("ENOSPC: no space left on device");
@@ -456,7 +483,7 @@ const writesCanBeDenied = (() => {
 	}
 })();
 
-async function persistedParent(workspaceId: string) {
+async function persistedParent(workspaceId: WorkspaceId) {
 	let manager: SessionManager | undefined;
 	const cwd = tmpDir(`trdel-${workspaceId}-`);
 	const { sessionId } = await createSessionWith(
@@ -506,10 +533,10 @@ const totalTokens = (usage: {
 test.skipIf(!writesCanBeDenied)(
 	"a failed usage write leaves pi's memory and leaf untouched and never cuts the reopened history",
 	async () => {
-		const { sessionId, manager, file } = await persistedParent("ws-memonly");
+		const { sessionId, manager, file } = await persistedParent(asWorkspaceId("ws-memonly"));
 		const { release } = gatedChildResponse();
 		try {
-			const child = await delegationServiceFor("ws-memonly").createChild({
+			const child = await delegationServiceFor(asWorkspaceId("ws-memonly")).createChild({
 				parent: sessionId,
 				visibility: "hidden",
 				info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
@@ -541,9 +568,9 @@ test.skipIf(!writesCanBeDenied)(
 test.skipIf(!writesCanBeDenied)(
 	"reopening a chat restores subagent spend whose write failed",
 	async () => {
-		const { cwd, sessionId, file } = await persistedParent("ws-reopen");
+		const { cwd, sessionId, file } = await persistedParent(asWorkspaceId("ws-reopen"));
 		faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
-		const child = await delegationServiceFor("ws-reopen").createChild({
+		const child = await delegationServiceFor(asWorkspaceId("ws-reopen")).createChild({
 			parent: sessionId,
 			visibility: "hidden",
 			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
@@ -561,7 +588,7 @@ test.skipIf(!writesCanBeDenied)(
 
 		const reopened = await createSessionWith(() => SessionManager.open(file), {
 			cwd,
-			workspaceId: "ws-reopen",
+			workspaceId: asWorkspaceId("ws-reopen"),
 		});
 		try {
 			expect(reopened.sessionId).toBe(sessionId);
@@ -579,7 +606,7 @@ test.skipIf(!writesCanBeDenied)(
 );
 
 test("a torn usage append is cut back so the next entry stays readable", async () => {
-	const { sessionId, manager, file } = await persistedParent("ws-torn");
+	const { sessionId, manager, file } = await persistedParent(asWorkspaceId("ws-torn"));
 	const appendUsage = manager.appendUsage.bind(manager);
 	try {
 		manager.appendUsage = () => {
@@ -603,7 +630,7 @@ test("a torn usage append is cut back so the next entry stays readable", async (
 });
 
 test("usage accounting survives a throwing publisher and an unreadable transcript path", async () => {
-	const { sessionId, manager, file } = await persistedParent("ws-besteffort");
+	const { sessionId, manager, file } = await persistedParent(asWorkspaceId("ws-besteffort"));
 	const getSessionFile = manager.getSessionFile.bind(manager);
 	try {
 		setSessionPublisher(() => {
@@ -624,7 +651,7 @@ test("usage accounting survives a throwing publisher and an unreadable transcrip
 });
 
 test.skipIf(!writesCanBeDenied)("a cut-back that cannot truncate never throws", async () => {
-	const { sessionId, manager, file } = await persistedParent("ws-notrunc");
+	const { sessionId, manager, file } = await persistedParent(asWorkspaceId("ws-notrunc"));
 	const appendUsage = manager.appendUsage.bind(manager);
 	try {
 		manager.appendUsage = () => {
@@ -661,12 +688,12 @@ test("a failed deletion recovers the usage of a child that settled while trash w
 			parentManager = SessionManager.create(dir);
 			return parentManager;
 		},
-		{ cwd, workspaceId: "ws-trashfail" },
+		{ cwd, workspaceId: asWorkspaceId("ws-trashfail") },
 	);
 	parentManager?.appendMessage({ role: "user", content: "persist", timestamp: Date.now() });
 	const { release } = gatedChildResponse();
 	try {
-		const child = await delegationServiceFor("ws-trashfail").createChild({
+		const child = await delegationServiceFor(asWorkspaceId("ws-trashfail")).createChild({
 			parent: sessionId,
 			visibility: "hidden",
 			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
@@ -674,7 +701,7 @@ test("a failed deletion recovers the usage of a child that settled while trash w
 		});
 		const run = child.runQueued("Long background job.");
 		await waitFor(() => child.snapshot?.status === "running");
-		const deleting = deleteSession(sessionId, "ws-trashfail", cwd);
+		const deleting = deleteSession(sessionId, asWorkspaceId("ws-trashfail"), cwd);
 		await trashStarted;
 		release();
 		await run;
@@ -707,7 +734,7 @@ function twoStepChildResponses(): { release: () => void } {
 	return { release };
 }
 
-function scoutChild(workspaceId: string, parent: string) {
+function scoutChild(workspaceId: WorkspaceId, parent: string) {
 	return delegationServiceFor(workspaceId).createChild({
 		parent,
 		visibility: "hidden",
@@ -728,7 +755,7 @@ const tokenCounts = (usage: {
 	cacheWrite: usage.cacheWrite,
 });
 
-async function inMemoryParent(workspaceId: string) {
+async function inMemoryParent(workspaceId: WorkspaceId) {
 	let manager: SessionManager | undefined;
 	const { sessionId } = await createSessionWith(
 		(dir) => {
@@ -744,10 +771,10 @@ async function inMemoryParent(workspaceId: string) {
 }
 
 test("a running subagent's spend reaches its parent after each response, before the run ends", async () => {
-	const { sessionId, manager, usageEntries } = await inMemoryParent("ws-live");
+	const { sessionId, manager, usageEntries } = await inMemoryParent(asWorkspaceId("ws-live"));
 	const { release } = twoStepChildResponses();
 	try {
-		const child = await scoutChild("ws-live", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-live"), sessionId);
 		const run = child.runQueued("Two steps.");
 		await waitFor(() => usageEntries().length > 0);
 		expect(child.snapshot?.status).toBe("running");
@@ -762,7 +789,9 @@ test("a running subagent's spend reaches its parent after each response, before 
 		const recorded = usageEntries().length;
 		expect(recorded).toBeGreaterThanOrEqual(2);
 		await child.dispose();
-		await reconcileSessionSubagentUsage("ws-live", sessionId, () => manager.getEntries());
+		await reconcileSessionSubagentUsage(asWorkspaceId("ws-live"), sessionId, () =>
+			manager.getEntries(),
+		);
 		expect(usageEntries()).toHaveLength(recorded);
 	} finally {
 		release();
@@ -771,11 +800,11 @@ test("a running subagent's spend reaches its parent after each response, before 
 });
 
 test("a live-recorded run stays exact after its chat is reopened", async () => {
-	const { cwd, sessionId, file } = await persistedParent("ws-livereopen");
+	const { cwd, sessionId, file } = await persistedParent(asWorkspaceId("ws-livereopen"));
 	const { release } = twoStepChildResponses();
 	let reopened: SessionManager | undefined;
 	try {
-		const child = await scoutChild("ws-livereopen", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-livereopen"), sessionId);
 		const run = child.runQueued("Two steps.");
 		await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
 		release();
@@ -790,9 +819,11 @@ test("a live-recorded run stays exact after its chat is reopened", async () => {
 				reopened = SessionManager.open(file);
 				return reopened;
 			},
-			{ cwd, workspaceId: "ws-livereopen" },
+			{ cwd, workspaceId: asWorkspaceId("ws-livereopen") },
 		);
-		await reconcileSessionSubagentUsage("ws-livereopen", sessionId, () => reopened?.getEntries());
+		await reconcileSessionSubagentUsage(asWorkspaceId("ws-livereopen"), sessionId, () =>
+			reopened?.getEntries(),
+		);
 		expect(reopened?.getEntries().filter((entry) => entry.type === "usage")).toHaveLength(recorded);
 		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
 	} finally {
@@ -804,7 +835,9 @@ test("a live-recorded run stays exact after its chat is reopened", async () => {
 test.skipIf(!writesCanBeDenied)(
 	"a failed progress write is carried by the terminal write and not recounted after reopening",
 	async () => {
-		const { cwd, sessionId, manager, file } = await persistedParent("ws-progressfail");
+		const { cwd, sessionId, manager, file } = await persistedParent(
+			asWorkspaceId("ws-progressfail"),
+		);
 		const appendUsage = manager.appendUsage.bind(manager);
 		let attempts = 0;
 		manager.appendUsage = (...args) => {
@@ -813,7 +846,7 @@ test.skipIf(!writesCanBeDenied)(
 		};
 		const { release } = twoStepChildResponses();
 		try {
-			const child = await scoutChild("ws-progressfail", sessionId);
+			const child = await scoutChild(asWorkspaceId("ws-progressfail"), sessionId);
 			chmodSync(file, 0o444);
 			const run = child.runQueued("Two steps.");
 			await waitFor(() => attempts > 0);
@@ -828,7 +861,7 @@ test.skipIf(!writesCanBeDenied)(
 
 			await createSessionWith(() => SessionManager.open(file), {
 				cwd,
-				workspaceId: "ws-progressfail",
+				workspaceId: asWorkspaceId("ws-progressfail"),
 			});
 			await waitFor(() => getSessionStats(sessionId).tokens.total === totalTokens(usage));
 			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
@@ -842,10 +875,10 @@ test.skipIf(!writesCanBeDenied)(
 );
 
 test("sequential runs of one child each record only their own spend", async () => {
-	const { sessionId } = await inMemoryParent("ws-reuse");
+	const { sessionId } = await inMemoryParent(asWorkspaceId("ws-reuse"));
 	faux.setResponses([fauxAssistantMessage("FIRST"), fauxAssistantMessage("SECOND")]);
 	try {
-		const child = await scoutChild("ws-reuse", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-reuse"), sessionId);
 		const first = (await child.runQueued("One.")).details.usage;
 		const second = (await child.runQueued("Two.")).details.usage;
 		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual({
@@ -860,7 +893,7 @@ test("sequential runs of one child each record only their own spend", async () =
 });
 
 test("a dropped progress write is carried by the run's remainder", async () => {
-	const { sessionId, manager } = await inMemoryParent("ws-dropprogress");
+	const { sessionId, manager } = await inMemoryParent(asWorkspaceId("ws-dropprogress"));
 	const appendUsage = manager.appendUsage.bind(manager);
 	let failures = 1;
 	manager.appendUsage = (...args) => {
@@ -869,7 +902,7 @@ test("a dropped progress write is carried by the run's remainder", async () => {
 	};
 	faux.setResponses([fauxAssistantMessage("DONE")]);
 	try {
-		const child = await scoutChild("ws-dropprogress", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-dropprogress"), sessionId);
 		const { usage } = (await child.runQueued("One.")).details;
 		expect(failures).toBe(-1);
 		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
@@ -880,7 +913,7 @@ test("a dropped progress write is carried by the run's remainder", async () => {
 });
 
 test("a dropped terminal write is recovered by reconciliation, never by the child's next run", async () => {
-	const { sessionId, manager } = await inMemoryParent("ws-dropterminal");
+	const { sessionId, manager } = await inMemoryParent(asWorkspaceId("ws-dropterminal"));
 	const appendUsage = manager.appendUsage.bind(manager);
 	let failing = true;
 	manager.appendUsage = (...args) => {
@@ -889,7 +922,7 @@ test("a dropped terminal write is recovered by reconciliation, never by the chil
 	};
 	faux.setResponses([fauxAssistantMessage("FIRST"), fauxAssistantMessage("SECOND")]);
 	try {
-		const child = await scoutChild("ws-dropterminal", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-dropterminal"), sessionId);
 		const first = (await child.runQueued("One.")).details.usage;
 		failing = false;
 		const second = (await child.runQueued("Two.")).details.usage;
@@ -898,7 +931,9 @@ test("a dropped terminal write is recovered by reconciliation, never by the chil
 		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(second));
 
 		await child.dispose();
-		await reconcileSessionSubagentUsage("ws-dropterminal", sessionId, () => manager.getEntries());
+		await reconcileSessionSubagentUsage(asWorkspaceId("ws-dropterminal"), sessionId, () =>
+			manager.getEntries(),
+		);
 		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual({
 			input: first.input + second.input,
 			output: first.output + second.output,
@@ -924,15 +959,15 @@ test("a failed deletion after partial progress records only the missing remainde
 		reportTrashStarted();
 		await trashOutcome;
 	});
-	const { cwd, sessionId, manager } = await persistedParent("ws-partialdelete");
+	const { cwd, sessionId, manager } = await persistedParent(asWorkspaceId("ws-partialdelete"));
 	const usageEntries = () => manager.getEntries().filter((entry) => entry.type === "usage");
 	const { release } = twoStepChildResponses();
 	try {
-		const child = await scoutChild("ws-partialdelete", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-partialdelete"), sessionId);
 		const run = child.runQueued("Two steps.");
 		await waitFor(() => usageEntries().length > 0);
 		const partial = usageEntries().length;
-		const deleting = deleteSession(sessionId, "ws-partialdelete", cwd);
+		const deleting = deleteSession(sessionId, asWorkspaceId("ws-partialdelete"), cwd);
 		await trashStarted;
 		release();
 		const { usage } = (await run).details;
@@ -951,7 +986,7 @@ test("a failed deletion after partial progress records only the missing remainde
 });
 
 test("emergency disposal never lets a late subagent record recreate a trashed transcript", async () => {
-	const { cwd, sessionId, file } = await persistedParent("ws-emergency");
+	const { cwd, sessionId, file } = await persistedParent(asWorkspaceId("ws-emergency"));
 	setTrashImplementationForTests(async (input) => {
 		for (const path of typeof input === "string" ? [input] : input) {
 			renameSync(path, `${path}.trashed`);
@@ -959,10 +994,10 @@ test("emergency disposal never lets a late subagent record recreate a trashed tr
 	});
 	const { release } = gatedChildResponse();
 	try {
-		const child = await scoutChild("ws-emergency", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-emergency"), sessionId);
 		const run = child.runQueued("Long background job.");
 		await waitFor(() => child.snapshot?.status === "running");
-		const deleting = deleteSession(sessionId, "ws-emergency", cwd);
+		const deleting = deleteSession(sessionId, asWorkspaceId("ws-emergency"), cwd);
 		await waitFor(() => !existsSync(file) && liveParentContext(sessionId) === undefined);
 		disposeAllSessions();
 		release();
@@ -976,10 +1011,10 @@ test("emergency disposal never lets a late subagent record recreate a trashed tr
 });
 
 test("spend dropped by emergency disposal during a close is recovered when the chat reopens", async () => {
-	const { cwd, sessionId, file } = await persistedParent("ws-closeemergency");
+	const { cwd, sessionId, file } = await persistedParent(asWorkspaceId("ws-closeemergency"));
 	const { release } = gatedChildResponse();
 	try {
-		const child = await scoutChild("ws-closeemergency", sessionId);
+		const child = await scoutChild(asWorkspaceId("ws-closeemergency"), sessionId);
 		const run = child.runQueued("Long background job.");
 		await waitFor(() => child.snapshot?.status === "running");
 		const closed = removeSession(sessionId);
@@ -997,7 +1032,7 @@ test("spend dropped by emergency disposal during a close is recovered when the c
 
 		await createSessionWith(() => SessionManager.open(file), {
 			cwd,
-			workspaceId: "ws-closeemergency",
+			workspaceId: asWorkspaceId("ws-closeemergency"),
 		});
 		await waitFor(() => getSessionStats(sessionId).tokens.total === totalTokens(usage));
 	} finally {
@@ -1008,7 +1043,7 @@ test("spend dropped by emergency disposal during a close is recovered when the c
 
 test("owned children remain inspectable before and during their first provider response", async () => {
 	const cwd = tmpDir("trdel-prefile-");
-	const workspaceId = "ws-prefile";
+	const workspaceId = asWorkspaceId("ws-prefile");
 	const { sessionId } = await createSession({ cwd, workspaceId });
 	const service = delegationServiceFor(workspaceId);
 	const child = await service.createChild({
@@ -1018,7 +1053,7 @@ test("owned children remain inspectable before and during their first provider r
 		session: {},
 	});
 	expect(existsSync(child.record.sessionFile)).toBe(false);
-	expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toEqual({
+	expect(readChildTranscript(workspaceId, sessionId, asSessionId(child.sessionId))).toEqual({
 		messages: [],
 		status: "queued",
 	});
@@ -1027,28 +1062,32 @@ test("owned children remain inspectable before and during their first provider r
 		[workspaceId, "foreign-parent", child.sessionId],
 		[workspaceId, sessionId, "unknown-child"],
 	] as const)
-		expect(() => readChildTranscript(workspace, parent, id)).toThrow("No transcript found");
+		expect(() =>
+			readChildTranscript(asWorkspaceId(workspace), asSessionId(parent), asSessionId(id)),
+		).toThrow("No transcript found");
 	const { release } = gatedChildResponse();
 	const run = child.runQueued("Wait for the provider.");
 	try {
 		await waitFor(() => child.snapshot?.status === "running");
 		expect(existsSync(child.record.sessionFile)).toBe(true);
-		expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toMatchObject({
-			messages: [
-				{
-					role: "user",
-					content: [{ type: "text", text: "Wait for the provider." }],
-				},
-			],
-			status: "running",
-		});
+		expect(readChildTranscript(workspaceId, sessionId, asSessionId(child.sessionId))).toMatchObject(
+			{
+				messages: [
+					{
+						role: "user",
+						content: [{ type: "text", text: "Wait for the provider." }],
+					},
+				],
+				status: "running",
+			},
+		);
 	} finally {
 		release();
 		await run;
 	}
-	expect(JSON.stringify(readChildTranscript(workspaceId, sessionId, child.sessionId))).toContain(
-		"GATED_DONE",
-	);
+	expect(
+		JSON.stringify(readChildTranscript(workspaceId, sessionId, asSessionId(child.sessionId))),
+	).toContain("GATED_DONE");
 	const canceled = await service.createChild({
 		parent: sessionId,
 		info: { createdBy: "test" },
@@ -1057,20 +1096,20 @@ test("owned children remain inspectable before and during their first provider r
 	});
 	await canceled.runQueued("Never sent.", { signal: AbortSignal.abort() });
 	expect(existsSync(canceled.record.sessionFile)).toBe(false);
-	expect(readChildTranscript(workspaceId, sessionId, canceled.sessionId)).toEqual({
+	expect(readChildTranscript(workspaceId, sessionId, asSessionId(canceled.sessionId))).toEqual({
 		messages: [],
 		status: "aborted",
 	});
 	await removeSession(sessionId);
-	expect(() => readChildTranscript(workspaceId, sessionId, canceled.sessionId)).toThrow(
-		"No transcript found",
-	);
+	expect(() =>
+		readChildTranscript(workspaceId, sessionId, asSessionId(canceled.sessionId)),
+	).toThrow("No transcript found");
 });
 
 test("deleteSession resolves only after its child cascade settles", async () => {
 	const cwd = tmpDir("trdel-await-");
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-await" });
-	const service = delegationServiceFor("ws-await");
+	const { sessionId } = await createSession({ cwd, workspaceId: asWorkspaceId("ws-await") });
+	const service = delegationServiceFor(asWorkspaceId("ws-await"));
 	const { release } = gatedChildResponse();
 	const child = await service.createChild({
 		parent: sessionId,
@@ -1082,7 +1121,7 @@ test("deleteSession resolves only after its child cascade settles", async () => 
 	await waitFor(() => child.snapshot?.status === "running");
 
 	let deleted = false;
-	const done = deleteSession(sessionId, "ws-await", cwd).then(() => {
+	const done = deleteSession(sessionId, asWorkspaceId("ws-await"), cwd).then(() => {
 		deleted = true;
 	});
 	await waitFor(() => liveParentContext(sessionId) === undefined);
@@ -1096,8 +1135,8 @@ test("deleteSession resolves only after its child cascade settles", async () => 
 
 test("workspace archival awaits in-flight delete transactions before deleting the store", async () => {
 	const cwd = tmpDir("trdel-arch-");
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-arch" });
-	const service = delegationServiceFor("ws-arch");
+	const { sessionId } = await createSession({ cwd, workspaceId: asWorkspaceId("ws-arch") });
+	const service = delegationServiceFor(asWorkspaceId("ws-arch"));
 	const { release } = gatedChildResponse();
 	const child = await service.createChild({
 		parent: sessionId,
@@ -1114,9 +1153,9 @@ test("workspace archival awaits in-flight delete transactions before deleting th
 			storeAliveAtCascadeEnd = existsSync(child.record.sessionFile);
 		}
 	});
-	const done = deleteSession(sessionId, "ws-arch", cwd);
+	const done = deleteSession(sessionId, asWorkspaceId("ws-arch"), cwd);
 	await waitFor(() => liveParentContext(sessionId) === undefined);
-	const archived = removeWorkspaceSessions("ws-arch", cwd);
+	const archived = removeWorkspaceSessions(asWorkspaceId("ws-arch"), cwd);
 	release();
 	await Promise.all([done, archived, run]);
 	unsubscribe();
@@ -1125,8 +1164,8 @@ test("workspace archival awaits in-flight delete transactions before deleting th
 
 test("graceful shutdown waits for a background child cascade", async () => {
 	const cwd = tmpDir("trdel-shutdown-");
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-shutdown" });
-	const service = delegationServiceFor("ws-shutdown");
+	const { sessionId } = await createSession({ cwd, workspaceId: asWorkspaceId("ws-shutdown") });
+	const service = delegationServiceFor(asWorkspaceId("ws-shutdown"));
 	const { release } = gatedChildResponse();
 	const child = await service.createChild({
 		parent: sessionId,
@@ -1147,8 +1186,11 @@ test("graceful shutdown waits for a background child cascade", async () => {
 
 test("children follow their parent's retained runtime generation across a flip", async () => {
 	const cwdOld = tmpDir("trdel-flip-old-");
-	const { sessionId: oldParent } = await createSession({ cwd: cwdOld, workspaceId: "ws-flip" });
-	const service = delegationServiceFor("ws-flip");
+	const { sessionId: oldParent } = await createSession({
+		cwd: cwdOld,
+		workspaceId: asWorkspaceId("ws-flip"),
+	});
+	const service = delegationServiceFor(asWorkspaceId("ws-flip"));
 	const gen2 = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
 		modelsPath: null,
@@ -1189,8 +1231,11 @@ test("children follow their parent's retained runtime generation across a flip",
 		await oldChild.dispose();
 
 		const cwdNew = tmpDir("trdel-flip-new-");
-		({ sessionId: newParent } = await createSession({ cwd: cwdNew, workspaceId: "ws-flip" }));
-		expect(liveParentContext(newParent)?.modelRuntime).toBe(gen2);
+		({ sessionId: newParent } = await createSession({
+			cwd: cwdNew,
+			workspaceId: asWorkspaceId("ws-flip"),
+		}));
+		expect(liveParentContext(asSessionId(newParent))?.modelRuntime).toBe(gen2);
 		faux.setResponses([fauxAssistantMessage("NEW_GEN_DONE")]);
 		const newChild = await service.createChild({
 			parent: newParent,
@@ -1204,7 +1249,7 @@ test("children follow their parent's retained runtime generation across a flip",
 	} finally {
 		configurePiRuntime(baseRuntime);
 		await removeSession(oldParent);
-		if (newParent) await removeSession(newParent);
+		if (newParent) await removeSession(asSessionId(newParent));
 	}
 });
 
@@ -1240,7 +1285,7 @@ test("a child without extensions reads images raw and still gets the oversized-i
 			},
 		],
 	});
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-image" });
+	const { sessionId } = await createSession({ cwd, workspaceId: asWorkspaceId("ws-image") });
 	let toolResult: unknown;
 	faux.setResponses([
 		fauxAssistantMessage(fauxToolCall("read", { path: "wide.png" })),
@@ -1250,7 +1295,7 @@ test("a child without extensions reads images raw and still gets the oversized-i
 		},
 	]);
 	try {
-		const child = await delegationServiceFor("ws-image").createChild({
+		const child = await delegationServiceFor(asWorkspaceId("ws-image")).createChild({
 			parent: sessionId,
 			visibility: "hidden",
 			info: { createdBy: "tool:Agent", roleName: "custom", roleSource: "project" },
@@ -1294,10 +1339,16 @@ test("a child on a provider an extension registered loads that extension from it
 }
 `,
 	);
-	const sessionIds: string[] = [];
+	const sessionIds: SessionId[] = [];
 	try {
-		const first = await createSession({ cwd: tmpDir("trdel-owner-"), workspaceId: "ws-owner" });
-		const second = await createSession({ cwd: tmpDir("trdel-owner-"), workspaceId: "ws-owner" });
+		const first = await createSession({
+			cwd: tmpDir("trdel-owner-"),
+			workspaceId: asWorkspaceId("ws-owner"),
+		});
+		const second = await createSession({
+			cwd: tmpDir("trdel-owner-"),
+			workspaceId: asWorkspaceId("ws-owner"),
+		});
 		sessionIds.push(first.sessionId, second.sessionId);
 		const ownerPaths = liveParentContext(first.sessionId)?.providerExtensionPaths?.("owned");
 		expect(ownerPaths).toHaveLength(1);
@@ -1313,7 +1364,7 @@ test("a child on a provider an extension registered loads that extension from it
 						? fauxAssistantMessage("SERVED")
 						: fauxAssistantMessage("", { stopReason: "error", errorMessage: "unobserved session" }),
 			]);
-			const child = await delegationServiceFor("ws-owner").createChild({
+			const child = await delegationServiceFor(asWorkspaceId("ws-owner")).createChild({
 				parent,
 				visibility: "hidden",
 				info: { createdBy: "tool:Agent", roleName: "worker", roleSource: "builtin" },
@@ -1326,7 +1377,10 @@ test("a child on a provider an extension registered loads that extension from it
 		}
 
 		rmSync(owner);
-		const unowned = await createSession({ cwd: tmpDir("trdel-owner-"), workspaceId: "ws-owner" });
+		const unowned = await createSession({
+			cwd: tmpDir("trdel-owner-"),
+			workspaceId: asWorkspaceId("ws-owner"),
+		});
 		sessionIds.push(unowned.sessionId);
 		expect(liveParentContext(unowned.sessionId)?.providerExtensionPaths?.("owned")).toEqual([]);
 	} finally {
@@ -1345,15 +1399,15 @@ test("the host concurrency resolver binds new services and live-resizes only the
 		return limits[workspaceId] ?? 4;
 	});
 	try {
-		const a = delegationServiceFor("ws-limit-a");
-		const b = delegationServiceFor("ws-limit-b");
+		const a = delegationServiceFor(asWorkspaceId("ws-limit-a"));
+		const b = delegationServiceFor(asWorkspaceId("ws-limit-b"));
 		expect(resolved).toEqual(["ws-limit-a", "ws-limit-b"]);
 		const applied: Array<[string, number]> = [];
 		a.setMaxConcurrentPerParent = (slots) => applied.push(["ws-limit-a", slots]);
 		b.setMaxConcurrentPerParent = (slots) => applied.push(["ws-limit-b", slots]);
 
 		limits["ws-limit-a"] = 9;
-		refreshSubagentConcurrency("ws-limit-a");
+		refreshSubagentConcurrency(asWorkspaceId("ws-limit-a"));
 		expect(applied).toEqual([["ws-limit-a", 9]]);
 
 		limits["ws-limit-b"] = 1;
@@ -1366,14 +1420,28 @@ test("the host concurrency resolver binds new services and live-resizes only the
 });
 
 test("transcript reads accept canonical dotted session ids and reject path-like ids", () => {
-	expect(() => readChildTranscript("ws", "parent..session", "child..session")).toThrow(
-		"No transcript found",
+	expect(() =>
+		readChildTranscript(
+			asWorkspaceId("ws"),
+			asSessionId("parent..session"),
+			asSessionId("child..session"),
+		),
+	).toThrow("No transcript found");
+	expect(() =>
+		readChildTranscript(asWorkspaceId("../../etc"), asSessionId("p"), asSessionId("c")),
+	).toThrow("Invalid workspaceId");
+	expect(() =>
+		readChildTranscript(asWorkspaceId("ws"), asSessionId(".."), asSessionId("c")),
+	).toThrow("Invalid parentSessionId");
+	expect(() =>
+		readChildTranscript(asWorkspaceId("ws"), asSessionId("p"), asSessionId("x/../y")),
+	).toThrow("Invalid childSessionId");
+	expect(() =>
+		readChildTranscript(asWorkspaceId("ws"), asSessionId("a\\b"), asSessionId("c")),
+	).toThrow("Invalid parentSessionId");
+	expect(() => readChildTranscript(asWorkspaceId(""), asSessionId("p"), asSessionId("c"))).toThrow(
+		"Invalid workspaceId",
 	);
-	expect(() => readChildTranscript("../../etc", "p", "c")).toThrow("Invalid workspaceId");
-	expect(() => readChildTranscript("ws", "..", "c")).toThrow("Invalid parentSessionId");
-	expect(() => readChildTranscript("ws", "p", "x/../y")).toThrow("Invalid childSessionId");
-	expect(() => readChildTranscript("ws", "a\\b", "c")).toThrow("Invalid parentSessionId");
-	expect(() => readChildTranscript("", "p", "c")).toThrow("Invalid workspaceId");
 });
 
 test("the wire mirrors never drift: completion tag and DelegationRunDetails shape", () => {

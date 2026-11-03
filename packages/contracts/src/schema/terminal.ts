@@ -1,4 +1,5 @@
 import { arr, bool, num, opt, type Static, str } from "@earendil-works/pi-schema";
+import { WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const TerminalTabInfo = wireObj({ tabKey: str(), title: str() });
@@ -10,20 +11,20 @@ export type TerminalDataPush = Static<typeof TerminalDataPush>;
 export const TerminalExitPush = wireObj({ id: str(), exitCode: num() });
 export type TerminalExitPush = Static<typeof TerminalExitPush>;
 
-export const TerminalDetachedPush = wireObj({ workspaceId: str(), tabKey: str() });
+export const TerminalDetachedPush = wireObj({ workspaceId: WorkspaceId, tabKey: str() });
 export type TerminalDetachedPush = Static<typeof TerminalDetachedPush>;
 
-export const TerminalTabsPush = wireObj({ workspaceId: str(), tabs: arr(TerminalTabInfo) });
+export const TerminalTabsPush = wireObj({ workspaceId: WorkspaceId, tabs: arr(TerminalTabInfo) });
 export type TerminalTabsPush = Static<typeof TerminalTabsPush>;
 
 export const TERMINAL_METHODS = {
 	"terminal.reserve": {
-		params: wireObj({ workspaceId: str(), tabKey: str(), title: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, tabKey: str(), title: str() }),
 		result: wireObj({ tab: TerminalTabInfo }),
 	},
 	"terminal.attach": {
 		params: wireObj({
-			workspaceId: str(),
+			workspaceId: WorkspaceId,
 			tabKey: str(),
 			title: opt(str()),
 			cols: opt(num()),
@@ -32,13 +33,13 @@ export const TERMINAL_METHODS = {
 		result: wireObj({ id: str(), created: bool(), replay: opt(str()) }),
 	},
 	"terminal.list": {
-		params: wireObj({ workspaceId: str() }),
+		params: wireObj({ workspaceId: WorkspaceId }),
 		result: wireObj({ tabs: arr(TerminalTabInfo) }),
 	},
 	"terminal.write": { params: wireObj({ id: str(), data: str() }), result: Ack },
 	"terminal.resize": { params: wireObj({ id: str(), cols: num(), rows: num() }), result: Ack },
 	"terminal.close": {
-		params: wireObj({ workspaceId: str(), tabKey: str(), force: opt(bool()) }),
+		params: wireObj({ workspaceId: WorkspaceId, tabKey: str(), force: opt(bool()) }),
 		result: wireObj({ closed: bool(), busy: bool() }),
 	},
 };

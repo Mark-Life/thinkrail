@@ -3,10 +3,12 @@ import type {
 	McpListResult,
 	McpServerSummary,
 	McpStatusSnapshot,
+	SessionId,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 
 export interface McpRead {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	connectionGeneration: number;
 	revision: number;
 }
@@ -100,8 +102,8 @@ export function foldMcpList(
 
 export function withoutMcpSession(
 	byWorkspace: Record<string, McpWorkspaceProjection>,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): Record<string, McpWorkspaceProjection> {
 	const projection = byWorkspace[workspaceId];
 	if (!projection?.sessions[sessionId]) return byWorkspace;

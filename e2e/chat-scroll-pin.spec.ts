@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { asSessionId } from "@thinkrail/contracts";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { moveMouseToChatViewport } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -80,7 +81,7 @@ test("a following reader's streaming edge stays on the pin line after every layo
 	await installSampler(page);
 
 	const replay = textStreamReplay(
-		seeded.id,
+		asSessionId(seeded.id),
 		streamedMarkdown(title, STREAM_CHARS),
 		BASE_TS + 100_000,
 	);
@@ -124,7 +125,7 @@ test("a reader who wheels up while the edge is pinned detaches and the text unde
 	await expect(chat).toBeVisible();
 
 	const replay = textStreamReplay(
-		seeded.id,
+		asSessionId(seeded.id),
 		streamedMarkdown(title, STREAM_CHARS),
 		BASE_TS + 100_000,
 	);

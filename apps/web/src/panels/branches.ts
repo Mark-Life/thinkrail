@@ -1,10 +1,10 @@
-import type { BranchList } from "@thinkrail/contracts";
+import type { BranchList, ProjectId } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getTransport } from "../transport";
 
 const NO_BRANCHES: BranchList = { local: [], remote: [], defaultBranch: "" };
 
-async function listBranchesOrEmpty(projectId: string): Promise<BranchList | null> {
+async function listBranchesOrEmpty(projectId: ProjectId): Promise<BranchList | null> {
 	try {
 		return await getTransport().request("git.listBranches", { projectId });
 	} catch {
@@ -13,7 +13,7 @@ async function listBranchesOrEmpty(projectId: string): Promise<BranchList | null
 }
 
 export function useBranchList(
-	projectId: string | null,
+	projectId: ProjectId | null,
 	onLoaded?: (list: BranchList) => void,
 ): { branches: BranchList | null; failed: boolean; refreshing: boolean; refresh: () => void } {
 	const [branches, setBranches] = useState<BranchList | null>(null);

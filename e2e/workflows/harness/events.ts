@@ -1,5 +1,5 @@
 import "./env";
-import type { PiEvent } from "@thinkrail/contracts";
+import type { PiEvent, SessionId } from "@thinkrail/contracts";
 import { setSessionPublisher } from "@thinkrail/server/agent";
 
 export interface CapturedToolCall {
@@ -159,7 +159,7 @@ setSessionPublisher((payload) => {
 	log.push(payload.event);
 });
 
-export function captureEvents(sessionId: string): EventLog {
+export function captureEvents(sessionId: SessionId): EventLog {
 	let log = logs.get(sessionId);
 	if (!log) {
 		log = new EventLog();

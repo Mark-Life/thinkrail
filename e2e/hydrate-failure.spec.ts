@@ -1,6 +1,8 @@
 import { mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -10,7 +12,7 @@ const BASE_TS = 1_700_400_000_000;
 
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
 
-function seedOpenTodo(sessionId: string, title: string): void {
+function seedOpenTodo(sessionId: SessionId, title: string): void {
 	const contextDir = join(repoCwd(), ".thinkrail", "context");
 	mkdirSync(contextDir, { recursive: true });
 	writeFileSync(join(contextDir, ".gitignore"), "*\n");
@@ -22,7 +24,7 @@ async function failGetMessagesFor(page: Page, sessionId: () => string): Promise<
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
 			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { id?: string; method?: string; params?: { sessionId?: string } };
+			let frame: { id?: string; method?: string; params?: { sessionId?: SessionId } };
 			try {
 				frame = JSON.parse(raw) as typeof frame;
 			} catch {
@@ -58,14 +60,14 @@ test("a transcript that fails to load says so and stays in history", async ({ pa
 	});
 	unreadableId = unreadable.id;
 	utimesSync(unreadable.path, new Date(BASE_TS), new Date(BASE_TS));
-	seedOpenTodo(unreadable.id, "finish the unreadable work");
+	seedOpenTodo(asSessionId(unreadable.id), "finish the unreadable work");
 
 	const readable = seedWorkspaceSession(repoCwd(), {
 		name: "the readable chat",
 		messages: [{ role: "user", text: "load me fine", timestamp: BASE_TS + 1_000 }],
 	});
 	utimesSync(readable.path, new Date(BASE_TS + 1_000), new Date(BASE_TS + 1_000));
-	seedOpenTodo(readable.id, "finish the readable work");
+	seedOpenTodo(asSessionId(readable.id), "finish the readable work");
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);

@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { compile } from "@earendil-works/pi-schema";
-import { WS_CHANNEL_SCHEMAS, WS_CHANNELS, WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
+import {
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
+	WS_CHANNEL_SCHEMAS,
+	WS_CHANNELS,
+	WS_METHOD_SCHEMAS,
+} from "@thinkrail/contracts";
 import { handleRequest } from "./handlers";
 import { checkWsPush, checkWsResult, pushFrame } from "./wsResults";
 
@@ -64,16 +71,21 @@ test("with the switch off, a bad push is not looked at", () => {
 });
 
 test("pi.event checks only the type tag", () => {
-	const push = { sessionId: "s", event: { type: "from_a_newer_pi", anything: 1 } };
+	const push = { sessionId: asSessionId("s"), event: { type: "from_a_newer_pi", anything: 1 } };
 	expect(() => checkWsPush("pi.event", push)).not.toThrow();
-	expect(() => checkWsPush("pi.event", { sessionId: "s", event: {} })).toThrow(/\/event\/type /);
+	expect(() => checkWsPush("pi.event", { sessionId: asSessionId("s"), event: {} })).toThrow(
+		/\/event\/type /,
+	);
 });
 
 test("pushFrame sends the channel and payload the client reads", () => {
-	const frame = pushFrame(WS_CHANNELS.workspaceRemoved, { projectId: "p", id: "w" });
+	const frame = pushFrame(WS_CHANNELS.workspaceRemoved, {
+		projectId: asProjectId("p"),
+		id: asWorkspaceId("w"),
+	});
 	expect(JSON.parse(frame)).toEqual({
 		channel: "workspace.removed",
-		data: { projectId: "p", id: "w" },
+		data: { projectId: asProjectId("p"), id: "w" },
 	});
 });
 

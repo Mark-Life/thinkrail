@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
@@ -13,7 +14,7 @@ import {
 
 function details(overrides: Partial<DelegationRunDetails> = {}): DelegationRunDetails {
 	return {
-		childSessionId: "child-1",
+		childSessionId: asSessionId("child-1"),
 		roleName: "scout",
 		task: "map the repo",
 		status: "running",
@@ -47,13 +48,15 @@ function props(overrides: Partial<ToolRenderProps> = {}): ToolRenderProps {
 }
 
 test("readRunDetails narrows a result's details and rejects malformed shapes", () => {
-	expect(readRunDetails({ content: [], details: details() })?.childSessionId).toBe("child-1");
+	expect(readRunDetails({ content: [], details: details() })?.childSessionId).toBe(
+		asSessionId("child-1"),
+	);
 	expect(readRunDetails({ content: [], details: {} })).toBeUndefined();
 	expect(readRunDetails({ content: [] })).toBeUndefined();
 	expect(readRunDetails(undefined)).toBeUndefined();
 	expect(readRunDetails("plain text")).toBeUndefined();
 	expect(
-		readRunDetails({ details: { childSessionId: "c", status: "running", task: "t" } }),
+		readRunDetails({ details: { childSessionId: asSessionId("c"), status: "running", task: "t" } }),
 	).toBeUndefined();
 	expect(
 		readRunDetails({ content: [], details: details({ status: "done" as never }) }),

@@ -16,6 +16,7 @@ import type {
 	LineSpan,
 	RevertTarget,
 	Workspace,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
@@ -26,7 +27,7 @@ import { trashFile } from "../trash";
 import { revertedText, spanFits, splitLines } from "./textSplice";
 
 export interface RevertChangeParams {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	scope: GitDiffScope;
 	target: RevertTarget;
@@ -34,7 +35,7 @@ export interface RevertChangeParams {
 }
 
 export interface UndoChangeParams {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	receiptId: string;
 	expect: { modifiedHash: string | null };
 }
@@ -92,11 +93,11 @@ export function retainReceipts<T extends { before: { bytes: Uint8Array | null } 
 	return retained;
 }
 
-export function forgetWorkspaceChanges(workspaceId: string): void {
+export function forgetWorkspaceChanges(workspaceId: WorkspaceId): void {
 	rings.delete(workspaceId);
 }
 
-function workspace(workspaceId: string): Workspace {
+function workspace(workspaceId: WorkspaceId): Workspace {
 	const ws = loadWorkspaces().find((candidate) => candidate.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 	return ws;
@@ -174,7 +175,7 @@ async function trashClaim(claimed: string, abs: string): Promise<void> {
 
 function record(change: {
 	kind: ChangeReceipt["kind"];
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	before: FileState;
 	after: FileState;

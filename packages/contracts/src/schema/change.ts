@@ -1,5 +1,6 @@
 import { lit, nullable, num, oneOf, opt, type Static, str, union } from "@earendil-works/pi-schema";
 import { GitDiffScope } from "./diffScope";
+import { WorkspaceId } from "./ids";
 import { wireObj } from "./wire";
 
 export const LineSpan = wireObj({ start: num(), count: num() });
@@ -19,7 +20,7 @@ const ChangeReceiptSide = wireObj({
 
 export const ChangeReceipt = wireObj({
 	id: str(),
-	workspaceId: str(),
+	workspaceId: WorkspaceId,
 	path: str(),
 	kind: oneOf(["revert", "undo"]),
 	at: num(),
@@ -32,7 +33,7 @@ export type ChangeReceipt = Static<typeof ChangeReceipt>;
 export const CHANGE_METHODS = {
 	"change.revert": {
 		params: wireObj({
-			workspaceId: str(),
+			workspaceId: WorkspaceId,
 			path: str(),
 			scope: GitDiffScope,
 			target: RevertTarget,
@@ -42,7 +43,7 @@ export const CHANGE_METHODS = {
 	},
 	"change.undo": {
 		params: wireObj({
-			workspaceId: str(),
+			workspaceId: WorkspaceId,
 			receiptId: str(),
 			expect: wireObj({ modifiedHash: nullable(str()) }),
 		}),

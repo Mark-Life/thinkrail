@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { join, sep } from "node:path";
 import { bool, compile, obj, str } from "@earendil-works/pi-schema";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	compareResourceHistory,
 	interruptedResource,
@@ -31,8 +32,8 @@ const IndexLine = compile(ResourceRecord);
 const ArchivedLog = compile(obj({ text: str(), truncated: bool() }, { open: true }));
 
 export interface ResourceHistoryScope {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 }
 
 export interface ArchivedOutput {
@@ -201,7 +202,7 @@ export function archivedCommandOutput(
 	}
 }
 
-export function removeWorkspaceResourceHistory(workspaceId: string): void {
+export function removeWorkspaceResourceHistory(workspaceId: WorkspaceId): void {
 	if (!STORAGE_ID.test(workspaceId)) return;
 	const dir = join(resourceHistoryRoot(), workspaceId);
 	for (const key of [...cache.keys()]) if (key.startsWith(`${dir}${sep}`)) cache.delete(key);

@@ -1,4 +1,6 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
+	asSessionId,
 	type BackgroundCommandOutputResult,
 	type BackgroundCommandStatus,
 	type BackgroundCommandSummary,
@@ -17,7 +19,7 @@ import {
 	tallyResources,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import type { BackgroundCommands } from "pi-background-commands";
+import type { BackgroundCommandSnapshot, BackgroundCommands } from "pi-background-commands";
 import type { ChildHandle, DelegationService, LifecycleEvent } from "pi-delegation";
 import {
 	archivedCommandOutput,
@@ -29,11 +31,14 @@ import { withSessionResources } from "./agentSessionManager";
 import { delegationServiceFor, INTERRUPTED_ABORT_REASON, stopSessionChildren } from "./delegation";
 import { mcpResourceSummaries } from "./mcpSessions";
 
-let publish: (payload: { workspaceId: string; sessionId: string }) => void = () => {};
+let publish: (payload: { workspaceId: WorkspaceId; sessionId: SessionId }) => void = () => {};
 export function setSessionResourcesPublisher(fn: typeof publish): void {
 	publish = fn;
 }
-export function publishSessionResourcesChanged(workspaceId: string, sessionId: string): void {
+export function publishSessionResourcesChanged(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+): void {
 	publish({ workspaceId, sessionId });
 }
 
@@ -42,9 +47,9 @@ function unavailable(): CodedError {
 }
 
 function childFor(
-	workspaceId: string,
-	parentSessionId: string,
-	childSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
+	childSessionId: SessionId,
 ): ChildHandle {
 	const child = delegationServiceFor(workspaceId).findChild(childSessionId);
 	if (
@@ -58,12 +63,12 @@ function childFor(
 
 function subagentSummary(
 	{ record, snapshot }: ChildHandle,
-	parentSessionId: string,
+	parentSessionId: SessionId,
 ): SubagentResourceSummary | undefined {
 	if (!snapshot) return undefined;
 	const live = snapshot.status === "running" || snapshot.status === "queued";
 	return {
-		childSessionId: record.sessionId,
+		childSessionId: asSessionId(record.sessionId),
 		parentSessionId,
 		...(record.info.roleName !== undefined ? { roleName: record.info.roleName.slice(0, 200) } : {}),
 		task: snapshot.task.slice(0, 2000),
@@ -81,7 +86,7 @@ function subagentSummary(
 	};
 }
 
-function ownedChildren(workspaceId: string, parentSessionId: string): ResourceRecord[] {
+function ownedChildren(workspaceId: WorkspaceId, parentSessionId: SessionId): ResourceRecord[] {
 	return delegationServiceFor(workspaceId)
 		.childrenOf(parentSessionId)
 		.flatMap((child): ResourceRecord[] => {
@@ -92,12 +97,18 @@ function ownedChildren(workspaceId: string, parentSessionId: string): ResourceRe
 		});
 }
 
+function commandSummary(snapshot: BackgroundCommandSnapshot) {
+	return { ...snapshot, sessionId: asSessionId(snapshot.sessionId) };
+}
+
 function commandRecords(commands: BackgroundCommands): ResourceRecord[] {
-	return commands.list().map((summary): ResourceRecord => ({ kind: "command", summary }));
+	return commands
+		.list()
+		.map((snapshot): ResourceRecord => ({ kind: "command", summary: commandSummary(snapshot) }));
 }
 
 function historyOf(
-	scope: { workspaceId: string; sessionId: string },
+	scope: { workspaceId: WorkspaceId; sessionId: SessionId },
 	kind: ResourceKind,
 	current: readonly ResourceRecord[],
 ) {
@@ -119,14 +130,17 @@ function historyOf(
 }
 
 function commandHistory(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	commands: BackgroundCommands,
 ): ReturnType<typeof historyOf> {
 	return historyOf({ workspaceId, sessionId }, "command", commandRecords(commands));
 }
 
-function subagentHistory(workspaceId: string, sessionId: string): ReturnType<typeof historyOf> {
+function subagentHistory(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+): ReturnType<typeof historyOf> {
 	return historyOf({ workspaceId, sessionId }, "subagent", ownedChildren(workspaceId, sessionId));
 }
 
@@ -139,8 +153,8 @@ function subagentSummaries(records: readonly ResourceRecord[]): SubagentResource
 }
 
 export function getSessionResources(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	cwd: string,
 ): Promise<SessionResources> {
 	return withSessionResources(workspaceId, sessionId, cwd, (commands) => {
@@ -165,8 +179,8 @@ export function getSessionResources(
 }
 
 export function getResourceHistoryPage(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	cwd: string,
 	request: { kind: ResourceKind; before?: ResourceHistoryCursor; limit?: number },
 ): Promise<ResourceHistoryPage> {
@@ -193,15 +207,17 @@ export function getResourceHistoryPage(
 }
 
 export function readBackgroundCommandOutput(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	commandId: string,
 	cwd: string,
 ): Promise<BackgroundCommandOutputResult> {
 	return withSessionResources(workspaceId, sessionId, cwd, (commands) => {
 		const handle = commands.find(commandId);
 		const output = handle?.output;
-		if (handle && output) return { available: true, command: handle.snapshot, output };
+		if (handle && output) {
+			return { available: true, command: commandSummary(handle.snapshot), output };
+		}
 		const archived = commandHistory(workspaceId, sessionId, commands).finished.find(
 			(record) => resourceRecordId(record) === commandId,
 		);
@@ -213,8 +229,8 @@ export function readBackgroundCommandOutput(
 }
 
 export function archiveCommandHistory(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	commands: BackgroundCommands,
 	closing: () => boolean,
 ): { finish: () => void } {
@@ -233,7 +249,9 @@ export function archiveCommandHistory(
 			const cutOff = snapshot.status === "stopped" && closing() && !requestedStops.has(snapshot.id);
 			const record: ResourceRecord = {
 				kind: "command",
-				summary: cutOff ? { ...snapshot, interrupted: true } : snapshot,
+				summary: cutOff
+					? { ...commandSummary(snapshot), interrupted: true }
+					: commandSummary(snapshot),
 			};
 			recordResource(
 				scope,
@@ -255,10 +273,10 @@ export function archiveCommandHistory(
 			finished = true;
 			unsubscribe();
 			for (const snapshot of commands.list()) {
-				if (!isLiveResource({ kind: "command", summary: snapshot })) continue;
+				if (!isLiveResource({ kind: "command", summary: commandSummary(snapshot) })) continue;
 				recordResource(
 					scope,
-					{ kind: "command", summary: { ...snapshot, interrupted: true } },
+					{ kind: "command", summary: { ...commandSummary(snapshot), interrupted: true } },
 					commands.find(snapshot.id)?.output,
 				);
 			}
@@ -267,7 +285,7 @@ export function archiveCommandHistory(
 }
 
 export function archiveSubagentRun(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	service: DelegationService,
 	event: LifecycleEvent,
 ): void {
@@ -275,13 +293,13 @@ export function archiveSubagentRun(
 		return;
 	const child = service.findChild(event.sessionId);
 	if (!child || child.record.scope !== workspaceId) return;
-	const summary = subagentSummary(child, event.parentSessionId);
+	const summary = subagentSummary(child, asSessionId(event.parentSessionId));
 	if (!summary) return;
 	const terminal = event.type === "run-terminal";
 	const cutOff =
 		terminal && summary.status === "aborted" && summary.abortReason === INTERRUPTED_ABORT_REASON;
 	recordResource(
-		{ workspaceId, sessionId: event.parentSessionId },
+		{ workspaceId, sessionId: asSessionId(event.parentSessionId) },
 		{
 			kind: "subagent",
 			summary: {
@@ -294,8 +312,8 @@ export function archiveSubagentRun(
 }
 
 export function stopBackgroundCommand(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	commandId: string,
 	cwd: string,
 ): Promise<void> {
@@ -307,9 +325,9 @@ export function stopBackgroundCommand(
 }
 
 export function stopSubagent(
-	workspaceId: string,
-	parentSessionId: string,
-	childSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
+	childSessionId: SessionId,
 	cwd: string,
 ): Promise<void> {
 	return withSessionResources(workspaceId, parentSessionId, cwd, () => {
@@ -320,8 +338,8 @@ export function stopSubagent(
 }
 
 export function stopAllSubagents(
-	workspaceId: string,
-	parentSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
 	cwd: string,
 ): Promise<number> {
 	return withSessionResources(

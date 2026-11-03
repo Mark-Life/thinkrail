@@ -3,7 +3,14 @@ import {
 	RiRobot2Line as Robot,
 	RiTerminalBoxLine as Terminal,
 } from "@remixicon/react";
-import type { OpenBranchReview, OpenPrResult, PrBodySource, Workspace } from "@thinkrail/contracts";
+import type {
+	OpenBranchReview,
+	OpenPrResult,
+	PrBodySource,
+	SessionId,
+	Workspace,
+} from "@thinkrail/contracts";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -60,7 +67,7 @@ type Retry =
 
 export interface ShipRunnerOptions {
 	workspace: Workspace | null;
-	sessionId: string | null;
+	sessionId: SessionId | null;
 	title?: string;
 	bodySource?: PrBodySource;
 	openReview: OpenBranchReview | null;
@@ -85,7 +92,7 @@ export interface ShipRunner {
 export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	const t = useT();
 	const { workspace, sessionId, openReview, noteOpenReview, refresh } = options;
-	const workspaceId = workspace?.id ?? "";
+	const workspaceId = workspace?.id ?? asWorkspaceId("");
 	const branch = workspace?.branch ?? "";
 	const pushToast = useAppStore((s) => s.pushToast);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);

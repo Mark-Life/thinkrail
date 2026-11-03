@@ -1,4 +1,5 @@
 import {
+	asSessionId,
 	type BackgroundCommandCompletionDetails,
 	isDelegationRunDetails,
 	type SubagentCompletionDetails,
@@ -50,7 +51,7 @@ function pulledCommand(raw: unknown): BackgroundCommandCompletionDetails | undef
 	const shown = excerpt(output.text);
 	const result: BackgroundCommandCompletionDetails = {
 		id,
-		sessionId,
+		sessionId: asSessionId(sessionId),
 		name,
 		status,
 		startedAt,

@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { INITIAL_TERMINAL_TAB_KEY, type Workspace } from "@thinkrail/contracts";
+import {
+	asProjectId,
+	asWorkspaceId,
+	INITIAL_TERMINAL_TAB_KEY,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { loadWorkspaces, saveWorkspaces } from "../persistence";
 import { listTerminals, resetTerminalState } from "../terminal";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -12,8 +17,8 @@ const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 function pendingWorkspace(): Workspace {
 	return {
-		id: "workspace",
-		projectId: "project",
+		id: asWorkspaceId("workspace"),
+		projectId: asProjectId("project"),
 		name: "Workspace",
 		branch: "workspace",
 		worktreePath: join(dataDir, "worktree"),

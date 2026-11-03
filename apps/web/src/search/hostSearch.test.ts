@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
 	MATCH_TIER,
 	type SearchGroup,
 	type SearchHit,
@@ -55,7 +58,7 @@ const input = (text: string, kinds: SearchGroup["kind"][] = ["file"]) => ({
 	enabled: true,
 	text,
 	kinds,
-	context: { projectId: "p1" },
+	context: { projectId: asProjectId("p1") },
 });
 
 const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
@@ -64,8 +67,8 @@ const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
 		title: id,
 		tier: MATCH_TIER.prefix,
 		score: 1,
-		projectId: "p1",
-		workspaceId: "w1",
+		projectId: asProjectId("p1"),
+		workspaceId: asWorkspaceId("w1"),
 	};
 	switch (kind) {
 		case "file":
@@ -73,9 +76,9 @@ const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
 		case "spec":
 			return { ...base, kind, path: id, specId: id, size: 1 };
 		case "plan":
-			return { ...base, kind, sessionId: id };
+			return { ...base, kind, sessionId: asSessionId(id) };
 		case "transcript":
-			return { ...base, kind, sessionId: id, messageIndex: 0, anchorText: id };
+			return { ...base, kind, sessionId: asSessionId(id), messageIndex: 0, anchorText: id };
 	}
 };
 
@@ -381,7 +384,12 @@ describe("host previews", () => {
 			() => generation,
 			() => ready,
 		);
-		const target = { kind: "chat" as const, sessionId: "s1", messageIndex: 2, anchorText: "the" };
+		const target = {
+			kind: "chat" as const,
+			sessionId: asSessionId("s1"),
+			messageIndex: 2,
+			anchorText: "the",
+		};
 		expect(await loader.load(target)).toEqual({ kind: "unavailable" });
 		answer = "missing";
 		expect(await loader.load(target)).toEqual({ kind: "unavailable" });

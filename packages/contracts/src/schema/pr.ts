@@ -9,6 +9,7 @@ import {
 	type Static,
 	str,
 } from "@earendil-works/pi-schema";
+import { SessionId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const BranchReviewState = oneOf(["open", "merged", "closed"]);
@@ -130,7 +131,7 @@ export const OpenPrResult = wireObj({
 export type OpenPrResult = Static<typeof OpenPrResult>;
 
 const PrActionParams = {
-	workspaceId: str(),
+	workspaceId: WorkspaceId,
 	branch: str(),
 	number: num(),
 };
@@ -138,8 +139,8 @@ const PrActionParams = {
 export const PR_METHODS = {
 	"pr.preview": {
 		params: wireObj({
-			workspaceId: str(),
-			sessionId: opt(str()),
+			workspaceId: WorkspaceId,
+			sessionId: opt(SessionId),
 			title: opt(str()),
 			source: opt(PrBodySource),
 			template: opt(str()),
@@ -147,7 +148,7 @@ export const PR_METHODS = {
 		result: PrPreview,
 	},
 	"pr.generate": {
-		params: wireObj({ workspaceId: str(), sessionId: opt(str()), template: opt(str()) }),
+		params: wireObj({ workspaceId: WorkspaceId, sessionId: opt(SessionId), template: opt(str()) }),
 		result: wireObj({ body: nullable(str()) }),
 	},
 	"pr.ready": { params: wireObj(PrActionParams), result: Ack },
@@ -158,8 +159,8 @@ export const PR_METHODS = {
 	"pr.reopen": { params: wireObj(PrActionParams), result: Ack },
 	"pr.open": {
 		params: wireObj({
-			workspaceId: str(),
-			sessionId: opt(str()),
+			workspaceId: WorkspaceId,
+			sessionId: opt(SessionId),
 			branch: opt(str()),
 			title: opt(str()),
 			titleEdited: opt(bool()),

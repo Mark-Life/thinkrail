@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 import type { ResourceHost } from "../host";
@@ -118,7 +119,7 @@ export function srcsetCandidates(srcSet: string): { url: string; descriptor: str
 }
 
 export function documentComponents(
-	ctx: { workspaceId: string; path: string },
+	ctx: { workspaceId: WorkspaceId; path: string },
 	{ bytesUrl, openFile }: Pick<ResourceHost, "bytesUrl" | "openFile">,
 ): Components {
 	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {

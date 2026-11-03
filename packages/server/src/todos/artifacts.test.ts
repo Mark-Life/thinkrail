@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GitFileChange, Workspace } from "@thinkrail/contracts";
+import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { STORE_DIR, storeRel, TodoStore } from "pi-todos/core";
 import { saveWorkspaces } from "../persistence";
@@ -22,7 +23,7 @@ import {
 } from "./baselines";
 import { putReviewRecord, readReviewRecords } from "./reviews";
 
-const SESSION = "sess-artifacts";
+const SESSION = asSessionId("sess-artifacts");
 const STORE_PATH = storeRel(SESSION);
 
 test("pi-todos STORE_DIR mirrors the shared WORKSPACE_TODOS_DIR", async () => {
@@ -33,9 +34,9 @@ test("the first queued mutation starts synchronously and reserves against re-ent
 	const gate = deferred<void>();
 	const order: string[] = [];
 	let second!: Promise<void>;
-	const first = enqueueTodoMutation("queue-sync", () => {
+	const first = enqueueTodoMutation(asWorkspaceId("queue-sync"), () => {
 		order.push("first");
-		second = enqueueTodoMutation("queue-sync", () => {
+		second = enqueueTodoMutation(asWorkspaceId("queue-sync"), () => {
 			order.push("second");
 		});
 		return gate.promise;
@@ -53,7 +54,7 @@ test("the read barrier follows newer queue tails, including work enqueued during
 	const thirdGate = deferred<void>();
 	const secondStarted = deferred<void>();
 	const thirdStarted = deferred<void>();
-	const workspaceId = "queue-stable-barrier";
+	const workspaceId = asWorkspaceId("queue-stable-barrier");
 	const order: string[] = [];
 	const first = enqueueTodoMutation(workspaceId, () => firstGate.promise);
 	const barrier = settleChangeArtifacts(workspaceId).then(() => order.push("barrier"));
@@ -103,8 +104,8 @@ test("a newly active window is captured before a held queue or an earlier done i
 		);
 		saveWorkspaces([
 			{
-				id: "ws-capture",
-				projectId: "p1",
+				id: asWorkspaceId("ws-capture"),
+				projectId: asProjectId("p1"),
 				name: "capture",
 				branch: "main",
 				baseBranch: "main",
@@ -120,8 +121,8 @@ test("a newly active window is captured before a held queue or an earlier done i
 		writeFileSync(join(worktree, "before.ts"), "before\n");
 
 		const gate = deferred<void>();
-		const blocker = enqueueTodoMutation("ws-capture", () => gate.promise);
-		const reconcile = maybeAttachChangeArtifacts("ws-capture", SESSION);
+		const blocker = enqueueTodoMutation(asWorkspaceId("ws-capture"), () => gate.promise);
+		const reconcile = maybeAttachChangeArtifacts(asWorkspaceId("ws-capture"), SESSION);
 		expect(readBaselines(worktree, SESSION)[active.id]?.paths).toEqual(["before.ts"]);
 		writeFileSync(join(worktree, "after.ts"), "after\n");
 
@@ -463,7 +464,7 @@ test("commit gate: another CHAT's open window in the same worktree → no commit
 		const sibling = new TodoStore(root, "sess-other");
 		const siblingTodo = sibling.add({ title: "their step" });
 		sibling.update(siblingTodo.id, { status: "in_progress" });
-		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
+		await reconcileChangeArtifacts(sibling, root, asSessionId("sess-other"), async () => []);
 
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
@@ -484,7 +485,7 @@ test("commit gate: another CHAT's open window in the same worktree → no commit
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "mine.ts" }]);
 
 		sibling.update(siblingTodo.id, { status: "done" });
-		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
+		await reconcileChangeArtifacts(sibling, root, asSessionId("sess-other"), async () => []);
 		store.update(todo.id, { status: "in_progress" });
 		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
@@ -514,11 +515,11 @@ test("commit gate: a window that overlapped another chat is never committed, eve
 		const sibling = new TodoStore(root, "sess-other");
 		const theirs = sibling.add({ title: "their step" });
 		sibling.update(theirs.id, { status: "in_progress" });
-		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
+		await reconcileChangeArtifacts(sibling, root, asSessionId("sess-other"), async () => []);
 		expect(readBaselines(root, SESSION)[todo.id]?.shared).toBe(true);
 
 		sibling.update(theirs.id, { status: "done" });
-		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
+		await reconcileChangeArtifacts(sibling, root, asSessionId("sess-other"), async () => []);
 		store.update(todo.id, { status: "done" });
 		let called = false;
 		await reconcileChangeArtifacts(
@@ -734,7 +735,7 @@ test("a shared window never adopts in-window commits — they stay orphan, delta
 		const sibling = new TodoStore(root, "sess-other");
 		const theirs = sibling.add({ title: "their step" });
 		sibling.update(theirs.id, { status: "in_progress" });
-		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
+		await reconcileChangeArtifacts(sibling, root, asSessionId("sess-other"), async () => []);
 
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
@@ -1000,7 +1001,7 @@ test("an orphan baseline (its item removed from the plan) is pruned by the next 
 		store.remove(todo.id);
 		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		expect(readBaselines(root, SESSION)[todo.id]).toBeUndefined();
-		expect(otherSessionWindows(root, "sess-other")).toBe(false);
+		expect(otherSessionWindows(root, asSessionId("sess-other"))).toBe(false);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -1013,10 +1014,10 @@ test("removeSessionBaselines drops the whole sidecar and is idempotent", async (
 			t1: { paths: [], head: null },
 			t2: { paths: ["a.ts"], head: "h1" },
 		});
-		expect(otherSessionWindows(root, "sess-other")).toBe(true);
+		expect(otherSessionWindows(root, asSessionId("sess-other"))).toBe(true);
 		removeSessionBaselines(root, SESSION);
 		expect(existsSync(join(root, WORKSPACE_TODOS_DIR, `${SESSION}.baselines.json`))).toBe(false);
-		expect(otherSessionWindows(root, "sess-other")).toBe(false);
+		expect(otherSessionWindows(root, asSessionId("sess-other"))).toBe(false);
 		removeSessionBaselines(root, SESSION);
 	} finally {
 		rmSync(root, { recursive: true, force: true });

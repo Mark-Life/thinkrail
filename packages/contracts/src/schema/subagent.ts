@@ -1,4 +1,5 @@
 import { arr, bool, lit, num, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
+import { SessionId, WorkspaceId } from "./ids";
 import { ThinkingLevel } from "./model";
 import { TranscriptMessage } from "./transcript";
 import { Ack, wireObj } from "./wire";
@@ -7,8 +8,8 @@ export const DelegationRunStatus = oneOf(["queued", "running", "completed", "err
 export type DelegationRunStatus = Static<typeof DelegationRunStatus>;
 
 export const SubagentResourceSummary = wireObj({
-	childSessionId: str(),
-	parentSessionId: str(),
+	childSessionId: SessionId,
+	parentSessionId: SessionId,
 	roleName: opt(str()),
 	task: str(),
 	status: DelegationRunStatus,
@@ -24,12 +25,16 @@ export const SubagentResourceSummary = wireObj({
 });
 export type SubagentResourceSummary = Static<typeof SubagentResourceSummary>;
 
-const ChildTarget = wireObj({ workspaceId: str(), parentSessionId: str(), childSessionId: str() });
+const ChildTarget = wireObj({
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
+	childSessionId: SessionId,
+});
 
 export const SUBAGENT_METHODS = {
 	"subagent.stop": { params: ChildTarget, result: Ack },
 	"subagent.stopAll": {
-		params: wireObj({ workspaceId: str(), parentSessionId: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, parentSessionId: SessionId }),
 		result: wireObj({ ok: lit(true), targeted: num() }),
 	},
 	"subagent.getTranscript": {

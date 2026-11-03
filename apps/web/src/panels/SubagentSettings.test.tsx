@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import {
+	asProjectId,
+	asWorkspaceId,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
@@ -14,8 +16,8 @@ function workspace(
 	subagentMaxConcurrentOverride?: number,
 ): Workspace {
 	return {
-		id: "ws1",
-		projectId: "p1",
+		id: asWorkspaceId("ws1"),
+		projectId: asProjectId("p1"),
 		name: "Checkout flow",
 		branch: "checkout-flow",
 		worktreePath: "/tmp/checkout-flow",

@@ -1,3 +1,4 @@
+import type { ProjectId } from "@thinkrail/contracts";
 import { ResourceHostProvider, ResourcePreview } from "@thinkrail/resource-renderers";
 import { startProjectSetupChat } from "../panels/setupPrompt";
 import { useOpenProject } from "../panels/useOpenProject";
@@ -19,7 +20,7 @@ function renderFilePreview(file: PaletteFile) {
 }
 
 export interface SearchPaletteHostProps {
-	readonly onNewWorkspace: (projectId: string) => void;
+	readonly onNewWorkspace: (projectId: ProjectId) => void;
 	readonly onToggleProjectsHome: () => void;
 	readonly hasUpdateSettings: boolean;
 }

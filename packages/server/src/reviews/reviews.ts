@@ -10,7 +10,9 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
+	asWorkspaceId,
 	type GitDiffScope,
 	type ReviewAnchor,
 	type ReviewChangedPayload,
@@ -51,7 +53,7 @@ export function setReviewPublisher(fn: (payload: ReviewChangedPayload) => void):
 
 /** Re-broadcast the current review snapshot so clients refresh (e.g. after a background plan review
  * writes a verdict that isn't itself a comment change). See submodule-server-todos. */
-export async function publishReview(workspaceId: string): Promise<void> {
+export async function publishReview(workspaceId: WorkspaceId): Promise<void> {
 	publish({ workspaceId, ...(await getReviewSnapshot(workspaceId)) });
 }
 
@@ -70,7 +72,7 @@ function assertSafeId(id: string, kind: "workspace" | "review"): void {
 	if (!SAFE_ID.test(id)) throw new InvalidReviewIdError(`Invalid ${kind} id: ${id}`);
 }
 
-function reviewFile(workspaceId: string): string {
+function reviewFile(workspaceId: WorkspaceId): string {
 	assertSafeId(workspaceId, "workspace");
 	return join(reviewsDir(), `${workspaceId}.json`);
 }
@@ -79,12 +81,12 @@ function archiveRoot(): string {
 	return join(reviewsDir(), "archive");
 }
 
-function archiveWorkspaceDir(workspaceId: string): string {
+function archiveWorkspaceDir(workspaceId: WorkspaceId): string {
 	assertSafeId(workspaceId, "workspace");
 	return join(archiveRoot(), workspaceId);
 }
 
-function archiveReviewFile(workspaceId: string, reviewId: string): string {
+function archiveReviewFile(workspaceId: WorkspaceId, reviewId: string): string {
 	assertSafeId(reviewId, "review");
 	return join(archiveWorkspaceDir(workspaceId), `${reviewId}.json`);
 }
@@ -117,7 +119,7 @@ export function reviewReadFailure(error: unknown): string {
 	return "read failure";
 }
 
-function load(workspaceId: string): ReviewSnapshot | null {
+function load(workspaceId: WorkspaceId): ReviewSnapshot | null {
 	return readSnapshot(reviewFile(workspaceId));
 }
 
@@ -133,11 +135,11 @@ function saveFile(file: string, snapshot: ReviewSnapshot): void {
 	}
 }
 
-function save(workspaceId: string, snapshot: ReviewSnapshot): void {
+function save(workspaceId: WorkspaceId, snapshot: ReviewSnapshot): void {
 	saveFile(reviewFile(workspaceId), snapshot);
 }
 
-function saveArchive(workspaceId: string, snapshot: ReviewSnapshot): void {
+function saveArchive(workspaceId: WorkspaceId, snapshot: ReviewSnapshot): void {
 	saveFile(archiveReviewFile(workspaceId, snapshot.review.id), snapshot);
 }
 
@@ -164,7 +166,7 @@ function archivedReviewFiles(): string[] {
 	return files;
 }
 
-function persistAndPublish(workspaceId: string, snapshot: ReviewSnapshot): void {
+function persistAndPublish(workspaceId: WorkspaceId, snapshot: ReviewSnapshot): void {
 	save(workspaceId, snapshot);
 	publish({ workspaceId, ...snapshot });
 }
@@ -175,7 +177,7 @@ function worktreeFilePath(worktreePath: string, path: string): string {
 	return resolve(worktreePath, rel);
 }
 
-function anchorPath(workspaceId: string, path: string): string {
+function anchorPath(workspaceId: WorkspaceId, path: string): string {
 	const rel = workspaceRelativePath(getWorkspace(workspaceId).worktreePath, path);
 	if (rel === null) throw new Error("Path escapes the worktree");
 	if (rel === "") throw new Error("A comment anchor must name a file, not the worktree root.");
@@ -209,7 +211,7 @@ function readWorktreeContent(worktreePath: string, path: string): string | Uint8
 	return bytes === null ? null : capturableContent(bytes);
 }
 
-async function freshSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+async function freshSnapshot(workspaceId: WorkspaceId): Promise<ReviewSnapshot> {
 	for (;;) {
 		const ws = getWorkspace(workspaceId);
 		const diffKey = workspaceDiffKey(ws);
@@ -230,7 +232,7 @@ async function freshSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
 	}
 }
 
-function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
+function archiveRecords(workspaceId: WorkspaceId, snapshot: ReviewSnapshot): void {
 	const archived: ReviewSnapshot = {
 		review: {
 			...snapshot.review,
@@ -244,7 +246,7 @@ function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
 
 const ensuring = new Map<string, Promise<ReviewSnapshot>>();
 
-function ensureSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+function ensureSnapshot(workspaceId: WorkspaceId): Promise<ReviewSnapshot> {
 	const pending = ensuring.get(workspaceId);
 	if (pending) return pending;
 	const existing = load(workspaceId);
@@ -261,13 +263,13 @@ function ensureSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
 	return flight;
 }
 
-function openSnapshot(workspaceId: string): ReviewSnapshot | null {
+function openSnapshot(workspaceId: WorkspaceId): ReviewSnapshot | null {
 	const existing = load(workspaceId);
 	return existing?.review.status === "open" ? existing : null;
 }
 
 async function mutateSnapshot<T>(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	mutate: (snapshot: ReviewSnapshot) => T,
 ): Promise<T> {
 	const existing = openSnapshot(workspaceId);
@@ -275,7 +277,7 @@ async function mutateSnapshot<T>(
 	return mutate(await ensureSnapshot(workspaceId));
 }
 
-function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolean {
+function reanchorSnapshot(workspaceId: WorkspaceId, snapshot: ReviewSnapshot): boolean {
 	const ws = getWorkspace(workspaceId);
 	let changed = false;
 	snapshot.comments = snapshot.comments.map((comment) => {
@@ -292,14 +294,14 @@ function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolea
 	return changed;
 }
 
-export async function getReviewSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+export async function getReviewSnapshot(workspaceId: WorkspaceId): Promise<ReviewSnapshot> {
 	const snapshot = openSnapshot(workspaceId);
 	if (!snapshot) return ensureSnapshot(workspaceId);
 	if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
 	return snapshot;
 }
 
-export function reanchorWorkspace(workspaceId: string): void {
+export function reanchorWorkspace(workspaceId: WorkspaceId): void {
 	try {
 		const snapshot = openSnapshot(workspaceId);
 		if (!snapshot || snapshot.comments.length === 0) return;
@@ -307,7 +309,11 @@ export function reanchorWorkspace(workspaceId: string): void {
 	} catch {}
 }
 
-export function anchorProblem(workspaceId: string, path: string, startLine: number): string | null {
+export function anchorProblem(
+	workspaceId: WorkspaceId,
+	path: string,
+	startLine: number,
+): string | null {
 	const ws = getWorkspace(workspaceId);
 	const content = readWorktreeFile(ws.worktreePath, path);
 	if (content === null)
@@ -319,13 +325,13 @@ export function anchorProblem(workspaceId: string, path: string, startLine: numb
 }
 
 export interface AddCommentInput {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	kind: ReviewCommentKind;
 	anchor: ReviewAnchor | null;
 	body: string;
 	scope?: GitDiffScope;
 	author?: "user" | "agent";
-	origin?: { todoId: string; reviewedSha: string; sessionId: string };
+	origin?: { todoId: string; reviewedSha: string; sessionId: SessionId };
 }
 
 function captureAnchor(anchor: ReviewAnchor, content: string | Uint8Array): ReviewAnchor {
@@ -397,7 +403,7 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 	});
 }
 
-export async function setReviewGuide(workspaceId: string, guide: ReviewGuide): Promise<void> {
+export async function setReviewGuide(workspaceId: WorkspaceId, guide: ReviewGuide): Promise<void> {
 	const root = getWorkspace(workspaceId).worktreePath;
 	const readingOrder = guide.readingOrder.map((step) => ({
 		...step,
@@ -409,7 +415,7 @@ export async function setReviewGuide(workspaceId: string, guide: ReviewGuide): P
 	});
 }
 
-export async function markFileDone(workspaceId: string, path: string): Promise<void> {
+export async function markFileDone(workspaceId: WorkspaceId, path: string): Promise<void> {
 	return mutateSnapshot(workspaceId, (snapshot) => {
 		const unresolved = snapshot.comments.some(
 			(c) => reviewSessionKey(c) === path && (c.status === "draft" || c.status === "sent"),
@@ -428,7 +434,7 @@ function mustFind(snapshot: ReviewSnapshot, id: string): ReviewComment {
 }
 
 export async function updateComment(input: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	id: string;
 	body?: string;
 	status?: ReviewCommentStatus;
@@ -458,7 +464,7 @@ export async function updateComment(input: {
 	});
 }
 
-export async function deleteComment(workspaceId: string, id: string): Promise<void> {
+export async function deleteComment(workspaceId: WorkspaceId, id: string): Promise<void> {
 	return mutateSnapshot(workspaceId, (snapshot) => {
 		const comment = mustFind(snapshot, id);
 		if (comment.status !== "draft")
@@ -468,7 +474,7 @@ export async function deleteComment(workspaceId: string, id: string): Promise<vo
 	});
 }
 
-export async function clearReview(workspaceId: string): Promise<ReviewSnapshot> {
+export async function clearReview(workspaceId: WorkspaceId): Promise<ReviewSnapshot> {
 	await ensureSnapshot(workspaceId);
 	const fresh = await freshSnapshot(workspaceId);
 	const existing = load(workspaceId);
@@ -478,7 +484,7 @@ export async function clearReview(workspaceId: string): Promise<ReviewSnapshot> 
 }
 
 export async function sendableComments(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commentIds?: string[],
 ): Promise<ReviewComment[]> {
 	const snapshot = await getReviewSnapshot(workspaceId);
@@ -495,7 +501,7 @@ export async function sendableComments(
 }
 
 export async function buildSendPackage(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	comments: ReviewComment[],
 ): Promise<string> {
 	const ws = getWorkspace(workspaceId);
@@ -516,9 +522,9 @@ export function reviewSessionKey(comment: Pick<ReviewComment, "anchor">): string
 }
 
 export async function markCommentsSent(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commentIds: string[],
-	sessionId: string,
+	sessionId: SessionId,
 ): Promise<void> {
 	return mutateSnapshot(workspaceId, (snapshot) => {
 		const comments = commentIds.map((id) => mustFind(snapshot, id));
@@ -538,7 +544,11 @@ export async function markCommentsSent(
 	});
 }
 
-export function rollbackSend(workspaceId: string, commentIds: string[], sessionId: string): void {
+export function rollbackSend(
+	workspaceId: WorkspaceId,
+	commentIds: string[],
+	sessionId: SessionId,
+): void {
 	const snapshot = load(workspaceId);
 	if (snapshot?.review.status !== "open") return;
 	const ids = new Set(commentIds);
@@ -563,15 +573,15 @@ export function rollbackSend(workspaceId: string, commentIds: string[], sessionI
 }
 
 export async function fileReviewSession(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	key: string,
-): Promise<string | undefined> {
+): Promise<SessionId | undefined> {
 	return (await ensureSnapshot(workspaceId)).review.fileSessions?.[key];
 }
 
 function applyAgentResolution(
 	snapshot: ReviewSnapshot,
-	sessionId: string,
+	sessionId: SessionId,
 	commentId: string,
 	note?: string,
 ): ReviewComment | null {
@@ -590,7 +600,7 @@ function applyAgentResolution(
 }
 
 export function resolveCommentFromAgent(
-	sessionId: string,
+	sessionId: SessionId,
 	commentId: string,
 	note?: string,
 ): ReviewComment {
@@ -599,7 +609,7 @@ export function resolveCommentFromAgent(
 		files = readdirSync(reviewsDir()).filter((file) => file.endsWith(".json"));
 	} catch {}
 	for (const file of files) {
-		const workspaceId = file.slice(0, -".json".length);
+		const workspaceId = asWorkspaceId(file.slice(0, -".json".length));
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = load(workspaceId);
@@ -632,7 +642,7 @@ export function resolveCommentFromAgent(
 	throw new Error(`Unknown review comment: ${commentId}. Use an id from the review package.`);
 }
 
-export function removeWorkspaceReviews(workspaceId: string): void {
+export function removeWorkspaceReviews(workspaceId: WorkspaceId): void {
 	rmSync(reviewFile(workspaceId), { force: true });
 	rmSync(archiveWorkspaceDir(workspaceId), { recursive: true, force: true });
 }

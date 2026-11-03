@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TestMarkdown as Markdown } from "../../testing/markdown";
 import { notebookMarkdownComponents, notebookMarkdownUrlTransform } from "./NotebookOutputView";
 
 const components = notebookMarkdownComponents(
-	{ workspaceId: "ws", path: "nb/demo.ipynb" },
+	{ workspaceId: asWorkspaceId("ws"), path: "nb/demo.ipynb" },
 	(workspaceId, path) => `http://host.test/files/${workspaceId}/${path}`,
 );
 

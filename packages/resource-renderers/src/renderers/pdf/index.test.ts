@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	anchorLabel,
@@ -63,9 +64,13 @@ test("a .pdf extension resolves through inferred MIME metadata", () => {
 	const disposers = [binary, pdfRenderer].map(registerResourceRenderer);
 	try {
 		expect(
-			resolveRenderers({ workspaceId: "ws", path: "report.pdf", text: false }, "view", {
-				mobile: false,
-			}).map((renderer) => renderer.id),
+			resolveRenderers(
+				{ workspaceId: asWorkspaceId("ws"), path: "report.pdf", text: false },
+				"view",
+				{
+					mobile: false,
+				},
+			).map((renderer) => renderer.id),
 		).toEqual(["thinkrail/pdf", "thinkrail/binary"]);
 	} finally {
 		for (const dispose of disposers.reverse()) dispose();

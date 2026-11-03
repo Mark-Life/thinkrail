@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
@@ -13,7 +14,7 @@ import { seedWorkspaceSession } from "./fixtures/sessions";
 interface Frame {
 	id?: string;
 	method?: string;
-	params?: { sessionId?: string; boundary?: string };
+	params?: { sessionId?: SessionId; boundary?: string };
 	channel?: string;
 	data?: unknown;
 	result?: unknown;

@@ -10,6 +10,7 @@ import {
 	union,
 } from "@earendil-works/pi-schema";
 import { BackgroundCommandSummary } from "./backgroundCommand";
+import { SessionId, WorkspaceId } from "./ids";
 import { McpServerResourceSummary } from "./mcp";
 import { SubagentResourceSummary } from "./subagent";
 import { wireObj } from "./wire";
@@ -47,8 +48,8 @@ export const ResourceHistoryPage = union([
 export type ResourceHistoryPage = Static<typeof ResourceHistoryPage>;
 
 export const SessionResources = wireObj({
-	workspaceId: str(),
-	sessionId: str(),
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	commands: arr(BackgroundCommandSummary),
 	subagents: arr(SubagentResourceSummary),
 	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */

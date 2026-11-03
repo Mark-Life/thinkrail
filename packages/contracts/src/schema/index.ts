@@ -18,6 +18,7 @@ export * from "./git";
 export * from "./github";
 export * from "./history";
 export * from "./host";
+export * from "./ids";
 export * from "./locales";
 export * from "./mcp";
 export * from "./methods";

@@ -1,3 +1,4 @@
+import type { ProjectId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	type EditorInfo,
 	PROJECT_RENAME_PROTOCOL_VERSION,
@@ -21,12 +22,12 @@ import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport
 
 const PREWARM_WORKSPACE_LIMIT = 8;
 
-export function goToProjectHome(projectId: string): void {
+export function goToProjectHome(projectId: ProjectId): void {
 	useAppStore.getState().selectProject(projectId, { reveal: true });
 	void loadProjectWorkspaces(projectId).catch(() => {});
 }
 
-export async function loadProjectWorkspaces(projectId: string): Promise<Workspace[]> {
+export async function loadProjectWorkspaces(projectId: ProjectId): Promise<Workspace[]> {
 	const rows = await getTransport().request("workspace.list", { projectId });
 	const store = useAppStore.getState();
 	store.setWorkspaces(projectId, rows);
@@ -51,19 +52,19 @@ export function canSettleWorkspace(protocolVersion: number | null, workspace: Wo
 	return supportsWorkspaceSettling(protocolVersion) && workspace.kind !== "default";
 }
 
-export function settleWorkspace(workspaceId: string): void {
+export function settleWorkspace(workspaceId: WorkspaceId): void {
 	void getTransport()
 		.request("workspace.settle", { id: workspaceId })
 		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.settleFailed"))));
 }
 
-export function unsettleWorkspace(workspaceId: string): void {
+export function unsettleWorkspace(workspaceId: WorkspaceId): void {
 	void getTransport()
 		.request("workspace.unsettle", { id: workspaceId })
 		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.keepActiveFailed"))));
 }
 
-export function markWorkspaceUnread(workspaceId: string): void {
+export function markWorkspaceUnread(workspaceId: WorkspaceId): void {
 	if (!useAppStore.getState().beginMarkWorkspaceUnread(workspaceId)) return;
 	void getTransport()
 		.request("workspace.markUnread", { id: workspaceId })
@@ -74,7 +75,7 @@ export function markWorkspaceUnread(workspaceId: string): void {
 		});
 }
 
-export function markWorkspaceRead(workspaceId: string): void {
+export function markWorkspaceRead(workspaceId: WorkspaceId): void {
 	void getTransport()
 		.request("workspace.markRead", { id: workspaceId })
 		.then(({ records }) => {
@@ -263,7 +264,7 @@ export function useEditors(): EditorInfo[] {
 	return editors;
 }
 
-export function removeWorkspace(workspaceId: string): void {
+export function removeWorkspace(workspaceId: WorkspaceId): void {
 	void getTransport()
 		.request("workspace.remove", { id: workspaceId })
 		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.removeFailed"))));
