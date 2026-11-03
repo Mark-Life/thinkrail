@@ -56,6 +56,9 @@ type FakePr = {
 	queued?: boolean;
 	openHeads?: string[];
 	listFails?: boolean;
+	viewReply?: string;
+	listReply?: string;
+	newField?: boolean;
 };
 
 function fakeGh(
@@ -66,6 +69,7 @@ function fakeGh(
 	const run: PrCommandRunner = async (_cwd, command, timeoutMs) => {
 		calls.push({ command, timeoutMs });
 		if (command[2] === "view") {
+			if (pr.viewReply !== undefined) return { ok: true, out: pr.viewReply };
 			return {
 				ok: true,
 				out: JSON.stringify({
@@ -73,11 +77,13 @@ function fakeGh(
 					state: pr.state,
 					headRepositoryOwner: { login: pr.owner ?? "acme" },
 					headRepository: { name: "app" },
+					...(pr.newField ? { autoMergeRequest: null } : {}),
 				}),
 			};
 		}
 		if (command[2] === "list") {
 			if (pr.listFails) return { ok: false, out: "" };
+			if (pr.listReply !== undefined) return { ok: true, out: pr.listReply };
 			const rows = (pr.openHeads ?? []).map((owner, index) => ({
 				number: 40 + index,
 				headRepositoryOwner: { login: owner },
@@ -122,6 +128,52 @@ afterEach(() => {
 
 const params = { workspaceId: "w1", branch: "feature", number: 12 };
 const closed: FakePr = { headRefName: "feature", state: "CLOSED" };
+
+describe("what gh answers", () => {
+	test("a field gh adds does not stop an action", async () => {
+		const { run, calls } = fakeGh({ headRefName: "feature", state: "OPEN", newField: true });
+		await readyPr(params, run);
+		expect(calls.map((call) => call.command[2])).toEqual(["view", "ready"]);
+	});
+
+	test("head fields gh leaves out or nulls never match this repository", async () => {
+		const viewReply = JSON.stringify({
+			headRefName: "feature",
+			state: "OPEN",
+			headRepositoryOwner: null,
+		});
+		const { run, calls } = fakeGh({ headRefName: "feature", state: "OPEN", viewReply });
+		await expect(readyPr(params, run)).rejects.toThrow(/not the pull request/);
+		expect(calls).toHaveLength(1);
+	});
+
+	test.each([
+		["not JSON", "<html>"],
+		["not an object", "[]"],
+		["no state", JSON.stringify({ headRefName: "feature" })],
+		["a state nobody knows", JSON.stringify({ headRefName: "feature", state: "QUEUED" })],
+	])("a view reply with %s is named and changes nothing", async (_name, viewReply) => {
+		const { run, calls } = fakeGh({ headRefName: "feature", state: "OPEN", viewReply });
+		await expect(readyPr(params, run)).rejects.toMatchObject({
+			code: "GH_REPLY_INVALID",
+			message: "Couldn't read PR #12: gh answered something unexpected.",
+		});
+		expect(calls).toHaveLength(1);
+	});
+
+	test.each([
+		["not a list", "{}"],
+		["a row that is not an object", "[1]"],
+	])("an open-PR list that is %s deletes nothing", async (_name, listReply) => {
+		const { run } = fakeGh({ ...closed, listReply });
+		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run)).rejects.toThrow(
+			/Couldn't confirm/,
+		);
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
+			"refs/heads/feature",
+		);
+	});
+});
 
 describe("readyPr / reopenPr", () => {
 	test("Ready checks the number still heads the branch, then mutates under the long timeout", async () => {

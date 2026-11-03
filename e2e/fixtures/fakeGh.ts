@@ -62,8 +62,8 @@ function main(): void {
 	const slug = /github\.com[:/](.+?)(?:\.git)?$/.exec(origin)?.[1] ?? "acme/sample";
 	const [owner = "", name = ""] = slug.split("/");
 	const shape = (pr: FakePr): Record<string, unknown> => ({
-		headRepositoryOwner: { login: pr.headOwner ?? owner },
-		headRepository: { name },
+		headRepositoryOwner: { id: "U_owner", login: pr.headOwner ?? owner },
+		headRepository: { id: "R_repo", name },
 		url: `https://github.com/${slug}/pull/${pr.number}`,
 		baseRefName: "main",
 		isDraft: false,
