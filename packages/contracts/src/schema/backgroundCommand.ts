@@ -9,7 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
-import { SessionId, WorkspaceId } from "./ids";
+import { SessionId, StoredSessionId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const BackgroundCommandStatus = oneOf([
@@ -23,7 +23,7 @@ export type BackgroundCommandStatus = Static<typeof BackgroundCommandStatus>;
 
 export const BackgroundCommandSummary = wireObj({
 	id: str(),
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	name: str(),
 	command: str(),
 	status: BackgroundCommandStatus,

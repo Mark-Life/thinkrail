@@ -50,6 +50,9 @@ import {
 	shouldRefreshOpenReview,
 } from "./handlers";
 
+const PROJECT_ID = testProjectId("00000000-0000-4000-8000-0000000000a1");
+const WORKSPACE_ID = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
+
 const CTX = { clientKey: "test-client" };
 
 let dataDir: string;
@@ -122,7 +125,7 @@ beforeEach(() => {
 	git(repo, "commit", "-m", "init");
 	writeFileSync(
 		join(dataDir, "projects.json"),
-		JSON.stringify([{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
+		JSON.stringify([{ id: PROJECT_ID, name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
 	);
 });
 
@@ -183,7 +186,7 @@ test("a client older than the settled protocol never hears about a merged or clo
 test("starting a PR mutation reactivates a parked workspace before any network await", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1"), name: "PR work" },
+		{ projectId: PROJECT_ID, name: "PR work" },
 		CTX,
 	)) as Workspace;
 	await handleRequest("workspace.settle", { id: workspace.id }, CTX);
@@ -197,7 +200,7 @@ test("starting a PR mutation reactivates a parked workspace before any network a
 	).rejects.toThrow("no 'origin' remote");
 	const rows = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	const after = rows.find((row) => row.id === workspace.id);
@@ -208,7 +211,7 @@ test("starting a PR mutation reactivates a parked workspace before any network a
 test("branch status reports a review-free branch, and workspace.push publishes it", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1"), name: "Ship segment" },
+		{ projectId: PROJECT_ID, name: "Ship segment" },
 		CTX,
 	)) as Workspace;
 	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
@@ -259,7 +262,7 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1"), name: "Poll" },
+		{ projectId: PROJECT_ID, name: "Poll" },
 		CTX,
 	)) as Workspace;
 	const remote = join(dataDir, "poll.git");
@@ -295,7 +298,7 @@ test("a CI poll re-reads the review without fetching origin; a focus read still 
 test("a split origin measures the branch against where it is pushed, not where it is fetched", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1"), name: "Split origin" },
+		{ projectId: PROJECT_ID, name: "Split origin" },
 		CTX,
 	)) as Workspace;
 	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
@@ -355,7 +358,7 @@ test("a split origin measures the branch against where it is pushed, not where i
 test("a split origin whose push repository can't be read reports publication as unknown", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1"), name: "Unreachable push" },
+		{ projectId: PROJECT_ID, name: "Unreachable push" },
 		CTX,
 	)) as Workspace;
 	const fetchRepo = join(dataDir, "fetch-only.git");
@@ -374,7 +377,7 @@ test("a split origin whose push repository can't be read reports publication as 
 test("a pre-v87 client's source-less PR preview keeps the session's plan body", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1"), name: "Legacy preview" },
+		{ projectId: PROJECT_ID, name: "Legacy preview" },
 		CTX,
 	)) as Workspace;
 	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
@@ -450,11 +453,7 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 		writeFileSync(join(globalDir, "kickoff.md"), "global body");
 		writeFileSync(join(projectDir, "kickoff.md"), "project body");
 
-		const listed = (await handleRequest(
-			"template.list",
-			{ projectId: testProjectId("p1") },
-			CTX,
-		)) as {
+		const listed = (await handleRequest("template.list", { projectId: PROJECT_ID }, CTX)) as {
 			templates: TemplateInfo[];
 		};
 		expect(listed.templates).toContainEqual(
@@ -463,7 +462,7 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 
 		const template = (await handleRequest(
 			"template.get",
-			{ projectId: testProjectId("p1"), name: "kickoff" },
+			{ projectId: PROJECT_ID, name: "kickoff" },
 			CTX,
 		)) as Template;
 		expect(template).toMatchObject({ scope: "project", content: "project body" });
@@ -471,19 +470,26 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 		await expect(
 			handleRequest(
 				"template.list",
-				{ workspaceId: testWorkspaceId("unused"), projectId: testProjectId("p1") },
+				{
+					workspaceId: testWorkspaceId("00000000-0000-4000-8000-fd94c6a26d6b"),
+					projectId: PROJECT_ID,
+				},
 				CTX,
 			),
 		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 		await expect(
 			handleRequest(
 				"template.get",
-				{ workspaceId: testWorkspaceId("unused"), projectId: testProjectId("p1"), name: "kickoff" },
+				{
+					workspaceId: testWorkspaceId("00000000-0000-4000-8000-fd94c6a26d6b"),
+					projectId: PROJECT_ID,
+					name: "kickoff",
+				},
 				CTX,
 			),
 		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 		await expect(
-			handleRequest("template.get", { projectId: testProjectId("p1") }, CTX),
+			handleRequest("template.get", { projectId: PROJECT_ID }, CTX),
 		).rejects.toMatchObject({
 			code: "INVALID_PARAMS",
 		});
@@ -516,7 +522,7 @@ test("model.default and new session creation share the AppConfig default resolut
 
 		const workspace = (await handleRequest(
 			"workspace.create",
-			{ projectId: testProjectId("p1") },
+			{ projectId: PROJECT_ID },
 			CTX,
 		)) as Workspace;
 		const created = (await handleRequest(
@@ -542,7 +548,7 @@ test("session.create and session.setModel answer ok when the recent model cannot
 		if (!selected) throw new Error("handler test model was not available");
 		const workspace = (await handleRequest(
 			"workspace.create",
-			{ projectId: testProjectId("p1") },
+			{ projectId: PROJECT_ID },
 			CTX,
 		)) as Workspace;
 
@@ -858,7 +864,7 @@ test("project.setTrust grants pi-level resource trust only when the request asks
 		join(dataDir, "projects.json"),
 		JSON.stringify([
 			{
-				id: "p1",
+				id: PROJECT_ID,
 				name: "repo",
 				path: repo,
 				slug: "repo",
@@ -868,7 +874,7 @@ test("project.setTrust grants pi-level resource trust only when the request asks
 		]),
 	);
 	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
-		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
+		(await handleRequest("project.setTrust", { id: PROJECT_ID, ...params }, CTX)) as Project;
 
 	expect(await setTrust({ trusted: true })).toMatchObject({
 		trusted: true,
@@ -894,7 +900,7 @@ test("project.setTrust acknowledges the present aliases only when it grants alia
 		);
 	};
 	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
-		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
+		(await handleRequest("project.setTrust", { id: PROJECT_ID, ...params }, CTX)) as Project;
 	writeAlias("first-alias");
 	expect((await setTrust({ trusted: true })).acknowledgedSkills).toEqual(["first-alias"]);
 
@@ -914,7 +920,7 @@ test("project.setTrust acknowledges the present aliases only when it grants alia
 test("workspace.rename locks the display name without changing Git or the worktree path", async () => {
 	const created = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace;
 
@@ -934,7 +940,7 @@ test("workspace.rename locks the display name without changing Git or the worktr
 	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(created.branch);
 	const listed = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	expect(listed.find((workspace) => workspace.id === created.id)).toMatchObject(renamed);
@@ -947,7 +953,7 @@ test("session.rename persists a bounded title into a closed Pi transcript", asyn
 	try {
 		const rows = (await handleRequest(
 			"workspace.list",
-			{ projectId: testProjectId("p1") },
+			{ projectId: PROJECT_ID },
 			CTX,
 		)) as Workspace[];
 		const workspace = rows[0];
@@ -989,7 +995,7 @@ test("session.rename persists a bounded title into a closed Pi transcript", asyn
 test("workspace.setSubagentsOverride persists on/off and null restores the global default", async () => {
 	const created = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace;
 
@@ -1018,7 +1024,7 @@ test("workspace.setSubagentsOverride persists on/off and null restores the globa
 test("workspace.setSubagentMaxConcurrent persists a limit and null restores the global one", async () => {
 	const created = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace;
 	const limited = (await handleRequest(
@@ -1041,7 +1047,7 @@ test("workspace.setSubagentMaxConcurrent persists a limit and null restores the 
 test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {
 	const rows = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	const workspace = rows[0];
@@ -1064,7 +1070,7 @@ test("workspace.watchReady waits for startup once, then reports an already-ready
 test("todo.requestFix on a chat that isn't on disk rolls the record back and never marks findings sent", async () => {
 	const rows = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	const workspace = rows[0];
@@ -1112,7 +1118,7 @@ test("a review send that names its chat lands every file's drafts there as one p
 	try {
 		const rows = (await handleRequest(
 			"workspace.list",
-			{ projectId: testProjectId("p1") },
+			{ projectId: PROJECT_ID },
 			CTX,
 		)) as Workspace[];
 		const workspace = rows[0];
@@ -1162,7 +1168,7 @@ test("a review send that names its chat lands every file's drafts there as one p
 test("workspace mutation handlers reject the Default before any side effect", async () => {
 	const rows = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	const def = rows[0];
@@ -1178,7 +1184,7 @@ test("workspace mutation handlers reject the Default before any side effect", as
 
 	const after = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	expect(after.filter((w) => w.kind === "default")).toHaveLength(1);
@@ -1201,12 +1207,12 @@ test("resource handlers scope every read/control to a registered workspace and a
 	try {
 		const workspace = (await handleRequest(
 			"workspace.create",
-			{ projectId: testProjectId("p1") },
+			{ projectId: PROJECT_ID },
 			CTX,
 		)) as Workspace;
 		const other = (await handleRequest(
 			"workspace.create",
-			{ projectId: testProjectId("p1") },
+			{ projectId: PROJECT_ID },
 			CTX,
 		)) as Workspace;
 		const parent = (await handleRequest(
@@ -1248,7 +1254,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 				CTX,
 			),
 		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
-		for (const workspaceId of [other.id, "missing-workspace"]) {
+		for (const workspaceId of [other.id, "00000000-0000-4000-8000-0000000000bf"]) {
 			const calls = [
 				["session.resources", { ...scope, workspaceId }],
 				["session.resourceHistory", { ...scope, workspaceId, kind: "subagent" }],
@@ -1276,7 +1282,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 		}
 		await expect(
 			handleRequest("session.resources", { ...scope, sessionId: testSessionId("../secret") }, CTX),
-		).rejects.toThrow("Invalid resource ids");
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 		expect(
 			await handleRequest("session.resources", { ...scope, path: "/tmp/secret" }, CTX),
 		).toEqual(await handleRequest("session.resources", scope, CTX));
@@ -1319,7 +1325,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 
 test("a request with bad params reaches no handler and names the field, not the value", async () => {
 	const secret = "sk-not-for-the-reply";
-	const rejection = handleRequest("project.setTrust", { id: "p1", trusted: secret }, CTX);
+	const rejection = handleRequest("project.setTrust", { id: PROJECT_ID, trusted: secret }, CTX);
 	await expect(rejection).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 	const message = await rejection.catch((err: Error) => err.message);
 	expect(message).toContain("/trusted");
@@ -1328,16 +1334,18 @@ test("a request with bad params reaches no handler and names the field, not the 
 
 test("a refusal reports only the first few bad fields, so its size stays bounded", async () => {
 	const names = Array.from({ length: 1_000 }, (_, index) => index);
-	const message = await handleRequest("project.acknowledgeSkills", { id: "p1", names }, CTX).catch(
-		(err: Error) => err.message,
-	);
+	const message = await handleRequest(
+		"project.acknowledgeSkills",
+		{ id: PROJECT_ID, names },
+		CTX,
+	).catch((err: Error) => err.message);
 	expect(String(message).split("; ")).toHaveLength(5);
 });
 
 test("terminal input that is not a string is refused before it reaches a PTY", async () => {
 	for (const data of [42, [104, 105], { text: "hi" }]) {
 		await expect(
-			handleRequest("terminal.write", { id: "missing", data }, CTX),
+			handleRequest("terminal.write", { id: "00000000-0000-4000-8000-ea21841da70e", data }, CTX),
 		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 	}
 });
@@ -1345,7 +1353,7 @@ test("terminal input that is not a string is refused before it reaches a PTY", a
 test("a subagent override outside the wire union is refused and nothing is stored", async () => {
 	const created = (await handleRequest(
 		"workspace.create",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace;
 	await expect(
@@ -1353,7 +1361,7 @@ test("a subagent override outside the wire union is refused and nothing is store
 	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 	const rows = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	expect(rows.find((row) => row.id === created.id)?.subagentsOverride).toBeUndefined();
@@ -1423,11 +1431,17 @@ test("project replies match their wire schemas", async () => {
 });
 
 test("an unknown diff scope or revert target is refused before a handler runs", async () => {
-	const base = { workspaceId: testWorkspaceId("missing"), path: "a.txt" };
+	const base = {
+		workspaceId: testWorkspaceId("00000000-0000-4000-8000-ea21841da70e"),
+		path: "a.txt",
+	};
 	await expect(
 		handleRequest(
 			"git.status",
-			{ workspaceId: testWorkspaceId("missing"), scope: { kind: "typo" } },
+			{
+				workspaceId: testWorkspaceId("00000000-0000-4000-8000-ea21841da70e"),
+				scope: { kind: "typo" },
+			},
 			CTX,
 		),
 	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
@@ -1450,7 +1464,7 @@ test("review.commentAdd refuses a selector of an unknown kind before its handler
 		handleRequest(
 			"review.commentAdd",
 			{
-				workspaceId: testWorkspaceId("w"),
+				workspaceId: WORKSPACE_ID,
 				kind: "inline",
 				anchor: { path: "a.ts", side: "worktree", selectors: [{ kind: "squiggle", at: 3 }] },
 				body: "note",
@@ -1463,7 +1477,7 @@ test("review.commentAdd refuses a selector of an unknown kind before its handler
 test("review.commentAdd stores a wire comment as the user's, whatever provenance it claims", async () => {
 	const rows = (await handleRequest(
 		"workspace.list",
-		{ projectId: testProjectId("p1") },
+		{ projectId: PROJECT_ID },
 		CTX,
 	)) as Workspace[];
 	const workspace = rows[0];

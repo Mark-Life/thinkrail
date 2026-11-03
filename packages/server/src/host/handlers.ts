@@ -509,9 +509,8 @@ function resourceCwd(workspaceId: WorkspaceId): string {
 	}
 }
 
-function checkResourceIds(hostIds: string[], sessionIds: SessionId[]) {
-	if (!hostIds.every(isHostResourceId) || !sessionIds.every(isPiSessionId))
-		throw new Error("Invalid resource ids");
+function checkCommandId(commandId: string) {
+	if (!isHostResourceId(commandId)) throw new Error("Invalid resource ids");
 }
 
 function checkResourceHistoryCursor(kind: ResourceKind, before: ResourceHistoryCursor) {
@@ -1165,16 +1164,14 @@ const handlers: WsHandlers = {
 	"mcp.readLog": (params) => mcpReadLog(params),
 	"mcp.testConnection": (params, ctx) => mcpTestConnection(params, ctx.clientKey),
 	"session.resources": (p) => {
-		checkResourceIds([p.workspaceId], [p.sessionId]);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
 	},
 	"session.resourceHistory": ({ workspaceId, sessionId, ...request }) => {
-		checkResourceIds([workspaceId], [sessionId]);
 		if (request.before) checkResourceHistoryCursor(request.kind, request.before);
 		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
 	},
 	"backgroundCommand.output": (p) => {
-		checkResourceIds([p.workspaceId, p.commandId], [p.sessionId]);
+		checkCommandId(p.commandId);
 		return readBackgroundCommandOutput(
 			p.workspaceId,
 			p.sessionId,
@@ -1183,7 +1180,7 @@ const handlers: WsHandlers = {
 		);
 	},
 	"backgroundCommand.stop": async (p) => {
-		checkResourceIds([p.workspaceId, p.commandId], [p.sessionId]);
+		checkCommandId(p.commandId);
 		await stopBackgroundCommand(
 			p.workspaceId,
 			p.sessionId,
@@ -1193,7 +1190,6 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"subagent.stop": async (p) => {
-		checkResourceIds([p.workspaceId], [p.parentSessionId, p.childSessionId]);
 		await stopSubagent(
 			p.workspaceId,
 			p.parentSessionId,
@@ -1203,7 +1199,6 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"subagent.stopAll": async (p) => {
-		checkResourceIds([p.workspaceId], [p.parentSessionId]);
 		const targeted = await stopAllSubagents(
 			p.workspaceId,
 			p.parentSessionId,

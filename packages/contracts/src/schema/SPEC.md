@@ -21,7 +21,7 @@ that map.
 
 - **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
   types, the `*_METHODS` and `*_CHANNELS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`, `WS_CHANNEL_SCHEMAS`,
-  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `WsRequestFrame`, `WsAck`, `WsResume`, `AnyHostWelcome`, `PROTOCOL_VERSION`, the client checks of `checks.ts`, the id brands with `newProjectId`, `newWorkspaceId`, `parseProjectId`, `parseWorkspaceId`, `parseSessionId` and `randomUuid`. From `wire.ts` only `Ack`; from `ids.ts` not the `test*` id makers, which only `@thinkrail/contracts/test-ids` exports: `wireObj`,
+  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `WsRequestFrame`, `WsAck`, `WsResume`, `AnyHostWelcome`, `PROTOCOL_VERSION`, the client checks of `checks.ts`, the id brands with `newProjectId`, `newWorkspaceId`, `parseProjectId`, `parseWorkspaceId`, `parseSessionId`, `parseStoredProjectId`, `parseStoredWorkspaceId`, `parseStoredSessionId` and `randomUuid`. From `wire.ts` only `Ack`; from `ids.ts` not the `test*` id makers, which only `@thinkrail/contracts/test-ids` exports: `wireObj`,
   `partialWireObj`, `readonlyArr`, `piOwned`, `NoParams` and `NoPayload` stay inside this directory. Schema values stay
   public because [[submodule-server-host]] compiles them. The client checks read them, so they ship in web JS.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
@@ -79,16 +79,37 @@ that map.
 - **A stored hash guards the wire.** `wireHash.test.ts` holds a hash of `WS_METHOD_SCHEMAS`, `WS_CHANNEL_SCHEMAS`,
   `AnyHostWelcome`, `HostWelcomeVersions` and the frames in `envelope.ts` beside the `PROTOCOL_VERSION` it was taken at. Field order does not count. Any schema edit fails until
   the stored value is updated, bump or not, so the test forces the decision and not a bump. The message gives the new value.
-- **Ids are branded.** `ProjectId`, `WorkspaceId` and `SessionId` in `ids.ts` are strings at run time, so the wire and the
-  stored files do not change. A wire field uses the one for its entity, so a call site cannot swap them. A new id comes from
-  `newProjectId` or `newWorkspaceId`; a session id has no generator, because pi owns it. A string from outside the schemas
-  (a pi session, a file name, a route) goes through `parseProjectId`, `parseWorkspaceId` or `parseSessionId`, which take any
-  value and answer the brand or `null` by checking the schema. Each parser compiles in `ids.ts`, not with `validatorOf`:
-  `checks.ts` reads every method schema, and those import the ids. UUIDs come from `randomUuid`, built on `getRandomValues`
-  because `crypto.randomUUID` is missing on a plain-HTTP client. Tests make an id from any string with `testProjectId`,
+- **Ids are branded and checked.** `ProjectId`, `WorkspaceId` and `SessionId` in `ids.ts` are strings with a brand. A wire
+  field uses the one for its entity, so a call site cannot swap them. A new id comes from `newProjectId` or `newWorkspaceId`;
+  a session id has no generator, because pi owns it. UUIDs come from `randomUuid`, built on `getRandomValues` because
+  `crypto.randomUUID` is missing on a plain-HTTP client. Each parser compiles in `ids.ts`, not with `validatorOf`: `checks.ts`
+  reads every method schema, and those import the ids. Tests make an id from any string with `testProjectId`,
   `testWorkspaceId` or `testSessionId` from `@thinkrail/contracts/test-ids`. `check:boundaries` refuses that entry outside
-  test sources, and refuses a relative import of `ids.ts` from another module. Only `ids.ts` casts to a brand.
+  test sources, and refuses a relative import of `ids.ts` from another module. Only the `brand` helper in `ids.ts` casts.
   `DelegationRunDetails.childSessionId` stays a `string`: it mirrors the `pi-delegation` type, and a test pins the two.
+- **An id has two checks: one for a request, one for a read.** A value a caller supplies must be able to reach a file path and
+  name a real entity, so it is strict. A value read back from disk must never disappear from a list, so it is lenient. `ids.test.ts`
+  walks the wire and fails on a request field with a stored schema, or a reply or push with a strict one.
+
+  | Id | Request field, route, `parseX` | Reply, push, stored file, `parseStoredX` |
+  |---|---|---|
+  | project | UUID, any version, lowercase | non-empty |
+  | workspace | UUID, any version, lowercase | path-safe |
+  | session | path-safe | any string |
+
+  Path-safe is pi's `--session-id` grammar with a limit of 200 characters. Every release writes `randomUUID()` for a project
+  or workspace, so a non-UUID there is a hand edit or a test seed. A reply may still carry one: it stays listed, and a request
+  that names it gets `INVALID_PARAMS`, so the app cannot rename or remove it. The way out is to edit the stored file. A workspace read is still path-safe because `removeWorkspaceDelegation` runs a recursive
+  delete on its id, so `../..` in `workspaces.json` must drop, not load. A project id reaches no path. Session ids stay any
+  string on a read because pi owns that parse and only checks for a string: a session from the pi CLI or an older pi file
+  still lists. It cannot open, rename or delete unless it is path-safe. The way out is to delete its file. One read does reach a session
+  file path: a review finding's `origin.sessionId`, which `clearChangesRequestedIfResolved` skips when it is not path-safe, and
+  `reviewsPath` throws on it. `reviews.ts` and `baselines.ts` read session ids from their own file names and put them back into
+  a path, so these stay strict, and a name that fails is skipped. `WsRequestFrame.sessionId` is a plain string, not an id: only
+  the replay fingerprint reads it, and a frame that fails its schema gets no reply. The checks are not v4 and v7 regexes: those
+  describe today's generators, and a gate on them would refuse a real id when a generator changes.
+- **The strict request ids keep the protocol version.** A client at another version gets the prompt before it can send a
+  refused value, and a client at this version no longer sends an empty project or workspace id.
 - **`errorCode` is any string.** A later build may send a code this client has no name for, and `WsErrorCode` carries the
   names by type only. `INVALID_REPLY` is never sent: the client mints it.
 - **Client checks are shared.** `checks.ts` exports `JsonObject`, for a reader that checks fields one by one, `validatorOf`, a

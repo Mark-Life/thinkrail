@@ -55,6 +55,7 @@ import {
 	JsonObject,
 	normalizeSessionTitle,
 	parseSessionId,
+	parseStoredSessionId,
 	sameModel,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
@@ -1745,7 +1746,7 @@ async function listSessionsInternal(
 	}
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	const disk = infos.flatMap((info): SessionSummary[] => {
-		const sessionId = parseSessionId(info.id);
+		const sessionId = parseStoredSessionId(info.id);
 		if (
 			sessionId === null ||
 			info.cwd !== cwd ||
@@ -1841,7 +1842,7 @@ async function collectSessionStateSources(
 	}
 	for (const { workspace, infos } of discovered) {
 		for (const info of infos) {
-			const sessionId = parseSessionId(info.id);
+			const sessionId = parseStoredSessionId(info.id);
 			if (
 				sessionId === null ||
 				info.cwd !== workspace.cwd ||
@@ -3104,7 +3105,7 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 	for (const info of infos) {
 		if (info.cwd !== cwd) continue;
 		rmSync(info.path, { force: true });
-		const sessionId = parseSessionId(info.id);
+		const sessionId = parseStoredSessionId(info.id);
 		if (sessionId === null) continue;
 		try {
 			removeSessionStateMetadata(sessionId);

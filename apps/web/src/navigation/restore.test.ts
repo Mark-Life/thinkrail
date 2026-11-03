@@ -20,7 +20,7 @@ function project(id: string): Project {
 	return { id: testProjectId(id), name: id, path: `/tmp/${id}`, slug: id, lastOpened: 1 };
 }
 
-function workspace(id: string, projectId = "p1"): Workspace {
+function workspace(id: string, projectId = "00000000-0000-4000-8000-0000000000a1"): Workspace {
 	return {
 		id: testWorkspaceId(id),
 		projectId: testProjectId(projectId),
@@ -177,7 +177,9 @@ afterEach(() => {
 });
 
 test("no restore runs before the atomic welcome generation", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1/chats/s1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
 	await settle();
@@ -185,48 +187,56 @@ test("no restore runs before the atomic welcome generation", async () => {
 	await settle();
 	expect(calls).toHaveLength(0);
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	expect(calls).toHaveLength(1);
-	expect(calls[0]?.projectId).toBe(testProjectId("p1"));
-	calls[0]?.resolve([workspace("w1")]);
+	expect(calls[0]?.projectId).toBe(testProjectId("00000000-0000-4000-8000-0000000000a1"));
+	calls[0]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
 	const state = useAppStore.getState();
-	expect(state.activeWorkspaceId).toBe(testWorkspaceId("w1"));
-	expect(state.selectedProjectId).toBe(testProjectId("p1"));
+	expect(state.activeWorkspaceId).toBe(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"));
+	expect(state.selectedProjectId).toBe(testProjectId("00000000-0000-4000-8000-0000000000a1"));
 	expect(state.routeChatTarget).toEqual({
-		workspaceId: testWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
 		sessionId: testSessionId("s1"),
 		navTick: 1,
 		navigation: null,
 		validated: false,
 	});
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 });
 
 test("duplicate welcome delivery starts at most one active restore read", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	expect(calls).toHaveLength(1);
-	calls[0]?.resolve([workspace("w1")]);
+	calls[0]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
-	expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w1"));
-	installWelcome([project("p1")]);
+	expect(useAppStore.getState().activeWorkspaceId).toBe(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+	);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	expect(calls).toHaveLength(1);
 });
 
 test("a malformed initial fragment canonicalizes to #/v1 and restores nothing", async () => {
-	const d = fakeDriver("#/v2/projects/p1/bogus");
+	const d = fakeDriver("#/v2/projects/00000000-0000-4000-8000-0000000000a1/bogus");
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	expect(d.fragment).toBe("#/v1");
 	expect(calls).toHaveLength(0);
@@ -234,94 +244,143 @@ test("a malformed initial fragment canonicalizes to #/v1 and restores nothing", 
 });
 
 test("a newer incoming fragment cancels the older restore's landing", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
-	d.incoming("#/v1/projects/p1/workspaces/w2");
+	d.incoming(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b2",
+	);
 	await settle();
 	expect(calls).toHaveLength(2);
-	calls[0]?.resolve([workspace("w1"), workspace("w2")]);
+	calls[0]?.resolve([
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+		workspace("00000000-0000-4000-8000-0000000000b2"),
+	]);
 	await settle();
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-	calls[1]?.resolve([workspace("w1"), workspace("w2")]);
+	calls[1]?.resolve([
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+		workspace("00000000-0000-4000-8000-0000000000b2"),
+	]);
 	await settle();
-	expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w2"));
+	expect(useAppStore.getState().activeWorkspaceId).toBe(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b2"),
+	);
 });
 
 test("fresh user navigation wins over a delayed workspace response", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1/chats/s1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
-	useAppStore.getState().setWorkspaces(testProjectId("p1"), [workspace("w1"), workspace("w2")]);
-	useAppStore.getState().activateWorkspace(workspace("w2"));
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w2");
+	useAppStore
+		.getState()
+		.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+			workspace("00000000-0000-4000-8000-0000000000b1"),
+			workspace("00000000-0000-4000-8000-0000000000b2"),
+		]);
+	useAppStore.getState().activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b2"));
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b2",
+	);
 	await settle();
-	calls[0]?.resolve([workspace("w1"), workspace("w2")]);
+	calls[0]?.resolve([
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+		workspace("00000000-0000-4000-8000-0000000000b2"),
+	]);
 	await settle();
 	const state = useAppStore.getState();
-	expect(state.activeWorkspaceId).toBe(testWorkspaceId("w2"));
+	expect(state.activeWorkspaceId).toBe(testWorkspaceId("00000000-0000-4000-8000-0000000000b2"));
 	expect(state.routeChatTarget).toBeNull();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w2");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b2",
+	);
 });
 
 test("same-workspace center navigation wins over a delayed route response", async () => {
 	const d = fakeDriver("");
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
 
-	d.incoming("#/v1/projects/p1/workspaces/w1/chats/s1");
+	d.incoming(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	await settle();
 	expect(calls).toHaveLength(1);
-	store.noteNavigation(testWorkspaceId("w1"));
+	store.noteNavigation(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"));
 	store.openTab(
 		{
 			kind: "file",
-			id: "w1:README.md",
-			workspaceId: testWorkspaceId("w1"),
+			id: "00000000-0000-4000-8000-0000000000b1:README.md",
+			workspaceId: testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
 			name: "README.md",
 			path: "README.md",
 			content: "",
 		},
 		"keep",
 	);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 
-	calls[0]?.resolve([workspace("w1")]);
+	calls[0]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
 	expect(useAppStore.getState().routeChatTarget).toBeNull();
-	expect(useAppStore.getState().activeTabByWorkspace.w1).toBe("w1:README.md");
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
+	expect(useAppStore.getState().activeTabByWorkspace["00000000-0000-4000-8000-0000000000b1"]).toBe(
+		"00000000-0000-4000-8000-0000000000b1:README.md",
+	);
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 });
 
 test("user navigation past an installed exact-chat target cancels it and resumes URL sync", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1/chats/s1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
-	calls[0]?.resolve([workspace("w1")]);
+	calls[0]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
 	expect(useAppStore.getState().routeChatTarget?.sessionId).toBe(testSessionId("s1"));
-	useAppStore.getState().noteNavigation(testWorkspaceId("w1"));
+	useAppStore.getState().noteNavigation(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"));
 	expect(useAppStore.getState().routeChatTarget).toBeNull();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
-	expect(d.pushes).toEqual(["#/v1/projects/p1/workspaces/w1"]);
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
+	expect(d.pushes).toEqual([
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	]);
 });
 
 test("a completed welcome lacking the project canonicalizes to Welcome", async () => {
-	const d = fakeDriver("#/v1/projects/p-gone/workspaces/w1/chats/s1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000af/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	expect(calls).toHaveLength(0);
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
@@ -329,35 +388,43 @@ test("a completed welcome lacking the project canonicalizes to Welcome", async (
 });
 
 test("a successful list lacking the workspace falls back to its Project Home", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w-gone");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000bf",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
-	calls[0]?.resolve([workspace("w1")]);
+	calls[0]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
 	const state = useAppStore.getState();
-	expect(state.selectedProjectId).toBe(testProjectId("p1"));
+	expect(state.selectedProjectId).toBe(testProjectId("00000000-0000-4000-8000-0000000000a1"));
 	expect(state.activeWorkspaceId).toBeNull();
-	expect(d.fragment).toBe("#/v1/projects/p1");
+	expect(d.fragment).toBe("#/v1/projects/00000000-0000-4000-8000-0000000000a1");
 });
 
 test("a failed workspace read is not deletion: URL and intent survive, the next welcome retries", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1/chats/s1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	calls[0]?.reject(new Error("socket died"));
 	await settle();
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
-	installWelcome([project("p1")]);
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	expect(calls).toHaveLength(2);
-	calls[1]?.resolve([workspace("w1")]);
+	calls[1]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
-	expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w1"));
+	expect(useAppStore.getState().activeWorkspaceId).toBe(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+	);
 	expect(useAppStore.getState().routeChatTarget?.sessionId).toBe(testSessionId("s1"));
 });
 
@@ -366,21 +433,36 @@ test("user navigation pushes one history entry per location; unchanged locations
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
 	expect(d.fragment).toBe("#/v1");
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 
 	const store = useAppStore.getState();
-	store.selectProject(testProjectId("p1"));
-	expect(d.pushes).toEqual(["#/v1/projects/p1"]);
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	expect(d.pushes).toEqual(["#/v1/projects/p1", "#/v1/projects/p1/workspaces/w1"]);
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	placeChats(testWorkspaceId("w1"), [testSessionId("s1")], "s1", 1);
+	store.selectProject(testProjectId("00000000-0000-4000-8000-0000000000a1"));
+	expect(d.pushes).toEqual(["#/v1/projects/00000000-0000-4000-8000-0000000000a1"]);
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
 	expect(d.pushes).toEqual([
-		"#/v1/projects/p1",
-		"#/v1/projects/p1/workspaces/w1",
-		"#/v1/projects/p1/workspaces/w1/chats/s1",
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1",
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	]);
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	placeChats(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		[testSessionId("s1")],
+		"s1",
+		1,
+	);
+	expect(d.pushes).toEqual([
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1",
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
 	]);
 
 	const writes = d.writes.length;
@@ -392,12 +474,19 @@ test("streaming pi events cause zero History writes while the location is unchan
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	selectChatPlacement(testWorkspaceId("w1"), testSessionId("s1"));
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	selectChatPlacement(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"), testSessionId("s1"));
 	await settle();
 
 	const writes = d.writes.length;
@@ -419,42 +508,55 @@ test("streaming pi events cause zero History writes while the location is unchan
 });
 
 test("an unresolved exact-chat target pauses URL sync until it is consumed", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1/chats/s1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
-	calls[0]?.resolve([workspace("w1")]);
+	calls[0]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
 	expect(useAppStore.getState().routeChatTarget?.sessionId).toBe(testSessionId("s1"));
 
 	useAppStore.getState().openTab(
 		{
 			kind: "file",
-			id: "w1:README.md",
-			workspaceId: testWorkspaceId("w1"),
+			id: "00000000-0000-4000-8000-0000000000b1:README.md",
+			workspaceId: testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
 			name: "README.md",
 			path: "README.md",
 			content: "",
 		},
 		"keep",
 	);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 
 	useAppStore.getState().clearRouteChatTarget();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 });
 
 test("an incoming main fragment is applied even when the client is already inside a chat", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	selectChatPlacement(testWorkspaceId("w1"), testSessionId("s1"));
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	selectChatPlacement(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"), testSessionId("s1"));
 	expect(d.fragment).toContain("/chats/s1");
 
 	d.incoming("#/v1");
@@ -468,13 +570,22 @@ test("a missing incoming project falls back to main instead of the previous live
 	const d = fakeDriver("");
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
 
-	d.incoming("#/v1/projects/gone/workspaces/w/chats/s");
+	d.incoming(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000af/workspaces/00000000-0000-4000-8000-0000000000bf/chats/s",
+	);
 	await settle();
 	expect(calls).toHaveLength(0);
 	expect(useAppStore.getState().selectedProjectId).toBeNull();
@@ -486,58 +597,83 @@ test("a workspace-level route retains existing local attention and canonicalizes
 	const d = fakeDriver("");
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	selectChatPlacement(testWorkspaceId("w1"), testSessionId("s1"));
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	selectChatPlacement(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"), testSessionId("s1"));
 
 	const pushesBefore = d.pushes.length;
-	d.incoming("#/v1/projects/p1/workspaces/w1");
+	d.incoming(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 	await settle();
 	expect(calls).toHaveLength(1);
-	calls[0]?.resolve([workspace("w1")]);
+	calls[0]?.resolve([workspace("00000000-0000-4000-8000-0000000000b1")]);
 	await settle();
 	const state = useAppStore.getState();
-	expect(selectAttentionCenterTab(state, testWorkspaceId("w1"))).toMatchObject({
+	expect(
+		selectAttentionCenterTab(state, testWorkspaceId("00000000-0000-4000-8000-0000000000b1")),
+	).toMatchObject({
 		kind: "chat",
 		sessionId: testSessionId("s1"),
 	});
 	expect(state.routeChatTarget).toBeNull();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 	expect(d.pushes.length).toBe(pushesBefore);
 });
 
 test("an older response cannot unmark a newer generation's in-flight read", async () => {
-	const d = fakeDriver("#/v1/projects/p1/workspaces/w1");
+	const d = fakeDriver(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
-	d.incoming("#/v1/projects/p1/workspaces/w2");
+	d.incoming(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b2",
+	);
 	await settle();
 	expect(calls).toHaveLength(2);
 
-	calls[0]?.resolve([workspace("w1"), workspace("w2")]);
+	calls[0]?.resolve([
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+		workspace("00000000-0000-4000-8000-0000000000b2"),
+	]);
 	await settle();
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	expect(calls).toHaveLength(2);
-	calls[1]?.resolve([workspace("w1"), workspace("w2")]);
+	calls[1]?.resolve([
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+		workspace("00000000-0000-4000-8000-0000000000b2"),
+	]);
 	await settle();
-	expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w2"));
+	expect(useAppStore.getState().activeWorkspaceId).toBe(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b2"),
+	);
 });
 
 test("teardown detaches the coordinator from driver and store", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	const dispose = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	await settle();
 	dispose();
 	const writes = d.writes.length;
-	useAppStore.getState().selectProject(testProjectId("p1"));
+	useAppStore.getState().selectProject(testProjectId("00000000-0000-4000-8000-0000000000a1"));
 	expect(d.writes.length).toBe(writes);
 });
 
@@ -545,91 +681,170 @@ test("a user chat-tab switch (attention clock advance) pushes exactly one entry"
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s2"), null, "medium");
-	placeChats(testWorkspaceId("w1"), [testSessionId("s1"), testSessionId("s2")], "s1", 1);
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s2"),
+		null,
+		"medium",
+	);
+	placeChats(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		[testSessionId("s1"), testSessionId("s2")],
+		"s1",
+		1,
+	);
 	await settle();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 
 	const pushesBefore = d.pushes.length;
-	useAppStore.getState().noteNavigation(testWorkspaceId("w1"));
-	placeChats(testWorkspaceId("w1"), [testSessionId("s1"), testSessionId("s2")], "s2", 2);
+	useAppStore.getState().noteNavigation(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"));
+	placeChats(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		[testSessionId("s1"), testSessionId("s2")],
+		"s2",
+		2,
+	);
 	expect(d.pushes.length).toBe(pushesBefore + 1);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s2");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s2",
+	);
 });
 
 test("passive auto-open coalesces: the activation pushed, the auto-opened chat replaces in place", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	expect(d.pushes).toEqual(["#/v1/projects/p1/workspaces/w1"]);
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	expect(d.pushes).toEqual([
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	]);
 
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium", undefined, {
-		activate: false,
-	});
-	selectChatPlacement(testWorkspaceId("w1"), testSessionId("s1"));
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
-	expect(d.pushes).toEqual(["#/v1/projects/p1/workspaces/w1"]);
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+		undefined,
+		{
+			activate: false,
+		},
+	);
+	selectChatPlacement(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"), testSessionId("s1"));
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
+	expect(d.pushes).toEqual([
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	]);
 });
 
 test("Back/Forward arrives as an incoming fragment: adopted and applied, never re-pushed", async () => {
 	const d = fakeDriver("");
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1"), workspace("w2")]);
-	store.activateWorkspace(workspace("w1"));
-	store.activateWorkspace(workspace("w2"));
-	expect(d.pushes).toEqual(["#/v1/projects/p1/workspaces/w1", "#/v1/projects/p1/workspaces/w2"]);
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+		workspace("00000000-0000-4000-8000-0000000000b2"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b2"));
+	expect(d.pushes).toEqual([
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b2",
+	]);
 
 	const pushesBefore = d.pushes.length;
-	d.incoming("#/v1/projects/p1/workspaces/w1");
+	d.incoming(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 	await settle();
-	calls.at(-1)?.resolve([workspace("w1"), workspace("w2")]);
+	calls
+		.at(-1)
+		?.resolve([
+			workspace("00000000-0000-4000-8000-0000000000b1"),
+			workspace("00000000-0000-4000-8000-0000000000b2"),
+		]);
 	await settle();
-	expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w1"));
+	expect(useAppStore.getState().activeWorkspaceId).toBe(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+	);
 	expect(d.pushes.length).toBe(pushesBefore);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	);
 });
 
 test("an armed push survives a momentarily underivable location and lands on its write", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.activateWorkspace(workspace("w1"));
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
 	expect(d.pushes).toEqual([]);
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	expect(d.pushes).toEqual(["#/v1/projects/p1/workspaces/w1"]);
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	expect(d.pushes).toEqual([
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1",
+	]);
 });
 
 test("a chat OPEN pushes once even though attention lands before the document commit", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	placeChats(testWorkspaceId("w1"), [testSessionId("s1")], "s1", 1);
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	placeChats(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		[testSessionId("s1")],
+		"s1",
+		1,
+	);
 	const pushesBefore = d.pushes.length;
 
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s2"), null, "medium");
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s2"),
+		null,
+		"medium",
+	);
 	useAppStore.setState((state) => ({
 		layoutAttentionByWorkspace: {
 			...state.layoutAttentionByWorkspace,
-			w1: {
+			"00000000-0000-4000-8000-0000000000b1": {
 				selectedByGroup: { center: "placed:s2" },
 				lastFocusedCenterGroupId: "center",
 				lastFocusedSideGroupId: {},
@@ -639,12 +854,12 @@ test("a chat OPEN pushes once even though attention lands before the document co
 	}));
 	expect(d.pushes.length).toBe(pushesBefore);
 	useAppStore.setState((state) => {
-		const document = state.layoutDocumentsByWorkspace.w1;
+		const document = state.layoutDocumentsByWorkspace["00000000-0000-4000-8000-0000000000b1"];
 		if (document?.center.kind !== "group") throw new Error("unexpected layout");
 		return {
 			layoutDocumentsByWorkspace: {
 				...state.layoutDocumentsByWorkspace,
-				w1: {
+				"00000000-0000-4000-8000-0000000000b1": {
 					...document,
 					center: {
 						...document.center,
@@ -658,30 +873,51 @@ test("a chat OPEN pushes once even though attention lands before the document co
 		};
 	});
 	expect(d.pushes.length).toBe(pushesBefore + 1);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s2");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s2",
+	);
 });
 
 test("removing the selected chat's placement (a close) pushes the neighbor location", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s2"), null, "medium");
-	placeChats(testWorkspaceId("w1"), [testSessionId("s1"), testSessionId("s2")], "s2", 1);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s2");
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s2"),
+		null,
+		"medium",
+	);
+	placeChats(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		[testSessionId("s1"), testSessionId("s2")],
+		"s2",
+		1,
+	);
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s2",
+	);
 	const pushesBefore = d.pushes.length;
 
 	useAppStore.setState((state) => {
-		const document = state.layoutDocumentsByWorkspace.w1;
+		const document = state.layoutDocumentsByWorkspace["00000000-0000-4000-8000-0000000000b1"];
 		if (document?.center.kind !== "group") throw new Error("unexpected layout");
 		return {
 			layoutDocumentsByWorkspace: {
 				...state.layoutDocumentsByWorkspace,
-				w1: {
+				"00000000-0000-4000-8000-0000000000b1": {
 					...document,
 					center: {
 						...document.center,
@@ -692,34 +928,60 @@ test("removing the selected chat's placement (a close) pushes the neighbor locat
 		};
 	});
 	expect(d.pushes.length).toBe(pushesBefore + 1);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s1",
+	);
 });
 
 test("a deferred stamped open pushes its click's entry after the async round trip", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	installWelcome([project("p1")]);
+	installWelcome([project("00000000-0000-4000-8000-0000000000a1")]);
 	const store = useAppStore.getState();
-	store.setWorkspaces(testProjectId("p1"), [workspace("w1")]);
-	store.activateWorkspace(workspace("w1"));
-	store.openChatSession(testWorkspaceId("w1"), testSessionId("s1"), null, "medium");
-	placeChats(testWorkspaceId("w1"), [testSessionId("s1")], "s1", 1);
+	store.setWorkspaces(testProjectId("00000000-0000-4000-8000-0000000000a1"), [
+		workspace("00000000-0000-4000-8000-0000000000b1"),
+	]);
+	store.activateWorkspace(workspace("00000000-0000-4000-8000-0000000000b1"));
+	store.openChatSession(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		testSessionId("s1"),
+		null,
+		"medium",
+	);
+	placeChats(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		[testSessionId("s1")],
+		"s1",
+		1,
+	);
 	const pushesBefore = d.pushes.length;
 
-	const stamp = useAppStore.getState().beginCenterNavigation(testWorkspaceId("w1"), "center");
+	const stamp = useAppStore
+		.getState()
+		.beginCenterNavigation(testWorkspaceId("00000000-0000-4000-8000-0000000000b1"), "center");
 	expect(d.pushes.length).toBe(pushesBefore);
 	await settle();
 	const landed = useAppStore.getState();
 	landed.openChatSession(
-		testWorkspaceId("w1"),
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
 		testSessionId("s2"),
 		null,
 		"medium",
 		undefined,
-		layoutOpenOptionsForNavigation(landed, testWorkspaceId("w1"), stamp),
+		layoutOpenOptionsForNavigation(
+			landed,
+			testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+			stamp,
+		),
 	);
-	placeChats(testWorkspaceId("w1"), [testSessionId("s1"), testSessionId("s2")], "s2");
+	placeChats(
+		testWorkspaceId("00000000-0000-4000-8000-0000000000b1"),
+		[testSessionId("s1"), testSessionId("s2")],
+		"s2",
+	);
 	expect(d.pushes.length).toBe(pushesBefore + 1);
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s2");
+	expect(d.fragment).toBe(
+		"#/v1/projects/00000000-0000-4000-8000-0000000000a1/workspaces/00000000-0000-4000-8000-0000000000b1/chats/s2",
+	);
 });

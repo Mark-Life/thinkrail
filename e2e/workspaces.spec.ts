@@ -46,7 +46,7 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 		join(E2E_DATA_DIR, "projects.json"),
 		JSON.stringify([
 			{
-				id: "fixture-project",
+				id: "00000000-0000-4000-8000-0000000000f1",
 				name: "sample-project",
 				path: E2E_FIXTURE_REPO,
 				slug: "sample-project",

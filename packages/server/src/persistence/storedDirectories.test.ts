@@ -78,3 +78,25 @@ test("a relative THINKRAIL_DATA_DIR still names one absolute data directory", ()
 	process.env.THINKRAIL_DATA_DIR = relative(process.cwd(), root);
 	expect(dataDir()).toBe(root);
 });
+
+test("a project with a hand-edited id stays listed", () => {
+	const ids = ["0f8fad5b-d9cb-469f-a165-70867728950e", "fixture-project", "hand edited"];
+	writeFileSync(
+		join(root, "projects.json"),
+		JSON.stringify(ids.map((id) => ({ ...project(root), id }))),
+	);
+
+	expect(loadProjects().map((entry) => String(entry.id))).toEqual(ids);
+});
+
+test("a workspace id stays listed when it is safe in a path, and a path escape drops", () => {
+	const kept = ["0f8fad5b-d9cb-469f-a165-70867728950e", "fixture-workspace-scope-one"];
+	writeFileSync(
+		join(root, "workspaces.json"),
+		JSON.stringify(
+			[...kept, "../..", "a/b"].map((id) => ({ ...workspace(root), id, projectId: "edited" })),
+		),
+	);
+
+	expect(loadWorkspaces().map((entry) => String(entry.id))).toEqual(kept);
+});

@@ -1,4 +1,5 @@
 import type { ReviewComment, ReviewSnapshot, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { getProjects } from "../projects";
 import { getReviewSnapshot } from "../reviews";
 import {
@@ -87,6 +88,7 @@ export async function itemOpenFindings(p: ItemRef): Promise<ReviewComment[]> {
  * findings-less whole-change verdict (which never had a comment to remove) is never touched.
  */
 export async function clearChangesRequestedIfResolved(p: ItemRef): Promise<void> {
+	if (parseSessionId(p.sessionId) === null) return;
 	if (todoReviewRecord(p)?.state !== "changes_requested") return;
 	if ((await itemOpenFindings(p)).length > 0) return;
 	dropTodoReviewVerdict(p);
