@@ -1,14 +1,15 @@
+import { compile, obj, str } from "@earendil-works/pi-schema";
 import type { NativeCommand } from "@thinkrail/contracts";
 import { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
-import { readLabels } from "./nativeLabels";
+import { type RawLabels, readLabels } from "./nativeLabels";
 
 const MENU_LABEL_KEYS = DESKTOP_MENU_KEYS;
 const MAX_MENU_LABEL_LENGTH = 80;
 
 export type DesktopMenuLabels = Readonly<Record<(typeof MENU_LABEL_KEYS)[number], string>>;
 
-export function readMenuLabels(raw: unknown): DesktopMenuLabels {
+export function readMenuLabels(raw: RawLabels): DesktopMenuLabels {
 	return readLabels(MENU_LABEL_KEYS, MAX_MENU_LABEL_LENGTH, raw);
 }
 
@@ -104,10 +105,8 @@ export function isNativeCommand(action: string | null): action is NativeCommand 
 	return action !== null && Object.hasOwn(NATIVE_COMMANDS, action);
 }
 
+const MenuClick = compile(obj({ data: obj({ action: str() }, { open: true }) }, { open: true }));
+
 export function readMenuAction(event: unknown) {
-	if (typeof event !== "object" || event === null) return null;
-	const data: unknown = Reflect.get(event, "data");
-	if (typeof data !== "object" || data === null) return null;
-	const action: unknown = Reflect.get(data, "action");
-	return typeof action === "string" ? action : null;
+	return MenuClick.check(event) ? event.data.action : null;
 }

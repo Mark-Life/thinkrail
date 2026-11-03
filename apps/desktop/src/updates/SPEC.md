@@ -21,7 +21,7 @@ operation, while the controller keeps only the cross-operation sequencing needed
 - **Public surface:** Electrobun update-controller and quit-coordinator construction, plus
   `readPendingInstallVersion` for the startup splash, are exported only through `index.ts`. The pure
   controller, enablement policy, journal store, dependency shapes, and lifecycle implementation stay internal.
-- **Allowed deps:** the type-only native update contract from `@thinkrail/contracts`, `electrobun/main` in the
+- **Allowed deps:** the type-only native update contract from `@thinkrail/contracts`, `pi-schema` for the journal, `electrobun/main` in the
   SDK adapter, and injected clocks/randomness/lifecycle callbacks in the pure controller.
 - **Forbidden:** web or server imports; renderer-selected feed URLs; host wire methods; release publication,
   signing, or authentication; draft persistence; shutdown ownership; a second SDK subscription.

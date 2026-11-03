@@ -47,7 +47,8 @@ export type WsErrorCode =
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
 	| "INVALID_PARAMS"
-	| "INVALID_REPLY";
+	| "INVALID_REPLY"
+	| "NATIVE_RPC_INVALID";
 
 /** Any string passes: a newer host may send a code this client does not know. */
 const WireErrorCode: Schema<WsErrorCode> = { type: "string" };

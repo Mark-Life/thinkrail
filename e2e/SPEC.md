@@ -476,7 +476,8 @@ tolerates an error reply still cannot hide a mismatch. Artifact hosts do not set
   surface — Pierre file rendering, unified-only diffs, tap-to-comment and inline placement at
   `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
   resize and hide the auxiliary stacks.
-- **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
+- **Consumes:** the built web artifact, the host's public boot/wire behavior, contracts' wire schemas through
+  `pi-schema` (`fixtures/wire.ts` parses frames and results with them, so a fixture cannot drift from the wire), sanctioned server test-fixture
   exports, CLI binary, the locator and ready-document poller from [[module-artifact-tests]], shared
   retrying teardown and `errnoCode` helpers, git, Chromium, and Playwright. Standalone native/installer smoke and shared
   artifact probes are owned by that test workspace, outside Playwright discovery.
