@@ -200,8 +200,8 @@ reload.
 
 ## Boundary
 
-- **Allowed deps:** Node built-ins (`node:fs`, `node:path`, `node:crypto`) and `@earendil-works/pi-schema`, which has no
-  dependencies and ships with `pi`.
+- **Allowed deps:** Node built-ins (`node:fs`, `node:path`, `node:crypto`) and `@earendil-works/pi-schema`, a real
+  `dependency` of this package: `pi install` skips peers and pi's extension loader does not provide it.
 - **Forbidden:** any other `@earendil-works/*` **and any `@thinkrail/*`** import — this is the pi-free,
   thinkrail-free layer the host can value-import without pulling pi into its bundle, and that stays
   installable under vanilla `pi`. Consequence: `STORE_DIR` (`.thinkrail/context/todos`) carries a **local

@@ -119,7 +119,7 @@ The on-disk file `version` is `6` (`3` added artifacts, `4` added the `commit` k
 ## Boundary
 
 - **Allowed deps:** `@earendil-works/pi-coding-agent` — types/public truncation helpers, as a peer
-  dep — and `typebox`, `@earendil-works/pi-schema`, and Node built-ins.
+  dep — `typebox`, Node built-ins, and `@earendil-works/pi-schema` as a real `dependency` (see [[submodule-pi-todos-core]]).
   `core/` uses Node built-ins and `pi-schema` only. The tool layer's response-only temporary files do not change
   ownership of the canonical TODO store (see [[submodule-pi-todos-tools]]).
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by

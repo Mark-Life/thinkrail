@@ -115,7 +115,8 @@ export function getConfig(): AppConfig {
 }
 
 function configToOverwrite(): AppConfig {
-	if (cacheHoldsDefaultsFromFailedRead || isConfigOverwriteRefused()) cached = null;
+	if (cacheHoldsDefaultsFromFailedRead) cached = null;
+	else if (cached && isConfigOverwriteRefused()) loadConfig();
 	return getConfig();
 }
 

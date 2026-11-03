@@ -294,16 +294,17 @@
     "packages/pi-todos": {
       "name": "pi-todos",
       "version": "0.0.0",
+      "dependencies": {
+        "@earendil-works/pi-schema": "catalog:",
+      },
       "devDependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
-        "@earendil-works/pi-schema": "catalog:",
         "@types/bun": "catalog:",
         "typebox": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
-        "@earendil-works/pi-schema": "*",
         "typebox": "*",
       },
     },

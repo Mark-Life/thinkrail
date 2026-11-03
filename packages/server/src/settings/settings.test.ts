@@ -1007,6 +1007,24 @@ test("one failed read beside a good cache does not refuse the next save", () => 
 	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
 });
 
+test("a refused save keeps a good cache while the file stays unreadable", () => {
+	const stored = { locale: "de", analyticsEnabled: true, disabledExtensions: ["x"] };
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(stored));
+	expect(getConfig()).toMatchObject(stored);
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+	expect(getConfig()).toMatchObject(stored);
+	noteRecentModel(wireModel("m", "p"));
+	expect(getConfig()).toMatchObject({ ...stored, recentModels: [] });
+
+	restoreConfig(stored);
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ ...stored, codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ ...stored, codeFontSize: 15 });
+});
+
 test("noteRecentModel does not throw when the save fails, and keeps the last good list", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

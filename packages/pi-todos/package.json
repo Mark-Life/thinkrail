@@ -21,14 +21,15 @@
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
+	"dependencies": {
+		"@earendil-works/pi-schema": "catalog:"
+	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",
-		"@earendil-works/pi-schema": "*",
 		"typebox": "*"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",
-		"@earendil-works/pi-schema": "catalog:",
 		"@types/bun": "catalog:",
 		"typebox": "catalog:",
 		"typescript": "catalog:"
