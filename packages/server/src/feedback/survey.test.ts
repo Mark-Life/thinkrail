@@ -11,6 +11,7 @@ import {
 	selectInAppSurvey,
 	setSurveyClockForTests,
 	surveyResponse,
+	surveyWaitPeriodMs,
 } from "./survey";
 
 afterEach(() => {
@@ -614,4 +615,62 @@ test("a translated list loses its open choice the same way, so its fixed choices
 		}),
 	);
 	expect(sent.$survey_response_pick).toBe("No");
+});
+
+test("a wrong-type part of a PostHog survey loses only that part", () => {
+	const selected = selectInAppSurvey({
+		surveys: [
+			launched({
+				appearance: { placeholder: 5, thankYouMessageHeader: "Thanks" },
+				conditions: "soon",
+				translations: { fr: { thankYouMessageHeader: 5 } },
+				questions: [
+					openQuestion,
+					{ ...openQuestion, id: "bad-description", description: 5 },
+					{
+						...openQuestion,
+						id: "bad-translation",
+						translations: { fr: { question: 5 }, de: { question: "Frage" } },
+					},
+				],
+			}),
+		],
+	});
+	expect(selected?.questions.map((question) => question.id)).toEqual([
+		openQuestion.id,
+		"bad-translation",
+	]);
+	expect(selected?.placeholder).toBeUndefined();
+	expect(selected?.thankYou).toBe("");
+	if (!selected) throw new Error("expected a survey");
+	expect(surveyWaitPeriodMs(selected)).toBe(0);
+	expect(localizeSurvey(selected, "fr").language).toBeUndefined();
+	expect(localizeSurvey(selected, "de").questions[1]?.question).toBe("Frage");
+});
+
+test("a survey with a wrong-type iteration, end date or archived flag stays hidden", () => {
+	for (const overrides of [
+		{ current_iteration: 1.5 },
+		{ current_iteration: "2" },
+		{ end_date: 5 },
+		{ archived: "no" },
+		{ id: 5 },
+		{ start_date: 5 },
+		{ questions: "none" },
+	]) {
+		expect(selectInAppSurvey({ surveys: [launched(overrides)] })).toBeNull();
+	}
+	expect(selectInAppSurvey({ surveys: [launched({ end_date: 5 }), launched()] })?.id).toBe(
+		launched().id,
+	);
+});
+
+test("a refresh that reads an unusable PostHog reply resolves quietly", async () => {
+	for (const body of ["not json", "5", '{"surveys":5}', '[{"name":5}]']) {
+		resetSurveyForTests();
+		const fetchImpl = (() =>
+			Promise.resolve(new Response(body, { status: 200 }))) as unknown as typeof fetch;
+		configureSurveySource({ apiKey: "phc_test", fetchImpl });
+		expect(await refreshInAppSurvey()).toBeNull();
+	}
 });

@@ -119,7 +119,7 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export
   (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package
   tests import them relatively (`./testFixtures`); the e2e seeder imports the subpath.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir` — the default sessions root — plus
+- **Allowed deps:** `pi-schema`; `@earendil-works/pi-coding-agent` (`getAgentDir` — the default sessions root — plus
   the exported session-tree helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionContext`
   used by `extract.ts`; **not `SessionManager`** in production code — see Responsibility. Tests may use
   `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
