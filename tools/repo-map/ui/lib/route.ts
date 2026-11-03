@@ -20,8 +20,11 @@ export interface TraceRoute {
 	tests: boolean;
 }
 
+export type FlowLayout = "waterfall" | "sequence";
+
 export interface FlowRoute {
 	view: "flow";
+	layout: FlowLayout;
 	symbol?: SymbolId;
 	side: GraphSide;
 	depth: number;
@@ -118,6 +121,7 @@ export function parseHash(hash: string, fallback: Route): Route {
 		case "flow": {
 			const base: FlowRoute = {
 				view: "flow",
+				layout: params.get("layout") === "sequence" ? "sequence" : "waterfall",
 				side,
 				depth: depthParam(params.get("d")),
 				utilities: params.get("utils") === "1",
@@ -186,6 +190,7 @@ function routeParams(route: Route) {
 			setParam(params, "s", route.symbol);
 			setSide(params, route.side);
 			if (route.depth !== DEFAULT_FLOW_DEPTH) params.set("d", String(route.depth));
+			if (route.layout === "sequence") params.set("layout", "sequence");
 			setParam(params, "sel", route.selected);
 			setFlag(params, "utils", route.utilities);
 			break;
@@ -239,7 +244,13 @@ export function traceHref(symbol: SymbolId | undefined, side: GraphSide = "head"
 }
 
 export function flowHref(symbol: SymbolId | undefined, side: GraphSide = "head") {
-	const base: FlowRoute = { view: "flow", side, depth: DEFAULT_FLOW_DEPTH, utilities: false };
+	const base: FlowRoute = {
+		view: "flow",
+		layout: "waterfall",
+		side,
+		depth: DEFAULT_FLOW_DEPTH,
+		utilities: false,
+	};
 	return formatHash(withOptional(base, "symbol", symbol));
 }
 

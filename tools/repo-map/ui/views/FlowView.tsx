@@ -3,10 +3,18 @@ import type { SymbolId } from "../../core/types";
 import { SplitWithSource } from "../components/SplitWithSource";
 import { StartPicker } from "../components/StartPicker";
 import { InlineMessage } from "../components/States";
-import { buildFlow, type Flow, type FlowStep } from "../lib/flow";
+import { buildFlow, type Flow, type FlowStep, stepLabel } from "../lib/flow";
 import { displayName, plural, shortModule } from "../lib/format";
-import { type FlowRoute, flowHref, formatHash, MAX_FLOW_DEPTH, MIN_FLOW_DEPTH } from "../lib/route";
+import {
+	type FlowLayout,
+	type FlowRoute,
+	flowHref,
+	formatHash,
+	MAX_FLOW_DEPTH,
+	MIN_FLOW_DEPTH,
+} from "../lib/route";
 import { useGraph, useWorkspace } from "../lib/workspace";
+import { FlowWaterfall } from "./FlowWaterfall";
 
 const LANE_WIDTH = 164;
 const LABEL_ROOM = LANE_WIDTH * 2;
@@ -20,14 +28,10 @@ function laneX(lane: number) {
 	return LANE_LEFT + lane * LANE_WIDTH;
 }
 
-function stepLabel(step: FlowStep) {
-	const name = displayName(step.to);
-	if (step.wire) return step.label ?? name;
-	if (step.kind === "render") return `<${name}>`;
-	if (step.kind === "new") return `new ${name}`;
-	if (step.kind === "implements") return `impl ${name}`;
-	return `${name}()`;
-}
+const LAYOUTS: ReadonlyArray<{ id: FlowLayout; label: string }> = [
+	{ id: "waterfall", label: "Waterfall" },
+	{ id: "sequence", label: "Sequence" },
+];
 
 function arrowPath(step: FlowStep, y: number) {
 	const from = laneX(step.fromLane);
@@ -181,7 +185,7 @@ export function FlowView(props: { route: FlowRoute }) {
 		return (
 			<StartPicker
 				title="Pick a symbol to follow"
-				detail="Flow follows calls depth-first in source order, with one lifeline per module. It is the call stack, drawn."
+				detail="Flow follows calls depth-first in source order, as a collapsible call tree or a sequence diagram."
 				hrefFor={hrefForPick}
 			/>
 		);
@@ -200,6 +204,7 @@ export function FlowView(props: { route: FlowRoute }) {
 	}
 	const selected = (route.selected && index.symbols.get(route.selected)) || rootSymbol;
 	const wires = flow.steps.filter((step) => step.wire).length;
+	const flowKey = `${root}|${route.side}|${route.depth}|${route.utilities}`;
 	return (
 		<SplitWithSource
 			symbol={selected}
@@ -213,6 +218,18 @@ export function FlowView(props: { route: FlowRoute }) {
 						<span className="graph-title" title={root}>
 							{displayName(rootSymbol)}
 						</span>
+						<nav className="layout-switch" aria-label="Flow layout">
+							{LAYOUTS.map((layout) => (
+								<a
+									key={layout.id}
+									className="layout-switch-option"
+									aria-current={route.layout === layout.id}
+									href={formatHash({ ...route, layout: layout.id })}
+								>
+									{layout.label}
+								</a>
+							))}
+						</nav>
 						<fieldset className="stepper">
 							<legend className="stepper-label">Depth</legend>
 							<a
@@ -260,6 +277,8 @@ export function FlowView(props: { route: FlowRoute }) {
 								<p>Flow follows outgoing calls. Open Trace to see who calls it.</p>
 							</InlineMessage>
 						</div>
+					) : route.layout === "waterfall" ? (
+						<FlowWaterfall key={flowKey} flow={flow} route={route} />
 					) : (
 						<Diagram flow={flow} route={route} />
 					)}

@@ -18,7 +18,16 @@ const routes: Route[] = [
 		types: true,
 		tests: true,
 	},
-	{ view: "flow", symbol, side: "head", depth: 5, utilities: true, selected: symbol },
+	{
+		view: "flow",
+		layout: "sequence",
+		symbol,
+		side: "head",
+		depth: 5,
+		utilities: true,
+		selected: symbol,
+	},
+	{ view: "flow", layout: "waterfall", symbol, side: "head", depth: 3, utilities: false },
 	{ view: "symbol", symbol, side: "base" },
 	{ view: "file", file: "a/b.ts", side: "head", line: 12 },
 	{ view: "changes", section: "groups", group: "g1", tab: "source", symbol },
@@ -34,6 +43,11 @@ describe("route", () => {
 		expect(parseHash("", fallback)).toBe(fallback);
 		expect(parseHash("#/nope", fallback)).toBe(fallback);
 		expect(parseHash("#/symbol", fallback)).toBe(fallback);
+	});
+
+	test("defaults flow to the waterfall layout", () => {
+		const route = parseHash("#/flow", fallback);
+		expect(route.view === "flow" && route.layout).toBe("waterfall");
 	});
 
 	test("clamps flow depth", () => {

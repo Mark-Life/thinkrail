@@ -1,4 +1,5 @@
 import type { CodeSymbol, EdgeKind, SymbolId } from "../../core/types";
+import { displayName } from "./format";
 import { type GraphIndex, isWireEdge } from "./graphIndex";
 
 export const UTILITY_FAN_IN = 40;
@@ -46,6 +47,15 @@ interface FlowLink {
 	kind: EdgeKind;
 	line: number;
 	label?: string;
+}
+
+export function stepLabel(step: FlowStep) {
+	const name = displayName(step.to);
+	if (step.wire) return step.label ?? name;
+	if (step.kind === "render") return `<${name}>`;
+	if (step.kind === "new") return `new ${name}`;
+	if (step.kind === "implements") return `impl ${name}`;
+	return `${name}()`;
 }
 
 function implementationsOf(index: GraphIndex, id: SymbolId) {
