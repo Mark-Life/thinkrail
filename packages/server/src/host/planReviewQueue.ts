@@ -1,29 +1,31 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { logger } from "../log";
 
 const log = logger("review");
 const chains = new Map<string, Promise<void>>();
 const active = new Set<string>();
 
-const planKey = (workspaceId: string, sessionId: string): string =>
+const planKey = (workspaceId: WorkspaceId, sessionId: SessionId): string =>
 	JSON.stringify([workspaceId, sessionId]);
-const itemKey = (sessionId: string, itemId: string): string => JSON.stringify([sessionId, itemId]);
+const itemKey = (sessionId: SessionId, itemId: string): string =>
+	JSON.stringify([sessionId, itemId]);
 
-export function planReviewRunning(workspaceId: string, sessionId: string): boolean {
+export function planReviewRunning(workspaceId: WorkspaceId, sessionId: SessionId): boolean {
 	return chains.has(planKey(workspaceId, sessionId));
 }
 
-export function itemReviewActive(sessionId: string, itemId: string): boolean {
+export function itemReviewActive(sessionId: SessionId, itemId: string): boolean {
 	return active.has(itemKey(sessionId, itemId));
 }
 
-export function claimItemReview(sessionId: string, itemId: string): boolean {
+export function claimItemReview(sessionId: SessionId, itemId: string): boolean {
 	const item = itemKey(sessionId, itemId);
 	if (active.has(item)) return false;
 	active.add(item);
 	return true;
 }
 
-export function releaseItemReview(sessionId: string, itemId: string): void {
+export function releaseItemReview(sessionId: SessionId, itemId: string): void {
 	active.delete(itemKey(sessionId, itemId));
 }
 
@@ -31,8 +33,8 @@ export function releaseItemReview(sessionId: string, itemId: string): void {
  * both entry points share. The caller owns the item claim; errors propagate to the caller (unlike
  * `enqueuePlanReview`, which swallows them for the detached button path). See planReview.SPEC.md. */
 export function onPlanChain<T>(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	run: () => Promise<T>,
 ): Promise<T> {
 	const plan = planKey(workspaceId, sessionId);
@@ -50,8 +52,8 @@ export function onPlanChain<T>(
 }
 
 export function enqueuePlanReview(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	itemId: string,
 	run: () => Promise<void>,
 ): boolean {

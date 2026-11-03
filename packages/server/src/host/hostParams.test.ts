@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG, type WireModel, WS_CHANNELS } from "@thinkrail/contracts";
+import { asWorkspaceId, DEFAULT_CONFIG, type WireModel, WS_CHANNELS } from "@thinkrail/contracts";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
@@ -268,7 +268,7 @@ test("a preset center too deep and malformed at the bottom stops at the depth gu
 
 test("oversized refused params never build a per-element report", async () => {
 	const commentIds = Array.from({ length: 20_000 }, (_, index) => index);
-	const params = { workspaceId: "w", commentIds };
+	const params = { workspaceId: asWorkspaceId("w"), commentIds };
 	expect(JSON.stringify(params).length).toBeGreaterThan(64 * 1024);
 	const refusal = handleRequest("review.sendBatch", params, CTX);
 	await expect(refusal).rejects.toMatchObject({
@@ -288,7 +288,11 @@ test("params too deep to measure are refused with the same coded error", async (
 });
 
 test("small refused params keep their reasons, and a missing params object is one of them", async () => {
-	const refusal = handleRequest("review.sendBatch", { workspaceId: "w", commentIds: [1] }, CTX);
+	const refusal = handleRequest(
+		"review.sendBatch",
+		{ workspaceId: asWorkspaceId("w"), commentIds: [1] },
+		CTX,
+	);
 	await expect(refusal).rejects.toThrow(/^Invalid review\.sendBatch: /);
 	const missing = handleRequest("review.sendBatch", undefined, CTX);
 	await expect(missing).rejects.toThrow(/^Invalid review\.sendBatch: /);

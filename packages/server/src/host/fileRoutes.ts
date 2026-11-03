@@ -1,4 +1,5 @@
 import { statSync } from "node:fs";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { CONTENT_SNIFF_BYTES, classifyBytes, mimeFromPath, resolveWorktreeFile } from "../fs";
 import { readBlobSizeAtAsync, readBlobStreamAtAsync } from "../git";
 import { loadWorkspaces } from "../persistence";
@@ -54,7 +55,7 @@ export async function serveWorktreeFile(pathname: string): Promise<Response> {
 	const relPath = parsed === null ? null : decoded(parsed.remainder);
 	if (parsed === null || relPath === null) return notFound(NO_STORE);
 	try {
-		const abs = resolveWorktreeFile(parsed.segment, relPath);
+		const abs = resolveWorktreeFile(asWorkspaceId(parsed.segment), relPath);
 		const stat = statSync(abs);
 		if (!stat.isFile()) return notFound(NO_STORE);
 		const file = Bun.file(abs);
@@ -79,7 +80,7 @@ export async function serveBlob(pathname: string, signal?: AbortSignal): Promise
 			(candidate) => candidate.id === workspace.segment,
 		)?.worktreePath;
 		if (worktreePath === undefined) return notFound();
-		resolveWorktreeFile(workspace.segment, relPath);
+		resolveWorktreeFile(asWorkspaceId(workspace.segment), relPath);
 		const size = await readBlobSizeAtAsync(worktreePath, blob.segment, relPath);
 		if (size === null) return notFound();
 		if (size > BLOB_SIZE_LIMIT) return new Response("blob too large", { status: 413 });

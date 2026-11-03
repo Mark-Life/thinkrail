@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { PlanReviewResult } from "@thinkrail/contracts";
-import { composeText, parseVerdict } from "./requestReview";
+import { composeText, parseVerdict } from "./reviewVerdict";
 
 const ID = "t_1";
 const TITLE = "Wire login redirect";

@@ -1,4 +1,4 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { SessionId, UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
@@ -35,7 +35,7 @@ type LayoutResourceIdentityInput =
 	| { kind: "diff"; path: string; before?: undefined; scope: LayoutDiffScopeInput }
 	| { kind: "diff"; path: string; before: string }
 	| { kind: "changes"; scope: LayoutDiffScopeInput }
-	| { kind: "chat"; sessionId: string }
+	| { kind: "chat"; sessionId: SessionId }
 	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
 	| { kind: "tool"; tool: string };

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { asSessionId } from "@thinkrail/contracts";
 import {
 	DEFAULT_CONFIG,
 	isSettleIdleDays,
@@ -431,7 +432,7 @@ describe("customMessageText", () => {
 test("command completion guards accept displayed terminal notices, not malformed or hidden details", () => {
 	const details = {
 		id: "command",
-		sessionId: "parent",
+		sessionId: asSessionId("parent"),
 		name: "build",
 		status: "completed",
 		startedAt: 1,

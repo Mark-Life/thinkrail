@@ -1,4 +1,4 @@
-import type { GitStatus } from "@thinkrail/contracts";
+import type { GitStatus, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useRef, useState } from "react";
 import {
@@ -13,7 +13,7 @@ import { scopeKey } from "./changesModel";
 import { readGitStatus } from "./gitStatusCache";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
-export function useGitStatus(workspaceId: string) {
+export function useGitStatus(workspaceId: WorkspaceId) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const warnedRef = useRef(false);

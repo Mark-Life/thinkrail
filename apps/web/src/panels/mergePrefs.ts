@@ -1,4 +1,4 @@
-import type { MergeMethod } from "@thinkrail/contracts";
+import type { MergeMethod, ProjectId } from "@thinkrail/contracts";
 import { STORAGE_PREFIX } from "../constants/branding";
 import { getTransport } from "../transport";
 
@@ -10,11 +10,11 @@ export interface MergePrefs {
 const FALLBACK_ORDER: MergeMethod[] = ["squash", "merge", "rebase"];
 const METHODS = new Set<string>(FALLBACK_ORDER);
 
-function storageKey(projectId: string): string {
+function storageKey(projectId: ProjectId): string {
 	return `${STORAGE_PREFIX}merge-pr:${getTransport().httpBase()}:${projectId}`;
 }
 
-export function loadMergePrefs(projectId: string): MergePrefs {
+export function loadMergePrefs(projectId: ProjectId): MergePrefs {
 	try {
 		const raw: unknown = JSON.parse(localStorage.getItem(storageKey(projectId)) ?? "null");
 		if (typeof raw !== "object" || raw === null) return {};
@@ -30,7 +30,7 @@ export function loadMergePrefs(projectId: string): MergePrefs {
 	}
 }
 
-export function saveMergePrefs(projectId: string, prefs: Required<MergePrefs>): void {
+export function saveMergePrefs(projectId: ProjectId, prefs: Required<MergePrefs>): void {
 	try {
 		localStorage.setItem(storageKey(projectId), JSON.stringify(prefs));
 	} catch {}

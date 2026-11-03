@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { asSessionId } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, waitForAgentSettled } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -51,7 +52,10 @@ test("manual compaction preserves context through continuation and reload", {
 		await expect(reply).toContainText("riverstone");
 		const wire = await E2eWire.connect();
 		const transcript = await wire
-			.request("session.getMessages", { sessionId, workspaceId: workspace.id })
+			.request("session.getMessages", {
+				sessionId: asSessionId(sessionId),
+				workspaceId: workspace.id,
+			})
 			.finally(() => wire.close());
 		const summary = transcript.messages.find((message) => message.role === "compactionSummary");
 		if (summary?.role !== "compactionSummary")

@@ -9,7 +9,8 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { PiEvent } from "@thinkrail/contracts";
+import type { PiEvent, SessionId } from "@thinkrail/contracts";
+import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
 import {
 	configurePiRuntime,
 	configurePiRuntimeFactory,
@@ -60,8 +61,8 @@ beforeEach(async () => {
 	sh("commit", "-m", "init");
 	saveWorkspaces([
 		{
-			id: "w1",
-			projectId: "p1",
+			id: asWorkspaceId("w1"),
+			projectId: asProjectId("p1"),
 			kind: "default",
 			name: "repo",
 			branch: "main",
@@ -111,7 +112,7 @@ test.each([
 	let recording: Promise<void> | undefined;
 	const observeSpy = spyOn(TurnTracker.prototype, "observe").mockImplementation(function (
 		this: TurnTracker,
-		sessionId: string,
+		sessionId: SessionId,
 		event: PiEvent,
 	) {
 		const job = realObserve.call(this, sessionId, event);
@@ -163,12 +164,12 @@ test.each([
 		server = await createServer({ port: 0, analytics: { mute: true } });
 		const { sessionId } = await createSession({
 			cwd: repo,
-			workspaceId: "w1",
+			workspaceId: asWorkspaceId("w1"),
 			model: toWireModel(faux.getModel()),
 		});
 		await promptSession(sessionId, "Write feature.ts");
 		expect(recording).toBeDefined();
-		expect(listTurns("w1")).toEqual([]);
+		expect(listTurns(asWorkspaceId("w1"))).toEqual([]);
 		if (teardown === "removeSession") {
 			await removeSession(sessionId);
 			expect(getSessionWorkspaceId(sessionId)).toBeUndefined();
@@ -188,9 +189,9 @@ test.each([
 		expect(trees[1]).not.toBeNull();
 		expect(trees[0]).not.toBe(trees[1]);
 		expect(getWorkspace("w1").worktreePath).toBe(repo);
-		const turns = listTurns("w1");
+		const turns = listTurns(asWorkspaceId("w1"));
 		expect(turns).toHaveLength(1);
-		expect(turns[0]).toMatchObject({ sessionId, workspaceId: "w1" });
+		expect(turns[0]).toMatchObject({ sessionId, workspaceId: asWorkspaceId("w1") });
 		expect(turns[0]?.changes.map((change) => change.path)).toEqual(["feature.ts"]);
 		expect(loadTurns().byWorkspace.w1).toEqual(turns);
 	} finally {

@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import type { ProjectId, SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { listSessions } from "../agent";
 import { findBranchReviewOutcome } from "../branch-review";
 import { logger } from "../log";
@@ -119,7 +119,7 @@ async function forEachBounded<T>(
 
 /** Backfills missing activity stamps, then refreshes the review of every candidate-live row. */
 export function scheduleLifecyclePass(
-	projectId: string,
+	projectId: ProjectId,
 	opts: { fresh?: boolean } = {},
 ): Promise<void> {
 	const running = passesInFlight.get(projectId);

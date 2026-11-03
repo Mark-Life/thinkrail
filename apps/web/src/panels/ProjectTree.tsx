@@ -23,7 +23,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
+import type { EditorInfo, Project, ProjectId, Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import {
@@ -127,22 +127,22 @@ export function ProjectTree() {
 	const editors = useEditors();
 
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
-	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
-	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
+	const [dialogProjectId, setDialogProjectId] = useState<ProjectId | null>(null);
+	const [existingDialogProjectId, setExistingDialogProjectId] = useState<ProjectId | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
 	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
-	const workspaceDialogReturnFocusIdRef = useRef<string | null>(null);
-	const existingDialogReturnFocusIdRef = useRef<string | null>(null);
+	const workspaceDialogReturnFocusIdRef = useRef<ProjectId | null>(null);
+	const existingDialogReturnFocusIdRef = useRef<ProjectId | null>(null);
 
 	const registerProjectNameButton = useCallback(
-		(projectId: string, element: HTMLButtonElement | null) => {
+		(projectId: ProjectId, element: HTMLButtonElement | null) => {
 			if (element) projectNameButtonsRef.current.set(projectId, element);
 			else projectNameButtonsRef.current.delete(projectId);
 		},
 		[],
 	);
-	const focusProjectNameOrAdd = useCallback((projectId?: string) => {
+	const focusProjectNameOrAdd = useCallback((projectId?: ProjectId) => {
 		requestAnimationFrame(() => {
 			const projectButton = projectId ? projectNameButtonsRef.current.get(projectId) : undefined;
 			(projectButton ?? addProjectButtonRef.current)?.focus();
@@ -195,7 +195,7 @@ export function ProjectTree() {
 		return () => clearTimeout(timer);
 	}, [autoSettledKey]);
 
-	const loadWorkspaces = useCallback(async (projectId: string) => {
+	const loadWorkspaces = useCallback(async (projectId: ProjectId) => {
 		await loadProjectWorkspaces(projectId);
 	}, []);
 
@@ -211,7 +211,7 @@ export function ProjectTree() {
 		}
 	}, [projects, expandedProjectIds, workspaces, loadWorkspaces]);
 
-	const selectProject = async (projectId: string) => {
+	const selectProject = async (projectId: ProjectId) => {
 		useAppStore.getState().selectProject(projectId, { reveal: true });
 		await loadWorkspaces(projectId);
 	};
@@ -220,7 +220,7 @@ export function ProjectTree() {
 		useAppStore.getState().activateWorkspace(workspace);
 	};
 
-	const toggleExpand = (projectId: string) => {
+	const toggleExpand = (projectId: ProjectId) => {
 		const store = useAppStore.getState();
 		const willExpand = !store.expandedProjectIds[projectId];
 		store.toggleProjectExpanded(projectId);
@@ -258,12 +258,12 @@ export function ProjectTree() {
 			});
 	};
 
-	const openWorkspaceDialog = (projectId: string, returnFocusToProject: boolean) => {
+	const openWorkspaceDialog = (projectId: ProjectId, returnFocusToProject: boolean) => {
 		workspaceDialogReturnFocusIdRef.current = returnFocusToProject ? projectId : null;
 		setDialogProjectId(projectId);
 	};
 
-	const openExistingWorktreeDialog = (projectId: string) => {
+	const openExistingWorktreeDialog = (projectId: ProjectId) => {
 		existingDialogReturnFocusIdRef.current = projectId;
 		setExistingDialogProjectId(projectId);
 	};
@@ -415,7 +415,7 @@ function SettledPartition({
 	renderRow,
 }: {
 	enabled: boolean;
-	projectId: string;
+	projectId: ProjectId;
 	partition: ReturnType<typeof selectWorkspacePartition>;
 	shelfExpanded: boolean;
 	shelfShown: number;

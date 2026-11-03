@@ -4,6 +4,7 @@ import {
 	RiSearchLine,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
+import type { ProjectId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
@@ -101,7 +102,7 @@ export function Shell() {
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
-	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
+	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<ProjectId | null>(null);
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 	const [searchShortcut] = useState(() => platformShortcutLabel("K"));

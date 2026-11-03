@@ -1,4 +1,4 @@
-import type { ResourceMeta } from "@thinkrail/contracts";
+import type { ResourceMeta, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { createContext, useContext } from "react";
 import type ReactMarkdown from "react-markdown";
@@ -39,36 +39,36 @@ export interface ResourceCodeHost {
 }
 
 export interface ResourceScope {
-	workspaceId: string;
-	sessionId?: string | undefined;
+	workspaceId: WorkspaceId;
+	sessionId?: SessionId | undefined;
 }
 
 export interface ResourceReviewSendProps {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	paths: readonly string[];
-	sessionId?: string | undefined;
+	sessionId?: SessionId | undefined;
 }
 
 export interface ResourceFileReviewProps {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	kind: "inline" | "diff";
-	sessionId?: string | undefined;
+	sessionId?: SessionId | undefined;
 	children: (review: SurfaceReview) => ReactNode;
 }
 
 export interface ResourceHost {
 	markdown: ResourceMarkdown;
 	code: ResourceCodeHost;
-	bytesUrl(workspaceId: string, path: string, oid?: string | null): string;
-	openFile(workspaceId: string, path: string, options?: { keep?: boolean }): void;
-	openComparison(workspaceId: string, before: string, path: string): void;
+	bytesUrl(workspaceId: WorkspaceId, path: string, oid?: string | null): string;
+	openFile(workspaceId: WorkspaceId, path: string, options?: { keep?: boolean }): void;
+	openComparison(workspaceId: WorkspaceId, before: string, path: string): void;
 	readFile(
-		workspaceId: string,
+		workspaceId: WorkspaceId,
 		path: string,
 	): Promise<{ content: string; meta?: ResourceMeta | undefined }>;
 	subscribeFileChanges(
-		workspaceId: string,
+		workspaceId: WorkspaceId,
 		onChange: (paths: readonly string[] | null) => void,
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;

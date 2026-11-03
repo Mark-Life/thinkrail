@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import type { NotificationSpec } from "./formatNotification";
 import {
 	createWebNotificationChannel,
@@ -155,7 +156,7 @@ describe("web notification channel", () => {
 			subtitle: "feature-branch",
 			body: "Waiting for your input",
 			tag: "attention:s1",
-			target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+			target: { kind: "chat", workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
 			...overrides,
 		};
 	}
@@ -176,7 +177,7 @@ describe("web notification channel", () => {
 				title: "ThinkRail",
 				body: "2 worktrees need your attention",
 				tag: "attention:s1",
-				target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+				target: { kind: "chat", workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
 			},
 			() => {},
 		);

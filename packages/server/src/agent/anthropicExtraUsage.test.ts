@@ -6,6 +6,7 @@ import { type Credential, InMemoryCredentialStore } from "@earendil-works/pi-ai"
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, WireModel } from "@thinkrail/contracts";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import {
 	createSession,
 	disposeAllSessions,
@@ -193,7 +194,7 @@ describe("session extra-usage notice", () => {
 		await signIn(OAUTH);
 		const { sessionId } = await createSession({
 			cwd,
-			workspaceId: "ws",
+			workspaceId: asWorkspaceId("ws"),
 			model: anthropicModel(),
 		});
 		await settle();
@@ -212,7 +213,7 @@ describe("session extra-usage notice", () => {
 		await signIn({ type: "api_key", key: "sk-ant-oat01-pasted" });
 		const { sessionId } = await createSession({
 			cwd,
-			workspaceId: "ws",
+			workspaceId: asWorkspaceId("ws"),
 			model: toWireModel(faux.getModel()),
 		});
 		await settle();
@@ -242,7 +243,7 @@ describe("session extra-usage notice", () => {
 		);
 		const { sessionId } = await createSession({
 			cwd,
-			workspaceId: "ws",
+			workspaceId: asWorkspaceId("ws"),
 			model: toWireModel(faux.getModel()),
 		});
 		await settle();
@@ -257,7 +258,7 @@ describe("session extra-usage notice", () => {
 
 	test("stays quiet for a normal Anthropic API key", async () => {
 		await signIn({ type: "api_key", key: "sk-ant-api03-normal" });
-		await createSession({ cwd, workspaceId: "ws", model: anthropicModel() });
+		await createSession({ cwd, workspaceId: asWorkspaceId("ws"), model: anthropicModel() });
 		await settle();
 		expect(notices).toEqual([]);
 	});
@@ -268,7 +269,7 @@ describe("session extra-usage notice", () => {
 			JSON.stringify({ warnings: { anthropicExtraUsage: false } }),
 		);
 		await signIn(OAUTH);
-		await createSession({ cwd, workspaceId: "ws", model: anthropicModel() });
+		await createSession({ cwd, workspaceId: asWorkspaceId("ws"), model: anthropicModel() });
 		await settle();
 		expect(notices).toEqual([]);
 		expect(globalProviderWarnings()).toEqual({ anthropicExtraUsage: false });
@@ -276,7 +277,7 @@ describe("session extra-usage notice", () => {
 
 	test("a check still awaiting auth stays quiet when Don't warn again lands first", async () => {
 		await signIn({ type: "api_key", key: "sk-ant-api03-normal" });
-		await createSession({ cwd, workspaceId: "ws", model: anthropicModel() });
+		await createSession({ cwd, workspaceId: asWorkspaceId("ws"), model: anthropicModel() });
 		await settle();
 		await signIn(OAUTH);
 		const checkAuth = runtime.checkAuth.bind(runtime);
@@ -313,7 +314,7 @@ describe("session extra-usage notice", () => {
 		await signIn(OAUTH);
 		const { sessionId } = await createSession({
 			cwd,
-			workspaceId: "ws",
+			workspaceId: asWorkspaceId("ws"),
 			model: toWireModel(faux.getModel()),
 		});
 		writeFileSync(
@@ -330,7 +331,7 @@ describe("session extra-usage notice", () => {
 		await signIn(OAUTH);
 		const { sessionId } = await createSession({
 			cwd,
-			workspaceId: "ws",
+			workspaceId: asWorkspaceId("ws"),
 			model: toWireModel(faux.getModel()),
 		});
 		expect(globalProviderWarnings()).toEqual({ anthropicExtraUsage: true });

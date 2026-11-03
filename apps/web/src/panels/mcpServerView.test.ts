@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { McpListResult, McpServerSummary } from "@thinkrail/contracts";
+import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import type { McpServerRow } from "@/store";
 import {
@@ -38,7 +39,7 @@ function row(overrides: Partial<McpServerRow> = {}, summaryOverrides = {}): McpS
 		summary: summary(summaryOverrides),
 		state: "connected",
 		effective: true,
-		sessions: { total: 1, reporting: ["s1"], connected: 1 },
+		sessions: { total: 1, reporting: [asSessionId("s1")], connected: 1 },
 		startingStalled: false,
 		approvalPending: false,
 		attention: false,
@@ -54,7 +55,10 @@ test("connected rows carry tool counts, partial chat coverage, and warn at zero 
 	expect(
 		mcpRowView(
 			currentTranslator(),
-			row({ toolCount: 2, sessions: { total: 3, reporting: ["s1", "s2"], connected: 2 } }),
+			row({
+				toolCount: 2,
+				sessions: { total: 3, reporting: [asSessionId("s1"), asSessionId("s2")], connected: 2 },
+			}),
 			NOW,
 		).label,
 	).toBe("Connected in 2 of 3 chats · 2 tools");
@@ -95,8 +99,10 @@ test("each non-green state has one reason line, at most one action and one secon
 	expect(view({ state: "disconnected" }).secondary).toBeUndefined();
 	expect(view({ state: "disabled-in-project" }).label).toBe("Disabled in this project");
 	expect(
-		view({ state: "disabled-in-chat", sessions: { total: 3, reporting: ["a", "b"], connected: 1 } })
-			.label,
+		view({
+			state: "disabled-in-chat",
+			sessions: { total: 3, reporting: [asSessionId("a"), asSessionId("b")], connected: 1 },
+		}).label,
 	).toBe("Disabled in 2 of 3 chats");
 	expect(
 		view(
@@ -178,24 +184,29 @@ test("a pending repository override turns any live row into a review", () => {
 
 test("enablement and exposure route by scope: user servers send only the changed field to the project record, repo servers rewrite their file", () => {
 	const user = summary({ projectOverride: { exposure: "direct" } });
-	expect(mcpSettingWrite("ws", user, { enabled: false }, null)).toEqual({
+	expect(mcpSettingWrite(asWorkspaceId("ws"), user, { enabled: false }, null)).toEqual({
 		method: "mcp.setProjectOverride",
-		params: { workspaceId: "ws", name: "docs", enabled: false },
+		params: { workspaceId: asWorkspaceId("ws"), name: "docs", enabled: false },
 	});
-	expect(mcpSettingWrite("ws", summary(), { exposure: "hidden" }, null)).toEqual({
+	expect(mcpSettingWrite(asWorkspaceId("ws"), summary(), { exposure: "hidden" }, null)).toEqual({
 		method: "mcp.setProjectOverride",
-		params: { workspaceId: "ws", name: "docs", exposure: "hidden" },
+		params: { workspaceId: asWorkspaceId("ws"), name: "docs", exposure: "hidden" },
 	});
 	const project = summary({
 		scope: "project",
 		approval: { state: "approved", fingerprint: "rendered" },
 	});
 	expect(
-		mcpSettingWrite("ws", project, { enabled: false }, { command: "x", exposure: "direct" }),
+		mcpSettingWrite(
+			asWorkspaceId("ws"),
+			project,
+			{ enabled: false },
+			{ command: "x", exposure: "direct" },
+		),
 	).toEqual({
 		method: "mcp.update",
 		params: {
-			workspaceId: "ws",
+			workspaceId: asWorkspaceId("ws"),
 			scope: "project",
 			name: "docs",
 			entry: { command: "x", exposure: "direct", enabled: false },
@@ -203,22 +214,34 @@ test("enablement and exposure route by scope: user servers send only the changed
 		},
 	});
 	expect(
-		mcpSettingWrite("ws", project, { exposure: "hidden" }, { command: "x", enabled: false }).params,
+		mcpSettingWrite(
+			asWorkspaceId("ws"),
+			project,
+			{ exposure: "hidden" },
+			{ command: "x", enabled: false },
+		).params,
 	).toMatchObject({
 		entry: { command: "x", enabled: false, exposure: "hidden" },
 		expectedFingerprint: "rendered",
 	});
 	expect(
-		mcpSettingWrite("ws", project, { enabled: true }, { command: "x", enabled: false }).params,
+		mcpSettingWrite(
+			asWorkspaceId("ws"),
+			project,
+			{ enabled: true },
+			{ command: "x", enabled: false },
+		).params,
 	).toMatchObject({ entry: { command: "x" } });
-	expect(() => mcpSettingWrite("ws", project, { enabled: true }, null)).toThrow(".pi/mcp.json");
+	expect(() => mcpSettingWrite(asWorkspaceId("ws"), project, { enabled: true }, null)).toThrow(
+		".pi/mcp.json",
+	);
 });
 
 test("an update or removal at either scope carries the fingerprint its row was rendered with, never a folded override's", () => {
 	const entry = { command: "x" };
 	expect(
 		mcpEntryUpdate(
-			"ws",
+			asWorkspaceId("ws"),
 			summary({
 				scope: "project",
 				fingerprint: "seen",
@@ -227,7 +250,7 @@ test("an update or removal at either scope carries the fingerprint its row was r
 			entry,
 		),
 	).toEqual({
-		workspaceId: "ws",
+		workspaceId: asWorkspaceId("ws"),
 		scope: "project",
 		name: "docs",
 		entry,
@@ -237,8 +260,8 @@ test("an update or removal at either scope carries the fingerprint its row was r
 		fingerprint: "user-entry",
 		approval: { state: "approved", fingerprint: "override" },
 	});
-	expect(mcpEntryUpdate("ws", user, entry)).toEqual({
-		workspaceId: "ws",
+	expect(mcpEntryUpdate(asWorkspaceId("ws"), user, entry)).toEqual({
+		workspaceId: asWorkspaceId("ws"),
 		scope: "user",
 		name: "docs",
 		entry,
@@ -251,8 +274,8 @@ test("save feedback never claims open chats already applied a change they are st
 	const result = (states: string[][]): McpListResult => ({
 		servers: [],
 		statuses: states.map((servers, index) => ({
-			workspaceId: "ws",
-			sessionId: `s${index}`,
+			workspaceId: asWorkspaceId("ws"),
+			sessionId: asSessionId(`s${index}`),
 			generation: 1,
 			servers: servers.map((state) => ({
 				name: "docs",

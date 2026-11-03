@@ -1,4 +1,5 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
@@ -41,7 +42,7 @@ import type {
 } from "./types";
 
 export interface LayoutTabFocusRequest {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	key: string;
 	location: LayoutGroupLocation;
 	tabId?: string;
@@ -54,7 +55,7 @@ export interface PreparedLayoutClose {
 }
 
 export interface WorkbenchProps {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
@@ -75,7 +76,7 @@ export interface WorkbenchProps {
 		tab: LayoutTab,
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
-	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	onRenameChat?: (sessionId: SessionId, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
@@ -433,7 +434,7 @@ export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
 
 export function useLayoutFocus(
 	request: LayoutTabFocusRequest | null | undefined,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	workspaceRef: React.RefObject<string>,
 ): void {
 	const consumed = useRef<string | null>(null);
@@ -583,7 +584,7 @@ export function findLayoutGroupTabs(
 }
 
 export interface SharedGroupProps {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;

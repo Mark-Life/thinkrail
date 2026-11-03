@@ -2,8 +2,12 @@ import type {
 	HistoryScope,
 	HistorySearchResult,
 	MessageHit,
+	ProjectId,
 	PromptHit,
+	SessionId,
+	WorkspaceId,
 } from "@thinkrail/contracts";
+import { asProjectId } from "@thinkrail/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatLocationRequest, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -31,9 +35,9 @@ export type ScopeKind = (typeof SCOPE_ORDER)[number];
 
 function buildScope(
 	kind: ScopeKind,
-	sessionId: string,
-	workspaceId: string,
-	projectId: string | undefined,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
+	projectId: ProjectId | undefined,
 ): HistoryScope {
 	switch (kind) {
 		case "chat":
@@ -41,7 +45,7 @@ function buildScope(
 		case "workspace":
 			return { kind: "workspace", workspaceId };
 		case "project":
-			return { kind: "project", projectId: projectId ?? "" };
+			return { kind: "project", projectId: projectId ?? asProjectId("") };
 		case "all":
 			return { kind: "all" };
 	}
@@ -83,9 +87,9 @@ export function jumpTarget(hit: PromptHit | MessageHit): ChatLocationRequest | n
 }
 
 export function useHistorySearch(
-	sessionId: string,
-	workspaceId: string,
-	projectId: string | undefined,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
+	projectId: ProjectId | undefined,
 ): {
 	state: HistorySearchState;
 	openOverlay: (seedQuery: string) => void;

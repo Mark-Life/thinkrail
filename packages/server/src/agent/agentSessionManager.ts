@@ -26,6 +26,7 @@ import type {
 	ImageContent,
 	Model,
 	PiEvent,
+	ProjectId,
 	QueuedMessageContent,
 	QueueLane,
 	RefreshedModels,
@@ -33,6 +34,7 @@ import type {
 	ReviewFixDetails,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	SessionId,
 	SessionQueueContent,
 	SessionQueueState,
 	SessionState,
@@ -44,8 +46,10 @@ import type {
 	TranscriptMessage,
 	WireModel,
 	WireModelAuth,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import {
+	asSessionId,
 	canMarkCompletionUnread,
 	firstPromptOfTexts,
 	isTranscriptMessageRole,
@@ -173,7 +177,7 @@ interface Entry {
 	session: AgentSession;
 	generation: PiRuntimeGeneration;
 	unsubscribe: () => void;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	lastSettlement: AgentSettlement | null | undefined;
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
 	stuckEmptyDeliveries: Record<QueueLane, number>;
@@ -200,27 +204,34 @@ interface Entry {
 	extraUsageWarned: boolean;
 }
 
-const sessions = new Map<string, Entry>();
+function sessionIdOf(session: Pick<AgentSession, "sessionId">) {
+	return asSessionId(session.sessionId);
+}
+
+const sessions = new Map<SessionId, Entry>();
 let sessionLifecycleGeneration = 0;
-const workspaceLifecycleGenerations = new Map<string, number>();
-const closingWorkspaces = new Map<string, number>();
-const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
-const sessionTeardowns = new Map<string, Promise<void>>();
-const tearingDownEntries = new Map<string, Entry>();
+const workspaceLifecycleGenerations = new Map<WorkspaceId, number>();
+const closingWorkspaces = new Map<WorkspaceId, number>();
+const pendingSessionPreparations = new Map<WorkspaceId, Set<Promise<unknown>>>();
+const sessionTeardowns = new Map<SessionId, Promise<void>>();
+const tearingDownEntries = new Map<SessionId, Entry>();
 
 interface WorkspaceLifecycleToken {
 	global: number;
 	workspace: number;
 }
 
-function captureWorkspaceLifecycle(workspaceId: string): WorkspaceLifecycleToken {
+function captureWorkspaceLifecycle(workspaceId: WorkspaceId): WorkspaceLifecycleToken {
 	return {
 		global: sessionLifecycleGeneration,
 		workspace: workspaceLifecycleGenerations.get(workspaceId) ?? 0,
 	};
 }
 
-function workspaceAcceptsSessions(workspaceId: string, token: WorkspaceLifecycleToken): boolean {
+function workspaceAcceptsSessions(
+	workspaceId: WorkspaceId,
+	token: WorkspaceLifecycleToken,
+): boolean {
 	return (
 		token.global === sessionLifecycleGeneration &&
 		token.workspace === (workspaceLifecycleGenerations.get(workspaceId) ?? 0) &&
@@ -229,7 +240,7 @@ function workspaceAcceptsSessions(workspaceId: string, token: WorkspaceLifecycle
 }
 
 function trackSessionPreparation<T>(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	token: WorkspaceLifecycleToken,
 	operation: () => Promise<T>,
 ): Promise<T> {
@@ -295,7 +306,7 @@ function omitMetadataKey<T>(record: Record<string, T>, key: string): Record<stri
 	return rest;
 }
 
-function removeSessionStateMetadata(sessionId: string): void {
+function removeSessionStateMetadata(sessionId: SessionId): void {
 	const currentLifecycle = lifecycle();
 	const nextLifecycle: SessionLifecycle = {
 		...currentLifecycle,
@@ -328,19 +339,19 @@ export async function usePiRuntime<T>(
 	return operation(generation.runtime, generation);
 }
 
-const deletedSessions = new Map<string, string>();
+const deletedSessions = new Map<SessionId, WorkspaceId>();
 
-const deletingSessions = new Map<string, { workspaceId: string; done: Promise<void> }>();
+const deletingSessions = new Map<SessionId, { workspaceId: WorkspaceId; done: Promise<void> }>();
 
-function isSessionDeleted(sessionId: string, workspaceId: string): boolean {
+function isSessionDeleted(sessionId: SessionId, workspaceId: WorkspaceId): boolean {
 	return deletedSessions.get(sessionId) === workspaceId;
 }
 
-function sessionIsTearingDown(sessionId: string): boolean {
+function sessionIsTearingDown(sessionId: SessionId): boolean {
 	return sessionTeardowns.has(sessionId);
 }
 
-function sessionCanAttach(sessionId: string, workspaceId: string): boolean {
+function sessionCanAttach(sessionId: SessionId, workspaceId: WorkspaceId): boolean {
 	return (
 		!isSessionDeleted(sessionId, workspaceId) &&
 		!sessionIsTearingDown(sessionId) &&
@@ -374,8 +385,10 @@ export function setSessionStatePublisher(fn: (record: SessionStateRecord) => voi
 	});
 }
 
-let resolveProjectId: (workspaceId: string) => string | null = () => null;
-export function setSessionProjectResolver(fn: (workspaceId: string) => string | null): void {
+let resolveProjectId: (workspaceId: WorkspaceId) => ProjectId | null = () => null;
+export function setSessionProjectResolver(
+	fn: (workspaceId: WorkspaceId) => ProjectId | null,
+): void {
 	resolveProjectId = fn;
 }
 
@@ -384,7 +397,7 @@ function effectivePendingCount(entry: Entry): number {
 	return Math.max(0, entry.session.pendingMessageCount - stuck);
 }
 
-function persistedCompletion(sessionId: string) {
+function persistedCompletion(sessionId: SessionId) {
 	const stateReceipts = receipts();
 	return stateReceipts?.baselineComplete
 		? (lifecycle().completionBySession[sessionId] ?? null)
@@ -396,12 +409,12 @@ function backgroundWorkActive(entry: Entry): boolean {
 		entry.commands
 			.list()
 			.some((command) => command.status === "running" || command.status === "stopping") ||
-		hasLiveSessionChildren(entry.workspaceId, entry.session.sessionId)
+		hasLiveSessionChildren(entry.workspaceId, sessionIdOf(entry.session))
 	);
 }
 
 function stateFromEntry(entry: Entry): SessionState {
-	const sessionId = entry.session.sessionId;
+	const sessionId = sessionIdOf(entry.session);
 	return deriveSessionState({
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: entry.session.isStreaming,
@@ -462,7 +475,7 @@ function entryTitle(entry: Entry): string {
 }
 
 function publishEntryState(entry: Entry): void {
-	if (sessions.get(entry.session.sessionId) !== entry) return;
+	if (sessions.get(sessionIdOf(entry.session)) !== entry) return;
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
@@ -472,7 +485,7 @@ function publishEntryState(entry: Entry): void {
 	if (entry.lastPublishedState === serialized) return;
 	entry.lastPublishedState = serialized;
 	publishState({
-		sessionId: entry.session.sessionId,
+		sessionId: sessionIdOf(entry.session),
 		workspaceId: entry.workspaceId,
 		projectId,
 		state,
@@ -492,14 +505,14 @@ function scheduleEntryStatePublish(entry: Entry): void {
 	});
 }
 
-export function scheduleSessionStatePublish(sessionId: string): void {
+export function scheduleSessionStatePublish(sessionId: SessionId): void {
 	const entry = sessions.get(sessionId);
 	if (entry) scheduleEntryStatePublish(entry);
 }
 
 function diskStateRecord(
-	sessionId: string,
-	workspace: { id: string; projectId: string },
+	sessionId: SessionId,
+	workspace: { id: WorkspaceId; projectId: ProjectId },
 	manager: SessionManager,
 	legacy = false,
 ): SessionStateRecord {
@@ -513,7 +526,11 @@ function diskStateRecord(
 	};
 }
 
-function stateFromDisk(sessionId: string, manager: SessionManager, legacy = false): SessionState {
+function stateFromDisk(
+	sessionId: SessionId,
+	manager: SessionManager,
+	legacy = false,
+): SessionState {
 	return deriveSessionState({
 		entries: manager.getBranch(),
 		isStreaming: false,
@@ -530,7 +547,7 @@ function stateFromDisk(sessionId: string, manager: SessionManager, legacy = fals
 	});
 }
 
-export function getSessionState(sessionId: string): SessionState {
+export function getSessionState(sessionId: SessionId): SessionState {
 	return stateFromEntry(mustGetEntry(sessionId));
 }
 
@@ -538,7 +555,7 @@ function stateRecordForEntry(entry: Entry): SessionStateRecord {
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) throw new Error(`Unknown workspace: ${entry.workspaceId}`);
 	return {
-		sessionId: entry.session.sessionId,
+		sessionId: sessionIdOf(entry.session),
 		workspaceId: entry.workspaceId,
 		projectId,
 		state: stateFromEntry(entry),
@@ -548,7 +565,7 @@ function stateRecordForEntry(entry: Entry): SessionStateRecord {
 }
 
 export function acknowledgeCompletion(
-	sessionId: string,
+	sessionId: SessionId,
 	completionId: string,
 ): { acknowledged: boolean; record: SessionStateRecord } {
 	const entry = mustGetEntry(sessionId);
@@ -572,7 +589,7 @@ export function acknowledgeCompletion(
 }
 
 export function nudgeSession(
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	images?: ImageContent[],
 ): {
@@ -606,7 +623,7 @@ export function nudgeSession(
 }
 
 function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void {
-	const sessionId = entry.session.sessionId;
+	const sessionId = sessionIdOf(entry.session);
 	const observed = deriveSessionState({
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: false,
@@ -638,12 +655,12 @@ function markCancelledRun(entry: Entry): void {
 	const state = stateFromEntry(entry);
 	if (!state.runId) return;
 	const current = lifecycle();
-	if (current.cancelledRunBySession[entry.session.sessionId] === state.runId) return;
+	if (current.cancelledRunBySession[sessionIdOf(entry.session)] === state.runId) return;
 	const next: SessionLifecycle = {
 		...current,
 		cancelledRunBySession: {
 			...current.cancelledRunBySession,
-			[entry.session.sessionId]: state.runId,
+			[sessionIdOf(entry.session)]: state.runId,
 		},
 	};
 	sessionLifecycle = next;
@@ -651,7 +668,7 @@ function markCancelledRun(entry: Entry): void {
 		saveSessionLifecycle(next);
 	} catch (error) {
 		log.warn(
-			`session cancellation state was not persisted for ${entry.session.sessionId}`,
+			`session cancellation state was not persisted for ${sessionIdOf(entry.session)}`,
 			error as Error,
 		);
 	}
@@ -670,23 +687,24 @@ const defaultSkillAdmission = (): SkillAdmissionContext => ({
 	disabledGroups: [],
 	overrides: {},
 });
-let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = defaultSkillAdmission;
+let skillAdmissionResolver: (workspaceId: WorkspaceId) => SkillAdmissionContext =
+	defaultSkillAdmission;
 export function setSkillAdmissionResolver(
-	resolver: ((workspaceId: string) => SkillAdmissionContext) | null,
+	resolver: ((workspaceId: WorkspaceId) => SkillAdmissionContext) | null,
 ): void {
 	skillAdmissionResolver = resolver ?? defaultSkillAdmission;
 }
 
 const defaultMcpPolicy = (): McpProjectPolicy => mcpPolicyOf(undefined);
-let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = defaultMcpPolicy;
+let mcpPolicyResolver: (workspaceId: WorkspaceId) => McpProjectPolicy = defaultMcpPolicy;
 export function setMcpPolicyResolver(
-	resolver: ((workspaceId: string) => McpProjectPolicy) | null,
+	resolver: ((workspaceId: WorkspaceId) => McpProjectPolicy) | null,
 ): void {
 	mcpPolicyResolver = resolver ?? defaultMcpPolicy;
 }
 
 type McpToolGrantWriter = (
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	server: string,
 	target: string,
 	tool: string,
@@ -696,19 +714,19 @@ export function setMcpToolGrantWriter(writer: McpToolGrantWriter): void {
 	mcpToolGrantWriter = writer;
 }
 
-function piResourceTrustFor(workspaceId: string): boolean {
+function piResourceTrustFor(workspaceId: WorkspaceId): boolean {
 	return skillAdmissionResolver(workspaceId).piResourceTrusted;
 }
 
 const enabledByDefault = (): boolean => true;
-let subagentsEnabledResolver: (workspaceId: string) => boolean = enabledByDefault;
+let subagentsEnabledResolver: (workspaceId: WorkspaceId) => boolean = enabledByDefault;
 export function setSubagentsEnabledResolver(
-	resolver: ((workspaceId: string) => boolean) | null,
+	resolver: ((workspaceId: WorkspaceId) => boolean) | null,
 ): void {
 	subagentsEnabledResolver = resolver ?? enabledByDefault;
 }
 
-function subagentsEnabled(workspaceId: string): boolean {
+function subagentsEnabled(workspaceId: WorkspaceId): boolean {
 	try {
 		return subagentsEnabledResolver(workspaceId);
 	} catch {
@@ -732,7 +750,7 @@ function applySubagentTools(entry: Entry): void {
 	entry.subagentToolsRefreshPending = false;
 }
 
-export function refreshSubagentTools(workspaceId?: string): void {
+export function refreshSubagentTools(workspaceId?: WorkspaceId): void {
 	for (const entry of sessions.values()) {
 		if (workspaceId !== undefined && entry.workspaceId !== workspaceId) continue;
 		if (entry.session.isStreaming) entry.subagentToolsRefreshPending = true;
@@ -744,14 +762,14 @@ export function refreshSubagentTools(workspaceId?: string): void {
 // worker's in-session request_review tool live: `setActiveToolsByName` rebuilds the system prompt from
 // only the active tools' guidelines, so toggling the tool off also drops its guidance. The Review button
 // path (startPlanReview) is separate and unaffected.
-let agentReviewEnabledResolver: (workspaceId: string) => boolean = enabledByDefault;
+let agentReviewEnabledResolver: (workspaceId: WorkspaceId) => boolean = enabledByDefault;
 export function setAgentReviewEnabledResolver(
-	resolver: ((workspaceId: string) => boolean) | null,
+	resolver: ((workspaceId: WorkspaceId) => boolean) | null,
 ): void {
 	agentReviewEnabledResolver = resolver ?? enabledByDefault;
 }
 
-function agentReviewEnabled(workspaceId: string): boolean {
+function agentReviewEnabled(workspaceId: WorkspaceId): boolean {
 	try {
 		return agentReviewEnabledResolver(workspaceId);
 	} catch {
@@ -771,7 +789,7 @@ function applyReviewTool(entry: Entry): void {
 	entry.reviewToolRefreshPending = false;
 }
 
-export function refreshAgentReviewTool(workspaceId?: string): void {
+export function refreshAgentReviewTool(workspaceId?: WorkspaceId): void {
 	for (const entry of sessions.values()) {
 		if (workspaceId !== undefined && entry.workspaceId !== workspaceId) continue;
 		if (entry.session.isStreaming) entry.reviewToolRefreshPending = true;
@@ -807,9 +825,9 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 		loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills) ||
 		isLoaderPackagePolicyStale(session.resourceLoader)
 	) {
-		void requestSessionReload(session.sessionId).catch((error) => {
-			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
-				log.warn(`extension reload failed for ${session.sessionId}`, error as Error);
+		void requestSessionReload(sessionIdOf(session)).catch((error) => {
+			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(sessionIdOf(session))) {
+				log.warn(`extension reload failed for ${sessionIdOf(session)}`, error as Error);
 			}
 		});
 	}
@@ -867,30 +885,30 @@ export function refreshExtensionTools(): void {
 	}
 }
 
-function hasDeletionTombstone(sessionId: string): boolean {
+function hasDeletionTombstone(sessionId: SessionId): boolean {
 	return deletedSessions.has(sessionId);
 }
 
-function mustGetEntry(sessionId: string): Entry {
+function mustGetEntry(sessionId: SessionId): Entry {
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	return entry;
 }
 
-function mustGet(sessionId: string): AgentSession {
+function mustGet(sessionId: SessionId): AgentSession {
 	return mustGetEntry(sessionId).session;
 }
 
-export function hasSession(sessionId: string): boolean {
+export function hasSession(sessionId: SessionId): boolean {
 	return sessions.has(sessionId) && !hasDeletionTombstone(sessionId);
 }
 
-export function getSessionWorkspaceId(sessionId: string): string | undefined {
+export function getSessionWorkspaceId(sessionId: SessionId): WorkspaceId | undefined {
 	return sessions.get(sessionId)?.workspaceId;
 }
 
-export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGeneration | undefined {
+export function getSessionRuntimeGeneration(sessionId: SessionId): PiRuntimeGeneration | undefined {
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
 
@@ -900,7 +918,7 @@ function transcriptMessages(session: AgentSession): TranscriptMessage[] {
 	) as TranscriptMessage[];
 }
 
-export async function reloadSessionResources(sessionId: string): Promise<void> {
+export async function reloadSessionResources(sessionId: SessionId): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	if (entry.reloadRunning) {
 		await entry.reloadRunning;
@@ -913,7 +931,9 @@ export async function reloadSessionResources(sessionId: string): Promise<void> {
 
 export type SessionReloadDisposition = "reloaded" | "deferred";
 
-export async function requestSessionReload(sessionId: string): Promise<SessionReloadDisposition> {
+export async function requestSessionReload(
+	sessionId: SessionId,
+): Promise<SessionReloadDisposition> {
 	const entry = mustGetEntry(sessionId);
 	if (entry.reloadRunning) {
 		entry.reloadPending = true;
@@ -942,7 +962,7 @@ function reloadBlockedReason(entry: Entry): string | null {
 
 function reconsiderPendingReload(entry: Entry): void {
 	if (!entry.reloadPending || entry.reloadRunning || reloadBlockedReason(entry)) return;
-	const { sessionId } = entry.session;
+	const sessionId = sessionIdOf(entry.session);
 	void runGatedReload(entry).catch((error) => {
 		if (
 			sessions.get(sessionId) !== entry ||
@@ -982,7 +1002,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 			reloaded = true;
 		} catch (error) {
 			if (!entry.disposed && !entry.resourcesClosing) {
-				recordMcpReloadFailure(entry.session.sessionId, error, mcpWasLoaded);
+				recordMcpReloadFailure(sessionIdOf(entry.session), error, mcpWasLoaded);
 			}
 			throw error;
 		} finally {
@@ -1004,7 +1024,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.subagents.flushCompletions();
 				publishEntryState(entry);
 				if (reloaded) {
-					restartMcpStatus(entry.session.sessionId);
+					restartMcpStatus(sessionIdOf(entry.session));
 					reconsiderPendingReload(entry);
 				}
 			}
@@ -1058,7 +1078,7 @@ export function buildSessionSettings(cwd: string, projectTrusted: boolean): Sett
 export type TrustReloadDisposition = SessionReloadDisposition | "failed";
 
 export async function applyPiResourceTrust(
-	workspaceIds: readonly string[],
+	workspaceIds: readonly WorkspaceId[],
 ): Promise<Record<string, TrustReloadDisposition>> {
 	const scope = new Set(workspaceIds);
 	const stale = [...sessions].filter(
@@ -1086,7 +1106,7 @@ export async function applyPiResourceTrust(
 
 export interface CreateSessionInput {
 	cwd: string;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
 	/** True: an unresolvable `model` falls back to the default instead of throwing. */
@@ -1094,7 +1114,7 @@ export interface CreateSessionInput {
 }
 
 export interface CreateSessionResult {
-	sessionId: string;
+	sessionId: SessionId;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 }
@@ -1154,7 +1174,7 @@ interface PreparedSessionEntry {
 
 async function prepareSessionEntry(
 	session: AgentSession,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	generation: PiRuntimeGeneration,
 	commands: BackgroundCommands,
 	subagents: Subagents,
@@ -1162,7 +1182,7 @@ async function prepareSessionEntry(
 	mcpHost: McpSessionHost,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
-	const { sessionId } = session;
+	const sessionId = sessionIdOf(session);
 	let terminal: AgentSettlement | null = null;
 	const entry: Entry = {
 		commands,
@@ -1336,7 +1356,7 @@ function soleRunningToolCall(session: AgentSession): string | undefined {
 }
 
 function abandonPreparedEntry(entry: Entry): void {
-	const { sessionId } = entry.session;
+	const sessionId = sessionIdOf(entry.session);
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.toolResponseWaiters.abandon();
@@ -1350,7 +1370,7 @@ function abandonPreparedEntry(entry: Entry): void {
 
 async function registerSession(
 	session: AgentSession,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	generation: PiRuntimeGeneration,
 	commands: BackgroundCommands,
 	subagents: Subagents,
@@ -1370,29 +1390,29 @@ async function registerSession(
 	);
 	if (
 		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
-		sessionIsTearingDown(session.sessionId)
+		sessionIsTearingDown(sessionIdOf(session))
 	) {
 		abandonPreparedEntry(prepared.entry);
 		throw new Error(`Workspace is unavailable: ${workspaceId}`);
 	}
 	prepared.entry.registered = true;
-	sessions.set(session.sessionId, prepared.entry);
+	sessions.set(sessionIdOf(session), prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
 	activateRegistryTools(prepared.entry);
 	applyExtensionTools(prepared.entry);
-	restartMcpStatus(session.sessionId);
+	restartMcpStatus(sessionIdOf(session));
 	commands.flushCompletions();
 	subagents.flushCompletions();
-	reconcileSubagentUsageInBackground(workspaceId, session.sessionId);
-	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
+	reconcileSubagentUsageInBackground(workspaceId, sessionIdOf(session));
+	log.debug(`session ${sessionIdOf(session)} attached (workspace ${workspaceId})`);
 	if (announceCreation) {
-		publishCreated(summaryOf(session.sessionId, prepared.entry));
+		publishCreated(summaryOf(sessionIdOf(session), prepared.entry));
 	}
 	publishEntryState(prepared.entry);
 	void warnAnthropicExtraUsage(prepared.entry);
 	if (session.settingsManager.isProjectTrusted() !== piResourceTrustFor(workspaceId))
-		await requestSessionReload(session.sessionId);
+		await requestSessionReload(sessionIdOf(session));
 	return prepared.result;
 }
 
@@ -1434,12 +1454,12 @@ type ParentSessionOptions = CreateAgentSessionOptions & {
 
 function createParentSession(
 	options: ParentSessionOptions,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	generation: PiRuntimeGeneration,
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const sessionId = options.sessionManager.getSessionId();
+	const sessionId = asSessionId(options.sessionManager.getSessionId());
 	if (sessionIsTearingDown(sessionId))
 		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 	return trackSessionPreparation(workspaceId, lifecycleToken, () =>
@@ -1449,13 +1469,13 @@ function createParentSession(
 
 async function createParentSessionInternal(
 	options: ParentSessionOptions,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	generation: PiRuntimeGeneration,
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
 	const { sessionManager, settingsManager, cwd } = options;
-	const sessionId = sessionManager.getSessionId();
+	const sessionId = asSessionId(sessionManager.getSessionId());
 	const toolResponseWaiters = createToolResponseWaiters();
 	const mcpHost = createMcpSessionHost({
 		policy: () => mcpPolicyResolver(workspaceId),
@@ -1550,7 +1570,7 @@ async function createParentSessionInternal(
 	}
 }
 
-export function canUseSessionResources(sessionId: string, workspaceId: string): boolean {
+export function canUseSessionResources(sessionId: SessionId, workspaceId: WorkspaceId): boolean {
 	const entry = sessions.get(sessionId);
 	return (
 		!!entry &&
@@ -1563,8 +1583,8 @@ export function canUseSessionResources(sessionId: string, workspaceId: string): 
 }
 
 export async function withSessionResources<T>(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	cwd: string,
 	operation: (commands: BackgroundCommands) => T | Promise<T>,
 ): Promise<T> {
@@ -1585,7 +1605,7 @@ export async function withSessionResources<T>(
 	return operation(entry.commands);
 }
 
-function summaryOf(sessionId: string, entry: Entry): SessionSummary {
+function summaryOf(sessionId: SessionId, entry: Entry): SessionSummary {
 	const { session } = entry;
 	return {
 		sessionId,
@@ -1707,9 +1727,12 @@ async function listSessionInfosStrict(
 	return infos;
 }
 
-async function listSessionsInternal(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+async function listSessionsInternal(
+	workspaceId: WorkspaceId,
+	cwd: string,
+): Promise<SessionSummary[]> {
 	const live: SessionSummary[] = [];
-	const liveIds = new Set<string>();
+	const liveIds = new Set<SessionId>();
 	const liveFiles = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
 		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
@@ -1722,12 +1745,15 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	const disk: SessionSummary[] = infos
 		.filter(
 			(info) =>
-				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
+				info.cwd === cwd &&
+				!liveIds.has(asSessionId(info.id)) &&
+				!isSessionDeleted(asSessionId(info.id), workspaceId),
 		)
 		.map((info) => {
+			const sessionId = asSessionId(info.id);
 			const manager = SessionManager.open(info.path);
 			return {
-				sessionId: info.id,
+				sessionId,
 				workspaceId,
 				title: info.name ?? "",
 				...firstPromptOf(manager.getEntries()),
@@ -1737,19 +1763,19 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 				messageCount: info.messageCount,
 				updatedAt: info.modified.getTime(),
 				live: false,
-				state: stateFromDisk(info.id, manager),
+				state: stateFromDisk(sessionId, manager),
 			};
 		});
 	return [...live, ...disk];
 }
 
-export function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+export function listSessions(workspaceId: WorkspaceId, cwd: string): Promise<SessionSummary[]> {
 	return listSessionsInternal(workspaceId, cwd);
 }
 
 export interface SessionStateWorkspace {
-	id: string;
-	projectId: string;
+	id: WorkspaceId;
+	projectId: ProjectId;
 	cwd: string;
 }
 
@@ -1811,22 +1837,23 @@ async function collectSessionStateSources(
 	}
 	for (const { workspace, infos } of discovered) {
 		for (const info of infos) {
+			const sessionId = asSessionId(info.id);
 			if (
 				info.cwd !== workspace.cwd ||
-				sessions.has(info.id) ||
-				isSessionDeleted(info.id, workspace.id)
+				sessions.has(sessionId) ||
+				isSessionDeleted(sessionId, workspace.id)
 			) {
 				continue;
 			}
 			const manager = SessionManager.open(info.path);
-			const record = diskStateRecord(info.id, workspace, manager, baseline);
+			const record = diskStateRecord(sessionId, workspace, manager, baseline);
 			records.push({
 				record,
 				branch: () => manager.getBranch(),
 				publish: () => {
 					const current = {
 						...record,
-						state: stateFromDisk(info.id, manager),
+						state: stateFromDisk(sessionId, manager),
 						title: manager.getSessionName() ?? "",
 					};
 					publishState(current);
@@ -1939,7 +1966,7 @@ export async function listSessionStates(
 const sessionFileOperations = new Map<string, Promise<void>>();
 
 function serializeSessionFileOperation<T>(
-	sessionId: string,
+	sessionId: SessionId,
 	operation: () => Promise<T> | T,
 ): Promise<T> {
 	const previous = sessionFileOperations.get(sessionId) ?? Promise.resolve();
@@ -1959,8 +1986,8 @@ export interface RenameSessionOptions {
 }
 
 export function renameSession(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 	title: string,
 	options: RenameSessionOptions = {},
@@ -1999,8 +2026,8 @@ export function renameSession(
 const attaching = new Map<string, Promise<void>>();
 
 function attachDiskSession(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 	lifecycleToken: WorkspaceLifecycleToken,
 ): Promise<void> {
@@ -2028,8 +2055,8 @@ function persistedSessionModelRef(model: unknown): { provider: string; id: strin
 }
 
 async function openDiskSession(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 	lifecycleToken: WorkspaceLifecycleToken,
 ): Promise<void> {
@@ -2075,8 +2102,8 @@ async function openDiskSession(
 }
 
 async function ensureSessionAttachedInternal(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 ): Promise<boolean> {
 	const lifecycleToken = captureWorkspaceLifecycle(workspaceId);
@@ -2101,16 +2128,16 @@ async function ensureSessionAttachedInternal(
 }
 
 export function ensureSessionAttached(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 ): Promise<boolean> {
 	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd);
 }
 
 async function getSessionMessagesInternal(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
 	const lifecycleToken = captureWorkspaceLifecycle(workspaceId);
@@ -2131,15 +2158,15 @@ async function getSessionMessagesInternal(
 }
 
 export function getSessionMessages(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
 export async function respondToTool(
-	sessionId: string,
+	sessionId: SessionId,
 	toolCallId: string,
 	response: unknown,
 ): Promise<void> {
@@ -2310,12 +2337,12 @@ async function steerEntry(
 		entry.session.steer(text, images),
 	);
 	if (disposition !== "queued") return;
-	cancelExtUiForSession(entry.session.sessionId);
+	cancelExtUiForSession(sessionIdOf(entry.session));
 	if (entry.toolResponseWaiters.supersede()) publishEntryState(entry);
 }
 
 export async function promptSession(
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
@@ -2337,13 +2364,13 @@ function answeringDialogs(entry: Entry, images: ImageContent[] | undefined): Pro
 	return {
 		...(images ? { images } : {}),
 		preflightResult: (disposition) => {
-			if (disposition !== "handled") cancelExtUiForSession(entry.session.sessionId);
+			if (disposition !== "handled") cancelExtUiForSession(sessionIdOf(entry.session));
 		},
 	};
 }
 
 export async function steerSession(
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
@@ -2353,7 +2380,7 @@ export async function steerSession(
 }
 
 export async function followUpSession(
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
@@ -2371,7 +2398,8 @@ async function followUpEntry(
 		const disposition = await queueSessionMessage(entry, "followUp", text, images, () =>
 			entry.session.followUp(text, images),
 		);
-		if (answersDialogs && disposition === "queued") cancelExtUiForSession(entry.session.sessionId);
+		if (answersDialogs && disposition === "queued")
+			cancelExtUiForSession(sessionIdOf(entry.session));
 		return;
 	}
 	const release = admitPreflight(entry);
@@ -2387,7 +2415,7 @@ async function followUpEntry(
 
 // Callers MUST `ackSend`-wrap this: a pre-turn rejection has to roll the review record back — see submodule-server-todos.
 export async function sendReviewFixToSession(
-	sessionId: string,
+	sessionId: SessionId,
 	content: string,
 	details: ReviewFixDetails,
 ): Promise<void> {
@@ -2403,7 +2431,7 @@ export async function sendReviewFixToSession(
 	}
 }
 
-export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
+export async function compactSession(sessionId: SessionId, instructions?: string): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	admitRun(entry);
 	if (entry.manualCompactionInProgress || entry.piCompactionInProgress) {
@@ -2427,7 +2455,10 @@ function queueStateOf(entry: Entry): SessionQueueState {
 	};
 }
 
-export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueContent {
+export function clearQueueSession(
+	sessionId: SessionId,
+	requireTextOnly = false,
+): SessionQueueContent {
 	return clearEntryQueue(mustGetEntry(sessionId), requireTextOnly);
 }
 
@@ -2442,7 +2473,7 @@ function clearEntryQueue(entry: Entry, requireTextOnly = false): SessionQueueCon
 }
 
 export async function removeQueuedSession(
-	sessionId: string,
+	sessionId: SessionId,
 	kind: QueueLane,
 	index: number,
 ): Promise<RemovedQueuedMessage> {
@@ -2502,7 +2533,7 @@ async function waitForAcceptedAnswerGrace(
 }
 
 export async function abortSession(
-	sessionId: string,
+	sessionId: SessionId,
 	restoreQueue = false,
 	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
@@ -2519,7 +2550,7 @@ async function abortEntry(
 	let restoredQueue = restoreQueue ? clearEntryQueue(entry) : undefined;
 	const acceptedResult = entry.toolResponseWaiters.prepareAbort();
 	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
-	if (sessions.get(entry.session.sessionId) !== entry) return restoredQueue;
+	if (sessions.get(sessionIdOf(entry.session)) !== entry) return restoredQueue;
 	if (restoredQueue) {
 		restoredQueue = mergeQueueContent(restoredQueue, clearEntryQueue(entry));
 	}
@@ -2527,14 +2558,14 @@ async function abortEntry(
 	return restoredQueue;
 }
 
-export async function setSessionModel(sessionId: string, model: WireModel): Promise<WireModel> {
+export async function setSessionModel(sessionId: SessionId, model: WireModel): Promise<WireModel> {
 	const entry = mustGetEntry(sessionId);
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
 	return sessionWireModel(resolved, entry.generation);
 }
 
-function extraUsageModelSelectExtension(sessionId: string): ExtensionFactory {
+function extraUsageModelSelectExtension(sessionId: SessionId): ExtensionFactory {
 	return (pi) => {
 		pi.on("model_select", () => {
 			const entry = sessions.get(sessionId);
@@ -2557,7 +2588,11 @@ async function warnAnthropicExtraUsage(entry: Entry): Promise<void> {
 	if (entry.extraUsageWarned) return;
 	const subject = extraUsageSubject(entry);
 	if (!(await shouldWarnAnthropicExtraUsage(subject))) return;
-	if (entry.extraUsageWarned || entry.disposed || sessions.get(entry.session.sessionId) !== entry)
+	if (
+		entry.extraUsageWarned ||
+		entry.disposed ||
+		sessions.get(sessionIdOf(entry.session)) !== entry
+	)
 		return;
 	if (entry.session.model?.provider !== subject.model?.provider) return;
 	const { sessionManager, settingsManager } = entry.session;
@@ -2569,23 +2604,23 @@ async function warnAnthropicExtraUsage(entry: Entry): Promise<void> {
 	)
 		return;
 	entry.extraUsageWarned = true;
-	publishSessionNotice(entry.session.sessionId, "anthropicExtraUsage");
+	publishSessionNotice(sessionIdOf(entry.session), "anthropicExtraUsage");
 }
 
 export function recheckAnthropicExtraUsage(): void {
 	for (const entry of sessions.values()) void warnAnthropicExtraUsage(entry);
 }
 
-export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
+export function setSessionThinkingLevel(sessionId: SessionId, level: ThinkingLevel): void {
 	mustGet(sessionId).setThinkingLevel(level);
 }
 
-export function getSessionStats(sessionId: string): SessionStats {
+export function getSessionStats(sessionId: SessionId): SessionStats {
 	const session = mustGet(sessionId);
 	const stats = session.getSessionStats();
 	const { contextUsage } = stats;
 	return {
-		sessionId: stats.sessionId,
+		sessionId: asSessionId(stats.sessionId),
 		totalMessages: stats.totalMessages,
 		tokens: {
 			input: stats.tokens.input,
@@ -2599,7 +2634,7 @@ export function getSessionStats(sessionId: string): SessionStats {
 	};
 }
 
-function reconcileSubagentUsageInBackground(workspaceId: string, sessionId: string): void {
+function reconcileSubagentUsageInBackground(workspaceId: WorkspaceId, sessionId: SessionId): void {
 	void reconcileSessionSubagentUsage(workspaceId, sessionId, () =>
 		usageWritableEntry(sessionId)?.session.sessionManager.getEntries(),
 	).catch((error: unknown) =>
@@ -2607,7 +2642,7 @@ function reconcileSubagentUsageInBackground(workspaceId: string, sessionId: stri
 	);
 }
 
-function usageWritableEntry(sessionId: string): Entry | undefined {
+function usageWritableEntry(sessionId: SessionId): Entry | undefined {
 	if (hasDeletionTombstone(sessionId)) return undefined;
 	return sessions.get(sessionId) ?? tearingDownEntries.get(sessionId);
 }
@@ -2621,7 +2656,11 @@ function sessionFileSize(file: string | undefined): number | undefined {
 	}
 }
 
-function cutTornUsageAppend(sessionId: string, file: string | undefined, size: number | undefined) {
+function cutTornUsageAppend(
+	sessionId: SessionId,
+	file: string | undefined,
+	size: number | undefined,
+) {
 	try {
 		if (file && size !== undefined && statSync(file).size > size) truncateSync(file, size);
 	} catch (error) {
@@ -2631,7 +2670,7 @@ function cutTornUsageAppend(sessionId: string, file: string | undefined, size: n
 
 /** Returns whether pi recorded the usage; a failed write records nothing. */
 export function recordSessionUsage(
-	sessionId: string,
+	sessionId: SessionId,
 	record: { kind: string; provider: string; model: string; usage: Usage; note?: string },
 ): boolean {
 	const entry = usageWritableEntry(sessionId);
@@ -2656,7 +2695,7 @@ export function recordSessionUsage(
 }
 
 export interface McpSessionView {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	cwd: string;
 	projectTrusted: boolean;
 	policy: McpProjectPolicy;
@@ -2666,7 +2705,7 @@ export interface McpSessionView {
 	commandOwner: string | null;
 }
 
-export function mcpSessionView(sessionId: string): McpSessionView | undefined {
+export function mcpSessionView(sessionId: SessionId): McpSessionView | undefined {
 	const entry = sessions.get(sessionId);
 	if (
 		!entry?.registered ||
@@ -2687,7 +2726,7 @@ export function mcpSessionView(sessionId: string): McpSessionView | undefined {
 	};
 }
 
-export function liveSessionIdsOf(workspaceId?: string): string[] {
+export function liveSessionIdsOf(workspaceId?: WorkspaceId): SessionId[] {
 	return [...sessions]
 		.filter(
 			([sessionId, entry]) =>
@@ -2714,7 +2753,7 @@ function notifyingCommandContext(
 }
 
 export function dispatchSessionMcpCommand(
-	sessionId: string,
+	sessionId: SessionId,
 	args: string,
 	notify?: McpCommandNotify,
 ): Promise<void> | null {
@@ -2728,7 +2767,7 @@ export function dispatchSessionMcpCommand(
 }
 
 export async function setSessionMcpServerEnabled(
-	sessionId: string,
+	sessionId: SessionId,
 	name: string,
 	enabled: boolean,
 ): Promise<SessionReloadDisposition | "unchanged"> {
@@ -2743,7 +2782,7 @@ export async function setSessionMcpServerEnabled(
 	return disposition;
 }
 
-export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
+export function getSessionCommands(sessionId: SessionId): SlashCommandInfo[] {
 	const session = mustGet(sessionId);
 	const extension = session.extensionRunner.getRegisteredCommands().map((command) => ({
 		name: command.invocationName,
@@ -2802,11 +2841,11 @@ export async function clampThinkingForModel(
 	return clampThinkingLevel(resolveWireModel(generation.runtime, ref), level);
 }
 
-export function isSessionStreaming(sessionId: string): boolean {
+export function isSessionStreaming(sessionId: SessionId): boolean {
 	return mustGet(sessionId).isStreaming;
 }
 
-export function liveParentContext(sessionId: string): ParentContext | undefined {
+export function liveParentContext(sessionId: SessionId): ParentContext | undefined {
 	const entry = sessions.get(sessionId);
 	if (!entry || !canUseSessionResources(sessionId, entry.workspaceId)) return undefined;
 	const { session, workspaceId } = entry;
@@ -2825,7 +2864,7 @@ export function liveParentContext(sessionId: string): ParentContext | undefined 
 
 const pendingCascades = new Map<string, Set<Promise<void>>>();
 
-function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void> {
+function trackCascade(workspaceId: WorkspaceId, cascade: Promise<void>): Promise<void> {
 	let pending = pendingCascades.get(workspaceId);
 	if (!pending) {
 		pending = new Set();
@@ -2854,7 +2893,7 @@ function settleShutdownStep(entry: Entry, step: () => Promise<unknown>): Promise
 	return running.then(
 		() => {},
 		(error) => {
-			log.debug(`session ${entry.session.sessionId} shutdown handlers failed`, error as Error);
+			log.debug(`session ${sessionIdOf(entry.session)} shutdown handlers failed`, error as Error);
 		},
 	);
 }
@@ -2885,7 +2924,7 @@ function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> 
 	const closing = entry.commands
 		.dispose(timeoutMs === undefined ? undefined : { timeoutMs })
 		.finally(() => entry.commandHistory.finish());
-	const children = disposeSessionChildren(entry.workspaceId, entry.session.sessionId);
+	const children = disposeSessionChildren(entry.workspaceId, sessionIdOf(entry.session));
 	const shutdown = emitSessionShutdown(entry, timeoutMs);
 	entry.resourceCascade = trackCascade(
 		entry.workspaceId,
@@ -2903,7 +2942,7 @@ function disposePiSessionAfterShutdown(entry: Entry): void {
 	});
 }
 
-function trackSessionTeardown(sessionId: string, cascade: Promise<void>): Promise<void> {
+function trackSessionTeardown(sessionId: SessionId, cascade: Promise<void>): Promise<void> {
 	const current = sessionTeardowns.get(sessionId);
 	if (current) return current;
 	let done: Promise<void>;
@@ -2914,7 +2953,7 @@ function trackSessionTeardown(sessionId: string, cascade: Promise<void>): Promis
 	return done;
 }
 
-function disposeSession(sessionId: string): Promise<void> {
+function disposeSession(sessionId: SessionId): Promise<void> {
 	const pending = sessionTeardowns.get(sessionId);
 	if (pending) return pending;
 	const entry = sessions.get(sessionId);
@@ -2938,7 +2977,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	return cascade;
 }
 
-export function removeSession(sessionId: string): Promise<void> {
+export function removeSession(sessionId: SessionId): Promise<void> {
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 	const pending = sessionTeardowns.get(sessionId);
 	if (pending) return pending;
@@ -3015,7 +3054,10 @@ export async function settleSessionsForShutdown(
 	}
 }
 
-async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
+async function removeWorkspaceSessionsInternal(
+	workspaceId: WorkspaceId,
+	cwd?: string,
+): Promise<void> {
 	workspaceLifecycleGenerations.set(
 		workspaceId,
 		(workspaceLifecycleGenerations.get(workspaceId) ?? 0) + 1,
@@ -3043,7 +3085,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 	}
 }
 
-export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
+export function removeWorkspaceSessions(workspaceId: WorkspaceId, cwd?: string): Promise<void> {
 	return removeWorkspaceSessionsInternal(workspaceId, cwd);
 }
 
@@ -3058,14 +3100,18 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 		if (info.cwd !== cwd) continue;
 		rmSync(info.path, { force: true });
 		try {
-			removeSessionStateMetadata(info.id);
+			removeSessionStateMetadata(asSessionId(info.id));
 		} catch (error) {
 			log.warn(`session state metadata was not pruned for ${info.id}`, error as Error);
 		}
 	}
 }
 
-export function deleteSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+export function deleteSession(
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
+	cwd: string,
+): Promise<void> {
 	const inFlight = deletingSessions.get(sessionId);
 	if (inFlight) {
 		if (inFlight.workspaceId !== workspaceId)
@@ -3088,8 +3134,8 @@ export function deleteSession(sessionId: string, workspaceId: string, cwd: strin
 }
 
 async function runDeleteTransaction(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	cwd: string,
 ): Promise<void> {
 	const installedTombstone = !deletedSessions.has(sessionId);

@@ -10,6 +10,7 @@ import {
 	type ToolCallEvent,
 	type ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
+import type { SessionId } from "@thinkrail/contracts";
 import { grantedMcpTools, loadHostMcpConfig, type McpProjectPolicy, mcpTargetOf } from "./config";
 import { createMcpEngine } from "./engine";
 import { isMcpResultTool, summarizeMcpResult } from "./results";
@@ -45,7 +46,7 @@ export type GrantMcpTool = (server: string, target: string, tool: string) => voi
 
 export interface McpSessionHostOptions {
 	policy: () => McpProjectPolicy;
-	onCommandSettled?: (sessionId: string) => void;
+	onCommandSettled?: (sessionId: SessionId) => void;
 	askForToolCall: AskForToolCall;
 	grantTool: GrantMcpTool;
 }

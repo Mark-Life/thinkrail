@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ResourceMarkdownProps } from "../host";
@@ -13,6 +14,7 @@ export function TestMarkdown({ text, className, remarkPlugins, ...rest }: Resour
 }
 
 export const testLinks = {
-	bytesUrl: (workspaceId: string, path: string) => `http://host.test/files/${workspaceId}/${path}`,
+	bytesUrl: (workspaceId: WorkspaceId, path: string) =>
+		`http://host.test/files/${workspaceId}/${path}`,
 	openFile: () => {},
 };

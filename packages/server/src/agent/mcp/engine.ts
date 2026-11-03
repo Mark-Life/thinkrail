@@ -10,6 +10,8 @@ import {
 	type RegisteredCommand,
 	type SessionShutdownEvent,
 } from "@earendil-works/pi-coding-agent";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { acquireMcpSignInLock } from "./signInLock";
 
 const TOOL_SEARCH = "tool_search";
@@ -32,14 +34,14 @@ function activateToolSearchForRegisteredServers(pi: ExtensionAPI): void {
 function observingCommands(
 	handler: RegisteredCommand["handler"],
 	lockSignIns: boolean,
-	onCommandSettled?: (sessionId: string) => void,
+	onCommandSettled?: (sessionId: SessionId) => void,
 ): RegisteredCommand["handler"] {
 	return async (args, ctx) => {
 		const [action, name, ...extra] = args.trim().split(/\s+/).filter(Boolean);
 		const mutates =
 			(action === "login" || action === "logout" || action === "reconnect") && extra.length === 0;
 		if (!mutates) return handler(args, ctx);
-		const sessionId = onCommandSettled ? ctx.sessionManager.getSessionId() : undefined;
+		const sessionId = onCommandSettled ? asSessionId(ctx.sessionManager.getSessionId()) : undefined;
 		const lock =
 			lockSignIns && name && (action === "login" || action === "logout")
 				? acquireMcpSignInLock(name, "chat")
@@ -61,7 +63,7 @@ function observingCommands(
 function engineApi(
 	pi: ExtensionAPI,
 	lockSignIns: boolean,
-	onCommandSettled?: (sessionId: string) => void,
+	onCommandSettled?: (sessionId: SessionId) => void,
 ): { api: ExtensionAPI; shutdown: McpEngine["shutdown"] } {
 	const shutdownHandlers: ShutdownHandler[] = [];
 	let closed = false;
@@ -109,7 +111,7 @@ export function createMcpEngine(options: {
 	loadConfig: (ctx: ExtensionContext) => LoadedMcpConfig;
 	lockSignIns?: boolean;
 	openUrl?: (url: string) => void;
-	onCommandSettled?: (sessionId: string) => void;
+	onCommandSettled?: (sessionId: SessionId) => void;
 }): McpEngine {
 	const mcp = createMcpExtension({
 		loadConfig: options.loadConfig,

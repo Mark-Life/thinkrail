@@ -1,4 +1,4 @@
-import type { GitDiffScope, GitStatus } from "@thinkrail/contracts";
+import type { GitDiffScope, GitStatus, WorkspaceId } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import { getTransport, wsErrorCode } from "../transport";
 import { scopeKey } from "./changesModel";
@@ -6,7 +6,7 @@ import { scopeKey } from "./changesModel";
 export const GIT_STATUS_CACHE_SIZE = 32;
 
 interface Entry {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	status: GitStatus;
 	requested: number;
 }
@@ -15,7 +15,7 @@ const entries = new Map<string, Entry>();
 let requests = 0;
 let watchingRemovals = false;
 
-const cacheKey = (workspaceId: string, scope: GitDiffScope, targetRef: string) =>
+const cacheKey = (workspaceId: WorkspaceId, scope: GitDiffScope, targetRef: string) =>
 	`${workspaceId}\u0000${scopeKey(scope)}\u0000${targetRef}`;
 
 function forgetRemovedWorkspaces(removed: Record<string, true>): void {
@@ -46,7 +46,7 @@ function remember(key: string, entry: Entry): void {
 }
 
 export function peekGitStatus(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	scope: GitDiffScope,
 	targetRef: string,
 ): GitStatus | null {
@@ -59,7 +59,7 @@ export function peekGitStatus(
 }
 
 export async function readGitStatus(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	scope: GitDiffScope,
 	targetRef: string,
 ): Promise<GitStatus> {

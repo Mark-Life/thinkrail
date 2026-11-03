@@ -1,4 +1,5 @@
 import { arr, bool, oneOf, type Schema, type Static, str } from "@earendil-works/pi-schema";
+import { WorkspaceId } from "./ids";
 import { ResourceMeta } from "./resourceMeta";
 import { wireObj } from "./wire";
 
@@ -27,9 +28,12 @@ export const FileNode: Schema<FileNode> = {
 };
 
 export const FS_METHODS = {
-	"fs.readDir": { params: wireObj({ workspaceId: str(), path: str() }), result: arr(FileNode) },
+	"fs.readDir": {
+		params: wireObj({ workspaceId: WorkspaceId, path: str() }),
+		result: arr(FileNode),
+	},
 	"fs.readFile": {
-		params: wireObj({ workspaceId: str(), path: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, path: str() }),
 		result: wireObj({ content: str(), meta: ResourceMeta }),
 	},
 };

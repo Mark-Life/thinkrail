@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import type { ProjectId, WorkspaceId } from "@thinkrail/contracts";
 import {
+	asWorkspaceId,
 	DEFAULT_WORKSPACE_NAME,
 	type DiffStats,
 	type ExistingWorktreeCandidate,
@@ -38,7 +40,7 @@ const log = logger("workspaces");
 export type WorkspaceLifecycleEvent =
 	| { kind: "created"; workspace: Workspace }
 	| { kind: "updated"; workspace: Workspace }
-	| { kind: "removed"; projectId: string; id: string };
+	| { kind: "removed"; projectId: ProjectId; id: WorkspaceId };
 
 type WorkspacePublisher = (event: WorkspaceLifecycleEvent) => void;
 
@@ -98,7 +100,7 @@ function nextAutoBranch(project: Project): string {
 	return `workspace-${n}`;
 }
 
-function openProjectById(projectId: string): Project {
+function openProjectById(projectId: ProjectId): Project {
 	const project = listProjects().find((candidate) => candidate.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	return project;
@@ -131,7 +133,7 @@ async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]>
 }
 
 export async function listExistingWorktrees(
-	projectId: string,
+	projectId: ProjectId,
 ): Promise<ExistingWorktreeCandidate[]> {
 	const project = openProjectById(projectId);
 	const entries = await gitWorktreeEntries(project.path);
@@ -150,7 +152,7 @@ export async function listExistingWorktrees(
 }
 
 export async function openExistingWorktree(
-	projectId: string,
+	projectId: ProjectId,
 	requestedPath: string,
 ): Promise<Workspace> {
 	const project = openProjectById(projectId);
@@ -184,7 +186,7 @@ export async function openExistingWorktree(
 	const displayName =
 		toDisplayName(basename(entry.path)) ?? toDisplayName(entry.branch) ?? "Existing worktree";
 	const workspace: Workspace = {
-		id: randomUUID(),
+		id: asWorkspaceId(randomUUID()),
 		projectId,
 		kind: "external",
 		name: displayName,
@@ -232,7 +234,7 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 }
 
 export async function createWorkspace(
-	projectId: string,
+	projectId: ProjectId,
 	name?: string,
 	baseRef?: string,
 ): Promise<Workspace> {
@@ -285,7 +287,7 @@ export async function createWorkspace(
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
 	const workspace: Workspace = {
-		id: randomUUID(),
+		id: asWorkspaceId(randomUUID()),
 		projectId,
 		name: wsName,
 		branch,
@@ -345,7 +347,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 	}
 
 	const workspace: Workspace = {
-		id: randomUUID(),
+		id: asWorkspaceId(randomUUID()),
 		projectId: project.id,
 		kind: "default",
 		name: DEFAULT_WORKSPACE_NAME,
@@ -361,7 +363,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 	return workspace;
 }
 
-export function completeInitialTerminalReservation(workspaceId: string): Workspace {
+export function completeInitialTerminalReservation(workspaceId: WorkspaceId): Workspace {
 	const all = loadWorkspaces();
 	const workspace = all.find((candidate) => candidate.id === workspaceId);
 	if (!workspace) throw new Error(`Unknown workspace: ${workspaceId}`);
@@ -372,7 +374,7 @@ export function completeInitialTerminalReservation(workspaceId: string): Workspa
 	return workspace;
 }
 
-export function refreshUserOwnedWorkspace(workspaceId: string): void {
+export function refreshUserOwnedWorkspace(workspaceId: WorkspaceId): void {
 	const peek = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
 	if (peek?.kind !== "default" && peek?.kind !== "external") return;
 	const truth =
@@ -620,7 +622,7 @@ export function setWorkspaceReview(
 }
 
 export async function listWorkspaces(
-	projectId: string,
+	projectId: ProjectId,
 	opts: { includeDiffStats?: boolean } = {},
 ): Promise<Workspace[]> {
 	const project = getProjects().find((p) => p.id === projectId);
@@ -641,7 +643,7 @@ export async function listWorkspaces(
 	});
 }
 
-function projectRows(projectId: string): Workspace[] {
+function projectRows(projectId: ProjectId): Workspace[] {
 	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
 	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
 	return rows;
@@ -653,7 +655,7 @@ export function workspaceDiffKey(
 	return `${ws.id}\u0000${ws.worktreePath}\u0000${ws.baseBranch}\u0000${ws.diffBase ?? ""}`;
 }
 
-export function listWorkspaceRecords(projectId: string): Workspace[] {
+export function listWorkspaceRecords(projectId: ProjectId): Workspace[] {
 	return loadWorkspaces().filter((w) => w.projectId === projectId);
 }
 

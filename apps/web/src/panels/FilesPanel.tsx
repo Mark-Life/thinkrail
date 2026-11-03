@@ -1,4 +1,5 @@
 import { RiCollapseVerticalLine } from "@remixicon/react";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,7 +16,7 @@ import { HeaderIconButton } from "./HeaderIconButton";
 import { RememberedScrollArea } from "./RememberedScrollArea";
 import { useGitStatus } from "./useGitStatus";
 
-export function FilesPanel({ workspaceId }: { workspaceId: string }) {
+export function FilesPanel({ workspaceId }: { workspaceId: WorkspaceId }) {
 	const t = useT();
 	const mode = useAppStore((s) => s.filesMode);
 	const setMode = useAppStore((s) => s.setFilesMode);
@@ -78,7 +79,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 	);
 }
 
-function AllFiles({ workspaceId, marks }: { workspaceId: string; marks: ChangeMarks }) {
+function AllFiles({ workspaceId, marks }: { workspaceId: WorkspaceId; marks: ChangeMarks }) {
 	const activePath = useAppStore((s) => selectActiveFilePath(s, workspaceId));
 	const [revealOnMount] = useState(
 		() =>

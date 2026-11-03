@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { registerResourceRenderer, resolveRenderers } from "../../registry";
 import { binaryRenderer } from "../binary";
 import { codeRenderer } from "../code";
@@ -16,7 +17,7 @@ test("a byte-only markdown path resolves to the binary fallback", () => {
 		expect(
 			resolveRenderers(
 				{
-					workspaceId: "ws",
+					workspaceId: asWorkspaceId("ws"),
 					path: "README.md",
 					mime: "text/markdown",
 					text: false,

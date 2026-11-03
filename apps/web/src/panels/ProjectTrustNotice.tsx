@@ -1,5 +1,5 @@
 import { RiShieldCheckLine as ShieldCheck, RiAlertLine as TriangleAlert } from "@remixicon/react";
-import type { Project } from "@thinkrail/contracts";
+import type { Project, ProjectId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
@@ -17,7 +17,7 @@ import { selectSupportsProjectTrust, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-export function ProjectTrustNotice({ projectId }: { projectId: string }) {
+export function ProjectTrustNotice({ projectId }: { projectId: ProjectId }) {
 	const t = useT();
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
 	const supportsProjectTrust = useAppStore(selectSupportsProjectTrust);

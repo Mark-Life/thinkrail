@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { asSessionId } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2eWire } from "./fixtures/wire";
 
@@ -45,7 +46,10 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 
 	const wire = await E2eWire.connect();
 	const transcript = await wire
-		.request("session.getMessages", { sessionId, workspaceId: workspace.id })
+		.request("session.getMessages", {
+			sessionId: asSessionId(sessionId),
+			workspaceId: workspace.id,
+		})
 		.finally(() => wire.close());
 	const firstAssistant = transcript.messages.findIndex((message) => message.role === "assistant");
 	const queuedUser = transcript.messages.findIndex(

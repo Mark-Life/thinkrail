@@ -8,6 +8,7 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
@@ -129,7 +130,7 @@ export function Workbench({
 	const gestureContext = tupleKey(workspaceId, String(projectionEpoch));
 	const workspaceRef = useRef(workspaceId);
 	const [focusAfterClose, setFocusAfterClose] = useState<{
-		workspaceId: string;
+		workspaceId: WorkspaceId;
 		closedTab: LayoutTab;
 		fallbackDomId: string;
 	} | null>(null);

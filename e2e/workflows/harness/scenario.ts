@@ -1,4 +1,5 @@
 import { test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
 import { type Check, type CheckResult, runChecks } from "./checks";
 import { type AnsweredRound, attachDialog, type DialogConfig } from "./dialog";
 import { captureEvents, type EventLog } from "./events";
@@ -70,7 +71,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 
 	const budget = { ...DEFAULT_BUDGET, ...def.watchdog?.budget };
 	let restoreFactory: (() => void) | undefined;
-	let sessionId: string | null = null;
+	let sessionId: SessionId | null = null;
 	let model = "unknown";
 	let dialog: ReturnType<typeof attachDialog> | null = null;
 	let watcher: ReturnType<typeof watchSignals> | null = null;

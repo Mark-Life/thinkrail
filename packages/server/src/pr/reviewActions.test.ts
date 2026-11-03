@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
 import type { PrCommandRunner } from "./pr";
 import { deleteRemoteBranch, mergePr, readyPr, reopenPr } from "./reviewActions";
 
@@ -43,7 +44,12 @@ function seedWorkspaces(rows: Record<string, unknown>[]): void {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify(
-			rows.map((row) => ({ projectId: "p1", worktreePath: repo, createdAt: 1, ...row })),
+			rows.map((row) => ({
+				projectId: asProjectId("p1"),
+				worktreePath: repo,
+				createdAt: 1,
+				...row,
+			})),
 		),
 	);
 }
@@ -126,7 +132,7 @@ afterEach(() => {
 	}
 });
 
-const params = { workspaceId: "w1", branch: "feature", number: 12 };
+const params = { workspaceId: asWorkspaceId("w1"), branch: "feature", number: 12 };
 const closed: FakePr = { headRefName: "feature", state: "CLOSED" };
 
 describe("what gh answers", () => {
@@ -166,9 +172,9 @@ describe("what gh answers", () => {
 		["a row that is not an object", "[1]"],
 	])("an open-PR list that is %s deletes nothing", async (_name, listReply) => {
 		const { run } = fakeGh({ ...closed, listReply });
-		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run)).rejects.toThrow(
-			/Couldn't confirm/,
-		);
+		await expect(
+			deleteRemoteBranch({ workspaceId: asWorkspaceId("w1"), branch: "feature" }, run),
+		).rejects.toThrow(/Couldn't confirm/);
 		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
 			"refs/heads/feature",
 		);
@@ -212,9 +218,9 @@ describe("readyPr / reopenPr", () => {
 			{ id: "w0", kind: "default", name: "Default", branch: "main", baseBranch: "main" },
 		]);
 		const { run, calls } = fakeGh({ headRefName: "main", state: "OPEN", owner: "contributor" });
-		await expect(readyPr({ workspaceId: "w0", branch: "main", number: 12 }, run)).rejects.toThrow(
-			/base branch/,
-		);
+		await expect(
+			readyPr({ workspaceId: asWorkspaceId("w0"), branch: "main", number: 12 }, run),
+		).rejects.toThrow(/base branch/);
 		expect(calls).toHaveLength(0);
 	});
 
@@ -308,7 +314,7 @@ describe("mergePr", () => {
 describe("deleteRemoteBranch", () => {
 	test("deletes origin's branch and leaves the local one", async () => {
 		const { run, calls } = fakeGh({ headRefName: "feature", state: "CLOSED", openHeads: ["fork"] });
-		await deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run);
+		await deleteRemoteBranch({ workspaceId: asWorkspaceId("w1"), branch: "feature" }, run);
 		expect(calls[0]?.command.slice(0, 7)).toEqual([
 			"gh",
 			"pr",
@@ -328,7 +334,7 @@ describe("deleteRemoteBranch", () => {
 			{ id: "w0", kind: "default", name: "Default", branch: "main", baseBranch: "main" },
 		]);
 		await expect(
-			deleteRemoteBranch({ workspaceId: "w0", branch: "main" }, fakeGh(closed).run),
+			deleteRemoteBranch({ workspaceId: asWorkspaceId("w0"), branch: "main" }, fakeGh(closed).run),
 		).rejects.toThrow(/base branch/);
 		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/main")).toBe(
 			"refs/heads/main",
@@ -366,12 +372,18 @@ describe("remote deletion is leased to the tip this checkout saw", () => {
 	test("a standalone deletion refuses a remote that moved or holds commits HEAD lacks", async () => {
 		const tip = teammatePush("unseen.txt");
 		await expect(
-			deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, fakeGh(closed).run),
+			deleteRemoteBranch(
+				{ workspaceId: asWorkspaceId("w1"), branch: "feature" },
+				fakeGh(closed).run,
+			),
 		).rejects.toThrow(/moved since this checkout last saw it/);
 		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(tip);
 		sh(repo, "fetch", "-q", "origin");
 		await expect(
-			deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, fakeGh(closed).run),
+			deleteRemoteBranch(
+				{ workspaceId: asWorkspaceId("w1"), branch: "feature" },
+				fakeGh(closed).run,
+			),
 		).rejects.toThrow(/has commits this checkout doesn't/);
 		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(tip);
 	});
@@ -380,9 +392,9 @@ describe("remote deletion is leased to the tip this checkout saw", () => {
 describe("the open-PR check before a deletion asks the push repository itself", () => {
 	test("an open PR from this branch in the push repository blocks the deletion", async () => {
 		const { run } = fakeGh({ ...closed, openHeads: ["acme"] });
-		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run)).rejects.toThrow(
-			/still has an open pull request/,
-		);
+		await expect(
+			deleteRemoteBranch({ workspaceId: asWorkspaceId("w1"), branch: "feature" }, run),
+		).rejects.toThrow(/still has an open pull request/);
 		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
 			"refs/heads/feature",
 		);
@@ -390,9 +402,9 @@ describe("the open-PR check before a deletion asks the push repository itself", 
 
 	test("an unanswered check deletes nothing", async () => {
 		const { run } = fakeGh({ ...closed, listFails: true });
-		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run)).rejects.toThrow(
-			/Couldn't confirm/,
-		);
+		await expect(
+			deleteRemoteBranch({ workspaceId: asWorkspaceId("w1"), branch: "feature" }, run),
+		).rejects.toThrow(/Couldn't confirm/);
 		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
 			"refs/heads/feature",
 		);
