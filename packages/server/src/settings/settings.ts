@@ -282,20 +282,19 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 
 /** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. Best effort: the choice has already applied. */
 export function noteRecentModel(model: WireModel): void {
-	const current = configToOverwrite();
-	const recentModels = [
-		model,
-		...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
-	].slice(0, RECENT_MODELS_LIMIT);
-	const next: AppConfig = { ...current, recentModels };
 	try {
+		const current = configToOverwrite();
+		const recentModels = [
+			model,
+			...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
+		].slice(0, RECENT_MODELS_LIMIT);
+		const next: AppConfig = { ...current, recentModels };
 		saveConfig(next);
+		cached = next;
+		publishSettings?.(next, {});
 	} catch (error) {
-		log.warn("recent model not saved", error);
-		return;
+		log.warn("recent model not noted", error);
 	}
-	cached = next;
-	publishSettings?.(next, {});
 }
 
 export function resetConfigCache(): void {

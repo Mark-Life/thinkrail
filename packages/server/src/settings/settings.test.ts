@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -1038,4 +1046,23 @@ test("noteRecentModel does not throw when the save fails, and keeps the last goo
 	restoreConfig({ locale: "de" });
 	noteRecentModel(wireModel("m", "p"));
 	expect(storedConfig()).toMatchObject({ locale: "de", recentModels: [wireModel("m", "p")] });
+});
+
+test("noteRecentModel does not throw when the first load cannot save its repair", () => {
+	const path = join(dataDir, "config.json");
+	writeFileSync(path, JSON.stringify({ customLayoutPresets: [{ id: "broken" }] }));
+	chmodSync(path, 0o444);
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toBeUndefined();
+});
+
+test("noteRecentModel does not throw when publishing fails, and keeps the saved list", () => {
+	setSettingsPublisher(() => {
+		throw new Error("publish failed");
+	});
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toEqual([wireModel("m", "p")]);
+	expect(getConfig().recentModels).toEqual([wireModel("m", "p")]);
 });

@@ -36,7 +36,7 @@ The sibling dependency graph is: `layoutState â†’ layout`; `chatReconciliation â
 ## Composition
 
 `ProtocolMismatchDialog` is the prompt for a host outside the protocol range ([[submodule-web-transport]]). It cannot be
-dismissed, because nothing below it works. Only `uiOutdated` has a Reload button.
+dismissed, because nothing below it works. Both directions have a Reload button.
 
 The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
 as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window

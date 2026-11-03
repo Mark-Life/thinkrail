@@ -48,7 +48,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Get right
 
-- **A save never writes defaults over a file it could not read.** When the first load failed, or any later read did, `updateConfig` and `noteRecentModel` read again first: the save merges onto the real values, or throws `STATE_FILE_UNREADABLE` if the read still fails. `noteRecentModel` is best effort, because the session has its new model by then: a failed save logs and does not fail `session.create` or `session.setModel`.
+- **A save never writes defaults over a file it could not read.** When the first load failed, or any later read did, `updateConfig` and `noteRecentModel` read again first: the save merges onto the real values, or throws `STATE_FILE_UNREADABLE` if the read still fails. `noteRecentModel` is best effort, because the session has its new model by then: any failure in it, read, save or publish, logs and does not fail `session.create` or `session.setModel`.
 - **Converge on broadcast, no client optimism.** `updateConfig` persists before replacing the live cache or publishing; a failed write changes neither runtime reads nor frontends. The publisher receives the full merged config for broadcast and the applied partial update so host consumers can distinguish an explicit field write from an unrelated merge. Every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
 - `terminalWindowsShell` defaults to `"auto"`; persisted values fall back through persistence's shared
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete

@@ -21,7 +21,7 @@ that map.
 
 - **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
   types, the `*_METHODS` and `*_CHANNELS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`, `WS_CHANNEL_SCHEMAS`,
-  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `AnyHostWelcome`, the id brands with their `as*` helpers. From `wire.ts` only `Ack`: `wireObj`,
+  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `WsRequestFrame`, `WsAck`, `WsResume`, `AnyHostWelcome`, the id brands with their `as*` helpers. From `wire.ts` only `Ack`: `wireObj`,
   `partialWireObj`, `readonlyArr`, `piOwned`, `NoParams` and `NoPayload` stay inside this directory. Schema values stay
   public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they ship in web JS.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
@@ -67,8 +67,8 @@ that map.
   with no projects. So the client reads `HostWelcomeVersions` first and checks `AnyHostWelcome` only on a host in range, not
   `ServerWelcome`. Its entries are bare objects, so one odd project cannot refuse the whole welcome. `ServerWelcome` must
   stay assignable to it. The test harness still checks `ServerWelcome`.
-- **A stored hash guards the wire.** `wireHash.test.ts` holds a hash of `WS_METHOD_SCHEMAS`, `WS_CHANNEL_SCHEMAS` and
-  `AnyHostWelcome` beside the `PROTOCOL_VERSION` it was taken at. Field order does not count. A schema edit with no version
+- **A stored hash guards the wire.** `wireHash.test.ts` holds a hash of `WS_METHOD_SCHEMAS`, `WS_CHANNEL_SCHEMAS`,
+  `AnyHostWelcome`, `HostWelcomeVersions` and the frames in `envelope.ts` beside the `PROTOCOL_VERSION` it was taken at. Field order does not count. A schema edit with no version
   bump fails, and the message gives the new value to store.
 - **Ids are branded.** `ProjectId`, `WorkspaceId` and `SessionId` in `ids.ts` are strings at run time, so the wire and the
   stored files do not change. A wire field uses the one for its entity, so a call site cannot swap them. Each type has one

@@ -3,12 +3,13 @@ import { createHash } from "node:crypto";
 import { num, obj, str } from "@earendil-works/pi-schema";
 import { PROTOCOL_VERSION } from "../wsProtocol";
 import { WS_CHANNEL_SCHEMAS } from "./channels";
-import { AnyHostWelcome } from "./host";
+import { WsAck, WsEnvelope, WsRequestFrame, WsResume } from "./envelope";
+import { AnyHostWelcome, HostWelcomeVersions } from "./host";
 import { WS_METHOD_SCHEMAS } from "./methods";
 
 const STORED = {
 	protocolVersion: 103,
-	hash: "5d576edd604d291153b62cc08e5c7ef373a4d89fbc3ebbf4288d987af57b05fa",
+	hash: "7facb68a6ec08d74d7df79faaab7277fa7b3285b433318b3a5d688d1ed9d2392",
 };
 
 function sortedKeys(value: unknown): unknown {
@@ -45,6 +46,9 @@ const wire = {
 	methods: WS_METHOD_SCHEMAS,
 	channels: WS_CHANNEL_SCHEMAS,
 	acceptedWelcome: AnyHostWelcome,
+	welcomeVersions: HostWelcomeVersions,
+	hostFrames: WsEnvelope,
+	clientFrames: { request: WsRequestFrame, ack: WsAck, resume: WsResume },
 };
 
 describe("wire hash", () => {
