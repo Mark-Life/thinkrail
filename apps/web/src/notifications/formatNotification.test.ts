@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { type AttentionEvent, formatNotification, reasonLabel } from "./formatNotification";
 
 function event(overrides: Partial<AttentionEvent> = {}): AttentionEvent {
 	return {
-		sessionId: asSessionId("s1"),
-		workspaceId: asWorkspaceId("w1"),
+		sessionId: testSessionId("s1"),
+		workspaceId: testWorkspaceId("w1"),
 		worktreeName: "feature-branch",
 		reason: { kind: "needs-input" },
 		...overrides,
@@ -54,7 +54,7 @@ describe("formatNotification", () => {
 			subtitle: "feature-branch",
 			body: "Waiting for your input",
 			tag: "attention:s1",
-			target: { kind: "chat", workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
+			target: { kind: "chat", workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 		});
 	});
 
@@ -67,9 +67,9 @@ describe("formatNotification", () => {
 
 	test("multiple → aggregated notification opens search", () => {
 		const spec = formatNotification([
-			event({ sessionId: asSessionId("s1") }),
-			event({ sessionId: asSessionId("s2") }),
-			event({ sessionId: asSessionId("s3") }),
+			event({ sessionId: testSessionId("s1") }),
+			event({ sessionId: testSessionId("s2") }),
+			event({ sessionId: testSessionId("s3") }),
 		]);
 		expect(spec).toEqual({
 			title: "ThinkRail",
@@ -94,8 +94,8 @@ describe("formatNotification", () => {
 
 	test("exactly two sessions aggregate with plural wording and a fixed tag", () => {
 		const spec = formatNotification([
-			event({ sessionId: asSessionId("s1") }),
-			event({ sessionId: asSessionId("s2") }),
+			event({ sessionId: testSessionId("s1") }),
+			event({ sessionId: testSessionId("s2") }),
 		]);
 		expect(spec?.body).toBe("2 worktrees need your attention");
 		expect(spec?.tag).toBe("thinkrail-attention");

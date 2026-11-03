@@ -1,7 +1,7 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -62,7 +62,7 @@ test("an image tool result previews inline and opens full screen", async ({ page
 		name: "image result",
 		messages: [{ role: "user", text: "read the mockup image", timestamp: BASE_TS }],
 	});
-	appendToolImageResult(chat.path, asSessionId(chat.id));
+	appendToolImageResult(chat.path, testSessionId(chat.id));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);

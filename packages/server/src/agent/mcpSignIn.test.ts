@@ -12,7 +12,7 @@ import type {
 	McpStatusSnapshot,
 	SessionId,
 } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createSession,
 	dispatchSessionMcpCommand,
@@ -141,7 +141,7 @@ async function waitFor<T>(read: () => T | undefined): Promise<T> {
 const start = (action: "login" | "test" | "logout", deadlineMs?: number) =>
 	startMcpProbe({
 		action,
-		workspaceId: asWorkspaceId("ws-signin"),
+		workspaceId: testWorkspaceId("ws-signin"),
 		cwd,
 		projectTrusted: false,
 		policy: { approvals: {}, overrides: {}, toolGrants: {} },
@@ -172,7 +172,7 @@ test("a failed Test connection reports pi's reason with credentials masked", asy
 	try {
 		const { done } = startMcpProbe({
 			action: "test",
-			workspaceId: asWorkspaceId("ws-signin"),
+			workspaceId: testWorkspaceId("ws-signin"),
 			cwd,
 			projectTrusted: false,
 			policy: { approvals: {}, overrides: {}, toolGrants: {} },
@@ -194,7 +194,7 @@ const oauthyState = async (sessionId: SessionId) =>
 		?.state;
 
 test("sign-in shows the https-or-loopback page, accepts only the owner's paste-back, and stores credentials", async () => {
-	const chat = await createSession({ workspaceId: asWorkspaceId("ws-signin"), cwd });
+	const chat = await createSession({ workspaceId: testWorkspaceId("ws-signin"), cwd });
 	expect(await oauthyState(chat.sessionId)).toBe("needs-sign-in");
 	const { loginId, done } = start("login");
 	const page = await frameOf(loginId, "authUrl");
@@ -203,7 +203,7 @@ test("sign-in shows the https-or-loopback page, accepts only the owner's paste-b
 	expect(authorize.origin).toBe(new URL(fixture.url).origin);
 	expect(pushes.find((entry) => entry.push.loginId === loginId)?.push.target).toEqual({
 		kind: "mcp",
-		workspaceId: asWorkspaceId("ws-signin"),
+		workspaceId: testWorkspaceId("ws-signin"),
 		serverName: "oauthy",
 	});
 	await frameOf(loginId, "prompt");
@@ -285,7 +285,7 @@ const chatRequests = (sessionId: SessionId) =>
 
 test("chat login and logout publish their new status without another model turn or list read", async () => {
 	const chat = await createSession({
-		workspaceId: asWorkspaceId("ws-signin"),
+		workspaceId: testWorkspaceId("ws-signin"),
 		cwd,
 		model: { ...faux.getModel(), thinkingLevels: ["off"] },
 	});
@@ -328,7 +328,7 @@ test("chat login and logout publish their new status without another model turn 
 });
 
 test("a chat's own /mcp login holds the server's sign-in lock until it ends", async () => {
-	const chat = await createSession({ workspaceId: asWorkspaceId("ws-signin"), cwd });
+	const chat = await createSession({ workspaceId: testWorkspaceId("ws-signin"), cwd });
 	const login = dispatchSessionMcpCommand(chat.sessionId, "login oauthy");
 	const asked = await waitFor(() =>
 		chatRequests(chat.sessionId).find((request) => request.kind === "input"),
@@ -342,7 +342,7 @@ test("a chat's own /mcp login holds the server's sign-in lock until it ends", as
 });
 
 test("a chat's /mcp login for a server the host's sign-in probe holds says so instead of starting", async () => {
-	const chat = await createSession({ workspaceId: asWorkspaceId("ws-signin"), cwd });
+	const chat = await createSession({ workspaceId: testWorkspaceId("ws-signin"), cwd });
 	const { loginId, done } = start("login");
 	await frameOf(loginId, "prompt");
 	await dispatchSessionMcpCommand(chat.sessionId, "login oauthy");

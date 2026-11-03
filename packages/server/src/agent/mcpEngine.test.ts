@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, SessionId } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	applyPiResourceTrust,
 	createSession,
@@ -199,7 +199,7 @@ async function waitFor<T>(
 }
 
 async function chat() {
-	const workspaceId = asWorkspaceId(`engine-${++sequence}`);
+	const workspaceId = testWorkspaceId(`engine-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,
@@ -607,7 +607,7 @@ test("pi settings that turn builtin:mcp off make MCP read-only with no chat open
 	const elsewhere = async (trusted: boolean) =>
 		(
 			await listMcpServers({
-				workspaceId: asWorkspaceId("engine-idle"),
+				workspaceId: testWorkspaceId("engine-idle"),
 				cwd,
 				project: trusted ? { piResourceTrust: "granted" } : undefined,
 				waitMs: 0,

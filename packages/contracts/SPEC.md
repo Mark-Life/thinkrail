@@ -127,6 +127,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+- **`@thinkrail/contracts/test-ids`:** the one other entry: `testProjectId`, `testWorkspaceId` and `testSessionId` make an
+  id from any string, for test sources only ([[submodule-contracts-schema]]).
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).

@@ -2,7 +2,7 @@ import { mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -60,14 +60,14 @@ test("a transcript that fails to load says so and stays in history", async ({ pa
 	});
 	unreadableId = unreadable.id;
 	utimesSync(unreadable.path, new Date(BASE_TS), new Date(BASE_TS));
-	seedOpenTodo(asSessionId(unreadable.id), "finish the unreadable work");
+	seedOpenTodo(testSessionId(unreadable.id), "finish the unreadable work");
 
 	const readable = seedWorkspaceSession(repoCwd(), {
 		name: "the readable chat",
 		messages: [{ role: "user", text: "load me fine", timestamp: BASE_TS + 1_000 }],
 	});
 	utimesSync(readable.path, new Date(BASE_TS + 1_000), new Date(BASE_TS + 1_000));
-	seedOpenTodo(asSessionId(readable.id), "finish the readable work");
+	seedOpenTodo(testSessionId(readable.id), "finish the readable work");
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);

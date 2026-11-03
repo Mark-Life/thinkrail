@@ -1,12 +1,11 @@
 import { expect, test } from "bun:test";
 import {
-	asProjectId,
-	asWorkspaceId,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SubagentSettings } from "./SubagentSettings";
@@ -16,8 +15,8 @@ function workspace(
 	subagentMaxConcurrentOverride?: number,
 ): Workspace {
 	return {
-		id: asWorkspaceId("ws1"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("ws1"),
+		projectId: testProjectId("p1"),
 		name: "Checkout flow",
 		branch: "checkout-flow",
 		worktreePath: "/tmp/checkout-flow",

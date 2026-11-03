@@ -1,7 +1,7 @@
 import {
-	asSessionId,
 	type BackgroundCommandCompletionDetails,
 	completionDelivery,
+	parseSessionId,
 	type SubagentCompletionDetails,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
@@ -88,12 +88,10 @@ export function SubagentResult({
 	const t = useT();
 	const actions = useChatActions();
 	const [expanded, fold, toggleRef] = useFold(`${id}:result`, false);
+	const childSessionId = parseSessionId(details.childSessionId);
 	const toggle: typeof fold = (event) => {
-		if (!expanded)
-			actions?.markResultSeen?.({
-				kind: "subagent",
-				childSessionId: asSessionId(details.childSessionId),
-			});
+		if (!expanded && childSessionId !== null)
+			actions?.markResultSeen?.({ kind: "subagent", childSessionId });
 		fold(event);
 	};
 	const report = completionReport(text);
@@ -114,10 +112,11 @@ export function SubagentResult({
 				metaLead={<RunModelLabel model={details.model} thinkingLevel={details.thinkingLevel} />}
 				meta={usageCounters(t, details).join(" · ")}
 				teaser={reportTeaser(report)}
-				onOpen={actions?.resultOpener({
-					kind: "subagent",
-					childSessionId: asSessionId(details.childSessionId),
-				})}
+				onOpen={
+					childSessionId === null
+						? undefined
+						: actions?.resultOpener({ kind: "subagent", childSessionId })
+				}
 			>
 				{report ? (
 					<div className="tr-text-reading text-text-default">

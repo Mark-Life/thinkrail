@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { STORE_DIR } from "pi-todos/core";
 import { listStoredPlans } from "./plans";
 
@@ -38,7 +38,7 @@ describe("listStoredPlans", () => {
 		writePlan("s1", "first", 1_000);
 		writeFileSync(join(root, STORE_DIR, "s1.baselines.json"), "{}");
 		const [plan] = listStoredPlans(root);
-		expect(listStoredPlans(root).map((stored) => stored.sessionId)).toEqual([asSessionId("s1")]);
+		expect(listStoredPlans(root).map((stored) => stored.sessionId)).toEqual([testSessionId("s1")]);
 		const read = plan?.read();
 		expect(read?.todos[0]?.title).toBe("first");
 		expect(listStoredPlans(root)[0]?.read()).toBe(read);

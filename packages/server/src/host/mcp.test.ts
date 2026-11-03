@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpListResult, McpServerLog, McpServerSummary } from "@thinkrail/contracts";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	approveProjectMcpServer,
 	getProjects,
@@ -55,8 +55,8 @@ beforeEach(() => {
 		join(root, "data", "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				kind: "default",
 				name: "Default",
 				branch: "main",
@@ -89,7 +89,7 @@ const codeOf = (promise: Promise<unknown>) =>
 
 test("config writes land in the defining file, validate like pi, and a project server added in ThinkRail is approved", async () => {
 	const added = await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "user",
 		name: "docs",
 		entry: { url: "https://docs.example/mcp" },
@@ -101,7 +101,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 	expect(
 		await codeOf(
 			request("mcp.add", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				scope: "user",
 				name: "docs",
 				entry: { url: "https://x" },
@@ -111,7 +111,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 	expect(
 		await codeOf(
 			request("mcp.add", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				scope: "user",
 				name: "legacy",
 				entry: { url: "https://x", type: "sse" },
@@ -121,7 +121,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 	expect(
 		await codeOf(
 			request("mcp.add", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				scope: "project",
 				name: "tokened",
 				entry: { url: "https://x", auth: { provider: "anthropic" } },
@@ -130,7 +130,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 	).toBe("MCP_CONFIG_INVALID");
 
 	const project = await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "repo-tool",
 		entry: { command: "npx", args: ["-y", "repo-tool"] },
@@ -138,7 +138,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 	expect(find(project, "project", "repo-tool")?.approval?.state).toBe("approved");
 
 	const removed = await request("mcp.remove", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "user",
 		name: "docs",
 		expectedFingerprint: find(project, "user", "docs")?.fingerprint,
@@ -150,7 +150,7 @@ test("a user entry is rewritten or removed only as rendered: a stale or missing 
 	const file = join(agentDir, "mcp.json");
 	const rendered = find(
 		await request("mcp.add", {
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			scope: "user",
 			name: "docs",
 			entry: { url: "https://docs.example/mcp" },
@@ -166,7 +166,7 @@ test("a user entry is rewritten or removed only as rendered: a stale or missing 
 		JSON.stringify({ mcpServers: { docs: { command: "npx", args: ["-y", "replaced"] } } }),
 	);
 	const replaced = readFileSync(file, "utf8");
-	const stale = { workspaceId: asWorkspaceId("w1"), scope: "user", name: "docs" };
+	const stale = { workspaceId: testWorkspaceId("w1"), scope: "user", name: "docs" };
 	for (const [params, code] of [
 		[{ ...stale, expectedFingerprint: rendered?.fingerprint }, "MCP_CONFIG_INVALID"],
 		[stale, "INVALID_PARAMS"],
@@ -183,7 +183,7 @@ test("a user entry is rewritten or removed only as rendered: a stale or missing 
 	).rejects.toThrow('The entry for "docs" changed since it was opened — review it again.');
 
 	const current = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"user",
 		"docs",
 	);
@@ -215,19 +215,19 @@ for (const scope of ["user", "project"] as const) {
 			'\uFEFF{"extra":true,"mcpServers":{"docs":{"url":"https://docs.example/mcp"}}}';
 		writeFileSync(file, original);
 		const current = find(
-			await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+			await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 			scope,
 			"docs",
 		);
 		expect(current?.fingerprint).toBeString();
 		if (scope === "project") {
 			await request("mcp.approve", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				name: "docs",
 				fingerprint: current?.fingerprint,
 			});
 		}
-		const target = { workspaceId: asWorkspaceId("w1"), scope, name: "docs" };
+		const target = { workspaceId: testWorkspaceId("w1"), scope, name: "docs" };
 		const entry = { url: "https://docs.example/v2" };
 		expect(await codeOf(request("mcp.add", { ...target, entry }))).toBe("MCP_CONFIG_INVALID");
 		expect(
@@ -261,7 +261,7 @@ for (const scope of ["user", "project"] as const) {
 	)(`add refuses a ${scope} file with prefix %j occupied by %j after the client listed it as absent`, async (prefix, entry) => {
 		approveProjectMcpServer("p1", "other", "other-fingerprint");
 		expect(
-			find(await request("mcp.list", { workspaceId: asWorkspaceId("w1") }), scope, "docs"),
+			find(await request("mcp.list", { workspaceId: testWorkspaceId("w1") }), scope, "docs"),
 		).toBeUndefined();
 		mkdirSync(join(repo, ".pi"));
 		const file = join(scope === "user" ? agentDir : join(repo, ".pi"), "mcp.json");
@@ -276,7 +276,7 @@ for (const scope of ["user", "project"] as const) {
 		expect(
 			await codeOf(
 				request("mcp.add", {
-					workspaceId: asWorkspaceId("w1"),
+					workspaceId: testWorkspaceId("w1"),
 					scope,
 					name: "docs",
 					entry: { url: "https://docs.example/mcp" },
@@ -287,7 +287,7 @@ for (const scope of ["user", "project"] as const) {
 		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
 
 		const current = find(
-			await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+			await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 			scope,
 			"docs",
 		);
@@ -295,7 +295,7 @@ for (const scope of ["user", "project"] as const) {
 		expect(
 			await codeOf(
 				request("mcp.update", {
-					workspaceId: asWorkspaceId("w1"),
+					workspaceId: testWorkspaceId("w1"),
 					scope,
 					name: "docs",
 					entry: { url: "https://docs.example/mcp" },
@@ -312,7 +312,7 @@ for (const scope of ["user", "project"] as const) {
 		const file = join(scope === "user" ? agentDir : join(repo, ".pi"), "mcp.json");
 		writeFileSync(file, JSON.stringify({ mcpServers: {} }));
 		const added = await request("mcp.add", {
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			scope,
 			name: "__proto__",
 			entry: { url: "https://proto.example/mcp" },
@@ -335,13 +335,13 @@ test("a repo-side change lapses approval, and approving needs the fingerprint th
 		);
 	write(["-y", "good"]);
 	const pending = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"repo",
 	);
 	expect(pending?.approval?.state).toBe("pending");
 	const approved = await request("mcp.approve", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "repo",
 		fingerprint: pending?.approval?.fingerprint,
 	});
@@ -349,7 +349,7 @@ test("a repo-side change lapses approval, and approving needs the fingerprint th
 
 	write(["-y", "evil"]);
 	const changed = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"repo",
 	);
@@ -357,7 +357,7 @@ test("a repo-side change lapses approval, and approving needs the fingerprint th
 	expect(
 		await codeOf(
 			request("mcp.approve", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				name: "repo",
 				fingerprint: pending?.approval?.fingerprint,
 			}),
@@ -372,7 +372,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 		writeFileSync(file, JSON.stringify({ mcpServers: { repo: { command: "npx", args } } }));
 	const update = (entry: object, expectedFingerprint?: string) =>
 		request("mcp.update", {
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			scope: "project",
 			name: "repo",
 			entry,
@@ -381,7 +381,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 
 	writeRepo(["-y", "good"]);
 	const pending = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"repo",
 	);
@@ -392,7 +392,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 	expect(toggled).toMatchObject({ enabled: false, approval: { state: "pending" } });
 
 	await request("mcp.approve", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "repo",
 		fingerprint: toggled?.approval?.fingerprint,
 	});
@@ -410,7 +410,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 		),
 	).toBe("MCP_CONFIG_INVALID");
 	const changed = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"repo",
 	);
@@ -423,7 +423,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 		expect(
 			await codeOf(
 				request(method, {
-					workspaceId: asWorkspaceId("w1"),
+					workspaceId: testWorkspaceId("w1"),
 					scope: "repo",
 					name: "x",
 					entry: { command: "x" },
@@ -439,13 +439,13 @@ test("an update or removal rendered from an entry that changed on disk since is 
 	mkdirSync(join(repo, ".pi"));
 	const file = join(repo, ".pi", "mcp.json");
 	await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "repo",
 		entry: { command: "npx", args: ["-y", "good"] },
 	});
 	const rendered = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"repo",
 	);
@@ -459,7 +459,7 @@ test("an update or removal rendered from an entry that changed on disk since is 
 	expect(
 		await codeOf(
 			request("mcp.update", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				scope: "project",
 				name: "repo",
 				entry: { command: "npx", args: ["-y", "evil"], enabled: false },
@@ -469,13 +469,13 @@ test("an update or removal rendered from an entry that changed on disk since is 
 	).toBe("MCP_CONFIG_INVALID");
 	expect(readFileSync(file, "utf8")).toBe(checkedOut);
 	expect(
-		find(await request("mcp.list", { workspaceId: asWorkspaceId("w1") }), "project", "repo")
+		find(await request("mcp.list", { workspaceId: testWorkspaceId("w1") }), "project", "repo")
 			?.approval?.state,
 	).toBe("changed");
 	expect(
 		await codeOf(
 			request("mcp.remove", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				scope: "project",
 				name: "repo",
 				expectedFingerprint: rendered?.approval?.fingerprint,
@@ -484,12 +484,12 @@ test("an update or removal rendered from an entry that changed on disk since is 
 	).toBe("MCP_CONFIG_INVALID");
 	expect(readFileSync(file, "utf8")).toBe(checkedOut);
 	const current = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"repo",
 	);
 	const removed = await request("mcp.remove", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "repo",
 		expectedFingerprint: current?.approval?.fingerprint,
@@ -503,13 +503,13 @@ test("always-allowed tools are listed on their server row and revoked one by one
 	writeFileSync(join(agentDir, "mcp.json"), JSON.stringify({ mcpServers: { linear: { url } } }));
 	grantProjectMcpTool("p1", "linear", target, "mcp__linear__create_issue");
 	grantProjectMcpTool("p1", "linear", target, "mcp__linear__comment");
-	const listed = await request("mcp.list", { workspaceId: asWorkspaceId("w1") });
+	const listed = await request("mcp.list", { workspaceId: testWorkspaceId("w1") });
 	expect(find(listed, "user", "linear")?.alwaysAllowed).toEqual([
 		{ tool: "mcp__linear__create_issue", label: "create_issue" },
 		{ tool: "mcp__linear__comment", label: "comment" },
 	]);
 	const revoked = await request("mcp.revokeToolGrant", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		tool: "mcp__linear__create_issue",
 	});
@@ -519,13 +519,17 @@ test("always-allowed tools are listed on their server row and revoked one by one
 	expect(getProjects()[0]?.mcpToolGrants?.linear?.tools).toEqual(["mcp__linear__comment"]);
 	expect(
 		await codeOf(
-			request("mcp.revokeToolGrant", { workspaceId: asWorkspaceId("w1"), name: "linear", tool: 7 }),
+			request("mcp.revokeToolGrant", {
+				workspaceId: testWorkspaceId("w1"),
+				name: "linear",
+				tool: 7,
+			}),
 		),
 	).toBe("INVALID_PARAMS");
 	expect(
 		await codeOf(
 			request("mcp.revokeToolGrant", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				name: "linear",
 				tool: "",
 			}),
@@ -542,14 +546,14 @@ test.each([
 		`${prefix}${JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } })}`,
 	);
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		enabled: false,
 	});
 	mkdirSync(join(repo, ".pi"));
 	const file = join(repo, ".pi", "mcp.json");
 	const share = () =>
-		request("mcp.shareWithRepo", { workspaceId: asWorkspaceId("w1"), name: "linear" });
+		request("mcp.shareWithRepo", { workspaceId: testWorkspaceId("w1"), name: "linear" });
 	const refusedLeavesFile = async (entry: object) => {
 		writeFileSync(file, `${prefix}${JSON.stringify({ mcpServers: { linear: entry } })}`);
 		const before = readFileSync(file, "utf8");
@@ -561,13 +565,13 @@ test.each([
 	await refusedLeavesFile({ exposure: "direct" });
 
 	const pending = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"user",
 		"linear",
 	);
 	expect(pending?.approval?.state).toBe("pending");
 	await request("mcp.approve", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		fingerprint: pending?.approval?.fingerprint,
 	});
@@ -596,7 +600,7 @@ test.each(
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
 	);
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		enabled: false,
 	});
@@ -611,12 +615,12 @@ test.each(
 	for (const approved of [false, true]) {
 		if (approved) {
 			const current = find(
-				await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+				await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 				"project",
 				"linear",
 			);
 			await request("mcp.approve", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				name: "linear",
 				fingerprint: current?.approval?.fingerprint,
 			});
@@ -624,7 +628,7 @@ test.each(
 		const projectsBefore = readFileSync(projectsFile, "utf8");
 		expect(
 			await codeOf(
-				request("mcp.shareWithRepo", { workspaceId: asWorkspaceId("w1"), name: "linear" }),
+				request("mcp.shareWithRepo", { workspaceId: testWorkspaceId("w1"), name: "linear" }),
 			),
 		).toBe("MCP_CONFIG_INVALID");
 		expect(readFileSync(file, "utf8")).toBe(before);
@@ -638,12 +642,12 @@ test("project settings for a user server merge into the record field by field un
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
 	);
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		exposure: "direct",
 	});
 	const overridden = await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		enabled: false,
 	});
@@ -652,7 +656,7 @@ test("project settings for a user server merge into the record field by field un
 		projectOverride: { enabled: false, exposure: "direct" },
 	});
 	const shared = await request("mcp.shareWithRepo", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 	});
 	expect(JSON.parse(readFileSync(join(repo, ".pi", "mcp.json"), "utf8")).mcpServers.linear).toEqual(
@@ -668,7 +672,7 @@ test("project settings for a user server merge into the record field by field un
 	expect(find(shared, "user", "linear")?.projectOverride).toBeUndefined();
 	expect(
 		await codeOf(
-			request("mcp.shareWithRepo", { workspaceId: asWorkspaceId("w1"), name: "linear" }),
+			request("mcp.shareWithRepo", { workspaceId: testWorkspaceId("w1"), name: "linear" }),
 		),
 	).toBe("MCP_CONFIG_INVALID");
 });
@@ -679,7 +683,7 @@ test("share requires the user-level server to remain an object definition", asyn
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
 	);
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		enabled: false,
 	});
@@ -691,7 +695,7 @@ test("share requires the user-level server to remain an object definition", asyn
 		const before = readFileSync(userFile, "utf8");
 		expect(
 			await codeOf(
-				request("mcp.shareWithRepo", { workspaceId: asWorkspaceId("w1"), name: "linear" }),
+				request("mcp.shareWithRepo", { workspaceId: testWorkspaceId("w1"), name: "linear" }),
 			),
 		).toBe("MCP_CONFIG_INVALID");
 		expect(existsSync(join(repo, ".pi", "mcp.json"))).toBe(false);
@@ -703,7 +707,7 @@ test("share requires the user-level server to remain an object definition", asyn
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
 	);
 	const linear = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"user",
 		"linear",
 	);
@@ -718,7 +722,7 @@ test("project writes refuse a symlinked .pi, and per-chat calls need a session o
 	expect(
 		await codeOf(
 			request("mcp.add", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				scope: "project",
 				name: "x",
 				entry: { command: "npx" },
@@ -728,8 +732,8 @@ test("project writes refuse a symlinked .pi, and per-chat calls need a session o
 	expect(
 		await codeOf(
 			request("mcp.setSessionOverride", {
-				workspaceId: asWorkspaceId("w1"),
-				sessionId: asSessionId("01a11840-3318-7548-baaf-c5a7a0729057"),
+				workspaceId: testWorkspaceId("w1"),
+				sessionId: testSessionId("01a11840-3318-7548-baaf-c5a7a0729057"),
 				name: "x",
 				enabled: false,
 			}),
@@ -738,7 +742,7 @@ test("project writes refuse a symlinked .pi, and per-chat calls need a session o
 	expect(
 		await codeOf(
 			request("mcp.add", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				scope: "user",
 				name: "bad name",
 				entry: {},
@@ -754,18 +758,18 @@ test("with builtin:mcp turned off in pi settings, sign-in, sign-out, Test connec
 	);
 	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ extensions: ["-builtin:mcp"] }));
 	expect(
-		(await request("mcp.list", { workspaceId: asWorkspaceId("w1") })).handledElsewhere,
+		(await request("mcp.list", { workspaceId: testWorkspaceId("w1") })).handledElsewhere,
 	).toEqual({
 		by: "pi settings (-builtin:mcp)",
 	});
 	for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
-		expect(await codeOf(request(method, { workspaceId: asWorkspaceId("w1"), name: "docs" }))).toBe(
-			"MCP_HANDLED_ELSEWHERE",
-		);
+		expect(
+			await codeOf(request(method, { workspaceId: testWorkspaceId("w1"), name: "docs" })),
+		).toBe("MCP_HANDLED_ELSEWHERE");
 	}
 	const before = readFileSync(join(agentDir, "mcp.json"), "utf8");
 	const docs = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"user",
 		"docs",
 	);
@@ -786,7 +790,7 @@ test("with builtin:mcp turned off in pi settings, sign-in, sign-out, Test connec
 		["mcp.shareWithRepo", { name: "docs" }],
 	];
 	for (const [method, params] of mutations) {
-		expect(await codeOf(request(method, { workspaceId: asWorkspaceId("w1"), ...params }))).toBe(
+		expect(await codeOf(request(method, { workspaceId: testWorkspaceId("w1"), ...params }))).toBe(
 			"MCP_HANDLED_ELSEWHERE",
 		);
 	}
@@ -796,7 +800,7 @@ test("with builtin:mcp turned off in pi settings, sign-in, sign-out, Test connec
 	expect(
 		find(
 			await request("mcp.setProjectOverride", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				name: "docs",
 				enabled: false,
 			}),
@@ -810,7 +814,7 @@ test("a server's log is its own masked lines from pi's mcp.log and its rotated c
 	const readLog = (name: string) =>
 		handleRequest(
 			"mcp.readLog",
-			{ workspaceId: asWorkspaceId("w1"), name },
+			{ workspaceId: testWorkspaceId("w1"), name },
 			CTX,
 		) as Promise<McpServerLog>;
 	const path = join(agentDir, "mcp.log");
@@ -840,12 +844,12 @@ test("a server's log is its own masked lines from pi's mcp.log and its rotated c
 test("an unreadable mcp.json is listed as a file problem with its path, and an entry that is not an object keeps its row", async () => {
 	const file = join(agentDir, "mcp.json");
 	writeFileSync(file, "{ not json");
-	const broken = await request("mcp.list", { workspaceId: asWorkspaceId("w1") });
+	const broken = await request("mcp.list", { workspaceId: testWorkspaceId("w1") });
 	expect(broken.servers).toEqual([]);
 	expect(broken.configErrors?.map((error) => error.source)).toEqual([file]);
 	expect(broken.configErrors?.[0]?.message).toBeTruthy();
 	writeFileSync(file, JSON.stringify({ mcpServers: { bad: null } }));
-	const odd = await request("mcp.list", { workspaceId: asWorkspaceId("w1") });
+	const odd = await request("mcp.list", { workspaceId: testWorkspaceId("w1") });
 	expect(odd.configErrors).toBeUndefined();
 	expect(find(odd, "user", "bad")?.configError).toBe('server "bad" must be an object');
 });
@@ -858,7 +862,7 @@ test("an untrusted project refuses writes to the MCP servers its repository defi
 		JSON.stringify({ mcpServers: { repo: { command: "npx", args: ["-y", "x"] } } }),
 	);
 	const pending = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"repo",
 	);
@@ -867,7 +871,7 @@ test("an untrusted project refuses writes to the MCP servers its repository defi
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
 	);
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		enabled: false,
 	});
@@ -889,18 +893,18 @@ test("an untrusted project refuses writes to the MCP servers its repository defi
 		["mcp.shareWithRepo", { name: "linear" }],
 	];
 	for (const [method, params] of refused) {
-		expect(await codeOf(request(method, { workspaceId: asWorkspaceId("w1"), ...params }))).toBe(
+		expect(await codeOf(request(method, { workspaceId: testWorkspaceId("w1"), ...params }))).toBe(
 			"MCP_CONFIG_INVALID",
 		);
 	}
 	expect(readFileSync(file, "utf8")).toBe(before);
-	const listed = await request("mcp.list", { workspaceId: asWorkspaceId("w1") });
+	const listed = await request("mcp.list", { workspaceId: testWorkspaceId("w1") });
 	expect(find(listed, "project", "repo")).toBeUndefined();
 	expect(find(listed, "user", "linear")?.enabled).toBe(false);
 	expect(
 		find(
 			await request("mcp.setProjectOverride", {
-				workspaceId: asWorkspaceId("w1"),
+				workspaceId: testWorkspaceId("w1"),
 				name: "linear",
 				enabled: true,
 			}),
@@ -923,19 +927,19 @@ test("Test connection judges the effective server of a name, not the shadowed on
 	const test = () =>
 		handleRequest(
 			"mcp.testConnection",
-			{ workspaceId: asWorkspaceId("w1"), name: "docs" },
+			{ workspaceId: testWorkspaceId("w1"), name: "docs" },
 			CTX,
 		) as Promise<{
 			loginId: string;
 		}>;
 	expect(await codeOf(test())).toBe("MCP_CONFIG_INVALID");
 	const pending = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"docs",
 	);
 	await request("mcp.approve", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "docs",
 		fingerprint: pending?.approval?.fingerprint,
 	});
@@ -950,7 +954,7 @@ test("a user server named __proto__ keeps its project setting as an own record e
 		JSON.stringify({ mcpServers: { ["__proto__"]: { url: "https://proto.example/mcp" } } }),
 	);
 	const listed = await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "__proto__",
 		enabled: false,
 	});
@@ -961,7 +965,7 @@ test("a user server named __proto__ keeps its project setting as an own record e
 	const stored = JSON.parse(readFileSync(join(root, "data", "projects.json"), "utf8"))[0];
 	expect(Object.hasOwn(stored.mcpOverrides, "__proto__")).toBe(true);
 	expect(
-		find(await request("mcp.list", { workspaceId: asWorkspaceId("w1") }), "user", "__proto__")
+		find(await request("mcp.list", { workspaceId: testWorkspaceId("w1") }), "user", "__proto__")
 			?.enabled,
 	).toBe(false);
 });
@@ -972,18 +976,18 @@ test("concurrent project override patches preserve both fields and unrelated set
 		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp" } } }),
 	);
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "other",
 		enabled: false,
 	});
 	await Promise.all([
 		request("mcp.setProjectOverride", {
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			name: "docs",
 			enabled: false,
 		}),
 		request("mcp.setProjectOverride", {
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			name: "docs",
 			exposure: "direct",
 		}),
@@ -993,7 +997,7 @@ test("concurrent project override patches preserve both fields and unrelated set
 		docs: { enabled: false, exposure: "direct" },
 	});
 	expect(
-		find(await request("mcp.list", { workspaceId: asWorkspaceId("w1") }), "user", "docs"),
+		find(await request("mcp.list", { workspaceId: testWorkspaceId("w1") }), "user", "docs"),
 	).toMatchObject({
 		enabled: false,
 		effectiveExposure: "direct",
@@ -1006,7 +1010,10 @@ test("sharing uses the latest project override after ownership resolves", async 
 		JSON.stringify({ mcpServers: { docs: { command: "unused-test-server" } } }),
 	);
 	setProjectMcpOverride("p1", "docs", { enabled: false });
-	const pending = request("mcp.shareWithRepo", { workspaceId: asWorkspaceId("w1"), name: "docs" });
+	const pending = request("mcp.shareWithRepo", {
+		workspaceId: testWorkspaceId("w1"),
+		name: "docs",
+	});
 	setProjectMcpOverride("p1", "docs", { exposure: "direct" });
 	const result = await pending;
 	expect(JSON.parse(readFileSync(join(repo, ".pi", "mcp.json"), "utf8")).mcpServers.docs).toEqual({
@@ -1023,7 +1030,7 @@ test("sharing uses the latest project override after ownership resolves", async 
 
 test("trust revoked during ownership resolution refuses every repository mutation", async () => {
 	const added = await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "repo",
 		entry: { command: "unused-test-server" },
@@ -1034,7 +1041,7 @@ test("trust revoked during ownership resolution refuses every repository mutatio
 		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp" } } }),
 	);
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "docs",
 		enabled: false,
 	});
@@ -1058,7 +1065,7 @@ test("trust revoked during ownership resolution refuses every repository mutatio
 	];
 	for (const [method, params] of mutations) {
 		setProjectTrust("p1", true, undefined, { resources: true });
-		const pending = request(method, { workspaceId: asWorkspaceId("w1"), ...params });
+		const pending = request(method, { workspaceId: testWorkspaceId("w1"), ...params });
 		setProjectTrust("p1", false);
 		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
 		expect(readFileSync(file, "utf8")).toBe(before);
@@ -1082,11 +1089,11 @@ test("ownership resolved for a previous cwd or project cannot admit a mutation",
 	);
 	for (const replacement of [
 		{ ...workspace, worktreePath: otherRepo },
-		{ ...workspace, projectId: asProjectId("p2") },
+		{ ...workspace, projectId: testProjectId("p2") },
 	]) {
 		writeFileSync(path, original);
 		const pending = request("mcp.add", {
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			scope: "user",
 			name: "docs",
 			entry: { command: "unused-test-server" },
@@ -1099,13 +1106,13 @@ test("ownership resolved for a previous cwd or project cannot admit a mutation",
 
 test("an update carries only the approval current at synchronous admission", async () => {
 	const added = await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "repo",
 		entry: { command: "unused-test-server" },
 	});
 	const pending = request("mcp.update", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "repo",
 		expectedFingerprint: find(added, "project", "repo")?.approval?.fingerprint,
@@ -1120,7 +1127,7 @@ test("an update carries only the approval current at synchronous admission", asy
 
 test("wire overrides reject invalid enablement and exposure before changing project or session state", async () => {
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "docs",
 		enabled: false,
 	});
@@ -1130,7 +1137,7 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 		expect(
 			await codeOf(
 				request("mcp.setProjectOverride", {
-					workspaceId: asWorkspaceId("w1"),
+					workspaceId: testWorkspaceId("w1"),
 					name: "docs",
 					enabled,
 				}),
@@ -1139,8 +1146,8 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 		expect(
 			await codeOf(
 				request("mcp.setSessionOverride", {
-					workspaceId: asWorkspaceId("w1"),
-					sessionId: asSessionId("01a11840-3318-7548-baaf-c5a7a0729057"),
+					workspaceId: testWorkspaceId("w1"),
+					sessionId: testSessionId("01a11840-3318-7548-baaf-c5a7a0729057"),
 					name: "docs",
 					enabled,
 				}),
@@ -1152,7 +1159,7 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 		expect(
 			await codeOf(
 				request("mcp.setProjectOverride", {
-					workspaceId: asWorkspaceId("w1"),
+					workspaceId: testWorkspaceId("w1"),
 					name: "docs",
 					enabled: true,
 					exposure,
@@ -1164,8 +1171,8 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 	expect(
 		await codeOf(
 			request("mcp.setSessionOverride", {
-				workspaceId: asWorkspaceId("w1"),
-				sessionId: asSessionId("missing"),
+				workspaceId: testWorkspaceId("w1"),
+				sessionId: testSessionId("missing"),
 				name: "docs",
 			}),
 		),
@@ -1179,7 +1186,7 @@ test("an undeclared param field reaches neither the project record nor the repos
 	);
 	const extra = { command: "evil", auth: { provider: "anthropic" }, approval: "approved" };
 	await request("mcp.setProjectOverride", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		enabled: false,
 		exposure: "direct",
@@ -1187,12 +1194,12 @@ test("an undeclared param field reaches neither the project record nor the repos
 	});
 	expect(getProjects()[0]?.mcpOverrides?.linear).toEqual({ enabled: false, exposure: "direct" });
 	await request("mcp.shareWithRepo", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "linear",
 		...extra,
 	});
 	await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "fresh",
 		entry: { command: "npx" },
@@ -1208,21 +1215,21 @@ test.each([
 	[null],
 	["npx"],
 ])("an entry that is not an object is refused before any write: %j", async (entry) => {
-	const params = { workspaceId: asWorkspaceId("w1"), scope: "user", name: "docs", entry };
+	const params = { workspaceId: testWorkspaceId("w1"), scope: "user", name: "docs", entry };
 	expect(await codeOf(request("mcp.add", params))).toBe("INVALID_PARAMS");
 	expect(existsSync(join(agentDir, "mcp.json"))).toBe(false);
 });
 
 test("probes refuse trust revoked while ownership is resolving", async () => {
 	await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "docs",
 		entry: { url: "http://127.0.0.1:1/mcp" },
 	});
 	for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
 		setProjectTrust("p1", true, undefined, { resources: true });
-		const pending = request(method, { workspaceId: asWorkspaceId("w1"), name: "docs" });
+		const pending = request(method, { workspaceId: testWorkspaceId("w1"), name: "docs" });
 		setProjectTrust("p1", false);
 		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
 	}
@@ -1244,11 +1251,11 @@ test("probes reject ownership resolved for a previous cwd or project", async () 
 	);
 	for (const replacement of [
 		{ ...workspace, worktreePath: otherRepo },
-		{ ...workspace, projectId: asProjectId("p2") },
+		{ ...workspace, projectId: testProjectId("p2") },
 	]) {
 		for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
 			writeFileSync(path, original);
-			const pending = request(method, { workspaceId: asWorkspaceId("w1"), name: "docs" });
+			const pending = request(method, { workspaceId: testWorkspaceId("w1"), name: "docs" });
 			writeFileSync(path, JSON.stringify([replacement]));
 			await expect(pending).rejects.toThrow("workspace or project trust changed");
 		}
@@ -1261,12 +1268,15 @@ test("Test connection reads the current approval rather than a pre-ownership sna
 		JSON.stringify({ mcpServers: { docs: { command: "unused-test-server" } } }),
 	);
 	await request("mcp.add", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		scope: "project",
 		name: "docs",
 		entry: { url: "http://127.0.0.1:1/mcp" },
 	});
-	const pending = request("mcp.testConnection", { workspaceId: asWorkspaceId("w1"), name: "docs" });
+	const pending = request("mcp.testConnection", {
+		workspaceId: testWorkspaceId("w1"),
+		name: "docs",
+	});
 	approveProjectMcpServer("p1", "docs", "revoked-fingerprint");
 	expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
 });
@@ -1282,17 +1292,19 @@ test("Test connection ignores an approved invalid HTTP project entry over a vali
 		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp", enabled: "false" } } }),
 	);
 	const invalid = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"docs",
 	);
 	await request("mcp.approve", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "docs",
 		fingerprint: invalid?.approval?.fingerprint,
 	});
 	expect(
-		await codeOf(request("mcp.testConnection", { workspaceId: asWorkspaceId("w1"), name: "docs" })),
+		await codeOf(
+			request("mcp.testConnection", { workspaceId: testWorkspaceId("w1"), name: "docs" }),
+		),
 	).toBe("MCP_CONFIG_INVALID");
 });
 
@@ -1307,18 +1319,18 @@ test("Test connection admits the user HTTP server beneath an approved invalid pr
 		JSON.stringify({ mcpServers: { fallback: { command: "unused-test-server", args: false } } }),
 	);
 	const invalid = find(
-		await request("mcp.list", { workspaceId: asWorkspaceId("w1") }),
+		await request("mcp.list", { workspaceId: testWorkspaceId("w1") }),
 		"project",
 		"fallback",
 	);
 	await request("mcp.approve", {
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		name: "fallback",
 		fingerprint: invalid?.approval?.fingerprint,
 	});
 	const started = (await handleRequest(
 		"mcp.testConnection",
-		{ workspaceId: asWorkspaceId("w1"), name: "fallback" },
+		{ workspaceId: testWorkspaceId("w1"), name: "fallback" },
 		CTX,
 	)) as { loginId: string };
 	expect(typeof started.loginId).toBe("string");
@@ -1332,7 +1344,7 @@ test("probes refuse names with no admitted valid config", async () => {
 	);
 	for (const name of ["missing", "invalid"]) {
 		for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
-			expect(await codeOf(request(method, { workspaceId: asWorkspaceId("w1"), name }))).toBe(
+			expect(await codeOf(request(method, { workspaceId: testWorkspaceId("w1"), name }))).toBe(
 				"MCP_CONFIG_INVALID",
 			);
 		}

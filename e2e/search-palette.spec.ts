@@ -2,7 +2,6 @@ import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
-	asSessionId,
 	MATCH_TIER,
 	MAX_SEARCH_PREVIEW_BYTES,
 	MAX_SEARCH_QUERY_LENGTH,
@@ -11,6 +10,7 @@ import {
 	type WsClientMessage,
 	type WsParams,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -239,7 +239,7 @@ test("a chat in a workspace this window never opened is found by its title, rena
 		);
 		if (!workspace) throw new Error("default workspace missing");
 		await wire.request("session.rename", {
-			sessionId: asSessionId(seeded.id),
+			sessionId: testSessionId(seeded.id),
 			workspaceId: workspace.id,
 			title: "Yak shaving notes",
 		});

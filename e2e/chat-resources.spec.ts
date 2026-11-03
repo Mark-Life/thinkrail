@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
 import {
-	asSessionId,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type ResourceRecord,
 	type SessionResources,
@@ -11,6 +10,7 @@ import {
 	type WsParams,
 	type WsResult,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
@@ -51,7 +51,7 @@ async function observeResourceWire(
 						commands: [],
 						subagents: [
 							{
-								childSessionId: asSessionId(options.completedChildId),
+								childSessionId: testSessionId(options.completedChildId),
 								parentSessionId: resourceScope.sessionId,
 								task: "Focus fixture",
 								status: "completed",
@@ -194,7 +194,7 @@ test("an older host hides Resources without issuing unsupported resource reads",
 test("an older welcome retires the inspector with its transcript and returns focus to the composer", async ({
 	page,
 }) => {
-	const childSessionId = asSessionId("resource-focus-child");
+	const childSessionId = testSessionId("resource-focus-child");
 	const wire = await observeResourceWire(page, { completedChildId: childSessionId });
 	await openResourceChat(page);
 	const trigger = page.getByTestId("resources-trigger");
@@ -260,7 +260,7 @@ function archivedHistory(sessionId: SessionId, base: number): ResourceRecord[] {
 	): ResourceRecord => ({
 		kind: "subagent",
 		summary: {
-			childSessionId: asSessionId(`019a0000-0000-7000-8000-00000000000${id}`),
+			childSessionId: testSessionId(`019a0000-0000-7000-8000-00000000000${id}`),
 			parentSessionId: sessionId,
 			roleName,
 			task: `${roleName} the archive`,
@@ -324,7 +324,7 @@ test("Resources keeps a chat's archived history: the dock sums it, the inspector
 		});
 	});
 	await openFixtureProject(page);
-	sessionId = asSessionId(
+	sessionId = testSessionId(
 		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 			name: "Resource history",
 			messages: [{ role: "user", text: "Show the archived resources.", timestamp: Date.now() }],

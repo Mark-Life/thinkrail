@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import type { McpListResult, McpServerSummary } from "@thinkrail/contracts";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { Children, isValidElement, type ReactNode } from "react";
@@ -38,7 +38,7 @@ function row(overrides: Partial<McpServerRow> = {}, summary: Partial<McpServerSu
 		state: "connected",
 		effective: true,
 		toolCount: 2,
-		sessions: { total: 1, reporting: [asSessionId("s1")], connected: 1 },
+		sessions: { total: 1, reporting: [testSessionId("s1")], connected: 1 },
 		startingStalled: false,
 		approvalPending: false,
 		attention: false,
@@ -246,27 +246,29 @@ test("a stale approval refreshes the summary without approving changed content u
 	});
 	try {
 		const openReview = { summary: cached };
-		await expect(approveMcpServer(asWorkspaceId("ws"), openReview.summary)).rejects.toThrow(
+		await expect(approveMcpServer(testWorkspaceId("ws"), openReview.summary)).rejects.toThrow(
 			"review it again",
 		);
 		expect(request.mock.calls).toEqual([
-			["mcp.approve", { workspaceId: asWorkspaceId("ws"), name: "fixture", fingerprint: "old" }],
-			["mcp.list", { workspaceId: asWorkspaceId("ws") }],
+			["mcp.approve", { workspaceId: testWorkspaceId("ws"), name: "fixture", fingerprint: "old" }],
+			["mcp.list", { workspaceId: testWorkspaceId("ws") }],
 		]);
 		expect(cached).toBe(changed);
 		expect(openReview.summary.approval?.fingerprint).toBe("old");
-		await expect(approveMcpServer(asWorkspaceId("ws"), openReview.summary)).rejects.toThrow(
+		await expect(approveMcpServer(testWorkspaceId("ws"), openReview.summary)).rejects.toThrow(
 			"review it again",
 		);
 		expect(request.mock.calls[2]).toEqual([
 			"mcp.approve",
-			{ workspaceId: asWorkspaceId("ws"), name: "fixture", fingerprint: "old" },
+			{ workspaceId: testWorkspaceId("ws"), name: "fixture", fingerprint: "old" },
 		]);
 		const reopened = { summary: cached };
-		await expect(approveMcpServer(asWorkspaceId("ws"), reopened.summary)).resolves.toBe(refreshed);
+		await expect(approveMcpServer(testWorkspaceId("ws"), reopened.summary)).resolves.toBe(
+			refreshed,
+		);
 		expect(request.mock.calls[4]).toEqual([
 			"mcp.approve",
-			{ workspaceId: asWorkspaceId("ws"), name: "fixture", fingerprint: "new" },
+			{ workspaceId: testWorkspaceId("ws"), name: "fixture", fingerprint: "new" },
 		]);
 		expect(request).toHaveBeenCalledTimes(5);
 	} finally {

@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import type { ExtUiRequest, SessionStateRecord } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
@@ -132,7 +132,7 @@ test("an extension dialog about a tool call asks on that tool's card, out of a c
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = asSessionId(await openSeededChat(page, "Dialog on a tool card"));
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog on a tool card"));
 	const group = page.getByTestId("activity-group").first();
 	await expect(group).toHaveAttribute("data-expanded", "false");
 
@@ -180,7 +180,7 @@ test("an approval lists the call's whole input inside the prompt, anchored or do
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = asSessionId(await openSeededChat(page, "Approval lists the input"));
+	const sessionId = testSessionId(await openSeededChat(page, "Approval lists the input"));
 	const group = page.getByTestId("activity-group").first();
 	const topic = "A very long research topic, written out in full detail. ".repeat(60).trim();
 
@@ -233,7 +233,7 @@ test("a draft typed into an anchored prompt survives folding its Activity group 
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = asSessionId(await openSeededChat(page, "Dialog draft across folds"));
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog draft across folds"));
 	const group = page.getByTestId("activity-group").first();
 	wire.ask({
 		id: "extui-edit",
@@ -263,7 +263,7 @@ test("a dialog tied to no tool call docks above the composer, and a host dismiss
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = asSessionId(await openSeededChat(page, "Dialog docked above the composer"));
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog docked above the composer"));
 
 	wire.ask({
 		id: "extui-paste",
@@ -307,7 +307,7 @@ test("options stack in one column in a narrow prompt, and a tall docked prompt s
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = asSessionId(await openSeededChat(page, "Dialog layout limits"));
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog layout limits"));
 	const chat = page.getByTestId("chat-scroll");
 
 	wire.ask({

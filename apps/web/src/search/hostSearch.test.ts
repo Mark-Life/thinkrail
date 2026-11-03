@@ -1,14 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
 	MATCH_TIER,
 	type SearchGroup,
 	type SearchHit,
 	type SearchQueryResult,
 	type WsParams,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createHostPreviewLoader,
 	createHostSearchController,
@@ -58,7 +56,7 @@ const input = (text: string, kinds: SearchGroup["kind"][] = ["file"]) => ({
 	enabled: true,
 	text,
 	kinds,
-	context: { projectId: asProjectId("p1") },
+	context: { projectId: testProjectId("p1") },
 });
 
 const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
@@ -67,8 +65,8 @@ const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
 		title: id,
 		tier: MATCH_TIER.prefix,
 		score: 1,
-		projectId: asProjectId("p1"),
-		workspaceId: asWorkspaceId("w1"),
+		projectId: testProjectId("p1"),
+		workspaceId: testWorkspaceId("w1"),
 	};
 	switch (kind) {
 		case "file":
@@ -76,9 +74,9 @@ const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
 		case "spec":
 			return { ...base, kind, path: id, specId: id, size: 1 };
 		case "plan":
-			return { ...base, kind, sessionId: asSessionId(id) };
+			return { ...base, kind, sessionId: testSessionId(id) };
 		case "transcript":
-			return { ...base, kind, sessionId: asSessionId(id), messageIndex: 0, anchorText: id };
+			return { ...base, kind, sessionId: testSessionId(id), messageIndex: 0, anchorText: id };
 	}
 };
 
@@ -386,7 +384,7 @@ describe("host previews", () => {
 		);
 		const target = {
 			kind: "chat" as const,
-			sessionId: asSessionId("s1"),
+			sessionId: testSessionId("s1"),
 			messageIndex: 2,
 			anchorText: "the",
 		};

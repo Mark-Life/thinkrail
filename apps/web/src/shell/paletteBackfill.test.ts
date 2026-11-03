@@ -7,7 +7,7 @@ import type {
 	Workspace,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "../store";
 import {
 	createPaletteBackfill,
@@ -17,7 +17,7 @@ import {
 } from "./paletteBackfill";
 
 const project = (id: string): Project => ({
-	id: asProjectId(id),
+	id: testProjectId(id),
 	name: id,
 	path: `/repos/${id}`,
 	slug: id,
@@ -25,7 +25,7 @@ const project = (id: string): Project => ({
 });
 
 const workspace = (id: string, projectId: ProjectId, name = id): Workspace => ({
-	id: asWorkspaceId(id),
+	id: testWorkspaceId(id),
 	projectId,
 	name,
 	branch: name,
@@ -65,46 +65,51 @@ describe("project membership refresh", () => {
 		useAppStore.setState({
 			projects: [project("p1"), project("p2"), project("p3")],
 			workspaces: {
-				p2: [workspace("w2", asProjectId("p2"))],
-				p3: [workspace("w3", asProjectId("p3"))],
+				p2: [workspace("w2", testProjectId("p2"))],
+				p3: [workspace("w3", testProjectId("p3"))],
 			},
 			sessionStateByWorkspace: {
-				w2: { s2: record(asSessionId("s2"), asWorkspaceId("w2"), asProjectId("p2")) },
-				"w-new": { s3: record(asSessionId("s3"), asWorkspaceId("w-new"), asProjectId("p3")) },
-				"w-gone": { s4: record(asSessionId("s4"), asWorkspaceId("w-gone"), asProjectId("p2")) },
+				w2: { s2: record(testSessionId("s2"), testWorkspaceId("w2"), testProjectId("p2")) },
+				"w-new": { s3: record(testSessionId("s3"), testWorkspaceId("w-new"), testProjectId("p3")) },
+				"w-gone": {
+					s4: record(testSessionId("s4"), testWorkspaceId("w-gone"), testProjectId("p2")),
+				},
 			},
 			removedWorkspaceIds: { "w-gone": true },
 		});
 		const state = useAppStore.getState();
-		expect(projectNeedsWorkspaceList(state, asProjectId("p1"))).toBe(true);
-		expect(projectNeedsWorkspaceList(state, asProjectId("p2"))).toBe(false);
-		expect(projectNeedsWorkspaceList(state, asProjectId("p3"))).toBe(true);
-		expect(projectNeedsWorkspaceList(state, asProjectId("closed"))).toBe(false);
-		expect(projectsNeedingWorkspaceLists(state)).toEqual(["p1", "p3"]);
+		expect(projectNeedsWorkspaceList(state, testProjectId("p1"))).toBe(true);
+		expect(projectNeedsWorkspaceList(state, testProjectId("p2"))).toBe(false);
+		expect(projectNeedsWorkspaceList(state, testProjectId("p3"))).toBe(true);
+		expect(projectNeedsWorkspaceList(state, testProjectId("closed"))).toBe(false);
+		expect(projectsNeedingWorkspaceLists(state)).toEqual([
+			testProjectId("p1"),
+			testProjectId("p3"),
+		]);
 	});
 
 	test("a refresh keeps the host's order, keeps rows that arrived meanwhile, and never replaces them", () => {
-		const fresh = workspace("w1", asProjectId("p1"), "renamed by a push");
-		const pushed = workspace("w9", asProjectId("p1"));
+		const fresh = workspace("w1", testProjectId("p1"), "renamed by a push");
+		const pushed = workspace("w9", testProjectId("p1"));
 		useAppStore.setState({
 			projects: [project("p1")],
-			workspaces: { p1: [fresh, workspace("w3", asProjectId("p1")), pushed] },
+			workspaces: { p1: [fresh, workspace("w3", testProjectId("p1")), pushed] },
 		});
-		mergeProjectWorkspaces(asProjectId("p1"), [
-			workspace("w1", asProjectId("p1"), "stale name"),
-			workspace("w2", asProjectId("p1")),
-			workspace("w3", asProjectId("p1")),
+		mergeProjectWorkspaces(testProjectId("p1"), [
+			workspace("w1", testProjectId("p1"), "stale name"),
+			workspace("w2", testProjectId("p1")),
+			workspace("w3", testProjectId("p1")),
 		]);
 		const rows = useAppStore.getState().workspaces.p1 ?? [];
 		expect(rows.map((row) => row.id)).toEqual([
-			asWorkspaceId("w1"),
-			asWorkspaceId("w2"),
-			asWorkspaceId("w3"),
-			asWorkspaceId("w9"),
+			testWorkspaceId("w1"),
+			testWorkspaceId("w2"),
+			testWorkspaceId("w3"),
+			testWorkspaceId("w9"),
 		]);
 		expect(rows[0]).toBe(fresh);
 
-		mergeProjectWorkspaces(asProjectId("p9"), [workspace("w9", asProjectId("p9"))]);
+		mergeProjectWorkspaces(testProjectId("p9"), [workspace("w9", testProjectId("p9"))]);
 		expect(useAppStore.getState().workspaces.p9).toBeUndefined();
 	});
 });
@@ -139,7 +144,7 @@ describe("the palette backfill against deferred host replies", () => {
 		useAppStore.setState({ status: "connected", connectionGeneration: 1 });
 		expect(calls).toHaveLength(0);
 		useAppStore.setState({ welcomeGeneration: 1 });
-		expect(calls.map((call) => call.projectId)).toEqual([asProjectId("p1")]);
+		expect(calls.map((call) => call.projectId)).toEqual([testProjectId("p1")]);
 		stop();
 	});
 
@@ -147,10 +152,10 @@ describe("the palette backfill against deferred host replies", () => {
 		connected();
 		const { calls, backfill } = deferredSources();
 		const stop = backfill.watch();
-		calls[0]?.resolve([workspace("w1", asProjectId("p1"))]);
+		calls[0]?.resolve([workspace("w1", testProjectId("p1"))]);
 		await settle();
 		expect(useAppStore.getState().workspaces.p1?.map((row) => row.id)).toEqual([
-			asWorkspaceId("w1"),
+			testWorkspaceId("w1"),
 		]);
 		useAppStore.setState({ welcomeGeneration: 2 });
 		expect(calls).toHaveLength(1);
@@ -162,30 +167,30 @@ describe("the palette backfill against deferred host replies", () => {
 		const { calls, backfill } = deferredSources();
 		const stop = backfill.watch();
 		useAppStore.setState({ connectionGeneration: 2, welcomeGeneration: 2 });
-		calls[0]?.resolve([workspace("w-stale", asProjectId("p1"))]);
+		calls[0]?.resolve([workspace("w-stale", testProjectId("p1"))]);
 		await settle();
 		expect(useAppStore.getState().workspaces.p1).toBeUndefined();
 		expect(calls).toHaveLength(2);
-		calls[1]?.resolve([workspace("w1", asProjectId("p1"))]);
+		calls[1]?.resolve([workspace("w1", testProjectId("p1"))]);
 		await settle();
 		expect(useAppStore.getState().workspaces.p1?.map((row) => row.id)).toEqual([
-			asWorkspaceId("w1"),
+			testWorkspaceId("w1"),
 		]);
 		stop();
 	});
 
 	test("a workspace a peer created while away makes its project listed again", async () => {
 		connected();
-		useAppStore.setState({ workspaces: { p1: [workspace("w1", asProjectId("p1"))] } });
+		useAppStore.setState({ workspaces: { p1: [workspace("w1", testProjectId("p1"))] } });
 		const { calls, backfill } = deferredSources();
 		const stop = backfill.watch();
 		expect(calls).toHaveLength(0);
 		useAppStore.setState({
 			sessionStateByWorkspace: {
-				w2: { s2: record(asSessionId("s2"), asWorkspaceId("w2"), asProjectId("p1")) },
+				w2: { s2: record(testSessionId("s2"), testWorkspaceId("w2"), testProjectId("p1")) },
 			},
 		});
-		expect(calls.map((call) => call.projectId)).toEqual([asProjectId("p1")]);
+		expect(calls.map((call) => call.projectId)).toEqual([testProjectId("p1")]);
 		stop();
 		useAppStore.setState({ welcomeGeneration: 3 });
 		expect(calls).toHaveLength(1);

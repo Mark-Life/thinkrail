@@ -49,12 +49,12 @@ import type {
 	WorkspaceId,
 } from "@thinkrail/contracts";
 import {
-	asSessionId,
 	canMarkCompletionUnread,
 	firstPromptOfTexts,
 	isTranscriptMessageRole,
 	JsonObject,
 	normalizeSessionTitle,
+	parseSessionId,
 	sameModel,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
@@ -139,6 +139,7 @@ import {
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
+import { requireSessionId } from "./requireSessionId";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
@@ -211,7 +212,7 @@ interface Entry {
 }
 
 function sessionIdOf(session: Pick<AgentSession, "sessionId">) {
-	return asSessionId(session.sessionId);
+	return requireSessionId(session.sessionId);
 }
 
 const sessions = new Map<SessionId, Entry>();
@@ -1463,9 +1464,10 @@ function createParentSession(
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const sessionId = asSessionId(options.sessionManager.getSessionId());
-	if (sessionIsTearingDown(sessionId))
-		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+	const rawSessionId = options.sessionManager.getSessionId();
+	const sessionId = parseSessionId(rawSessionId);
+	if (sessionId === null || sessionIsTearingDown(sessionId))
+		return Promise.reject(new Error(`Unknown session: ${rawSessionId}`));
 	return trackSessionPreparation(workspaceId, lifecycleToken, () =>
 		createParentSessionInternal(options, workspaceId, generation, lifecycleToken, announceCreation),
 	);
@@ -1479,7 +1481,7 @@ async function createParentSessionInternal(
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
 	const { sessionManager, settingsManager, cwd } = options;
-	const sessionId = asSessionId(sessionManager.getSessionId());
+	const sessionId = requireSessionId(sessionManager.getSessionId());
 	const toolResponseWaiters = createToolResponseWaiters();
 	const mcpHost = createMcpSessionHost({
 		policy: () => mcpPolicyResolver(workspaceId),
@@ -1744,17 +1746,18 @@ async function listSessionsInternal(
 		liveIds.add(sessionId);
 	}
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
-	const disk: SessionSummary[] = infos
-		.filter(
-			(info) =>
-				info.cwd === cwd &&
-				!liveIds.has(asSessionId(info.id)) &&
-				!isSessionDeleted(asSessionId(info.id), workspaceId),
+	const disk = infos.flatMap((info): SessionSummary[] => {
+		const sessionId = parseSessionId(info.id);
+		if (
+			sessionId === null ||
+			info.cwd !== cwd ||
+			liveIds.has(sessionId) ||
+			isSessionDeleted(sessionId, workspaceId)
 		)
-		.map((info) => {
-			const sessionId = asSessionId(info.id);
-			const manager = SessionManager.open(info.path);
-			return {
+			return [];
+		const manager = SessionManager.open(info.path);
+		return [
+			{
 				sessionId,
 				workspaceId,
 				title: info.name ?? "",
@@ -1766,8 +1769,9 @@ async function listSessionsInternal(
 				updatedAt: info.modified.getTime(),
 				live: false,
 				state: stateFromDisk(sessionId, manager),
-			};
-		});
+			},
+		];
+	});
 	return [...live, ...disk];
 }
 
@@ -1839,8 +1843,9 @@ async function collectSessionStateSources(
 	}
 	for (const { workspace, infos } of discovered) {
 		for (const info of infos) {
-			const sessionId = asSessionId(info.id);
+			const sessionId = parseSessionId(info.id);
 			if (
+				sessionId === null ||
 				info.cwd !== workspace.cwd ||
 				sessions.has(sessionId) ||
 				isSessionDeleted(sessionId, workspace.id)
@@ -2628,7 +2633,7 @@ export function getSessionStats(sessionId: SessionId): SessionStats {
 	const stats = session.getSessionStats();
 	const { contextUsage } = stats;
 	return {
-		sessionId: asSessionId(stats.sessionId),
+		sessionId: requireSessionId(stats.sessionId),
 		totalMessages: stats.totalMessages,
 		tokens: {
 			input: stats.tokens.input,
@@ -3107,8 +3112,10 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 	for (const info of infos) {
 		if (info.cwd !== cwd) continue;
 		rmSync(info.path, { force: true });
+		const sessionId = parseSessionId(info.id);
+		if (sessionId === null) continue;
 		try {
-			removeSessionStateMetadata(asSessionId(info.id));
+			removeSessionStateMetadata(sessionId);
 		} catch (error) {
 			log.warn(`session state metadata was not pruned for ${info.id}`, error);
 		}

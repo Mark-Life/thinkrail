@@ -13,7 +13,7 @@ import {
 	unknown,
 } from "@earendil-works/pi-schema";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
 
@@ -68,8 +68,10 @@ function otherOwners(root: string, sessionId: SessionId): SessionId[] {
 	try {
 		return readdirSync(join(root, WORKSPACE_TODOS_DIR))
 			.filter((n) => n.endsWith(BASELINE_SUFFIX))
-			.map((n) => asSessionId(n.slice(0, -BASELINE_SUFFIX.length)))
-			.filter((owner) => owner !== sessionId);
+			.flatMap((n) => {
+				const owner = parseSessionId(n.slice(0, -BASELINE_SUFFIX.length));
+				return owner === null || owner === sessionId ? [] : [owner];
+			});
 	} catch {
 		return [];
 	}

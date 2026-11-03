@@ -99,6 +99,38 @@ test("accepts the declared package rings and thin launcher edges", () => {
 	expect(moduleBoundaryViolations(root)).toEqual([]);
 });
 
+test("keeps the test-only id makers out of production sources", () => {
+	const root = fixture();
+	const testImport = 'import "@thinkrail/contracts/test-ids";';
+	for (const file of [
+		"apps/web/src/a.test.ts",
+		"apps/web/src/a.spec.tsx",
+		"packages/server/src/history/testFixtures.ts",
+		"packages/server/src/agent/mcp/fixtures/server.ts",
+		"packages/server/src/a.fixture.ts",
+		"packages/artifact-tests/src/probes.ts",
+	]) {
+		write(root, file, testImport);
+	}
+	write(root, "packages/contracts/src/schema/ids.test.ts", 'import "../testIds"; import "./ids";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(root, "apps/web/src/latest.ts", testImport);
+	write(root, "packages/server/src/contest.ts", 'import "../../contracts/src/testIds";');
+	write(root, "packages/shared/src/deep.ts", 'import "@thinkrail/contracts/src/schema/ids";');
+	write(
+		root,
+		"apps/web/src/deep.test.ts",
+		'import "../../../packages/contracts/src/schema/ids.ts";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/deep.test.ts: import "../../../packages/contracts/src/schema/ids.ts" reaches contracts\' id source past its public entries',
+		'apps/web/src/latest.ts: import "@thinkrail/contracts/test-ids" uses the test-only id makers outside test sources',
+		'packages/server/src/contest.ts: import "../../contracts/src/testIds" uses the test-only id makers outside test sources',
+		'packages/shared/src/deep.ts: import "@thinkrail/contracts/src/schema/ids" reaches contracts\' id source past its public entries',
+	]);
+});
+
 test("keeps DAG orchestration portable and out of delegation and the unbundled host", () => {
 	const root = fixture();
 	write(root, "packages/pi-dag/index.ts", 'export * from "pi-delegation";');

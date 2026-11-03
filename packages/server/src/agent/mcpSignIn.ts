@@ -7,7 +7,6 @@ import {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { LoginFrame, LoginPush, WorkspaceId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { liveSessionIdsOf, mcpSessionView } from "./agentSessionManager";
 import {
@@ -21,7 +20,7 @@ import {
 import { reconnectMcpServer, refreshMcpStatus } from "./mcpSessions";
 import { createPiSettings } from "./packages";
 import { getPiRuntimeGeneration } from "./piRuntime";
-import { createWebUiContext } from "./webUiContext";
+import { inertUiMembers } from "./webUiContext";
 
 const PROBE_SHUTDOWN_MS = 3_000;
 const PROBE_DEADLINE_MS = 10 * 60_000;
@@ -83,7 +82,7 @@ function frame(probe: Probe, raw: LoginFrame): void {
 function probeUi(probe: Probe, notices: { message: string; level: string }[]): ExtensionUIContext {
 	const noop = () => {};
 	return {
-		...createWebUiContext(asSessionId(`probe:${probe.loginId}`)),
+		...inertUiMembers,
 		notify(message, type) {
 			notices.push({ message, level: type ?? "info" });
 		},

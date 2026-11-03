@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PiEvent, TurnChangeSet } from "@thinkrail/contracts";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import * as gitModule from "../git";
 import { gitDiffFile, gitStatus, snapshotWorktree } from "../git";
 import { loadTurns, saveWorkspaces } from "../persistence";
@@ -40,8 +40,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				worktreePath: repo,
@@ -59,7 +59,7 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-const resolve = () => ({ workspaceId: asWorkspaceId("w1"), worktreePath: repo });
+const resolve = () => ({ workspaceId: testWorkspaceId("w1"), worktreePath: repo });
 
 const start: PiEvent = { type: "agent_start" };
 const settle: PiEvent = { type: "agent_settled", terminal: null };
@@ -102,19 +102,19 @@ test("a run that changes files is recorded once with its change set, published, 
 	let clock = 1_000;
 	const tracker = new TurnTracker(resolve, () => (clock += 1));
 
-	await tracker.observe(asSessionId("s1"), start);
-	await tracker.observe(asSessionId("s1"), start);
+	await tracker.observe(testSessionId("s1"), start);
+	await tracker.observe(testSessionId("s1"), start);
 	writeFileSync(join(repo, "README.md"), "# repo\n\nedited by the agent\n");
 	writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
-	await tracker.observe(asSessionId("s1"), settle);
+	await tracker.observe(testSessionId("s1"), settle);
 
-	const turns = listTurns(asWorkspaceId("w1"));
+	const turns = listTurns(testWorkspaceId("w1"));
 	expect(turns).toHaveLength(1);
 	const turn = turns[0];
 	if (!turn) throw new Error("expected a turn");
 	expect(turn).toMatchObject({
-		workspaceId: asWorkspaceId("w1"),
-		sessionId: asSessionId("s1"),
+		workspaceId: testWorkspaceId("w1"),
+		sessionId: testSessionId("s1"),
 		startedAt: 1_001,
 	});
 	expect(turn.settledAt).toBeGreaterThan(turn.startedAt);
@@ -127,21 +127,21 @@ test("a run that changes files is recorded once with its change set, published, 
 	expect(loadTurns().byWorkspace.w1).toEqual([turn]);
 
 	const scope = turnScope(turn);
-	const status = await gitStatus(asWorkspaceId("w1"), scope);
+	const status = await gitStatus(testWorkspaceId("w1"), scope);
 	expect(status.changes.map((change) => change.path).sort()).toEqual(["README.md", "feature.ts"]);
-	const diff = await gitDiffFile(asWorkspaceId("w1"), "README.md", scope);
+	const diff = await gitDiffFile(testWorkspaceId("w1"), "README.md", scope);
 	expect(diff.original).toBe("# repo\n");
 	expect(diff.modified).toBe("# repo\n\nedited by the agent\n");
 	expect(diff.originalOid).toBe(turn.baseTree);
 
 	// later edits by the user do not move the recorded turn: both sides are snapshots
 	writeFileSync(join(repo, "README.md"), "# repo\n\nedited again by the user\n");
-	expect((await gitDiffFile(asWorkspaceId("w1"), "README.md", scope)).modified).toBe(
+	expect((await gitDiffFile(testWorkspaceId("w1"), "README.md", scope)).modified).toBe(
 		"# repo\n\nedited by the agent\n",
 	);
 
-	forgetWorkspaceTurns(asWorkspaceId("w1"));
-	expect(listTurns(asWorkspaceId("w1"))).toEqual([]);
+	forgetWorkspaceTurns(testWorkspaceId("w1"));
+	expect(listTurns(testWorkspaceId("w1"))).toEqual([]);
 });
 
 function snapshotNow(cwd: string): string {
@@ -178,14 +178,14 @@ test("the head is captured the moment the run settles, not after a slow base sna
 		return seen.length === 1 ? base.promise : Promise.resolve(tree);
 	});
 
-	const started = tracker.observe(asSessionId("s1"), start);
+	const started = tracker.observe(testSessionId("s1"), start);
 	writeFileSync(join(repo, "run-one.ts"), "export const one = 1;\n");
-	const settled = tracker.observe(asSessionId("s1"), settle);
+	const settled = tracker.observe(testSessionId("s1"), settle);
 	writeFileSync(join(repo, "run-two.ts"), "export const two = 2;\n");
 	base.resolve(seen[0] ?? null);
 	await Promise.all([started, settled]);
 
-	const [turn] = listTurns(asWorkspaceId("w1"));
+	const [turn] = listTurns(testWorkspaceId("w1"));
 	expect(turn?.changes.map((change) => change.path)).toEqual(["run-one.ts"]);
 });
 
@@ -204,15 +204,15 @@ test.each([
 		(cwd) => (++calls === 1 ? snapshotWorktree(cwd) : head.promise),
 	);
 
-	await tracker.observe(asSessionId("s1"), start);
+	await tracker.observe(testSessionId("s1"), start);
 	writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
 	if (when === "before") attached = false;
-	const settled = tracker.observe(asSessionId("s1"), settle);
+	const settled = tracker.observe(testSessionId("s1"), settle);
 	attached = false;
 	head.resolve(await snapshotWorktree(repo));
 	await settled;
 
-	const turns = listTurns(asWorkspaceId("w1"));
+	const turns = listTurns(testWorkspaceId("w1"));
 	expect(turns).toHaveLength(1);
 	expect(turns[0]?.changes.map((change) => change.path)).toEqual(["feature.ts"]);
 	expect(published).toEqual(turns);
@@ -232,16 +232,16 @@ test("a workspace removed while its run is settling records and publishes nothin
 	});
 	const tracker = new TurnTracker(resolve);
 	try {
-		await tracker.observe(asSessionId("s1"), start);
+		await tracker.observe(testSessionId("s1"), start);
 		writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
-		const settled = tracker.observe(asSessionId("s1"), settle);
+		const settled = tracker.observe(testSessionId("s1"), settle);
 		await statusReady.promise;
 		saveWorkspaces([]);
-		forgetWorkspaceTurns(asWorkspaceId("w1"));
+		forgetWorkspaceTurns(testWorkspaceId("w1"));
 		releaseStatus.resolve();
 		await settled;
 
-		expect(listTurns(asWorkspaceId("w1"))).toEqual([]);
+		expect(listTurns(testWorkspaceId("w1"))).toEqual([]);
 		expect(published).toEqual([]);
 		expect(existsSync(join(dataDir, "turns.json"))).toBe(false);
 	} finally {
@@ -252,14 +252,14 @@ test("a workspace removed while its run is settling records and publishes nothin
 
 test("attempt-level agent_end does not end a run before agent_settled", async () => {
 	const tracker = new TurnTracker(resolve);
-	await tracker.observe(asSessionId("s1"), start);
+	await tracker.observe(testSessionId("s1"), start);
 	writeFileSync(join(repo, "first.txt"), "first attempt\n");
-	await tracker.observe(asSessionId("s1"), { type: "agent_end", messages: [], willRetry: true });
-	expect(listTurns(asWorkspaceId("w1"))).toEqual([]);
-	await tracker.observe(asSessionId("s1"), start);
+	await tracker.observe(testSessionId("s1"), { type: "agent_end", messages: [], willRetry: true });
+	expect(listTurns(testWorkspaceId("w1"))).toEqual([]);
+	await tracker.observe(testSessionId("s1"), start);
 	writeFileSync(join(repo, "retry.txt"), "retry\n");
-	await tracker.observe(asSessionId("s1"), settle);
-	expect(listTurns(asWorkspaceId("w1"))[0]?.changes.map((change) => change.path)).toEqual([
+	await tracker.observe(testSessionId("s1"), settle);
+	expect(listTurns(testWorkspaceId("w1"))[0]?.changes.map((change) => change.path)).toEqual([
 		"first.txt",
 		"retry.txt",
 	]);
@@ -268,33 +268,33 @@ test("attempt-level agent_end does not end a run before agent_settled", async ()
 test("turns are kept in start order even when a later-started run settles first", async () => {
 	let clock = 1_000;
 	const tracker = new TurnTracker(resolve, () => (clock += 1));
-	await tracker.observe(asSessionId("early"), start);
-	await tracker.observe(asSessionId("late"), start);
+	await tracker.observe(testSessionId("early"), start);
+	await tracker.observe(testSessionId("late"), start);
 	writeFileSync(join(repo, "late.ts"), "export const late = true;\n");
-	await tracker.observe(asSessionId("late"), settle);
+	await tracker.observe(testSessionId("late"), settle);
 	writeFileSync(join(repo, "early.ts"), "export const early = true;\n");
-	await tracker.observe(asSessionId("early"), settle);
-	expect(listTurns(asWorkspaceId("w1")).map((turn) => turn.sessionId)).toEqual([
-		asSessionId("early"),
-		asSessionId("late"),
+	await tracker.observe(testSessionId("early"), settle);
+	expect(listTurns(testWorkspaceId("w1")).map((turn) => turn.sessionId)).toEqual([
+		testSessionId("early"),
+		testSessionId("late"),
 	]);
 });
 
 test("a run that changes nothing records no turn", async () => {
 	const tracker = new TurnTracker(resolve);
-	await tracker.observe(asSessionId("s1"), start);
-	await tracker.observe(asSessionId("s1"), settle);
-	expect(listTurns(asWorkspaceId("w1"))).toEqual([]);
+	await tracker.observe(testSessionId("s1"), start);
+	await tracker.observe(testSessionId("s1"), settle);
+	expect(listTurns(testWorkspaceId("w1"))).toEqual([]);
 	expect(existsSync(join(dataDir, "turns.json"))).toBe(false);
 });
 
 test("a settle without a matching start, or a session the host cannot place, is ignored", async () => {
 	const tracker = new TurnTracker(() => null);
-	await tracker.observe(asSessionId("s1"), start);
-	await tracker.observe(asSessionId("s1"), settle);
+	await tracker.observe(testSessionId("s1"), start);
+	await tracker.observe(testSessionId("s1"), settle);
 	const placed = new TurnTracker(resolve);
-	await placed.observe(asSessionId("s2"), settle);
-	expect(listTurns(asWorkspaceId("w1"))).toEqual([]);
+	await placed.observe(testSessionId("s2"), settle);
+	expect(listTurns(testWorkspaceId("w1"))).toEqual([]);
 });
 
 test("shutdown's drain waits for a recording only up to its bound", async () => {
@@ -303,8 +303,8 @@ test("shutdown's drain waits for a recording only up to its bound", async () => 
 	const tracker = new TurnTracker(resolve, Date.now, (cwd) =>
 		++calls === 1 ? snapshotWorktree(cwd) : head.promise,
 	);
-	await tracker.observe(asSessionId("s1"), start);
-	void tracker.observe(asSessionId("s1"), settle);
+	await tracker.observe(testSessionId("s1"), start);
+	void tracker.observe(testSessionId("s1"), settle);
 	const drained = await Promise.race([
 		tracker.drain(20).then(() => "drained"),
 		Bun.sleep(1_000).then(() => "hung"),

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -9,7 +8,7 @@ import type {
 	Project,
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
-import { asProjectId } from "@thinkrail/contracts";
+import { newProjectId } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
@@ -132,7 +131,7 @@ export function openProject(inputPath: string, displayName?: string): Project {
 	const taken = new Set(projects.map((p) => p.slug));
 	const label = displayName?.replace(/\s+/g, " ").trim();
 	const project: Project = {
-		id: asProjectId(randomUUID()),
+		id: newProjectId(),
 		name: label && label.length <= PROJECT_NAME_MAX_LENGTH ? label : basename(root),
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
