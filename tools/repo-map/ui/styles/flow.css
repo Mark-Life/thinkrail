@@ -1,0 +1,192 @@
+.flow-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+.flow-canvas {
+	position: relative;
+	min-width: 100%;
+}
+
+.flow-lanes {
+	position: sticky;
+	top: 0;
+	height: 32px;
+	min-width: 100%;
+	background: var(--bg);
+	border-bottom: 1px solid var(--border);
+	z-index: 2;
+}
+
+.flow-depth-head {
+	position: absolute;
+	left: var(--s2);
+	top: 9px;
+	color: var(--text-faint);
+	font-size: 10px;
+}
+
+.flow-lane-head {
+	position: absolute;
+	top: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--s1);
+	height: 24px;
+	padding: 0 var(--s2);
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	font-size: var(--text-xs);
+}
+
+.flow-lane-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono);
+}
+
+.flow-body {
+	position: relative;
+	margin-top: 4px;
+}
+
+.flow-svg {
+	position: absolute;
+	left: 0;
+	top: 0;
+	pointer-events: none;
+	z-index: 1;
+}
+
+.flow-lifeline {
+	stroke: var(--border);
+	stroke-width: 1;
+}
+
+.flow-activation {
+	fill: var(--raised);
+	stroke: var(--border-strong);
+}
+
+.flow-arrow {
+	stroke: var(--text-faint);
+	stroke-width: 1;
+}
+
+.flow-arrow-wire {
+	stroke: var(--accent);
+	stroke-width: 2.5;
+}
+
+.flow-row {
+	position: absolute;
+	left: 0;
+	right: 0;
+	display: block;
+}
+
+.flow-row:hover {
+	background: var(--hover);
+}
+
+.flow-row-wire {
+	background: var(--accent-tint);
+}
+
+.flow-row-wire:hover {
+	background: var(--accent-tint-strong);
+}
+
+.flow-row-selected {
+	box-shadow:
+		inset 2px 0 0 var(--accent),
+		inset 0 0 0 1px var(--border-strong);
+	background: var(--raised);
+}
+
+.flow-gutter {
+	position: absolute;
+	left: var(--s2);
+	top: 8px;
+	color: var(--text-faint);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.flow-label {
+	position: absolute;
+	top: 2px;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--s1);
+	height: 16px;
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	white-space: nowrap;
+	z-index: 2;
+}
+
+.flow-label-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.flow-label-wire {
+	color: var(--accent-strong);
+	font-weight: 600;
+}
+
+.flow-seen {
+	flex: none;
+	color: var(--text-faint);
+	font-family: var(--font-ui);
+	font-size: 10px;
+}
+
+.stepper {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	flex: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.stepper-label {
+	float: left;
+	padding: 0;
+	margin-right: var(--s1);
+	color: var(--text-muted);
+	font-size: var(--text-sm);
+}
+
+.stepper-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	background: var(--raised);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+}
+
+.stepper-button:hover {
+	background: var(--hover);
+}
+
+.stepper-button[aria-disabled="true"] {
+	opacity: 0.45;
+	pointer-events: none;
+}
+
+.stepper-value {
+	min-width: 20px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,127 @@
+.palette-layer {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	padding-top: 12vh;
+	z-index: 10;
+}
+
+.palette-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgb(0 0 0 / 45%);
+	border: 0;
+	cursor: default;
+}
+
+.palette {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: min(640px, calc(100vw - 48px));
+	max-height: 64vh;
+	background: var(--panel);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-lg);
+	box-shadow: 0 16px 48px rgb(0 0 0 / 35%);
+}
+
+.palette-input {
+	flex: none;
+	height: 44px;
+	padding: 0 var(--s3);
+	background: transparent;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	color: var(--text);
+	font: inherit;
+	font-size: var(--text-lg);
+}
+
+.palette-input:focus {
+	outline: none;
+}
+
+.palette-input::placeholder {
+	color: var(--text-faint);
+}
+
+.palette-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--s1);
+	flex: none;
+	padding: var(--s2) var(--s3);
+	border-bottom: 1px solid var(--border);
+}
+
+.palette-tip {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--text-xs);
+}
+
+.palette-results {
+	flex: 1;
+	min-height: 120px;
+	padding: var(--s1);
+	overflow: auto;
+}
+
+.palette-row {
+	display: flex;
+	align-items: baseline;
+	gap: var(--s2);
+	padding: var(--s1) var(--s2);
+	border-radius: var(--radius);
+}
+
+.palette-row-active {
+	background: var(--accent-tint-strong);
+}
+
+.palette-label {
+	flex: none;
+	max-width: 60%;
+	font-family: var(--font-mono);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.palette-detail {
+	flex: 1;
+	min-width: 0;
+	color: var(--text-faint);
+	font-size: var(--text-xs);
+	text-align: right;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	direction: rtl;
+}
+
+.palette-empty {
+	padding: var(--s3);
+	color: var(--text-muted);
+}
+
+.palette-footer {
+	display: flex;
+	gap: var(--s4);
+	flex: none;
+	padding: var(--s1) var(--s3);
+	border-top: 1px solid var(--border);
+	color: var(--text-faint);
+	font-size: var(--text-xs);
+}
+
+.palette-footer kbd {
+	padding: 0 3px;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	font-size: 10px;
+}

@@ -1,0 +1,131 @@
+.source-pane {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+	background: var(--bg);
+}
+
+.source-header {
+	display: flex;
+	align-items: center;
+	gap: var(--s1);
+	height: 32px;
+	flex: none;
+	padding: 0 var(--s2) 0 var(--s3);
+	background: var(--panel);
+	border-bottom: 1px solid var(--border);
+}
+
+.source-path {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-muted);
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	direction: rtl;
+	text-align: left;
+}
+
+.source-path:hover {
+	color: var(--text);
+	text-decoration: underline;
+}
+
+.side-tag {
+	margin-left: auto;
+	padding: 0 var(--s1);
+	border: 1px solid var(--border-strong);
+	border-radius: 3px;
+	color: var(--text-muted);
+	font-size: 10px;
+	line-height: 14px;
+}
+
+.source-state {
+	padding: var(--s3);
+	color: var(--text-faint);
+	font-size: var(--text-sm);
+}
+
+.source-body {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 20px;
+	color: var(--code-foreground);
+}
+
+.source-body[hidden] {
+	display: none;
+}
+
+.source-canvas {
+	position: relative;
+	min-width: 100%;
+}
+
+.src-line {
+	position: absolute;
+	left: 0;
+	right: 0;
+	display: flex;
+	height: 20px;
+	white-space: pre;
+}
+
+.src-line-focus {
+	background: var(--accent-tint);
+}
+
+.src-number {
+	position: sticky;
+	left: 0;
+	flex: none;
+	width: 48px;
+	padding-right: var(--s3);
+	background: var(--bg);
+	color: var(--text-faint);
+	font-size: 11px;
+	text-align: right;
+	user-select: none;
+	z-index: 1;
+}
+
+.src-line-focus .src-number {
+	background: var(--panel);
+	box-shadow: inset 2px 0 0 var(--accent);
+	color: var(--text);
+}
+
+.src-text {
+	flex: none;
+	padding-right: var(--s4);
+}
+
+.src-link {
+	text-decoration: underline;
+	text-decoration-color: var(--text-faint);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 3px;
+	border-radius: 2px;
+	cursor: pointer;
+}
+
+.src-link:hover {
+	background: var(--accent-tint-strong);
+	text-decoration-color: var(--accent);
+}
+
+.src-link-wire {
+	background: var(--accent-tint);
+	color: var(--accent-strong);
+	font-weight: 600;
+	text-decoration-color: var(--accent);
+	text-decoration-thickness: 2px;
+}
