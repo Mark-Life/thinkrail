@@ -20,6 +20,7 @@ import {
 	SessionManager,
 	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { arr, compile, lit, map, obj, opt, str, union, unknown } from "@earendil-works/pi-schema";
 import type {
 	AgentSettlement,
 	ImageContent,
@@ -1618,6 +1619,16 @@ function defaultSessionDirectory(cwd: string): string {
 	return join(resolve(getAgentDir()), "sessions", safePath);
 }
 
+const SessionHeaderLine = compile(
+	obj({ type: lit("session"), id: str(), cwd: opt(unknown()) }, { open: true }),
+);
+const SessionCwd = compile(str());
+const JsonContainer = compile(union([map(unknown()), arr(unknown())]));
+const SavedModelFields = compile(map(unknown()));
+const SavedModelRef = compile(
+	obj({ provider: str({ minLength: 1 }), modelId: str({ minLength: 1 }) }, { open: true }),
+);
+
 function hasErrorCode(error: unknown, code: string): boolean {
 	return typeof error === "object" && error !== null && Reflect.get(error, "code") === code;
 }
@@ -1635,15 +1646,11 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 			} catch {
 				continue;
 			}
-			if (typeof entry !== "object" || entry === null) {
-				throw new Error("first parsed entry is not an object");
+			if (SessionHeaderLine.check(entry)) {
+				return { id: entry.id, cwd: SessionCwd.check(entry.cwd) ? entry.cwd : "" };
 			}
-			const id = Reflect.get(entry, "id");
-			if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
-				return null;
-			}
-			const headerCwd = Reflect.get(entry, "cwd");
-			return { id, cwd: typeof headerCwd === "string" ? headerCwd : "" };
+			if (!JsonContainer.check(entry)) throw new Error("first parsed entry is not an object");
+			return null;
 		}
 		throw new Error("session header is missing");
 	} catch (error) {
@@ -2017,14 +2024,10 @@ function attachDiskSession(
 }
 
 function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
-	if (typeof model !== "object" || model === null) return undefined;
-	const provider = Reflect.get(model, "provider");
-	const id = Reflect.get(model, "modelId");
-	if (provider === undefined && id === undefined) return undefined;
-	if (typeof provider !== "string" || !provider || typeof id !== "string" || !id) {
-		throw new Error("The chat's saved model is unavailable.");
-	}
-	return { provider, id };
+	if (!SavedModelFields.check(model)) return undefined;
+	if (model.provider === undefined && model.modelId === undefined) return undefined;
+	if (!SavedModelRef.check(model)) throw new Error("The chat's saved model is unavailable.");
+	return { provider: model.provider, id: model.modelId };
 }
 
 async function openDiskSession(

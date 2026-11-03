@@ -1,5 +1,6 @@
 import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { arr, compile, map, obj, str, unknown } from "@earendil-works/pi-schema";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
 export type FatalErrorKind = "uncaughtException" | "unhandledRejection";
@@ -133,8 +134,21 @@ const PASSTHROUGH_KEYS = [
 	"request_method",
 ] as const;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+const Fields = compile(map(unknown()));
+const Stacktrace = compile(obj({ frames: arr(unknown()) }, { open: true }));
+const WithCode = compile(obj({ code: str({ pattern: "^[A-Z][A-Z0-9_]{1,63}$" }) }, { open: true }));
+
+interface SanitizedMechanism {
+	handled?: boolean;
+	synthetic: boolean;
+	type: string;
+}
+
+interface SanitizedException {
+	type: string;
+	value: string;
+	mechanism?: SanitizedMechanism;
+	stacktrace?: { type: "raw"; frames: Record<string, unknown>[] };
 }
 
 function positiveInt(value: unknown): number | undefined {
@@ -156,7 +170,7 @@ function sanitizeFrame(
 	roots: FrameRoots,
 	chunkIds: Record<string, unknown>,
 ): Record<string, unknown> | null {
-	if (!isRecord(frame)) return null;
+	if (!Fields.check(frame)) return null;
 	const file = normalizeFrameFilename(frame.filename, roots);
 	const external = file.filename === EXTERNAL_FRAME;
 	const fn = typeof frame.function === "string" ? frame.function : "";
@@ -182,8 +196,8 @@ function sanitizeException(
 	value: string,
 	roots: FrameRoots,
 	chunkIds: Record<string, unknown>,
-): Record<string, unknown> {
-	const out: Record<string, unknown> = {
+): SanitizedException {
+	const out: SanitizedException = {
 		type:
 			typeof exception.type === "string" && SAFE_TYPE.test(exception.type)
 				? exception.type
@@ -191,7 +205,7 @@ function sanitizeException(
 		value,
 	};
 	const mechanism = exception.mechanism;
-	if (isRecord(mechanism)) {
+	if (Fields.check(mechanism)) {
 		out.mechanism = {
 			handled: mechanism.handled === true,
 			synthetic: mechanism.synthetic === true,
@@ -202,7 +216,7 @@ function sanitizeException(
 		};
 	}
 	const stacktrace = exception.stacktrace;
-	if (isRecord(stacktrace) && Array.isArray(stacktrace.frames)) {
+	if (Stacktrace.check(stacktrace)) {
 		const frames = stacktrace.frames
 			.slice(-MAX_FRAMES)
 			.map((frame) => sanitizeFrame(frame, roots, chunkIds))
@@ -229,11 +243,11 @@ export function sanitizeExceptionProperties(
 	}
 	const list = Array.isArray(properties.$exception_list) ? properties.$exception_list : [];
 	const chunkIdsValue = properties[CHUNK_IDS_PROPERTY];
-	const chunkIds = isRecord(chunkIdsValue) ? chunkIdsValue : {};
+	const chunkIds = Fields.check(chunkIdsValue) ? chunkIdsValue : {};
 	const handled = typeof properties.handled === "boolean" ? properties.handled : undefined;
 	const summary = classifier(passthrough);
 	const exceptions = list
-		.filter(isRecord)
+		.filter(Fields.check)
 		.slice(0, MAX_EXCEPTIONS)
 		.map((exception, index) =>
 			sanitizeException(exception, index === 0 ? summary : "", roots, chunkIds),
@@ -242,11 +256,8 @@ export function sanitizeExceptionProperties(
 	const crashType =
 		passthrough.source === "host_crash" ? CRASH_MECHANISMS.get(passthrough.scope) : undefined;
 	if (root && (handled !== undefined || crashType)) {
-		const mechanism = isRecord(root.mechanism)
-			? root.mechanism
-			: { synthetic: false, type: "generic" };
 		root.mechanism = {
-			...mechanism,
+			...(root.mechanism ?? { synthetic: false, type: "generic" }),
 			...(handled !== undefined ? { handled } : {}),
 			...(crashType ? { type: crashType } : {}),
 		};
@@ -290,9 +301,7 @@ export function reportableError(error: unknown, depth = 0): Error {
 }
 
 export function errorCode(error: unknown): string | undefined {
-	if (!isRecord(error) && !(error instanceof Error)) return undefined;
-	const code = (error as { code?: unknown }).code;
-	return typeof code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(code) ? code : undefined;
+	return WithCode.check(error) ? error.code : undefined;
 }
 
 export function toV8Stack(stack: string): string {
