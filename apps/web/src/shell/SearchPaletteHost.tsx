@@ -1,3 +1,4 @@
+import type { ProjectId } from "@thinkrail/contracts";
 import { startProjectSetupChat } from "../panels/setupPrompt";
 import { useOpenProject } from "../panels/useOpenProject";
 import { goToProjectHome } from "../panels/workspaceActions";
@@ -6,7 +7,7 @@ import { useAppStore } from "../store";
 import { type SearchPaletteOptions, useSearchPalette } from "./useSearchPalette";
 
 export interface SearchPaletteHostProps {
-	readonly onNewWorkspace: (projectId: string) => void;
+	readonly onNewWorkspace: (projectId: ProjectId) => void;
 	readonly onToggleProjectsHome: () => void;
 	readonly hasUpdateSettings: boolean;
 }

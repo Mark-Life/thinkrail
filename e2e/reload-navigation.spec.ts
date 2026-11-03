@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
 	createWorkspaceViaDialog,
@@ -212,7 +213,7 @@ test("a failed exact-chat transcript waits for reconnect instead of duplicating 
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
 			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { id?: string; method?: string; params?: { sessionId?: string } };
+			let frame: { id?: string; method?: string; params?: { sessionId?: SessionId } };
 			try {
 				frame = JSON.parse(raw) as typeof frame;
 			} catch {

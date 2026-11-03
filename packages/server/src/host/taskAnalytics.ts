@@ -1,4 +1,4 @@
-import type { PiEvent } from "@thinkrail/contracts";
+import type { PiEvent, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { groupStatus, TodoStore } from "pi-todos/core";
 import type { AdditionalAnalyticsCapture, AdditionalAnalyticsEvent } from "../analytics";
 import { settleChangeArtifacts } from "../todos";
@@ -15,7 +15,7 @@ export interface TaskGroupObservation {
 	properties: TaskProperties;
 }
 
-function readGroups(workspaceId: string, sessionId: string): TaskGroupObservation[] {
+function readGroups(workspaceId: WorkspaceId, sessionId: SessionId): TaskGroupObservation[] {
 	return new TodoStore(getWorkspace(workspaceId).worktreePath, sessionId)
 		.read()
 		.groups.map((group) => {
@@ -58,12 +58,12 @@ export class TaskObservation {
 		this.tools.clear();
 	}
 
-	forget(sessionId: string): void {
+	forget(sessionId: SessionId): void {
 		this.completed.delete(sessionId);
 		this.tools.delete(sessionId);
 	}
 
-	begin(workspaceId: string, sessionId: string): () => Promise<void> {
+	begin(workspaceId: WorkspaceId, sessionId: SessionId): () => Promise<void> {
 		try {
 			const capture = this.getCapture();
 			if (capture !== this.grant) {
@@ -106,7 +106,7 @@ export class TaskObservation {
 		}
 	}
 
-	toolStarted(workspaceId: string, sessionId: string, event: PiEvent): void {
+	toolStarted(workspaceId: WorkspaceId, sessionId: SessionId, event: PiEvent): void {
 		if (
 			event.type !== "tool_execution_start" ||
 			(event.toolName !== "todo_update" && event.toolName !== "todo_write")
@@ -122,7 +122,7 @@ export class TaskObservation {
 		tools.set(event.toolCallId, finish);
 	}
 
-	toolFinished(sessionId: string, event: PiEvent): () => Promise<void> {
+	toolFinished(sessionId: SessionId, event: PiEvent): () => Promise<void> {
 		if (event.type !== "tool_execution_end") return async () => {};
 		const tools = this.tools.get(sessionId);
 		const finish = tools?.get(event.toolCallId);

@@ -1,5 +1,8 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type SessionResources,
@@ -12,7 +15,10 @@ import {
 	useAppStore,
 } from "./index";
 
-const scope = { workspaceId: "resources-workspace", sessionId: "resources-session" };
+const scope = {
+	workspaceId: asWorkspaceId("resources-workspace"),
+	sessionId: asSessionId("resources-session"),
+};
 const command = (status: BackgroundCommandSummary["status"]): BackgroundCommandSummary => ({
 	id: status,
 	sessionId: scope.sessionId,
@@ -184,8 +190,8 @@ test("atomic invalidation and installation preserve stale snapshots and reject o
 
 test("workspace and session response identity cannot cross authority", () => {
 	state().invalidateChatResources(scope);
-	state().installChatResources(read(), { ...snapshot, sessionId: "foreign" });
-	state().installChatResources(read(), { ...snapshot, workspaceId: "foreign" });
+	state().installChatResources(read(), { ...snapshot, sessionId: asSessionId("foreign") });
+	state().installChatResources(read(), { ...snapshot, workspaceId: asWorkspaceId("foreign") });
 	expect(projection()?.snapshot).toBeNull();
 });
 
@@ -241,7 +247,7 @@ test("clear and rehydrate use distinct revisions so a late read cannot resurrect
 test("chat deletion and workspace removal clear projections and fence future arrivals", () => {
 	for (const remove of [
 		() => state().deleteChat(scope.workspaceId, scope.sessionId),
-		() => state().applyWorkspaceRemoved("project", scope.workspaceId),
+		() => state().applyWorkspaceRemoved(asProjectId("project"), scope.workspaceId),
 	]) {
 		useAppStore.setState({ deletedSessionsByWorkspace: {}, removedWorkspaceIds: {} });
 		state().invalidateChatResources(scope);

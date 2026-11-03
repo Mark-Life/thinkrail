@@ -1,5 +1,5 @@
 import { arr, compile, lit, obj, type Static, str, union } from "@earendil-works/pi-schema";
-import type { MergeMethod, MergePrResult } from "@thinkrail/contracts";
+import type { MergeMethod, MergePrResult, WorkspaceId } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	findBranchReviewOutcome,
@@ -20,7 +20,7 @@ import {
 } from "./pr";
 
 export interface ReviewActionParams {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	branch: string;
 	number: number;
 }
@@ -46,7 +46,7 @@ const MERGE_FLAGS: Record<MergeMethod, string> = {
 
 const HEAD_FIELDS = "headRepositoryOwner,headRepository";
 
-function branchWorkspace(workspaceId: string, branch: string) {
+function branchWorkspace(workspaceId: WorkspaceId, branch: string) {
 	const ws = refreshedWorkspace(workspaceId, undefined);
 	if (ws.branch !== branch) {
 		throw new Error(
@@ -288,7 +288,7 @@ async function assertNoOpenReview(
 }
 
 export async function deleteRemoteBranch(
-	params: { workspaceId: string; branch: string },
+	params: { workspaceId: WorkspaceId; branch: string },
 	run: PrCommandRunner = runProviderCommand,
 ): Promise<void> {
 	const ws = branchWorkspace(params.workspaceId, params.branch);

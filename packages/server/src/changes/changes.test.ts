@@ -13,7 +13,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import type { ChangeReceipt, GitDiffScope, LineSpan, RevertTarget } from "@thinkrail/contracts";
+import type {
+	ChangeReceipt,
+	GitDiffScope,
+	LineSpan,
+	RevertTarget,
+	WorkspaceId,
+} from "@thinkrail/contracts";
+import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
 import { setTrashImplementationForTests } from "../trash";
 import { forgetWorkspaceChanges, retainReceipts, revertChange, undoChange } from "./changes";
@@ -24,7 +31,7 @@ const UNCOMMITTED: GitDiffScope = { kind: "uncommitted" };
 
 let dataDir: string;
 let repo: string;
-let workspaceId: string;
+let workspaceId: WorkspaceId;
 let trashed: string[];
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 let nextWorkspace = 0;
@@ -109,13 +116,13 @@ beforeEach(() => {
 	git("config", "core.autocrlf", "false");
 	write("a.ts", "one\ntwo\nthree\n");
 	commitAll("init");
-	workspaceId = `w${++nextWorkspace}`;
+	workspaceId = asWorkspaceId(`w${++nextWorkspace}`);
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
 				id: workspaceId,
-				projectId: "p1",
+				projectId: asProjectId("p1"),
 				name: workspaceId,
 				branch: "main",
 				worktreePath: repo,

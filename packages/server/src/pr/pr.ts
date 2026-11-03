@@ -1,6 +1,13 @@
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { join, sep } from "node:path";
-import type { GhSetupProblem, OpenPrResult, PrBodySource, PrPreview } from "@thinkrail/contracts";
+import type {
+	GhSetupProblem,
+	OpenPrResult,
+	PrBodySource,
+	PrPreview,
+	SessionId,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	forgetOpenBranchReview,
@@ -36,8 +43,8 @@ export type PrCommandRunner = (
 export const MUTATION_TIMEOUT_MS = 60_000;
 
 export interface OpenPrParams {
-	workspaceId: string;
-	sessionId?: string;
+	workspaceId: WorkspaceId;
+	sessionId?: SessionId;
 	branch?: string;
 	title?: string;
 	titleEdited?: boolean;
@@ -49,8 +56,8 @@ export interface OpenPrParams {
 export type OpenPrHostResult = OpenPrResult & { branch: string };
 
 export interface PreviewPrParams {
-	workspaceId: string;
-	sessionId?: string;
+	workspaceId: WorkspaceId;
+	sessionId?: SessionId;
 	title?: string;
 	source?: PrBodySource;
 	template?: string;
@@ -139,8 +146,8 @@ async function commitSubjects(worktreePath: string, baseBranch: string): Promise
 }
 
 async function sessionPlan(
-	workspaceId: string,
-	sessionId: string | undefined,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId | undefined,
 ): Promise<{ body: string; planned: boolean }> {
 	if (!sessionId) return { body: "", planned: false };
 	await generateTodoSummary({ workspaceId, sessionId });
@@ -181,8 +188,8 @@ export interface PrDraftInput {
 }
 
 export async function prDraftInput(params: {
-	workspaceId: string;
-	sessionId?: string;
+	workspaceId: WorkspaceId;
+	sessionId?: SessionId;
 	template?: string;
 }): Promise<PrDraftInput> {
 	const ws = getWorkspace(params.workspaceId);
@@ -414,7 +421,7 @@ async function pushToOrigin(cwd: string, branch: string): Promise<string> {
 	return origin;
 }
 
-export function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
+export function refreshedWorkspace(workspaceId: WorkspaceId, expectedBranch: string | undefined) {
 	refreshUserOwnedWorkspace(workspaceId);
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
@@ -426,7 +433,7 @@ export function refreshedWorkspace(workspaceId: string, expectedBranch: string |
 	return ws;
 }
 
-function pushWorkspace(workspaceId: string, branch: string, confirmBase: boolean) {
+function pushWorkspace(workspaceId: WorkspaceId, branch: string, confirmBase: boolean) {
 	const ws = refreshedWorkspace(workspaceId, branch);
 	if (onBaseBranch(ws) && !confirmBase) {
 		throw new Error(
@@ -437,7 +444,7 @@ function pushWorkspace(workspaceId: string, branch: string, confirmBase: boolean
 }
 
 export async function pushBranch(params: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	branch: string;
 	confirmBase?: boolean;
 }): Promise<{ dirtyFiles: number }> {
@@ -449,7 +456,7 @@ export async function pushBranch(params: {
 	return { dirtyFiles };
 }
 
-function prWorkspace(workspaceId: string, expectedBranch: string | undefined) {
+function prWorkspace(workspaceId: WorkspaceId, expectedBranch: string | undefined) {
 	const ws = refreshedWorkspace(workspaceId, expectedBranch);
 	const baseRemote = remoteNameOf(ws.baseBranch, listRemotes(ws.worktreePath));
 	const unconfiguredTrackingRef =

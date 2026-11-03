@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import type { StablePreferenceAdapter } from "../clientPreferences";
 import { nullProto } from "../lib";
 import { useAppStore } from "../store";
@@ -61,7 +62,7 @@ test("persistence hydrates the store and writes later changes back", () => {
 	const dispose = initFilesTreePersistence(adapter);
 	expect(useAppStore.getState().filesTreeByWorkspace.w1?.expanded).toEqual(["src"]);
 
-	useAppStore.getState().setFilesTreeExpanded("w1", ["src/auth"], true);
+	useAppStore.getState().setFilesTreeExpanded(asWorkspaceId("w1"), ["src/auth"], true);
 	dispose();
 	expect(parseFilesTreeDocument(adapter.value).w1?.expanded).toEqual(["src", "src/auth"]);
 });

@@ -12,6 +12,8 @@ import {
 	str,
 	unknown,
 } from "@earendil-works/pi-schema";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
 
@@ -31,11 +33,11 @@ interface BaselineFile {
 	items: Record<string, Baseline>;
 }
 
-function baselinePath(root: string, sessionId: string): string {
+function baselinePath(root: string, sessionId: SessionId): string {
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${BASELINE_SUFFIX}`);
 }
 
-export function readBaselines(root: string, sessionId: string): Record<string, Baseline> {
+export function readBaselines(root: string, sessionId: SessionId): Record<string, Baseline> {
 	const file = readStateFile(baselinePath(root, sessionId));
 	if (file.value === undefined) return {};
 	if (StoredBaselines.check(file.value))
@@ -44,13 +46,13 @@ export function readBaselines(root: string, sessionId: string): Record<string, B
 	return {};
 }
 
-export function otherSessionWindows(root: string, sessionId: string): boolean {
+export function otherSessionWindows(root: string, sessionId: SessionId): boolean {
 	return otherOwners(root, sessionId).some(
 		(owner) => Object.keys(readBaselines(root, owner)).length > 0,
 	);
 }
 
-export function markOtherSessionWindowsShared(root: string, sessionId: string): void {
+export function markOtherSessionWindowsShared(root: string, sessionId: SessionId): void {
 	for (const owner of otherOwners(root, sessionId)) {
 		const items = readBaselines(root, owner);
 		const open = Object.values(items);
@@ -62,25 +64,25 @@ export function markOtherSessionWindowsShared(root: string, sessionId: string): 
 	}
 }
 
-function otherOwners(root: string, sessionId: string): string[] {
+function otherOwners(root: string, sessionId: SessionId): SessionId[] {
 	try {
 		return readdirSync(join(root, WORKSPACE_TODOS_DIR))
 			.filter((n) => n.endsWith(BASELINE_SUFFIX))
-			.map((n) => n.slice(0, -BASELINE_SUFFIX.length))
+			.map((n) => asSessionId(n.slice(0, -BASELINE_SUFFIX.length)))
 			.filter((owner) => owner !== sessionId);
 	} catch {
 		return [];
 	}
 }
 
-export function dropItemBaseline(root: string, sessionId: string, id: string): void {
+export function dropItemBaseline(root: string, sessionId: SessionId, id: string): void {
 	const items = readBaselines(root, sessionId);
 	if (items[id] === undefined) return;
 	delete items[id];
 	writeBaselines(root, sessionId, items);
 }
 
-export function removeSessionBaselines(root: string, sessionId: string): void {
+export function removeSessionBaselines(root: string, sessionId: SessionId): void {
 	try {
 		rmSync(baselinePath(root, sessionId), { force: true });
 	} catch {}
@@ -88,7 +90,7 @@ export function removeSessionBaselines(root: string, sessionId: string): void {
 
 export function writeBaselines(
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 	items: Record<string, Baseline>,
 ): void {
 	const path = baselinePath(root, sessionId);

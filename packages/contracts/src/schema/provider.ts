@@ -9,6 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
+import { WorkspaceId } from "./ids";
 import { Ack, NoParams, NoPayload, wireObj } from "./wire";
 
 export const ProviderAuthKind = oneOf(["oauth", "api-key", "env", "central", "other"]);
@@ -172,7 +173,7 @@ export const LoginPush = wireObj({
 	providerId: str(),
 	frame: LoginFrame,
 	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
-	target: opt(wireObj({ kind: lit("mcp"), workspaceId: str(), serverName: str() })),
+	target: opt(wireObj({ kind: lit("mcp"), workspaceId: WorkspaceId, serverName: str() })),
 });
 export type LoginPush = Static<typeof LoginPush>;
 

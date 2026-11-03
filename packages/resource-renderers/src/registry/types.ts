@@ -5,13 +5,14 @@ import type {
 	ReviewAnchorState,
 	ReviewCommentStatus,
 	ReviewSelector,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { ComponentType } from "react";
 import type { ResourceHost } from "../host";
 
 export interface ResourceDescriptor {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	mime?: string;
 	language?: string;

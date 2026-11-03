@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { asSessionId } from "@thinkrail/contracts";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -127,7 +128,7 @@ for (const { order, mode, viewport } of cases) {
 			.filter({ hasText: title });
 		const chat = page.getByTestId("chat-scroll").filter({ visible: true });
 		const replay = textStreamReplay(
-			seeded.id,
+			asSessionId(seeded.id),
 			streamedMarkdown(title, STREAM_CHARS),
 			BASE_TS + 100_000,
 		);

@@ -10,6 +10,7 @@ import {
 	str,
 } from "@earendil-works/pi-schema";
 import { GitFileChange } from "./git";
+import { SessionId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const TodoStatus = oneOf(["pending", "in_progress", "done"]);
@@ -99,22 +100,22 @@ export const TodoPlan = wireObj({
 });
 export type TodoPlan = Static<typeof TodoPlan>;
 
-const TodoItemRef = wireObj({ workspaceId: str(), sessionId: str(), id: str() });
-const TodoPlanRef = wireObj({ workspaceId: str(), sessionId: str() });
+const TodoItemRef = wireObj({ workspaceId: WorkspaceId, sessionId: SessionId, id: str() });
+const TodoPlanRef = wireObj({ workspaceId: WorkspaceId, sessionId: SessionId });
 
 export const TODO_METHODS = {
 	"todo.list": {
 		params: wireObj({
-			workspaceId: str(),
-			sessionId: str(),
+			workspaceId: WorkspaceId,
+			sessionId: SessionId,
 			opened: opt(oneOf(["page", "rail"])),
 		}),
 		result: TodoPlan,
 	},
 	"todo.add": {
 		params: wireObj({
-			workspaceId: str(),
-			sessionId: str(),
+			workspaceId: WorkspaceId,
+			sessionId: SessionId,
 			title: str(),
 			note: opt(str()),
 			surface: opt(oneOf(["chat", "page", "rail"])),
@@ -123,8 +124,8 @@ export const TODO_METHODS = {
 	},
 	"todo.update": {
 		params: wireObj({
-			workspaceId: str(),
-			sessionId: str(),
+			workspaceId: WorkspaceId,
+			sessionId: SessionId,
 			id: str(),
 			status: opt(TodoStatus),
 			title: opt(str()),
@@ -135,7 +136,7 @@ export const TODO_METHODS = {
 	"todo.remove": { params: TodoItemRef, result: Ack },
 	"todo.review": { params: TodoItemRef, result: Ack },
 	"todo.requestFix": {
-		params: wireObj({ workspaceId: str(), sessionId: str(), id: str(), feedback: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, sessionId: SessionId, id: str(), feedback: str() }),
 		result: Ack,
 	},
 	"todo.startReview": { params: TodoItemRef, result: Ack },

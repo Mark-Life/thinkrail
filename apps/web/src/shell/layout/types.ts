@@ -1,4 +1,4 @@
-import type { GitDiffScope, LayoutPreset } from "@thinkrail/contracts";
+import type { GitDiffScope, LayoutPreset, SessionId } from "@thinkrail/contracts";
 
 export type LayoutBottomAlignment = LayoutPreset["bottom"]["alignment"];
 export type LayoutToolId = LayoutPreset["left"]["groups"][number]["tools"][number];
@@ -32,7 +32,7 @@ export interface LayoutChatTab {
 	kind: "chat";
 	id: string;
 	name: string;
-	sessionId: string;
+	sessionId: SessionId;
 }
 
 export interface LayoutDocumentTab {

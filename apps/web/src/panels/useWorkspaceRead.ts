@@ -1,18 +1,19 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef } from "react";
 import { selectWorkspaceTick, useAppStore } from "../store";
 import { createSingleFlight, type SingleFlight } from "./singleFlight";
 
 interface WorkspaceReadHandlers<T> {
-	onResult: (value: T, workspaceId: string) => void;
-	onFailure?: (workspaceId: string, error: unknown) => void;
-	onSwitch?: (workspaceId: string) => void;
+	onResult: (value: T, workspaceId: WorkspaceId) => void;
+	onFailure?: (workspaceId: WorkspaceId, error: unknown) => void;
+	onSwitch?: (workspaceId: WorkspaceId) => void;
 }
 
 const isRemoved = (id: string) => Boolean(useAppStore.getState().removedWorkspaceIds[id]);
 
 export function useWorkspaceRead<T>(
-	workspaceId: string | null,
-	read: (workspaceId: string, readKey: string | undefined) => Promise<T>,
+	workspaceId: WorkspaceId | null,
+	read: (workspaceId: WorkspaceId, readKey: string | undefined) => Promise<T>,
 	handlers: WorkspaceReadHandlers<T>,
 	readKey?: string,
 ): { reload: () => void } {
@@ -20,7 +21,7 @@ export function useWorkspaceRead<T>(
 	latest.current = { read, handlers, workspaceId, readKey };
 	const flightRef = useRef<SingleFlight | null>(null);
 
-	const runRead = useCallback((flight: SingleFlight, id: string, key: string | undefined) => {
+	const runRead = useCallback((flight: SingleFlight, id: WorkspaceId, key: string | undefined) => {
 		if (isRemoved(id)) return;
 		const live = () =>
 			!flight.isStopped() &&

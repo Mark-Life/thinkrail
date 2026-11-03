@@ -1,6 +1,8 @@
 import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -31,7 +33,7 @@ async function expectAttentionDot(row: Locator): Promise<void> {
 	await expect(dot.locator('[aria-hidden="true"]')).toHaveClass(/bg-primary/);
 }
 
-async function seedSentReviewComment(page: Page, sessionId: string): Promise<void> {
+async function seedSentReviewComment(page: Page, sessionId: SessionId): Promise<void> {
 	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
 	try {
 		const [project] = await wire.request("project.list", {});
@@ -404,7 +406,7 @@ test("opening a chat from a sent review comment clears its unread result", async
 		if ((await peerExpand.getAttribute("data-expanded")) === "true") await peerExpand.click();
 		await expectAttentionDot(peerProject);
 
-		await seedSentReviewComment(page, session.id);
+		await seedSentReviewComment(page, asSessionId(session.id));
 		await enterDefaultWorkspace(page);
 		const targetChatTab = page.locator(
 			`[data-testid="editor-tab"][data-kind="chat"][data-session-id="${session.id}"]`,

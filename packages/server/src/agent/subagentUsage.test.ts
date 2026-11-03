@@ -3,6 +3,7 @@ import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { asSessionId } from "@thinkrail/contracts";
 import {
 	childFileUsage,
 	createRunUsageRecorder,
@@ -41,7 +42,7 @@ const assistant = (input: number, cost: number) =>
 
 test("childFileUsage totals a fresh child and ignores a line torn by a crash", () => {
 	const content = [header(), assistant(10, 0.1), assistant(20, 0.2), '{"type":"mess'].join("\n");
-	expect(childFileUsage("child", content)).toMatchObject({
+	expect(childFileUsage(asSessionId("child"), content)).toMatchObject({
 		provider: "anthropic",
 		model: "claude",
 		usage: { input: 30, output: 2, totalTokens: 32, cost: { total: 0.30000000000000004 } },
@@ -50,7 +51,7 @@ test("childFileUsage totals a fresh child and ignores a line torn by a crash", (
 
 test("childFileUsage skips forked children whose copied history carries the parent's spend", () => {
 	const content = [header({ parentSession: "/p.jsonl" }), assistant(10, 0.1)].join("\n");
-	expect(childFileUsage("child", content)).toBeUndefined();
+	expect(childFileUsage(asSessionId("child"), content)).toBeUndefined();
 });
 
 const usageOf = (input: number, cost: number) => ({
@@ -63,7 +64,7 @@ const usageOf = (input: number, cost: number) => ({
 });
 
 test("unrecordedUsage appends a non-negative shortfall, cost-only included, but not cost noise", () => {
-	const total = childFileUsage("child", [header(), assistant(30, 0.3)].join("\n"));
+	const total = childFileUsage(asSessionId("child"), [header(), assistant(30, 0.3)].join("\n"));
 	if (!total) throw new Error("expected usage");
 	const recorded = (input: number, cost: number) => ({
 		input,
@@ -139,7 +140,12 @@ test("a lost earlier record is recovered even when a later record of that child 
 	const parent = parentRecords(dir);
 	const later = new Date(Date.now() + 60_000).toISOString();
 	parent.record(
-		{ childSessionId: "child", provider: "anthropic", model: "claude", usage: usageOf(20, 0.2) },
+		{
+			childSessionId: asSessionId("child"),
+			provider: "anthropic",
+			model: "claude",
+			usage: usageOf(20, 0.2),
+		},
 		later,
 	);
 	await parent.reconcile();
@@ -192,11 +198,11 @@ function recorderHarness(outcomes: boolean[] = []) {
 
 test("a run records each increment once and its remainder at the end, cost-only included", () => {
 	const { writes, recorder, run } = recorderHarness();
-	recorder.progress("parent", "child", run(10, 0.1));
-	recorder.progress("parent", "child", run(10, 0.1));
-	recorder.progress("parent", "child", run(10, 0.1 + 1e-12));
-	recorder.progress("parent", "child", run(25, 0.2));
-	recorder.terminal("parent", "child", run(25, 0.5));
+	recorder.progress(asSessionId("parent"), asSessionId("child"), run(10, 0.1));
+	recorder.progress(asSessionId("parent"), asSessionId("child"), run(10, 0.1));
+	recorder.progress(asSessionId("parent"), asSessionId("child"), run(10, 0.1 + 1e-12));
+	recorder.progress(asSessionId("parent"), asSessionId("child"), run(25, 0.2));
+	recorder.terminal(asSessionId("parent"), asSessionId("child"), run(25, 0.5));
 	expect(writes.map(({ input }) => input)).toEqual([10, 15, 0]);
 	expect(writes.map(({ cost }) => cost).reduce((sum, cost) => sum + cost)).toBeCloseTo(0.5, 12);
 	expect(writes[2]?.cost).toBeCloseTo(0.3, 12);
@@ -204,11 +210,11 @@ test("a run records each increment once and its remainder at the end, cost-only 
 
 test("an increment pi did not take is carried within the run but not into the next run", () => {
 	const { writes, recorder, run } = recorderHarness([false, true, false]);
-	recorder.progress("parent", "child", run(10, 0));
-	recorder.terminal("parent", "child", run(30, 0));
+	recorder.progress(asSessionId("parent"), asSessionId("child"), run(10, 0));
+	recorder.terminal(asSessionId("parent"), asSessionId("child"), run(30, 0));
 	expect(writes.map(({ input }) => input)).toEqual([10, 30]);
 
-	recorder.terminal("parent", "child", run(5, 0));
-	recorder.terminal("parent", "child", run(7, 0));
+	recorder.terminal(asSessionId("parent"), asSessionId("child"), run(5, 0));
+	recorder.terminal(asSessionId("parent"), asSessionId("child"), run(7, 0));
 	expect(writes.map(({ input }) => input)).toEqual([10, 30, 5, 7]);
 });

@@ -5,6 +5,7 @@ import {
 	RiArrowGoBackLine as RotateCcw,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton, withIconClass } from "@thinkrail/ui/button";
 import { menuItemClass } from "@thinkrail/ui/menu-styles";
@@ -25,9 +26,9 @@ export function WorkspaceChatHistory({
 	targetGroupId,
 	onRenameChat,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	targetGroupId: string;
-	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	onRenameChat?: (sessionId: SessionId, titleInput: string, currentTitle: string) => void;
 }) {
 	const t = useT();
 	const closed = useAppStore((state) => state.closedChatsByWorkspace[workspaceId] ?? EMPTY_CHATS);
@@ -89,10 +90,10 @@ function ClosedChatRow({
 	onRenameChat,
 }: {
 	chat: ClosedChat;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	targetGroupId: string;
 	onDismiss: () => void;
-	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	onRenameChat?: (sessionId: SessionId, titleInput: string, currentTitle: string) => void;
 }) {
 	const t = useT();
 	const now = useNow();

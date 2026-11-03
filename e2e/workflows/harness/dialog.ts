@@ -1,4 +1,5 @@
 import "./env";
+import type { SessionId } from "@thinkrail/contracts";
 import type {
 	AskUserQuestionAnswer,
 	AskUserQuestionItem,
@@ -98,7 +99,7 @@ async function personaAnswer(
 }
 
 export function attachDialog(
-	sessionId: string,
+	sessionId: SessionId,
 	log: EventLog,
 	config: DialogConfig = {},
 ): { answered: AnsweredRound[]; detach: () => void; settle: () => Promise<void> } {

@@ -5,7 +5,14 @@ import { join } from "node:path";
 import { createProvider, envApiKeyAuth, InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { TODO_NUDGE_PREFIX, type WsResult } from "@thinkrail/contracts";
+import {
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
+	type SessionId,
+	TODO_NUDGE_PREFIX,
+	type WsResult,
+} from "@thinkrail/contracts";
 import {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
@@ -30,7 +37,7 @@ const TEST_KEY = "phc_test";
 
 const PRIVATE = "private-auth-attribution";
 const context = { clientKey: `${PRIVATE}-client` };
-const workspaceId = `${PRIVATE}-workspace`;
+const workspaceId = asWorkspaceId(`${PRIVATE}-workspace`);
 const saved = {
 	THINKRAIL_DATA_DIR: process.env.THINKRAIL_DATA_DIR,
 	PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR,
@@ -42,7 +49,7 @@ let runtime: ModelRuntime;
 let faux: ReturnType<typeof createFauxCore>;
 let events: { event: string; properties: Record<string, unknown> }[];
 let outgoing: string[];
-let sessionIds: string[];
+let sessionIds: SessionId[];
 let unexpectedAuthCalls: string[];
 
 async function addFauxProvider(
@@ -123,7 +130,7 @@ beforeEach(async () => {
 	saveWorkspaces([
 		{
 			id: workspaceId,
-			projectId: `${PRIVATE}-project`,
+			projectId: asProjectId(`${PRIVATE}-project`),
 			kind: "default",
 			name: `${PRIVATE}-workspace-label`,
 			branch: "main",
@@ -202,7 +209,7 @@ test("preconfigured API-key chats and accepted prompt, steer and follow-up sends
 	const prompt = handleRequest("session.prompt", { sessionId, text: `${PRIVATE}-prompt` }, context);
 	try {
 		await started.promise;
-		expect(isSessionStreaming(sessionId)).toBe(true);
+		expect(isSessionStreaming(asSessionId(sessionId))).toBe(true);
 		for (const method of ["session.steer", "session.followUp"]) {
 			expect(
 				await handleRequest(method, { sessionId, text: `${PRIVATE}-${method}` }, context),
@@ -356,7 +363,7 @@ test("model changes affect later sends but not provider/auth captured before a d
 });
 
 test("retained sessions keep their generation's API-key auth when new same-provider chats use a subscription", async () => {
-	const retainedId = await createChat();
+	const retainedId = asSessionId(await createChat());
 	const retainedGeneration = getSessionRuntimeGeneration(retainedId);
 	const nextCredentials = new InMemoryCredentialStore();
 	const nextRuntime = await ModelRuntime.create({
@@ -383,7 +390,7 @@ test("retained sessions keep their generation's API-key auth when new same-provi
 	);
 	expect(await usePiRuntime((current) => current === nextRuntime)).toBe(true);
 	expect(getSessionRuntimeGeneration(retainedId)).toBe(retainedGeneration);
-	expect(getSessionRuntimeGeneration(newId)).toBe(candidate.generation);
+	expect(getSessionRuntimeGeneration(asSessionId(newId))).toBe(candidate.generation);
 	await handleRequest("session.prompt", { sessionId: retainedId, text: `${PRIVATE}-old` }, context);
 	await handleRequest("session.prompt", { sessionId: newId, text: `${PRIVATE}-new` }, context);
 	await shutdownAnalytics();

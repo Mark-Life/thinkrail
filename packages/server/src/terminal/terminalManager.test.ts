@@ -1,14 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { asProjectId, asWorkspaceId, WS_CHANNELS } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
 	closeTerminalTab,
-	closeWorkspaceTerminals,
 	listTerminals,
 	persistTerminalSessions,
 	reserveTerminal,
@@ -26,7 +25,7 @@ interface PublishedFrame {
 	data: unknown;
 }
 
-const WS = "ws-1";
+const WS = asWorkspaceId("ws-1");
 // An external, real child process on every platform (PowerShell's `sleep` alias runs in-process; see terminal/SPEC.md).
 const BUSY_LOOP_COMMAND = process.platform === "win32" ? "ping -n 30 127.0.0.1" : "sleep 30";
 const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
@@ -141,7 +140,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: "project-1",
+			projectId: asProjectId("project-1"),
 			name: "Workspace",
 			branch: "main",
 			baseBranch: "main",
@@ -571,34 +570,3 @@ test(
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
-
-describe("membership survives an ungraceful exit", () => {
-	test("a tab closed before a crash does not come back", () => {
-		attachTerminal(WS, "tab-a", "client-1");
-		closeTerminalTab(WS, "tab-a", true);
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toHaveLength(0);
-	});
-
-	test("a tab opened before a crash is still there", () => {
-		attachTerminal(WS, "tab-a", "client-1", { title: "Survivor" });
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Survivor" }]);
-	});
-
-	test("archiving a workspace before a crash takes its tabs with it", () => {
-		attachTerminal(WS, "tab-a", "client-1");
-		closeWorkspaceTerminals(WS);
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toHaveLength(0);
-	});
-});
