@@ -1,5 +1,6 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { arr, compile, obj, str, unknown } from "@earendil-works/pi-schema";
 import { logger } from "../log";
 
 const log = logger("agent");
@@ -9,6 +10,8 @@ const CHATGPT_ALLOWLIST_PROVIDER = "openai-codex";
 const LISTING_TIMEOUT_MS = 5_000;
 const LISTING_TTL_MS = 60_000;
 const DATE_SUFFIX = /^-(?:\d{8}|\d{4}-\d{2}-\d{2})$/;
+const ModelListing = compile(obj({ data: arr(unknown()) }, { open: true }));
+const ModelEntry = compile(obj({ id: str() }, { open: true }));
 
 export type ModelAvailabilityRuntime = Pick<
 	ModelRuntime,
@@ -135,15 +138,9 @@ async function readProviderListing(
 		signal,
 	});
 	if (!response.ok) return undefined;
-	const body = (await response.json()) as { data?: unknown };
-	if (!Array.isArray(body.data)) return undefined;
-	const ids = new Set(
-		body.data.flatMap((entry: unknown) =>
-			entry && typeof entry === "object" && "id" in entry && typeof entry.id === "string"
-				? [entry.id]
-				: [],
-		),
-	);
+	const body: unknown = await response.json();
+	if (!ModelListing.check(body)) return undefined;
+	const ids = new Set(body.data.flatMap((entry) => (ModelEntry.check(entry) ? [entry.id] : [])));
 	return ids.size > 0 ? { baseUrl, ids } : undefined;
 }
 

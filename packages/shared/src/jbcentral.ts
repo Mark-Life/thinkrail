@@ -358,6 +358,10 @@ function quotaAmount(value: unknown): number | null {
 	return Number.isFinite(amount) ? amount : null;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function parseJbcentralQuota(output: string): JbcentralQuotaReadResult {
 	let parsed: unknown;
 	try {
@@ -365,16 +369,11 @@ function parseJbcentralQuota(output: string): JbcentralQuotaReadResult {
 	} catch {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+	if (!isPlainObject(parsed) || !isPlainObject(parsed.tariffQuota)) {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
-	const tariffQuota = (parsed as Record<string, unknown>).tariffQuota;
-	if (!tariffQuota || typeof tariffQuota !== "object" || Array.isArray(tariffQuota)) {
-		return { outcome: "failed", reason: "invalid-output" };
-	}
-	const values = tariffQuota as Record<string, unknown>;
-	const remaining = quotaAmount(values.available);
-	const total = quotaAmount(values.maximum);
+	const remaining = quotaAmount(parsed.tariffQuota.available);
+	const total = quotaAmount(parsed.tariffQuota.maximum);
 	if (remaining === null || total === null) {
 		return { outcome: "failed", reason: "invalid-output" };
 	}
