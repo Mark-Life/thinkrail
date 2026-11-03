@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
 import {
-	asSessionId,
 	LoginPush,
 	resultProblem,
 	type SessionId,
@@ -15,6 +14,7 @@ import {
 	WsResponse,
 	type WsResult,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
@@ -552,7 +552,7 @@ export default function syntheticExternalExtension(pi) {
 		});
 		await within(
 			rpc(socket, "session.delete", {
-				sessionId: asSessionId(transcript.id),
+				sessionId: testSessionId(transcript.id),
 				workspaceId: workspace.id,
 			}),
 			10_000,

@@ -2,7 +2,7 @@ import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { SessionId, ToolCall } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	enterDefaultWorkspace,
 	expandDisclosure,
@@ -71,7 +71,7 @@ async function openVisualizationSession(
 	await expect(card).toHaveAttribute("data-status", "done");
 	await expect(card).toHaveAttribute("data-expanded", "true");
 	await expect(card.getByTestId("tool-visualize")).toHaveAttribute("data-status", "done");
-	return { card, sessionId: asSessionId(sessionId) };
+	return { card, sessionId: testSessionId(sessionId) };
 }
 
 const MOCKUP_DIR = ".thinkrail/context/mockups";

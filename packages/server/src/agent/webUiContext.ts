@@ -156,6 +156,29 @@ export async function selectForToolCall(
 	return typeof v === "string" ? v : undefined;
 }
 
+export const inertUiMembers = {
+	onTerminalInput: () => () => {},
+	setWorkingMessage: () => {},
+	setWorkingVisible: () => {},
+	setWorkingIndicator: () => {},
+	setHiddenThinkingLabel: () => {},
+	setFooter: () => {},
+	setHeader: () => {},
+	custom: (() => Promise.resolve(undefined)) as ExtensionUIContext["custom"],
+	pasteToEditor: () => {},
+	setEditorText: () => {},
+	getEditorText: () => "",
+	addAutocompleteProvider: () => {},
+	setEditorComponent: () => {},
+	getEditorComponent: () => undefined,
+	theme: plainTextTheme,
+	getAllThemes: () => [],
+	getTheme: () => undefined,
+	setTheme: () => ({ success: true }),
+	getToolsExpanded: () => false,
+	setToolsExpanded: () => {},
+} satisfies Partial<ExtensionUIContext>;
+
 export function createWebUiContext(
 	sessionId: SessionId,
 	currentToolCall: () => string | undefined = () => undefined,
@@ -214,26 +237,6 @@ export function createWebUiContext(
 		setTitle(title) {
 			publish({ id: nextId(), sessionId, kind: "setTitle", title });
 		},
-
-		onTerminalInput: () => () => {},
-		setWorkingMessage: () => {},
-		setWorkingVisible: () => {},
-		setWorkingIndicator: () => {},
-		setHiddenThinkingLabel: () => {},
-		setFooter: () => {},
-		setHeader: () => {},
-		custom: (() => Promise.resolve(undefined)) as ExtensionUIContext["custom"],
-		pasteToEditor: () => {},
-		setEditorText: () => {},
-		getEditorText: () => "",
-		addAutocompleteProvider: () => {},
-		setEditorComponent: () => {},
-		getEditorComponent: () => undefined,
-		theme: plainTextTheme,
-		getAllThemes: () => [],
-		getTheme: () => undefined,
-		setTheme: () => ({ success: true }),
-		getToolsExpanded: () => false,
-		setToolsExpanded: () => {},
+		...inertUiMembers,
 	} satisfies ExtensionUIContext;
 }

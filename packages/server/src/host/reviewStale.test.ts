@@ -3,15 +3,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewComment, ReviewSnapshot, Workspace } from "@thinkrail/contracts";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { saveWorkspaces } from "../persistence";
 import { markClientStale } from "./todoReview";
 
 let dataDir: string;
 let worktree: string;
-const WS = asWorkspaceId("ws-stale");
-const SESSION = asSessionId("sess-stale");
+const WS = testWorkspaceId("ws-stale");
+const SESSION = testSessionId("sess-stale");
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "stale-data-"));
@@ -20,7 +20,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: asProjectId("p1"),
+			projectId: testProjectId("p1"),
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
@@ -62,7 +62,7 @@ test("markClientStale flags only an outdated finding whose reviewed sha was supe
 	const snapshot: ReviewSnapshot = {
 		review: {
 			id: "rev_1",
-			workspaceId: asWorkspaceId(WS),
+			workspaceId: testWorkspaceId(WS),
 			status: "open",
 			baseSha: "x",
 			createdAt: 0,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { InteractiveTools } from "../extensions";
 import { deriveSessionState } from "./sessionState";
 
@@ -90,7 +90,7 @@ describe("deriveSessionState", () => {
 	test("a pending extension dialog carries the exact replayable request", () => {
 		const request = {
 			id: "dialog-1",
-			sessionId: asSessionId("session-1"),
+			sessionId: testSessionId("session-1"),
 			kind: "confirm" as const,
 			title: "Continue?",
 			message: "Confirm the operation.",

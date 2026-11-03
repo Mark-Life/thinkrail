@@ -1,13 +1,12 @@
-import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import type { ProjectId, WorkspaceId } from "@thinkrail/contracts";
 import {
-	asWorkspaceId,
 	DEFAULT_WORKSPACE_NAME,
 	type DiffStats,
 	type ExistingWorktreeCandidate,
 	isSubagentMaxConcurrent,
+	newWorkspaceId,
 	type OpenBranchReview,
 	type Project,
 	type SubagentOverride,
@@ -186,7 +185,7 @@ export async function openExistingWorktree(
 	const displayName =
 		toDisplayName(basename(entry.path)) ?? toDisplayName(entry.branch) ?? "Existing worktree";
 	const workspace: Workspace = {
-		id: asWorkspaceId(randomUUID()),
+		id: newWorkspaceId(),
 		projectId,
 		kind: "external",
 		name: displayName,
@@ -287,7 +286,7 @@ export async function createWorkspace(
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
 	const workspace: Workspace = {
-		id: asWorkspaceId(randomUUID()),
+		id: newWorkspaceId(),
 		projectId,
 		name: wsName,
 		branch,
@@ -347,7 +346,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 	}
 
 	const workspace: Workspace = {
-		id: asWorkspaceId(randomUUID()),
+		id: newWorkspaceId(),
 		projectId: project.id,
 		kind: "default",
 		name: DEFAULT_WORKSPACE_NAME,

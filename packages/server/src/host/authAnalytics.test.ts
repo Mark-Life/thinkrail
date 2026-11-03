@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	type AuthMetadataContext,
 	loginAuthMethod,
@@ -156,7 +156,7 @@ test("failed metadata reads never break telemetry callers or expose their messag
 	};
 	expect(observedAuthMethod("openai", failed)).toBe("unknown");
 	expect(loginAuthMethod("anthropic", "oauth", failed)).toBe("unknown");
-	expect(sessionProviderAnalytics(asSessionId("missing-session"))).toEqual({
+	expect(sessionProviderAnalytics(testSessionId("missing-session"))).toEqual({
 		provider: "custom",
 		model: "custom",
 		auth_method: "unknown",

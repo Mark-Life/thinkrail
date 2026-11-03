@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn } from "./types";
 
@@ -16,7 +16,7 @@ function command(
 		timestamp: 1,
 		details: {
 			id,
-			sessionId: asSessionId("s"),
+			sessionId: testSessionId("s"),
 			name: "job",
 			status,
 			startedAt: 0,

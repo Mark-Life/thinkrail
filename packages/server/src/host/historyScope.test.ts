@@ -1,47 +1,47 @@
 import { expect, test } from "bun:test";
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { buildHistoryScope } from "./historyScope";
 
 test("all scope: filter matches any cwd + sessionId", () => {
 	const { filter } = buildHistoryScope({ kind: "all" }, [], () => []);
 
-	expect(filter("/some/cwd", asSessionId("session1"))).toBe(true);
-	expect(filter("/another/cwd", asSessionId("session2"))).toBe(true);
-	expect(filter("", asSessionId(""))).toBe(true);
+	expect(filter("/some/cwd", testSessionId("session1"))).toBe(true);
+	expect(filter("/another/cwd", testSessionId("session2"))).toBe(true);
+	expect(filter("", testSessionId(""))).toBe(true);
 });
 
 test("chat scope: filter matches only the exact sessionId", () => {
 	const { filter } = buildHistoryScope(
-		{ kind: "chat", sessionId: asSessionId("target-session") },
+		{ kind: "chat", sessionId: testSessionId("target-session") },
 		[],
 		() => [],
 	);
 
-	expect(filter("/some/cwd", asSessionId("target-session"))).toBe(true);
-	expect(filter("/some/cwd", asSessionId("other-session"))).toBe(false);
-	expect(filter("/another/cwd", asSessionId("target-session"))).toBe(true);
+	expect(filter("/some/cwd", testSessionId("target-session"))).toBe(true);
+	expect(filter("/some/cwd", testSessionId("other-session"))).toBe(false);
+	expect(filter("/another/cwd", testSessionId("target-session"))).toBe(true);
 });
 
 test("workspace scope: filter matches the worktreePath of a known workspace", () => {
 	const p1: Project = {
-		id: asProjectId("p1"),
+		id: testProjectId("p1"),
 		name: "project",
 		path: "/proj",
 		slug: "project",
 		lastOpened: 0,
 	};
 	const ws1: Workspace = {
-		id: asWorkspaceId("ws1"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("ws1"),
+		projectId: testProjectId("p1"),
 		name: "ws1",
 		branch: "ws1",
 		worktreePath: "/proj/worktrees/ws1",
 		baseBranch: "main",
 	};
 	const ws2: Workspace = {
-		id: asWorkspaceId("ws2"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("ws2"),
+		projectId: testProjectId("p1"),
 		name: "ws2",
 		branch: "ws2",
 		worktreePath: "/proj/worktrees/ws2",
@@ -49,35 +49,35 @@ test("workspace scope: filter matches the worktreePath of a known workspace", ()
 	};
 
 	const { filter } = buildHistoryScope(
-		{ kind: "workspace", workspaceId: asWorkspaceId("ws1") },
+		{ kind: "workspace", workspaceId: testWorkspaceId("ws1") },
 		[p1],
 		(projectId) => (projectId === "p1" ? [ws1, ws2] : []),
 	);
 
-	expect(filter("/proj/worktrees/ws1", asSessionId("any-session"))).toBe(true);
-	expect(filter("/proj/worktrees/ws2", asSessionId("any-session"))).toBe(false);
-	expect(filter("/other/path", asSessionId("any-session"))).toBe(false);
+	expect(filter("/proj/worktrees/ws1", testSessionId("any-session"))).toBe(true);
+	expect(filter("/proj/worktrees/ws2", testSessionId("any-session"))).toBe(false);
+	expect(filter("/other/path", testSessionId("any-session"))).toBe(false);
 });
 
 test("workspace scope with unknown workspaceId: filter always returns false, even with other workspaces in registry", () => {
 	const p1: Project = {
-		id: asProjectId("p1"),
+		id: testProjectId("p1"),
 		name: "project",
 		path: "/proj",
 		slug: "project",
 		lastOpened: 0,
 	};
 	const ws1: Workspace = {
-		id: asWorkspaceId("ws1"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("ws1"),
+		projectId: testProjectId("p1"),
 		name: "ws1",
 		branch: "ws1",
 		worktreePath: "/proj/worktrees/ws1",
 		baseBranch: "main",
 	};
 	const ws2: Workspace = {
-		id: asWorkspaceId("ws2"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("ws2"),
+		projectId: testProjectId("p1"),
 		name: "ws2",
 		branch: "ws2",
 		worktreePath: "/proj/worktrees/ws2",
@@ -85,29 +85,29 @@ test("workspace scope with unknown workspaceId: filter always returns false, eve
 	};
 
 	const { filter } = buildHistoryScope(
-		{ kind: "workspace", workspaceId: asWorkspaceId("unknown-ws") },
+		{ kind: "workspace", workspaceId: testWorkspaceId("unknown-ws") },
 		[p1],
 		(projectId) => (projectId === "p1" ? [ws1, ws2] : []),
 	);
 
-	expect(filter("/proj/worktrees/ws1", asSessionId("any-session"))).toBe(false);
-	expect(filter("/proj/worktrees/ws2", asSessionId("any-session"))).toBe(false);
-	expect(filter("/", asSessionId("session1"))).toBe(false);
-	expect(filter("", asSessionId(""))).toBe(false);
+	expect(filter("/proj/worktrees/ws1", testSessionId("any-session"))).toBe(false);
+	expect(filter("/proj/worktrees/ws2", testSessionId("any-session"))).toBe(false);
+	expect(filter("/", testSessionId("session1"))).toBe(false);
+	expect(filter("", testSessionId(""))).toBe(false);
 });
 
 test("project scope: filter matches cwds of any workspace in the project", () => {
 	const ws1: Workspace = {
-		id: asWorkspaceId("ws1"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("ws1"),
+		projectId: testProjectId("p1"),
 		name: "ws1",
 		branch: "ws1",
 		worktreePath: "/proj/worktrees/ws1",
 		baseBranch: "main",
 	};
 	const ws2: Workspace = {
-		id: asWorkspaceId("ws2"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("ws2"),
+		projectId: testProjectId("p1"),
 		name: "ws2",
 		branch: "ws2",
 		worktreePath: "/proj/worktrees/ws2",
@@ -115,26 +115,26 @@ test("project scope: filter matches cwds of any workspace in the project", () =>
 	};
 
 	const { filter } = buildHistoryScope(
-		{ kind: "project", projectId: asProjectId("p1") },
-		[{ id: asProjectId("p1"), name: "project", path: "/proj", slug: "project", lastOpened: 0 }],
+		{ kind: "project", projectId: testProjectId("p1") },
+		[{ id: testProjectId("p1"), name: "project", path: "/proj", slug: "project", lastOpened: 0 }],
 		(projectId) => (projectId === "p1" ? [ws1, ws2] : []),
 	);
 
-	expect(filter("/proj/worktrees/ws1", asSessionId("any-session"))).toBe(true);
-	expect(filter("/proj/worktrees/ws2", asSessionId("any-session"))).toBe(true);
-	expect(filter("/other/project/worktrees/ws1", asSessionId("any-session"))).toBe(false);
+	expect(filter("/proj/worktrees/ws1", testSessionId("any-session"))).toBe(true);
+	expect(filter("/proj/worktrees/ws2", testSessionId("any-session"))).toBe(true);
+	expect(filter("/other/project/worktrees/ws1", testSessionId("any-session"))).toBe(false);
 });
 
 test("labels: build a worktreePath → {workspaceId, projectId} map from all projects' workspaces", () => {
 	const p1: Project = {
-		id: asProjectId("p1"),
+		id: testProjectId("p1"),
 		name: "project-1",
 		path: "/proj1",
 		slug: "project-1",
 		lastOpened: 0,
 	};
 	const p2: Project = {
-		id: asProjectId("p2"),
+		id: testProjectId("p2"),
 		name: "project-2",
 		path: "/proj2",
 		slug: "project-2",
@@ -142,24 +142,24 @@ test("labels: build a worktreePath → {workspaceId, projectId} map from all pro
 	};
 
 	const p1ws1: Workspace = {
-		id: asWorkspaceId("p1ws1"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("p1ws1"),
+		projectId: testProjectId("p1"),
 		name: "ws1",
 		branch: "ws1",
 		worktreePath: "/proj1/worktrees/ws1",
 		baseBranch: "main",
 	};
 	const p1ws2: Workspace = {
-		id: asWorkspaceId("p1ws2"),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId("p1ws2"),
+		projectId: testProjectId("p1"),
 		name: "ws2",
 		branch: "ws2",
 		worktreePath: "/proj1/worktrees/ws2",
 		baseBranch: "main",
 	};
 	const p2ws1: Workspace = {
-		id: asWorkspaceId("p2ws1"),
-		projectId: asProjectId("p2"),
+		id: testWorkspaceId("p2ws1"),
+		projectId: testProjectId("p2"),
 		name: "ws1",
 		branch: "ws1",
 		worktreePath: "/proj2/worktrees/ws1",
@@ -173,16 +173,16 @@ test("labels: build a worktreePath → {workspaceId, projectId} map from all pro
 	});
 
 	expect(labels("/proj1/worktrees/ws1")).toEqual({
-		workspaceId: asWorkspaceId("p1ws1"),
-		projectId: asProjectId("p1"),
+		workspaceId: testWorkspaceId("p1ws1"),
+		projectId: testProjectId("p1"),
 	});
 	expect(labels("/proj1/worktrees/ws2")).toEqual({
-		workspaceId: asWorkspaceId("p1ws2"),
-		projectId: asProjectId("p1"),
+		workspaceId: testWorkspaceId("p1ws2"),
+		projectId: testProjectId("p1"),
 	});
 	expect(labels("/proj2/worktrees/ws1")).toEqual({
-		workspaceId: asWorkspaceId("p2ws1"),
-		projectId: asProjectId("p2"),
+		workspaceId: testWorkspaceId("p2ws1"),
+		projectId: testProjectId("p2"),
 	});
 	expect(labels("/unknown/path")).toEqual({});
 });
@@ -190,6 +190,6 @@ test("labels: build a worktreePath → {workspaceId, projectId} map from all pro
 test("unknown scope kind: filter always returns false, never throws", () => {
 	const { filter } = buildHistoryScope({ kind: "bogus" } as never, [], () => []);
 
-	expect(filter("/some/cwd", asSessionId("session1"))).toBe(false);
-	expect(filter("/another/cwd", asSessionId("session2"))).toBe(false);
+	expect(filter("/some/cwd", testSessionId("session1"))).toBe(false);
+	expect(filter("/another/cwd", testSessionId("session2"))).toBe(false);
 });

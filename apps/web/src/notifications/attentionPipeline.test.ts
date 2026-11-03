@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { SessionId, SessionState } from "@thinkrail/contracts";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	type AttentionNotificationEngine,
 	createAttentionNotificationEngine,
@@ -53,7 +53,7 @@ const finished: SessionState = {
 };
 
 function cand(sessionId: SessionId, state: SessionState): AttentionCandidate {
-	return { sessionId, workspaceId: asWorkspaceId("w1"), worktreeName: sessionId, state };
+	return { sessionId, workspaceId: testWorkspaceId("w1"), worktreeName: sessionId, state };
 }
 
 /**
@@ -105,9 +105,9 @@ describe("observer + engine pipeline", () => {
 	});
 
 	test("prime then a rising edge yields one chat notification", () => {
-		candidates = [cand(asSessionId("s1"), idle())];
+		candidates = [cand(testSessionId("s1"), idle())];
 		observe(); // prime
-		candidates = [cand(asSessionId("s1"), question)];
+		candidates = [cand(testSessionId("s1"), question)];
 		observe(); // rising edge → enqueue
 		clock.run();
 		expect(emitted).toHaveLength(1);
@@ -116,14 +116,14 @@ describe("observer + engine pipeline", () => {
 		expect(emitted[0]?.body).toBe("Waiting for your input");
 		expect(emitted[0]?.target).toEqual({
 			kind: "chat",
-			workspaceId: asWorkspaceId("w1"),
-			sessionId: asSessionId("s1"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
 		});
 	});
 
 	test("two sessions lighting in one window aggregate", () => {
 		observe(); // prime empty
-		candidates = [cand(asSessionId("s1"), question), cand(asSessionId("s2"), finished)];
+		candidates = [cand(testSessionId("s1"), question), cand(testSessionId("s2"), finished)];
 		observe();
 		clock.run();
 		expect(emitted).toHaveLength(1);
@@ -133,9 +133,9 @@ describe("observer + engine pipeline", () => {
 
 	test("a session answered before the window flush is dropped", () => {
 		observe(); // prime empty
-		candidates = [cand(asSessionId("s1"), question)];
+		candidates = [cand(testSessionId("s1"), question)];
 		observe(); // enqueue s1
-		candidates = [cand(asSessionId("s1"), idle())]; // user answered before flush
+		candidates = [cand(testSessionId("s1"), idle())]; // user answered before flush
 		observe();
 		clock.run();
 		expect(emitted).toHaveLength(0);
@@ -143,7 +143,7 @@ describe("observer + engine pipeline", () => {
 
 	test("focus at flush suppresses the whole batch without asking permission", () => {
 		observe();
-		candidates = [cand(asSessionId("s1"), question)];
+		candidates = [cand(testSessionId("s1"), question)];
 		observe();
 		focused = true;
 		clock.run();
@@ -154,7 +154,7 @@ describe("observer + engine pipeline", () => {
 	test("missing permission asks once for a multi-session batch", () => {
 		permission = "default";
 		observe();
-		candidates = [cand(asSessionId("s1"), question), cand(asSessionId("s2"), question)];
+		candidates = [cand(testSessionId("s1"), question), cand(testSessionId("s2"), question)];
 		observe();
 		clock.run();
 		expect(emitted).toHaveLength(0);
@@ -162,13 +162,13 @@ describe("observer + engine pipeline", () => {
 	});
 
 	test("a reconnect re-primes so an already-lit session never re-notifies", () => {
-		candidates = [cand(asSessionId("s1"), question)];
+		candidates = [cand(testSessionId("s1"), question)];
 		observe(); // prime with s1 already lit → no enqueue
 		clock.run();
 		expect(emitted).toHaveLength(0);
 		// reconnect: fresh snapshot, s1 still lit
 		generation = 2;
-		candidates = [cand(asSessionId("s1"), question)];
+		candidates = [cand(testSessionId("s1"), question)];
 		observe();
 		clock.run();
 		expect(emitted).toHaveLength(0);
@@ -177,7 +177,7 @@ describe("observer + engine pipeline", () => {
 	test("a disabled toggle suppresses the batch and asks nothing", () => {
 		enabled = false;
 		observe();
-		candidates = [cand(asSessionId("s1"), question)];
+		candidates = [cand(testSessionId("s1"), question)];
 		observe();
 		clock.run();
 		expect(emitted).toHaveLength(0);
@@ -186,19 +186,19 @@ describe("observer + engine pipeline", () => {
 
 	test("sequential edges across windows each notify", () => {
 		observe(); // prime empty
-		candidates = [cand(asSessionId("s1"), question)];
+		candidates = [cand(testSessionId("s1"), question)];
 		observe();
 		clock.run();
 		expect(emitted).toHaveLength(1);
 		// s1 answered, s2 lights later
-		candidates = [cand(asSessionId("s1"), idle()), cand(asSessionId("s2"), question)];
+		candidates = [cand(testSessionId("s1"), idle()), cand(testSessionId("s2"), question)];
 		observe();
 		clock.run();
 		expect(emitted).toHaveLength(2);
 		expect(emitted[1]?.target).toEqual({
 			kind: "chat",
-			workspaceId: asWorkspaceId("w1"),
-			sessionId: asSessionId("s2"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s2"),
 		});
 	});
 });

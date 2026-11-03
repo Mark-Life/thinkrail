@@ -1,5 +1,5 @@
 import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
 import { messagesToRuntime } from "../../chat/hydrate";
@@ -24,6 +24,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
+	type LayoutTab,
 	removeSessionLayoutTabs,
 	selectTab,
 	type WorkspaceLayoutDocument,
@@ -32,6 +33,13 @@ import { commitWorkspaceLayout } from "../layoutState";
 
 const sessionHydration = new Map<string, Promise<boolean>>();
 const AUTO_OPEN_CHAT_LIMIT = 4;
+
+function placedSessionId(tab: LayoutTab): SessionId | null {
+	if (tab.kind === "chat") return tab.sessionId;
+	return tab.kind === "document" && tab.documentKind === "todo-plan"
+		? parseSessionId(tab.sourceId)
+		: null;
+}
 
 let autoOpenAttemptGeneration = 0;
 const autoOpenAttemptedWorkspaceIds = new Set<WorkspaceId>();
@@ -150,12 +158,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: WorkspaceId):
 				collectAllGroups(document)
 					.flatMap((group) => group.tabs)
 					.flatMap((tab) => {
-						const sessionId =
-							tab.kind === "chat"
-								? tab.sessionId
-								: tab.kind === "document" && tab.documentKind === "todo-plan"
-									? asSessionId(tab.sourceId)
-									: null;
+						const sessionId = placedSessionId(tab);
 						return sessionId && Object.hasOwn(deletedSessions, sessionId) ? [sessionId] : [];
 					}),
 			),
@@ -216,13 +219,10 @@ export function useWorkspaceChatCatalogReconciliation(
 		const baselinePlacedSessionIds = baselineDocument
 			? collectAllGroups(baselineDocument)
 					.flatMap((group) => group.tabs)
-					.flatMap((tab) =>
-						tab.kind === "chat"
-							? [tab.sessionId]
-							: tab.kind === "document" && tab.documentKind === "todo-plan"
-								? [asSessionId(tab.sourceId)]
-								: [],
-					)
+					.flatMap((tab) => {
+						const sessionId = placedSessionId(tab);
+						return sessionId === null ? [] : [sessionId];
+					})
 			: [];
 		const baselineSessionIds = [
 			...new Set([

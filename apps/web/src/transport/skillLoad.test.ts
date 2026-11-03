@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { WorkspaceFsChangedPayload, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createSkillLoadRequests } from "./skillLoad";
 
 test("session-message loads reject a response for a different workspace or session", async () => {
@@ -10,16 +10,16 @@ test("session-message loads reject a response for a different workspace or sessi
 		noteFsChanged: () => {},
 		workspaceTick: () => 0,
 		createSession: async () => ({
-			sessionId: asSessionId("created"),
+			sessionId: testSessionId("created"),
 			model: null,
 			thinkingLevel: "medium",
 		}),
 		getSessionMessages: async () => ({
 			summary: {
-				sessionId: asSessionId(
+				sessionId: testSessionId(
 					requestedMismatch === "session" ? "other-session" : "requested-session",
 				),
-				workspaceId: asWorkspaceId(
+				workspaceId: testWorkspaceId(
 					requestedMismatch === "workspace" ? "other-workspace" : "requested-workspace",
 				),
 				title: "Chat",
@@ -35,8 +35,8 @@ test("session-message loads reject a response for a different workspace or sessi
 		reloadSessionResources: async () => ({ ok: true }),
 	});
 	const params = {
-		workspaceId: asWorkspaceId("requested-workspace"),
-		sessionId: asSessionId("requested-session"),
+		workspaceId: testWorkspaceId("requested-workspace"),
+		sessionId: testSessionId("requested-session"),
 	};
 	await expect(requests.getSessionMessages(params)).rejects.toThrow(
 		"Session response did not match the requested workspace and session",
@@ -73,7 +73,7 @@ test("resource loads share startup, fold the replay fallback before the baseline
 		createSession: async () => {
 			order.push("create");
 			tick += 1;
-			return { sessionId: asSessionId("created"), model: null, thinkingLevel: "medium" };
+			return { sessionId: testSessionId("created"), model: null, thinkingLevel: "medium" };
 		},
 		getSessionMessages: async ({ sessionId, workspaceId }) => {
 			order.push("messages");
@@ -98,7 +98,7 @@ test("resource loads share startup, fold the replay fallback before the baseline
 		},
 	});
 
-	const creating = requests.createSession({ workspaceId: asWorkspaceId("ws1") });
+	const creating = requests.createSession({ workspaceId: testWorkspaceId("ws1") });
 	expect(watchCalls).toBe(1);
 	expect(order).toEqual([]);
 
@@ -107,12 +107,12 @@ test("resource loads share startup, fold the replay fallback before the baseline
 	expect(created.syncedTick).toBe(1);
 	expect(order).toEqual(["fallback", "baseline", "create"]);
 	expect(fallbacks).toEqual([
-		{ workspaceId: asWorkspaceId("ws1"), paths: [], truncated: true, skillChange: "unknown" },
+		{ workspaceId: testWorkspaceId("ws1"), paths: [], truncated: true, skillChange: "unknown" },
 	]);
 	expect(tick).toBe(2);
 
-	const reloaded = await requests.reloadSessionResources(asWorkspaceId("ws1"), {
-		sessionId: asSessionId("created"),
+	const reloaded = await requests.reloadSessionResources(testWorkspaceId("ws1"), {
+		sessionId: testSessionId("created"),
 	});
 	expect(watchCalls).toBe(2);
 	expect(reloaded.syncedTick).toBe(2);
@@ -139,7 +139,7 @@ test("a prewarm-started preparation never becomes a real load's baseline: the fi
 		noteFsChanged: () => {},
 		workspaceTick: () => 3,
 		createSession: async () => ({
-			sessionId: asSessionId("created"),
+			sessionId: testSessionId("created"),
 			model: null,
 			thinkingLevel: "medium",
 		}),
@@ -160,14 +160,14 @@ test("a prewarm-started preparation never becomes a real load's baseline: the fi
 		reloadSessionResources: async () => ({ ok: true }),
 	});
 
-	const prewarming = requests.prewarmWorkspaceSkillLoad(asWorkspaceId("ws1"));
-	const prewarmingAgain = requests.prewarmWorkspaceSkillLoad(asWorkspaceId("ws1"));
+	const prewarming = requests.prewarmWorkspaceSkillLoad(testWorkspaceId("ws1"));
+	const prewarmingAgain = requests.prewarmWorkspaceSkillLoad(testWorkspaceId("ws1"));
 	expect(watchCalls).toEqual([true]);
 
-	const creating = requests.createSession({ workspaceId: asWorkspaceId("ws1") });
+	const creating = requests.createSession({ workspaceId: testWorkspaceId("ws1") });
 	expect(watchCalls).toEqual([true, false]);
 
-	const prewarmingDuringReal = requests.prewarmWorkspaceSkillLoad(asWorkspaceId("ws1"));
+	const prewarmingDuringReal = requests.prewarmWorkspaceSkillLoad(testWorkspaceId("ws1"));
 	expect(watchCalls).toEqual([true, false]);
 
 	resolvePrewarm({ startupNudge: true });
@@ -180,7 +180,7 @@ test("a prewarm-started preparation never becomes a real load's baseline: the fi
 	]);
 	expect(created.syncedTick).toBe(3);
 
-	await requests.prewarmWorkspaceSkillLoad(asWorkspaceId("ws1"));
+	await requests.prewarmWorkspaceSkillLoad(testWorkspaceId("ws1"));
 	expect(watchCalls).toEqual([true, false, true]);
 });
 
@@ -195,7 +195,7 @@ test("a failed prewarm leaves the eventual session load able to retry preparatio
 		noteFsChanged: () => {},
 		workspaceTick: () => 7,
 		createSession: async () => ({
-			sessionId: asSessionId("created"),
+			sessionId: testSessionId("created"),
 			model: null,
 			thinkingLevel: "medium",
 		}),
@@ -216,12 +216,12 @@ test("a failed prewarm leaves the eventual session load able to retry preparatio
 		reloadSessionResources: async () => ({ ok: true }),
 	});
 
-	await expect(requests.prewarmWorkspaceSkillLoad(asWorkspaceId("ws1"))).rejects.toThrow(
+	await expect(requests.prewarmWorkspaceSkillLoad(testWorkspaceId("ws1"))).rejects.toThrow(
 		"watch failed",
 	);
 	const loaded = await requests.getSessionMessages({
-		workspaceId: asWorkspaceId("ws1"),
-		sessionId: asSessionId("disk"),
+		workspaceId: testWorkspaceId("ws1"),
+		sessionId: testSessionId("disk"),
 	});
 	expect(watchCalls).toEqual([true, false]);
 	expect(loaded.syncedTick).toBe(7);
@@ -246,7 +246,7 @@ test("a transcript read starts the shared preparation but never waits for watche
 		workspaceTick: () => tick,
 		createSession: async () => {
 			order.push("create");
-			return { sessionId: asSessionId("created"), model: null, thinkingLevel: "medium" };
+			return { sessionId: testSessionId("created"), model: null, thinkingLevel: "medium" };
 		},
 		getSessionMessages: async ({ sessionId, workspaceId }) => {
 			order.push("messages");
@@ -269,13 +269,13 @@ test("a transcript read starts the shared preparation but never waits for watche
 	});
 
 	const read = await requests.getSessionMessages({
-		workspaceId: asWorkspaceId("ws1"),
-		sessionId: asSessionId("disk"),
+		workspaceId: testWorkspaceId("ws1"),
+		sessionId: testSessionId("disk"),
 	});
 	expect(read.syncedTick).toBe(5);
 	expect(order).toEqual(["watchReady", "messages"]);
 
-	const creating = requests.createSession({ workspaceId: asWorkspaceId("ws1") });
+	const creating = requests.createSession({ workspaceId: testWorkspaceId("ws1") });
 	expect(order).toEqual(["watchReady", "messages"]);
 	resolveReady({ startupNudge: true });
 	expect((await creating).syncedTick).toBe(6);

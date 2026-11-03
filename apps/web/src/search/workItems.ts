@@ -12,7 +12,6 @@ import type {
 	Workspace,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import { chatLabel } from "../lib";
@@ -126,11 +125,12 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			(projectId === undefined ? undefined : projectOrder.get(projectId)) ?? state.projects.length
 		);
 	};
-	const byProject = Object.entries(state.sessionStateByWorkspace).sort(
-		([, a], [, b]) => orderOf(a) - orderOf(b),
+	const byProject = Object.values(state.sessionStateByWorkspace).sort(
+		(a, b) => orderOf(a) - orderOf(b),
 	);
-	for (const [rawWorkspaceId, records] of byProject) {
-		const workspaceId = asWorkspaceId(rawWorkspaceId);
+	for (const records of byProject) {
+		const workspaceId = Object.values(records)[0]?.workspaceId;
+		if (workspaceId === undefined) continue;
 		const workspace = workspaceById.get(workspaceId);
 		let attention: SessionAttention | undefined;
 		for (const record of Object.values(records)) {

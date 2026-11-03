@@ -126,7 +126,7 @@ function DeleteChatButton({
 function PromptRow({
 	hit,
 	highlight,
-	scope,
+	scopeKind,
 	workspaceName,
 	isSelected,
 	onPick,
@@ -136,7 +136,7 @@ function PromptRow({
 }: {
 	hit: PromptHit;
 	highlight: HighlightTerms;
-	scope: HistoryScope;
+	scopeKind: HistoryScope["kind"];
 	workspaceName: string | undefined;
 	isSelected: boolean;
 	onPick: () => void;
@@ -147,7 +147,7 @@ function PromptRow({
 	const t = useT();
 	const now = useNow();
 	const firstLine = firstNonBlankLine(hit.text) ?? "";
-	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
+	const showChip = (scopeKind === "project" || scopeKind === "all") && !!hit.workspaceId;
 	const target = jumpTarget(hit);
 	return (
 		<div
@@ -385,7 +385,7 @@ function HistoryPicker({
 	onSetScope,
 }: HistoryOverlayProps) {
 	const t = useT();
-	const { stage, query, scope, result, selected, error } = state;
+	const { stage, query, scopeKind, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 	const rootRef = useRef<HTMLDivElement>(null);
@@ -515,7 +515,7 @@ function HistoryPicker({
 									key={`${hit.sessionId}:${hit.timestamp}`}
 									hit={hit}
 									highlight={highlight}
-									scope={scope}
+									scopeKind={scopeKind}
 									workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
 									isSelected={i === selected}
 									onPick={() => onInsert(hit)}
@@ -578,10 +578,10 @@ function HistoryPicker({
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="history-scope"
-						data-scope={scope.kind}
+						data-scope={scopeKind}
 						className="flex shrink-0 items-center gap-4 rounded-full border border-border-default bg-container-workspace-bg px-8 py-2 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
 					>
-						<span>{t(SCOPE_LABELS[scope.kind])}</span>
+						<span>{t(SCOPE_LABELS[scopeKind])}</span>
 						<span className="text-text-muted">⌃R</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
@@ -598,7 +598,7 @@ function HistoryPicker({
 								data-scope={kind}
 								onSelect={() => onSetScope(kind)}
 							>
-								<Check className={kind === scope.kind ? "size-14" : "size-14 invisible"} />
+								<Check className={kind === scopeKind ? "size-14" : "size-14 invisible"} />
 								<span>{t(SCOPE_MENU_LABELS[kind])}</span>
 							</DropdownMenuItem>
 						))}

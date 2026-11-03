@@ -111,6 +111,8 @@ every client reads the wire one way. The one package
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, `WS_METHOD_SCHEMAS`, `PROTOCOL_VERSION`, and the
   client checks) and of `wsProtocol` (`WS_METHODS`, `WS_CHANNELS`, the typed maps, and feature-introduction versions).
+- **`@thinkrail/contracts/test-ids`:** the one other entry: `testProjectId`, `testWorkspaceId` and `testSessionId` make an
+  id from any string, for test sources only ([[submodule-contracts-schema]]).
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).

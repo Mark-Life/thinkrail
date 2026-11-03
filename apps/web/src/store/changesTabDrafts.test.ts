@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createChangesTab, useAppStore } from "./appStore";
 
 beforeEach(() => {
@@ -7,7 +7,7 @@ beforeEach(() => {
 });
 
 test("switching a Changes section renderer retains transient review drafts but drops view geometry", () => {
-	const tab = createChangesTab(asWorkspaceId("ws"), "changes", "Changes", { kind: "branch" });
+	const tab = createChangesTab(testWorkspaceId("ws"), "changes", "Changes", { kind: "branch" });
 	const reviewDrafts = { selection: { text: "not saved", start: 3, end: 7 } };
 	tab.sections["file.json"] = {
 		rendererId: "thinkrail/json",
@@ -17,7 +17,7 @@ test("switching a Changes section renderer retains transient review drafts but d
 	useAppStore.getState().openTab(tab, "keep");
 	useAppStore
 		.getState()
-		.setChangesTabSectionRenderer(asWorkspaceId("ws"), "changes", "file.json", "thinkrail/code");
+		.setChangesTabSectionRenderer(testWorkspaceId("ws"), "changes", "file.json", "thinkrail/code");
 	const restored = useAppStore
 		.getState()
 		.tabsByWorkspace.ws?.find((candidate) => candidate.id === tab.id);
@@ -28,7 +28,7 @@ test("switching a Changes section renderer retains transient review drafts but d
 });
 
 test("the first scratch write keeps the preview atomically without repeating layout intents per keystroke", () => {
-	const tab = createChangesTab(asWorkspaceId("ws"), "changes", "Changes", { kind: "branch" });
+	const tab = createChangesTab(testWorkspaceId("ws"), "changes", "Changes", { kind: "branch" });
 	useAppStore.getState().openTab(tab, "preview");
 	expect(useAppStore.getState().previewTabByWorkspace.ws).toBe("changes");
 	const before = useAppStore.getState().layoutIntents.length;
@@ -39,7 +39,7 @@ test("the first scratch write keeps the preview atomically without repeating lay
 	useAppStore
 		.getState()
 		.setChangesTabSectionReviewDraft(
-			asWorkspaceId("ws"),
+			testWorkspaceId("ws"),
 			"changes",
 			"file.ts",
 			"selection",
@@ -52,7 +52,7 @@ test("the first scratch write keeps the preview atomically without repeating lay
 	useAppStore
 		.getState()
 		.setChangesTabSectionReviewDraft(
-			asWorkspaceId("ws"),
+			testWorkspaceId("ws"),
 			"changes",
 			"file.ts",
 			"selection",
@@ -62,19 +62,19 @@ test("the first scratch write keeps the preview atomically without repeating lay
 });
 
 test("tab close retires scratch and a late callback cannot recreate the closed tab", () => {
-	const tab = createChangesTab(asWorkspaceId("ws"), "changes", "Changes", { kind: "branch" });
+	const tab = createChangesTab(testWorkspaceId("ws"), "changes", "Changes", { kind: "branch" });
 	useAppStore.getState().openTab(tab, "keep");
 	const { setChangesTabSectionReviewDraft, closeTab } = useAppStore.getState();
 	setChangesTabSectionReviewDraft(
-		asWorkspaceId("ws"),
+		testWorkspaceId("ws"),
 		"changes",
 		"file.ts",
 		"selection",
 		() => "unsaved",
 	);
-	closeTab("changes", false, false, asWorkspaceId("ws"));
+	closeTab("changes", false, false, testWorkspaceId("ws"));
 	setChangesTabSectionReviewDraft(
-		asWorkspaceId("ws"),
+		testWorkspaceId("ws"),
 		"changes",
 		"file.ts",
 		"selection",
@@ -84,7 +84,7 @@ test("tab close retires scratch and a late callback cannot recreate the closed t
 	useAppStore
 		.getState()
 		.openTab(
-			createChangesTab(asWorkspaceId("ws"), "changes", "Changes", { kind: "branch" }),
+			createChangesTab(testWorkspaceId("ws"), "changes", "Changes", { kind: "branch" }),
 			"keep",
 		);
 	const restored = useAppStore.getState().tabsByWorkspace.ws?.[0];

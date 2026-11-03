@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, McpToolGrant } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createSession,
 	disposeAllSessions,
@@ -150,7 +150,7 @@ async function waitFor<T>(read: () => T | undefined, ms = 8000): Promise<T> {
 const selects = () => requests.filter((request) => request.kind === "select");
 
 async function chat() {
-	const workspaceId = asWorkspaceId(`confirm-${++sequence}`);
+	const workspaceId = testWorkspaceId(`confirm-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,

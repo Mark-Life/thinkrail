@@ -486,8 +486,13 @@ re-opened transcripts provider-valid.
     or stealth tier that rate-limits or disappears), else the `default` pick; `default`
     = `preferredDefaultModel`; `null` when nothing is authenticated. This is the primitive the `assist` tasks
     (plan summaries, PR drafting) run on — the only place model **dispatch** happens outside a session.
+  - `requireSessionId` — turns a session id pi hands the host into a `SessionId`, and throws on refusal. Use it where
+    the caller already fails by throwing (tool `execute`, session creation, `sessionIdOf`). A session is attached
+    only after `createParentSession` accepts its id, so `sessionIdOf` cannot refuse on an attached session.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
-    calls (dialogs round-trip to the browser, fire-and-forget methods push). A dialog names the tool call
+    calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
+    that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no
+    made-up session id. A dialog names the tool call
     it is about (`toolCallId`) so the web asks on that call's card: the manager passes pi's own
     `agent.state.pendingToolCalls` and a dialog anchors only while **exactly one** call is running (the
     common gate-before-a-tool case; parallel calls stay unanchored rather than guess), and

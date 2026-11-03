@@ -1,7 +1,7 @@
 import {
-	asSessionId,
 	type BackgroundCommandCompletionDetails,
 	isDelegationRunDetails,
+	parseSessionId,
 	type SubagentCompletionDetails,
 } from "@thinkrail/contracts";
 import { parseToolResultContent } from "@thinkrail/extension-api/web";
@@ -43,15 +43,15 @@ function pulledCommand(raw: unknown): BackgroundCommandCompletionDetails | undef
 	const snapshot = details?.snapshot;
 	const output = details?.output;
 	if (!snapshot || !output || typeof output.text !== "string") return undefined;
-	const { id, sessionId, name, status, startedAt, finishedAt, exitCode, errorMessage } = snapshot;
-	if (typeof id !== "string" || typeof sessionId !== "string" || typeof name !== "string")
-		return undefined;
+	const { id, name, status, startedAt, finishedAt, exitCode, errorMessage } = snapshot;
+	const sessionId = parseSessionId(snapshot.sessionId);
+	if (typeof id !== "string" || sessionId === null || typeof name !== "string") return undefined;
 	if (status !== "completed" && status !== "error" && status !== "stopped") return undefined;
 	if (!finite(startedAt) || !finite(finishedAt)) return undefined;
 	const shown = excerpt(output.text);
 	const result: BackgroundCommandCompletionDetails = {
 		id,
-		sessionId: asSessionId(sessionId),
+		sessionId,
 		name,
 		status,
 		startedAt,

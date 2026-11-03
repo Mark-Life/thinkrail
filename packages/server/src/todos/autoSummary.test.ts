@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { setOneShotRunner } from "../assist";
 import { previewPr } from "../pr/pr";
@@ -14,7 +14,7 @@ import { generateTodoSummary } from "./todos";
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const SESSION = asSessionId("sess-auto-summary");
+const SESSION = testSessionId("sess-auto-summary");
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-todos-autosum-"));
@@ -29,8 +29,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				worktreePath: repo,
@@ -71,7 +71,7 @@ test("generates and persists a PR-body summary when the completed plan has none"
 	seedDone(store);
 
 	const result = await generateTodoSummary({
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		sessionId: SESSION,
 	});
 	expect(result.summary).toBe(draft);
@@ -96,7 +96,7 @@ test("discards the draft when the plan's step set changed during generation", as
 	});
 
 	const result = await generateTodoSummary({
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		sessionId: SESSION,
 	});
 	expect(result.summary).toBeNull();
@@ -114,7 +114,7 @@ test("returns the existing note untouched and never calls the model", async () =
 	store.setSummary("Agent wrote this.");
 
 	const result = await generateTodoSummary({
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		sessionId: SESSION,
 	});
 	expect(result.summary).toBe("Agent wrote this.");
@@ -133,7 +133,7 @@ test("returns null (no model call) when the plan is not fully done", async () =>
 	store.add({ title: "Still open" });
 
 	const result = await generateTodoSummary({
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		sessionId: SESSION,
 	});
 	expect(result.summary).toBeNull();
@@ -151,7 +151,7 @@ test("previewPr drives summary generation on the host side so the PR body is nev
 	seedDone(store);
 	expect(new TodoStore(repo, SESSION).read().summary).toBeUndefined();
 
-	const preview = await previewPr({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION });
+	const preview = await previewPr({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(new TodoStore(repo, SESSION).read().summary).toBe(draft);
 	expect(preview.body).toContain("## Summary");
 	expect(preview.body).toContain("## Testing");
@@ -168,8 +168,8 @@ test("a concurrent request shares the in-flight draft instead of getting null", 
 	seedDone(store);
 
 	const [chat, plan] = await Promise.all([
-		generateTodoSummary({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION }),
-		generateTodoSummary({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION }),
+		generateTodoSummary({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION }),
+		generateTodoSummary({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION }),
 	]);
 	expect(chat.summary).toContain("One shared draft.");
 	expect(chat.summary).toContain("## Changes");

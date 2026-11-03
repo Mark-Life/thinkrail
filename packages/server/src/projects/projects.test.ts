@@ -13,7 +13,7 @@ import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Project } from "@thinkrail/contracts";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	approveProjectMcpServer,
 	closeProject,
@@ -104,8 +104,8 @@ function seedWorkspace(worktreePath: string, kind?: "default" | "external"): voi
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("ws-1"),
-				projectId: asProjectId("p-other"),
+				id: testWorkspaceId("ws-1"),
+				projectId: testProjectId("p-other"),
 				name: "seeded",
 				branch: "feature/seeded",
 				worktreePath,
@@ -360,8 +360,8 @@ test("legacy project records default to open in both projections", () => {
 		JSON.stringify([{ id: "legacy", name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
 	);
 
-	expect(listProjects().map((project) => project.id)).toEqual([asProjectId("legacy")]);
-	expect(listRecentProjects().map((project) => project.id)).toEqual([asProjectId("legacy")]);
+	expect(listProjects().map((project) => project.id)).toEqual([testProjectId("legacy")]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual([testProjectId("legacy")]);
 });
 
 test("close/reopen preserves the stable project identity and workspace associations", async () => {
@@ -607,8 +607,8 @@ test("recent projects omit closed records whose folders are definitively gone", 
 	await refreshRecentProjectFolders(1_000);
 
 	expect(listRecentProjects().map((project) => project.id)).toEqual([
-		asProjectId("kept"),
-		asProjectId("open-gone"),
+		testProjectId("kept"),
+		testProjectId("open-gone"),
 	]);
 	expect(getProjects()).toHaveLength(5);
 });
@@ -621,14 +621,14 @@ test("recent projects follow the last completed folder check of a closed record"
 			{ id: "moved", name: "moved", path: folder, slug: "moved", lastOpened: 1, closed: true },
 		]),
 	);
-	expect(listRecentProjects().map((project) => project.id)).toEqual([asProjectId("moved")]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual([testProjectId("moved")]);
 
 	await refreshRecentProjectFolders(1_000);
 	expect(listRecentProjects()).toEqual([]);
 
 	mkdirSync(folder);
 	await refreshRecentProjectFolders(1_000);
-	expect(listRecentProjects().map((project) => project.id)).toEqual([asProjectId("moved")]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual([testProjectId("moved")]);
 });
 
 test("a folder check that outlasts the budget neither blocks the refresh nor repeats", async () => {
@@ -646,7 +646,7 @@ test("a folder check that outlasts the budget neither blocks the refresh nor rep
 	await refreshRecentProjectFolders(10);
 
 	expect(hungStatCalls - calls).toBe(1);
-	expect(listRecentProjects().map((project) => project.id)).toEqual([asProjectId("hung")]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual([testProjectId("hung")]);
 });
 
 test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
@@ -668,6 +668,6 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
 			chmodSync(locked, 0o755);
 		}
 
-		expect(listRecentProjects().map((project) => project.id)).toEqual([asProjectId("locked")]);
+		expect(listRecentProjects().map((project) => project.id)).toEqual([testProjectId("locked")]);
 	},
 );
