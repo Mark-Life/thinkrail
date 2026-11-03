@@ -68,5 +68,6 @@ that map.
   bare objects. `ServerWelcome` must stay assignable to it. The test harness still checks `ServerWelcome`.
 - **`errorCode` is any string.** A newer host may send a code this client has no name for, and `WsErrorCode` carries the
   names by type only. `INVALID_REPLY` is never sent: the client mints it.
-- **One object check.** `checks.ts` exports `JsonObject`, for a reader that checks fields one by one.
+- **One object check, one reply check.** `checks.ts` exports `JsonObject`, for a reader that checks fields one by one, `validatorOf`, a
+  cache of compiled schemas, and `resultProblem`, which the web transport, e2e fixtures and artifact probes share.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.
