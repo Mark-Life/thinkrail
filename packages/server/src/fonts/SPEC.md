@@ -47,7 +47,7 @@ client resolves, and the client confirms rendering and monospacing by measuremen
   composes all of them, the reveal with `editors`' file-manager reveal, and owns the HTTP route.
 - `testFonts.ts` is a test-only builder of minimal TTF/OTF/WOFF/WOFF2 fonts and a `ttcf` header, outside
   the barrel; tests import it relatively, `host`'s route test included.
-- **Allowed deps:** `persistence` (`dataDir`, the data-folder helpers), `log`, `subprocess` (`runBounded`),
+- **Allowed deps:** `pi-schema`, `persistence` (`dataDir`, the data-folder helpers), `log`, `subprocess` (`runBounded`),
   `@thinkrail/shared/codedError`, `node:zlib` (Bun built-in) — no font-parsing or compression package.
 - **Forbidden:** HTTP, `settings` (the chosen fonts), `agent`, any workspace path.
 

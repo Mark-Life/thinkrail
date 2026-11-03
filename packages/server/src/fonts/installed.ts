@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { arr, bool, compile, obj, opt, str } from "@earendil-works/pi-schema";
 import {
 	type InstalledFontFamily,
 	type InstalledFontsResult,
@@ -51,17 +52,15 @@ function unavailable(message: string): CodedError {
 	return new CodedError("INSTALLED_FONTS_UNAVAILABLE", message);
 }
 
-function familyOf(item: unknown): InstalledFontFamily {
-	const name = typeof item === "object" && item !== null ? Reflect.get(item, "name") : undefined;
-	if (typeof item !== "object" || item === null || typeof name !== "string") {
-		throw new Error("expected every font family to have a name");
-	}
-	return { name, monospaceHint: Reflect.get(item, "monospaceHint") === true };
-}
+const FontFamilyList = compile(
+	arr(obj({ name: str(), monospaceHint: opt(bool()) }, { open: true })),
+);
+const FontNameList = compile(arr(str()));
+const FixtureDirective = compile(obj({ error: str() }, { open: true }));
 
 function familyList(value: unknown): InstalledFontFamily[] {
-	if (!Array.isArray(value)) throw new Error("expected a list of font families");
-	return value.map(familyOf);
+	if (!FontFamilyList.check(value)) throw new Error("expected a list of font families");
+	return value.map(({ name, monospaceHint }) => ({ name, monospaceHint: monospaceHint === true }));
 }
 
 export function parseFcList(stdout: string): InstalledFontFamily[] {
@@ -82,10 +81,8 @@ export function parseMacFamilies(stdout: string): InstalledFontFamily[] {
 
 export function parseWindowsFamilies(stdout: string): InstalledFontFamily[] {
 	const names: unknown = JSON.parse(stdout);
-	if (!Array.isArray(names) || !names.every((name) => typeof name === "string")) {
-		throw new Error("expected a list of family names");
-	}
-	return names.map((name: string) => ({ name, monospaceHint: false }));
+	if (!FontNameList.check(names)) throw new Error("expected a list of family names");
+	return names.map((name) => ({ name, monospaceHint: false }));
 }
 
 export function normalizeInstalledFamilies(families: InstalledFontFamily[]): InstalledFontFamily[] {
@@ -126,9 +123,7 @@ function fixtureFamilies(path: string): InstalledFontFamily[] {
 	} catch (error) {
 		throw unavailable(`The installed-font fixture could not be read: ${messageOf(error)}`);
 	}
-	const directive =
-		typeof value === "object" && value !== null ? Reflect.get(value, "error") : undefined;
-	if (typeof directive === "string") throw unavailable(directive);
+	if (FixtureDirective.check(value)) throw unavailable(value.error);
 	try {
 		return familyList(value);
 	} catch (error) {
