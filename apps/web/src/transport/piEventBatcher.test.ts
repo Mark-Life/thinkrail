@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import type { PiEvent, SessionEventPayload, WsEnvelope } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import type { PiEvent, SessionEventPayload, SessionId, WsEnvelope } from "@thinkrail/contracts";
+import { asSessionId, WS_CHANNELS } from "@thinkrail/contracts";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 
-const payload = (sessionId: string, type: PiEvent["type"]): SessionEventPayload => ({
+const payload = (sessionId: SessionId, type: PiEvent["type"]): SessionEventPayload => ({
 	sessionId,
 	event: { type } as PiEvent,
 });
@@ -27,8 +27,8 @@ test("batches consecutive Pi events in exact arrival order", () => {
 	const batcher = createPiEventBatcher((events) => delivered.push(events), {
 		schedule: scheduler.schedule,
 	});
-	const first = payload("a", "agent_start");
-	const second = payload("b", "turn_start");
+	const first = payload(asSessionId("a"), "agent_start");
+	const second = payload(asSessionId("b"), "turn_start");
 
 	batcher.enqueue(first);
 	batcher.enqueue(second);
@@ -47,9 +47,9 @@ test("the queue ceiling forces a flush and disposal drops pending work", () => {
 		maxBatchSize: 2,
 		schedule: scheduler.schedule,
 	});
-	const first = payload("a", "agent_start");
-	const second = payload("a", "turn_start");
-	const third = payload("a", "agent_end");
+	const first = payload(asSessionId("a"), "agent_start");
+	const second = payload(asSessionId("a"), "turn_start");
+	const third = payload(asSessionId("a"), "agent_end");
 
 	batcher.enqueue(first);
 	batcher.enqueue(second);
@@ -69,7 +69,7 @@ test("the queue ceiling forces a flush and disposal drops pending work", () => {
 test("responses and non-Pi pushes form dispatch barriers", () => {
 	const piPush: WsEnvelope = {
 		channel: WS_CHANNELS.piEvent,
-		data: payload("a", "agent_start"),
+		data: payload(asSessionId("a"), "agent_start"),
 	};
 	const otherPush: WsEnvelope = {
 		channel: WS_CHANNELS.workspaceFsChanged,

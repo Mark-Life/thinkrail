@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewAnchor, Workspace } from "@thinkrail/contracts";
+import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import { saveProjects, saveWorkspaces } from "../persistence";
 import { addComment, markCommentsSent } from "../reviews";
@@ -18,8 +19,8 @@ import {
 
 let dataDir: string;
 let worktree: string;
-const WS = "ws-fixfindings";
-const SESSION = "sess-fixfindings";
+const WS = asWorkspaceId("ws-fixfindings");
+const SESSION = asSessionId("sess-fixfindings");
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "fixfind-data-"));
@@ -30,7 +31,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: "p1",
+			projectId: asProjectId("p1"),
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
@@ -89,7 +90,7 @@ test("itemFixFindings keeps only this item's open unstale agent findings", async
 
 	const kept = await finding({});
 	await finding({ origin: { ...origin, todoId: "other-item" } });
-	await finding({ origin: { ...origin, sessionId: "other-session" } });
+	await finding({ origin: { ...origin, sessionId: asSessionId("other-session") } });
 	await addComment({
 		workspaceId: WS,
 		kind: "inline",
@@ -107,7 +108,7 @@ test("itemFixFindings keeps only this item's open unstale agent findings", async
 });
 
 test("reconcilePendingReviewsOnBoot clears a pending mark stranded by a host restart, walking every project's every workspace from disk", () => {
-	saveProjects([{ id: "p1", name: "w", path: worktree, slug: "w", lastOpened: 1 }]);
+	saveProjects([{ id: asProjectId("p1"), name: "w", path: worktree, slug: "w", lastOpened: 1 }]);
 	const todo = new TodoStore(worktree, SESSION).add({
 		title: "t",
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],

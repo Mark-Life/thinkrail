@@ -1,3 +1,4 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	type BackgroundCommandOutputResult,
 	type ResourceHistoryCursor,
@@ -129,7 +130,7 @@ export function createChatResourceControls(
 	deps: {
 		state: () => ResourceStore;
 		stopCommand: (id: string) => Promise<unknown>;
-		stopSubagent: (id: string) => Promise<unknown>;
+		stopSubagent: (id: SessionId) => Promise<unknown>;
 		stopAll: () => Promise<unknown>;
 		setMcpEnabled: (name: string, enabled: boolean) => Promise<unknown>;
 		reconnectMcp: (name: string) => Promise<unknown>;
@@ -173,7 +174,7 @@ export function createChatResourceControls(
 			if (command && isActiveBackgroundCommand(command))
 				void run(`command:${id}`, () => deps.stopCommand(id));
 		},
-		stopSubagent: (id: string) => {
+		stopSubagent: (id: SessionId) => {
 			const child = selectChatResourceProjection(deps.state(), scope)?.snapshot?.subagents.find(
 				(item) => item.childSessionId === id,
 			);
@@ -221,7 +222,7 @@ export function createChatResourceControls(
 	};
 }
 
-export function useChatResources(workspaceId: string, sessionId: string) {
+export function useChatResources(workspaceId: WorkspaceId, sessionId: SessionId) {
 	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
 	const projection = useAppStore((state) => selectChatResourceProjection(state, scope));
 	const visible = useAppStore((state) => selectChatResourcesVisible(state, scope));
@@ -308,7 +309,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 		actions,
 		retry: useCallback(() => sync.current?.refresh(), []),
 		stopCommand: useCallback((id: string) => controls.current?.stopCommand(id), []),
-		stopSubagent: useCallback((id: string) => controls.current?.stopSubagent(id), []),
+		stopSubagent: useCallback((id: SessionId) => controls.current?.stopSubagent(id), []),
 		stopAll: useCallback(() => controls.current?.stopAll(), []),
 		setMcpEnabled: useCallback(
 			(name: string, enabled: boolean) => controls.current?.setMcpEnabled(name, enabled),
@@ -363,7 +364,11 @@ export function startCommandLogPolling(
 	});
 }
 
-export function useCommandLog(workspaceId: string, sessionId: string, commandId: string | null) {
+export function useCommandLog(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+	commandId: string | null,
+) {
 	const generation = useAppStore((state) => state.connectionGeneration);
 	const ready = useAppStore(
 		(state) =>

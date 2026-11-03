@@ -1,8 +1,14 @@
 import { beforeEach, expect, test } from "bun:test";
-import { TURN_CHANGES_PROTOCOL_VERSION, type TurnChangeSet } from "@thinkrail/contracts";
+import {
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
+	TURN_CHANGES_PROTOCOL_VERSION,
+	type TurnChangeSet,
+} from "@thinkrail/contracts";
 import { useAppStore } from "./index";
 
-const workspaceId = "turn-workspace";
+const workspaceId = asWorkspaceId("turn-workspace");
 const state = useAppStore.getState;
 
 function turn(
@@ -13,7 +19,7 @@ function turn(
 	return {
 		id,
 		workspaceId,
-		sessionId: "turn-session",
+		sessionId: asSessionId("turn-session"),
 		startedAt,
 		settledAt: 100 - startedAt,
 		baseTree: `base-${id}`,
@@ -134,10 +140,10 @@ test("a response cannot seed turns after disconnect or from an earlier connectio
 
 test("workspace removal rejects pending snapshots and pushes without touching a sibling", () => {
 	readTurns()([turn("old", 1)]);
-	const sibling = turn("sibling", 2, { workspaceId: "sibling-workspace" });
+	const sibling = turn("sibling", 2, { workspaceId: asWorkspaceId("sibling-workspace") });
 	readTurns(sibling.workspaceId)([sibling]);
 	const finish = readTurns();
-	state().applyWorkspaceRemoved("project", workspaceId);
+	state().applyWorkspaceRemoved(asProjectId("project"), workspaceId);
 	finish([turn("stale", 3)]);
 	state().applyTurnChanged(turn("late", 4));
 	expect(state().turnsByWorkspace).toEqual({ [sibling.workspaceId]: [sibling] });

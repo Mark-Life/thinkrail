@@ -9,12 +9,13 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
+import { ProjectId, SessionId, WorkspaceId } from "./ids";
 import { wireObj } from "./wire";
 
 export const HistoryScope = union([
-	wireObj({ kind: lit("chat"), sessionId: str() }),
-	wireObj({ kind: lit("workspace"), workspaceId: str() }),
-	wireObj({ kind: lit("project"), projectId: str() }),
+	wireObj({ kind: lit("chat"), sessionId: SessionId }),
+	wireObj({ kind: lit("workspace"), workspaceId: WorkspaceId }),
+	wireObj({ kind: lit("project"), projectId: ProjectId }),
 	wireObj({ kind: lit("all") }),
 ]);
 export type HistoryScope = Static<typeof HistoryScope>;
@@ -22,10 +23,10 @@ export type HistoryScope = Static<typeof HistoryScope>;
 const PROMPT_HIT_FIELDS = {
 	text: str(),
 	timestamp: num(),
-	sessionId: str(),
+	sessionId: SessionId,
 	sessionTitle: opt(str()),
-	workspaceId: opt(str()),
-	projectId: opt(str()),
+	workspaceId: opt(WorkspaceId),
+	projectId: opt(ProjectId),
 	cwd: str(),
 	messageIndex: opt(num()),
 	anchorText: opt(str()),

@@ -1,4 +1,5 @@
 import { arr, opt, type Static, str } from "@earendil-works/pi-schema";
+import { WorkspaceId } from "./ids";
 import { wireObj } from "./wire";
 
 export const SpecGraphNode = wireObj({
@@ -19,5 +20,5 @@ export const SpecGraphSnapshot = wireObj({ nodes: arr(SpecGraphNode) });
 export type SpecGraphSnapshot = Static<typeof SpecGraphSnapshot>;
 
 export const SPEC_METHODS = {
-	"spec.graph": { params: wireObj({ workspaceId: str() }), result: SpecGraphSnapshot },
+	"spec.graph": { params: wireObj({ workspaceId: WorkspaceId }), result: SpecGraphSnapshot },
 };

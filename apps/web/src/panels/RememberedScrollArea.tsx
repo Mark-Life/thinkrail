@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useScrollViewState, viewStateScrollTop } from "@thinkrail/resource-renderers";
 import { type ReactNode, useEffect, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
@@ -14,7 +15,7 @@ export function RememberedScrollArea({
 	viewportClassName,
 	children,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	view: FilesScrollView;
 	scope?: string;
 	restore?: boolean;

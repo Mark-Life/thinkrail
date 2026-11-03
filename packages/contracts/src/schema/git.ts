@@ -1,5 +1,6 @@
 import { arr, bool, nullable, num, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
 import { GitDiffScope } from "./diffScope";
+import { ProjectId, WorkspaceId } from "./ids";
 import { ResourceMeta } from "./resourceMeta";
 import { wireObj } from "./wire";
 
@@ -44,17 +45,17 @@ export const BranchList = wireObj({
 export type BranchList = Static<typeof BranchList>;
 
 export const GIT_METHODS = {
-	"git.listBranches": { params: wireObj({ projectId: str() }), result: BranchList },
+	"git.listBranches": { params: wireObj({ projectId: ProjectId }), result: BranchList },
 	"git.prefetch": {
-		params: wireObj({ projectId: str(), ref: str() }),
+		params: wireObj({ projectId: ProjectId, ref: str() }),
 		result: wireObj({ ok: bool() }),
 	},
 	"git.status": {
-		params: wireObj({ workspaceId: str(), scope: opt(GitDiffScope) }),
+		params: wireObj({ workspaceId: WorkspaceId, scope: opt(GitDiffScope) }),
 		result: GitStatus,
 	},
 	"git.diffFile": {
-		params: wireObj({ workspaceId: str(), path: str(), scope: opt(GitDiffScope) }),
+		params: wireObj({ workspaceId: WorkspaceId, path: str(), scope: opt(GitDiffScope) }),
 		result: wireObj({
 			original: str(),
 			modified: str(),
@@ -63,7 +64,7 @@ export const GIT_METHODS = {
 		}),
 	},
 	"git.listCommits": {
-		params: wireObj({ workspaceId: str() }),
+		params: wireObj({ workspaceId: WorkspaceId }),
 		result: wireObj({ commits: arr(GitCommit) }),
 	},
 };

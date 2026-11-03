@@ -1,4 +1,4 @@
-import type { TerminalDataPush, TerminalExitPush } from "@thinkrail/contracts";
+import type { TerminalDataPush, TerminalExitPush, WorkspaceId } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
@@ -101,7 +101,7 @@ function tryLoad(fn: () => void): void {
 
 interface Props {
 	tabKey: string;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	initialCommand?: string;
 }
 

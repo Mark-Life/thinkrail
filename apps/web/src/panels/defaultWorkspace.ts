@@ -1,10 +1,10 @@
-import type { Workspace } from "@thinkrail/contracts";
+import type { ProjectId, Workspace } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { isDefaultWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
 export async function enterDefaultWorkspace(
-	projectId: string,
+	projectId: ProjectId,
 	stillWanted: () => boolean = () => true,
 ): Promise<Workspace | null> {
 	const title = t("panels.defaultWorkspace.openFailed");

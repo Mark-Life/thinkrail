@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	asSessionId,
 	BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE,
 	type BackgroundCommandCompletionDetails,
 	type TranscriptMessage,
@@ -13,7 +14,7 @@ import { deriveRows } from "./rows";
 
 const details: BackgroundCommandCompletionDetails = {
 	id: "command",
-	sessionId: "chat",
+	sessionId: asSessionId("chat"),
 	name: "Build",
 	status: "completed",
 	startedAt: 1,
@@ -103,7 +104,7 @@ test("a subagent result teases its report, offers the transcript and never rende
 			<SubagentResult
 				id="sub"
 				details={{
-					childSessionId: "child-1",
+					childSessionId: asSessionId("child-1"),
 					roleName: "reviewer",
 					task: "review",
 					status: "completed",

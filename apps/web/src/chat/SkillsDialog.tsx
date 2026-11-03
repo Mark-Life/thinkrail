@@ -4,7 +4,14 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type { Project, SkillCatalogEntry, Workspace } from "@thinkrail/contracts";
+import type {
+	Project,
+	ProjectId,
+	SessionId,
+	SkillCatalogEntry,
+	Workspace,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -68,8 +75,8 @@ function isWorkspace(result: Project | Workspace): result is Workspace {
 }
 
 export interface SkillsWorkspaceContext {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	streaming: boolean;
 	stale?: boolean;
 	onReloaded?: (syncedTick: number) => void;
@@ -81,7 +88,7 @@ export function SkillsDialog({
 	open,
 	onOpenChange,
 }: {
-	projectId: string;
+	projectId: ProjectId;
 	workspace?: SkillsWorkspaceContext;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;

@@ -1,4 +1,4 @@
-import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import type { TemplateInfo, TemplateScope, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -35,7 +35,7 @@ export function TemplateEditorDialog({
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	workspaceId: string | undefined;
+	workspaceId: WorkspaceId | undefined;
 	template?: TemplateInfo | null;
 	initialScope?: TemplateScope;
 	initialBody?: string;

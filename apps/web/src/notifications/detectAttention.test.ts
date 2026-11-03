@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionState } from "@thinkrail/contracts";
+import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { type AttentionCandidate, attentionReason, diffAttention, isLit } from "./detectAttention";
 
 function state(overrides: Partial<SessionState> = {}): SessionState {
@@ -17,8 +18,8 @@ function state(overrides: Partial<SessionState> = {}): SessionState {
 
 function candidate(overrides: Partial<AttentionCandidate> = {}): AttentionCandidate {
 	return {
-		sessionId: "s1",
-		workspaceId: "w1",
+		sessionId: asSessionId("s1"),
+		workspaceId: asWorkspaceId("w1"),
 		worktreeName: "branch",
 		state: state(),
 		...overrides,
@@ -97,7 +98,7 @@ describe("diffAttention", () => {
 		});
 		const { events, litNow } = diffAttention(new Map(), [candidate({ state: litState })]);
 		expect(events).toHaveLength(1);
-		expect(events[0]?.sessionId).toBe("s1");
+		expect(events[0]?.sessionId).toBe(asSessionId("s1"));
 		expect(litNow.get("s1")).toBe(true);
 	});
 
@@ -118,21 +119,21 @@ describe("diffAttention", () => {
 	test("multiple candidates emit only the rising ones", () => {
 		const { events } = diffAttention(new Map([["s1", true]]), [
 			candidate({
-				sessionId: "s1",
+				sessionId: asSessionId("s1"),
 				state: state({
 					needsInput: { interactionId: "tool:i", kind: "tool-response", toolCallId: "i" },
 				}),
 			}),
 			candidate({
-				sessionId: "s2",
+				sessionId: asSessionId("s2"),
 				state: state({
 					completion: { completionId: "c", outcome: "failed", failure: "error" },
 					completionUnread: true,
 				}),
 			}),
-			candidate({ sessionId: "s3", state: state() }),
+			candidate({ sessionId: asSessionId("s3"), state: state() }),
 		]);
-		expect(events.map((e) => e.sessionId)).toEqual(["s2"]);
+		expect(events.map((e) => e.sessionId)).toEqual([asSessionId("s2")]);
 	});
 
 	test("re-lighting after going dark emits again", () => {

@@ -1,3 +1,4 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef, useState } from "react";
 import { type SessionRuntime, toast, useAppStore } from "../store";
@@ -15,8 +16,8 @@ export interface TranscriptSyncNeed {
 }
 
 interface TranscriptSyncInput {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	expectedEventRevision: number;
 	connectionGeneration: number;
 	reason: "compaction" | "reconnect";
@@ -91,8 +92,8 @@ export function useTranscriptSync({
 	connectionGeneration,
 	enabled = true,
 }: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	runtime: Pick<
 		SessionRuntime,
 		"turns" | "syncedConnectionGeneration" | "eventRevision" | "isStreaming"

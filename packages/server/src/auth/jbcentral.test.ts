@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
 import {
 	configurePiRuntime,
@@ -414,14 +415,18 @@ describe("watched native Central runtime", () => {
 		if (!centralModel) throw new Error("synthetic Central model missing");
 		const session = await createSession({
 			cwd: root,
-			workspaceId: "workspace-existing",
+			workspaceId: asWorkspaceId("workspace-existing"),
 			model: centralModel,
 		});
 
 		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
 		expect((await getJbcentralStatus()).state).toBe("supported");
 		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("central-model");
-		const hydrated = await getSessionMessages(session.sessionId, "workspace-existing", root);
+		const hydrated = await getSessionMessages(
+			session.sessionId,
+			asWorkspaceId("workspace-existing"),
+			root,
+		);
 		expect(hydrated.summary.model).toMatchObject({
 			provider: "central-test",
 			id: "central-model",

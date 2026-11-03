@@ -1,12 +1,14 @@
 import type {
 	Ack,
 	AnyHostWelcome,
+	SessionId,
 	SessionStateRecord,
 	WsMethodName,
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
 import {
+	asProjectId,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -50,7 +52,7 @@ export function supportsToolResponses(protocolVersion: number | null): boolean {
 }
 
 export function respondToTool(
-	sessionId: string,
+	sessionId: SessionId,
 	toolCallId: string,
 	response: unknown,
 ): Promise<void> {
@@ -215,7 +217,8 @@ function refreshUserFonts(connectionGeneration: number): void {
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
-	for (const projectId of Object.keys(snapshot.workspaces)) {
+	for (const key of Object.keys(snapshot.workspaces)) {
+		const projectId = asProjectId(key);
 		if (!openProjectIds.has(projectId)) continue;
 		void getTransport()
 			.request("workspace.list", { projectId, includeDiffStats: false })

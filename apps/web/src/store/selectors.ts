@@ -1,5 +1,9 @@
+import type { ProjectId, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
@@ -352,8 +356,8 @@ interface SessionStateProjection {
 
 export function selectSessionState(
 	state: SessionStateProjection,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): SessionState | null {
 	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
 }
@@ -412,7 +416,7 @@ export interface WorkspacePartition {
 
 interface PartitionState extends SessionStateProjection {
 	workspaceSettlingSupported: boolean;
-	activeWorkspaceId: string | null;
+	activeWorkspaceId: WorkspaceId | null;
 	activeWorkspaceLiveLatch: boolean;
 	settleIdleDays: number | null;
 }
@@ -456,7 +460,7 @@ export function selectWorkspaceSettledReason(
 /** The Default row stays first; every other row splits into live and settled, newest created first or by `order`. */
 export function selectWorkspacePartition(
 	state: PartitionState & { workspaces: Record<string, Workspace[]> },
-	projectId: string,
+	projectId: ProjectId,
 	now: number,
 	order: WorkspaceOrder = "created",
 ): WorkspacePartition {
@@ -483,21 +487,21 @@ export function selectWorkspacePartition(
 export function selectAutoSettledCounts(
 	state: PartitionState & { workspaces: Record<string, Workspace[]> },
 	now: number,
-): { projectId: string; count: number }[] {
-	const counts: { projectId: string; count: number }[] = [];
+): { projectId: ProjectId; count: number }[] {
+	const counts: { projectId: ProjectId; count: number }[] = [];
 	for (const [projectId, rows] of Object.entries(state.workspaces)) {
 		const count = rows.filter((workspace) => {
 			const reason = selectWorkspaceSettledReason(state, workspace, now);
 			return reason !== null && reason.kind !== "override";
 		}).length;
-		if (count > 0) counts.push({ projectId, count });
+		if (count > 0) counts.push({ projectId: asProjectId(projectId), count });
 	}
 	return counts;
 }
 
 export function selectWorkspaceNeedsAttention(
 	state: SessionStateProjection,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): boolean {
 	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some(
 		(record) => record.state.needsInput !== null || record.state.completionUnread,
@@ -512,7 +516,7 @@ export type WorkspaceReadAction = "markRead" | "markUnread";
 
 export function selectWorkspaceReadAction(
 	state: SessionStateProjection,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): WorkspaceReadAction | null {
 	const records = Object.values(state.sessionStateByWorkspace[workspaceId] ?? {});
 	if (records.some((record) => record.state.completionUnread)) return "markRead";
@@ -552,7 +556,7 @@ export function getSessionAttention(state: SessionState): SessionAttention | nul
 
 export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): boolean {
 	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some((record) =>
 		isSessionWorking(record.state),
@@ -561,7 +565,7 @@ export function selectWorkspaceIsRunning(
 
 export function selectWorkspaceSettleBlocked(
 	state: SessionStateProjection,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): boolean {
 	return (
 		selectWorkspaceIsRunning(state, workspaceId) ||
@@ -571,7 +575,7 @@ export function selectWorkspaceSettleBlocked(
 
 export function selectProjectNeedsAttention(
 	state: SessionStateProjection,
-	projectId: string,
+	projectId: ProjectId,
 ): boolean {
 	return Object.values(state.sessionStateByWorkspace).some((records) =>
 		Object.values(records).some(
@@ -582,7 +586,10 @@ export function selectProjectNeedsAttention(
 	);
 }
 
-export function selectProjectIsRunning(state: SessionStateProjection, projectId: string): boolean {
+export function selectProjectIsRunning(
+	state: SessionStateProjection,
+	projectId: ProjectId,
+): boolean {
 	return Object.values(state.sessionStateByWorkspace).some((records) =>
 		Object.values(records).some(
 			(record) => record.projectId === projectId && isSessionWorking(record.state),
@@ -599,8 +606,8 @@ interface CompletionAckState extends SessionStateProjection, MarkedUnreadState {
 
 export function selectReadyCompletionAck(
 	state: CompletionAckState,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): string | null {
 	const record = state.sessionStateByWorkspace[workspaceId]?.[sessionId];
 	const completion = record?.state.completion;
@@ -621,7 +628,7 @@ export function selectReadyCompletionAck(
 }
 
 interface ActiveWorkspaceState {
-	activeWorkspaceId: string | null;
+	activeWorkspaceId: WorkspaceId | null;
 	workspaces: Record<string, Workspace[]>;
 }
 
@@ -639,7 +646,7 @@ interface CenterResourceCacheState extends LayoutAttentionState {
 }
 
 interface ProjectContextState extends ActiveWorkspaceState {
-	selectedProjectId: string | null;
+	selectedProjectId: ProjectId | null;
 	projects: Project[];
 }
 
@@ -675,7 +682,7 @@ function findLayoutPlacement(
 
 export function selectLayoutTabPlacement(
 	state: LayoutDocumentState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabId: string,
 ): LayoutTabPlacement | null {
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
@@ -686,7 +693,7 @@ export function selectLayoutTabPlacement(
 
 export function selectLayoutResourcePlacement(
 	state: LayoutDocumentState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	resource: LayoutTab,
 ): LayoutResourcePlacement | null {
 	return selectLayoutIdentityPlacement(state, workspaceId, layoutResourceIdentity(resource));
@@ -694,7 +701,7 @@ export function selectLayoutResourcePlacement(
 
 export function selectLayoutIdentityPlacement(
 	state: LayoutDocumentState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	identity: string,
 ): LayoutResourcePlacement | null {
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
@@ -704,7 +711,7 @@ export function selectLayoutIdentityPlacement(
 
 export function selectLayoutTabPlaced(
 	state: LayoutDocumentState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabId: string,
 ): boolean {
 	return selectLayoutTabPlacement(state, workspaceId, tabId) !== null;
@@ -712,7 +719,7 @@ export function selectLayoutTabPlaced(
 
 export function selectAttentionCenterTab(
 	state: LayoutAttentionState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): LayoutCenterTab | null {
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
 	const attention = state.layoutAttentionByWorkspace[workspaceId];
@@ -727,15 +734,15 @@ export function selectAttentionCenterTab(
 }
 
 interface ChatAttentionState extends LayoutAttentionState {
-	activeWorkspaceId: string | null;
+	activeWorkspaceId: WorkspaceId | null;
 	obscuredChatSessions: Record<string, true>;
-	historyOpenRequest: { sessionId: string } | null;
+	historyOpenRequest: { sessionId: SessionId } | null;
 }
 
 export function selectChatAttended(
 	state: ChatAttentionState,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): boolean {
 	if (
 		state.activeWorkspaceId !== workspaceId ||
@@ -749,7 +756,7 @@ export function selectChatAttended(
 
 export function selectAttentionCenterResourceCacheKey(
 	state: CenterResourceCacheState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): string | null {
 	const selected = selectAttentionCenterTab(state, workspaceId);
 	if (!selected) return null;
@@ -778,7 +785,7 @@ export function selectAttentionCenterResourceCacheKey(
 
 export function selectAttentionCenterResourceReady(
 	state: CenterResourceCacheState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): boolean {
 	return selectAttentionCenterResourceCacheKey(state, workspaceId) !== null;
 }
@@ -801,7 +808,7 @@ export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | 
 
 export function selectWorkspaceById(
 	state: ActiveWorkspaceState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): Workspace | null {
 	for (const workspaces of Object.values(state.workspaces)) {
 		const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
@@ -810,7 +817,7 @@ export function selectWorkspaceById(
 	return null;
 }
 
-export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): string | null {
+export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): ProjectId | null {
 	return selectActiveWorkspace(state)?.projectId ?? null;
 }
 
@@ -820,9 +827,9 @@ export function selectContextProject(state: ProjectContextState): Project | null
 }
 
 export interface HistoryTarget {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	tabId: string;
-	sessionId: string;
+	sessionId: SessionId;
 }
 
 export function selectActiveEditorTab(
@@ -830,7 +837,7 @@ export function selectActiveEditorTab(
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		activeTabByWorkspace: Record<string, string | null>;
 	},
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): EditorTab | null {
 	const activeId = state.activeTabByWorkspace[workspaceId];
 	return (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => tab.id === activeId) ?? null;
@@ -841,7 +848,7 @@ export function selectWorkspaceChatTab(
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		activeTabByWorkspace: Record<string, string | null>;
 	},
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): Extract<EditorTab, { kind: "chat" }> | null {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const active = selectActiveEditorTab(state, workspaceId);
@@ -851,7 +858,7 @@ export function selectWorkspaceChatTab(
 }
 
 export function selectHistoryTarget(state: {
-	activeWorkspaceId: string | null;
+	activeWorkspaceId: WorkspaceId | null;
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
 }): HistoryTarget | null {
@@ -866,13 +873,13 @@ export function selectRailPlanSessionId(
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		activeTabByWorkspace: Record<string, string | null>;
 	},
-	workspaceId: string,
-): string | null {
+	workspaceId: WorkspaceId,
+): SessionId | null {
 	return selectWorkspaceChatTab(state, workspaceId)?.sessionId ?? null;
 }
 
 export interface KnownChatLocation {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	title: string;
 }
 
@@ -881,17 +888,17 @@ export function selectKnownChatLocation(
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	},
-	sessionId: string,
+	sessionId: SessionId,
 ): KnownChatLocation | null {
 	for (const [workspaceId, tabs] of Object.entries(state.tabsByWorkspace)) {
 		const tab = tabs.find(
 			(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
 		);
-		if (tab?.kind === "chat") return { workspaceId, title: tab.name };
+		if (tab?.kind === "chat") return { workspaceId: asWorkspaceId(workspaceId), title: tab.name };
 	}
 	for (const [workspaceId, chats] of Object.entries(state.closedChatsByWorkspace)) {
 		const chat = chats.find((candidate) => candidate.sessionId === sessionId);
-		if (chat) return { workspaceId, title: chat.title };
+		if (chat) return { workspaceId: asWorkspaceId(workspaceId), title: chat.title };
 	}
 	return null;
 }
@@ -902,14 +909,14 @@ export function selectWorkspaceSessionIds(
 		closedChatsByWorkspace: Record<string, ClosedChat[]>;
 		layoutDocumentsByWorkspace?: Record<string, WorkspaceLayoutDocument>;
 	},
-	workspaceId: string,
-): string[] {
+	workspaceId: WorkspaceId,
+): SessionId[] {
 	const sessionIds = new Set(
 		(state.tabsByWorkspace[workspaceId] ?? []).flatMap((tab) =>
 			tab.kind === "chat" || tab.kind === "plan"
 				? [tab.sessionId]
 				: tab.kind === "doc"
-					? [tab.sourceId]
+					? [asSessionId(tab.sourceId)]
 					: [],
 		),
 	);
@@ -925,7 +932,7 @@ export function selectWorkspaceSessionIds(
 		for (const tab of node.tabs) {
 			if (tab.kind === "chat") sessionIds.add(tab.sessionId);
 			if (tab.kind === "document" && tab.documentKind === "todo-plan") {
-				sessionIds.add(tab.sourceId);
+				sessionIds.add(asSessionId(tab.sourceId));
 			}
 		}
 	};
@@ -946,7 +953,7 @@ export const BRANCH_SCOPE: GitDiffScope = { kind: "branch" };
 
 export function selectDiffScope(
 	state: { diffScopeByWorkspace: Record<string, GitDiffScope> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): GitDiffScope {
 	return state.diffScopeByWorkspace[workspaceId] ?? BRANCH_SCOPE;
 }
@@ -960,7 +967,7 @@ const EMPTY_FILES_TREE_VIEW: FilesTreeView = {
 
 export function selectFilesTreeView(
 	state: { filesTreeByWorkspace: Record<string, FilesTreeView> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): FilesTreeView {
 	return state.filesTreeByWorkspace[workspaceId] ?? EMPTY_FILES_TREE_VIEW;
 }
@@ -970,27 +977,27 @@ export function selectActiveFilePath(
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		activeTabByWorkspace: Record<string, string | null>;
 	},
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): string | null {
 	const tab = selectActiveEditorTab(state, workspaceId);
 	return tab?.kind === "file" || tab?.kind === "diff" ? normalizePath(tab.path) : null;
 }
 
-export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: string): string {
+export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: WorkspaceId): string {
 	const workspace = selectWorkspaceById(state, workspaceId);
 	return workspace ? (workspace.diffBase ?? workspace.baseBranch) : "";
 }
 
 export function selectDiffTabTargetRef(
 	state: ActiveWorkspaceState,
-	tab: { workspaceId: string; scope: GitDiffScope },
+	tab: { workspaceId: WorkspaceId; scope: GitDiffScope },
 ): string {
 	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
 }
 
 export function selectChangesTabSection(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabId: string,
 	path: string,
 ): ChangesTabSection | undefined {
@@ -1000,7 +1007,7 @@ export function selectChangesTabSection(
 
 export function selectChangesTabRendererIds(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabId: string,
 ): Record<string, string> {
 	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
@@ -1034,8 +1041,8 @@ export function workspaceName(
 
 export function selectChatName(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): string {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	return tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId)?.name ?? "";
@@ -1057,8 +1064,8 @@ export function selectKnownChatTitle(
 		layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 		closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	},
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): string | null {
 	const reported = state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.title;
 	if (reported !== undefined) return reported || null;
@@ -1082,8 +1089,8 @@ export function selectKnownChatTitle(
 
 export function selectChatFirstPrompt(
 	state: ChatFirstPromptState,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): string | undefined {
 	const reported =
 		state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.firstPrompt ??
@@ -1098,7 +1105,11 @@ export function selectRecordFirstPrompts(state: ChatFirstPromptState): Record<st
 	const prompts: Record<string, string> = {};
 	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
 		for (const sessionId of Object.keys(records)) {
-			const prompt = selectChatFirstPrompt(state, workspaceId, sessionId);
+			const prompt = selectChatFirstPrompt(
+				state,
+				asWorkspaceId(workspaceId),
+				asSessionId(sessionId),
+			);
 			if (prompt) prompts[sessionId] = prompt;
 		}
 	}
@@ -1107,7 +1118,7 @@ export function selectRecordFirstPrompts(state: ChatFirstPromptState): Record<st
 
 export function selectUnnamedChatFirstPrompts(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): Record<string, string> {
 	const prompts: Record<string, string> = {};
 	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
@@ -1122,8 +1133,8 @@ export function selectUnnamedChatFirstPrompts(
 export function selectChatTitle(
 	t: Translator,
 	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): string {
 	return chatDisplayName(
 		t,
@@ -1134,7 +1145,7 @@ export function selectChatTitle(
 
 export function selectCompactionTurnIds(
 	state: { sessions: Record<string, SessionRuntime> },
-	sessionId: string,
+	sessionId: SessionId,
 ): ReadonlySet<string> {
 	return new Set(
 		(state.sessions[sessionId]?.turns ?? [])
@@ -1145,7 +1156,7 @@ export function selectCompactionTurnIds(
 
 export function selectWorkspaceTick(
 	state: { fsChangesByWorkspace: Record<string, { tick: number }> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): number {
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
 }
@@ -1165,7 +1176,7 @@ interface FileChangeState {
 export function selectFileChangeSince(
 	state: FileChangeState,
 	previous: FileChangeState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): readonly string[] | null | undefined {
 	if (state.connectionGeneration !== previous.connectionGeneration) return null;
 	const change = state.fsChangesByWorkspace[workspaceId];
@@ -1175,7 +1186,7 @@ export function selectFileChangeSince(
 
 export function selectCurrentRouteChatTarget(state: {
 	routeChatTarget: RouteChatTarget | null;
-	activeWorkspaceId: string | null;
+	activeWorkspaceId: WorkspaceId | null;
 	navTickByWorkspace: Record<string, number>;
 }): RouteChatTarget | null {
 	const target = state.routeChatTarget;
@@ -1185,7 +1196,7 @@ export function selectCurrentRouteChatTarget(state: {
 
 export function selectWorkspaceNavTick(
 	state: { navTickByWorkspace: Record<string, number> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): number {
 	return state.navTickByWorkspace[workspaceId] ?? 0;
 }
@@ -1197,8 +1208,8 @@ interface SkillsStaleState {
 
 export function selectSkillsStale(
 	state: SkillsStaleState,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): boolean {
 	return (
 		(state.skillChangeTickByWorkspace[workspaceId] ?? 0) >
@@ -1207,7 +1218,7 @@ export function selectSkillsStale(
 }
 
 export interface TerminalState {
-	activeWorkspaceId: string | null;
+	activeWorkspaceId: WorkspaceId | null;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 }
@@ -1226,11 +1237,11 @@ export function selectActiveTerminalId(state: TerminalState): string | null {
 
 export function selectLastOpenChatSession(
 	state: {
-		tabsByWorkspace: Record<string, { kind: string; id: string; sessionId?: string }[]>;
+		tabsByWorkspace: Record<string, { kind: string; id: string; sessionId?: SessionId }[]>;
 		activeTabByWorkspace: Record<string, string | null>;
 	},
-	workspaceId: string,
-): string | null {
+	workspaceId: WorkspaceId,
+): SessionId | null {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const activeId = state.activeTabByWorkspace[workspaceId];
 	const active = tabs.find((t) => t.id === activeId);
@@ -1244,7 +1255,7 @@ export function selectLastOpenChatSession(
 
 export function selectReviewDraftCount(
 	state: { reviewsByWorkspace: Record<string, { comments: { status: string }[] }> },
-	workspaceId: string | null,
+	workspaceId: WorkspaceId | null,
 ): number {
 	if (!workspaceId) return 0;
 	const snapshot = state.reviewsByWorkspace[workspaceId];
@@ -1255,7 +1266,7 @@ export function selectAgentReviewCommentCount(
 	state: {
 		reviewsByWorkspace: Record<string, { comments: { status: string; author?: string }[] }>;
 	},
-	workspaceId: string | null,
+	workspaceId: WorkspaceId | null,
 ): number {
 	if (!workspaceId) return 0;
 	const snapshot = state.reviewsByWorkspace[workspaceId];

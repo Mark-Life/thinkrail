@@ -5,7 +5,7 @@ import {
 	RiGitPullRequestLine as GitCompare,
 	RiRobot2Line as Robot,
 } from "@remixicon/react";
-import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
+import type { GitCommit, GitDiffScope, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -29,7 +29,7 @@ export function ChangesScopeMenu({
 	scope,
 	onSelectScope,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	scope: GitDiffScope;
 	onSelectScope: (scope: GitDiffScope) => void;
 }) {

@@ -1,7 +1,8 @@
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import type { ToolCall } from "@thinkrail/contracts";
+import type { SessionId, ToolCall } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
 	expandDisclosure,
@@ -30,7 +31,7 @@ async function openVisualizationSession(
 	name: string,
 	args: ToolCall["arguments"],
 	assistantText?: string,
-): Promise<{ card: Locator; sessionId: string }> {
+): Promise<{ card: Locator; sessionId: SessionId }> {
 	await openFixtureProject(page);
 	const messages: Parameters<typeof seedWorkspaceSession>[1]["messages"] = [
 		{ role: "user", text: "Show the visualization.", timestamp: BASE_TS },
@@ -70,7 +71,7 @@ async function openVisualizationSession(
 	await expect(card).toHaveAttribute("data-status", "done");
 	await expect(card).toHaveAttribute("data-expanded", "true");
 	await expect(card.getByTestId("tool-visualize")).toHaveAttribute("data-status", "done");
-	return { card, sessionId };
+	return { card, sessionId: asSessionId(sessionId) };
 }
 
 const MOCKUP_DIR = ".thinkrail/context/mockups";
@@ -375,12 +376,12 @@ test("a file visualization with a before path shows the renderer's before/after 
 test("review comments on a visualized file are sent into the chat that shows it", async ({
 	page,
 }) => {
-	const sends: { method: string; sessionId?: string }[] = [];
+	const sends: { method: string; sessionId?: SessionId }[] = [];
 	page.on("websocket", (socket) =>
 		socket.on("framesent", ({ payload }) => {
 			const frame = JSON.parse(String(payload)) as {
 				method?: string;
-				params?: { sessionId?: string };
+				params?: { sessionId?: SessionId };
 			};
 			if (frame.method === "review.sendBatch" || frame.method === "review.sendComment") {
 				sends.push({

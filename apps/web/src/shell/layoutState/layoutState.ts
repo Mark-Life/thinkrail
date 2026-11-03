@@ -1,4 +1,4 @@
-import type { LayoutPreset } from "@thinkrail/contracts";
+import type { LayoutPreset, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useLayoutEffect } from "react";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../clientPreferences";
@@ -630,7 +630,7 @@ export function emptyWorkspaceProjection(
 }
 
 export function workspaceProjectionReference(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): { document: WorkspaceLayoutDocument; attention: LayoutAttention } | undefined {
 	const state = useAppStore.getState();
 	for (const id of state.workspaceSelectionHistory) {
@@ -642,7 +642,7 @@ export function workspaceProjectionReference(
 	return undefined;
 }
 
-function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
+function installWorkspaceView(workspaceId: WorkspaceId): WorkspaceLayoutDocument {
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
 	const existingDocument = state.layoutDocumentsByWorkspace[workspaceId];
@@ -670,7 +670,9 @@ function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
 	return installed;
 }
 
-export function ensureWorkspaceLayoutState(workspaceId: string): Promise<WorkspaceLayoutDocument> {
+export function ensureWorkspaceLayoutState(
+	workspaceId: WorkspaceId,
+): Promise<WorkspaceLayoutDocument> {
 	const existing = workspaceInitializations.get(workspaceId);
 	if (existing) return existing;
 	const request = (async () => {
@@ -745,7 +747,7 @@ function rebaseProjectedDocument(
 	};
 }
 
-export function applyLayoutAttention(workspaceId: string, next: LayoutAttention): void {
+export function applyLayoutAttention(workspaceId: WorkspaceId, next: LayoutAttention): void {
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) return;
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
@@ -789,7 +791,7 @@ export interface LayoutCommitOptions {
 }
 
 export async function commitWorkspaceLayout(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	document: WorkspaceLayoutDocument,
 	options: LayoutCommitOptions = {},
 ): Promise<WorkspaceLayoutDocument> {
@@ -875,7 +877,7 @@ export function useLocalLayoutState(): void {
 	}, []);
 }
 
-export function useWorkspaceLayoutState(workspaceId: string): void {
+export function useWorkspaceLayoutState(workspaceId: WorkspaceId): void {
 	useLayoutEffect(() => {
 		const report = (error: unknown) => {
 			if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {
