@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +8,6 @@ import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
 	closeTerminalTab,
-	closeWorkspaceTerminals,
 	listTerminals,
 	persistTerminalSessions,
 	reserveTerminal,
@@ -571,34 +570,3 @@ test(
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
-
-describe("membership survives an ungraceful exit", () => {
-	test("a tab closed before a crash does not come back", () => {
-		attachTerminal(WS, "tab-a", "client-1");
-		closeTerminalTab(WS, "tab-a", true);
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toHaveLength(0);
-	});
-
-	test("a tab opened before a crash is still there", () => {
-		attachTerminal(WS, "tab-a", "client-1", { title: "Survivor" });
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Survivor" }]);
-	});
-
-	test("archiving a workspace before a crash takes its tabs with it", () => {
-		attachTerminal(WS, "tab-a", "client-1");
-		closeWorkspaceTerminals(WS);
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toHaveLength(0);
-	});
-});

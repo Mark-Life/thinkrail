@@ -221,8 +221,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   - **The protocol range decides on the welcome.** `protocolRange.ts` compares the host's version with this build's range,
     and this build's version with the host's range; a host that sends no range is judged by the first test only. Outside
     it, the welcome handler sets `protocolMismatch` and installs nothing, so no snapshot of an unknown shape reaches the store. Only the
-    next welcome clears it. `uiOutdated` means the host is newer, so Reload can help; `hostOutdated` means the UI is newer, for
-    example a remote or separately shipped UI, so the prompt asks for a host update instead.
+    next welcome clears it. `wireChecks.ts` reads the three version fields first and runs `AnyHostWelcome` only on a host in range:
+    a host out of range may have changed any other field, and it must still reach the prompt. That handler reads nothing else from such a welcome.
+  - **Both prompts offer Reload.** Every shipped UI comes from the host it dials, so Reload gets the host's own interface in
+    either direction. Where the UI is served apart from the host (a Vite dev server, `THINKRAIL_STATIC_DIR`), the prompt
+    comes back and its text says to update and restart the host. A host update alone does not restart the process.
 - **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**
   The server bounds network `git` at 55s precisely so its own error — naming the ref, carrying git's
   stderr — wins the race against the causeless `request "…" timed out` this side raises at 60s (issue #209;

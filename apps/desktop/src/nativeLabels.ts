@@ -1,11 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { compile, map, unknown } from "@earendil-works/pi-schema";
+import { JsonObject } from "@thinkrail/contracts";
 import { DESKTOP_DIALOG_KEYS, EN, type EnglishCatalog } from "@thinkrail/locales";
 import { desktopError } from "./errorReporting";
 
 const MAX_DIALOG_LABEL_LENGTH = 200;
-const LabelFile = compile(map(unknown()));
 
 export type RawLabels = Readonly<Record<string, unknown>>;
 
@@ -38,7 +37,7 @@ export const DEFAULT_DIALOG_LABELS: DesktopDialogLabels = readDialogLabels({});
 export function readNativeLabels(path: string): RawLabels {
 	try {
 		const labels: unknown = JSON.parse(readFileSync(path, "utf8"));
-		return LabelFile.check(labels) ? labels : {};
+		return JsonObject.check(labels) ? labels : {};
 	} catch {
 		return {};
 	}

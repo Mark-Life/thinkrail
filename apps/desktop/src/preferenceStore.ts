@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { compile, lit, map, obj, unknown } from "@earendil-works/pi-schema";
+import { JsonObject } from "@thinkrail/contracts";
 import {
 	isDesktopPreferenceKey,
 	isDesktopPreferenceScopeId,
@@ -21,7 +22,6 @@ interface PreferenceDocument {
 const PreferenceFile = compile(
 	obj({ version: lit(PREFERENCE_VERSION), preferences: map(unknown()) }, { open: true }),
 );
-const PreferenceScope = compile(map(unknown()));
 
 function emptyDocument(): PreferenceDocument {
 	return { version: PREFERENCE_VERSION, preferences: {} };
@@ -70,8 +70,7 @@ function readDocument(path: string): PreferenceDocument {
 			) {
 				break;
 			}
-			if (!validPersistedScopeKey(storedScopeKey) || !PreferenceScope.check(storedPreferences))
-				continue;
+			if (!validPersistedScopeKey(storedScopeKey) || !JsonObject.check(storedPreferences)) continue;
 			const scopeEntries: Array<[string, string]> = [];
 			for (const [key, preferenceValue] of Object.entries(storedPreferences)) {
 				if (totalPreferences >= MAX_PREFERENCES) break;

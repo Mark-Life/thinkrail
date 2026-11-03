@@ -1,13 +1,13 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { compile, map, unknown } from "@earendil-works/pi-schema";
 import type {
 	PiPackageResourceType,
 	PiPackageScope,
 	PiPackageSummary,
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
+import { JsonObject } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { refreshExtensionTools } from "./agentSessionManager";
 import { bumpPackagesRevision, setInstalledPackagesListener } from "./extensions";
@@ -200,13 +200,12 @@ export async function piPackagesRevealTarget(
 	);
 }
 
-const SettingsObject = compile(map(unknown()));
 const RESOURCE_KEYS = ["packages", "extensions", "skills", "prompts"] as const;
 
 function resourceFingerprint(path: string): string {
 	try {
 		const raw: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
-		const record = SettingsObject.check(raw) ? raw : {};
+		const record = JsonObject.check(raw) ? raw : {};
 		return JSON.stringify(RESOURCE_KEYS.map((key) => record[key] ?? null));
 	} catch {
 		return "";

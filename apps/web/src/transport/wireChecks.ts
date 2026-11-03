@@ -1,31 +1,22 @@
-import { compile, type Schema, type Validator } from "@earendil-works/pi-schema";
+import { compile, type Schema } from "@earendil-works/pi-schema";
 import {
 	AnyHostWelcome,
+	HostWelcomeVersions,
+	validatorOf,
 	WS_CHANNEL_SCHEMAS,
 	WS_CHANNELS,
 	WS_METHOD_SCHEMAS,
 	WsEnvelope,
 	type WsMethodName,
 } from "@thinkrail/contracts";
+import { protocolMismatch } from "./protocolRange";
 
 const MAX_REPORTED_ERRORS = 5;
 
 const envelope = compile(WsEnvelope);
+const welcomeVersions = compile(HostWelcomeVersions);
 
-const CHANNEL_SCHEMAS = new Map<string, Schema<unknown>>([
-	...Object.entries(WS_CHANNEL_SCHEMAS),
-	[WS_CHANNELS.serverWelcome, AnyHostWelcome],
-]);
-
-const validators = new Map<Schema<unknown>, Validator>();
-
-function validatorOf(schema: Schema<unknown>): Validator {
-	const known = validators.get(schema);
-	if (known) return known;
-	const validator = compile(schema);
-	validators.set(schema, validator);
-	return validator;
-}
+const CHANNEL_SCHEMAS = new Map<string, Schema<unknown>>(Object.entries(WS_CHANNEL_SCHEMAS));
 
 function failureOf(schema: Schema<unknown>, value: unknown): string | null {
 	const validator = validatorOf(schema);
@@ -47,7 +38,13 @@ export function parseEnvelope(raw: string): WsEnvelope | null {
 	return envelope.check(value) ? value : null;
 }
 
+function welcomeFailure(data: unknown): string | null {
+	if (welcomeVersions.check(data) && protocolMismatch(data)) return null;
+	return failureOf(AnyHostWelcome, data);
+}
+
 export function pushFailure(channel: string, data: unknown): string | null {
+	if (channel === WS_CHANNELS.serverWelcome) return welcomeFailure(data);
 	const schema = CHANNEL_SCHEMAS.get(channel);
 	return schema ? failureOf(schema, data) : "unknown channel";
 }

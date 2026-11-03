@@ -48,15 +48,16 @@ Each file is parsed once, at the load. A file that holds a wire shape reuses the
 schema in this directory. The rest of the host trusts the type. A file any released version wrote must keep loading whole, so a
 new required wire field on `Project`, `Workspace` or a model needs a default at the load.
 
-`stateFile.ts` owns the failure rules for `projects`, `workspaces`, `terminals`, `config`, `environment`, and, through the barrel (`readStateFile`, `parseEntryRecord`, `assertOverwriteAllowed`), the `todos` sidecars and `feedback.json`:
+`stateFile.ts` owns the failure rules for `projects`, `workspaces`, `terminals`, `config`, `environment`, and, through the barrel (`readStateFile`, `parseEntryRecord`, `assertOverwriteAllowed`, and `isConfigOverwriteRefused` for `settings`), the `todos` sidecars and `feedback.json`:
 
 - **One bad entry costs one entry.** `parseEntries` and, for a keyed map, `parseEntryRecord` keep what passes and drops the rest. A record that passes also passes
   the web's reply check, so a bad entry never refuses the whole `project.list`.
 - **Nothing is lost silently.** Before a drop or a whole-file failure can reach a save, the raw bytes go to
   `<file>.corrupt-<content hash>`, mode `0600` because `environment.json` holds secrets. The hash makes this once per content
   across loads and restarts; the problem is reported only when the copy is made, with entry indexes and schema paths, never values.
+  Each file keeps its newest 10 copies. An entry that holds `1e999` drops like any other: JSON has no such number, and it would reach the wire as `null`.
 - **What cannot be read or copied cannot be replaced.** An I/O failure other than `ENOENT`, or a failed copy, loads empty and
-  a later save of that file throws `STATE_FILE_UNREADABLE`, until a read succeeds. The file stays in place. This keeps a transient
+  a later save of that file throws `STATE_FILE_UNREADABLE`, until a read succeeds. The file stays in place. `settings` reads again before each save, so a config that recovered saves on top of the stored values. This keeps a transient
   `EMFILE` from replacing projects with an empty list.
 - **Reporting goes through an observer.** `observeStateFileProblems` carries a `CodedError`, because `log` depends on this module.
   `host` wires it to `logger("persistence")` at boot, so the report reaches PostHog as a code only.

@@ -8,9 +8,7 @@ import {
 } from "@thinkrail/contracts";
 import { openAppFresh, openFixtureProject } from "./fixtures/app";
 
-type WelcomeEdit = Partial<
-	Pick<ServerWelcome, "protocolVersion" | "protocolMin" | "protocolMax">
-> | null;
+type WelcomeEdit = Partial<Record<keyof ServerWelcome, unknown>> | null;
 
 const ABOVE_RANGE = { protocolVersion: PROTOCOL_MAX_VERSION + 1 };
 const BELOW_RANGE = { protocolVersion: PROTOCOL_MIN_VERSION - 1 };
@@ -96,28 +94,56 @@ test("a newer host that dropped this UI's version also offers Reload", async ({ 
 	await expect(reload(page)).toBeVisible();
 });
 
-test("a UI newer than its host says to update the host, with no Reload, and clears once the host is updated", async ({
+test("a UI newer than its host offers Reload, and clears once the host answers in range", async ({
 	page,
 }) => {
 	const host = await editWelcome(page, BELOW_RANGE);
 	await openAppFresh(page);
 	await expect(prompt(page)).toHaveAttribute("data-mismatch", "hostOutdated");
-	await expect(prompt(page)).toContainText("Update ThinkRail on the host machine");
-	await expect(reload(page)).toHaveCount(0);
+	await expect(prompt(page)).toContainText("Reload to get this host's interface");
 
-	host.reconnectWith(null);
+	host.change(null);
+	const loaded = page.waitForEvent("load");
+	await reload(page).click();
+	await loaded;
 	await expect(prompt(page)).toHaveCount(0);
 	await expect(page.getByTestId("welcome-action").first()).toBeVisible();
+
+	host.reconnectWith(BELOW_RANGE);
+	await expect(prompt(page)).toHaveAttribute("data-mismatch", "hostOutdated");
+	host.reconnectWith(null);
+	await expect(prompt(page)).toHaveCount(0);
 });
 
-test("an older host whose range ends below this UI also says to update the host", async ({
-	page,
-}) => {
+test("an older host whose range ends below this UI also offers Reload", async ({ page }) => {
 	await editWelcome(page, {
 		protocolVersion: PROTOCOL_VERSION - 1,
 		protocolMax: PROTOCOL_VERSION - 1,
 	});
 	await page.goto("/");
 	await expect(prompt(page)).toHaveAttribute("data-mismatch", "hostOutdated");
-	await expect(reload(page)).toHaveCount(0);
+	await expect(reload(page)).toBeVisible();
+});
+
+for (const [field, broken] of [
+	["projects", { byId: {} }],
+	["config", null],
+	["hostPlatform", 1],
+] as const) {
+	test(`a host above the range that changed ${field} still gets the prompt`, async ({ page }) => {
+		await editWelcome(page, { ...ABOVE_RANGE, protocolMin: 150, [field]: broken });
+		await page.goto("/");
+		await expect(prompt(page)).toHaveAttribute("data-mismatch", "uiOutdated");
+		await expect(reload(page)).toBeVisible();
+	});
+}
+
+test("a host in range that sends a broken welcome installs nothing", async ({ page }) => {
+	const dropped = page.waitForEvent("console", (message) =>
+		message.text().includes("dropped a push on server.welcome"),
+	);
+	await editWelcome(page, { projects: { byId: {} } });
+	await page.goto("/");
+	await dropped;
+	await expect(prompt(page)).toHaveCount(0);
 });

@@ -53,6 +53,7 @@ import {
 	canMarkCompletionUnread,
 	firstPromptOfTexts,
 	isTranscriptMessageRole,
+	JsonObject,
 	normalizeSessionTitle,
 	sameModel,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
@@ -1645,7 +1646,6 @@ const SessionHeaderLine = compile(
 );
 const SessionCwd = compile(str());
 const JsonContainer = compile(union([map(unknown()), arr(unknown())]));
-const SavedModelFields = compile(map(unknown()));
 const SavedModelRef = compile(
 	obj({ provider: str({ minLength: 1 }), modelId: str({ minLength: 1 }) }, { open: true }),
 );
@@ -2048,7 +2048,7 @@ function attachDiskSession(
 }
 
 function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
-	if (!SavedModelFields.check(model)) return undefined;
+	if (!JsonObject.check(model)) return undefined;
 	if (model.provider === undefined && model.modelId === undefined) return undefined;
 	if (!SavedModelRef.check(model)) throw new Error("The chat's saved model is unavailable.");
 	return { provider: model.provider, id: model.modelId };

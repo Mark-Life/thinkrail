@@ -1,14 +1,14 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { compile, type Schema, type Validator } from "@earendil-works/pi-schema";
+import { compile } from "@earendil-works/pi-schema";
 import {
 	asSessionId,
 	LoginPush,
+	resultProblem,
 	type SessionId,
 	type ToolResultMessage,
 	type WorkspaceId,
-	WS_METHOD_SCHEMAS,
 	WsEnvelope,
 	type WsMethodName,
 	type WsParams,
@@ -171,7 +171,6 @@ let requestSequence = 0;
 const replyFrame = compile(WsResponse);
 const anyFrame = compile(WsEnvelope);
 const loginPush = compile(LoginPush);
-const resultValidators = new Map<Schema<unknown>, Validator>();
 
 function parseJson(data: unknown): unknown {
 	if (typeof data !== "string") return undefined;
@@ -180,15 +179,6 @@ function parseJson(data: unknown): unknown {
 	} catch {
 		return undefined;
 	}
-}
-
-function resultProblem(method: WsMethodName, result: unknown): string | null {
-	const schema: Schema<unknown> = WS_METHOD_SCHEMAS[method].result;
-	const validator = resultValidators.get(schema) ?? compile(schema);
-	resultValidators.set(schema, validator);
-	if (validator.check(result)) return null;
-	const [first] = validator.errors(result);
-	return `${method} replied with a shape its schema refuses: ${first?.path} ${first?.message}`;
 }
 
 function rpc<M extends WsMethodName>(

@@ -6,8 +6,7 @@ import { Ack, NoParams, wireObj } from "./wire";
 export const HostPlatform = oneOf(["darwin", "linux", "win32"]);
 export type HostPlatform = Static<typeof HostPlatform>;
 
-export const HostUpdateStatus = oneOf(["available", "running", "succeeded", "failed"]);
-export type HostUpdateStatus = Static<typeof HostUpdateStatus>;
+const HostUpdateStatus = oneOf(["available", "running", "succeeded", "failed"]);
 
 export const HostUpdateNotice = wireObj({
 	currentVersion: str(),
@@ -34,11 +33,19 @@ function bareObject<T>(): Schema<T> {
 	return { type: "object" };
 }
 
-/** What a client needs from a welcome of any host version. Older hosts omit later fields and send older shapes. */
-export const AnyHostWelcome = wireObj({
+const HOST_VERSION_FIELDS = {
 	protocolVersion: num(),
 	protocolMin: opt(num()),
 	protocolMax: opt(num()),
+};
+
+/** All a client reads from a welcome before it knows the host is in range. */
+export const HostWelcomeVersions = wireObj(HOST_VERSION_FIELDS);
+export type HostWelcomeVersions = Static<typeof HostWelcomeVersions>;
+
+/** What a client needs from the welcome of a host in range. */
+export const AnyHostWelcome = wireObj({
+	...HOST_VERSION_FIELDS,
 	appVersion: opt(str()),
 	hostPlatform: opt(str()),
 	hostUpdate: opt(bareObject<HostUpdateNotice>()),

@@ -1,8 +1,9 @@
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { arr, compile, map, obj, oneOf, opt, str, union, unknown } from "@earendil-works/pi-schema";
+import { arr, compile, obj, oneOf, opt, str, union, unknown } from "@earendil-works/pi-schema";
 import type { DetectedAccount, DetectedAccountSource } from "@thinkrail/contracts";
+import { JsonObject } from "@thinkrail/contracts";
 import { usePiRuntime } from "../agent";
 
 export interface DetectAccountsOptions {
@@ -38,7 +39,6 @@ const CLAUDE_SUBSCRIPTION_BILLING = [
 
 const GROK_API_KEY_SCOPE = "xai::api_key";
 
-const JsonObject = compile(map(unknown()));
 const Filled = str({ pattern: "\\S" });
 const FilledText = compile(Filled);
 const ClaudeOauth = compile(

@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { compile, obj, oneOf, opt, str, unknown } from "@earendil-works/pi-schema";
 import {
 	TODO_ARTIFACT_KINDS,
 	TODO_ORIGINS,
@@ -58,7 +59,46 @@ const CARRIED_LOOSE_GROUP = "Completed";
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
 const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
-const ARTIFACT_KIND_SET: ReadonlySet<string> = new Set(TODO_ARTIFACT_KINDS);
+
+const OPTIONAL_FIELD = opt(unknown());
+
+const StoredFile = compile(
+	obj({ todos: OPTIONAL_FIELD, groups: OPTIONAL_FIELD, summary: OPTIONAL_FIELD }, { open: true }),
+);
+const StoredItem = compile(
+	obj(
+		{
+			id: str(),
+			title: str(),
+			status: OPTIONAL_FIELD,
+			origin: OPTIONAL_FIELD,
+			createdAt: OPTIONAL_FIELD,
+			updatedAt: OPTIONAL_FIELD,
+			note: OPTIONAL_FIELD,
+			summary: OPTIONAL_FIELD,
+			verification: OPTIONAL_FIELD,
+			commitSubject: OPTIONAL_FIELD,
+			artifacts: OPTIONAL_FIELD,
+		},
+		{ open: true },
+	),
+);
+const StoredGroup = compile(
+	obj({ id: OPTIONAL_FIELD, title: str(), todos: OPTIONAL_FIELD }, { open: true }),
+);
+const StoredArtifact = compile(
+	obj(
+		{
+			kind: oneOf(TODO_ARTIFACT_KINDS),
+			path: OPTIONAL_FIELD,
+			sha: OPTIONAL_FIELD,
+			label: OPTIONAL_FIELD,
+			specId: OPTIONAL_FIELD,
+		},
+		{ open: true },
+	),
+);
+const ArtifactWithLabel = compile(obj({ label: str() }, { open: true }));
 
 function isStatus(v: unknown): v is TodoStatus {
 	return typeof v === "string" && STATUS_SET.has(v);
@@ -100,11 +140,9 @@ function decodeMarkdownIfAgent(s: string, origin: TodoOrigin): string {
 
 function decodeArtifactsIfAgent(raw: unknown, origin: TodoOrigin): unknown {
 	if (origin !== "agent" || !Array.isArray(raw)) return raw;
-	return raw.map((entry) => {
-		if (typeof entry !== "object" || entry === null) return entry;
-		const o = entry as Record<string, unknown>;
-		return typeof o.label === "string" ? { ...o, label: decodeUnicode(o.label) } : o;
-	});
+	return raw.map((entry) =>
+		ArtifactWithLabel.check(entry) ? { ...entry, label: decodeUnicode(entry.label) } : entry,
+	);
 }
 
 // Titles are single-line by contract (item bullets and `##` group headings in the markdown export). A
@@ -118,14 +156,12 @@ function sanitizeArtifacts(raw: unknown): TodoArtifact[] | undefined {
 	if (!Array.isArray(raw)) return undefined;
 	const out: TodoArtifact[] = [];
 	for (const entry of raw) {
-		if (typeof entry !== "object" || entry === null) continue;
-		const o = entry as Record<string, unknown>;
-		if (typeof o.kind !== "string" || !ARTIFACT_KIND_SET.has(o.kind)) continue;
-		const artifact: TodoArtifact = { kind: o.kind as TodoArtifact["kind"] };
-		if (typeof o.path === "string" && o.path) artifact.path = o.path;
-		if (typeof o.sha === "string" && o.sha) artifact.sha = o.sha;
-		if (typeof o.label === "string" && o.label) artifact.label = o.label;
-		if (typeof o.specId === "string" && o.specId) artifact.specId = o.specId;
+		if (!StoredArtifact.check(entry)) continue;
+		const artifact: TodoArtifact = { kind: entry.kind };
+		if (typeof entry.path === "string" && entry.path) artifact.path = entry.path;
+		if (typeof entry.sha === "string" && entry.sha) artifact.sha = entry.sha;
+		if (typeof entry.label === "string" && entry.label) artifact.label = entry.label;
+		if (typeof entry.specId === "string" && entry.specId) artifact.specId = entry.specId;
 		if (artifact.kind === "commit" ? !artifact.sha : !artifact.path) continue;
 		out.push(artifact);
 	}
@@ -133,40 +169,56 @@ function sanitizeArtifacts(raw: unknown): TodoArtifact[] | undefined {
 }
 
 function sanitize(raw: unknown): Todo | null {
-	if (typeof raw !== "object" || raw === null) return null;
-	const o = raw as Record<string, unknown>;
-	if (typeof o.id !== "string" || typeof o.title !== "string") return null;
+	if (!StoredItem.check(raw)) return null;
 	const now = nowIso();
-	const origin: TodoOrigin = isOrigin(o.origin) ? o.origin : "agent";
+	const origin: TodoOrigin = isOrigin(raw.origin) ? raw.origin : "agent";
 	const todo: Todo = {
-		id: o.id,
-		title: flattenTitle(o.title),
-		status: isStatus(o.status) ? o.status : "pending",
+		id: raw.id,
+		title: flattenTitle(raw.title),
+		status: isStatus(raw.status) ? raw.status : "pending",
 		origin,
-		createdAt: typeof o.createdAt === "string" ? o.createdAt : now,
-		updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : now,
+		createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
+		updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : now,
 	};
-	if (typeof o.note === "string" && o.note) todo.note = o.note;
-	if (typeof o.summary === "string" && o.summary) todo.summary = o.summary;
-	if (typeof o.verification === "string" && o.verification) todo.verification = o.verification;
-	if (typeof o.commitSubject === "string" && o.commitSubject) todo.commitSubject = o.commitSubject;
-	const artifacts = sanitizeArtifacts(o.artifacts);
+	if (typeof raw.note === "string" && raw.note) todo.note = raw.note;
+	if (typeof raw.summary === "string" && raw.summary) todo.summary = raw.summary;
+	if (typeof raw.verification === "string" && raw.verification)
+		todo.verification = raw.verification;
+	if (typeof raw.commitSubject === "string" && raw.commitSubject)
+		todo.commitSubject = raw.commitSubject;
+	const artifacts = sanitizeArtifacts(raw.artifacts);
 	if (artifacts) todo.artifacts = artifacts;
 	return todo;
 }
 
-function sanitizeGroup(raw: unknown): TodoGroup | null {
-	if (typeof raw !== "object" || raw === null) return null;
-	const o = raw as Record<string, unknown>;
-	if (typeof o.title !== "string") return null;
-	const todos = Array.isArray(o.todos)
-		? o.todos.map(sanitize).filter((t): t is Todo => t !== null)
-		: [];
+function keptEntries<T>(
+	raw: unknown,
+	parse: (entry: unknown) => T | null,
+	onDrop: () => void,
+): T[] {
+	if (!Array.isArray(raw)) {
+		if (raw !== undefined) onDrop();
+		return [];
+	}
+	const kept = raw.map(parse).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+	if (kept.length < raw.length) onDrop();
+	return kept;
+}
+
+function sanitizeGroup(raw: unknown, onDrop: () => void): TodoGroup | null {
+	if (!StoredGroup.check(raw)) return null;
 	return {
-		id: typeof o.id === "string" ? o.id : freshId("g"),
-		title: flattenTitle(o.title),
-		todos,
+		id: typeof raw.id === "string" ? raw.id : freshId("g"),
+		title: flattenTitle(raw.title),
+		todos: keptEntries(raw.todos, sanitize, onDrop),
 	};
+}
+
+function keepCorruptCopy(file: string, raw: string): void {
+	const hash = createHash("sha256").update(raw).digest("hex").slice(0, 12);
+	try {
+		writeFileSync(`${file}.corrupt-${hash}`, raw, { flag: "wx", mode: 0o600 });
+	} catch {}
 }
 
 function makeTodo(
@@ -204,21 +256,29 @@ export class TodoStore {
 
 	read(): TodoPlan {
 		if (!existsSync(this.file)) return { todos: [], groups: [] };
-		let parsed: unknown;
+		let raw: string;
 		try {
-			parsed = JSON.parse(readFileSync(this.file, "utf8"));
+			raw = readFileSync(this.file, "utf8");
 		} catch {
 			return { todos: [], groups: [] };
 		}
-		const file = parsed as Partial<TodoFile> | null;
-		const todos = Array.isArray(file?.todos)
-			? file.todos.map(sanitize).filter((t): t is Todo => t !== null)
-			: [];
-		const groups = Array.isArray(file?.groups)
-			? file.groups.map(sanitizeGroup).filter((g): g is TodoGroup => g !== null)
-			: [];
-		const plan: TodoPlan = { todos, groups };
-		if (typeof file?.summary === "string" && file.summary) plan.summary = file.summary;
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(raw);
+		} catch {
+			keepCorruptCopy(this.file, raw);
+			return { todos: [], groups: [] };
+		}
+		if (!StoredFile.check(parsed)) {
+			keepCorruptCopy(this.file, raw);
+			return { todos: [], groups: [] };
+		}
+		const onDrop = () => keepCorruptCopy(this.file, raw);
+		const plan: TodoPlan = {
+			todos: keptEntries(parsed.todos, sanitize, onDrop),
+			groups: keptEntries(parsed.groups, (entry) => sanitizeGroup(entry, onDrop), onDrop),
+		};
+		if (typeof parsed.summary === "string" && parsed.summary) plan.summary = parsed.summary;
 		return plan;
 	}
 

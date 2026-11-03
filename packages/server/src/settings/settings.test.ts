@@ -8,6 +8,7 @@ import {
 	DEFAULT_CONFIG,
 	type LayoutPreset,
 } from "@thinkrail/contracts";
+import { loadConfig } from "../persistence";
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import {
 	getConfig,
@@ -955,4 +956,68 @@ test("invalid font updates are rejected before persistence or broadcast", () => 
 	expect(getConfig()).toEqual(before);
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
+function makeConfigUnreadable() {
+	mkdirSync(join(dataDir, "config.json"));
+}
+
+function restoreConfig(config: Partial<AppConfig>) {
+	rmSync(join(dataDir, "config.json"), { recursive: true });
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(config));
+}
+
+function storedConfig() {
+	return JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+}
+
+test("a config unreadable at load refuses saves, then saves onto the stored values once it reads again", () => {
+	makeConfigUnreadable();
+	expect(getConfig()).toEqual(DEFAULT_CONFIG);
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+
+	restoreConfig({ locale: "de" });
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(getConfig().locale).toBe("de");
+});
+
+test("another read of a recovered config cannot make a save write the defaults from the failed load", () => {
+	makeConfigUnreadable();
+	getConfig();
+	restoreConfig({ locale: "de", defaultModel: wireModel("m", "p") });
+	expect(loadConfig().locale).toBe("de");
+
+	updateConfig({ codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({
+		locale: "de",
+		defaultModel: wireModel("m", "p"),
+		codeFontSize: 15,
+	});
+});
+
+test("one failed read beside a good cache does not refuse the next save", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ locale: "de" }));
+	expect(getConfig().locale).toBe("de");
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+	restoreConfig({ locale: "de" });
+
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+});
+
+test("noteRecentModel does not throw when the save fails, and keeps the last good list", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	makeConfigUnreadable();
+	getConfig();
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(getConfig().recentModels).toEqual([]);
+	expect(published).toEqual([]);
+
+	restoreConfig({ locale: "de" });
+	noteRecentModel(wireModel("m", "p"));
+	expect(storedConfig()).toMatchObject({ locale: "de", recentModels: [wireModel("m", "p")] });
 });

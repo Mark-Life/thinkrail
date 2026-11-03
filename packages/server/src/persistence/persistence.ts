@@ -12,7 +12,6 @@ import {
 	opt,
 	type Static,
 	str,
-	unknown,
 	type Validator,
 } from "@earendil-works/pi-schema";
 import {
@@ -27,6 +26,7 @@ import {
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
+	JsonObject,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	Project,
@@ -45,7 +45,13 @@ import {
 } from "./attribution";
 import type { AcquisitionRecord } from "./attributionProtocol";
 import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
-import { assertOverwriteAllowed, parseEntries, readStateFile, type StateFile } from "./stateFile";
+import {
+	assertOverwriteAllowed,
+	isOverwriteRefused,
+	parseEntries,
+	readStateFile,
+	type StateFile,
+} from "./stateFile";
 
 export {
 	type AcquisitionRecord,
@@ -74,14 +80,12 @@ function storedDirectory(path: string): string {
 	return isAbsolute(path) ? resolve(path) : path;
 }
 
-const StoredObject = compile(map(unknown()));
-
 function openStateFile(file: string): StateFile {
 	return readStateFile(join(dataDir(), file));
 }
 
 function readStoredObject(file: StateFile): Record<string, unknown> {
-	if (StoredObject.check(file.value)) return file.value;
+	if (JsonObject.check(file.value)) return file.value;
 	if (file.value !== undefined) file.setAside("not an object");
 	return {};
 }
@@ -157,7 +161,6 @@ const PersistedSessionCompletion = obj(
 	{ runId: str(), completion: SessionCompletion },
 	{ open: true },
 );
-export type PersistedSessionCompletion = Static<typeof PersistedSessionCompletion>;
 
 const SessionLifecycle = obj(
 	{
@@ -184,7 +187,7 @@ const PersistedTurns = obj(
 	{ version: lit(TURNS_VERSION), byWorkspace: map(arr(TurnChangeSet)) },
 	{ open: true },
 );
-export type PersistedTurns = Static<typeof PersistedTurns>;
+type PersistedTurns = Static<typeof PersistedTurns>;
 const PersistedTurnsFile = compile(PersistedTurns);
 
 export function loadTurns(): PersistedTurns {
@@ -213,7 +216,7 @@ const ProjectEntry = compile(Project);
 const WorkspaceEntry = compile(Workspace);
 
 function withStoredSlug(entry: unknown): unknown {
-	return StoredObject.check(entry) ? { slug: "", ...entry } : entry;
+	return JsonObject.check(entry) ? { slug: "", ...entry } : entry;
 }
 
 export function loadProjects(): Project[] {
@@ -242,7 +245,7 @@ const PersistedTerminalTab = obj(
 	{ tabKey: str(), title: str(), recorded: opt(str()) },
 	{ open: true },
 );
-export type PersistedTerminalTab = Static<typeof PersistedTerminalTab>;
+type PersistedTerminalTab = Static<typeof PersistedTerminalTab>;
 const TerminalTabEntry = compile(PersistedTerminalTab);
 
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
@@ -269,7 +272,7 @@ const VarEntry = compile(HostEnvironmentVar);
 
 /** A model's identity is `{provider, id}`; the rest is a catalog snapshot older hosts wrote only in part. */
 function withModelSnapshot(entry: unknown): unknown {
-	if (!StoredObject.check(entry)) return entry;
+	if (!JsonObject.check(entry)) return entry;
 	return { name: entry.id, contextWindow: 0, reasoning: false, thinkingLevels: [], ...entry };
 }
 
@@ -386,6 +389,10 @@ export function loadConfig(): AppConfig {
 		onboardingDismissed: value.onboardingDismissed === true,
 		...normalizeFontSettings(value),
 	};
+}
+
+export function isConfigOverwriteRefused(): boolean {
+	return isOverwriteRefused(join(dataDir(), "config.json"));
 }
 
 export function saveConfig(config: AppConfig): void {

@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { num, obj, str } from "@earendil-works/pi-schema";
 import { PROTOCOL_VERSION } from "../wsProtocol";
 import { WS_CHANNEL_SCHEMAS } from "./channels";
+import { AnyHostWelcome } from "./host";
 import { WS_METHOD_SCHEMAS } from "./methods";
 
 const STORED = {
 	protocolVersion: 103,
-	hash: "9d6b12658412d8a6e7554df3ad6a4e82d012c00f2229cc0534ab6493ed0dcd15",
+	hash: "5d576edd604d291153b62cc08e5c7ef373a4d89fbc3ebbf4288d987af57b05fa",
 };
 
 function sortedKeys(value: unknown): unknown {
@@ -15,7 +17,10 @@ function sortedKeys(value: unknown): unknown {
 	return Object.fromEntries(
 		Object.entries(value)
 			.sort(([a], [b]) => (a < b ? -1 : 1))
-			.map(([key, child]) => [key, sortedKeys(child)]),
+			.map(([key, child]) => [
+				key,
+				key === "required" && Array.isArray(child) ? child.toSorted() : sortedKeys(child),
+			]),
 	);
 }
 
@@ -36,7 +41,11 @@ function staleWireProblem(stored: typeof STORED, current: typeof STORED) {
 	return `PROTOCOL_VERSION changed. Check that older peers still work, ${store}.`;
 }
 
-const wire = { methods: WS_METHOD_SCHEMAS, channels: WS_CHANNEL_SCHEMAS };
+const wire = {
+	methods: WS_METHOD_SCHEMAS,
+	channels: WS_CHANNEL_SCHEMAS,
+	acceptedWelcome: AnyHostWelcome,
+};
 
 describe("wire hash", () => {
 	test("a wire schema change comes with a PROTOCOL_VERSION bump", () => {
@@ -47,10 +56,13 @@ describe("wire hash", () => {
 	test("an edited schema fails with the steps to take, and key order does not count", () => {
 		const stored = { protocolVersion: 1, hash: wireHash({ a: { x: 1, y: 2 } }) };
 		const reordered = { protocolVersion: 1, hash: wireHash({ a: { y: 2, x: 1 } }) };
+		const fields = { protocolVersion: 1, hash: wireHash(obj({ x: str(), y: num() })) };
+		const fieldsReordered = { protocolVersion: 1, hash: wireHash(obj({ y: num(), x: str() })) };
 		const edited = { protocolVersion: 1, hash: wireHash({ a: { x: 1, y: 3 } }) };
 		const bumped = { protocolVersion: 2, hash: edited.hash };
 
 		expect(staleWireProblem(stored, reordered)).toBeNull();
+		expect(staleWireProblem(fields, fieldsReordered)).toBeNull();
 		expect(staleWireProblem(stored, edited)).toContain("Raise PROTOCOL_VERSION");
 		expect(staleWireProblem(stored, bumped)).toContain("PROTOCOL_VERSION changed");
 	});

@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { flatItems, groupStatus, storeRel, type TodoGroup, TodoStore } from "./index.ts";
@@ -568,6 +576,55 @@ test("a corrupt store file degrades to an empty list rather than throwing", () =
 		mkdirSync(dirname(file), { recursive: true });
 		writeFileSync(file, "not json{", "utf8");
 		expect(store(root).read()).toEqual({ todos: [], groups: [] });
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a plan a hand edit broke survives the next write in a copy", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		s.add({ title: "first" });
+		s.add({ title: "second" });
+		const broken = readFileSync(s.file, "utf8").replace(/\n\}\s*$/, ",\n}");
+		writeFileSync(s.file, broken, "utf8");
+
+		expect(s.read()).toEqual({ todos: [], groups: [] });
+		s.add({ title: "new" });
+
+		expect(s.read().todos.map((todo) => todo.title)).toEqual(["new"]);
+		const copies = readdirSync(dirname(s.file)).filter((name) => name.includes(".corrupt-"));
+		expect(copies).toHaveLength(1);
+		expect(readFileSync(join(dirname(s.file), copies[0] ?? ""), "utf8")).toBe(broken);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a dropped item keeps a copy; a repaired field does not, and a clean file makes none", () => {
+	const root = tempRoot();
+	const copies = (s: TodoStore) =>
+		readdirSync(dirname(s.file)).filter((name) => name.includes(".corrupt-"));
+	try {
+		const s = store(root);
+		s.add({ title: "kept" });
+		s.read();
+		expect(copies(s)).toEqual([]);
+
+		writeFileSync(s.file, JSON.stringify({ todos: [{ id: "a", title: "a", status: "weird" }] }));
+		expect(s.read().todos[0]?.status).toBe("pending");
+		expect(copies(s)).toEqual([]);
+
+		writeFileSync(s.file, JSON.stringify({ todos: [{ id: "a", title: "a" }, null] }));
+		expect(s.read().todos).toHaveLength(1);
+		expect(copies(s)).toHaveLength(1);
+
+		for (const shape of ["[1]", "null", '{"todos":5}', '{"groups":[{"title":"g","todos":[1]}]}']) {
+			writeFileSync(s.file, shape);
+			s.read();
+		}
+		expect(copies(s)).toHaveLength(5);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

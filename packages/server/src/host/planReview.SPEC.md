@@ -171,7 +171,7 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 
 - **Owns / public surface:** `startPlanReview(workspaceId, sessionId, itemId, runSubagent?)`,
   `maybeAutoReReview(workspaceId, sessionId)`, `installRequestReviewSeam()`,
-  `setReviewFailedPublisher(fn)`, and the pure `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
+  `setReviewFailedPublisher(fn)`; `reviewVerdict`'s pure `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
   `releaseItemReview` / `itemReviewActive` / `planReviewRunning`.
 - **Allowed deps:** `agent` (`runReviewSubagent`, `sendReviewFixToSession`, `getSessionWorkspaceId`,
   `notifyExtUi`), `todos`, `reviews`, `settings`, and host siblings `ackSend` / `reviewLock` /

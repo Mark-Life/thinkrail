@@ -1,5 +1,5 @@
 import {
-	type AnyHostWelcome,
+	type HostWelcomeVersions,
 	PROTOCOL_MAX_VERSION,
 	PROTOCOL_MIN_VERSION,
 	PROTOCOL_VERSION,
@@ -7,7 +7,7 @@ import {
 import type { ProtocolMismatch } from "../store";
 
 export function protocolMismatch(
-	host: Pick<AnyHostWelcome, "protocolVersion" | "protocolMin" | "protocolMax">,
+	host: HostWelcomeVersions,
 	client = { version: PROTOCOL_VERSION, min: PROTOCOL_MIN_VERSION, max: PROTOCOL_MAX_VERSION },
 ): ProtocolMismatch | null {
 	const clientAccepts = host.protocolVersion >= client.min && host.protocolVersion <= client.max;

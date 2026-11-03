@@ -63,11 +63,13 @@ that map.
 - **Result and channel schemas are proven by tests.** The host's test harnesses check real replies and pushes against
   them ([[submodule-server-host]]), so a mismatch is a schema bug or a host bug, not a tolerated drift. `piOwned` parts
   pass by design. A wrong schema reaches users: [[submodule-web-transport]] refuses what fails it.
-- **`server.welcome` has a floor.** The client checks `AnyHostWelcome`, not `ServerWelcome`: it is the only frame that names
-  the host's version, and refusing it would leave the app with no projects. Older hosts omit later fields, so entries are
-  bare objects. `ServerWelcome` must stay assignable to it. The test harness still checks `ServerWelcome`.
-- **A stored hash guards the wire.** `wireHash.test.ts` holds a hash of `WS_METHOD_SCHEMAS` plus `WS_CHANNEL_SCHEMAS` beside the
-  `PROTOCOL_VERSION` it was taken at. A schema edit with no version bump fails, and the message gives the new value to store.
+- **`server.welcome` has a floor.** It is the only frame that names the host's version, and refusing it would leave the app
+  with no projects. So the client reads `HostWelcomeVersions` first and checks `AnyHostWelcome` only on a host in range, not
+  `ServerWelcome`. Its entries are bare objects, so one odd project cannot refuse the whole welcome. `ServerWelcome` must
+  stay assignable to it. The test harness still checks `ServerWelcome`.
+- **A stored hash guards the wire.** `wireHash.test.ts` holds a hash of `WS_METHOD_SCHEMAS`, `WS_CHANNEL_SCHEMAS` and
+  `AnyHostWelcome` beside the `PROTOCOL_VERSION` it was taken at. Field order does not count. A schema edit with no version
+  bump fails, and the message gives the new value to store.
 - **Ids are branded.** `ProjectId`, `WorkspaceId` and `SessionId` in `ids.ts` are strings at run time, so the wire and the
   stored files do not change. A wire field uses the one for its entity, so a call site cannot swap them. Each type has one
   `as*` helper to mint it where a string enters from outside the schemas: a pi session, a new UUID, a file name, a route,
@@ -75,4 +77,6 @@ that map.
   `string`: it mirrors the `pi-delegation` type, and a test pins the two.
 - **`errorCode` is any string.** A newer host may send a code this client has no name for, and `WsErrorCode` carries the
   names by type only. `INVALID_REPLY` is never sent: the client mints it.
+- **One object check, one reply check.** `checks.ts` exports `JsonObject`, for a reader that checks fields one by one, `validatorOf`, a
+  cache of compiled schemas, and `resultProblem`, which the web transport, e2e fixtures and artifact probes share.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { WS_CHANNELS } from "@thinkrail/contracts";
-import { parseFrame, readReply, resultProblem } from "./fixtures/wire";
+import { resultProblem, WS_CHANNELS } from "@thinkrail/contracts";
+import { parseFrame, readReply } from "./fixtures/wire";
 
 test("the setup wire reads only the reply it waits for", () => {
 	const reply = JSON.stringify({ id: "a", ok: true, result: { ok: true } });

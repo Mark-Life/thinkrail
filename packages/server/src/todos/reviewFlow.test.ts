@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
 import { reconcileChangeArtifacts } from "./artifacts";
+import { renderFixPackage } from "./reviewPackage";
 import {
 	clearAllPendingReviews,
 	dropReviewRecord,
@@ -19,7 +20,6 @@ import {
 	approveTodoReview,
 	listTodos,
 	removeTodo,
-	renderFixPackage,
 	requestTodoFix,
 	reviewedShaSuperseded,
 	rollbackTodoFix,
@@ -105,6 +105,24 @@ test("reviewedShaSuperseded: true when an older sha lost the newest slot, else f
 	expect(reviewedShaSuperseded(ref, "sha2")).toBe(false);
 	expect(reviewedShaSuperseded(ref, "")).toBe(false);
 	expect(reviewedShaSuperseded({ ...ref, id: "t_nope" }, "sha1")).toBe(false);
+});
+
+test("a bad section of a review sidecar costs that section: a spent auto cycle stays spent", () => {
+	const file = join(repo, ".thinkrail/context/todos", `${SESSION}.reviews.json`);
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, JSON.stringify({ version: 1, pending: [], autoCycles: { t_1: 1 } }));
+
+	expect(readAutoCycles(repo, SESSION, "t_1")).toBe(1);
+	expect(readdirSync(dirname(file)).some((name) => name.includes(".corrupt-"))).toBe(true);
+});
+
+test("a hand-edited auto-cycle count outside the JSON range drops with a copy", () => {
+	const file = join(repo, ".thinkrail/context/todos", `${SESSION}.reviews.json`);
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, '{"version":1,"autoCycles":{"t_1":1e999,"t_2":1}}');
+
+	expect(readAutoCycles(repo, SESSION, "t_1")).toBeUndefined();
+	expect(readAutoCycles(repo, SESSION, "t_2")).toBe(1);
 });
 
 test("review sidecar: put/read round-trip, rollback restore, corrupt file reads as none", () => {

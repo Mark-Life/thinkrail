@@ -34,13 +34,11 @@ export function ProtocolMismatchDialog() {
 						{uiOutdated ? t("shell.protocolMismatch.uiBody") : t("shell.protocolMismatch.hostBody")}
 					</DialogDescription>
 				</DialogHeader>
-				{uiOutdated ? (
-					<DialogFooter>
-						<Button data-testid="protocol-mismatch-reload" onClick={() => window.location.reload()}>
-							{t("shell.protocolMismatch.reload")}
-						</Button>
-					</DialogFooter>
-				) : null}
+				<DialogFooter>
+					<Button data-testid="protocol-mismatch-reload" onClick={() => window.location.reload()}>
+						{t("shell.protocolMismatch.reload")}
+					</Button>
+				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);

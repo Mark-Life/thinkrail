@@ -4,17 +4,15 @@ import {
 	arr,
 	compile,
 	lit,
-	map,
 	num,
 	obj,
 	oneOf,
 	opt,
 	type Static,
 	str,
-	unknown,
 } from "@earendil-works/pi-schema";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { asSessionId, JsonObject } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
 
@@ -39,16 +37,6 @@ type PendingReview = Static<typeof PendingReviewSchema>;
 const TodoReviewEntry = compile(TodoReviewRecordSchema);
 const PendingEntry = compile(PendingReviewSchema);
 const AutoCycleEntry = compile(num());
-const StoredReviews = compile(
-	obj(
-		{
-			items: opt(map(unknown())),
-			pending: opt(map(unknown())),
-			autoCycles: opt(map(unknown())),
-		},
-		{ open: true },
-	),
-);
 
 export interface TodoReviewMeta {
 	pending: Record<string, PendingReview>;
@@ -73,17 +61,24 @@ function reviewsPath(root: string, sessionId: SessionId): string {
 function readFile(root: string, sessionId: SessionId): ReviewsFile {
 	const stored = readStateFile(reviewsPath(root, sessionId));
 	if (stored.value === undefined) return { version: 1, items: {} };
-	if (!StoredReviews.check(stored.value)) {
+	if (!JsonObject.check(stored.value)) {
 		stored.setAside("not a reviews file");
 		return { version: 1, items: {} };
 	}
+	const { items, pending: storedPending, autoCycles: storedCycles } = stored.value;
+	const section = (name: string, value: unknown) => {
+		if (value === undefined) return {};
+		if (JsonObject.check(value)) return value;
+		stored.setAside(`${name} is not an object`);
+		return {};
+	};
 	const file: ReviewsFile = {
 		version: 1,
-		items: parseEntryRecord(stored, stored.value.items ?? {}, TodoReviewEntry),
+		items: parseEntryRecord(stored, section("items", items), TodoReviewEntry),
 	};
-	const pending = parseEntryRecord(stored, stored.value.pending ?? {}, PendingEntry);
+	const pending = parseEntryRecord(stored, section("pending", storedPending), PendingEntry);
 	if (Object.keys(pending).length > 0) file.pending = pending;
-	const autoCycles = parseEntryRecord(stored, stored.value.autoCycles ?? {}, AutoCycleEntry);
+	const autoCycles = parseEntryRecord(stored, section("autoCycles", storedCycles), AutoCycleEntry);
 	if (Object.keys(autoCycles).length > 0) file.autoCycles = autoCycles;
 	return file;
 }

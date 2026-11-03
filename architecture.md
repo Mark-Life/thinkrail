@@ -92,8 +92,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    is a named exception in its spec, today the quit-confirmation rule and the search matcher (the palette's
    ranking, kept in `contracts` so host-side search can rank with the same copy); adding one updates this
    decision. `server.welcome` carries the host's protocol version and supported range. An independently-shipped UI
-   compares them with its own: inside the range they stay compatible, outside it the UI shows a blocking prompt. Reload is
-   offered only when the UI is the older side; if the UI is newer, the prompt asks for a host update.
+   compares them with its own: inside the range they stay compatible, outside it the UI shows a blocking prompt with Reload,
+   which gets the host's own interface. If the prompt returns, the UI is served apart from the host, and the text asks for a host update and restart.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
    is keyed by backend profile so ids from one host are never interpreted against another.

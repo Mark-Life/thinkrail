@@ -6,6 +6,7 @@ import {
 	readFileSync,
 	rmSync,
 	statSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -88,6 +89,39 @@ test.each([
 	const [copy] = copies();
 	expect(readFileSync(join(root, copy ?? ""), "utf8")).toBe(stored);
 	expect(readFileSync(join(root, file), "utf8")).toBe(stored);
+});
+
+test("an entry holding a number JSON cannot carry drops with a copy, and the others stay", () => {
+	const stored = `[${JSON.stringify(project("a"))},${JSON.stringify(project("b")).replace(/"lastOpened":\d+/, '"lastOpened":1e999')}]`;
+	expect(stored).toContain("1e999");
+	writeFileSync(join(root, "projects.json"), stored);
+
+	expect(loadProjects().map((entry) => entry.id)).toEqual([asProjectId("a")]);
+	expect(problems[0]?.message).toContain("dropped entries 1");
+	expect(copies()).toHaveLength(1);
+});
+
+test("a file keeps only its newest copies, and another file's are left alone", () => {
+	writeFileSync(join(root, "workspaces.json"), "{ other");
+	loadWorkspaces();
+	for (let version = 0; version < 15; version += 1) {
+		writeFileSync(join(root, "projects.json"), `{ not json ${version}`);
+		loadProjects();
+		const newest = copies().find(
+			(name) =>
+				name.startsWith("projects.json") &&
+				readFileSync(join(root, name), "utf8").endsWith(` ${version}`),
+		);
+		if (newest) utimesSync(join(root, newest), version + 1, version + 1);
+	}
+
+	const kept = copies().filter((name) => name.startsWith("projects.json"));
+	expect(kept).toHaveLength(10);
+	expect(kept.map((name) => readFileSync(join(root, name), "utf8")).toSorted()).toContain(
+		"{ not json 14",
+	);
+	expect(kept.map((name) => readFileSync(join(root, name), "utf8"))).not.toContain("{ not json 0");
+	expect(copies().filter((name) => name.startsWith("workspaces.json"))).toHaveLength(1);
 });
 
 test("a config that is not JSON loads defaults, and the next save leaves the old bytes in a copy", () => {

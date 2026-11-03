@@ -1,6 +1,7 @@
 export * from "./backgroundCommand";
 export * from "./change";
 export * from "./channels";
+export * from "./checks";
 export * from "./client";
 export * from "./customEndpoint";
 export * from "./dialog";

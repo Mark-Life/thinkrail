@@ -15,6 +15,7 @@ import {
 	str,
 	unknown,
 } from "@earendil-works/pi-schema";
+import { JsonObject } from "@thinkrail/contracts";
 
 export const MCP_EXPOSURES = ["codemode", "deferred", "direct", "hidden"] as const;
 
@@ -80,7 +81,7 @@ const McpFile = obj(
 
 export type McpFile = Static<typeof McpFile>;
 
-export const isJsonObject = compile(map(unknown())).check;
+export const isJsonObject = JsonObject.check;
 export const isMcpFile = compile(McpFile).check;
 export const isExposure = compile(Exposure).check;
 export const isStringMap = compile(StringMap).check;

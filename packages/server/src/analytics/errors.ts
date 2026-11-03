@@ -1,6 +1,7 @@
 import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { arr, compile, map, obj, str, unknown } from "@earendil-works/pi-schema";
+import { arr, compile, obj, str, unknown } from "@earendil-works/pi-schema";
+import { JsonObject } from "@thinkrail/contracts";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
 export type FatalErrorKind = "uncaughtException" | "unhandledRejection";
@@ -134,7 +135,6 @@ const PASSTHROUGH_KEYS = [
 	"request_method",
 ] as const;
 
-const Fields = compile(map(unknown()));
 const Stacktrace = compile(obj({ frames: arr(unknown()) }, { open: true }));
 const WithCode = compile(obj({ code: str({ pattern: "^[A-Z][A-Z0-9_]{1,63}$" }) }, { open: true }));
 
@@ -170,7 +170,7 @@ function sanitizeFrame(
 	roots: FrameRoots,
 	chunkIds: Record<string, unknown>,
 ): Record<string, unknown> | null {
-	if (!Fields.check(frame)) return null;
+	if (!JsonObject.check(frame)) return null;
 	const file = normalizeFrameFilename(frame.filename, roots);
 	const external = file.filename === EXTERNAL_FRAME;
 	const fn = typeof frame.function === "string" ? frame.function : "";
@@ -205,7 +205,7 @@ function sanitizeException(
 		value,
 	};
 	const mechanism = exception.mechanism;
-	if (Fields.check(mechanism)) {
+	if (JsonObject.check(mechanism)) {
 		out.mechanism = {
 			handled: mechanism.handled === true,
 			synthetic: mechanism.synthetic === true,
@@ -243,11 +243,11 @@ export function sanitizeExceptionProperties(
 	}
 	const list = Array.isArray(properties.$exception_list) ? properties.$exception_list : [];
 	const chunkIdsValue = properties[CHUNK_IDS_PROPERTY];
-	const chunkIds = Fields.check(chunkIdsValue) ? chunkIdsValue : {};
+	const chunkIds = JsonObject.check(chunkIdsValue) ? chunkIdsValue : {};
 	const handled = typeof properties.handled === "boolean" ? properties.handled : undefined;
 	const summary = classifier(passthrough);
 	const exceptions = list
-		.filter(Fields.check)
+		.filter(JsonObject.check)
 		.slice(0, MAX_EXCEPTIONS)
 		.map((exception, index) =>
 			sanitizeException(exception, index === 0 ? summary : "", roots, chunkIds),

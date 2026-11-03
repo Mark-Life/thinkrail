@@ -1,6 +1,6 @@
-import { compile, type Schema, type Validator } from "@earendil-works/pi-schema";
+import { compile } from "@earendil-works/pi-schema";
 import {
-	WS_METHOD_SCHEMAS,
+	resultProblem,
 	WsEnvelope,
 	type WsMethodName,
 	type WsParams,
@@ -14,7 +14,6 @@ export class E2eWireTransientError extends Error {}
 
 const envelope = compile(WsEnvelope);
 const response = compile(WsResponse);
-const validators = new Map<Schema<unknown>, Validator>();
 
 function parseJson(message: unknown): unknown {
 	if (typeof message !== "string") return undefined;
@@ -33,15 +32,6 @@ export function parseFrame(message: unknown): WsEnvelope | null {
 export function readReply(message: unknown, id: string): WsResponse | null {
 	const frame = parseJson(message);
 	return response.check(frame) && frame.id === id ? frame : null;
-}
-
-export function resultProblem(method: WsMethodName, result: unknown): string | null {
-	const schema: Schema<unknown> = WS_METHOD_SCHEMAS[method].result;
-	const validator = validators.get(schema) ?? compile(schema);
-	validators.set(schema, validator);
-	if (validator.check(result)) return null;
-	const [first] = validator.errors(result);
-	return `${method} replied with a shape its schema refuses: ${first?.path} ${first?.message}`;
 }
 
 export class E2eWire {

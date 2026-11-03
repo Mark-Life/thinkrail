@@ -4,7 +4,6 @@ import {
 	compile,
 	int,
 	lit,
-	map,
 	nullable,
 	num,
 	obj,
@@ -15,6 +14,7 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
+import { JsonObject } from "@thinkrail/contracts";
 
 export const IN_APP_SURVEY_NAME = "in-app-feedback";
 
@@ -86,7 +86,7 @@ export const Conditions = compile(
 	obj({ seenSurveyWaitPeriodInDays: opt(nullable(num())) }, { open: true }),
 );
 
-export const TranslationMap = compile(map(unknown()));
+export const TranslationMap = JsonObject;
 export const PostHogSurveyTranslation = compile(
 	obj({ thankYouMessageHeader: Text }, { open: true }),
 );
