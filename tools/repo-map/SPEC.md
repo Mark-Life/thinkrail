@@ -76,6 +76,9 @@ Rules the views keep:
 - The URL hash holds all view state, so every view is a link and back and forward work. `route.ts` owns the format.
 - Nothing draws the whole graph. A trace starts one level deep and cuts each fan-out to 8 with a "+N more" node, wire edges first. A group over 24 symbols shows one symbol and its neighbors.
 - Change state always has a mark (`+`, `-`, `~`, `>`) as well as a color. Removed edges are also dashed.
+- Trace, Flow, Symbol and File show the explorer: a file tree with each file's symbols, plus a session-only Recent list. Picking a symbol keeps the current view, and the tree reveals the active symbol. It stays mounted across views so open folders survive.
+- Back and forward use browser history. The hash holds the view, and `repoMapPosition` in `history.state` tells the buttons whether either direction exists.
+- Pane widths are stored in `localStorage`. Double-clicking a divider resets it.
 - Flow opens as a waterfall: one indented, collapsible row per call. Bar length counts the calls inside a row, because a static index has no durations. Collapse state is local and resets when the flow changes.
 - Flow hides symbols with 40 or more callers unless asked, and says how many. It folds an interface member with one implementation into the call.
 - The source pane renders only visible lines, so its row height is fixed and find-in-page sees only those lines.

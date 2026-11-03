@@ -11,6 +11,13 @@ import type { ThemedToken } from "shiki/core";
 import type { GraphSide } from "../../core/types";
 import { fetchSource } from "./api";
 import { highlightLines } from "./highlight";
+import {
+	clampWidth,
+	type HistoryPosition,
+	nextHistoryPosition,
+	parseStoredWidth,
+	readEntryPosition,
+} from "./panes";
 import { parseHash, type Route } from "./route";
 
 function subscribeHash(listener: () => void) {
@@ -25,6 +32,66 @@ function readHash() {
 export function useRoute(fallback: Route) {
 	const hash = useSyncExternalStore(subscribeHash, readHash);
 	return parseHash(hash, fallback);
+}
+
+const HISTORY_LAST_KEY = "repo-map.history-last";
+
+function readInitialHistory(): HistoryPosition {
+	const position = readEntryPosition(window.history.state) ?? 0;
+	const stored = parseStoredWidth({
+		stored: window.sessionStorage.getItem(HISTORY_LAST_KEY),
+		fallback: 0,
+	});
+	return { position, last: Math.max(position, stored) };
+}
+
+export function useHistoryPosition() {
+	const [history, setHistory] = useState(readInitialHistory);
+	useEffect(() => {
+		let current = readInitialHistory();
+		const save = () => {
+			window.history.replaceState({ repoMapPosition: current.position }, "");
+			window.sessionStorage.setItem(HISTORY_LAST_KEY, String(current.last));
+			setHistory(current);
+		};
+		save();
+		const onHashChange = () => {
+			current = nextHistoryPosition({ current, entry: readEntryPosition(window.history.state) });
+			save();
+		};
+		window.addEventListener("hashchange", onHashChange);
+		return () => window.removeEventListener("hashchange", onHashChange);
+	}, []);
+	return { canGoBack: history.position > 0, canGoForward: history.position < history.last };
+}
+
+export function usePaneWidth(input: {
+	storageKey: string;
+	initial: number;
+	min: number;
+	roomForOthers: number;
+}) {
+	const { storageKey, initial, min, roomForOthers } = input;
+	const [width, setWidth] = useState(() =>
+		parseStoredWidth({ stored: window.localStorage.getItem(storageKey), fallback: initial }),
+	);
+	const resize = useCallback(
+		(next: number) => {
+			const clamped = clampWidth({
+				width: next,
+				min,
+				max: window.innerWidth - roomForOthers,
+			});
+			setWidth(clamped);
+			window.localStorage.setItem(storageKey, String(clamped));
+		},
+		[storageKey, min, roomForOthers],
+	);
+	const reset = useCallback(() => {
+		setWidth(initial);
+		window.localStorage.removeItem(storageKey);
+	}, [storageKey, initial]);
+	return { width, resize, reset };
 }
 
 export function useElementSize<T extends HTMLElement>() {

@@ -1,5 +1,6 @@
 import type { GraphRef, SymbolId } from "../../core/types";
 import { plural, shortSha } from "../lib/format";
+import { useHistoryPosition } from "../lib/hooks";
 import { CHANGES_HREF, flowHref, MAP_HREF, type Route, traceHref } from "../lib/route";
 import { sideOfSymbol, useWorkspace } from "../lib/workspace";
 import { Icon } from "./Icons";
@@ -19,9 +20,12 @@ function activeView(route: Route) {
 export function Header(props: {
 	route: Route;
 	lastSymbol: SymbolId | undefined;
+	explorerOpen: boolean | undefined;
+	onToggleExplorer: () => void;
 	onOpenPalette: () => void;
 }) {
 	const workspace = useWorkspace();
+	const { canGoBack, canGoForward } = useHistoryPosition();
 	const { session, diff } = workspace;
 	const active = activeView(props.route);
 	const side = sideOfSymbol(workspace, props.lastSymbol);
@@ -42,6 +46,40 @@ export function Header(props: {
 					</span>
 				) : (
 					<span className="ref-chip">{refLabel(session.head)}</span>
+				)}
+			</div>
+			<div className="header-history">
+				<button
+					type="button"
+					className="icon-button"
+					aria-label="Back"
+					title="Back (press [)"
+					disabled={!canGoBack}
+					onClick={() => window.history.back()}
+				>
+					<Icon name="back" />
+				</button>
+				<button
+					type="button"
+					className="icon-button"
+					aria-label="Forward"
+					title="Forward (press ])"
+					disabled={!canGoForward}
+					onClick={() => window.history.forward()}
+				>
+					<Icon name="forward" />
+				</button>
+				{props.explorerOpen === undefined ? null : (
+					<button
+						type="button"
+						className="icon-button"
+						aria-label="Files and recent"
+						aria-pressed={props.explorerOpen}
+						title="Show or hide files and recent (press e)"
+						onClick={props.onToggleExplorer}
+					>
+						<Icon name="panel" />
+					</button>
 				)}
 			</div>
 			<nav className="header-nav" aria-label="Views">

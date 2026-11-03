@@ -254,6 +254,17 @@ export function flowHref(symbol: SymbolId | undefined, side: GraphSide = "head")
 	return formatHash(withOptional(base, "symbol", symbol));
 }
 
+export function symbolInViewHref(route: Route, symbol: SymbolId, side: GraphSide = "head") {
+	if (route.view === "trace") {
+		return formatHash({ ...route, symbol, side, expanded: [], revealed: [] });
+	}
+	if (route.view === "flow") {
+		const { view, layout, depth, utilities } = route;
+		return formatHash({ view, layout, depth, utilities, symbol, side });
+	}
+	return symbolHref(symbol, side);
+}
+
 export const CHANGES_HREF = formatHash({ view: "changes", section: "groups", tab: "calls" });
 export const MAP_HREF = formatHash({ view: "map", tests: false });
 

@@ -6,6 +6,10 @@ const ICONS = {
 	fit: "M2 6V2h4v1.5H3.5V6H2Zm8-4h4v4h-1.5V3.5H10V2ZM2 10h1.5v2.5H6V14H2v-4Zm10.5 0H14v4h-4v-1.5h2.5V10Z",
 	plus: "M7.25 3h1.5v4.25H13v1.5H8.75V13h-1.5V8.75H3v-1.5h4.25V3Z",
 	minus: "M3 7.25h10v1.5H3v-1.5Z",
+	back: "M10 3 5 8l5 5 1.06-1.06L7.12 8l3.94-3.94L10 3Z",
+	forward: "M6 3l5 5-5 5-1.06-1.06L8.88 8 4.94 4.06 6 3Z",
+	chevronDown: "M3 6l5 5 5-5-1.06-1.06L8 8.88 4.06 4.94 3 6Z",
+	panel: "M2 3h12v10H2V3Zm1.5 1.5v7H6v-7H3.5Zm4 0v7h5v-7h-5Z",
 } as const;
 
 export function Icon(props: { name: keyof typeof ICONS }) {

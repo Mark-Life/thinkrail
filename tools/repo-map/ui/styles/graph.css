@@ -1,6 +1,5 @@
 .graph-view {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(360px, 30%);
 	height: 100%;
 }
 
@@ -18,12 +17,12 @@
 .graph-toolbar {
 	display: flex;
 	align-items: center;
-	gap: var(--s4);
-	height: 36px;
+	flex-wrap: wrap;
+	gap: var(--s1) var(--s4);
+	min-height: 36px;
 	flex: none;
-	padding: 0 var(--s3);
+	padding: var(--s1) var(--s3);
 	border-bottom: 1px solid var(--border);
-	overflow: hidden;
 }
 
 .graph-title {

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SymbolId } from "../core/types";
+import { Explorer } from "./components/Explorer";
 import { Header } from "./components/Header";
 import { Palette } from "./components/Palette";
+import { ResizeHandle } from "./components/ResizeHandle";
 import { ErrorState, LoadingState } from "./components/States";
 import { TrustFooter } from "./components/TrustFooter";
 import { describeLoadError, type LoadProgress, loadData } from "./lib/api";
-import { isTypingTarget, useRoute } from "./lib/hooks";
+import { isTypingTarget, usePaneWidth, useRoute } from "./lib/hooks";
 import { CHANGES_HREF, flowHref, MAP_HREF, type Route, traceHref } from "./lib/route";
 import {
 	buildWorkspace,
@@ -31,6 +33,15 @@ function currentSymbol(route: Route) {
 		return route.symbol;
 	if (route.view === "changes") return route.symbol;
 	return undefined;
+}
+
+function viewHasExplorer(route: Route) {
+	return (
+		route.view === "trace" ||
+		route.view === "flow" ||
+		route.view === "symbol" ||
+		route.view === "file"
+	);
 }
 
 function routeBody(route: Route) {
@@ -61,6 +72,15 @@ function Shell() {
 	);
 	const route = useRoute(fallback);
 	const [paletteOpen, setPaletteOpen] = useState(false);
+	const [explorerOpen, setExplorerOpen] = useState(true);
+	const explorerPane = usePaneWidth({
+		storageKey: "repo-map.explorer-width",
+		initial: 280,
+		min: 180,
+		roomForOthers: 500,
+	});
+	const hasExplorer = viewHasExplorer(route);
+	const showExplorer = hasExplorer && explorerOpen;
 	const lastSymbol = useRef<SymbolId | undefined>(undefined);
 	lastSymbol.current = currentSymbol(route) ?? lastSymbol.current;
 
@@ -92,6 +112,9 @@ function Shell() {
 			else if (event.key === "f") switchView("flow");
 			else if (event.key === "m") switchView("map");
 			else if (event.key === "c") switchView("changes");
+			else if (event.key === "e") setExplorerOpen((open) => !open);
+			else if (event.key === "[") window.history.back();
+			else if (event.key === "]") window.history.forward();
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
@@ -102,9 +125,34 @@ function Shell() {
 			<Header
 				route={route}
 				lastSymbol={lastSymbol.current}
+				explorerOpen={hasExplorer ? explorerOpen : undefined}
+				onToggleExplorer={() => setExplorerOpen((open) => !open)}
 				onOpenPalette={() => setPaletteOpen(true)}
 			/>
-			<main className="shell-main">{routeBody(route)}</main>
+			<main className="shell-main">
+				<div
+					className="workbench"
+					style={{
+						gridTemplateColumns: showExplorer
+							? `min(${explorerPane.width}px, 40%) 5px minmax(0, 1fr)`
+							: "minmax(0, 1fr)",
+					}}
+				>
+					<div className="explorer-host" hidden={!showExplorer}>
+						<Explorer route={route} />
+					</div>
+					{showExplorer ? (
+						<ResizeHandle
+							label="Resize file tree"
+							width={explorerPane.width}
+							direction={1}
+							onResize={explorerPane.resize}
+							onReset={explorerPane.reset}
+						/>
+					) : null}
+					<div className="workbench-body">{routeBody(route)}</div>
+				</div>
+			</main>
 			<TrustFooter />
 			{paletteOpen ? <Palette onClose={() => setPaletteOpen(false)} /> : null}
 		</div>

@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { sid } from "./fixture";
-import { DEFAULT_FLOW_DEPTH, formatHash, MAX_FLOW_DEPTH, parseHash, type Route } from "./route";
+import {
+	DEFAULT_FLOW_DEPTH,
+	formatHash,
+	MAX_FLOW_DEPTH,
+	parseHash,
+	type Route,
+	symbolHref,
+	symbolInViewHref,
+} from "./route";
 
 const fallback: Route = { view: "map", tests: false };
 const symbol = sid("packages/server/src/host/handlers.ts", "handlers.session.prompt");
@@ -55,5 +63,51 @@ describe("route", () => {
 		expect(route.view === "flow" && route.depth).toBe(MAX_FLOW_DEPTH);
 		const invalid = parseHash("#/flow?d=abc", fallback);
 		expect(invalid.view === "flow" && invalid.depth).toBe(DEFAULT_FLOW_DEPTH);
+	});
+});
+
+describe("symbolInViewHref", () => {
+	const other = sid("apps/web/a.ts", "other");
+
+	test("keeps the flow layout and depth and clears the selected row", () => {
+		const route: Route = {
+			view: "flow",
+			layout: "sequence",
+			symbol,
+			selected: symbol,
+			side: "head",
+			depth: 5,
+			utilities: true,
+		};
+		expect(parseHash(symbolInViewHref(route, other), fallback)).toEqual({
+			view: "flow",
+			layout: "sequence",
+			symbol: other,
+			side: "head",
+			depth: 5,
+			utilities: true,
+		});
+	});
+
+	test("keeps trace toggles and clears expanded nodes", () => {
+		const route: Route = {
+			view: "trace",
+			symbol,
+			side: "head",
+			expanded: ["a"],
+			revealed: ["b"],
+			types: true,
+			tests: false,
+		};
+		expect(parseHash(symbolInViewHref(route, other), fallback)).toEqual({
+			...route,
+			symbol: other,
+			expanded: [],
+			revealed: [],
+		});
+	});
+
+	test("opens the symbol page from any other view", () => {
+		expect(symbolInViewHref({ view: "map", tests: false }, other)).toBe(symbolHref(other));
 	});
 });
