@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace, WorkspaceId } from "@thinkrail/contracts";
-import { asProjectId, asSessionId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	createWorkspace,
 	getWorkspace,
@@ -62,11 +62,11 @@ function fakeChat(workspaceId: WorkspaceId | undefined, named = false) {
 }
 
 test("names an unnamed chat and workspace once: any-script name, English branch, locked", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{
 			chat_title: "Ревью #567 Add page zoom shortcuts",
 			workspace_name: "Ревью #567 Add page zoom shortcuts",
@@ -87,7 +87,7 @@ test("names an unnamed chat and workspace once: any-script name, English branch,
 	expect(text).toContain("branch review-567-page-zoom");
 
 	const again = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Something else", workspace_name: "Something else", branch: "something-else" },
 		chat.deps,
 	);
@@ -97,12 +97,12 @@ test("names an unnamed chat and workspace once: any-script name, English branch,
 });
 
 test("a manual rename always wins over the agent", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	renameWorkspace(ws.id, "Mine");
 	const chat = fakeChat(ws.id, true);
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
 		chat.deps,
 	);
@@ -117,7 +117,7 @@ test.each([
 	["before", true],
 	["after", false],
 ])("the agent names a workspace whose terminal checked out a branch (nudge %s naming), but never moves that branch", async (_order, nudged) => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	git(ws.worktreePath, "switch", "-c", "feature/mine");
 	if (nudged) syncWorkspaceBranch(ws.id);
 	const refs = () =>
@@ -127,7 +127,7 @@ test.each([
 	const before = refs();
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
 		fakeChat(ws.id).deps,
 	);
@@ -144,11 +144,11 @@ test.each([
 });
 
 test("a detached HEAD still names the workspace and says the branch was kept", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	git(ws.worktreePath, "switch", "--detach");
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
 		fakeChat(ws.id).deps,
 	);
@@ -165,21 +165,21 @@ test("a detached HEAD still names the workspace and says the branch was kept", a
 });
 
 test("a kept branch moves on a later call from the same chat once HEAD is back on the own branch", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 	git(ws.worktreePath, "switch", "-c", "peek");
 	await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Agent title", workspace_name: "First", branch: "first" },
 		chat.deps,
 	);
 	git(ws.worktreePath, "switch", ws.branch);
-	expect(await applyAgentTitle(asSessionId("s1"), { chat_title: "Again" }, chat.deps)).toContain(
+	expect(await applyAgentTitle(testSessionId("s1"), { chat_title: "Again" }, chat.deps)).toContain(
 		"Chat title kept",
 	);
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ workspace_name: "Second", branch: "second" },
 		chat.deps,
 	);
@@ -190,7 +190,7 @@ test("a kept branch moves on a later call from the same chat once HEAD is back o
 	expect(after.branchNamePending).toBeUndefined();
 	expect(
 		await applyAgentTitle(
-			asSessionId("s1"),
+			testSessionId("s1"),
 			{ workspace_name: "Third", branch: "third" },
 			chat.deps,
 		),
@@ -198,36 +198,36 @@ test("a kept branch moves on a later call from the same chat once HEAD is back o
 });
 
 test("a kept branch never moves for another chat or after a manual rename", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	git(ws.worktreePath, "switch", "-c", "peek");
 	await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Agent title", workspace_name: "First", branch: "first" },
 		fakeChat(ws.id).deps,
 	);
 	git(ws.worktreePath, "switch", ws.branch);
 	const later = { chat_title: "Later chat", workspace_name: "Other task", branch: "other-task" };
 
-	expect(await applyAgentTitle(asSessionId("s2"), later, fakeChat(ws.id).deps)).toBe(
+	expect(await applyAgentTitle(testSessionId("s2"), later, fakeChat(ws.id).deps)).toBe(
 		'Chat title set to "Later chat".\nWorkspace name kept: this workspace is already named.',
 	);
 	renameWorkspace(ws.id, "User picked");
 	expect(getWorkspace(ws.id).branchNamePending).toBeUndefined();
-	expect(await applyAgentTitle(asSessionId("s1"), later, fakeChat(ws.id, true).deps)).toBe(
+	expect(await applyAgentTitle(testSessionId("s1"), later, fakeChat(ws.id, true).deps)).toBe(
 		"Chat title kept: this chat is already named.\nWorkspace name kept: this workspace is already named.",
 	);
 	expect(getWorkspace(ws.id)).toMatchObject({ name: "User picked", branch: ws.branch });
 });
 
 test("the Default workspace keeps its name while the chat still gets one", async () => {
-	const def = (await listWorkspaces(asProjectId("p1"))).find(
+	const def = (await listWorkspaces(testProjectId("p1"))).find(
 		(w): w is Workspace => w.kind === "default",
 	);
 	if (!def) throw new Error("expected a Default workspace");
 	const chat = fakeChat(def.id);
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Fix login", workspace_name: "Fix login" },
 		chat.deps,
 	);
@@ -238,11 +238,11 @@ test("the Default workspace keeps its name while the chat still gets one", async
 });
 
 test("long names clamp at a word boundary; a missing slug keeps the branch", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 	const long = "Review #9 ".concat("word ".repeat(30)).trim();
 
-	await applyAgentTitle(asSessionId("s1"), { chat_title: long, workspace_name: long }, chat.deps);
+	await applyAgentTitle(testSessionId("s1"), { chat_title: long, workspace_name: long }, chat.deps);
 
 	const title = chat.writes[0]?.title ?? "";
 	expect(title.length).toBeLessThanOrEqual(80);
@@ -254,11 +254,15 @@ test("long names clamp at a word boundary; a missing slug keeps the branch", asy
 });
 
 test("a branch without workspace_name is rejected before anything is written", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 
 	await expect(
-		applyAgentTitle(asSessionId("s1"), { chat_title: "Fix login", branch: "fix-login" }, chat.deps),
+		applyAgentTitle(
+			testSessionId("s1"),
+			{ chat_title: "Fix login", branch: "fix-login" },
+			chat.deps,
+		),
 	).rejects.toThrow("pass it together with workspace_name");
 
 	expect(chat.writes).toEqual([]);
@@ -267,17 +271,17 @@ test("a branch without workspace_name is rejected before anything is written", a
 });
 
 test("a chat-only call on an unnamed workspace is rejected before anything is written", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 	await expect(
-		applyAgentTitle(asSessionId("s1"), { chat_title: "Fix login" }, chat.deps),
+		applyAgentTitle(testSessionId("s1"), { chat_title: "Fix login" }, chat.deps),
 	).rejects.toThrow("pass chat_title, workspace_name and branch together in one call");
 	expect(chat.writes).toEqual([]);
 	expect(getWorkspace(ws.id).renamed).toBeUndefined();
 
 	renameWorkspace(ws.id, "Mine");
 	const named = await applyAgentTitle(
-		asSessionId("s2"),
+		testSessionId("s2"),
 		{ chat_title: "Other" },
 		fakeChat(ws.id).deps,
 	);
@@ -286,12 +290,12 @@ test("a chat-only call on an unnamed workspace is rejected before anything is wr
 
 test("rejects calls from sessions the host does not manage, and empty names", async () => {
 	await expect(
-		applyAgentTitle(asSessionId("child"), { chat_title: "x" }, fakeChat(undefined).deps),
+		applyAgentTitle(testSessionId("child"), { chat_title: "x" }, fakeChat(undefined).deps),
 	).rejects.toThrow("only available in a top-level chat");
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	await expect(
 		applyAgentTitle(
-			asSessionId("s1"),
+			testSessionId("s1"),
 			{ chat_title: "  ", workspace_name: "!!" },
 			fakeChat(ws.id).deps,
 		),

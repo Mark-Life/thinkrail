@@ -6,7 +6,7 @@ import type {
 	SessionId,
 	SessionResources,
 } from "@thinkrail/contracts";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { foldMcpSnapshot, type McpHeldSnapshot, type McpWorkspaceProjection } from "./mcp";
 import {
 	deriveMcpServerRows,
@@ -38,7 +38,7 @@ function session(sessionId: SessionId, servers: Partial<McpServerStatus>[]): Mcp
 	return foldMcpSnapshot(
 		undefined,
 		{
-			workspaceId: asWorkspaceId("ws"),
+			workspaceId: testWorkspaceId("ws"),
 			sessionId,
 			generation: 1,
 			servers: servers.map((server) => ({
@@ -100,9 +100,9 @@ test("across live chats a problem in any chat wins, and the row names the chats 
 		projection(
 			[summary("docs")],
 			[
-				session(asSessionId("a"), [{ toolCount: 2 }]),
-				session(asSessionId("b"), [{ toolCount: 2 }]),
-				session(asSessionId("c"), [{ state: "disabled-in-chat" }]),
+				session(testSessionId("a"), [{ toolCount: 2 }]),
+				session(testSessionId("b"), [{ toolCount: 2 }]),
+				session(testSessionId("c"), [{ state: "disabled-in-chat" }]),
 			],
 		),
 		NOW,
@@ -117,8 +117,8 @@ test("across live chats a problem in any chat wins, and the row names the chats 
 		projection(
 			[summary("docs")],
 			[
-				session(asSessionId("a"), [{ toolCount: 2 }]),
-				session(asSessionId("b"), [{ state: "failed", detail: "docs: failed: spawn ENOENT" }]),
+				session(testSessionId("a"), [{ toolCount: 2 }]),
+				session(testSessionId("b"), [{ state: "failed", detail: "docs: failed: spawn ENOENT" }]),
 			],
 		),
 		NOW,
@@ -133,9 +133,9 @@ test("across live chats a problem in any chat wins, and the row names the chats 
 		projection(
 			[summary("docs")],
 			[
-				session(asSessionId("a"), [{ state: "pending-reload" }]),
-				session(asSessionId("b"), [{ toolCount: 2 }]),
-				session(asSessionId("c"), [{ state: "pending-reload" }]),
+				session(testSessionId("a"), [{ state: "pending-reload" }]),
+				session(testSessionId("b"), [{ toolCount: 2 }]),
+				session(testSessionId("c"), [{ state: "pending-reload" }]),
 			],
 		),
 		NOW,
@@ -145,7 +145,7 @@ test("across live chats a problem in any chat wins, and the row names the chats 
 		sessions: { total: 3, connected: 1, reporting: ["a", "c"] },
 	});
 	const unreported = deriveMcpServerRows(
-		projection([summary("docs")], [session(asSessionId("a"), [])]),
+		projection([summary("docs")], [session(testSessionId("a"), [])]),
 		NOW,
 	);
 	expect(unreported[0]).toMatchObject({
@@ -155,13 +155,13 @@ test("across live chats a problem in any chat wins, and the row names the chats 
 	const partly = deriveMcpServerRows(
 		projection(
 			[summary("docs")],
-			[session(asSessionId("a"), [{ toolCount: 1 }]), session(asSessionId("b"), [])],
+			[session(testSessionId("a"), [{ toolCount: 1 }]), session(testSessionId("b"), [])],
 		),
 		NOW,
 	)[0];
 	expect(partly).toMatchObject({ state: "connected", sessions: { total: 2, connected: 1 } });
 	const disabled = deriveMcpServerRows(
-		projection([summary("docs", { enabled: false })], [session(asSessionId("a"), [])]),
+		projection([summary("docs", { enabled: false })], [session(testSessionId("a"), [])]),
 		NOW,
 	)[0];
 	expect(disabled?.state).toBe("disabled");
@@ -172,7 +172,7 @@ test("starting is bounded: past the bound it reads as unknown and stalled", () =
 	const fresh = deriveMcpServerRows(
 		projection(
 			[summary("docs")],
-			[session(asSessionId("a"), [{ state: "starting", updatedAt: startedAt }])],
+			[session(testSessionId("a"), [{ state: "starting", updatedAt: startedAt }])],
 		),
 		NOW,
 	)[0];
@@ -185,7 +185,7 @@ test("starting is bounded: past the bound it reads as unknown and stalled", () =
 		projection(
 			[summary("docs")],
 			[
-				session(asSessionId("a"), [
+				session(testSessionId("a"), [
 					{ state: "starting", updatedAt: NOW - MCP_STARTING_BOUND_MS - 1 },
 				]),
 			],
@@ -200,13 +200,13 @@ test("a workspace reads as starting while a live chat reports a server starting"
 		selectMcpWorkspaceStarting(
 			{
 				mcpByWorkspace: {
-					ws: projection([], [session(asSessionId("a"), [{ state: "starting" }])]),
+					ws: projection([], [session(testSessionId("a"), [{ state: "starting" }])]),
 				},
 			},
-			asWorkspaceId("ws"),
+			testWorkspaceId("ws"),
 		),
 	).toBe(true);
-	expect(selectMcpWorkspaceStarting({ mcpByWorkspace: {} }, asWorkspaceId("ws"))).toBe(false);
+	expect(selectMcpWorkspaceStarting({ mcpByWorkspace: {} }, testWorkspaceId("ws"))).toBe(false);
 });
 
 test("a same-name pair runs the approved project entry and replaces the user one; an unapproved one leaves the user entry running", () => {
@@ -220,7 +220,7 @@ test("a same-name pair runs the approved project entry and replaces the user one
 					approval: { state: "approved", fingerprint: "f" },
 				}),
 			],
-			[session(asSessionId("a"), [{ toolCount: 1 }])],
+			[session(testSessionId("a"), [{ toolCount: 1 }])],
 		),
 		NOW,
 	);
@@ -238,7 +238,7 @@ test("a same-name pair runs the approved project entry and replaces the user one
 					approval: { state: "changed", fingerprint: "g" },
 				}),
 			],
-			[session(asSessionId("a"), [{ toolCount: 1 }])],
+			[session(testSessionId("a"), [{ toolCount: 1 }])],
 		),
 		NOW,
 	);
@@ -266,12 +266,12 @@ test("host authority follows the admitted endpoint for pending, invalid and appr
 			approval: { state: replacement === "pending" ? "pending" : "approved", fingerprint: "f" },
 			...(replacement === "invalid" ? { configError: "Invalid repository definition" } : {}),
 		});
-		for (const sessions of [[], [session(asSessionId("a"), [{ state: "needs-sign-in" }])]]) {
+		for (const sessions of [[], [session(testSessionId("a"), [{ state: "needs-sign-in" }])]]) {
 			const rows = deriveMcpServerRows(projection([user, project], sessions), NOW);
 			const active = rows.find((row) => row.effective);
 			expect(active?.summary.endpoint).toBe(projectEffective ? project.endpoint : user.endpoint);
 			expect(active?.state).toBe(sessions.length > 0 ? "needs-sign-in" : "not-running");
-			expect(active?.sessions.reporting).toEqual(sessions.length > 0 ? [asSessionId("a")] : []);
+			expect(active?.sessions.reporting).toEqual(sessions.length > 0 ? [testSessionId("a")] : []);
 			const inactive = rows.find((row) => !row.effective);
 			expect(inactive?.sessions.reporting).toEqual([]);
 			expect(inactive?.state).toBe(
@@ -301,7 +301,7 @@ test("effective=true is authoritative despite folded invalid repository override
 	});
 	for (const servers of [[user], [user, skipped]]) {
 		const rows = deriveMcpServerRows(
-			projection(servers, [session(asSessionId("a"), [{ state: "needs-sign-in" }])]),
+			projection(servers, [session(testSessionId("a"), [{ state: "needs-sign-in" }])]),
 			NOW,
 		);
 		expect(byName(rows, "user:docs")).toMatchObject({
@@ -349,7 +349,7 @@ test("a pending repository override flags its user row for attention without hid
 	const [row] = deriveMcpServerRows(
 		projection(
 			[summary("docs", { approval: { state: "pending", fingerprint: "o" } })],
-			[session(asSessionId("a"), [{ toolCount: 3 }])],
+			[session(testSessionId("a"), [{ toolCount: 3 }])],
 		),
 		NOW,
 	);
@@ -369,7 +369,7 @@ test("handled elsewhere makes every row read-only, and attention rows sort first
 				summary("beta"),
 				summary("gamma", { transport: "http", oauth: true }),
 			],
-			[session(asSessionId("a"), [{ name: "beta" }, { name: "gamma", state: "needs-sign-in" }])],
+			[session(testSessionId("a"), [{ name: "beta" }, { name: "gamma", state: "needs-sign-in" }])],
 		),
 		NOW,
 	);
@@ -385,8 +385,8 @@ test("chat resource groups add the session's MCP servers, attention first, witho
 		{ name: "off", state: "disabled-in-chat", transport: "stdio" },
 	];
 	const base: SessionResources = {
-		workspaceId: asWorkspaceId("ws"),
-		sessionId: asSessionId("s"),
+		workspaceId: testWorkspaceId("ws"),
+		sessionId: testSessionId("s"),
 		commands: [],
 		subagents: [],
 	};

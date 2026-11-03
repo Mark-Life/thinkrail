@@ -15,7 +15,7 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { HistoryScope, SessionId, Workspace } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	admissionContextFor,
 	configurePiRuntime,
@@ -126,7 +126,7 @@ async function expectFullChatLifecycle(workspace: Workspace): Promise<void> {
 	expect(workspace.worktreePath).toBe(resolve(workspace.worktreePath));
 	const cwd = workspace.worktreePath;
 
-	const live = asSessionId(await chat(workspace, `live ${workspace.kind}`));
+	const live = testSessionId(await chat(workspace, `live ${workspace.kind}`));
 	await expect(getSessionResources(workspace.id, live, cwd)).resolves.toMatchObject({
 		sessionId: live,
 	});
@@ -135,7 +135,7 @@ async function expectFullChatLifecycle(workspace: Workspace): Promise<void> {
 	expect(existsSync(liveTranscript)).toBe(false);
 
 	const marker = `closedchat${workspace.kind}`;
-	const closed = asSessionId(await chat(workspace, marker));
+	const closed = testSessionId(await chat(workspace, marker));
 	const closedCwd = headerCwd(closed);
 	await removeSession(closed);
 	expect((await listSessions(workspace.id, cwd)).map((s) => s.sessionId)).toContain(closed);

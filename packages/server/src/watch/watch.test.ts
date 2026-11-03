@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkspaceFsChangedPayload, WorkspaceSkillChange } from "@thinkrail/contracts";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createCoalescer } from "./coalesce";
 import {
 	ensureWatch,
@@ -164,8 +164,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("ws1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("ws1"),
+				projectId: testProjectId("p1"),
 				name: "ws",
 				branch: "b",
 				worktreePath: worktree,
@@ -190,12 +190,12 @@ afterEach(() => {
 });
 
 test("a watched worktree publishes a debounced fsChanged batch for a new file", async () => {
-	void ensureWatch(asWorkspaceId("ws1"));
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 	writeFileSync(join(worktree, "hello.ts"), "export {};\n");
 	await waitFor(() => payloads.length > 0);
-	expect(payloads[0]?.workspaceId).toBe(asWorkspaceId("ws1"));
+	expect(payloads[0]?.workspaceId).toBe(testWorkspaceId("ws1"));
 	expect(payloads[0]?.truncated).toBe(false);
 	expect(payloads[0]?.paths).toContain("hello.ts");
 	expect(payloads[0]?.skillChange).toBe("none");
@@ -203,7 +203,7 @@ test("a watched worktree publishes a debounced fsChanged batch for a new file", 
 
 test("a watched project-skill path carries detected evidence", async () => {
 	mkdirSync(join(worktree, ".claude", "skills", "demo"), { recursive: true });
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 	writeFileSync(join(worktree, ".claude", "skills", "demo", "SKILL.md"), "# Demo\n");
 	await waitFor(() => payloads.some((payload) => payload.skillChange === "detected"));
@@ -214,7 +214,7 @@ test("a watched project-skill path carries detected evidence", async () => {
 
 test("a missing classifier degrades a concrete event to unknown", async () => {
 	setSkillPathClassifier(null);
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 	writeFileSync(join(worktree, "unclassified.ts"), "export {};\n");
 	await waitFor(() => payloads.some((payload) => payload.paths.includes("unclassified.ts")));
@@ -228,8 +228,8 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	const started: string[] = [];
 	setRepoMetaPublisher((id) => nudges.push(id));
 	setWatchStartedPublisher((id) => started.push(`${id}:${nudges.length}`));
-	void ensureWatch(asWorkspaceId("ws1"));
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	expect(started).toEqual(["ws1:0"]);
 	await sleep(100);
 
@@ -242,7 +242,7 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	await sleep(600);
 	expect(payloads.filter((p) => p.paths.some((x) => x.includes(".git")))).toHaveLength(0);
 
-	stopWatch(asWorkspaceId("ws1"));
+	stopWatch(testWorkspaceId("ws1"));
 	writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/other\n");
 	await sleep(600);
 	expect(nudges).toEqual(["ws1"]);
@@ -262,7 +262,7 @@ test("a throwing repo-meta or fsChanged subscriber never escapes the watcher's t
 			payloads.push(payload);
 			throw new Error("subscriber failed");
 		});
-		void ensureWatch(asWorkspaceId("ws1"));
+		void ensureWatch(testWorkspaceId("ws1"));
 		await waitFor(() => payloads.length > 0);
 		writeFileSync(join(worktree, "after.ts"), "export {};\n");
 		await waitFor(() => payloads.some((payload) => payload.paths.includes("after.ts")));
@@ -284,12 +284,12 @@ test("a watch-started publisher that throws leaves no half-registered watcher be
 		calls += 1;
 		if (calls === 1) throw new Error("seed failed");
 	});
-	expect(await ensureWatch(asWorkspaceId("ws1"))).toEqual({ startupNudge: true });
+	expect(await ensureWatch(testWorkspaceId("ws1"))).toEqual({ startupNudge: true });
 	expect(calls).toBe(1);
-	const ready = ensureWatch(asWorkspaceId("ws1"));
+	const ready = ensureWatch(testWorkspaceId("ws1"));
 	expect(calls).toBe(2);
 	expect(await ready).toEqual({ startupNudge: true });
-	expect(await ensureWatch(asWorkspaceId("ws1"))).toEqual({ startupNudge: false });
+	expect(await ensureWatch(testWorkspaceId("ws1"))).toEqual({ startupNudge: false });
 });
 
 test("a linked worktree's git metadata lives outside the root — its churn still nudges the sink", async () => {
@@ -300,7 +300,7 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 
 	const nudges: string[] = [];
 	setRepoMetaPublisher((id) => nudges.push(id));
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 
 	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b2\n");
@@ -310,7 +310,7 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 	expect(nudges).toEqual(["ws1"]);
 	expect(payloads.filter((p) => p.paths.length > 0)).toHaveLength(0);
 
-	stopWatch(asWorkspaceId("ws1"));
+	stopWatch(testWorkspaceId("ws1"));
 	await sleep(50);
 	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b3\n");
 	await sleep(600);
@@ -318,7 +318,7 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 });
 
 test("ignored churn (node_modules) never publishes", async () => {
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 	mkdirSync(join(worktree, "node_modules"));
 	await sleep(50);
@@ -328,11 +328,11 @@ test("ignored churn (node_modules) never publishes", async () => {
 });
 
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
-	void ensureWatch(asWorkspaceId("nope"));
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("nope"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
-	stopWatch(asWorkspaceId("ws1"));
-	stopWatch(asWorkspaceId("ws1"));
+	stopWatch(testWorkspaceId("ws1"));
+	stopWatch(testWorkspaceId("ws1"));
 	writeFileSync(join(worktree, "after-stop.ts"), "x\n");
 	await sleep(1000);
 	expect(payloads).toHaveLength(0);
@@ -344,8 +344,8 @@ test("a fresh watcher shares readiness, publishes its wildcard first, then repor
 		payloads.push(payload);
 		order.push("publish");
 	});
-	const first = ensureWatch(asWorkspaceId("ws1"));
-	const second = ensureWatch(asWorkspaceId("ws1"));
+	const first = ensureWatch(testWorkspaceId("ws1"));
+	const second = ensureWatch(testWorkspaceId("ws1"));
 	expect(second).toBe(first);
 	const settled = first.then((result) => {
 		order.push("ready");
@@ -356,28 +356,28 @@ test("a fresh watcher shares readiness, publishes its wildcard first, then repor
 	expect(order).toEqual([]);
 	expect(await settled).toEqual({ startupNudge: true });
 	expect(payloads).toEqual([
-		{ workspaceId: asWorkspaceId("ws1"), paths: [], truncated: true, skillChange: "unknown" },
+		{ workspaceId: testWorkspaceId("ws1"), paths: [], truncated: true, skillChange: "unknown" },
 	]);
 	expect(order).toEqual(["publish", "ready"]);
-	expect(await ensureWatch(asWorkspaceId("ws1"))).toEqual({ startupNudge: false });
+	expect(await ensureWatch(testWorkspaceId("ws1"))).toEqual({ startupNudge: false });
 	await sleep(300);
 	expect(payloads).toHaveLength(1);
 });
 
 test("stopping before readiness settles callers conservatively without a late publish", async () => {
-	const ready = ensureWatch(asWorkspaceId("ws1"));
-	stopWatch(asWorkspaceId("ws1"));
+	const ready = ensureWatch(testWorkspaceId("ws1"));
+	stopWatch(testWorkspaceId("ws1"));
 	expect(await ready).toEqual({ startupNudge: true });
 	await sleep(1000);
 	expect(payloads).toHaveLength(0);
 });
 
 test("a deleted-and-recreated worktree root (same path, new inode) is re-watched on the next read", async () => {
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 	rmSync(worktree, { recursive: true, force: true });
 	mkdirSync(worktree);
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 	payloads.length = 0;
 	writeFileSync(join(worktree, "reborn.ts"), "x\n");
@@ -397,7 +397,7 @@ function seedWorkspaces(ids: string[]): Map<string, string> {
 		JSON.stringify(
 			ids.map((id) => ({
 				id,
-				projectId: asProjectId("p1"),
+				projectId: testProjectId("p1"),
 				name: id,
 				branch: id,
 				worktreePath: roots.get(id),
@@ -414,14 +414,14 @@ const isSettled = (promise: Promise<unknown>): Promise<boolean> =>
 test("prewarm-only watchers are globally capped: the oldest is evicted, real watchers never are", async () => {
 	const prewarmIds = Array.from({ length: 9 }, (_, i) => `p${i + 1}`);
 	seedWorkspaces(["real1", ...prewarmIds]);
-	const realReady = ensureWatch(asWorkspaceId("real1"));
+	const realReady = ensureWatch(testWorkspaceId("real1"));
 	const readies = new Map(
-		prewarmIds.slice(0, 8).map((id) => [id, ensureWatch(asWorkspaceId(id), { prewarm: true })]),
+		prewarmIds.slice(0, 8).map((id) => [id, ensureWatch(testWorkspaceId(id), { prewarm: true })]),
 	);
 	expect(await isSettled(realReady)).toBe(false);
 	for (const ready of readies.values()) expect(await isSettled(ready)).toBe(false);
 
-	void ensureWatch(asWorkspaceId("p9"), { prewarm: true });
+	void ensureWatch(testWorkspaceId("p9"), { prewarm: true });
 	const evicted = readies.get("p1");
 	if (!evicted) throw new Error("missing p1 readiness");
 	expect(await evicted).toEqual({ startupNudge: true });
@@ -432,14 +432,14 @@ test("prewarm-only watchers are globally capped: the oldest is evicted, real wat
 test("a real read promotes a prewarmed watcher out of prewarm eviction", async () => {
 	const prewarmIds = Array.from({ length: 10 }, (_, i) => `p${i + 1}`);
 	seedWorkspaces(prewarmIds);
-	const promoted = ensureWatch(asWorkspaceId("p1"), { prewarm: true });
-	expect(ensureWatch(asWorkspaceId("p1"))).toBe(promoted);
+	const promoted = ensureWatch(testWorkspaceId("p1"), { prewarm: true });
+	expect(ensureWatch(testWorkspaceId("p1"))).toBe(promoted);
 	const readies = new Map(
-		prewarmIds.slice(1, 9).map((id) => [id, ensureWatch(asWorkspaceId(id), { prewarm: true })]),
+		prewarmIds.slice(1, 9).map((id) => [id, ensureWatch(testWorkspaceId(id), { prewarm: true })]),
 	);
 	expect(await isSettled(promoted)).toBe(false);
 
-	void ensureWatch(asWorkspaceId("p10"), { prewarm: true });
+	void ensureWatch(testWorkspaceId("p10"), { prewarm: true });
 	expect(await isSettled(readies.get("p2") ?? Promise.resolve())).toBe(true);
 	expect(await isSettled(promoted)).toBe(false);
 	expect(await isSettled(readies.get("p3") ?? Promise.resolve())).toBe(false);
@@ -448,19 +448,19 @@ test("a real read promotes a prewarmed watcher out of prewarm eviction", async (
 test("re-prewarming an alive prewarm-only watcher refreshes its eviction recency", async () => {
 	const prewarmIds = Array.from({ length: 9 }, (_, i) => `p${i + 1}`);
 	seedWorkspaces(prewarmIds);
-	const first = ensureWatch(asWorkspaceId("p1"), { prewarm: true });
+	const first = ensureWatch(testWorkspaceId("p1"), { prewarm: true });
 	const readies = new Map(
-		prewarmIds.slice(1, 8).map((id) => [id, ensureWatch(asWorkspaceId(id), { prewarm: true })]),
+		prewarmIds.slice(1, 8).map((id) => [id, ensureWatch(testWorkspaceId(id), { prewarm: true })]),
 	);
-	expect(ensureWatch(asWorkspaceId("p1"), { prewarm: true })).toBe(first);
+	expect(ensureWatch(testWorkspaceId("p1"), { prewarm: true })).toBe(first);
 
-	void ensureWatch(asWorkspaceId("p9"), { prewarm: true });
+	void ensureWatch(testWorkspaceId("p9"), { prewarm: true });
 	expect(await isSettled(readies.get("p2") ?? Promise.resolve())).toBe(true);
 	expect(await isSettled(first)).toBe(false);
 });
 
 test("a watcher whose workspace record is gone is reaped on the next ensureWatch", async () => {
-	void ensureWatch(asWorkspaceId("ws1"));
+	void ensureWatch(testWorkspaceId("ws1"));
 	await sleep(100);
 	const worktree2 = join(dataDir, "worktree2");
 	mkdirSync(worktree2);
@@ -468,8 +468,8 @@ test("a watcher whose workspace record is gone is reaped on the next ensureWatch
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("ws2"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("ws2"),
+				projectId: testProjectId("p1"),
 				name: "ws2",
 				branch: "b2",
 				worktreePath: worktree2,
@@ -477,7 +477,7 @@ test("a watcher whose workspace record is gone is reaped on the next ensureWatch
 			},
 		]),
 	);
-	void ensureWatch(asWorkspaceId("ws2"));
+	void ensureWatch(testWorkspaceId("ws2"));
 	await sleep(100);
 	payloads.length = 0;
 	writeFileSync(join(worktree, "zombie.ts"), "x\n");

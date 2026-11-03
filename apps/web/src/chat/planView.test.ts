@@ -6,7 +6,7 @@ import type {
 	TodoItem,
 	UserMessage,
 } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { InteractionState } from "./interactionState";
 import {
 	adoptedCommits,
@@ -142,7 +142,7 @@ test("hostSessionGlance uses host blockers and execution over stale transcript f
 					kind: "dialog",
 					request: {
 						id: "d1",
-						sessionId: asSessionId("s1"),
+						sessionId: testSessionId("s1"),
 						kind: "confirm",
 						title: "Continue?",
 						message: "Proceed?",
@@ -460,12 +460,12 @@ test("itemOpenFindings: counts open agent comments anchored in the item's change
 	expect(
 		itemOpenFindings(
 			flagged,
-			[stamped("t_flagged", asSessionId("s1")), stamped("t_other", asSessionId("s1"))],
-			asSessionId("s1"),
+			[stamped("t_flagged", testSessionId("s1")), stamped("t_other", testSessionId("s1"))],
+			testSessionId("s1"),
 		),
 	).toBe(1);
 	expect(
-		itemOpenFindings(flagged, [stamped("t_flagged", asSessionId("s2"))], asSessionId("s1")),
+		itemOpenFindings(flagged, [stamped("t_flagged", testSessionId("s2"))], testSessionId("s1")),
 	).toBe(0);
 	expect(reviewChangesRequested(flagged)).toBe(true);
 	expect(reviewChangesRequested(item("plain", "done"))).toBe(false);

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { readableFileSize, readDir, readFile, workspaceRelativePath } from "./files";
 
 let dataDir: string;
@@ -19,8 +19,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				baseBranch: "main",
@@ -37,9 +37,9 @@ afterEach(() => {
 });
 
 test("readDir reports worktree-relative paths with forward slashes on every platform", () => {
-	expect(readDir(asWorkspaceId("w1"), ".").map((node) => node.path)).toEqual(["src"]);
-	expect(readDir(asWorkspaceId("w1"), "src").map((node) => node.path)).toEqual(["src/auth"]);
-	expect(readDir(asWorkspaceId("w1"), "src/auth").map((node) => node.path)).toEqual([
+	expect(readDir(testWorkspaceId("w1"), ".").map((node) => node.path)).toEqual(["src"]);
+	expect(readDir(testWorkspaceId("w1"), "src").map((node) => node.path)).toEqual(["src/auth"]);
+	expect(readDir(testWorkspaceId("w1"), "src/auth").map((node) => node.path)).toEqual([
 		"src/auth/login.ts",
 	]);
 });
@@ -70,7 +70,9 @@ symlinkTest("readDir classifies symlinks by target and refuses escaping ones", (
 	symlinkSync(join(root, "real", "a.ts"), join(root, "filelink"));
 	symlinkSync(join(root, "missing"), join(root, "dangling"));
 	symlinkSync(join(dataDir, "outside"), join(root, "escape"));
-	const kinds = Object.fromEntries(readDir(asWorkspaceId("w1"), ".").map((n) => [n.name, n.kind]));
+	const kinds = Object.fromEntries(
+		readDir(testWorkspaceId("w1"), ".").map((n) => [n.name, n.kind]),
+	);
 	expect(kinds).toMatchObject({
 		real: "dir",
 		dirlink: "dir",
@@ -78,8 +80,8 @@ symlinkTest("readDir classifies symlinks by target and refuses escaping ones", (
 		dangling: "file",
 		escape: "file",
 	});
-	expect(readDir(asWorkspaceId("w1"), "dirlink").map((n) => n.path)).toEqual(["dirlink/a.ts"]);
-	expect(() => readDir(asWorkspaceId("w1"), "escape")).toThrow("escapes");
+	expect(readDir(testWorkspaceId("w1"), "dirlink").map((n) => n.path)).toEqual(["dirlink/a.ts"]);
+	expect(() => readDir(testWorkspaceId("w1"), "escape")).toThrow("escapes");
 });
 
 test("readableFileSize answers a regular file's size and missing for what readFile would not serve", () => {
@@ -109,10 +111,10 @@ test.skipIf(process.platform === "win32")(
 		symlinkSync(join(root, "loop-a"), join(root, "loop-b"));
 
 		expect(readableFileSize(root, "inside-link.ts")).toBe(11);
-		expect(readFile(asWorkspaceId("w1"), "inside-link.ts").content).toBe("export {};\n");
+		expect(readFile(testWorkspaceId("w1"), "inside-link.ts").content).toBe("export {};\n");
 		for (const path of ["outside-link.txt", "metadata-link", "dangling-link.ts", "loop-a"]) {
 			expect(readableFileSize(root, path)).toBe("missing");
-			expect(() => readFile(asWorkspaceId("w1"), path)).toThrow();
+			expect(() => readFile(testWorkspaceId("w1"), path)).toThrow();
 		}
 		expect(readableFileSize(root, "dir-link")).toBe("missing");
 	},
@@ -120,35 +122,35 @@ test.skipIf(process.platform === "win32")(
 
 test("readFile with maxBytes reads at most the cap and refuses a larger file, contained as before", () => {
 	writeFileSync(join(root, "exact.txt"), "12345");
-	expect(readFile(asWorkspaceId("w1"), "exact.txt", { maxBytes: 5 }).content).toBe("12345");
-	expect(readFile(asWorkspaceId("w1"), "exact.txt", { maxBytes: 6 }).meta.byteLength).toBe(5);
-	expect(() => readFile(asWorkspaceId("w1"), "exact.txt", { maxBytes: 4 })).toThrow(
+	expect(readFile(testWorkspaceId("w1"), "exact.txt", { maxBytes: 5 }).content).toBe("12345");
+	expect(readFile(testWorkspaceId("w1"), "exact.txt", { maxBytes: 6 }).meta.byteLength).toBe(5);
+	expect(() => readFile(testWorkspaceId("w1"), "exact.txt", { maxBytes: 4 })).toThrow(
 		expect.objectContaining({ code: "FILE_TOO_LARGE" }),
 	);
 	writeFileSync(join(root, "empty.txt"), "");
-	expect(readFile(asWorkspaceId("w1"), "empty.txt", { maxBytes: 0 }).content).toBe("");
-	expect(() => readFile(asWorkspaceId("w1"), "exact.txt", { maxBytes: 0 })).toThrow(
+	expect(readFile(testWorkspaceId("w1"), "empty.txt", { maxBytes: 0 }).content).toBe("");
+	expect(() => readFile(testWorkspaceId("w1"), "exact.txt", { maxBytes: 0 })).toThrow(
 		expect.objectContaining({ code: "FILE_TOO_LARGE" }),
 	);
-	expect(() => readFile(asWorkspaceId("w1"), "exact.txt", { maxBytes: -1 })).toThrow(
+	expect(() => readFile(testWorkspaceId("w1"), "exact.txt", { maxBytes: -1 })).toThrow(
 		"non-negative integer",
 	);
-	expect(() => readFile(asWorkspaceId("w1"), "exact.txt", { maxBytes: 1.5 })).toThrow(
+	expect(() => readFile(testWorkspaceId("w1"), "exact.txt", { maxBytes: 1.5 })).toThrow(
 		"non-negative integer",
 	);
 	writeFileSync(join(dataDir, "outside.txt"), "secret");
-	expect(() => readFile(asWorkspaceId("w1"), "../outside.txt", { maxBytes: 100 })).toThrow();
+	expect(() => readFile(testWorkspaceId("w1"), "../outside.txt", { maxBytes: 100 })).toThrow();
 	const big = 200 * 1024;
 	writeFileSync(join(root, "big.txt"), "y".repeat(big));
-	expect(readFile(asWorkspaceId("w1"), "big.txt", { maxBytes: big }).meta.byteLength).toBe(big);
-	expect(() => readFile(asWorkspaceId("w1"), "big.txt", { maxBytes: big - 1 })).toThrow(
+	expect(readFile(testWorkspaceId("w1"), "big.txt", { maxBytes: big }).meta.byteLength).toBe(big);
+	expect(() => readFile(testWorkspaceId("w1"), "big.txt", { maxBytes: big - 1 })).toThrow(
 		expect.objectContaining({ code: "FILE_TOO_LARGE" }),
 	);
 	writeFileSync(
 		join(root, "picture.png"),
 		Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
 	);
-	expect(readFile(asWorkspaceId("w1"), "picture.png", { maxBytes: 100 })).toMatchObject({
+	expect(readFile(testWorkspaceId("w1"), "picture.png", { maxBytes: 100 })).toMatchObject({
 		content: "",
 		meta: { text: false },
 	});

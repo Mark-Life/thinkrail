@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 import { shot } from "./fixtures/screenshots";
 
@@ -66,7 +66,7 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	await expect(
 		page.locator('[data-testid="stream-indicator"][data-phase="running-tool"]'),
 	).toHaveText("Running bash…", { timeout: 120_000 });
-	const parentId = asSessionId(await currentParentId(page));
+	const parentId = testSessionId(await currentParentId(page));
 	await expect(page.getByTestId("resources-dock")).toBeVisible();
 	const inspector = await openResources(page);
 	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
@@ -194,7 +194,7 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 	await expect(trigger).toHaveAttribute("data-active-count", "2", { timeout: 180_000 });
 	await expect(trigger).toHaveAccessibleName("Resources, 2 active");
 	await waitForAgentSettled(page, 120_000);
-	const parentId = asSessionId(await currentParentId(page));
+	const parentId = testSessionId(await currentParentId(page));
 	const turnsBeforeStop = starts(parentId);
 	expect(turnsBeforeStop).toBeGreaterThan(0);
 	const inspector = await openResources(page);

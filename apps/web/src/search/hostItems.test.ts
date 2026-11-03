@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
 	MATCH_TIER,
 	parseMatchTerms,
 	type SearchGroup,
 	type SearchHit,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { hostItems } from "./hostItems";
 import { EMPTY_LEARNING } from "./learning";
@@ -16,8 +14,8 @@ import { rankItems } from "./rank";
 const base = {
 	tier: MATCH_TIER.prefix,
 	score: 1,
-	projectId: asProjectId("p1"),
-	workspaceId: asWorkspaceId("w1"),
+	projectId: testProjectId("p1"),
+	workspaceId: testWorkspaceId("w1"),
 } as const;
 
 const file: SearchHit = {
@@ -40,7 +38,7 @@ const plan: SearchHit = {
 	kind: "plan",
 	title: "Refresh the token",
 	subtitle: "Auth plan",
-	sessionId: asSessionId("remote"),
+	sessionId: testSessionId("remote"),
 };
 const transcript: SearchHit = {
 	...base,
@@ -50,7 +48,7 @@ const transcript: SearchHit = {
 	subtitle: "Only the host knows",
 	tier: MATCH_TIER.content,
 	score: 0,
-	sessionId: asSessionId("remote"),
+	sessionId: testSessionId("remote"),
 	messageIndex: 3,
 	anchorText: "the refresh now retries",
 	ranges: { title: [[4, 11]] },
@@ -90,7 +88,7 @@ describe("hostItems", () => {
 			subtitle: "One › Auth refresh · src/auth",
 			scope: "files",
 			group: "files",
-			file: { workspaceId: asWorkspaceId("w1"), path: "src/auth/refresh.ts" },
+			file: { workspaceId: testWorkspaceId("w1"), path: "src/auth/refresh.ts" },
 		});
 		expect(file?.previewTarget).toBeUndefined();
 		expect(file?.match?.ranges.title).toEqual([[0, 7]]);
@@ -114,7 +112,7 @@ describe("hostItems", () => {
 		expect(result.find((item) => item.kind === "transcript")).toMatchObject({
 			late: 1,
 			subtitle: "Only the host knows · One › Auth refresh",
-			previewTarget: { kind: "chat", sessionId: asSessionId("remote"), messageIndex: 3 },
+			previewTarget: { kind: "chat", sessionId: testSessionId("remote"), messageIndex: 3 },
 		});
 	});
 

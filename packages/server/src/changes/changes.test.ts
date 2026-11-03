@@ -20,7 +20,7 @@ import type {
 	RevertTarget,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { hashBytes } from "../fs";
 import { setTrashImplementationForTests } from "../trash";
 import { forgetWorkspaceChanges, retainReceipts, revertChange, undoChange } from "./changes";
@@ -116,13 +116,13 @@ beforeEach(() => {
 	git("config", "core.autocrlf", "false");
 	write("a.ts", "one\ntwo\nthree\n");
 	commitAll("init");
-	workspaceId = asWorkspaceId(`w${++nextWorkspace}`);
+	workspaceId = testWorkspaceId(`w${++nextWorkspace}`);
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
 				id: workspaceId,
-				projectId: asProjectId("p1"),
+				projectId: testProjectId("p1"),
 				name: workspaceId,
 				branch: "main",
 				worktreePath: repo,

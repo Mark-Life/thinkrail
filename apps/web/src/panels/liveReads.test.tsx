@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asWorkspaceId, type WorkspaceId } from "@thinkrail/contracts";
+import type { WorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { act, type ReactNode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useAppStore } from "../store";
@@ -59,7 +60,7 @@ function scriptedReads<T>() {
 const tick = (workspaceId: string, paths: string[], truncated = false) =>
 	act(async () => {
 		useAppStore.getState().noteFsChanged({
-			workspaceId: asWorkspaceId(workspaceId),
+			workspaceId: testWorkspaceId(workspaceId),
 			paths,
 			truncated,
 			skillChange: "none",
@@ -72,7 +73,7 @@ function WorkspaceRead(props: {
 	results: string[];
 	switched?: string[];
 }) {
-	useWorkspaceRead(asWorkspaceId(props.workspaceId), props.read, {
+	useWorkspaceRead(testWorkspaceId(props.workspaceId), props.read, {
 		onResult: (value) => props.results.push(value),
 		onSwitch: (id) => props.switched?.push(id),
 	});
@@ -141,7 +142,7 @@ test("a slow tab read waits out further ticks, lands, then catches up once", asy
 	const applied: string[] = [];
 	const view = await mount(
 		<LiveTab
-			workspaceId={asWorkspaceId("lt-slow")}
+			workspaceId={testWorkspaceId("lt-slow")}
 			path="f.ts"
 			read={host.read}
 			applied={applied}
@@ -163,7 +164,7 @@ test("a slow tab read waits out further ticks, lands, then catches up once", asy
 test("a tab that moves to another file drops the old file's answer", async () => {
 	const host = scriptedReads<string>();
 	const applied: string[] = [];
-	const props = { workspaceId: asWorkspaceId("lt-switch"), read: host.read, applied };
+	const props = { workspaceId: testWorkspaceId("lt-switch"), read: host.read, applied };
 	const view = await mount(<LiveTab path="a.ts" {...props} />);
 	await tick("lt-switch", [], true);
 	await view.rerender(<LiveTab path="b.ts" {...props} />);

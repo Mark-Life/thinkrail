@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
 import type { PiPackageSummary, PiPackagesCatalog, WorkspaceId } from "@thinkrail/contracts";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { setPiPackagesPublisher } from "../agent";
 import { writeFixturePiPackage } from "../agent/packages/testFixtures";
@@ -52,8 +52,8 @@ beforeEach(() => {
 		join(root, "data", "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				kind: "default",
 				name: "Default",
 				branch: "main",
@@ -100,7 +100,7 @@ test("lists user scope without a workspace and repository scope with a trusted o
 	expect(userOnly.packages.map((p) => [p.name, p.scope])).toEqual([["@fixture/pi-tools", "user"]]);
 	expect(userOnly.builtins.map((b) => b.name)).toEqual(["mcp", "tool-search"]);
 
-	const withWorkspace = await list(asWorkspaceId("w1"));
+	const withWorkspace = await list(testWorkspaceId("w1"));
 	expect(withWorkspace.projectTrusted).toBe(true);
 	expect(withWorkspace.projectSettingsPath).toBe(join(repo, ".pi", "settings.json"));
 	expect(withWorkspace.packages.map((p) => [p.scope, p.shadowed ?? false])).toEqual([
@@ -114,7 +114,7 @@ test("installing for me a package the repository already declares returns a row 
 	writeFileSync(join(repo, ".pi", "settings.json"), JSON.stringify({ packages: [pkg] }));
 	const summary = (await handleRequest(
 		"packages.install",
-		{ source: pkg, scope: "user", workspaceId: asWorkspaceId("w1") },
+		{ source: pkg, scope: "user", workspaceId: testWorkspaceId("w1") },
 		CTX,
 	)) as PiPackageSummary;
 	expect(summary).toMatchObject({ scope: "user", shadowed: true, enabled: true });
@@ -207,20 +207,20 @@ test("installing for the repository a folder the user already declares returns t
 	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [tools] }));
 	const projectKey = `local:project:${repo}:tools`;
 	updateConfig({ disabledPackages: [projectKey] });
-	expect((await list(asWorkspaceId("w1"))).packages[0]).toMatchObject({
+	expect((await list(testWorkspaceId("w1"))).packages[0]).toMatchObject({
 		scope: "user",
 		enabled: true,
 		switchKeys: [`local:${tools}`],
 	});
 	const summary = (await handleRequest(
 		"packages.install",
-		{ source: "./tools", scope: "project", workspaceId: asWorkspaceId("w1") },
+		{ source: "./tools", scope: "project", workspaceId: testWorkspaceId("w1") },
 		CTX,
 	)) as PiPackageSummary;
 	expect(summary).toMatchObject({ scope: "project", enabled: true });
 	expect(summary.switchKeys.sort()).toEqual([`local:${tools}`, projectKey].sort());
 	expect(getConfig().disabledPackages).toEqual([]);
-	const rows = (await list(asWorkspaceId("w1"))).packages;
+	const rows = (await list(testWorkspaceId("w1"))).packages;
 	expect(rows.map((row) => [row.scope, row.enabled, row.shadowed ?? false])).toEqual([
 		["user", true, true],
 		["project", true, false],
@@ -259,7 +259,7 @@ test("a repository install needs a trusted project", async () => {
 	);
 	const error = await handleRequest(
 		"packages.install",
-		{ source: pkg, scope: "project", workspaceId: asWorkspaceId("w1") },
+		{ source: pkg, scope: "project", workspaceId: testWorkspaceId("w1") },
 		CTX,
 	).catch((e) => e);
 	expect(errorCodeOf(error)).toBe("PACKAGE_UNTRUSTED");

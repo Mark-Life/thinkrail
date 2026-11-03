@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createReadSequencer,
 	createTabReader,
@@ -88,7 +88,7 @@ test("a tick read superseded before it applied rechecks so the tab does not stay
 });
 
 function liveTab() {
-	const tab = { workspaceId: asWorkspaceId("w"), path: "a.ts", loadedTick: 0, content: "v0" };
+	const tab = { workspaceId: testWorkspaceId("w"), path: "a.ts", loadedTick: 0, content: "v0" };
 	let disk = "v1";
 	let tick = 0;
 	const reads: Array<{ snapshot: string; resolve: () => void; reject: () => void }> = [];

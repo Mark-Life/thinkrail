@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Project, ProjectId, Workspace } from "@thinkrail/contracts";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "../store";
 import { createPaletteNavigator } from "./paletteNavigation";
 
 const project = (id: string): Project => ({
-	id: asProjectId(id),
+	id: testProjectId(id),
 	name: id,
 	path: `/repos/${id}`,
 	slug: id,
@@ -13,7 +13,7 @@ const project = (id: string): Project => ({
 });
 
 const workspace = (id: string, projectId: ProjectId): Workspace => ({
-	id: asWorkspaceId(id),
+	id: testWorkspaceId(id),
 	projectId,
 	name: id,
 	branch: id,
@@ -44,25 +44,25 @@ describe("palette navigation", () => {
 		const loader = deferredLoader();
 		const navigator = createPaletteNavigator(loader.load);
 		const first = navigator.navigateToWorkspace({
-			id: asWorkspaceId("pa-w"),
-			projectId: asProjectId("pa"),
+			id: testWorkspaceId("pa-w"),
+			projectId: testProjectId("pa"),
 		});
 		const second = navigator.navigateToWorkspace({
-			id: asWorkspaceId("pb-w"),
-			projectId: asProjectId("pb"),
+			id: testWorkspaceId("pb-w"),
+			projectId: testProjectId("pb"),
 		});
-		loader.finish(asProjectId("pa"));
+		loader.finish(testProjectId("pa"));
 		expect(await first).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-		loader.finish(asProjectId("pb"));
+		loader.finish(testProjectId("pb"));
 		expect(await second).toBe(true);
-		expect(useAppStore.getState().activeWorkspaceId).toBe(asWorkspaceId("pb-w"));
+		expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("pb-w"));
 	});
 
 	test("a begun pick stops being wanted after a later pick or a navigation elsewhere, not when its own list lands", () => {
 		useAppStore.setState({
 			projects: [project("pa"), project("pb")],
-			workspaces: { pb: [workspace("pb-w", asProjectId("pb"))] },
+			workspaces: { pb: [workspace("pb-w", testProjectId("pb"))] },
 		});
 		const navigator = createPaletteNavigator(deferredLoader().load);
 		const overtaken = navigator.beginPick();
@@ -71,46 +71,48 @@ describe("palette navigation", () => {
 		expect(current()).toBe(true);
 		useAppStore
 			.getState()
-			.setWorkspaces(asProjectId("pa"), [workspace("pa-default", asProjectId("pa"))]);
+			.setWorkspaces(testProjectId("pa"), [workspace("pa-default", testProjectId("pa"))]);
 		expect(current()).toBe(true);
 		useAppStore
 			.getState()
-			.activateWorkspace({ id: asWorkspaceId("pb-w"), projectId: asProjectId("pb") });
+			.activateWorkspace({ id: testWorkspaceId("pb-w"), projectId: testProjectId("pb") });
 		expect(current()).toBe(false);
 	});
 
 	test("a round trip away and back while a pick loads still drops the pick", async () => {
 		useAppStore.setState({
 			projects: [project("p1"), project("p2"), project("p3")],
-			workspaces: { p2: [workspace("w2", asProjectId("p2")), workspace("w3", asProjectId("p2"))] },
+			workspaces: {
+				p2: [workspace("w2", testProjectId("p2")), workspace("w3", testProjectId("p2"))],
+			},
 		});
 		useAppStore
 			.getState()
-			.activateWorkspace({ id: asWorkspaceId("w2"), projectId: asProjectId("p2") });
+			.activateWorkspace({ id: testWorkspaceId("w2"), projectId: testProjectId("p2") });
 		const loader = deferredLoader();
 		const navigator = createPaletteNavigator(loader.load);
 		const workspaceTrip = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p1-w"),
-			projectId: asProjectId("p1"),
+			id: testWorkspaceId("p1-w"),
+			projectId: testProjectId("p1"),
 		});
 		useAppStore
 			.getState()
-			.activateWorkspace({ id: asWorkspaceId("w3"), projectId: asProjectId("p2") });
+			.activateWorkspace({ id: testWorkspaceId("w3"), projectId: testProjectId("p2") });
 		useAppStore
 			.getState()
-			.activateWorkspace({ id: asWorkspaceId("w2"), projectId: asProjectId("p2") });
-		loader.finish(asProjectId("p1"));
+			.activateWorkspace({ id: testWorkspaceId("w2"), projectId: testProjectId("p2") });
+		loader.finish(testProjectId("p1"));
 		expect(await workspaceTrip).toBe(false);
-		expect(useAppStore.getState().activeWorkspaceId).toBe(asWorkspaceId("w2"));
+		expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w2"));
 
-		useAppStore.setState({ activeWorkspaceId: null, selectedProjectId: asProjectId("p2") });
+		useAppStore.setState({ activeWorkspaceId: null, selectedProjectId: testProjectId("p2") });
 		const homeTrip = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p3-w"),
-			projectId: asProjectId("p3"),
+			id: testWorkspaceId("p3-w"),
+			projectId: testProjectId("p3"),
 		});
-		useAppStore.getState().selectProject(asProjectId("p1"));
-		useAppStore.getState().selectProject(asProjectId("p2"));
-		loader.finish(asProjectId("p3"));
+		useAppStore.getState().selectProject(testProjectId("p1"));
+		useAppStore.getState().selectProject(testProjectId("p2"));
+		loader.finish(testProjectId("p3"));
 		expect(await homeTrip).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 	});
@@ -118,17 +120,17 @@ describe("palette navigation", () => {
 	test("a workspace the store already holds opens at once", async () => {
 		useAppStore.setState({
 			projects: [project("p1")],
-			workspaces: { p1: [workspace("w1", asProjectId("p1"))] },
+			workspaces: { p1: [workspace("w1", testProjectId("p1"))] },
 		});
 		const loader = deferredLoader();
 		const navigator = createPaletteNavigator(loader.load);
 		expect(
 			await navigator.navigateToWorkspace({
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 			}),
 		).toBe(true);
-		expect(useAppStore.getState().activeWorkspaceId).toBe(asWorkspaceId("w1"));
+		expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w1"));
 	});
 
 	test("an unloaded workspace opens once its project's list lands", async () => {
@@ -136,68 +138,68 @@ describe("palette navigation", () => {
 		const loader = deferredLoader();
 		const navigator = createPaletteNavigator(loader.load);
 		const opened = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p1-w"),
-			projectId: asProjectId("p1"),
+			id: testWorkspaceId("p1-w"),
+			projectId: testProjectId("p1"),
 		});
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-		loader.finish(asProjectId("p1"));
+		loader.finish(testProjectId("p1"));
 		expect(await opened).toBe(true);
-		expect(useAppStore.getState().activeWorkspaceId).toBe(asWorkspaceId("p1-w"));
+		expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("p1-w"));
 	});
 
 	test("a later pick or a navigation elsewhere wins over a pick still loading its project, a tab opening on its own does not", async () => {
 		useAppStore.setState({
 			projects: [project("p1"), project("p2")],
-			workspaces: { p2: [workspace("w2", asProjectId("p2"))] },
+			workspaces: { p2: [workspace("w2", testProjectId("p2"))] },
 		});
 		const loader = deferredLoader();
 		const navigator = createPaletteNavigator(loader.load);
 		const stale = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p1-w"),
-			projectId: asProjectId("p1"),
+			id: testWorkspaceId("p1-w"),
+			projectId: testProjectId("p1"),
 		});
 		expect(
 			await navigator.navigateToWorkspace({
-				id: asWorkspaceId("w2"),
-				projectId: asProjectId("p2"),
+				id: testWorkspaceId("w2"),
+				projectId: testProjectId("p2"),
 			}),
 		).toBe(true);
-		loader.finish(asProjectId("p1"));
+		loader.finish(testProjectId("p1"));
 		expect(await stale).toBe(false);
-		expect(useAppStore.getState().activeWorkspaceId).toBe(asWorkspaceId("w2"));
+		expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w2"));
 
 		const late = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p1-tab-w"),
-			projectId: asProjectId("p1-tab"),
+			id: testWorkspaceId("p1-tab-w"),
+			projectId: testProjectId("p1-tab"),
 		});
 		useAppStore.setState((state) => ({
 			activeTabByWorkspace: { ...state.activeTabByWorkspace, w2: "a-chat-tab-that-just-opened" },
 		}));
-		loader.finish(asProjectId("p1-tab"));
+		loader.finish(testProjectId("p1-tab"));
 		expect(await late).toBe(true);
-		expect(useAppStore.getState().activeWorkspaceId).toBe(asWorkspaceId("p1-tab-w"));
+		expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("p1-tab-w"));
 
 		useAppStore
 			.getState()
-			.activateWorkspaceFromRoute({ id: asWorkspaceId("w2"), projectId: asProjectId("p2") });
+			.activateWorkspaceFromRoute({ id: testWorkspaceId("w2"), projectId: testProjectId("p2") });
 		const switched = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p1-switch-w"),
-			projectId: asProjectId("p1-switch"),
+			id: testWorkspaceId("p1-switch-w"),
+			projectId: testProjectId("p1-switch"),
 		});
-		useAppStore.getState().noteNavigation(asWorkspaceId("w2"));
-		loader.finish(asProjectId("p1-switch"));
+		useAppStore.getState().noteNavigation(testWorkspaceId("w2"));
+		loader.finish(testProjectId("p1-switch"));
 		expect(await switched).toBe(false);
-		expect(useAppStore.getState().activeWorkspaceId).toBe(asWorkspaceId("w2"));
+		expect(useAppStore.getState().activeWorkspaceId).toBe(testWorkspaceId("w2"));
 
 		const again = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p1-later-w"),
-			projectId: asProjectId("p1-later"),
+			id: testWorkspaceId("p1-later-w"),
+			projectId: testProjectId("p1-later"),
 		});
 		useAppStore
 			.getState()
-			.activateWorkspaceFromRoute({ id: asWorkspaceId("w2"), projectId: asProjectId("p2") });
-		useAppStore.setState({ selectedProjectId: asProjectId("p2"), activeWorkspaceId: null });
-		loader.finish(asProjectId("p1-later"));
+			.activateWorkspaceFromRoute({ id: testWorkspaceId("w2"), projectId: testProjectId("p2") });
+		useAppStore.setState({ selectedProjectId: testProjectId("p2"), activeWorkspaceId: null });
+		loader.finish(testProjectId("p1-later"));
 		expect(await again).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 	});
@@ -207,10 +209,10 @@ describe("palette navigation", () => {
 		const loader = deferredLoader();
 		const navigator = createPaletteNavigator(loader.load);
 		const gone = navigator.navigateToWorkspace({
-			id: asWorkspaceId("p1-removed"),
-			projectId: asProjectId("p1"),
+			id: testWorkspaceId("p1-removed"),
+			projectId: testProjectId("p1"),
 		});
-		loader.finish(asProjectId("p1"));
+		loader.finish(testProjectId("p1"));
 		expect(await gone).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 		expect(useAppStore.getState().toasts.at(-1)?.message).toBe(
@@ -220,8 +222,8 @@ describe("palette navigation", () => {
 		const failing = createPaletteNavigator(() => Promise.reject(new Error("socket closed")));
 		expect(
 			await failing.navigateToWorkspace({
-				id: asWorkspaceId("p2-w"),
-				projectId: asProjectId("p2"),
+				id: testWorkspaceId("p2-w"),
+				projectId: testProjectId("p2"),
 			}),
 		).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();

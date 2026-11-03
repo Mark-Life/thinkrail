@@ -7,7 +7,6 @@ import type {
 	SessionId,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { asProjectId } from "@thinkrail/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatLocationRequest, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -20,7 +19,7 @@ export interface HistorySearchState {
 	open: boolean;
 	stage: HistoryStage;
 	query: string;
-	scope: HistoryScope;
+	scopeKind: ScopeKind;
 	result: HistorySearchResult | null;
 	selected: number;
 	error: boolean;
@@ -38,17 +37,31 @@ function buildScope(
 	sessionId: SessionId,
 	workspaceId: WorkspaceId,
 	projectId: ProjectId | undefined,
-): HistoryScope {
+): HistoryScope | null {
 	switch (kind) {
 		case "chat":
 			return { kind: "chat", sessionId };
 		case "workspace":
 			return { kind: "workspace", workspaceId };
 		case "project":
-			return { kind: "project", projectId: projectId ?? asProjectId("") };
+			return projectId ? { kind: "project", projectId } : null;
 		case "all":
 			return { kind: "all" };
 	}
+}
+
+const NO_MATCHES: HistorySearchResult = {
+	prompts: [],
+	messages: [],
+	promptTotal: 0,
+	messageTotal: 0,
+	indexing: false,
+};
+
+function searchHistory(query: string, scope: HistoryScope | null): Promise<HistorySearchResult> {
+	return scope
+		? getTransport().request("history.search", { query, scope, limit: 50 })
+		: Promise.resolve(NO_MATCHES);
 }
 
 function flatListLength(stage: HistoryStage, result: HistorySearchResult | null): number {
@@ -119,8 +132,7 @@ export function useHistorySearch(
 		const token = ++tokenRef.current;
 		if (!open) return;
 		const timer = setTimeout(() => {
-			getTransport()
-				.request("history.search", { query, scope, limit: 50 })
+			searchHistory(query, scope)
 				.then((res) => {
 					if (tokenRef.current !== token) return;
 					setResult(res);
@@ -139,8 +151,7 @@ export function useHistorySearch(
 		const token = ++retryTokenRef.current;
 		if (!open || !result?.indexing) return;
 		const timer = setTimeout(() => {
-			getTransport()
-				.request("history.search", { query, scope, limit: 50 })
+			searchHistory(query, scope)
 				.then((res) => {
 					if (retryTokenRef.current !== token) return;
 					setResult(res);
@@ -234,8 +245,8 @@ export function useHistorySearch(
 	);
 
 	const state = useMemo<HistorySearchState>(
-		() => ({ open, stage, query, scope, result, selected, error }),
-		[open, stage, query, scope, result, selected, error],
+		() => ({ open, stage, query, scopeKind, result, selected, error }),
+		[open, stage, query, scopeKind, result, selected, error],
 	);
 
 	return {

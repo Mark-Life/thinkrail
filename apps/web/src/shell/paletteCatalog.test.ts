@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { commandItems } from "../search";
 import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
 
 const workspace: Workspace = {
-	id: asWorkspaceId("w1"),
-	projectId: asProjectId("p1"),
+	id: testWorkspaceId("w1"),
+	projectId: testProjectId("p1"),
 	name: "auth",
 	branch: "auth",
 	baseBranch: "main",
@@ -19,7 +19,7 @@ const noop = () => {};
 function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 	return {
 		t: currentTranslator(),
-		contextProjectId: asProjectId("p1"),
+		contextProjectId: testProjectId("p1"),
 		activeWorkspace: workspace,
 		editors: [],
 		historyAvailable: false,

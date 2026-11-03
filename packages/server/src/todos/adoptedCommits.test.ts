@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths, setSyncGitTimeoutForTests } from "../git";
 import { maybeAttachChangeArtifacts, settleChangeArtifacts } from "./artifacts";
@@ -13,7 +13,7 @@ let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 const savedPath = process.env.PATH;
-const SESSION = asSessionId("sess-adopt");
+const SESSION = testSessionId("sess-adopt");
 
 function sh(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -53,8 +53,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "feature",
 				worktreePath: repo,
@@ -76,7 +76,7 @@ afterEach(() => {
 test("a branch commit no item owns surfaces as an adopted, unreviewed commit — even with an empty plan", async () => {
 	const sha = commitFile("loose.ts", "export const a = 1;\n", "feat: loose work");
 
-	const plan = await listTodos({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION });
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 
 	expect(plan.todos).toEqual([]);
 	expect(plan.groups).toEqual([]);
@@ -95,16 +95,16 @@ test("a commit a subagent makes during an item's window attaches to the step, no
 	const store = new TodoStore(repo, SESSION);
 	const todo = store.add({ title: "implement feature" });
 	store.update(todo.id, { status: "in_progress" });
-	await maybeAttachChangeArtifacts(asWorkspaceId("w1"), SESSION); // opens the work window (baseline head)
+	await maybeAttachChangeArtifacts(testWorkspaceId("w1"), SESSION); // opens the work window (baseline head)
 
 	// a subagent commits its own work directly into the shared worktree
 	const sha = commitFile("impl.ts", "export const x = 1;\n", "feat: implement x");
 
 	store.update(todo.id, { status: "done" });
-	await maybeAttachChangeArtifacts(asWorkspaceId("w1"), SESSION);
-	await settleChangeArtifacts(asWorkspaceId("w1"));
+	await maybeAttachChangeArtifacts(testWorkspaceId("w1"), SESSION);
+	await settleChangeArtifacts(testWorkspaceId("w1"));
 
-	const plan = await listTodos({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION });
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	const item = plan.todos.find((t) => t.id === todo.id);
 	expect(item?.artifacts?.some((a) => a.kind === "commit" && a.sha === sha)).toBe(true);
 	expect((plan.adoptedCommits ?? []).some((a) => a.artifacts?.[0]?.sha === sha)).toBe(false);
@@ -113,7 +113,7 @@ test("a commit a subagent makes during an item's window attaches to the step, no
 test("a commit owned by a todo item is NOT adopted (no double-counting)", async () => {
 	const store = new TodoStore(repo, SESSION);
 	writeFileSync(join(repo, "owned.ts"), "export const b = 2;\n");
-	const owned = gitCommitPaths(asWorkspaceId("w1"), "feat: owned step", ["owned.ts"]);
+	const owned = gitCommitPaths(testWorkspaceId("w1"), "feat: owned step", ["owned.ts"]);
 	if (!owned) throw new Error("commit failed");
 	store.add({
 		title: "owned step",
@@ -121,7 +121,7 @@ test("a commit owned by a todo item is NOT adopted (no double-counting)", async 
 	});
 	const looseSha = commitFile("loose.ts", "export const a = 1;\n", "feat: loose work");
 
-	const plan = await listTodos({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION });
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 
 	const adoptedShas = (plan.adoptedCommits ?? []).map((t) => t.artifacts?.[0]?.sha);
 	expect(adoptedShas).toEqual([looseSha]);
@@ -131,16 +131,16 @@ test("an adopted commit is reviewable by its commit:<sha> id and settles like an
 	const sha = commitFile("loose.ts", "export const a = 1;\n", "feat: loose work");
 	const id = `commit:${sha}`;
 
-	const started = startTodoReview({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION, id });
+	const started = startTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 	expect(started.pkg).toContain(sha.slice(0, 12));
 	expect(started.reviewedSha).toBe(sha);
 
-	const reviewing = await listTodos({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION });
+	const reviewing = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(reviewing.adoptedCommits?.[0]?.review?.reviewing).toBe(true);
 
-	approveTodoReview({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION, id });
+	approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 
-	const settled = await listTodos({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION });
+	const settled = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(settled.adoptedCommits?.[0]?.review?.state).toBe("reviewed");
 });
 
@@ -148,7 +148,7 @@ test("review resolution rejects a commit:<sha> outside base..HEAD or owned by an
 	const baseSha = headSha(repo);
 	expect(() =>
 		startTodoReview({
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			sessionId: SESSION,
 			id: `commit:${baseSha}`,
 		}),
@@ -156,7 +156,7 @@ test("review resolution rejects a commit:<sha> outside base..HEAD or owned by an
 
 	const store = new TodoStore(repo, SESSION);
 	writeFileSync(join(repo, "owned.ts"), "export const b = 2;\n");
-	const owned = gitCommitPaths(asWorkspaceId("w1"), "feat: owned step", ["owned.ts"]);
+	const owned = gitCommitPaths(testWorkspaceId("w1"), "feat: owned step", ["owned.ts"]);
 	if (!owned) throw new Error("commit failed");
 	store.add({
 		title: "owned step",
@@ -164,7 +164,7 @@ test("review resolution rejects a commit:<sha> outside base..HEAD or owned by an
 	});
 	expect(() =>
 		startTodoReview({
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			sessionId: SESSION,
 			id: `commit:${owned.sha}`,
 		}),
@@ -175,13 +175,17 @@ test("review resolution rejects an abbreviated commit:<short-sha> id", () => {
 	const sha = commitFile("loose.ts", "export const a = 1;\n", "feat: loose work");
 	expect(() =>
 		startTodoReview({
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			sessionId: SESSION,
 			id: `commit:${sha.slice(0, 10)}`,
 		}),
 	).toThrow(/No TODO with id/);
 	expect(() =>
-		startTodoReview({ workspaceId: asWorkspaceId("w1"), sessionId: SESSION, id: `commit:${sha}` }),
+		startTodoReview({
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: SESSION,
+			id: `commit:${sha}`,
+		}),
 	).not.toThrow();
 });
 
@@ -206,14 +210,14 @@ test("review resolution rejects a commit past the newest-200 listCommits cap", (
 	const newest = headSha(repo);
 	expect(() =>
 		startTodoReview({
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			sessionId: SESSION,
 			id: `commit:${oldest}`,
 		}),
 	).toThrow(/No TODO with id/);
 	expect(() =>
 		startTodoReview({
-			workspaceId: asWorkspaceId("w1"),
+			workspaceId: testWorkspaceId("w1"),
 			sessionId: SESSION,
 			id: `commit:${newest}`,
 		}),
@@ -235,14 +239,14 @@ test.skipIf(process.platform === "win32")(
 		chmodSync(join(bin, "git"), 0o755);
 		process.env.PATH = `${bin}${delimiter}${savedPath}`;
 		setSyncGitTimeoutForTests(300);
-		await maybeAttachChangeArtifacts(asWorkspaceId("w1"), SESSION);
-		await settleChangeArtifacts(asWorkspaceId("w1"));
+		await maybeAttachChangeArtifacts(testWorkspaceId("w1"), SESSION);
+		await settleChangeArtifacts(testWorkspaceId("w1"));
 		process.env.PATH = savedPath;
 		setSyncGitTimeoutForTests(undefined);
 		expect(readBaselines(repo, SESSION)[active.id]).toBeUndefined();
 
-		await maybeAttachChangeArtifacts(asWorkspaceId("w1"), SESSION);
-		await settleChangeArtifacts(asWorkspaceId("w1"));
+		await maybeAttachChangeArtifacts(testWorkspaceId("w1"), SESSION);
+		await settleChangeArtifacts(testWorkspaceId("w1"));
 		expect(readBaselines(repo, SESSION)[active.id]?.head).toBe(headSha(repo));
 	},
 	20_000,

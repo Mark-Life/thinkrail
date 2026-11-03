@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	anchorLabel,
 	describeResource,
@@ -66,7 +66,7 @@ function registerFallbacks(): void {
 }
 
 const markdown: ResourceDescriptor = {
-	workspaceId: asWorkspaceId("ws"),
+	workspaceId: testWorkspaceId("ws"),
 	path: "docs/README.md",
 	mime: "text/markdown",
 	language: "markdown",
@@ -158,7 +158,7 @@ test("text and byte resources always resolve to their registered fallback", () =
 	expect(resolveRenderers(markdown, "diff", { mobile: false }).at(-1)?.id).toBe("thinkrail/code");
 	expect(
 		resolveRenderers(
-			{ workspaceId: asWorkspaceId("ws"), path: "asset.bin", text: false, byteLength: 4 },
+			{ workspaceId: testWorkspaceId("ws"), path: "asset.bin", text: false, byteLength: 4 },
 			"view",
 			{
 				mobile: false,
@@ -219,13 +219,13 @@ test("anchor labels cover line ranges, structural references, regions, and whole
 test("resource descriptions derive language and mime without overriding host metadata", () => {
 	expect(
 		describeResource(
-			asWorkspaceId("ws"),
+			testWorkspaceId("ws"),
 			"src/view.TSX",
 			{ hash: "hash", byteLength: 42, text: true },
 			{ kind: "uncommitted" },
 		),
 	).toEqual({
-		workspaceId: asWorkspaceId("ws"),
+		workspaceId: testWorkspaceId("ws"),
 		path: "src/view.TSX",
 		mime: "text/typescript",
 		language: "tsx",
@@ -234,7 +234,7 @@ test("resource descriptions derive language and mime without overriding host met
 		scope: { kind: "uncommitted" },
 	});
 	expect(
-		describeResource(asWorkspaceId("ws"), "asset.png", {
+		describeResource(testWorkspaceId("ws"), "asset.png", {
 			hash: "hash",
 			byteLength: 10,
 			text: false,

@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import type { SessionId } from "@thinkrail/contracts";
 import {
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -15,6 +12,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import type { LoginState } from "../auth";
 import { useAppStore } from "../store";
 import * as wireTransport from "./wireTransport";
@@ -80,8 +78,8 @@ test("auto plan-summary is requested only from a host at or beyond the v69 capab
 function record(sessionId: SessionId, completionId: string): SessionStateRecord {
 	return {
 		sessionId,
-		workspaceId: asWorkspaceId("workspace"),
-		projectId: asProjectId("project"),
+		workspaceId: testWorkspaceId("workspace"),
+		projectId: testProjectId("project"),
 		state: {
 			execution: "idle",
 			runId: `run:${sessionId}`,
@@ -95,29 +93,29 @@ function record(sessionId: SessionId, completionId: string): SessionStateRecord 
 }
 
 test("buffered state replaces its stale snapshot row before activation binding", () => {
-	const other = record(asSessionId("other"), "completion:other");
+	const other = record(testSessionId("other"), "completion:other");
 	expect(
 		mergeSessionStateRecords(
-			[record(asSessionId("target"), "completion:old"), other],
+			[record(testSessionId("target"), "completion:old"), other],
 			[
-				record(asSessionId("target"), "completion:newer"),
-				record(asSessionId("target"), "completion:latest"),
+				record(testSessionId("target"), "completion:newer"),
+				record(testSessionId("target"), "completion:latest"),
 			],
 		),
-	).toEqual([record(asSessionId("target"), "completion:latest"), other]);
+	).toEqual([record(testSessionId("target"), "completion:latest"), other]);
 });
 
 describe("the reconnect workspace list refresh", () => {
 	const project = (id: string): Project => ({
-		id: asProjectId(id),
+		id: testProjectId(id),
 		name: id,
 		path: `/repos/${id}`,
 		slug: id,
 		lastOpened: 0,
 	});
 	const workspace = (id: string, name = id): Workspace => ({
-		id: asWorkspaceId(id),
-		projectId: asProjectId("p1"),
+		id: testWorkspaceId(id),
+		projectId: testProjectId("p1"),
 		name,
 		branch: id,
 		baseBranch: "main",
@@ -133,8 +131,8 @@ describe("the reconnect workspace list refresh", () => {
 			workspaces: { p1: [workspace("w1"), workspace("w2"), workspace("w3")] },
 		});
 		applyWorkspaceListRefresh(
-			asProjectId("p1"),
-			[asWorkspaceId("w1"), asWorkspaceId("w2"), asWorkspaceId("w3")],
+			testProjectId("p1"),
+			[testWorkspaceId("w1"), testWorkspaceId("w2"), testWorkspaceId("w3")],
 			[workspace("w1", "renamed"), workspace("w3")],
 		);
 		const state = useAppStore.getState();
@@ -151,23 +149,23 @@ describe("the reconnect workspace list refresh", () => {
 			workspaces: { p1: [workspace("w1"), workspace("w-pushed")] },
 		});
 		applyWorkspaceListRefresh(
-			asProjectId("p1"),
-			[asWorkspaceId("w1")],
+			testProjectId("p1"),
+			[testWorkspaceId("w1")],
 			[workspace("w1"), workspace("w-unknown")],
 		);
 		const state = useAppStore.getState();
 		expect(state.workspaces.p1?.map((row) => row.id)).toEqual([
-			asWorkspaceId("w1"),
-			asWorkspaceId("w-pushed"),
+			testWorkspaceId("w1"),
+			testWorkspaceId("w-pushed"),
 		]);
 		expect(state.removedWorkspaceIds["w-pushed"]).toBeUndefined();
 	});
 
 	test("ignores a reply for a project that closed meanwhile", () => {
 		useAppStore.setState({ projects: [], workspaces: { p1: [workspace("w1")] } });
-		applyWorkspaceListRefresh(asProjectId("p1"), [asWorkspaceId("w1")], []);
+		applyWorkspaceListRefresh(testProjectId("p1"), [testWorkspaceId("w1")], []);
 		const state = useAppStore.getState();
-		expect(state.workspaces.p1?.map((row) => row.id)).toEqual([asWorkspaceId("w1")]);
+		expect(state.workspaces.p1?.map((row) => row.id)).toEqual([testWorkspaceId("w1")]);
 		expect(state.removedWorkspaceIds.w1).toBeUndefined();
 	});
 
@@ -184,7 +182,7 @@ describe("the reconnect workspace list refresh", () => {
 			const login: LoginState = {
 				loginId: "login_1",
 				providerId: "mcp",
-				target: { kind: "mcp", workspaceId: asWorkspaceId("w2"), serverName: "docs" },
+				target: { kind: "mcp", workspaceId: testWorkspaceId("w2"), serverName: "docs" },
 				status: "active",
 			};
 			useAppStore.setState({
@@ -193,8 +191,8 @@ describe("the reconnect workspace list refresh", () => {
 				activeLogin: login,
 			});
 			applyWorkspaceListRefresh(
-				asProjectId("p1"),
-				[asWorkspaceId("w1"), asWorkspaceId("w2")],
+				testProjectId("p1"),
+				[testWorkspaceId("w1"), testWorkspaceId("w2")],
 				[workspace("w1")],
 			);
 			expect(useAppStore.getState().activeLogin).toBeNull();

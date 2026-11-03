@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	configurePiRuntime,
 	createSession,
@@ -98,8 +98,8 @@ test.each([
 	configurePiRuntime(runtime);
 	saveWorkspaces([
 		{
-			id: asWorkspaceId("workspace"),
-			projectId: asProjectId("project"),
+			id: testWorkspaceId("workspace"),
+			projectId: testProjectId("project"),
 			kind: "default",
 			name: "Test",
 			branch: "main",
@@ -119,7 +119,7 @@ test.each([
 	});
 	const session = await createSession({
 		cwd: directory,
-		workspaceId: asWorkspaceId("workspace"),
+		workspaceId: testWorkspaceId("workspace"),
 		model: toWireModel(provider.getModel()),
 	});
 	const { sessionId } = session;

@@ -2,7 +2,7 @@ import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { clickTranscriptControl } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -227,7 +227,7 @@ test("structured tool paths reuse the preview tab while rich tool results stay i
 		name: "tool file links",
 		messages: [{ role: "user", text: "inspect structured tool outputs", timestamp: BASE_TS }],
 	});
-	appendToolResults(chat.path, asSessionId(chat.id));
+	appendToolResults(chat.path, testSessionId(chat.id));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);

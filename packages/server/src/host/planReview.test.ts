@@ -10,7 +10,8 @@ import {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ReviewFailedPayload, SessionId, Workspace } from "@thinkrail/contracts";
-import { asProjectId, asSessionId, asWorkspaceId, isPlanReviewResult } from "@thinkrail/contracts";
+import { isPlanReviewResult } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import {
 	configurePiRuntime,
@@ -48,7 +49,7 @@ const TEST_KEY = "phc_test";
 
 let dataDir: string;
 let worktree: string;
-const WS = asWorkspaceId("ws-planreview");
+const WS = testWorkspaceId("ws-planreview");
 
 function modelDef(id: string) {
 	return {
@@ -118,7 +119,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: asProjectId("p1"),
+			projectId: testProjectId("p1"),
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
@@ -144,7 +145,7 @@ const verdictRunner =
 	(finalText: string, onRun?: () => void): ReviewRunner =>
 	async () => {
 		onRun?.();
-		return { childSessionId: asSessionId("child"), status: "completed" as const, finalText };
+		return { childSessionId: testSessionId("child"), status: "completed" as const, finalText };
 	};
 
 const approve = '```json\n{ "verdict": "approve", "findings": [] }\n```';
@@ -390,7 +391,7 @@ test("reviews of one plan run one at a time, and a step already under review is 
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		running -= 1;
 		return {
-			childSessionId: asSessionId("child"),
+			childSessionId: testSessionId("child"),
 			status: "completed" as const,
 			finalText: approve,
 		};
@@ -418,7 +419,7 @@ test("a subagent that returns no parsable verdict clears the reviewing mark inst
 
 test("a fix the worker never accepted gives the auto cycle back instead of stranding the step", async () => {
 	// No session exists for this id, so the structured fix send rejects before the worker's turn.
-	const sessionId = asSessionId("sess-detached");
+	const sessionId = testSessionId("sess-detached");
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
 
@@ -464,7 +465,7 @@ test("a fix landing during another step's review is re-reviewed, not dropped", a
 	const slowRunner: ReviewRunner = async () => {
 		await bGate;
 		return {
-			childSessionId: asSessionId("child"),
+			childSessionId: testSessionId("child"),
 			status: "completed" as const,
 			finalText: approve,
 		};
@@ -501,7 +502,7 @@ test("a tool request_review queues behind a button review of another step on the
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		running -= 1;
 		return {
-			childSessionId: asSessionId("child"),
+			childSessionId: testSessionId("child"),
 			status: "completed" as const,
 			finalText: approve,
 		};
@@ -664,7 +665,7 @@ test("an unset reviewer model resolves the host's new-chat default, not the work
 	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
 		captured = role.model;
 		return {
-			childSessionId: asSessionId("child"),
+			childSessionId: testSessionId("child"),
 			status: "completed" as const,
 			finalText: approve,
 		};
@@ -682,7 +683,7 @@ test("an unset reviewer effort resolves the host's new-chat default, not the wor
 	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
 		captured = role.thinkingLevel;
 		return {
-			childSessionId: asSessionId("child"),
+			childSessionId: testSessionId("child"),
 			status: "completed" as const,
 			finalText: approve,
 		};
@@ -899,7 +900,7 @@ test("the button path delivers canonical ids even when a Review send races befor
 		if (!racedOnce) {
 			racedOnce = true;
 			raced = withReviewLock(WS, () =>
-				reviews.markCommentsSent(WS, [c.id], asSessionId("sess-other")),
+				reviews.markCommentsSent(WS, [c.id], testSessionId("sess-other")),
 			).catch(() => {});
 		}
 		return c;
@@ -1031,7 +1032,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	// A commit no plan item owns is surfaced only as a wire-only adoptedCommits entry; the review result
 	// card / detached-failure toast must name its subject, so itemTitleOf has to look there too.
 	const wt = mkdtempSync(join(tmpdir(), "planreview-adopt-"));
-	const ws = asWorkspaceId("ws-adopt");
+	const ws = testWorkspaceId("ws-adopt");
 	sh(wt, "init", "-b", "main");
 	sh(wt, "config", "user.email", "t@thinkrail.test");
 	sh(wt, "config", "user.name", "test");
@@ -1047,7 +1048,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	saveWorkspaces([
 		{
 			id: ws,
-			projectId: asProjectId("p1"),
+			projectId: testProjectId("p1"),
 			name: "w",
 			branch: "feature",
 			baseBranch: "main",
@@ -1056,10 +1057,10 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 		} as Workspace,
 	]);
 	try {
-		expect(await itemTitleOf(asWorkspaceId(ws), asSessionId("sess-adopt"), `commit:${sha}`)).toBe(
-			"feat: loose work",
-		);
-		expect(await itemTitleOf(ws, asSessionId("sess-adopt"), "commit:deadbeef")).toBe(
+		expect(
+			await itemTitleOf(testWorkspaceId(ws), testSessionId("sess-adopt"), `commit:${sha}`),
+		).toBe("feat: loose work");
+		expect(await itemTitleOf(ws, testSessionId("sess-adopt"), "commit:deadbeef")).toBe(
 			"commit:deadbeef",
 		);
 	} finally {

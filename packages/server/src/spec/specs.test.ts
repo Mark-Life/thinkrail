@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	evictSpecIndex,
 	evictSpecRoot,
@@ -25,8 +25,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("ws1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("ws1"),
+				projectId: testProjectId("p1"),
 				name: "ws",
 				branch: "b",
 				worktreePath: worktree,
@@ -34,7 +34,7 @@ beforeEach(() => {
 			},
 		]),
 	);
-	evictSpecIndex(asWorkspaceId("ws1"));
+	evictSpecIndex(testWorkspaceId("ws1"));
 });
 
 afterEach(() => {
@@ -56,7 +56,7 @@ test("maps spec files to wire DTOs (title falls back to id; absent status/parent
 	);
 	writeFileSync(join(worktree, "README.md"), "# not a spec\n");
 
-	const { nodes } = specGraph(asWorkspaceId("ws1"));
+	const { nodes } = specGraph(testWorkspaceId("ws1"));
 	expect(nodes.map((n) => n.id).sort()).toEqual(["mod-a", "root-spec"]);
 
 	const root = nodes.find((n) => n.id === "root-spec");
@@ -75,7 +75,7 @@ test("maps spec files to wire DTOs (title falls back to id; absent status/parent
 });
 
 test("throws for an unknown workspace", () => {
-	expect(() => specGraph(asWorkspaceId("nope"))).toThrow("Unknown workspace: nope");
+	expect(() => specGraph(testWorkspaceId("nope"))).toThrow("Unknown workspace: nope");
 });
 
 test("projectHasSpecs ignores ephemeral task-specs — only a durable spec signals 'set up'", () => {
@@ -99,11 +99,11 @@ test("projectHasSpecs ignores ephemeral task-specs — only a durable spec signa
 
 test("revalidates on read: a spec added after the first fetch appears on the next", () => {
 	writeSpec("SPEC.md", "id: root-spec\ntype: goal-and-requirements\ntitle: Root");
-	expect(specGraph(asWorkspaceId("ws1")).nodes).toHaveLength(1);
+	expect(specGraph(testWorkspaceId("ws1")).nodes).toHaveLength(1);
 
 	writeSpec("module-b/SPEC.md", "id: mod-b\ntype: module-design\ntitle: Mod B\nparent: root-spec");
 	expect(
-		specGraph(asWorkspaceId("ws1"))
+		specGraph(testWorkspaceId("ws1"))
 			.nodes.map((n) => n.id)
 			.sort(),
 	).toEqual(["mod-b", "root-spec"]);
@@ -111,10 +111,10 @@ test("revalidates on read: a spec added after the first fetch appears on the nex
 
 test("evictSpecIndex drops the cached index; a later read rebuilds cleanly", () => {
 	writeSpec("SPEC.md", "id: root-spec\ntype: goal-and-requirements\ntitle: Root");
-	expect(specGraph(asWorkspaceId("ws1")).nodes).toHaveLength(1);
+	expect(specGraph(testWorkspaceId("ws1")).nodes).toHaveLength(1);
 
-	evictSpecIndex(asWorkspaceId("ws1"));
-	expect(specGraph(asWorkspaceId("ws1")).nodes.map((n) => n.id)).toEqual(["root-spec"]);
+	evictSpecIndex(testWorkspaceId("ws1"));
+	expect(specGraph(testWorkspaceId("ws1")).nodes.map((n) => n.id)).toEqual(["root-spec"]);
 });
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));

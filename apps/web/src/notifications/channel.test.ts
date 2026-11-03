@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { NativeNotificationBridge, NativeNotificationInput } from "@thinkrail/contracts";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createDesktopNotificationChannel } from "./desktopNotifications";
 import type { NotificationSpec } from "./formatNotification";
 
@@ -10,7 +10,7 @@ function singleSpec(overrides: Partial<NotificationSpec> = {}): NotificationSpec
 		subtitle: "feature-branch",
 		body: "Waiting for your input",
 		tag: "attention:s1",
-		target: { kind: "chat", workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
+		target: { kind: "chat", workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 		...overrides,
 	};
 }

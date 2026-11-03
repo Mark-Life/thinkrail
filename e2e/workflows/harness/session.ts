@@ -1,6 +1,6 @@
 import "./env";
 import type { SessionId } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	abortSession,
 	createSession,
@@ -19,7 +19,7 @@ let counter = 0;
 export async function startSession(cwd: string): Promise<StartedSession> {
 	const result = await createSession({
 		cwd,
-		workspaceId: asWorkspaceId(`workflow-test-${++counter}`),
+		workspaceId: testWorkspaceId(`workflow-test-${++counter}`),
 	});
 	const model = result.model ? `${result.model.provider}/${result.model.id}` : "unknown";
 	return { sessionId: result.sessionId, model };
