@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { PiEvent } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
 import {
 	attachDialog,
@@ -96,7 +96,7 @@ const QUESTIONS: AskUserQuestionItem[] = [
 
 test("dialog: a throwing script degrades to the fallback rung and records the error", async () => {
 	const log = new EventLog();
-	const { answered, detach } = attachDialog(asSessionId("unit-session-throwing-script"), log, {
+	const { answered, detach } = attachDialog(testSessionId("unit-session-throwing-script"), log, {
 		script: [
 			{
 				match: () => {
@@ -117,7 +117,7 @@ test("dialog: a throwing script degrades to the fallback rung and records the er
 
 test("dialog: settle resolves once deliveries finish and records delivery failures", async () => {
 	const log = new EventLog();
-	const { answered, detach, settle } = attachDialog(asSessionId("unit-session-settle"), log, {
+	const { answered, detach, settle } = attachDialog(testSessionId("unit-session-settle"), log, {
 		fallback: "pickRecommended",
 	});
 	log.push(toolStart("q1", "ask_user_question", { questions: QUESTIONS }));

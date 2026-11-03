@@ -51,9 +51,6 @@ import type {
 	WorkspaceId,
 } from "@thinkrail/contracts";
 import {
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
 	canMarkCompletionUnread,
 	customMessageText,
 	DEFAULT_CONFIG,
@@ -68,6 +65,7 @@ import {
 	isTodoReviewFixMessage,
 	normalizeFontSettings,
 	normalizeThemePreference,
+	parseSessionId,
 	readToolResponseMessage,
 	sameModel,
 } from "@thinkrail/contracts";
@@ -134,6 +132,7 @@ import {
 	type ModelRef,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
+	selectAttendedSessionId,
 	selectChatAttended,
 	selectChatFirstPrompt,
 	selectFilesTreeView,
@@ -300,7 +299,7 @@ function editorResourceIdentity(tab: EditorTab): string {
 
 export function editorSessionId(tab: EditorTab): SessionId | null {
 	if (tab.kind === "chat" || tab.kind === "plan") return tab.sessionId;
-	return tab.kind === "doc" ? asSessionId(tab.sourceId) : null;
+	return tab.kind === "doc" ? parseSessionId(tab.sourceId) : null;
 }
 
 function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): string {
@@ -1615,8 +1614,8 @@ function pruneExpandedProjects(
 	state: Pick<AppState, "expandedProjectIds">,
 	projects: Project[],
 ): Pick<AppState, "expandedProjectIds"> | Record<string, never> {
-	const open = new Set(projects.map((project) => project.id));
-	const kept = Object.keys(state.expandedProjectIds).filter((id) => open.has(asProjectId(id)));
+	const open = new Set<string>(projects.map((project) => project.id));
+	const kept = Object.keys(state.expandedProjectIds).filter((id) => open.has(id));
 	if (kept.length === Object.keys(state.expandedProjectIds).length) return {};
 	return {
 		expandedProjectIds: Object.fromEntries(kept.map((id) => [id, true as const])),
@@ -2199,14 +2198,15 @@ function renameSessionTabs(
 function renameChat(s: AppState, sessionId: SessionId, title: string): Partial<AppState> | null {
 	let found = false;
 	let patch: Partial<AppState> = {};
-	for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+	for (const tabs of Object.values(s.tabsByWorkspace)) {
 		const sessionTabs = tabs.filter(
 			(tab): tab is ChatTab | PlanTab =>
 				(tab.kind === "chat" || tab.kind === "plan") && tab.sessionId === sessionId,
 		);
-		if (sessionTabs.length === 0) continue;
+		const [first] = sessionTabs;
+		if (!first) continue;
 		if (sessionTabs.some((tab) => tab.kind === "chat")) found = true;
-		const renamed = renameSessionTabs({ ...s, ...patch }, asWorkspaceId(wsId), sessionTabs, title);
+		const renamed = renameSessionTabs({ ...s, ...patch }, first.workspaceId, sessionTabs, title);
 		if (renamed) patch = { ...patch, ...renamed };
 	}
 	for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
@@ -3877,16 +3877,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (get().markingUnreadWorkspaces[workspaceId]) return false;
 		set((s) => {
 			const candidates: Record<string, string> = {};
+			let attendedSessionId: SessionId | null = null;
 			for (const record of Object.values(s.sessionStateByWorkspace[workspaceId] ?? {})) {
 				const completionId = record.state.completion?.completionId;
 				if (completionId && canMarkCompletionUnread(record.state)) {
 					candidates[record.sessionId] = completionId;
+					if (attendedSessionId === null && selectChatAttended(s, workspaceId, record.sessionId)) {
+						attendedSessionId = record.sessionId;
+					}
 				}
 			}
-			const attendedSessionId =
-				Object.keys(candidates)
-					.map(asSessionId)
-					.find((sessionId) => selectChatAttended(s, workspaceId, sessionId)) ?? null;
 			return {
 				markingUnreadWorkspaces: {
 					...s.markingUnreadWorkspaces,
@@ -3924,7 +3924,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			for (const [workspaceId, pending] of Object.entries(s.markingUnreadWorkspaces)) {
 				if (
 					pending.attendedSessionId !== null &&
-					!selectChatAttended(s, asWorkspaceId(workspaceId), pending.attendedSessionId)
+					selectAttendedSessionId(s, workspaceId) !== pending.attendedSessionId
 				) {
 					markingUnreadWorkspaces = {
 						...markingUnreadWorkspaces,
@@ -3934,7 +3934,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			let markedUnreadBySession = s.markedUnreadBySession;
 			for (const [sessionId, mark] of Object.entries(s.markedUnreadBySession)) {
-				if (mark.held && !selectChatAttended(s, mark.workspaceId, asSessionId(sessionId))) {
+				if (mark.held && selectAttendedSessionId(s, mark.workspaceId) !== sessionId) {
 					markedUnreadBySession = {
 						...markedUnreadBySession,
 						[sessionId]: { ...mark, held: false },
@@ -4661,11 +4661,11 @@ useAppStore.subscribe((state) => {
 		Object.entries(state.markingUnreadWorkspaces).some(
 			([workspaceId, pending]) =>
 				pending.attendedSessionId !== null &&
-				!selectChatAttended(state, asWorkspaceId(workspaceId), pending.attendedSessionId),
+				selectAttendedSessionId(state, workspaceId) !== pending.attendedSessionId,
 		) ||
 		Object.entries(state.markedUnreadBySession).some(
 			([sessionId, mark]) =>
-				mark.held && !selectChatAttended(state, mark.workspaceId, asSessionId(sessionId)),
+				mark.held && selectAttendedSessionId(state, mark.workspaceId) !== sessionId,
 		);
 	if (unattended) state.releaseUnattendedUnreadHolds();
 });

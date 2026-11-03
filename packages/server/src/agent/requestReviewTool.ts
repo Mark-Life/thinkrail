@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { PlanReviewResult, SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
+import { requireSessionId } from "./requireSessionId";
 
 export const REQUEST_REVIEW_TOOL_NAME = "request_review";
 
@@ -56,7 +56,7 @@ export function createRequestReviewTool(): ToolDefinition<
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const { itemId } = params as RequestReviewParams;
 			const { result, text } = await handler(
-				asSessionId(ctx.sessionManager.getSessionId()),
+				requireSessionId(ctx.sessionManager.getSessionId()),
 				itemId,
 				signal,
 			);

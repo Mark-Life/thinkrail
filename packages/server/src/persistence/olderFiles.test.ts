@@ -3,14 +3,8 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
-import {
-	AppConfig,
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
-	Project,
-	Workspace,
-} from "@thinkrail/contracts";
+import { AppConfig, Project, Workspace } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	claimAppInstalled,
 	ensureInstallation,
@@ -77,8 +71,8 @@ const PROJECTS = {
 
 const WORKSPACES = {
 	"v0.0.1": {
-		id: asWorkspaceId("w"),
-		projectId: asProjectId("p"),
+		id: testWorkspaceId("w"),
+		projectId: testProjectId("p"),
 		name: "w",
 		branch: "b",
 		worktreePath: "/repo/w",
@@ -87,8 +81,8 @@ const WORKSPACES = {
 		diffStats: { added: 1, removed: 2, changed: 3 },
 	},
 	"v0.1.6": {
-		id: asWorkspaceId("w"),
-		projectId: asProjectId("p"),
+		id: testWorkspaceId("w"),
+		projectId: testProjectId("p"),
 		kind: "external",
 		name: "w",
 		branch: "b",
@@ -100,8 +94,8 @@ const WORKSPACES = {
 		subagentsOverride: "on",
 	},
 	"v0.3.1": {
-		id: asWorkspaceId("w"),
-		projectId: asProjectId("p"),
+		id: testWorkspaceId("w"),
+		projectId: testProjectId("p"),
 		kind: "default",
 		name: "w",
 		branch: "b",
@@ -252,8 +246,8 @@ test("a stored model with its identity but a partial snapshot stays usable on th
 test("the other state files of v0.3.1 load unchanged", () => {
 	const turn = {
 		id: "t",
-		workspaceId: asWorkspaceId("w"),
-		sessionId: asSessionId("s"),
+		workspaceId: testWorkspaceId("w"),
+		sessionId: testSessionId("s"),
 		startedAt: 1,
 		settledAt: 2,
 		baseTree: "a",

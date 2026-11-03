@@ -18,14 +18,8 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
-import {
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
-	resourceRecordId,
-	type SessionResources,
-	type SessionState,
-} from "@thinkrail/contracts";
+import { resourceRecordId, type SessionResources, type SessionState } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import type { BackgroundCommandSnapshot, BackgroundCommands } from "pi-background-commands";
 import type { ChildHandle } from "pi-delegation";
 import { interactiveTools } from "../extensions";
@@ -130,7 +124,7 @@ afterAll(async () => {
 	rmSync(root, { recursive: true, force: true });
 });
 async function parent() {
-	const workspaceId = asWorkspaceId(`resources-${++sequence}`);
+	const workspaceId = testWorkspaceId(`resources-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({ workspaceId, cwd });
 	return { workspaceId, cwd, sessionId };
@@ -183,12 +177,12 @@ test("tool and UI share one command owner across parent abort and resource reloa
 		available: false,
 	});
 	await expect(
-		getSessionResources(asWorkspaceId("foreign"), p.sessionId, p.cwd),
+		getSessionResources(testWorkspaceId("foreign"), p.sessionId, p.cwd),
 	).rejects.toMatchObject({
 		code: "RESOURCE_UNAVAILABLE",
 	});
 	await expect(
-		getSessionResources(p.workspaceId, asSessionId("missing"), p.cwd),
+		getSessionResources(p.workspaceId, testSessionId("missing"), p.cwd),
 	).rejects.toMatchObject({
 		code: "RESOURCE_UNAVAILABLE",
 	});
@@ -218,7 +212,7 @@ test("foreign parent/workspace controls are indistinguishable from missing comma
 	});
 	for (const childId of [child.sessionId, "missing"]) {
 		await expect(
-			stopSubagent(other.workspaceId, other.sessionId, asSessionId(childId), other.cwd),
+			stopSubagent(other.workspaceId, other.sessionId, testSessionId(childId), other.cwd),
 		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
 	}
 	await expect(
@@ -275,7 +269,7 @@ test("scoped catalog notifications expose stopping before settlement, never outp
 });
 
 test("natural completion wakes once after reload, and shell settings use the current parent identity", async () => {
-	const workspaceId = asWorkspaceId(`resources-${++sequence}`);
+	const workspaceId = testWorkspaceId(`resources-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "shell-"));
 	mkdirSync(join(cwd, ".pi"));
 	writeFileSync(
@@ -442,7 +436,7 @@ test("work a dead host left in flight reads as interrupted and keeps no log", as
 	recordResource(p, {
 		kind: "subagent",
 		summary: {
-			childSessionId: asSessionId("01a00000-0000-7000-8000-000000000001"),
+			childSessionId: testSessionId("01a00000-0000-7000-8000-000000000001"),
 			parentSessionId: p.sessionId,
 			task: "Explore",
 			status: "running",
@@ -492,8 +486,8 @@ test("finished commands page newest first and the page size is clamped", async (
 
 test("the command archive marks only teardown's own cuts interrupted, keeps their logs, and stops at finish", () => {
 	const scope = {
-		workspaceId: asWorkspaceId("archive-unit"),
-		sessionId: asSessionId("chat-archive"),
+		workspaceId: testWorkspaceId("archive-unit"),
+		sessionId: testSessionId("chat-archive"),
 	};
 	const snapshots = new Map<string, BackgroundCommandSnapshot>();
 	const listeners = new Set<() => void>();
@@ -600,7 +594,7 @@ test("a user stop that settles during teardown stays stopped; teardown's own cut
 	const stopping = stopSubagent(
 		p.workspaceId,
 		p.sessionId,
-		asSessionId(stoppedByUser.sessionId),
+		testSessionId(stoppedByUser.sessionId),
 		p.cwd,
 	);
 	const removing = removeSession(p.sessionId);
@@ -738,7 +732,7 @@ test("resource reads fail closed while a prior parent generation tears down", as
 
 test("workspace archive stops existing resources before awaiting parent preparation", async () => {
 	const cwd = mkdtempSync(join(root, "archive-preparation-"));
-	const workspaceId = asWorkspaceId(`archive-preparation-${++sequence}`);
+	const workspaceId = testWorkspaceId(`archive-preparation-${++sequence}`);
 	const existing = await createSession({ cwd, workspaceId });
 	const marker = join(cwd, "existing-command");
 	await launch(
@@ -752,7 +746,7 @@ test("workspace archive stops existing resources before awaiting parent preparat
 	let sessionId: SessionId | undefined;
 	AgentSession.prototype.bindExtensions = async function (bindings) {
 		await original.call(this, bindings);
-		sessionId = asSessionId(this.sessionId);
+		sessionId = testSessionId(this.sessionId);
 		entered.resolve();
 		await release.promise;
 	};
@@ -844,7 +838,7 @@ test("direct child projection keeps every active and the newest twenty finished 
 			await child.runQueued("task".repeat(600));
 			await Bun.sleep(2);
 		}
-		const newestFirst = children.map((c) => asSessionId(c.sessionId)).reverse();
+		const newestFirst = children.map((c) => testSessionId(c.sessionId)).reverse();
 		const resources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
 		expect(resources.subagents.map((s) => s.childSessionId)).toEqual(newestFirst.slice(0, 20));
 		expect(resources.history?.subagents).toEqual({
@@ -869,7 +863,7 @@ test("direct child projection keeps every active and the newest twenty finished 
 		const oldest = children[0];
 		if (!oldest) throw new Error("missing child");
 		expect(
-			readChildTranscript(p.workspaceId, p.sessionId, asSessionId(oldest.sessionId)).status,
+			readChildTranscript(p.workspaceId, p.sessionId, testSessionId(oldest.sessionId)).status,
 		).toBe("completed");
 		expect(oldest.snapshot?.collected).toBe(false);
 		expect(changes).toHaveLength(23 * 4);
@@ -947,11 +941,11 @@ test("a registration failure removes the disposed session from live resource aut
 		await expect(parent()).rejects.toThrow("broadcast failed");
 		expect(attempted).toBeDefined();
 		if (!attempted) throw new Error("Missing attempted session");
-		expect(hasSession(asSessionId(attempted))).toBe(false);
+		expect(hasSession(testSessionId(attempted))).toBe(false);
 	} finally {
 		setSessionCreatedPublisher(() => {});
-		if (attempted && hasSession(asSessionId(attempted)))
-			await removeSession(asSessionId(attempted));
+		if (attempted && hasSession(testSessionId(attempted)))
+			await removeSession(testSessionId(attempted));
 	}
 });
 
@@ -978,7 +972,7 @@ test("failed preparation stops commands launched before registration and does no
 	};
 	try {
 		await expect(
-			createSession({ workspaceId: asWorkspaceId("prepare-failed"), cwd }),
+			createSession({ workspaceId: testWorkspaceId("prepare-failed"), cwd }),
 		).rejects.toThrow("prepare failed");
 		await settleSessionsForShutdown();
 		const size = readFileSync(marker).length;
@@ -1047,7 +1041,7 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 
 function recordStates(sessionId: SessionId): { states: SessionState[]; stop: () => void } {
 	const states: SessionState[] = [];
-	setSessionProjectResolver(() => asProjectId("resources-project"));
+	setSessionProjectResolver(() => testProjectId("resources-project"));
 	setSessionStatePublisher((record) => {
 		if (record.sessionId === sessionId) states.push(record.state);
 	});
@@ -1296,11 +1290,11 @@ test("SDK creation failure on new and reopened sessions never registers resource
 		return manager;
 	});
 	try {
-		await expect(createSession({ cwd, workspaceId: asWorkspaceId("sdk-failure") })).rejects.toThrow(
-			"SDK creation failed",
-		);
 		await expect(
-			getSessionResources(asWorkspaceId("sdk-failure"), asSessionId(id), cwd),
+			createSession({ cwd, workspaceId: testWorkspaceId("sdk-failure") }),
+		).rejects.toThrow("SDK creation failed");
+		await expect(
+			getSessionResources(testWorkspaceId("sdk-failure"), testSessionId(id), cwd),
 		).rejects.toMatchObject({
 			code: "RESOURCE_UNAVAILABLE",
 		});
@@ -1354,16 +1348,19 @@ test("completion before registration is held and flushed once the parent is addr
 		faux.setResponses([fauxAssistantMessage("REGISTERED_COMPLETION")]);
 	};
 	try {
-		const { sessionId } = await createSession({ workspaceId: asWorkspaceId("registration"), cwd });
+		const { sessionId } = await createSession({
+			workspaceId: testWorkspaceId("registration"),
+			cwd,
+		});
 		await waitFor(async () => {
 			const { messages, summary } = await getSessionMessages(
 				sessionId,
-				asWorkspaceId("registration"),
+				testWorkspaceId("registration"),
 				cwd,
 			);
 			return !summary.isStreaming && JSON.stringify(messages).includes("REGISTERED_COMPLETION");
 		});
-		const { messages } = await getSessionMessages(sessionId, asWorkspaceId("registration"), cwd);
+		const { messages } = await getSessionMessages(sessionId, testWorkspaceId("registration"), cwd);
 		expect(
 			messages.filter(
 				(m) => m.role === "custom" && m.customType === "background-command-completion",
@@ -1676,7 +1673,7 @@ test.each([
 			const stopping = stopSubagent(
 				p.workspaceId,
 				p.sessionId,
-				asSessionId(job.child.sessionId),
+				testSessionId(job.child.sessionId),
 				p.cwd,
 			);
 			childGate.resolve();
@@ -1692,7 +1689,7 @@ test.each([
 				{ childSessionId: job.child.sessionId, status: "aborted", abortReason: "user" },
 			]);
 			expect(
-				readChildTranscript(p.workspaceId, p.sessionId, asSessionId(job.child.sessionId)).status,
+				readChildTranscript(p.workspaceId, p.sessionId, testSessionId(job.child.sessionId)).status,
 			).toBe("aborted");
 		}
 		const waiting = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
@@ -1869,7 +1866,7 @@ test("stopped command completion cannot strand a live question across polite shu
 });
 
 test("a command that finishes during an idle manual compaction is reported once it ends", async () => {
-	const workspaceId = asWorkspaceId(`resources-${++sequence}`);
+	const workspaceId = testWorkspaceId(`resources-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "compact-"));
 	mkdirSync(join(cwd, ".pi"));
 	writeFileSync(

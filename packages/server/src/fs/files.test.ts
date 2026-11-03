@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { readDir, workspaceRelativePath } from "./files";
 
 let dataDir: string;
@@ -19,8 +19,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				baseBranch: "main",
@@ -37,9 +37,9 @@ afterEach(() => {
 });
 
 test("readDir reports worktree-relative paths with forward slashes on every platform", () => {
-	expect(readDir(asWorkspaceId("w1"), ".").map((node) => node.path)).toEqual(["src"]);
-	expect(readDir(asWorkspaceId("w1"), "src").map((node) => node.path)).toEqual(["src/auth"]);
-	expect(readDir(asWorkspaceId("w1"), "src/auth").map((node) => node.path)).toEqual([
+	expect(readDir(testWorkspaceId("w1"), ".").map((node) => node.path)).toEqual(["src"]);
+	expect(readDir(testWorkspaceId("w1"), "src").map((node) => node.path)).toEqual(["src/auth"]);
+	expect(readDir(testWorkspaceId("w1"), "src/auth").map((node) => node.path)).toEqual([
 		"src/auth/login.ts",
 	]);
 });

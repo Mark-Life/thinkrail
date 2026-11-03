@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
-import { asSessionId, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { messagesToRuntime } from "./hydrate";
 import { deriveRows } from "./rows";
 import { readRunDetails } from "./tools/subagent/runDetails";
@@ -89,7 +90,7 @@ test("a failed round keeps its error before a later user-stopped result that wok
 		timestamp: 3,
 		details: {
 			id: "bg-1",
-			sessionId: asSessionId("s"),
+			sessionId: testSessionId("s"),
 			name: "e2e",
 			status: "stopped",
 			startedAt: 1,
@@ -242,7 +243,7 @@ test("turnIdByMessageIndex maps each message's position to its own turn id, null
 
 test("a subagent-completion custom message hydrates as its own subagentCompletion turn", () => {
 	const details = {
-		childSessionId: asSessionId("child-1"),
+		childSessionId: testSessionId("child-1"),
 		roleName: "scout",
 		task: "map the repo",
 		status: "completed",
@@ -319,7 +320,7 @@ test("a failed tool result maps to error status", () => {
 
 test("a failed Agent result keeps its run details — the transcript stays openable after reload", () => {
 	const details = {
-		childSessionId: asSessionId("child-err"),
+		childSessionId: testSessionId("child-err"),
 		roleName: "scout",
 		task: "doomed task",
 		status: "error",
@@ -346,7 +347,7 @@ test("a failed Agent result keeps its run details — the transcript stays opena
 		},
 	] as unknown as Message[]);
 	expect(toolResults.ag1?.status).toBe("error");
-	expect(readRunDetails(toolResults.ag1?.raw)?.childSessionId).toBe(asSessionId("child-err"));
+	expect(readRunDetails(toolResults.ag1?.raw)?.childSessionId).toBe(testSessionId("child-err"));
 });
 
 test("a toolCall with no matching toolResult has no entry — the call renders as still running", () => {

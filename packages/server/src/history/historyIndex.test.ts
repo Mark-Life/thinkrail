@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AssistantMessage, SystemMessage, Usage } from "@earendil-works/pi-ai";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { extractSession } from "./extract";
 import { getHistoryIndex, HistoryIndex, makeSnippet, matchesTerms } from "./historyIndex";
 import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
@@ -50,11 +50,11 @@ describe("HistoryIndex.search", () => {
 		});
 
 		expect(result.messages.map((m) => m.timestamp)).toEqual([3000]);
-		expect(result.messages.map((m) => m.sessionId)).toEqual([asSessionId("sess-a")]);
+		expect(result.messages.map((m) => m.sessionId)).toEqual([testSessionId("sess-a")]);
 		expect(result.prompts.map((p) => p.timestamp)).toEqual([2000, 1000]);
 		expect(result.prompts.map((p) => p.sessionId)).toEqual([
-			asSessionId("sess-b"),
-			asSessionId("sess-a"),
+			testSessionId("sess-b"),
+			testSessionId("sess-a"),
 		]);
 		expect(result.indexing).toBe(false);
 	});
@@ -125,7 +125,7 @@ describe("HistoryIndex.search", () => {
 
 		expect(result.prompts).toHaveLength(1);
 		expect(result.prompts[0]?.timestamp).toBe(5000);
-		expect(result.prompts[0]?.sessionId).toBe(asSessionId("sess-b"));
+		expect(result.prompts[0]?.sessionId).toBe(testSessionId("sess-b"));
 		expect(result.promptTotal).toBe(1);
 	});
 
@@ -149,7 +149,7 @@ describe("HistoryIndex.search", () => {
 		});
 
 		expect(result.prompts).toHaveLength(1);
-		expect(result.prompts[0]?.sessionId).toBe(asSessionId("sess-a"));
+		expect(result.prompts[0]?.sessionId).toBe(testSessionId("sess-a"));
 		expect(result.promptTotal).toBe(1);
 	});
 
@@ -325,8 +325,8 @@ describe("HistoryIndex.search", () => {
 			});
 
 			expect(result.prompts.map((p) => p.sessionId).sort()).toEqual([
-				asSessionId("sess-a"),
-				asSessionId("sess-b"),
+				testSessionId("sess-a"),
+				testSessionId("sess-b"),
 			]);
 			expect(result.prompts.map((p) => p.cwd).sort()).toEqual(["/repo/a", "/repo/b"]);
 		} finally {
@@ -360,7 +360,7 @@ describe("HistoryIndex.search", () => {
 			});
 
 			expect(result.prompts.map((prompt) => prompt.sessionId)).toEqual([
-				asSessionId("sess-linked"),
+				testSessionId("sess-linked"),
 			]);
 		} finally {
 			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
@@ -380,12 +380,12 @@ describe("HistoryIndex.search", () => {
 		const result = await index.search({
 			query: "labelled",
 			filter: allowAll,
-			labels: () => ({ workspaceId: asWorkspaceId("ws1"), projectId: asProjectId("proj1") }),
+			labels: () => ({ workspaceId: testWorkspaceId("ws1"), projectId: testProjectId("proj1") }),
 		});
 
 		expect(result.prompts[0]).toMatchObject({
-			workspaceId: asWorkspaceId("ws1"),
-			projectId: asProjectId("proj1"),
+			workspaceId: testWorkspaceId("ws1"),
+			projectId: testProjectId("proj1"),
 			cwd: "/repo/a",
 			sessionTitle: "My chat",
 		});

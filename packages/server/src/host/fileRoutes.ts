@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { parseWorkspaceId } from "@thinkrail/contracts";
 import { CONTENT_SNIFF_BYTES, classifyBytes, mimeFromPath, resolveWorktreeFile } from "../fs";
 import { readBlobSizeAtAsync, readBlobStreamAtAsync } from "../git";
 import { loadWorkspaces } from "../persistence";
@@ -52,10 +52,11 @@ function head(rest: string): { segment: string; remainder: string } | null {
 
 export async function serveWorktreeFile(pathname: string): Promise<Response> {
 	const parsed = head(pathname.slice(FILES_PREFIX.length));
+	const workspaceId = parsed === null ? null : parseWorkspaceId(parsed.segment);
 	const relPath = parsed === null ? null : decoded(parsed.remainder);
-	if (parsed === null || relPath === null) return notFound(NO_STORE);
+	if (workspaceId === null || relPath === null) return notFound(NO_STORE);
 	try {
-		const abs = resolveWorktreeFile(asWorkspaceId(parsed.segment), relPath);
+		const abs = resolveWorktreeFile(workspaceId, relPath);
 		const stat = statSync(abs);
 		if (!stat.isFile()) return notFound(NO_STORE);
 		const file = Bun.file(abs);
@@ -76,11 +77,10 @@ export async function serveBlob(pathname: string, signal?: AbortSignal): Promise
 	if (workspace === null || blob === null || relPath === null) return notFound();
 	if (!OID.test(blob.segment)) return notFound();
 	try {
-		const worktreePath = loadWorkspaces().find(
-			(candidate) => candidate.id === workspace.segment,
-		)?.worktreePath;
-		if (worktreePath === undefined) return notFound();
-		resolveWorktreeFile(asWorkspaceId(workspace.segment), relPath);
+		const owner = loadWorkspaces().find((candidate) => candidate.id === workspace.segment);
+		const worktreePath = owner?.worktreePath;
+		if (owner === undefined || worktreePath === undefined) return notFound();
+		resolveWorktreeFile(owner.id, relPath);
 		const size = await readBlobSizeAtAsync(worktreePath, blob.segment, relPath);
 		if (size === null) return notFound();
 		if (size > BLOB_SIZE_LIMIT) return new Response("blob too large", { status: 413 });

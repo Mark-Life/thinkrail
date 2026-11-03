@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import type { ResourceRenderer, ReviewThread } from "../../registry";
 import { registerResourceRenderer, resolveRenderers } from "../../registry";
@@ -51,7 +51,7 @@ test("image extensions match when MIME metadata is absent", () => {
 	try {
 		expect(
 			resolveRenderers(
-				{ workspaceId: asWorkspaceId("ws"), path: "photo.avif", text: false },
+				{ workspaceId: testWorkspaceId("ws"), path: "photo.avif", text: false },
 				"view",
 				{
 					mobile: false,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
@@ -216,7 +216,7 @@ describe("isDelegationRunDetails", () => {
 		contextTokens: 3,
 	};
 	const valid = {
-		childSessionId: asSessionId("child-1"),
+		childSessionId: testSessionId("child-1"),
 		task: "map the repo",
 		status: "completed",
 		usage,
@@ -329,7 +329,7 @@ describe("resource history vocabulary", () => {
 			kind: "command",
 			summary: {
 				id: "c",
-				sessionId: asSessionId("s"),
+				sessionId: testSessionId("s"),
 				name: "tests",
 				command: "bun test",
 				status: "completed",
@@ -343,8 +343,8 @@ describe("resource history vocabulary", () => {
 		({
 			kind: "subagent",
 			summary: {
-				childSessionId: asSessionId("child"),
-				parentSessionId: asSessionId("s"),
+				childSessionId: testSessionId("child"),
+				parentSessionId: testSessionId("s"),
 				task: "Explore",
 				status: "completed",
 				createdAt: new Date(5_000).toISOString(),
@@ -413,7 +413,7 @@ describe("resource history vocabulary", () => {
 				kind: "command",
 				summary: {
 					id: "c",
-					sessionId: asSessionId("s"),
+					sessionId: testSessionId("s"),
 					name: "dev",
 					command: "bun run dev",
 					status: "stopping",

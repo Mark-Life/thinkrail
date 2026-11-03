@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	anchorLabel,
@@ -65,7 +65,7 @@ test("a .pdf extension resolves through inferred MIME metadata", () => {
 	try {
 		expect(
 			resolveRenderers(
-				{ workspaceId: asWorkspaceId("ws"), path: "report.pdf", text: false },
+				{ workspaceId: testWorkspaceId("ws"), path: "report.pdf", text: false },
 				"view",
 				{
 					mobile: false,

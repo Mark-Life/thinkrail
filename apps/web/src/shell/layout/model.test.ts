@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import type { LayoutAttention } from "../../lib";
 import {
@@ -176,7 +176,7 @@ describe("workspace layout model", () => {
 		try {
 			const t = currentTranslator();
 			const chat = (name: string) =>
-				({ kind: "chat", id: "c", name, sessionId: asSessionId("s") }) as const;
+				({ kind: "chat", id: "c", name, sessionId: testSessionId("s") }) as const;
 			expect(layoutTabName(t, chat(""))).toBe("Unterhaltung");
 			expect(layoutTabName(t, chat("Fix login"))).toBe("Fix login");
 			const prompts = { s: "Please refactor the authentication module so that tokens refresh" };
@@ -261,7 +261,7 @@ describe("workspace layout model", () => {
 			kind: "chat",
 			id: "chat:one",
 			name: "Chat",
-			sessionId: asSessionId("one"),
+			sessionId: testSessionId("one"),
 		};
 		document = mutation(openCenterTab(document, chat, "center-a", "preview")).document;
 		if (document.center.kind !== "group") throw new Error("expected one center group");
@@ -941,7 +941,7 @@ describe("workspace layout model", () => {
 	test("session pruning removes both chat and registered TODO references without touching neighbors", () => {
 		const document = baseDocument([
 			file("one"),
-			{ kind: "chat", id: "chat", name: "Chat", sessionId: asSessionId("session") },
+			{ kind: "chat", id: "chat", name: "Chat", sessionId: testSessionId("session") },
 			{
 				kind: "document",
 				id: "todo",
@@ -951,7 +951,7 @@ describe("workspace layout model", () => {
 				docPath: "TODO.md",
 			},
 		]);
-		const pruned = removeSessionLayoutTabs(document, asSessionId("session"));
+		const pruned = removeSessionLayoutTabs(document, testSessionId("session"));
 		expect(collectCenterGroups(pruned.center).flatMap((group) => group.tabs)).toEqual([
 			file("one"),
 		]);

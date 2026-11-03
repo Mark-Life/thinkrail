@@ -77,7 +77,6 @@ import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
 import type { ChatAttachment } from "./types";
 import { useHistorySearch } from "./useHistorySearch";
 
@@ -284,12 +283,10 @@ export default function ChatView({
 			? inspectorSelectedId
 			: null;
 	const selectedSubagentId =
-		inspectorOpen &&
-		inspectorSelectedId &&
-		[...resources.groups.subagents, ...resources.groups.finishedSubagents].some(
-			(child) => child.childSessionId === inspectorSelectedId,
-		)
-			? asSessionId(inspectorSelectedId)
+		inspectorOpen && inspectorSelectedId
+			? ([...resources.groups.subagents, ...resources.groups.finishedSubagents].find(
+					(child) => child.childSessionId === inspectorSelectedId,
+				)?.childSessionId ?? null)
 			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
 	const markResultSeen = freshResults.markSeen;

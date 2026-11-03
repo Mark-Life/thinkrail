@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	type AttentionNotificationEngine,
 	type AttentionNotificationEngineDeps,
@@ -34,8 +34,8 @@ function scheduler() {
 
 function event(overrides: Partial<AttentionEvent> = {}): AttentionEvent {
 	return {
-		sessionId: asSessionId("s1"),
-		workspaceId: asWorkspaceId("w1"),
+		sessionId: testSessionId("s1"),
+		workspaceId: testWorkspaceId("w1"),
 		worktreeName: "branch",
 		reason: { kind: "needs-input" },
 		...overrides,
@@ -81,21 +81,21 @@ describe("createAttentionNotificationEngine", () => {
 	});
 
 	test("coalesces a burst into one flush and emits a single notification", () => {
-		engine.enqueue(event({ sessionId: asSessionId("s1") }));
-		engine.enqueue(event({ sessionId: asSessionId("s1") }));
+		engine.enqueue(event({ sessionId: testSessionId("s1") }));
+		engine.enqueue(event({ sessionId: testSessionId("s1") }));
 		expect(clock.size).toBe(1); // one window timer, not one per event
 		clock.run();
 		expect(emitted).toHaveLength(1);
 		expect(emitted[0]?.target).toEqual({
 			kind: "chat",
-			workspaceId: asWorkspaceId("w1"),
-			sessionId: asSessionId("s1"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
 		});
 	});
 
 	test("multiple sessions aggregate", () => {
-		engine.enqueue(event({ sessionId: asSessionId("s1") }));
-		engine.enqueue(event({ sessionId: asSessionId("s2") }));
+		engine.enqueue(event({ sessionId: testSessionId("s1") }));
+		engine.enqueue(event({ sessionId: testSessionId("s2") }));
 		clock.run();
 		expect(emitted[0]?.target).toEqual({ kind: "search" });
 		expect(emitted[0]?.body).toBe("2 worktrees need your attention");
@@ -118,19 +118,19 @@ describe("createAttentionNotificationEngine", () => {
 	});
 
 	test("already-answered sessions are dropped at flush", () => {
-		engine.enqueue(event({ sessionId: asSessionId("s1") }));
-		engine.enqueue(event({ sessionId: asSessionId("s2") }));
+		engine.enqueue(event({ sessionId: testSessionId("s1") }));
+		engine.enqueue(event({ sessionId: testSessionId("s2") }));
 		lit.delete("s1");
 		clock.run();
 		expect(emitted[0]?.target).toEqual({
 			kind: "chat",
-			workspaceId: asWorkspaceId("w1"),
-			sessionId: asSessionId("s2"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s2"),
 		});
 	});
 
 	test("no surviving events ⇒ nothing emitted", () => {
-		engine.enqueue(event({ sessionId: asSessionId("s1") }));
+		engine.enqueue(event({ sessionId: testSessionId("s1") }));
 		lit.clear();
 		clock.run();
 		expect(emitted).toHaveLength(0);
@@ -160,23 +160,23 @@ describe("createAttentionNotificationEngine", () => {
 	});
 
 	test("a second burst after a flush arms a fresh window and emits again", () => {
-		engine.enqueue(event({ sessionId: asSessionId("s1") }));
+		engine.enqueue(event({ sessionId: testSessionId("s1") }));
 		clock.run();
 		expect(emitted).toHaveLength(1);
-		engine.enqueue(event({ sessionId: asSessionId("s2") }));
+		engine.enqueue(event({ sessionId: testSessionId("s2") }));
 		expect(clock.size).toBe(1);
 		clock.run();
 		expect(emitted).toHaveLength(2);
 		expect(emitted[1]?.target).toEqual({
 			kind: "chat",
-			workspaceId: asWorkspaceId("w1"),
-			sessionId: asSessionId("s2"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s2"),
 		});
 	});
 
 	test("the latest event per session within a window wins", () => {
-		engine.enqueue(event({ sessionId: asSessionId("s1"), worktreeName: "old" }));
-		engine.enqueue(event({ sessionId: asSessionId("s1"), worktreeName: "new" }));
+		engine.enqueue(event({ sessionId: testSessionId("s1"), worktreeName: "old" }));
+		engine.enqueue(event({ sessionId: testSessionId("s1"), worktreeName: "new" }));
 		clock.run();
 		expect(emitted).toHaveLength(1);
 		expect(emitted[0]?.subtitle).toBe("new");

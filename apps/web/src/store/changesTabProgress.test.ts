@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createChangesTab, useAppStore } from "./appStore";
 
 beforeEach(() => {
@@ -7,7 +7,7 @@ beforeEach(() => {
 	useAppStore
 		.getState()
 		.openTab(
-			createChangesTab(asWorkspaceId("ws"), "changes", "Changes", { kind: "branch" }),
+			createChangesTab(testWorkspaceId("ws"), "changes", "Changes", { kind: "branch" }),
 			"keep",
 		);
 });
@@ -20,7 +20,7 @@ function changesTab() {
 
 test("keeping the last hunk records hunk and file progress in one store update", () => {
 	const { setChangesTabHunkKept, setChangesTabViewed } = useAppStore.getState();
-	setChangesTabHunkKept(asWorkspaceId("ws"), "changes", "file.ts", "first", true, [
+	setChangesTabHunkKept(testWorkspaceId("ws"), "changes", "file.ts", "first", true, [
 		"first",
 		"last",
 	]);
@@ -31,7 +31,7 @@ test("keeping the last hunk records hunk and file progress in one store update",
 		updates += 1;
 	});
 	try {
-		setChangesTabHunkKept(asWorkspaceId("ws"), "changes", "file.ts", "last", true, [
+		setChangesTabHunkKept(testWorkspaceId("ws"), "changes", "file.ts", "last", true, [
 			"first",
 			"last",
 		]);
@@ -42,8 +42,11 @@ test("keeping the last hunk records hunk and file progress in one store update",
 	expect(changesTab().kept["file.ts"]).toEqual(["first", "last"]);
 	expect(changesTab().viewed).toEqual(["file.ts"]);
 
-	setChangesTabViewed(asWorkspaceId("ws"), "changes", "file.ts", false);
-	setChangesTabHunkKept(asWorkspaceId("ws"), "changes", "file.ts", "last", true, ["first", "last"]);
+	setChangesTabViewed(testWorkspaceId("ws"), "changes", "file.ts", false);
+	setChangesTabHunkKept(testWorkspaceId("ws"), "changes", "file.ts", "last", true, [
+		"first",
+		"last",
+	]);
 	expect(changesTab().viewed).toEqual([]);
 });
 
@@ -67,7 +70,7 @@ test("progress promotes the canonical restored placement without consuming anoth
 		previewTabByWorkspace: { ws: "other-group-preview" },
 		layoutIntents: [],
 	});
-	useAppStore.getState().setChangesTabViewed(asWorkspaceId("ws"), "changes", "file.ts", true);
+	useAppStore.getState().setChangesTabViewed(testWorkspaceId("ws"), "changes", "file.ts", true);
 	expect(useAppStore.getState().layoutIntents).toMatchObject([
 		{ kind: "select", tabId: "restored", keep: true, focus: false, countNavigation: false },
 	]);
@@ -75,7 +78,7 @@ test("progress promotes the canonical restored placement without consuming anoth
 });
 
 test("marking a scope viewed is one atomic update and retains earlier file progress", () => {
-	useAppStore.getState().setChangesTabViewed(asWorkspaceId("ws"), "changes", "earlier.ts", true);
+	useAppStore.getState().setChangesTabViewed(testWorkspaceId("ws"), "changes", "earlier.ts", true);
 	let updates = 0;
 	const unsubscribe = useAppStore.subscribe(() => {
 		updates += 1;
@@ -83,7 +86,7 @@ test("marking a scope viewed is one atomic update and retains earlier file progr
 	try {
 		useAppStore
 			.getState()
-			.setChangesTabViewed(asWorkspaceId("ws"), "changes", ["a.ts", "b.ts", "a.ts"], true);
+			.setChangesTabViewed(testWorkspaceId("ws"), "changes", ["a.ts", "b.ts", "a.ts"], true);
 	} finally {
 		unsubscribe();
 	}

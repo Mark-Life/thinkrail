@@ -8,7 +8,7 @@ import type {
 	ReviewComment,
 	Workspace,
 } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { TodoStore } from "pi-todos/core";
 import {
@@ -443,7 +443,11 @@ async function taskFixture() {
 	});
 	const item = store.read().groups[0]?.todos[0];
 	if (!item) throw new Error("fixture todo missing");
-	const ref = { workspaceId: workspace.id, sessionId: asSessionId("private-session"), id: item.id };
+	const ref = {
+		workspaceId: workspace.id,
+		sessionId: testSessionId("private-session"),
+		id: item.id,
+	};
 	return { root, ctx, workspace, store, item, ref };
 }
 

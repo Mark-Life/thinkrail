@@ -12,7 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile, num } from "@earendil-works/pi-schema";
-import { asProjectId, DEFAULT_CONFIG } from "@thinkrail/contracts";
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
+import { testProjectId } from "@thinkrail/contracts/test-ids";
 import type { CodedError } from "@thinkrail/shared/codedError";
 import {
 	loadConfig,
@@ -29,7 +30,7 @@ import {
 
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 const project = (id: string) => ({
-	id: asProjectId(id),
+	id: testProjectId(id),
 	name: id,
 	path: `/repo/${id}`,
 	slug: id,
@@ -58,8 +59,8 @@ test("a bad entry is dropped and reported once, and the file is copied before a 
 	const stored = JSON.stringify([project("a"), { id: "no-path" }, project("b")]);
 	writeFileSync(join(root, "projects.json"), stored);
 
-	expect(loadProjects().map((entry) => entry.id)).toEqual([asProjectId("a"), asProjectId("b")]);
-	expect(loadProjects().map((entry) => entry.id)).toEqual([asProjectId("a"), asProjectId("b")]);
+	expect(loadProjects().map((entry) => entry.id)).toEqual([testProjectId("a"), testProjectId("b")]);
+	expect(loadProjects().map((entry) => entry.id)).toEqual([testProjectId("a"), testProjectId("b")]);
 
 	expect(problems.map((problem) => problem.code)).toEqual(["STATE_FILE_SET_ASIDE"]);
 	expect(problems[0]?.message).toContain("dropped entries 1");
@@ -96,7 +97,7 @@ test("an entry holding a number JSON cannot carry drops with a copy, and the oth
 	expect(stored).toContain("1e999");
 	writeFileSync(join(root, "projects.json"), stored);
 
-	expect(loadProjects().map((entry) => entry.id)).toEqual([asProjectId("a")]);
+	expect(loadProjects().map((entry) => entry.id)).toEqual([testProjectId("a")]);
 	expect(problems[0]?.message).toContain("dropped entries 1");
 	expect(copies()).toHaveLength(1);
 });

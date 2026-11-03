@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import type { WorkspaceId } from "@thinkrail/contracts";
 import {
-	asWorkspaceId,
 	type PiPackageScope,
 	type PiPackageSummary,
 	type PiPackagesCatalog,
 	parsePiPackageInput,
 } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { t } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -90,7 +90,7 @@ function render(
 }
 
 test("the form offers both scopes with a trusted workspace and shows the settings path", () => {
-	const markup = render(asWorkspaceId("w1"), CATALOG);
+	const markup = render(testWorkspaceId("w1"), CATALOG);
 	expect(markup).toContain('data-step="form"');
 	expect(markup).toContain('data-testid="install-package-source"');
 	expect(markup).toContain('data-testid="install-package-scope-project"');
@@ -100,7 +100,7 @@ test("the form offers both scopes with a trusted workspace and shows the setting
 	expect(markup).toContain('aria-label="What can I paste here?"');
 	expect(markup).toContain('data-testid="packages-gallery-link"');
 	expect(markup).toMatch(/data-testid="install-package-submit"[^>]*disabled/);
-	const typed = render(asWorkspaceId("w1"), CATALOG, { kind: "form" }, "npm:@acme/pi-jira@1.4.2");
+	const typed = render(testWorkspaceId("w1"), CATALOG, { kind: "form" }, "npm:@acme/pi-jira@1.4.2");
 	expect(typed).toContain('data-testid="install-package-echo"');
 	expect(typed).toContain("Install @acme/pi-jira");
 });
@@ -109,12 +109,12 @@ test("without a workspace the repository scope is disabled with a reason; untrus
 	const { projectSettingsPath: _projectSettingsPath, ...withoutRepository } = CATALOG;
 	const noWorkspace = render(null, withoutRepository);
 	expect(noWorkspace).toContain("Open a workspace to install for its repository.");
-	const untrusted = render(asWorkspaceId("w1"), { ...CATALOG, projectTrusted: false });
+	const untrusted = render(testWorkspaceId("w1"), { ...CATALOG, projectTrusted: false });
 	expect(untrusted).toContain("Trust this project before installing packages into its repository.");
 });
 
 test("installing, installed and failed steps", () => {
-	const installing = render(asWorkspaceId("w1"), CATALOG, {
+	const installing = render(testWorkspaceId("w1"), CATALOG, {
 		kind: "installing",
 		name: "@acme/pi-jira",
 	});
@@ -122,7 +122,7 @@ test("installing, installed and failed steps", () => {
 	expect(installing).toContain('role="progressbar"');
 	expect(installing).not.toContain("install-package-submit");
 
-	const installed = render(asWorkspaceId("w1"), CATALOG, {
+	const installed = render(testWorkspaceId("w1"), CATALOG, {
 		kind: "installed",
 		summary: {
 			...SUMMARY,
@@ -154,7 +154,7 @@ test("installing, installed and failed steps", () => {
 	expect(installed).toContain("Installed globally");
 	expect(installed).toContain('data-testid="install-package-done"');
 
-	const failed = render(asWorkspaceId("w1"), CATALOG, {
+	const failed = render(testWorkspaceId("w1"), CATALOG, {
 		kind: "failed",
 		name: "pi-gone",
 		message: "npm ERR! 404 Not Found",
@@ -163,7 +163,7 @@ test("installing, installed and failed steps", () => {
 	expect(failed).toContain("npm ERR! 404 Not Found");
 	expect(failed).toContain("Nothing was added to your settings.");
 	expect(failed).toContain('data-testid="install-package-retry"');
-	const unknown = render(asWorkspaceId("w1"), CATALOG, {
+	const unknown = render(testWorkspaceId("w1"), CATALOG, {
 		kind: "failed",
 		name: "x",
 		message: "socket closed",
@@ -171,7 +171,7 @@ test("installing, installed and failed steps", () => {
 	});
 	expect(unknown).not.toContain("Nothing was added to your settings.");
 	expect(unknown).toContain("It may have been added anyway — check the list.");
-	const timedOut = render(asWorkspaceId("w1"), CATALOG, {
+	const timedOut = render(testWorkspaceId("w1"), CATALOG, {
 		kind: "failed",
 		name: "x",
 		message: "slow",
@@ -238,7 +238,7 @@ test("a pasted `pi install -l …` line selects the repository scope when it is 
 						projectTrusted: true,
 						projectSettingsPath: "/repo/.pi/settings.json",
 					}}
-					workspaceId={asWorkspaceId("w1")}
+					workspaceId={testWorkspaceId("w1")}
 					onSourceChange={() => {}}
 					onScopeChange={() => {}}
 					onSubmit={() => {}}

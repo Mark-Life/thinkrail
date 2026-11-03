@@ -1,12 +1,10 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type SessionResources,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	selectChatResourceAuthority,
 	selectChatResourceGroups,
@@ -16,8 +14,8 @@ import {
 } from "./index";
 
 const scope = {
-	workspaceId: asWorkspaceId("resources-workspace"),
-	sessionId: asSessionId("resources-session"),
+	workspaceId: testWorkspaceId("resources-workspace"),
+	sessionId: testSessionId("resources-session"),
 };
 const command = (status: BackgroundCommandSummary["status"]): BackgroundCommandSummary => ({
 	id: status,
@@ -190,8 +188,8 @@ test("atomic invalidation and installation preserve stale snapshots and reject o
 
 test("workspace and session response identity cannot cross authority", () => {
 	state().invalidateChatResources(scope);
-	state().installChatResources(read(), { ...snapshot, sessionId: asSessionId("foreign") });
-	state().installChatResources(read(), { ...snapshot, workspaceId: asWorkspaceId("foreign") });
+	state().installChatResources(read(), { ...snapshot, sessionId: testSessionId("foreign") });
+	state().installChatResources(read(), { ...snapshot, workspaceId: testWorkspaceId("foreign") });
 	expect(projection()?.snapshot).toBeNull();
 });
 
@@ -247,7 +245,7 @@ test("clear and rehydrate use distinct revisions so a late read cannot resurrect
 test("chat deletion and workspace removal clear projections and fence future arrivals", () => {
 	for (const remove of [
 		() => state().deleteChat(scope.workspaceId, scope.sessionId),
-		() => state().applyWorkspaceRemoved(asProjectId("project"), scope.workspaceId),
+		() => state().applyWorkspaceRemoved(testProjectId("project"), scope.workspaceId),
 	]) {
 		useAppStore.setState({ deletedSessionsByWorkspace: {}, removedWorkspaceIds: {} });
 		state().invalidateChatResources(scope);

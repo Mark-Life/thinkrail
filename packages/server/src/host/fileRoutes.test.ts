@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { BLOB_SIZE_LIMIT, serveBlob, serveWorktreeFile } from "./fileRoutes";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x7f]);
@@ -42,8 +42,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: asWorkspaceId("w1"),
-				projectId: asProjectId("p1"),
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				worktreePath: repo,

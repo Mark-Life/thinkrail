@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import type { SessionId, SessionStats } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { refreshSessionStats } from "./useSessionStats";
 
 const stats: SessionStats = {
-	sessionId: asSessionId("session-1"),
+	sessionId: testSessionId("session-1"),
 	totalMessages: 3,
 	tokens: { input: 10, output: 5, cacheRead: 2, cacheWrite: 1, total: 18 },
 	cost: 0.01,
@@ -44,7 +44,7 @@ function refresh(
 ) {
 	return refreshSessionStats(
 		{
-			sessionId: asSessionId("session-1"),
+			sessionId: testSessionId("session-1"),
 			expectedStatsRefreshTick: 7,
 			connectionGeneration: 4,
 			isCurrent,
@@ -56,7 +56,7 @@ function refresh(
 test("refreshSessionStats installs an authoritative current snapshot", async () => {
 	const fixture = dependencies();
 	expect(await refresh(fixture.deps)).toBe("applied");
-	expect(fixture.installed()).toEqual({ sessionId: asSessionId("session-1"), stats });
+	expect(fixture.installed()).toEqual({ sessionId: testSessionId("session-1"), stats });
 });
 
 test("refreshSessionStats rejects superseded revisions, generations, identities, and callers", async () => {
@@ -64,7 +64,7 @@ test("refreshSessionStats rejects superseded revisions, generations, identities,
 		dependencies({ statsRefreshTick: 8 }),
 		dependencies({ connectionGeneration: 5 }),
 		dependencies({ status: "disconnected" }),
-		dependencies({ read: async () => ({ ...stats, sessionId: asSessionId("other") }) }),
+		dependencies({ read: async () => ({ ...stats, sessionId: testSessionId("other") }) }),
 	]) {
 		expect(await refresh(fixture.deps)).toBe("stale");
 		expect(fixture.installed()).toBeNull();

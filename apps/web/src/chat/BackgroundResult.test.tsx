@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import {
-	asSessionId,
 	BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE,
 	type BackgroundCommandCompletionDetails,
 	type TranscriptMessage,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EMPTY_RUNTIME, reduceSessionEvent } from "@/store";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
@@ -14,7 +14,7 @@ import { deriveRows } from "./rows";
 
 const details: BackgroundCommandCompletionDetails = {
 	id: "command",
-	sessionId: asSessionId("chat"),
+	sessionId: testSessionId("chat"),
 	name: "Build",
 	status: "completed",
 	startedAt: 1,
@@ -104,7 +104,7 @@ test("a subagent result teases its report, offers the transcript and never rende
 			<SubagentResult
 				id="sub"
 				details={{
-					childSessionId: asSessionId("child-1"),
+					childSessionId: testSessionId("child-1"),
 					roleName: "reviewer",
 					task: "review",
 					status: "completed",
