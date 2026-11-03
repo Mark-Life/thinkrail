@@ -18,6 +18,10 @@ interface ModuleRule {
 }
 
 const BROWSER_SAFE_PI_PACKAGE = /^@earendil-works\/pi-schema(?:\/|$)/;
+const TEST_IDS_ENTRY = /^(?:test-ids|src\/testIds(?:\.ts)?)$/;
+const ID_SOURCE = /^src\/schema\/ids(?:\.ts)?$/;
+const TEST_SOURCE =
+	/\.(?:test|spec|perf|fixture)\.[cm]?[jt]sx?$|(?:^|\/)(?:testing|fixtures)\/|(?:^|\/)(?:test[A-Z-]|fixtures\.)[^/]*$/;
 
 const MODULE_RULES: readonly ModuleRule[] = [
 	{
@@ -281,6 +285,21 @@ function sourceRule(rule: ModuleRule, subpath: string): ModuleRule {
 	}
 }
 
+function idMakerViolation(rule: ModuleRule, subpath: string, target: WorkspaceTarget) {
+	if (target.root !== "packages/contracts") return undefined;
+	if (rule.root !== target.root && ID_SOURCE.test(target.subpath)) {
+		return "reaches contracts' id source past its public entries";
+	}
+	if (
+		TEST_IDS_ENTRY.test(target.subpath) &&
+		rule.root !== "packages/artifact-tests" &&
+		!TEST_SOURCE.test(subpath)
+	) {
+		return "uses the test-only id makers outside test sources";
+	}
+	return undefined;
+}
+
 function sourceViolation(
 	rule: ModuleRule,
 	subpath: string,
@@ -295,6 +314,8 @@ function sourceViolation(
 	const sdk = rule.root === "packages/extension-api";
 	const sdkHalf = sourceHalf(subpath.replace(/^src\//, ""));
 	if (target) {
+		const idMaker = idMakerViolation(rule, subpath, target);
+		if (idMaker) return idMaker;
 		if (extension && target.root === rule.root && half) {
 			const targetHalf = sourceHalf(target.subpath);
 			if (targetHalf && targetHalf !== half) return "crosses extension web/server source halves";

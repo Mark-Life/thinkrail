@@ -49,7 +49,7 @@ not this module; the theme-aware highlighter remains app-local.
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client) and **`randomUuid()`** (the same
   source shaped as an RFC 4122 v4 UUID, for wire ids the host validates as UUIDs; `crypto.randomUUID` is
-  missing on such a client),
+  missing on such a client; re-exported from contracts, which owns it for the id generators),
   **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
   commit something a double click contradicts: a single click (or keyboard activation) on the active
   preview tab, so a double click is not read as two keeps, the Changes review-tab preview, and the Review

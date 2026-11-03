@@ -11,7 +11,7 @@ import {
 	type SessionShutdownEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { acquireMcpSignInLock } from "./signInLock";
 
 const TOOL_SEARCH = "tool_search";
@@ -41,7 +41,7 @@ function observingCommands(
 		const mutates =
 			(action === "login" || action === "logout" || action === "reconnect") && extra.length === 0;
 		if (!mutates) return handler(args, ctx);
-		const sessionId = onCommandSettled ? asSessionId(ctx.sessionManager.getSessionId()) : undefined;
+		const sessionId = onCommandSettled ? parseSessionId(ctx.sessionManager.getSessionId()) : null;
 		const lock =
 			lockSignIns && name && (action === "login" || action === "logout")
 				? acquireMcpSignInLock(name, "chat")
@@ -55,7 +55,7 @@ function observingCommands(
 			await handler(args, ctx);
 		} finally {
 			lock?.release();
-			if (sessionId !== undefined) onCommandSettled?.(sessionId);
+			if (sessionId !== null) onCommandSettled?.(sessionId);
 		}
 	};
 }

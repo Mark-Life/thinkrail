@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import type { TodoPlan } from "@thinkrail/contracts";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { findBranchReviewOutcome, forgetOpenBranchReview, githubSlug } from "../branch-review";
 import {
 	compareQuickPullUrl,
@@ -497,8 +497,8 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 			join(dataDir, "workspaces.json"),
 			JSON.stringify([
 				{
-					id: asWorkspaceId("w1"),
-					projectId: asProjectId("p1"),
+					id: testWorkspaceId("w1"),
+					projectId: testProjectId("p1"),
 					name: "Feature",
 					branch: "feature",
 					baseBranch: "main",
@@ -525,8 +525,8 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 		process.env.THINKRAIL_GH_OFFLINE = "1";
 
 		const result = await openPr({
-			workspaceId: asWorkspaceId("w1"),
-			sessionId: asSessionId("s1"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
 			title: "Feature",
 			body: "Body",
 		});
@@ -551,8 +551,8 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 
 		const result = await openPr(
 			{
-				workspaceId: asWorkspaceId("w1"),
-				sessionId: asSessionId("s1"),
+				workspaceId: testWorkspaceId("w1"),
+				sessionId: testSessionId("s1"),
 				title: "Feature",
 				body: "Body",
 			},
@@ -570,7 +570,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 		expect((await findBranchReviewOutcome(repo, "feature")).value).toBeNull();
 		sh(repo, "remote", "set-url", "origin", remote);
 		const result = await openPr(
-			{ workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
+			{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 			async () => {
 				throw new Error("a non-GitHub push must not run gh");
 			},
@@ -595,8 +595,8 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 			join(dataDir, "workspaces.json"),
 			JSON.stringify([
 				{
-					id: asWorkspaceId("w1"),
-					projectId: asProjectId("p1"),
+					id: testWorkspaceId("w1"),
+					projectId: testProjectId("p1"),
 					name: "Feature",
 					branch: "feature",
 					baseBranch: "upstream/main",
@@ -607,7 +607,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 		);
 
 		await expect(
-			openPr({ workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") }),
+			openPr({ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") }),
 		).rejects.toThrow(/non-origin remote base/);
 		const pushed = Bun.spawnSync([
 			"git",
@@ -634,8 +634,8 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 			join(dataDir, "workspaces.json"),
 			JSON.stringify([
 				{
-					id: asWorkspaceId("w1"),
-					projectId: asProjectId("p1"),
+					id: testWorkspaceId("w1"),
+					projectId: testProjectId("p1"),
 					name: "w1",
 					branch: "main",
 					baseBranch: "main",
@@ -668,7 +668,7 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 		seedWorkspace({ kind: "default" });
 		await expect(
 			openPr(
-				{ workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
+				{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 				neverRun,
 				async () => null,
 			),
@@ -679,7 +679,7 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 		seedWorkspace({ kind: "external", baseBranch: "origin/main" });
 		await expect(
 			openPr(
-				{ workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
+				{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 				neverRun,
 				async () => null,
 			),
@@ -695,8 +695,8 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 			join(dataDir, "workspaces.json"),
 			JSON.stringify([
 				{
-					id: asWorkspaceId("w1"),
-					projectId: asProjectId("p1"),
+					id: testWorkspaceId("w1"),
+					projectId: testProjectId("p1"),
 					name: "w1",
 					branch: "feat/x",
 					baseBranch: "main",
@@ -708,7 +708,7 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 		let error: unknown;
 		try {
 			await openPr(
-				{ workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
+				{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 				neverRun,
 				async () => null,
 			);
@@ -747,8 +747,8 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 			join(dataDir, "workspaces.json"),
 			JSON.stringify([
 				{
-					id: asWorkspaceId("w1"),
-					projectId: asProjectId("p1"),
+					id: testWorkspaceId("w1"),
+					projectId: testProjectId("p1"),
 					name: "w1",
 					kind: "default",
 					branch: "feature/a",
@@ -761,7 +761,7 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 
 		await expect(
 			openPr(
-				{ workspaceId: asWorkspaceId("w1"), sessionId: asSessionId("s1") },
+				{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 				neverRun,
 				async () => null,
 			),

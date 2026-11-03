@@ -10,7 +10,7 @@ import {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ProjectResourceKind, SessionId, WorkspaceId } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	applyPiResourceTrust,
 	createSession,
@@ -111,7 +111,7 @@ function projectCwd(): string {
 }
 
 async function projectSession(): Promise<{ workspaceId: WorkspaceId; sessionId: SessionId }> {
-	const workspaceId = asWorkspaceId(`trust-${++sequence}`);
+	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
 	const { sessionId } = await createSession({ workspaceId, cwd: projectCwd() });
 	return { workspaceId, sessionId };
 }
@@ -204,7 +204,7 @@ test("an untrusted project's native resources stay out until a grant reaches the
 	expect(await applyPiResourceTrust([workspaceId])).toEqual({});
 
 	trustedWorkspaces.add(workspaceId);
-	expect(await applyPiResourceTrust([asWorkspaceId("some-other-workspace")])).toEqual({});
+	expect(await applyPiResourceTrust([testWorkspaceId("some-other-workspace")])).toEqual({});
 	expect(await applyPiResourceTrust([workspaceId])).toEqual({ [sessionId]: "reloaded" });
 	expect(hasNativeTemplate(sessionId)).toBe(true);
 	expect(await applyPiResourceTrust([workspaceId])).toEqual({});
@@ -239,7 +239,7 @@ test("a session whose trust changed while it was opening reloads into the new tr
 		flipPath,
 		"export default function flip(pi) { pi.on('session_start', () => { globalThis.__projectTrustFlip?.(); }); }\n",
 	);
-	const workspaceId = asWorkspaceId(`trust-${++sequence}`);
+	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
 	hook.__projectTrustFlip = () => trustedWorkspaces.add(workspaceId);
 	try {
 		const { sessionId } = await createSession({ workspaceId, cwd: projectCwd() });
@@ -274,7 +274,7 @@ test("a revoke deferred on a busy parent keeps its project provider extension ou
 		__trustOwnerFaux?: typeof faux;
 	};
 	hook.__trustOwnerFaux = faux;
-	const workspaceId = asWorkspaceId(`trust-${++sequence}`);
+	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
 	const cwd = projectCwd();
 	mkdirSync(join(cwd, ".pi", "extensions"), { recursive: true });
 	writeFileSync(

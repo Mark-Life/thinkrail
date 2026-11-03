@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace, WorkspaceId } from "@thinkrail/contracts";
-import { asProjectId, asSessionId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId } from "@thinkrail/contracts/test-ids";
 import { createWorkspace, getWorkspace, listWorkspaces, renameWorkspace } from "../workspaces";
 import { type AgentTitleDeps, applyAgentTitle } from "./titleTool";
 
@@ -56,11 +56,11 @@ function fakeChat(workspaceId: WorkspaceId | undefined, named = false) {
 }
 
 test("names an unnamed chat and workspace once: any-script name, English branch, locked", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{
 			chat_title: "Ревью #567 Add page zoom shortcuts",
 			workspace_name: "Ревью #567 Add page zoom shortcuts",
@@ -81,7 +81,7 @@ test("names an unnamed chat and workspace once: any-script name, English branch,
 	expect(text).toContain("branch review-567-page-zoom");
 
 	const again = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Something else", workspace_name: "Something else", branch: "something-else" },
 		chat.deps,
 	);
@@ -91,12 +91,12 @@ test("names an unnamed chat and workspace once: any-script name, English branch,
 });
 
 test("a manual rename always wins over the agent", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	renameWorkspace(ws.id, "Mine");
 	const chat = fakeChat(ws.id, true);
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
 		chat.deps,
 	);
@@ -108,14 +108,14 @@ test("a manual rename always wins over the agent", async () => {
 });
 
 test("the Default workspace keeps its name while the chat still gets one", async () => {
-	const def = (await listWorkspaces(asProjectId("p1"))).find(
+	const def = (await listWorkspaces(testProjectId("p1"))).find(
 		(w): w is Workspace => w.kind === "default",
 	);
 	if (!def) throw new Error("expected a Default workspace");
 	const chat = fakeChat(def.id);
 
 	const text = await applyAgentTitle(
-		asSessionId("s1"),
+		testSessionId("s1"),
 		{ chat_title: "Fix login", workspace_name: "Fix login" },
 		chat.deps,
 	);
@@ -126,11 +126,11 @@ test("the Default workspace keeps its name while the chat still gets one", async
 });
 
 test("long names clamp at a word boundary; a missing slug keeps the branch", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 	const long = "Review #9 ".concat("word ".repeat(30)).trim();
 
-	await applyAgentTitle(asSessionId("s1"), { chat_title: long, workspace_name: long }, chat.deps);
+	await applyAgentTitle(testSessionId("s1"), { chat_title: long, workspace_name: long }, chat.deps);
 
 	const title = chat.writes[0]?.title ?? "";
 	expect(title.length).toBeLessThanOrEqual(80);
@@ -142,11 +142,15 @@ test("long names clamp at a word boundary; a missing slug keeps the branch", asy
 });
 
 test("a branch without workspace_name is rejected before anything is written", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 
 	await expect(
-		applyAgentTitle(asSessionId("s1"), { chat_title: "Fix login", branch: "fix-login" }, chat.deps),
+		applyAgentTitle(
+			testSessionId("s1"),
+			{ chat_title: "Fix login", branch: "fix-login" },
+			chat.deps,
+		),
 	).rejects.toThrow("pass it together with workspace_name");
 
 	expect(chat.writes).toEqual([]);
@@ -155,17 +159,17 @@ test("a branch without workspace_name is rejected before anything is written", a
 });
 
 test("a chat-only call on an unnamed workspace is rejected before anything is written", async () => {
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	const chat = fakeChat(ws.id);
 	await expect(
-		applyAgentTitle(asSessionId("s1"), { chat_title: "Fix login" }, chat.deps),
+		applyAgentTitle(testSessionId("s1"), { chat_title: "Fix login" }, chat.deps),
 	).rejects.toThrow("pass chat_title, workspace_name and branch together in one call");
 	expect(chat.writes).toEqual([]);
 	expect(getWorkspace(ws.id).renamed).toBeUndefined();
 
 	renameWorkspace(ws.id, "Mine");
 	const named = await applyAgentTitle(
-		asSessionId("s2"),
+		testSessionId("s2"),
 		{ chat_title: "Other" },
 		fakeChat(ws.id).deps,
 	);
@@ -174,12 +178,12 @@ test("a chat-only call on an unnamed workspace is rejected before anything is wr
 
 test("rejects calls from sessions the host does not manage, and empty names", async () => {
 	await expect(
-		applyAgentTitle(asSessionId("child"), { chat_title: "x" }, fakeChat(undefined).deps),
+		applyAgentTitle(testSessionId("child"), { chat_title: "x" }, fakeChat(undefined).deps),
 	).rejects.toThrow("only available in a top-level chat");
-	const ws = await createWorkspace(asProjectId("p1"));
+	const ws = await createWorkspace(testProjectId("p1"));
 	await expect(
 		applyAgentTitle(
-			asSessionId("s1"),
+			testSessionId("s1"),
 			{ chat_title: "  ", workspace_name: "!!" },
 			fakeChat(ws.id).deps,
 		),

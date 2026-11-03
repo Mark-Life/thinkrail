@@ -18,7 +18,17 @@ export * from "./git";
 export * from "./github";
 export * from "./history";
 export * from "./host";
-export * from "./ids";
+export {
+	newProjectId,
+	newWorkspaceId,
+	ProjectId,
+	parseProjectId,
+	parseSessionId,
+	parseWorkspaceId,
+	randomUuid,
+	SessionId,
+	WorkspaceId,
+} from "./ids";
 export * from "./locales";
 export * from "./mcp";
 export * from "./methods";

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { createWorkspaceViaDialog, openFixtureProject, waitForAgentSettled } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -53,7 +53,7 @@ test("manual compaction preserves context through continuation and reload", {
 		const wire = await E2eWire.connect();
 		const transcript = await wire
 			.request("session.getMessages", {
-				sessionId: asSessionId(sessionId),
+				sessionId: testSessionId(sessionId),
 				workspaceId: workspace.id,
 			})
 			.finally(() => wire.close());

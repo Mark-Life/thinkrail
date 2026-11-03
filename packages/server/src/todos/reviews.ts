@@ -12,7 +12,7 @@ import {
 	str,
 } from "@earendil-works/pi-schema";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId, JsonObject } from "@thinkrail/contracts";
+import { JsonObject, parseSessionId } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
 
@@ -229,7 +229,8 @@ export function clearAllPendingReviews(
 	}
 	const cleared: { sessionId: SessionId; itemIds: string[] }[] = [];
 	for (const name of names) {
-		const sessionId = asSessionId(name.slice(0, -REVIEWS_SUFFIX.length));
+		const sessionId = parseSessionId(name.slice(0, -REVIEWS_SUFFIX.length));
+		if (sessionId === null) continue;
 		const file = readFile(root, sessionId);
 		const itemIds = Object.keys(file.pending ?? {});
 		if (itemIds.length === 0) continue;

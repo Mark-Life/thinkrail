@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ReviewDetails, WorkspaceId } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	type BranchAnswer,
 	CI_DISCOVERY_POLLS,
@@ -74,7 +74,7 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 	const calls: Array<{ workspaceId: WorkspaceId; allowCached?: true }> = [];
 	const releases: Array<(answer: BranchAnswer) => void> = [];
 	const controller = startBranchStatusSync({
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		key: "w1\0feature",
 		state,
 		focusTarget,
@@ -85,11 +85,11 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 		},
 	});
 
-	expect(calls).toEqual([{ workspaceId: asWorkspaceId("w1"), allowCached: true }]);
+	expect(calls).toEqual([{ workspaceId: testWorkspaceId("w1"), allowCached: true }]);
 	focusTarget.dispatchEvent(new Event("focus"));
 	expect(calls).toEqual([
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
-		{ workspaceId: asWorkspaceId("w1") },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1") },
 	]);
 	releases[0]?.({ review: { kind: "pull-request", number: 1 }, status: null });
 	releases[1]?.({ review: { kind: "pull-request", number: 2 }, status: null });
@@ -105,9 +105,9 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 	expect(calls).toHaveLength(2);
 	controller.setConnected(true);
 	expect(calls).toEqual([
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
-		{ workspaceId: asWorkspaceId("w1") },
-		{ workspaceId: asWorkspaceId("w1") },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1") },
+		{ workspaceId: testWorkspaceId("w1") },
 	]);
 
 	controller.stop();
@@ -118,7 +118,7 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 test("reload re-reads cache-eligible and is dropped while disconnected", () => {
 	const calls: Array<{ workspaceId: WorkspaceId; allowCached?: true }> = [];
 	const controller = startBranchStatusSync({
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		key: "w1\0feature",
 		state: createBranchStatusState(),
 		focusTarget: new EventTarget(),
@@ -131,16 +131,16 @@ test("reload re-reads cache-eligible and is dropped while disconnected", () => {
 
 	controller.reload();
 	expect(calls).toEqual([
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
 	]);
 	controller.setConnected(false);
 	controller.reload();
 	controller.setConnected(true);
 	expect(calls).toEqual([
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
 	]);
 	controller.stop();
 });
@@ -170,7 +170,7 @@ test("a v87 branch status folds its counts onto the review and keeps the facts r
 test("a CI poll reads the review fresh but skips the fetch, and only while connected", () => {
 	const calls: unknown[] = [];
 	const controller = startBranchStatusSync({
-		workspaceId: asWorkspaceId("w1"),
+		workspaceId: testWorkspaceId("w1"),
 		key: "w1\0poll",
 		state: createBranchStatusState(),
 		focusTarget: new EventTarget(),
@@ -185,8 +185,8 @@ test("a CI poll reads the review fresh but skips the fetch, and only while conne
 	controller.setConnected(true);
 	controller.poll();
 	expect(calls).toEqual([
-		{ workspaceId: asWorkspaceId("w1"), allowCached: true },
-		{ workspaceId: asWorkspaceId("w1"), skipFetch: true },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1"), skipFetch: true },
 	]);
 	controller.stop();
 });

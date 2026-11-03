@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TestMarkdown as Markdown, testLinks } from "../testing/markdown";
@@ -43,7 +43,7 @@ test("relative document targets have no browser-navigable href", () => {
 		createElement(Markdown, {
 			text: "[`themes/SPEC.md`](../themes/SPEC.md)",
 			components: documentComponents(
-				{ workspaceId: asWorkspaceId("workspace-1"), path: "apps/web/src/styles/COLOR.md" },
+				{ workspaceId: testWorkspaceId("workspace-1"), path: "apps/web/src/styles/COLOR.md" },
 				testLinks,
 			),
 		}),

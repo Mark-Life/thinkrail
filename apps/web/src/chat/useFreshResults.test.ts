@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { freshOf, inspectedResult, rememberSeen, resultTargetKey } from "./useFreshResults";
 
 const command: BackgroundCommandSummary = {
 	id: "cmd",
-	sessionId: asSessionId("chat"),
+	sessionId: testSessionId("chat"),
 	name: "tests",
 	command: "bun test",
 	status: "completed",
@@ -14,8 +14,8 @@ const command: BackgroundCommandSummary = {
 	exitCode: 0,
 };
 const child: SubagentResourceSummary = {
-	childSessionId: asSessionId("child"),
-	parentSessionId: asSessionId("chat"),
+	childSessionId: testSessionId("child"),
+	parentSessionId: testSessionId("chat"),
 	task: "review",
 	status: "completed",
 	createdAt: new Date(0).toISOString(),
@@ -30,7 +30,7 @@ test("a finished result is new until its key is seen, and nothing is new before 
 		commands: [],
 		subagents: [child],
 	});
-	expect(resultTargetKey({ kind: "subagent", childSessionId: asSessionId("child") })).toBe(
+	expect(resultTargetKey({ kind: "subagent", childSessionId: testSessionId("child") })).toBe(
 		"subagent:child",
 	);
 });
@@ -38,9 +38,9 @@ test("a finished result is new until its key is seen, and nothing is new before 
 test("opening a result in the inspector counts only once it has finished", () => {
 	const finished = { finishedCommands: [command], finishedSubagents: [child] };
 	expect(inspectedResult(finished, "cmd", null)).toEqual({ kind: "command", id: "cmd" });
-	expect(inspectedResult(finished, null, asSessionId("child"))).toEqual({
+	expect(inspectedResult(finished, null, testSessionId("child"))).toEqual({
 		kind: "subagent",
-		childSessionId: asSessionId("child"),
+		childSessionId: testSessionId("child"),
 	});
 	expect(inspectedResult(finished, "still-running", null)).toBeNull();
 	expect(inspectedResult(finished, null, null)).toBeNull();
@@ -55,7 +55,7 @@ test("acknowledging before the first snapshot keeps the first-visit baseline pen
 
 test("a foreground subagent is never a new result: the agent's card already delivered it", () => {
 	const { detached: _detached, ...attached } = child;
-	const foreground: SubagentResourceSummary = { ...attached, childSessionId: asSessionId("fg") };
+	const foreground: SubagentResourceSummary = { ...attached, childSessionId: testSessionId("fg") };
 	const finished = { finishedCommands: [], finishedSubagents: [child, foreground] };
 	expect(freshOf(finished, new Set()).subagents).toEqual([child]);
 });

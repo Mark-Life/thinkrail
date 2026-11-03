@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { saveWorkspaces } from "../persistence";
 import {
@@ -15,7 +15,7 @@ import {
 	setTerminalPublisher,
 } from "./terminalManager";
 
-const WS = asWorkspaceId("ws-1");
+const WS = testWorkspaceId("ws-1");
 const SAVED_ENV = ["THINKRAIL_DATA_DIR", "HISTFILE", "HISTSIZE", "ZDOTDIR"].map(
 	(name) => [name, process.env[name]] as const,
 );
@@ -32,7 +32,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: asProjectId("project-1"),
+			projectId: testProjectId("project-1"),
 			name: "Workspace",
 			branch: "main",
 			baseBranch: "main",

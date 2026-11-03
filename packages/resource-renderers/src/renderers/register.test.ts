@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { diffRendererCapabilities, registerResourceRenderer } from "../registry";
 import { binaryRenderer } from "./binary";
 import { codeRenderer } from "./code";
@@ -60,7 +60,7 @@ test("diff capabilities resolve from a path before content loads", () => {
 		const scope = { kind: "uncommitted" } as const;
 		const resolve = (path: string, selectedId?: string) => {
 			const { layout, whitespace } = diffRendererCapabilities(
-				asWorkspaceId("ws"),
+				testWorkspaceId("ws"),
 				path,
 				scope,
 				selectedId,

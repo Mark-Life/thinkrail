@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionState } from "@thinkrail/contracts";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { type AttentionCandidate, attentionReason, diffAttention, isLit } from "./detectAttention";
 
 function state(overrides: Partial<SessionState> = {}): SessionState {
@@ -18,8 +18,8 @@ function state(overrides: Partial<SessionState> = {}): SessionState {
 
 function candidate(overrides: Partial<AttentionCandidate> = {}): AttentionCandidate {
 	return {
-		sessionId: asSessionId("s1"),
-		workspaceId: asWorkspaceId("w1"),
+		sessionId: testSessionId("s1"),
+		workspaceId: testWorkspaceId("w1"),
 		worktreeName: "branch",
 		state: state(),
 		...overrides,
@@ -98,7 +98,7 @@ describe("diffAttention", () => {
 		});
 		const { events, litNow } = diffAttention(new Map(), [candidate({ state: litState })]);
 		expect(events).toHaveLength(1);
-		expect(events[0]?.sessionId).toBe(asSessionId("s1"));
+		expect(events[0]?.sessionId).toBe(testSessionId("s1"));
 		expect(litNow.get("s1")).toBe(true);
 	});
 
@@ -119,21 +119,21 @@ describe("diffAttention", () => {
 	test("multiple candidates emit only the rising ones", () => {
 		const { events } = diffAttention(new Map([["s1", true]]), [
 			candidate({
-				sessionId: asSessionId("s1"),
+				sessionId: testSessionId("s1"),
 				state: state({
 					needsInput: { interactionId: "tool:i", kind: "tool-response", toolCallId: "i" },
 				}),
 			}),
 			candidate({
-				sessionId: asSessionId("s2"),
+				sessionId: testSessionId("s2"),
 				state: state({
 					completion: { completionId: "c", outcome: "failed", failure: "error" },
 					completionUnread: true,
 				}),
 			}),
-			candidate({ sessionId: asSessionId("s3"), state: state() }),
+			candidate({ sessionId: testSessionId("s3"), state: state() }),
 		]);
-		expect(events.map((e) => e.sessionId)).toEqual([asSessionId("s2")]);
+		expect(events.map((e) => e.sessionId)).toEqual([testSessionId("s2")]);
 	});
 
 	test("re-lighting after going dark emits again", () => {

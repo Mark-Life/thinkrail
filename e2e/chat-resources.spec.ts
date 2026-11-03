@@ -1,15 +1,15 @@
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import type { SessionId } from "@thinkrail/contracts";
-import {
-	asSessionId,
-	type ResourceRecord,
-	type SessionResources,
-	type WsClientMessage,
-	type WsParams,
-	type WsResult,
+import type {
+	ResourceRecord,
+	SessionId,
+	SessionResources,
+	WsClientMessage,
+	WsParams,
+	WsResult,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
@@ -45,7 +45,7 @@ async function observeResourceWire(page: Page, options: { completedChildId?: str
 						commands: [],
 						subagents: [
 							{
-								childSessionId: asSessionId(options.completedChildId),
+								childSessionId: testSessionId(options.completedChildId),
 								parentSessionId: resourceScope.sessionId,
 								task: "Focus fixture",
 								status: "completed",
@@ -161,7 +161,7 @@ test("Resources rehydrates on welcome after a real socket reconnect and browser 
 test("a finished subagent row shows its details and transcript in the inspector", async ({
 	page,
 }) => {
-	const childSessionId = asSessionId("resource-focus-child");
+	const childSessionId = testSessionId("resource-focus-child");
 	const wire = await observeResourceWire(page, { completedChildId: childSessionId });
 	await openResourceChat(page);
 	await page.getByTestId("resources-trigger").click();
@@ -215,7 +215,7 @@ function archivedHistory(sessionId: SessionId, base: number): ResourceRecord[] {
 	): ResourceRecord => ({
 		kind: "subagent",
 		summary: {
-			childSessionId: asSessionId(`019a0000-0000-7000-8000-00000000000${id}`),
+			childSessionId: testSessionId(`019a0000-0000-7000-8000-00000000000${id}`),
 			parentSessionId: sessionId,
 			roleName,
 			task: `${roleName} the archive`,
@@ -279,7 +279,7 @@ test("Resources keeps a chat's archived history: the dock sums it, the inspector
 		});
 	});
 	await openFixtureProject(page);
-	sessionId = asSessionId(
+	sessionId = testSessionId(
 		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 			name: "Resource history",
 			messages: [{ role: "user", text: "Show the archived resources.", timestamp: Date.now() }],

@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
-import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { jbcentralExtensionPath } from "@thinkrail/shared/jbcentral";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { stripAmbientPiCredentials } from "./ambientCredentials";
@@ -222,8 +222,8 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await expect(chatTab).toHaveCount(1);
 	const rawSessionId = await chatTab.getAttribute("data-session-id");
 	if (!rawSessionId) throw new Error("Restarted chat tab is missing its session id");
-	const sessionId = asSessionId(rawSessionId);
-	const workspaceId = asWorkspaceId(persistedWorkspaceId());
+	const sessionId = testSessionId(rawSessionId);
+	const workspaceId = testWorkspaceId(persistedWorkspaceId());
 	const wire = await E2eWire.connect(PORT);
 	try {
 		const before = await wire.request("session.getMessages", {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ProjectTrustSummary } from "@thinkrail/contracts";
-import { asProjectId } from "@thinkrail/contracts";
+import { testProjectId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	canStopTrusting,
@@ -144,30 +144,30 @@ describe("notice copy", () => {
 
 test("a grant asks for pi-level resources only when the notice named them", () => {
 	expect(
-		trustGrantParams(asProjectId("p"), {
+		trustGrantParams(testProjectId("p"), {
 			kind: "untrusted",
 			aliasSkills: 1,
 			piResources: ["prompts"],
 			mcpServers: 0,
 		}),
-	).toEqual({ id: asProjectId("p"), trusted: true, resources: true });
+	).toEqual({ id: testProjectId("p"), trusted: true, resources: true });
 	expect(
-		trustGrantParams(asProjectId("p"), {
+		trustGrantParams(testProjectId("p"), {
 			kind: "untrusted",
 			aliasSkills: 0,
 			piResources: [],
 			mcpServers: 1,
 		}),
-	).toEqual({ id: asProjectId("p"), trusted: true, resources: true });
+	).toEqual({ id: testProjectId("p"), trusted: true, resources: true });
 	expect(
-		trustGrantParams(asProjectId("p"), {
+		trustGrantParams(testProjectId("p"), {
 			kind: "untrusted",
 			aliasSkills: 1,
 			piResources: [],
 			mcpServers: 0,
 		}),
 	).toEqual({
-		id: asProjectId("p"),
+		id: testProjectId("p"),
 		trusted: true,
 	});
 });

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createSession,
 	disposeAllSessions,
@@ -137,7 +137,7 @@ async function waitFor(read: () => boolean, ms = 8000): Promise<void> {
 }
 
 async function parent() {
-	const workspaceId = asWorkspaceId(`gate-${++sequence}`);
+	const workspaceId = testWorkspaceId(`gate-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,

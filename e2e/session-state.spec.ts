@@ -2,7 +2,7 @@ import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -406,7 +406,7 @@ test("opening a chat from a sent review comment clears its unread result", async
 		if ((await peerExpand.getAttribute("data-expanded")) === "true") await peerExpand.click();
 		await expectAttentionDot(peerProject);
 
-		await seedSentReviewComment(page, asSessionId(session.id));
+		await seedSentReviewComment(page, testSessionId(session.id));
 		await enterDefaultWorkspace(page);
 		const targetChatTab = page.locator(
 			`[data-testid="editor-tab"][data-kind="chat"][data-session-id="${session.id}"]`,

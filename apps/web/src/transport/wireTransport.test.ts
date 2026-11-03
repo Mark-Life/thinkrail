@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
 import type { SessionId } from "@thinkrail/contracts";
 import {
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -13,6 +10,7 @@ import {
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	mergeSessionStateRecords,
 	supportsChangeMutations,
@@ -74,8 +72,8 @@ test("auto plan-summary is requested only from a host at or beyond the v69 capab
 function record(sessionId: SessionId, completionId: string): SessionStateRecord {
 	return {
 		sessionId,
-		workspaceId: asWorkspaceId("workspace"),
-		projectId: asProjectId("project"),
+		workspaceId: testWorkspaceId("workspace"),
+		projectId: testProjectId("project"),
 		state: {
 			execution: "idle",
 			runId: `run:${sessionId}`,
@@ -89,14 +87,14 @@ function record(sessionId: SessionId, completionId: string): SessionStateRecord 
 }
 
 test("buffered state replaces its stale snapshot row before activation binding", () => {
-	const other = record(asSessionId("other"), "completion:other");
+	const other = record(testSessionId("other"), "completion:other");
 	expect(
 		mergeSessionStateRecords(
-			[record(asSessionId("target"), "completion:old"), other],
+			[record(testSessionId("target"), "completion:old"), other],
 			[
-				record(asSessionId("target"), "completion:newer"),
-				record(asSessionId("target"), "completion:latest"),
+				record(testSessionId("target"), "completion:newer"),
+				record(testSessionId("target"), "completion:latest"),
 			],
 		),
-	).toEqual([record(asSessionId("target"), "completion:latest"), other]);
+	).toEqual([record(testSessionId("target"), "completion:latest"), other]);
 });

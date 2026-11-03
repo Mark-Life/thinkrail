@@ -3,7 +3,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import { asSessionId, type SessionId, type WorkspaceId } from "@thinkrail/contracts";
+import { parseSessionId, type SessionId, type WorkspaceId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -592,7 +592,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: WorkspaceId }
 				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
 			}
 			if (tab.kind === "document") {
-				if (deletedSessions?.[tab.sourceId]) return <MissingResource kind="plan" />;
+				const planSessionId = parseSessionId(tab.sourceId);
+				if (planSessionId === null || deletedSessions?.[planSessionId]) {
+					return <MissingResource kind="plan" />;
+				}
 				return (
 					<ErrorBoundary
 						label={t("shell.workbench.panel.plan")}
@@ -600,7 +603,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: WorkspaceId }
 						resetKeys={[workspaceId, tab.id]}
 					>
 						<Suspense fallback={<MissingResource kind="plan" />}>
-							<PlanPane workspaceId={workspaceId} sessionId={asSessionId(tab.sourceId)} />
+							<PlanPane workspaceId={workspaceId} sessionId={planSessionId} />
 						</Suspense>
 					</ErrorBoundary>
 				);

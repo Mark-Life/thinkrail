@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	MAIN_LOCATION,
 	type NavigationLocation,
@@ -10,13 +10,13 @@ import {
 test("the codec round-trips all four location kinds", () => {
 	const locations: NavigationLocation[] = [
 		{ kind: "main" },
-		{ kind: "project", projectId: asProjectId("p1") },
-		{ kind: "workspace", projectId: asProjectId("p1"), workspaceId: asWorkspaceId("w1") },
+		{ kind: "project", projectId: testProjectId("p1") },
+		{ kind: "workspace", projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") },
 		{
 			kind: "chat",
-			projectId: asProjectId("p1"),
-			workspaceId: asWorkspaceId("w1"),
-			sessionId: asSessionId("s1"),
+			projectId: testProjectId("p1"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
 		},
 	];
 	for (const location of locations) {
@@ -27,9 +27,9 @@ test("the codec round-trips all four location kinds", () => {
 test("ids that need encoding survive the round trip as single path segments", () => {
 	const location: NavigationLocation = {
 		kind: "chat",
-		projectId: asProjectId("p/with slash"),
-		workspaceId: asWorkspaceId("w#hash?q"),
-		sessionId: asSessionId("s%25already"),
+		projectId: testProjectId("p/with slash"),
+		workspaceId: testWorkspaceId("w#hash?q"),
+		sessionId: testSessionId("s%25already"),
 	};
 	const fragment = serializeLocation(location);
 	expect(fragment.split("/")).toHaveLength(8);
@@ -39,11 +39,11 @@ test("ids that need encoding survive the round trip as single path segments", ()
 test("parse accepts the fragment with or without its leading '#'", () => {
 	expect(parseFragment("/v1/projects/p1")).toEqual({
 		kind: "project",
-		projectId: asProjectId("p1"),
+		projectId: testProjectId("p1"),
 	});
 	expect(parseFragment("#/v1/projects/p1")).toEqual({
 		kind: "project",
-		projectId: asProjectId("p1"),
+		projectId: testProjectId("p1"),
 	});
 });
 

@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from "bun:test";
 import type { AssistantMessage, SessionState, UserMessage } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { awaitingToolCallIdOf, deriveInteractionStates } from "./interactionState";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn } from "./types";
@@ -134,7 +134,7 @@ test("the host's needs-input names the one tool call it accepts a response for",
 				kind: "dialog",
 				request: {
 					id: "d1",
-					sessionId: asSessionId("s"),
+					sessionId: testSessionId("s"),
 					kind: "confirm",
 					title: "t",
 					message: "m",
