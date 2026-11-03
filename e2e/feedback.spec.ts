@@ -1,7 +1,6 @@
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	type AppSurvey,
-	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	type SurveySubmitParams,
 	WS_CHANNELS,
 	type WsErrorCode,
@@ -47,11 +46,7 @@ interface SurveyHost {
 	welcomeFrame: () => string;
 }
 
-async function stubSurveyHost(
-	page: Page,
-	initial: AppSurvey | null,
-	protocolVersion?: number,
-): Promise<SurveyHost> {
+async function stubSurveyHost(page: Page, initial: AppSurvey | null): Promise<SurveyHost> {
 	let browserSocket: WebSocketRoute | undefined;
 	let welcome: string | undefined;
 	const host: SurveyHost = {
@@ -112,16 +107,8 @@ async function stubSurveyHost(
 		server.onMessage((message) => {
 			const raw = typeof message === "string" ? message : message.toString();
 			try {
-				const frame = JSON.parse(raw) as { channel?: string; data?: { protocolVersion?: number } };
-				if (frame.channel === WS_CHANNELS.serverWelcome) {
-					if (protocolVersion !== undefined && frame.data) {
-						frame.data.protocolVersion = protocolVersion;
-						welcome = JSON.stringify(frame);
-						socket.send(welcome);
-						return;
-					}
-					welcome = raw;
-				}
+				const frame = JSON.parse(raw) as { channel?: string };
+				if (frame.channel === WS_CHANNELS.serverWelcome) welcome = raw;
 			} catch {}
 			socket.send(message);
 		});
@@ -301,19 +288,6 @@ test("a long question scrolls inside the survey window so every control stays re
 	await window.getByTestId("survey-send").scrollIntoViewIfNeeded();
 	await expect(window.getByTestId("survey-send")).toBeInViewport();
 	await expect(window.getByRole("button", { name: "Close" })).toBeInViewport();
-});
-
-test("a pre-v97 host's retired interview invitation never opens the survey invitation", async ({
-	page,
-}) => {
-	const host = await stubSurveyHost(page, survey(1), FEEDBACK_SURVEY_PROTOCOL_VERSION - 1);
-	invite(host);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-feedback").click();
-	await expect(page.getByTestId("feedback-join-discord")).toBeVisible();
-	await expect(page.getByTestId("feedback-take-survey")).toHaveCount(0);
-	await expect(page.getByTestId("survey-invitation-dialog")).toHaveCount(0);
-	expect(host.reads).toBe(0);
 });
 
 test("the survey is asked for in the UI language and Send echoes the translation shown", async ({

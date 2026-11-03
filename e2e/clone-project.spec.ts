@@ -10,7 +10,7 @@ import {
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { PROJECT_CLONE_PROTOCOL_VERSION, type WsParams } from "@thinkrail/contracts";
+import type { WsParams } from "@thinkrail/contracts";
 import { openAppFresh } from "./fixtures/app";
 import { commitFile, git, gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
@@ -197,44 +197,6 @@ test("the parent picker and manual name wait for the host destination reply befo
 	await dialog.getByTestId("clone-project-submit").click();
 	await expect(page.getByTestId("welcome-title")).toHaveText("chosen-name");
 	expect(gitText(destination, "rev-parse", "HEAD").trim()).toBe(fixture.head);
-});
-
-test("hosts before protocol 95 hide cloning in both project menus", async ({ page }) => {
-	const cloneRequests: unknown[] = [];
-	await page.routeWebSocket(/\/ws(?:\?|$)/, (browser) => {
-		const server = browser.connectToServer();
-		browser.onMessage((message) => {
-			const frame = parseFrame(message);
-			if (frame.method === "project.clone" || frame.method === "project.cloneDestination")
-				cloneRequests.push(frame);
-			server.send(message);
-		});
-		server.onMessage((message) => {
-			const frame = parseFrame(message);
-			if (frame.channel === "server.welcome") {
-				browser.send(
-					JSON.stringify({
-						...frame,
-						data: {
-							...(frame.data as Record<string, unknown>),
-							protocolVersion: PROJECT_CLONE_PROTOCOL_VERSION - 1,
-						},
-					}),
-				);
-			} else {
-				browser.send(message);
-			}
-		});
-	});
-	await openAppFresh(page);
-	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
-	await expect(page.getByTestId("menu-open-project")).toBeVisible();
-	await expect(page.getByTestId("menu-clone-project")).toHaveCount(0);
-	await page.keyboard.press("Escape");
-	await page.getByTestId("add-project-menu").click();
-	await expect(page.getByTestId("menu-open-project")).toBeVisible();
-	await expect(page.getByTestId("menu-clone-project")).toHaveCount(0);
-	expect(cloneRequests).toEqual([]);
 });
 
 test("cancel UI keeps fields busy after acknowledgement until the simulated null clone reply", async ({

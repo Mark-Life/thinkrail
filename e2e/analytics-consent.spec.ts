@@ -1,12 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
-import {
-	ANALYTICS_CONSENT_PROTOCOL_VERSION,
-	type AppConfig,
-	type AppConfigUpdate,
-	WS_CHANNELS,
-} from "@thinkrail/contracts";
+import { type AppConfig, type AppConfigUpdate, WS_CHANNELS } from "@thinkrail/contracts";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
@@ -299,38 +294,4 @@ test("consent takes precedence over an addressed survey invitation", async ({ pa
 	await page.getByTestId("analytics-consent-confirm").click();
 	await expect(page.getByTestId("analytics-consent-dialog")).toBeHidden();
 	await expect(page.getByTestId("survey-invitation-dialog")).toBeVisible();
-});
-
-test("pre-v65 hosts keep the legacy Privacy switch without a consent dialog or confirmation writes", async ({
-	page,
-	baseURL,
-}) => {
-	await seedAnalyticsConsent(baseURL, true, false);
-	const updates = trackSettingsUpdates(page);
-	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
-		const server = socket.connectToServer();
-		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				channel?: string;
-				data: { protocolVersion: number; config: Partial<AppConfig> };
-			};
-			if (frame.channel === WS_CHANNELS.serverWelcome) {
-				frame.data.protocolVersion = ANALYTICS_CONSENT_PROTOCOL_VERSION - 1;
-				delete frame.data.config.analyticsConsentConfirmed;
-				socket.send(JSON.stringify(frame));
-			} else socket.send(message);
-		});
-	});
-	await page.goto("/");
-	await openPrivacy(page, true);
-	await expect(page.getByTestId("analytics-consent-dialog")).toBeHidden();
-	const toggle = page.getByRole("switch", { name: "Share anonymous usage analytics" });
-	await expect(toggle).toBeChecked();
-	await toggle.click();
-	await expect(toggle).not.toBeChecked();
-	expect(updates).toEqual([{ analyticsEnabled: false }]);
-	expect(savedConfig()).toMatchObject({
-		analyticsEnabled: false,
-		analyticsConsentConfirmed: false,
-	});
 });

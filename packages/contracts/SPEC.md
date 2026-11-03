@@ -13,8 +13,9 @@ tags: [wire]
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
 runtime: the wire schemas ([[submodule-contracts-schema]]), the WS method/channel constants, protocol/feature
-versions, the small config default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
-the palette ranks with — kept here so host-side search can rank with the same copy. The one package
+versions, the small config default, narrow cross-ring guards, the quit-confirmation rule both clients drive, the search matcher
+the palette ranks with — kept here so host-side search can rank with the same copy — and the client wire checks, so
+every client reads the wire one way. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
@@ -108,8 +109,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
-  would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+  would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, `WS_METHOD_SCHEMAS`, `PROTOCOL_VERSION`, and the
+  client checks) and of `wsProtocol` (`WS_METHODS`, `WS_CHANNELS`, the typed maps, and feature-introduction versions).
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).
@@ -896,7 +897,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
   The `WsMethodMap` typed request/result map, derived whole from `WS_METHOD_SCHEMAS` +
-  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
+  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. **One integer:** a UI and a host must hold the same
+  `PROTOCOL_VERSION`, and `server.welcome` sends the host's. It is raised only for a breaking wire change;
+  [[submodule-contracts-schema]] has the rules. A private type check ties `WS_METHODS` to `WsMethodMap`
   in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
   `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close

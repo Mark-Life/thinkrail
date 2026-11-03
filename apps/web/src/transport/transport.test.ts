@@ -4,12 +4,13 @@ import {
 	asSessionId,
 	asWorkspaceId,
 	PROTOCOL_VERSION,
+	pushFailure,
+	resultFailure,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "@thinkrail/contracts";
 import { RequestError, wsErrorCode } from "./requestError";
 import { WsTransport } from "./transport";
-import { pushFailure, resultFailure } from "./wireChecks";
 
 class TestWebSocket {
 	static readonly CONNECTING = 0;
@@ -406,7 +407,7 @@ describe("WsTransport wire checks", () => {
 		expect(barriers).toEqual([]);
 	});
 
-	test("a newer host's extra fields pass on every level of a reply and a push", async () => {
+	test("a later build's extra fields pass on every level of a reply and a push", async () => {
 		const { transport, socket } = connected();
 		const seen: unknown[] = [];
 		transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => seen.push(data));
@@ -421,7 +422,7 @@ describe("WsTransport wire checks", () => {
 		expect(value).toEqual({ ok: true, extra: 1 });
 	});
 
-	test("a welcome from an older host passes, and one with no version is dropped", () => {
+	test("every welcome passes, so the handler can prompt", () => {
 		const { transport, socket } = connected();
 		const seen: unknown[] = [];
 		transport.subscribe(WS_CHANNELS.serverWelcome, (data) => seen.push(data));
@@ -430,8 +431,13 @@ describe("WsTransport wire checks", () => {
 		socket?.message(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: older }));
 		expect(seen).toEqual([older]);
 
-		socket?.message(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: { projects: [] } }));
-		expect(seen).toEqual([older]);
+		const unversioned = { projects: [] };
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: unversioned }));
+		expect(seen).toEqual([older, unversioned]);
+
+		const broken = { protocolVersion: PROTOCOL_VERSION, projects: { byId: {} } };
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: broken }));
+		expect(seen).toEqual([older, unversioned, broken]);
 	});
 
 	test("a pi event with an unknown type passes: only its tag is checked", () => {
