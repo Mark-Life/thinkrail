@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { arr, compile, obj, opt, str } from "@earendil-works/pi-schema";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { RequestError, wsErrorCode } from "./requestError";
 import { type DroppedFrame, WsTransport } from "./transport";
 
@@ -90,12 +91,12 @@ describe("WsTransport channel replay", () => {
 		[
 			"resource invalidations deliver live but are not replayed on remount",
 			WS_CHANNELS.sessionResourcesChanged,
-			{ workspaceId: "workspace", sessionId: "session" },
+			{ workspaceId: testWorkspaceId("workspace"), sessionId: testSessionId("session") },
 		],
 		[
 			"does not replay a stale terminal takeover to a late terminal body",
 			WS_CHANNELS.terminalDetached,
-			{ workspaceId: "w1", tabKey: "terminal-1" },
+			{ workspaceId: testWorkspaceId("w1"), tabKey: "terminal-1" },
 		],
 		[
 			"does not replay a provider invalidation to a late settings pane",
@@ -210,7 +211,7 @@ describe("WsTransport response receipts", () => {
 		socket?.open();
 
 		const first = transport.request("project.list", {});
-		const second = transport.request("workspace.list", { projectId: "p1" });
+		const second = transport.request("workspace.list", { projectId: testProjectId("p1") });
 		const ids = requestsIn(socket?.sent ?? []).map((frame) => frame.id ?? "");
 		expect(ids).toHaveLength(2);
 		const before = socket?.sent.length ?? 0;
@@ -253,13 +254,13 @@ describe("WsTransport response receipts", () => {
 		first?.open();
 
 		const resolved = transport.request("project.list", {});
-		const stillOpen = transport.request("workspace.list", { projectId: "p1" });
+		const stillOpen = transport.request("workspace.list", { projectId: testProjectId("p1") });
 		const [resolvedId, stillOpenId] = requestsIn(first?.sent ?? []).map((frame) => frame.id ?? "");
 		first?.message(JSON.stringify({ id: resolvedId, ok: true, result: [] }));
 		expect(await resolved).toEqual([]);
 		first?.close();
 
-		const queued = transport.request("git.status", { workspaceId: "w1" });
+		const queued = transport.request("git.status", { workspaceId: testWorkspaceId("w1") });
 		await tick(520);
 		const replacement = TestWebSocket.instances[1];
 		replacement?.open();
@@ -390,8 +391,14 @@ describe("WsTransport wire checks", () => {
 			beforeDispatch: (message) => barriers.push(message),
 			onDroppedFrame: (frame) => dropped.push(frame),
 		});
-		const good = { channel: WS_CHANNELS.workspaceRemoved, data: { projectId: "p1", id: "w1" } };
-		const bad = { channel: WS_CHANNELS.workspaceRemoved, data: { projectId: "p1", id: 7 } };
+		const good = {
+			channel: WS_CHANNELS.workspaceRemoved,
+			data: { projectId: testProjectId("p1"), id: "w1" },
+		};
+		const bad = {
+			channel: WS_CHANNELS.workspaceRemoved,
+			data: { projectId: testProjectId("p1"), id: 7 },
+		};
 		const seen: unknown[] = [];
 		transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => seen.push(data));
 
@@ -435,7 +442,7 @@ describe("WsTransport wire checks", () => {
 		const { transport, socket } = connected();
 		const seen: unknown[] = [];
 		transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => seen.push(data));
-		const data = { projectId: "p1", id: "w1", extra: 1 };
+		const data = { projectId: testProjectId("p1"), id: "w1", extra: 1 };
 		socket?.message(JSON.stringify({ channel: WS_CHANNELS.workspaceRemoved, data, extra: 1 }));
 		expect(seen).toEqual([data]);
 
@@ -463,10 +470,13 @@ describe("WsTransport wire checks", () => {
 		const { transport, socket } = connected();
 		const seen: unknown[] = [];
 		transport.subscribe(WS_CHANNELS.piEvent, (data) => seen.push(data));
-		const data = { sessionId: "s1", event: { type: "from_a_newer_pi", detail: {} } };
+		const data = { sessionId: testSessionId("s1"), event: { type: "from_a_newer_pi", detail: {} } };
 		socket?.message(JSON.stringify({ channel: WS_CHANNELS.piEvent, data }));
 		socket?.message(
-			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: { sessionId: "s1", event: {} } }),
+			JSON.stringify({
+				channel: WS_CHANNELS.piEvent,
+				data: { sessionId: testSessionId("s1"), event: {} },
+			}),
 		);
 		expect(seen).toEqual([data]);
 	});

@@ -1,6 +1,8 @@
 import { beforeAll, expect, test } from "bun:test";
-import type { AssistantMessage, SessionState, UserMessage } from "@thinkrail/contracts";
+import type { SessionState, StopReason } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { awaitingToolCallIdOf, deriveInteractionStates } from "./interactionState";
+import { assistantMessage, userMessage } from "./messageFixtures.test";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn } from "./types";
 
@@ -16,25 +18,24 @@ const callTurn = (
 	id: string,
 	toolCallId: string,
 	toolName: string,
-	stopReason = "toolUse",
+	stopReason: StopReason = "toolUse",
 ): ChatTurn => ({
 	kind: "assistant",
 	id,
 	streaming: false,
-	message: {
-		role: "assistant",
+	message: assistantMessage({
 		content: [{ type: "toolCall", id: toolCallId, name: toolName, arguments: {} }],
 		stopReason,
-	} as unknown as AssistantMessage,
+	}),
 });
 
-const askTurn = (id: string, toolCallId: string, stopReason = "toolUse"): ChatTurn =>
+const askTurn = (id: string, toolCallId: string, stopReason: StopReason = "toolUse"): ChatTurn =>
 	callTurn(id, toolCallId, "ask_user_question", stopReason);
 
 const userTurn = (id: string): ChatTurn => ({
 	kind: "user",
 	id,
-	message: { role: "user", content: "hi", timestamp: 0 } as UserMessage,
+	message: userMessage("hi"),
 });
 
 const reply = { answers: [], cancelled: false };
@@ -59,7 +60,7 @@ test("a user turn AFTER an unresponded call supersedes it; one before does not",
 });
 
 test("an interactive call in a non-executable assistant is terminal without a tool result", () => {
-	for (const stopReason of ["error", "aborted", "length"]) {
+	for (const stopReason of ["error", "aborted", "length"] as const) {
 		expect(deriveInteractionStates([askTurn("a1", "tc1", stopReason)], {}).tc1).toEqual({
 			superseded: false,
 			terminal: true,
@@ -117,8 +118,15 @@ test("tool calls that are not registered interactive derive no state", () => {
 });
 
 test("the host's needs-input names the one tool call it accepts a response for", () => {
-	const state = (needsInput: SessionState["needsInput"]) =>
-		({ needsInput }) as unknown as SessionState;
+	const state = (needsInput: SessionState["needsInput"]): SessionState => ({
+		execution: "idle",
+		runId: null,
+		needsInput,
+		completion: null,
+		completionUnread: false,
+		queuedCount: 0,
+		backgroundWork: false,
+	});
 	expect(awaitingToolCallIdOf(null)).toBeUndefined();
 	expect(awaitingToolCallIdOf(state(null))).toBeNull();
 	expect(
@@ -131,17 +139,14 @@ test("the host's needs-input names the one tool call it accepts a response for",
 			state({
 				interactionId: "dialog:d1",
 				kind: "dialog",
-				request: { id: "d1", sessionId: "s", kind: "confirm", title: "t", message: "m" },
+				request: {
+					id: "d1",
+					sessionId: testSessionId("s"),
+					kind: "confirm",
+					title: "t",
+					message: "m",
+				},
 			}),
 		),
 	).toBeNull();
-});
-
-test("a pre-v93 host's question state still names the awaiting call", () => {
-	const legacy = (needsInput: unknown) => ({ needsInput }) as unknown as SessionState;
-	expect(awaitingToolCallIdOf(legacy({ interactionId: "question:call-9", kind: "question" }))).toBe(
-		"call-9",
-	);
-	expect(awaitingToolCallIdOf(legacy({ interactionId: "call-9", kind: "question" }))).toBeNull();
-	expect(awaitingToolCallIdOf(legacy({ interactionId: "question:x", kind: "other" }))).toBeNull();
 });

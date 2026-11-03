@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { JsonObject } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { piExtensionSource, writePiPackageFixture } from "./fixtures/piPackage";
@@ -21,7 +23,9 @@ function writeFixturePackage(): void {
 
 function readSettings(): Record<string, unknown> {
 	if (!existsSync(SETTINGS_PATH)) return {};
-	return JSON.parse(readFileSync(SETTINGS_PATH, "utf8")) as Record<string, unknown>;
+	const settings: unknown = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
+	if (!JsonObject.check(settings)) throw new Error(`${SETTINGS_PATH} is not a JSON object`);
+	return settings;
 }
 
 function clearPackageSettings(): void {
@@ -118,7 +122,9 @@ test("a pi package installed from Settings reaches a chat, switches off and on, 
 		await openPersistedChat(page, "package lifecycle");
 		await expect(page.getByTestId("chat-toolbar")).toBeVisible();
 		const commandNames = async () =>
-			(await wire.request("session.getCommands", { sessionId: session.id })).map((c) => c.name);
+			(await wire.request("session.getCommands", { sessionId: testSessionId(session.id) })).map(
+				(c) => c.name,
+			);
 		await expect.poll(commandNames, { timeout: 30_000 }).toContain("fixture-hello");
 
 		await openExtensionsSettings(page);

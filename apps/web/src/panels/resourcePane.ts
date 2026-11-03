@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -9,7 +10,11 @@ function encodeResourcePath(path: string): string {
 	return path.split("/").map(encodeURIComponent).join("/");
 }
 
-export function resourceBytesUrl(workspaceId: string, path: string, oid?: string | null): string {
+export function resourceBytesUrl(
+	workspaceId: WorkspaceId,
+	path: string,
+	oid?: string | null,
+): string {
 	const base = getTransport().httpBase();
 	const workspace = encodeURIComponent(workspaceId);
 	return oid
@@ -18,7 +23,7 @@ export function resourceBytesUrl(workspaceId: string, path: string, oid?: string
 }
 
 export function useResetViewStateOnImplementationChange(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabId: string,
 	implementationKey: string,
 ): void {

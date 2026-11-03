@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import type { ReviewComment, ReviewGuide } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { guideCursorIndex, guideStepKey, guideSteps, nextGuideStep } from "./ChangesReviewGuide";
+
+function stepAt<T>(steps: readonly T[], index: number): T {
+	const step = steps[index];
+	if (step === undefined) throw new Error(`no step at ${index}`);
+	return step;
+}
 
 function comment(over: Partial<ReviewComment>): ReviewComment {
 	return {
@@ -24,7 +31,7 @@ const guide: ReviewGuide = {
 	],
 	verdict: "request_changes",
 	todoId: "t",
-	sessionId: "s",
+	sessionId: testSessionId("s"),
 	reviewedSha: "abc",
 	at: 1,
 };
@@ -75,7 +82,7 @@ test("the cursor follows its step by identity, and a step resolved from under it
 			anchor: { path: "src/z.ts", side: "worktree", selectors: [] },
 		}),
 	]);
-	const onF1 = { key: guideStepKey(steps[2] as (typeof steps)[number]), index: 2 };
+	const onF1 = { key: guideStepKey(stepAt(steps, 2)), index: 2 };
 	expect(guideCursorIndex(steps, onF1)).toBe(2);
 	// a reading step inserted ahead moves the finding down; the cursor stays on it
 	const grown = guideSteps(
@@ -102,7 +109,7 @@ test("two reading steps on one file are two cursor positions", () => {
 		},
 		[],
 	);
-	const second = steps[1] as (typeof steps)[number];
-	expect(guideStepKey(second)).not.toBe(guideStepKey(steps[0] as (typeof steps)[number]));
+	const second = stepAt(steps, 1);
+	expect(guideStepKey(second)).not.toBe(guideStepKey(stepAt(steps, 0)));
 	expect(guideCursorIndex(steps, { key: guideStepKey(second), index: 1 })).toBe(1);
 });

@@ -1,10 +1,9 @@
-import { completionDelivery } from "@thinkrail/contracts";
 import type { ChatTurn } from "./types";
 
 function isUnansweredResult(turn: ChatTurn | undefined): boolean {
 	if (turn?.kind !== "backgroundCommandCompletion" && turn?.kind !== "subagentCompletion")
 		return false;
-	const delivery = completionDelivery(turn.details);
+	const { delivery } = turn.details;
 	if (delivery !== undefined) return delivery === "appended";
 	return turn.kind === "backgroundCommandCompletion"
 		? turn.details.status === "stopped"

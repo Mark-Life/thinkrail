@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	canRenameWorkspace,
 	createRenameController,
@@ -7,8 +8,8 @@ import {
 } from "./workspaceActions";
 
 const managed: Workspace = {
-	id: "w1",
-	projectId: "p1",
+	id: testWorkspaceId("w1"),
+	projectId: testProjectId("p1"),
 	name: "Workspace",
 	branch: "workspace",
 	worktreePath: "/tmp/workspace",

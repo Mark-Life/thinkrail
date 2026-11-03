@@ -13,7 +13,9 @@ import type {
 	McpServerEntryInput,
 	McpServerScope,
 	McpServerSummary,
+	SessionId,
 	Workspace,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, t as translate, useT } from "@thinkrail/locales/react";
@@ -146,7 +148,10 @@ async function settle<T>(work: () => Promise<T>): Promise<Settled<T>> {
 	}
 }
 
-async function readProjectEntry(workspaceId: string, name: string): Promise<McpServerEntryInput> {
+async function readProjectEntry(
+	workspaceId: WorkspaceId,
+	name: string,
+): Promise<McpServerEntryInput> {
 	const { content } = await getTransport().request("fs.readFile", {
 		workspaceId,
 		path: ".pi/mcp.json",
@@ -155,7 +160,7 @@ async function readProjectEntry(workspaceId: string, name: string): Promise<McpS
 }
 
 async function addServers(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	servers: { name: string; entry: McpServerEntryInput }[],
 	scope: McpServerScope,
 ): Promise<{ results: McpAddResult[]; last: McpListResult | null }> {
@@ -172,7 +177,7 @@ async function addServers(
 }
 
 async function refreshOnFailure(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	write: () => Promise<McpListResult>,
 ): Promise<McpListResult> {
 	try {
@@ -184,7 +189,7 @@ async function refreshOnFailure(
 }
 
 export async function approveMcpServer(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	summary: McpServerSummary,
 ): Promise<McpListResult> {
 	const fingerprint = summary.approval?.fingerprint;
@@ -201,7 +206,7 @@ function cancelLoginQuietly(loginId: string): void {
 }
 
 function writeSetting(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	row: McpServerRow,
 	change: McpSettingChange,
 ): Promise<McpListResult> {
@@ -764,7 +769,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 		} else if (outcome.value) setFeedback(mcpSaveFeedback(outcome.value));
 	};
 
-	const runInChats = (row: McpServerRow, request: (sessionId: string) => Promise<unknown>) =>
+	const runInChats = (row: McpServerRow, request: (sessionId: SessionId) => Promise<unknown>) =>
 		run(
 			row,
 			async () => {

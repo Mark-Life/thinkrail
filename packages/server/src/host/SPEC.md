@@ -76,7 +76,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   successful `send` says the bytes were queued, not that the page read them, and a socket that dies holding a
   reply is indistinguishable from one that flushed it — so any result dropped on the host's own initiative may
   be the one a replay is about to ask for. A result leaves only on the client's own word, via two frames handled
-  here and never routed to a handler: `{ ack: [id] }` names responses it has **read** (the steady state) and
+  here and never routed to a handler, and read by `clientFrames.ts`, which silently drops a frame the schemas refuse: `{ ack: [id] }` names responses it has **read** (the steady state) and
   requests whose own deadline fired, and `{ resume: [id] }` on each reconnect names everything it still
   considers **unresolved**, freeing all other settled results. A still-running entry that an `ack` names, or a
   `resume` omits, is **abandoned**: the page will never replay that id (ids only grow, and a timed-out id has left

@@ -10,10 +10,12 @@ import {
 	MAX_SEARCH_GROUP_LIMIT,
 	MAX_SEARCH_PREVIEW_BYTES,
 	MAX_SEARCH_QUERY_LENGTH,
+	type ProjectId,
 	type SearchContext,
 	type SearchHit,
 	type SearchPreviewResult,
 	type SearchPreviewTarget,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
@@ -88,8 +90,8 @@ const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 export interface PaletteHost {
 	readonly context: SearchContext;
 	readonly openHit: (hit: SearchHit) => void;
-	readonly projectName: (projectId: string) => string | undefined;
-	readonly workspaceName: (workspaceId: string) => string | undefined;
+	readonly projectName: (projectId: ProjectId) => string | undefined;
+	readonly workspaceName: (workspaceId: WorkspaceId) => string | undefined;
 	readonly renderFilePreview: (file: PaletteFile) => ReactNode;
 }
 

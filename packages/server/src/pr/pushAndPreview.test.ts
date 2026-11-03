@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { commitsAheadOf, setSyncGitTimeoutForTests } from "../git";
 import {
 	discoverTemplates,
@@ -55,7 +56,12 @@ function seedWorkspaces(rows: Record<string, unknown>[]): void {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify(
-			rows.map((row) => ({ projectId: "p1", worktreePath: repo, createdAt: 1, ...row })),
+			rows.map((row) => ({
+				projectId: testProjectId("p1"),
+				worktreePath: repo,
+				createdAt: 1,
+				...row,
+			})),
 		),
 	);
 }
@@ -100,7 +106,7 @@ describe("commitsAheadOf", () => {
 describe("pushBranch", () => {
 	test("publishes the workspace branch to origin without touching any PR", async () => {
 		writeFileSync(join(repo, "dirty.txt"), "uncommitted\n");
-		const result = await pushBranch({ workspaceId: "w1", branch: "feature" });
+		const result = await pushBranch({ workspaceId: testWorkspaceId("w1"), branch: "feature" });
 		expect(result).toEqual({ dirtyFiles: 1 });
 		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(sh(repo, "rev-parse", "HEAD"));
 		expect(sh(repo, "rev-parse", "--abbrev-ref", "feature@{upstream}")).toBe("origin/feature");
@@ -112,9 +118,11 @@ describe("pushBranch", () => {
 		seedWorkspaces([
 			{ id: "w0", kind: "default", name: "Default", branch: "main", baseBranch: "main" },
 		]);
-		await expect(pushBranch({ workspaceId: "w0", branch: "main" })).rejects.toThrow(/base branch/);
+		await expect(
+			pushBranch({ workspaceId: testWorkspaceId("w0"), branch: "main" }),
+		).rejects.toThrow(/base branch/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
-		await pushBranch({ workspaceId: "w0", branch: "main", confirmBase: true });
+		await pushBranch({ workspaceId: testWorkspaceId("w0"), branch: "main", confirmBase: true });
 		expect(sh(remote, "rev-parse", "refs/heads/main")).toBe(sh(repo, "rev-parse", "HEAD"));
 	});
 
@@ -124,7 +132,7 @@ describe("pushBranch", () => {
 			{ id: "w0", kind: "default", name: "Default", branch: "feature", baseBranch: "main" },
 		]);
 		await expect(
-			pushBranch({ workspaceId: "w0", branch: "feature", confirmBase: true }),
+			pushBranch({ workspaceId: testWorkspaceId("w0"), branch: "feature", confirmBase: true }),
 		).rejects.toThrow(/moved from "feature" to "main"/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
 	});
@@ -159,7 +167,7 @@ describe("pushBranch", () => {
 				{ id: "w0", kind: "default", name: "Default", branch: "feature", baseBranch: "main" },
 			]);
 			const pushed = withHangingGit('*" symbolic-ref "*', () =>
-				pushBranch({ workspaceId: "w0", branch: "feature", confirmBase: true }),
+				pushBranch({ workspaceId: testWorkspaceId("w0"), branch: "feature", confirmBase: true }),
 			);
 			await expect(pushed).rejects.toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
 			expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
@@ -169,7 +177,7 @@ describe("pushBranch", () => {
 	posix("a managed reftable workspace whose branch read times out aborts the push", async () => {
 		sh(repo, "refs", "migrate", "--ref-format=reftable");
 		const pushed = withHangingGit('*" symbolic-ref "*', () =>
-			pushBranch({ workspaceId: "w1", branch: "feature" }),
+			pushBranch({ workspaceId: testWorkspaceId("w1"), branch: "feature" }),
 		);
 		await expect(pushed).rejects.toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
@@ -177,7 +185,7 @@ describe("pushBranch", () => {
 
 	posix("a core.sshCommand probe that times out pushes nothing", async () => {
 		const pushed = withHangingGit('*" core.sshCommand "*', () =>
-			pushBranch({ workspaceId: "w1", branch: "feature" }),
+			pushBranch({ workspaceId: testWorkspaceId("w1"), branch: "feature" }),
 		);
 		await expect(pushed).rejects.toThrow(/^Could not read core\.sshCommand: timed out/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
@@ -185,12 +193,12 @@ describe("pushBranch", () => {
 
 	test("a managed workspace switched in its terminal pushes the live branch, never the stale one", async () => {
 		sh(repo, "switch", "-q", "-c", "feature-live");
-		await expect(pushBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
-			/moved from "feature" to "feature-live"/,
-		);
+		await expect(
+			pushBranch({ workspaceId: testWorkspaceId("w1"), branch: "feature" }),
+		).rejects.toThrow(/moved from "feature" to "feature-live"/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
 
-		await pushBranch({ workspaceId: "w1", branch: "feature-live" });
+		await pushBranch({ workspaceId: testWorkspaceId("w1"), branch: "feature-live" });
 		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads")).toBe(
 			"refs/heads/feature-live",
 		);
@@ -198,9 +206,9 @@ describe("pushBranch", () => {
 
 	test("a repository without origin names the missing remote", async () => {
 		sh(repo, "remote", "remove", "origin");
-		await expect(pushBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
-			/no 'origin' remote/,
-		);
+		await expect(
+			pushBranch({ workspaceId: testWorkspaceId("w1"), branch: "feature" }),
+		).rejects.toThrow(/no 'origin' remote/);
 	});
 });
 
@@ -211,7 +219,7 @@ describe("previewPr sources and template discovery", () => {
 	}
 
 	test("without a session the body defaults to the commit subjects, oldest first", async () => {
-		const preview = await previewPr({ workspaceId: "w1" });
+		const preview = await previewPr({ workspaceId: testWorkspaceId("w1") });
 		expect(preview).toEqual({
 			title: "feature",
 			body: "- Add the ship segment\n- Wire the push action",
@@ -222,9 +230,16 @@ describe("previewPr sources and template discovery", () => {
 	});
 
 	test("a chat without plan items defaults to commits but still offers its adopted-commit plan body", async () => {
-		const preview = await previewPr({ workspaceId: "w1", sessionId: "s1" });
+		const preview = await previewPr({
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
+		});
 		expect(preview).toMatchObject({ planAvailable: true, source: "commits" });
-		const plan = await previewPr({ workspaceId: "w1", sessionId: "s1", source: "plan" });
+		const plan = await previewPr({
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
+			source: "plan",
+		});
 		expect(plan.body).toContain("## Committed outside the plan");
 	});
 
@@ -242,16 +257,20 @@ describe("previewPr sources and template discovery", () => {
 		];
 		expect(await discoverTemplates(repo)).toEqual(expected);
 
-		const first = await previewPr({ workspaceId: "w1", source: "template" });
+		const first = await previewPr({ workspaceId: testWorkspaceId("w1"), source: "template" });
 		expect(first.body).toBe("## Problem\n\n## Approach");
 		expect(first.templates).toEqual(expected);
 		const chosen = await previewPr({
-			workspaceId: "w1",
+			workspaceId: testWorkspaceId("w1"),
 			source: "template",
 			template: ".github/PULL_REQUEST_TEMPLATE/bugfix.md",
 		});
 		expect(chosen.body).toBe("## Bug");
-		const unknown = await previewPr({ workspaceId: "w1", source: "template", template: "../x.md" });
+		const unknown = await previewPr({
+			workspaceId: testWorkspaceId("w1"),
+			source: "template",
+			template: "../x.md",
+		});
 		expect(unknown.body).toBe("");
 	});
 
@@ -265,7 +284,7 @@ describe("previewPr sources and template discovery", () => {
 
 	test("the empty source is empty and the title honours an explicit one", async () => {
 		expect(
-			await previewPr({ workspaceId: "w1", source: "empty", title: " Ship it " }),
+			await previewPr({ workspaceId: testWorkspaceId("w1"), source: "empty", title: " Ship it " }),
 		).toMatchObject({
 			title: "Ship it",
 			body: "",
@@ -277,7 +296,7 @@ describe("openPr keeps its body source apart from the analytics source", () => {
 	test("a plan-page push with no body still renders a body instead of an empty one", async () => {
 		sh(repo, "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git");
 		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://gitlab.com/acme/widgets.git");
-		const wireParams = { workspaceId: "w1", source: "plan_page" };
+		const wireParams = { workspaceId: testWorkspaceId("w1"), source: "plan_page" };
 		const result = await openPr(wireParams);
 		expect(result.action).toBe("compare");
 		expect(new URL(result.compareUrl ?? "").searchParams.get("merge_request[description]")).toBe(
@@ -291,7 +310,7 @@ describe("prDraftInput", () => {
 		mkdirSync(join(repo, ".github"));
 		writeFileSync(join(repo, ".github", "pull_request_template.md"), "## Why\n");
 		const input = await prDraftInput({
-			workspaceId: "w1",
+			workspaceId: testWorkspaceId("w1"),
 			template: ".github/pull_request_template.md",
 		});
 		expect(input.branch).toBe("feature");
@@ -311,7 +330,7 @@ describe("openPr is bound to the branch the user saw", () => {
 			{ id: "w2", kind: "external", name: "Ext", branch: "feature", baseBranch: "main" },
 		]);
 		await expect(
-			openPr({ workspaceId: "w2", branch: "feature", body: "Draft for feature" }),
+			openPr({ workspaceId: testWorkspaceId("w2"), branch: "feature", body: "Draft for feature" }),
 		).rejects.toThrow(/moved from "feature" to "other"/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
 	});
@@ -321,7 +340,10 @@ describe("openPr refreshes a session's PR body from its plan", () => {
 	test("a push with no body renders the session plan, adopted commits included", async () => {
 		sh(repo, "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git");
 		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://gitlab.com/acme/widgets.git");
-		const result = await openPr({ workspaceId: "w1", sessionId: "s1" });
+		const result = await openPr({
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
+		});
 		expect(
 			new URL(result.compareUrl ?? "").searchParams.get("merge_request[description]"),
 		).toContain("## Committed outside the plan");
@@ -333,7 +355,7 @@ describe("openPr picks the forge from where the branch is pushed", () => {
 		sh(repo, "remote", "set-url", "origin", "https://github.com/acme/widgets.git");
 		sh(repo, "remote", "set-url", "--push", "origin", "https://gitlab.com/acme/widgets.git");
 		sh(repo, "config", `url.${remote}.insteadOf`, "https://gitlab.com/acme/widgets.git");
-		const result = await openPr({ workspaceId: "w1", body: "Body" });
+		const result = await openPr({ workspaceId: testWorkspaceId("w1"), body: "Body" });
 		expect(result.action).toBe("compare");
 		expect(result.compareUrl).toStartWith("https://gitlab.com/acme/widgets/-/merge_requests/new?");
 		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(sh(repo, "rev-parse", "HEAD"));

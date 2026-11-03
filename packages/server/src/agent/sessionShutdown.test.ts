@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createSession,
 	disposeAllSessions,
@@ -118,7 +119,7 @@ async function eventuallyShutdownEvents(from: number, count: number): Promise<Sh
 }
 
 async function parent() {
-	const workspaceId = `shutdown-${++sequence}`;
+	const workspaceId = testWorkspaceId(`shutdown-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,
@@ -148,7 +149,7 @@ test("an immediate host stop disposes the pi session only after its shutdown han
 
 test("a session abandoned while attaching emits session_shutdown before its pi session is disposed", async () => {
 	const before = shutdownEvents().length;
-	const workspaceId = `shutdown-${++sequence}`;
+	const workspaceId = testWorkspaceId(`shutdown-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const creating = createSession({
 		workspaceId,

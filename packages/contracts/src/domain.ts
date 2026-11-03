@@ -2,11 +2,10 @@ import { compile } from "@earendil-works/pi-schema";
 import { keepValidFields } from "./fieldwise";
 import {
 	type AppConfig,
-	type BackgroundCommandSummary,
+	BackgroundCommandOutputDetails,
 	CODE_FONT_SIZE,
 	CodeFontSize,
-	DELEGATION_RUN_STATUSES,
-	type DelegationRunStatus,
+	DelegationRunDetails,
 	FONT_WEIGHT_OFFSET,
 	FontChoice,
 	FontFamilyName,
@@ -18,15 +17,12 @@ import {
 	JsonObject,
 	LINE_WIDTH_COLUMNS,
 	LineWidth,
+	McpContentBlockSummary,
 	PartialAppConfig,
-	PLAN_REVIEW_VERDICTS,
-	type PlanReviewVerdict,
-	REVIEW_COMMENT_KINDS,
+	PlanReviewResult,
 	type ResourceHistoryCursor,
 	type ResourceRecord,
 	type ResourceTally,
-	type ReviewCommentKind,
-	type ReviewReadingStep,
 	SETTLE_IDLE_DAYS,
 	SettleIdleDays,
 	SUBAGENT_MAX_CONCURRENT,
@@ -37,7 +33,6 @@ import {
 	THEME_MODES,
 	type ThemeMode,
 	type ThemePreference,
-	type ThinkingLevel,
 	UserFontFile,
 } from "./schema";
 
@@ -91,79 +86,9 @@ export function firstPromptOfTexts(texts: Iterable<string>): string | undefined 
 
 export const DEFAULT_WORKSPACE_NAME = "Default";
 
-const THINKING_LEVEL_SET = {
-	off: true,
-	minimal: true,
-	low: true,
-	medium: true,
-	high: true,
-	xhigh: true,
-	max: true,
-} satisfies Record<ThinkingLevel, true>;
-
-function isThinkingLevel(value: unknown): value is ThinkingLevel {
-	return typeof value === "string" && Object.hasOwn(THINKING_LEVEL_SET, value);
-}
-
-export function isDelegationRunDetails(value: unknown): value is DelegationRunDetails {
-	if (!value || typeof value !== "object") return false;
-	const d = value as Partial<DelegationRunDetails>;
-	if (typeof d.childSessionId !== "string" || typeof d.task !== "string") return false;
-	if (typeof d.status !== "string" || !DELEGATION_RUN_STATUSES.includes(d.status)) return false;
-	if (typeof d.durationMs !== "number") return false;
-	for (const field of [d.roleName, d.roleSource, d.model, d.activity, d.abortReason]) {
-		if (field !== undefined && typeof field !== "string") return false;
-	}
-	if (d.thinkingLevel !== undefined && !isThinkingLevel(d.thinkingLevel)) return false;
-	const u = d.usage as Partial<DelegationRunDetails["usage"]> | undefined;
-	return (
-		!!u &&
-		typeof u === "object" &&
-		typeof u.input === "number" &&
-		typeof u.output === "number" &&
-		typeof u.cacheRead === "number" &&
-		typeof u.cacheWrite === "number" &&
-		typeof u.cost === "number" &&
-		typeof u.turns === "number" &&
-		typeof u.contextTokens === "number"
-	);
-}
-
-export interface DelegationRunDetails {
-	childSessionId: string;
-	roleName?: string;
-	roleSource?: string;
-	task: string;
-	status: DelegationRunStatus;
-	model?: string;
-	thinkingLevel?: ThinkingLevel;
-	usage: {
-		input: number;
-		output: number;
-		cacheRead: number;
-		cacheWrite: number;
-		cost: number;
-		turns: number;
-		contextTokens: number;
-	};
-	durationMs: number;
-	activity?: string;
-	abortReason?: string;
-}
-
-export type CompletionDelivery = "wake" | "run" | "appended";
-
-export interface SubagentCompletionDetails extends DelegationRunDetails {
-	delivery?: CompletionDelivery;
-}
-
-export interface BackgroundCommandCompletionDetails
-	extends Omit<BackgroundCommandSummary, "command"> {
-	status: "completed" | "error" | "stopped";
-	finishedAt: number;
-	output: { text: string; truncated: boolean };
-	delivery?: CompletionDelivery;
-}
+export const isDelegationRunDetails = compile(DelegationRunDetails).check;
+export const isBackgroundCommandOutputDetails = compile(BackgroundCommandOutputDetails).check;
+export const isMcpContentBlockSummary = compile(McpContentBlockSummary).check;
 
 export type ResourceOutcome = keyof ResourceTally;
 
@@ -257,33 +182,6 @@ export function resourceHistoryCursor(record: ResourceRecord): ResourceHistoryCu
 
 export function compareResourceHistory(a: ResourceHistoryCursor, b: ResourceHistoryCursor): number {
 	return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
-}
-
-/** Mirror of pi's `McpToolDetails` as it arrives in `mcp__*` and the three MCP resource tools' results. */
-export interface McpToolDetails {
-	server: string;
-	tool: string;
-	fullOutputPath?: string;
-}
-
-export type McpContentBlockSummary =
-	| { kind: "text"; chars: number }
-	| { kind: "image"; mimeType: string }
-	| { kind: "audio"; mimeType: string }
-	| { kind: "resource_link"; uri: string; name?: string; mimeType?: string }
-	| { kind: "resource"; uri: string; mimeType?: string; chars?: number };
-
-/**
- * Bounded, base64-free presentation summary written into a tool result's `details.thinkrail` by the
- * host so cards render the same live, after reload, and on another client.
- */
-export interface McpResultSummary {
-	blocks: McpContentBlockSummary[];
-	/** Blocks dropped from the end of `blocks` once the summary's byte budget was spent. */
-	omittedBlocks?: number;
-	structuredContent?: unknown;
-	structuredContentTruncated?: boolean;
-	isError?: boolean;
 }
 
 const NPM_NAME = String.raw`(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*`;
@@ -631,99 +529,6 @@ export const MAX_SEARCH_GROUP_LIMIT = 50;
 
 export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
 
-/** Slim view of a sent review finding on a todo-review-fix message (path/lines pre-resolved host-side). */
-export interface ReviewFixComment {
-	id: string;
-	kind: ReviewCommentKind;
-	body: string;
-	path?: string;
-	startLine?: number;
-	endLine?: number;
-}
-
-/** Structured payload of a todo-review-fix custom message; the message `content` stays the agent-read text. */
-export interface ReviewFixDetails {
-	itemId: string;
-	itemTitle: string;
-	reviewId?: string;
-	/** The reviewer's/user's feedback prose (renderFixPackage note), when present. */
-	note?: string;
-	comments: ReviewFixComment[];
-}
-
-/** Result of the worker-invoked request_review tool (Option A): a review subagent's structured verdict on
- * a plan step. Carried as the tool result's `details`, rendered by the request_review card, and written to
- * the item's review record. See submodule-server-host-plan-review + submodule-server-todos. */
-export interface PlanReviewResult {
-	itemId: string;
-	itemTitle: string;
-	verdict: PlanReviewVerdict;
-	reviewedSha?: string;
-	/** The reviewer's one-paragraph rationale (shown on the card). */
-	summary?: string;
-	/** The reviewer's suggested order for reading the change set, one line of why per file. */
-	readingOrder?: ReviewReadingStep[];
-	findings: ReviewFixComment[];
-	/** Host-set on an `approve` it refused to settle: findings from an earlier round are still open, so
-	 * the step stays unreviewed until the worker resolves them. */
-	blockedByOpenFindings?: number;
-}
-
 export const REVIEW_READING_ORDER_LIMIT = 12;
 
-function isReadingStep(value: unknown): value is ReviewReadingStep {
-	if (!value || typeof value !== "object") return false;
-	const step = value as Partial<ReviewReadingStep>;
-	return (
-		typeof step.path === "string" &&
-		step.path.length > 0 &&
-		typeof step.why === "string" &&
-		step.why.length > 0
-	);
-}
-
-function isPositiveInt(n: unknown): n is number {
-	return typeof n === "number" && Number.isInteger(n) && n > 0;
-}
-
-/** A single reviewer finding: id + body required; kind (if present) a known enum; a line requires a path,
- * an endLine requires a startLine, and any range is positive and coherent. See submodule-server-host-plan-review. */
-function isReviewFinding(f: unknown): f is ReviewFixComment {
-	if (!f || typeof f !== "object") return false;
-	const c = f as Partial<ReviewFixComment>;
-	if (typeof c.id !== "string" || c.id.length === 0) return false;
-	if (typeof c.body !== "string" || c.body.length === 0) return false;
-	if (c.kind !== undefined && !REVIEW_COMMENT_KINDS.includes(c.kind)) return false;
-	if (c.path !== undefined && typeof c.path !== "string") return false;
-	if (c.startLine !== undefined && !isPositiveInt(c.startLine)) return false;
-	if (c.endLine !== undefined && !isPositiveInt(c.endLine)) return false;
-	if (c.startLine !== undefined && c.path === undefined) return false;
-	if (c.endLine !== undefined && c.startLine === undefined) return false;
-	if (c.startLine !== undefined && c.endLine !== undefined && c.endLine < c.startLine) return false;
-	return true;
-}
-
-/** Validate the review subagent's parsed JSON verdict (untrusted — model output). Every finding field and
- * its enum/line coherence is checked, and the verdict/finding cardinality is enforced: a `request_changes`
- * with no actionable finding is rejected (it would strand the worker), while an `approve` may carry none. */
-export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
-	if (!value || typeof value !== "object") return false;
-	const r = value as Partial<PlanReviewResult>;
-	if (typeof r.itemId !== "string" || typeof r.itemTitle !== "string") return false;
-	if (typeof r.verdict !== "string" || !PLAN_REVIEW_VERDICTS.includes(r.verdict)) return false;
-	if (r.summary !== undefined && typeof r.summary !== "string") return false;
-	if (
-		r.readingOrder !== undefined &&
-		(!Array.isArray(r.readingOrder) ||
-			r.readingOrder.length > REVIEW_READING_ORDER_LIMIT ||
-			!r.readingOrder.every(isReadingStep))
-	) {
-		return false;
-	}
-	if (r.blockedByOpenFindings !== undefined && typeof r.blockedByOpenFindings !== "number")
-		return false;
-	if (!Array.isArray(r.findings)) return false;
-	if (!r.findings.every(isReviewFinding)) return false;
-	if (r.verdict === "request_changes" && r.findings.length === 0) return false;
-	return true;
-}
+export const isPlanReviewResult = compile(PlanReviewResult).check;

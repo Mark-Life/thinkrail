@@ -132,6 +132,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions);
   from `wireChecks`, `describeFailure`, `wsResultValidator`, `wsPushValidator`, `parseWsResult`, `parseWsPush`,
   `wsChannelOf`, `Parsed`, `WsClientChannelMap` and `WsClientPayload`.
+- **`@thinkrail/contracts/test-ids`:** the one other entry: `testProjectId`, `testWorkspaceId` and `testSessionId` make an
+  id from any string, for test sources only ([[submodule-contracts-schema]]).
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).
@@ -312,8 +314,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `needsInput.kind: "question"` / `question:<toolCallId>` as the awaiting call, because the UI ships
     independently of the host (Decision 3). Both go when the window closes.
   - the **todo plan-review fix** wire types — the **`TODO_REVIEW_FIX_CUSTOM_TYPE`** constant,
-    **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** guard (in
-    `wsProtocol`), and **`ReviewFixDetails`** / **`ReviewFixComment`** (in `domain`): a plan-review
+    **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** check (in
+    `wsProtocol`, compiled from the message schema), and **`ReviewFixDetails`** / **`ReviewFixComment`** (schemas in
+    `schema/review.ts`): a plan-review
     verdict's fix request reaches the worker as a **structured custom message** (customType
     `todo-review-fix`) instead of a synthetic user turn (#363). The message `content` stays the rendered
     package text the agent reads; `details` (the item id/title, optional note, and slim path/line-resolved
@@ -587,10 +590,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
   shape, its details **`SubagentCompletionDetails`**: the run details plus the optional
   **`CompletionDelivery`** marker mirrored from `pi-subagents`) and the shared
-  **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
-  details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
+  **`isSubagentCompletionMessage`** check — wire data is untrusted, so each completion, review-fix and
+  command-completion check is compiled from a message schema in `wsProtocol` (the custom-message fields plus
+  the tag and the details schema), and **`isDelegationRunDetails`** (domain) is the compiled
+  `DelegationRunDetails` schema in `schema/subagent.ts`: the **closed status union**, every
   required **numeric usage field**, `durationMs`, every present optional display field as a string, and a
-  present `thinkingLevel` as one of pi's closed levels, never just "an object is present" (PR #303 review finding). That validator is the one home for the
+  present `thinkingLevel` as one of pi's closed levels, never just "an object is present". That schema is the one home for the
   shape check — the web's Agent-card reader
   narrows through it too — plus **`customMessageText`** — the one text extraction over
   `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
@@ -1072,9 +1077,9 @@ wire-owned cancellation registry.
 wire details contain terminal snapshot metadata without the full command, plus the owner's bounded
 plain-text diagnostic excerpt and truncation flag, and the same optional `delivery` marker as a
 subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
-transcripts written before it, which keep the old round rules). The guards do not validate it; the
-shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
-reads as absent everywhere. The conversation may render that historical notice,
+transcripts written before it, which keep the old round rules). The message schemas check it as the
+closed `CompletionDelivery` union, so a reader takes `details.delivery` as typed. A
+`background_command` `output` result reads through `isBackgroundCommandOutputDetails`. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -1191,7 +1196,8 @@ contracts only.
   invalid project row that the loader skipped. Mutations and probes reject if workspace identity, cwd or
   project trust changed during async ownership resolution; no stale project grant admits a new operation.
 - `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools;
-  `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
+  `McpResultSummary` (schema in `schema/mcp.ts`, each block checked by `isMcpContentBlockSummary`) is the
+  host-written, bounded, base64-free presentation summary under
   `details.thinkrail` that lets cards render identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
   file is gone.

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { McpListResult, McpServerSummary } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import type { McpServerRow } from "@/store";
 import {
@@ -38,7 +39,7 @@ function row(overrides: Partial<McpServerRow> = {}, summaryOverrides = {}): McpS
 		summary: summary(summaryOverrides),
 		state: "connected",
 		effective: true,
-		sessions: { total: 1, reporting: ["s1"], connected: 1 },
+		sessions: { total: 1, reporting: [testSessionId("s1")], connected: 1 },
 		startingStalled: false,
 		approvalPending: false,
 		attention: false,
@@ -54,7 +55,10 @@ test("connected rows carry tool counts, partial chat coverage, and warn at zero 
 	expect(
 		mcpRowView(
 			currentTranslator(),
-			row({ toolCount: 2, sessions: { total: 3, reporting: ["s1", "s2"], connected: 2 } }),
+			row({
+				toolCount: 2,
+				sessions: { total: 3, reporting: [testSessionId("s1"), testSessionId("s2")], connected: 2 },
+			}),
 			NOW,
 		).label,
 	).toBe("Connected in 2 of 3 chats · 2 tools");
@@ -95,8 +99,10 @@ test("each non-green state has one reason line, at most one action and one secon
 	expect(view({ state: "disconnected" }).secondary).toBeUndefined();
 	expect(view({ state: "disabled-in-project" }).label).toBe("Disabled in this project");
 	expect(
-		view({ state: "disabled-in-chat", sessions: { total: 3, reporting: ["a", "b"], connected: 1 } })
-			.label,
+		view({
+			state: "disabled-in-chat",
+			sessions: { total: 3, reporting: [testSessionId("a"), testSessionId("b")], connected: 1 },
+		}).label,
 	).toBe("Disabled in 2 of 3 chats");
 	expect(
 		view(
@@ -178,24 +184,29 @@ test("a pending repository override turns any live row into a review", () => {
 
 test("enablement and exposure route by scope: user servers send only the changed field to the project record, repo servers rewrite their file", () => {
 	const user = summary({ projectOverride: { exposure: "direct" } });
-	expect(mcpSettingWrite("ws", user, { enabled: false }, null)).toEqual({
+	expect(mcpSettingWrite(testWorkspaceId("ws"), user, { enabled: false }, null)).toEqual({
 		method: "mcp.setProjectOverride",
-		params: { workspaceId: "ws", name: "docs", enabled: false },
+		params: { workspaceId: testWorkspaceId("ws"), name: "docs", enabled: false },
 	});
-	expect(mcpSettingWrite("ws", summary(), { exposure: "hidden" }, null)).toEqual({
+	expect(mcpSettingWrite(testWorkspaceId("ws"), summary(), { exposure: "hidden" }, null)).toEqual({
 		method: "mcp.setProjectOverride",
-		params: { workspaceId: "ws", name: "docs", exposure: "hidden" },
+		params: { workspaceId: testWorkspaceId("ws"), name: "docs", exposure: "hidden" },
 	});
 	const project = summary({
 		scope: "project",
 		approval: { state: "approved", fingerprint: "rendered" },
 	});
 	expect(
-		mcpSettingWrite("ws", project, { enabled: false }, { command: "x", exposure: "direct" }),
+		mcpSettingWrite(
+			testWorkspaceId("ws"),
+			project,
+			{ enabled: false },
+			{ command: "x", exposure: "direct" },
+		),
 	).toEqual({
 		method: "mcp.update",
 		params: {
-			workspaceId: "ws",
+			workspaceId: testWorkspaceId("ws"),
 			scope: "project",
 			name: "docs",
 			entry: { command: "x", exposure: "direct", enabled: false },
@@ -203,22 +214,34 @@ test("enablement and exposure route by scope: user servers send only the changed
 		},
 	});
 	expect(
-		mcpSettingWrite("ws", project, { exposure: "hidden" }, { command: "x", enabled: false }).params,
+		mcpSettingWrite(
+			testWorkspaceId("ws"),
+			project,
+			{ exposure: "hidden" },
+			{ command: "x", enabled: false },
+		).params,
 	).toMatchObject({
 		entry: { command: "x", enabled: false, exposure: "hidden" },
 		expectedFingerprint: "rendered",
 	});
 	expect(
-		mcpSettingWrite("ws", project, { enabled: true }, { command: "x", enabled: false }).params,
+		mcpSettingWrite(
+			testWorkspaceId("ws"),
+			project,
+			{ enabled: true },
+			{ command: "x", enabled: false },
+		).params,
 	).toMatchObject({ entry: { command: "x" } });
-	expect(() => mcpSettingWrite("ws", project, { enabled: true }, null)).toThrow(".pi/mcp.json");
+	expect(() => mcpSettingWrite(testWorkspaceId("ws"), project, { enabled: true }, null)).toThrow(
+		".pi/mcp.json",
+	);
 });
 
 test("an update or removal at either scope carries the fingerprint its row was rendered with, never a folded override's", () => {
 	const entry = { command: "x" };
 	expect(
 		mcpEntryUpdate(
-			"ws",
+			testWorkspaceId("ws"),
 			summary({
 				scope: "project",
 				fingerprint: "seen",
@@ -227,7 +250,7 @@ test("an update or removal at either scope carries the fingerprint its row was r
 			entry,
 		),
 	).toEqual({
-		workspaceId: "ws",
+		workspaceId: testWorkspaceId("ws"),
 		scope: "project",
 		name: "docs",
 		entry,
@@ -237,8 +260,8 @@ test("an update or removal at either scope carries the fingerprint its row was r
 		fingerprint: "user-entry",
 		approval: { state: "approved", fingerprint: "override" },
 	});
-	expect(mcpEntryUpdate("ws", user, entry)).toEqual({
-		workspaceId: "ws",
+	expect(mcpEntryUpdate(testWorkspaceId("ws"), user, entry)).toEqual({
+		workspaceId: testWorkspaceId("ws"),
 		scope: "user",
 		name: "docs",
 		entry,
@@ -248,15 +271,17 @@ test("an update or removal at either scope carries the fingerprint its row was r
 });
 
 test("save feedback never claims open chats already applied a change they are still reloading for", () => {
-	const result = (states: string[][]): McpListResult => ({
+	const result = (
+		states: McpListResult["statuses"][number]["servers"][number]["state"][][],
+	): McpListResult => ({
 		servers: [],
 		statuses: states.map((servers, index) => ({
-			workspaceId: "ws",
-			sessionId: `s${index}`,
+			workspaceId: testWorkspaceId("ws"),
+			sessionId: testSessionId(`s${index}`),
 			generation: 1,
 			servers: servers.map((state) => ({
 				name: "docs",
-				state: state as McpListResult["statuses"][number]["servers"][number]["state"],
+				state,
 				updatedAt: 1,
 			})),
 		})),

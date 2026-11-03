@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TestMarkdown as Markdown, testLinks } from "../testing/markdown";
@@ -14,7 +15,10 @@ function render(text: string): string {
 			rehypePlugins: documentRehypePlugins(),
 			components: {
 				...alertComponents,
-				...documentComponents({ workspaceId: "ws", path: "docs/README.md" }, testLinks),
+				...documentComponents(
+					{ workspaceId: testWorkspaceId("ws"), path: "docs/README.md" },
+					testLinks,
+				),
 			},
 		}),
 	);

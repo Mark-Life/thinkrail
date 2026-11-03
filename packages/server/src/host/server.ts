@@ -162,6 +162,7 @@ import {
 	stopWorkspaceCreations,
 	syncWorkspaceBranch,
 } from "../workspaces";
+import { readClientFrame } from "./clientFrames";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
@@ -264,8 +265,6 @@ const CLIENT_REPLAY_RETENTION_MS = 60_000;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 
 const log = logger("host");
-
-const isRequestId = (id: unknown): id is string => typeof id === "string";
 
 function requestFingerprint(method: string, params: unknown, sessionId: unknown): string {
 	try {
@@ -516,36 +515,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					return;
 				}
 				const raw = typeof message === "string" ? message : message.toString();
-				let req: unknown;
-				try {
-					req = JSON.parse(raw);
-				} catch {
+				const frame = readClientFrame(raw);
+				if (frame.kind === "refused") return;
+				if (frame.kind === "ack") {
+					reportAbandoned(requestReplays.acknowledge(ws.data.clientKey, frame.ids));
 					return;
 				}
-				if (typeof req !== "object" || req === null) return;
-				if ("ack" in req && Array.isArray(req.ack)) {
-					reportAbandoned(
-						requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId)),
-					);
+				if (frame.kind === "resume") {
+					reportAbandoned(requestReplays.retain(ws.data.clientKey, frame.ids));
 					return;
 				}
-				if ("resume" in req && Array.isArray(req.resume)) {
-					reportAbandoned(requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId)));
-					return;
-				}
-				if (
-					!("id" in req) ||
-					typeof req.id !== "string" ||
-					!("method" in req) ||
-					typeof req.method !== "string"
-				) {
-					return;
-				}
-				const requestId = req.id;
-				const method = req.method;
+				const { id: requestId, method, params, sessionId } = frame.request;
 				const methodDiagnostic = requestMethodDiagnostic(method);
-				const params = "params" in req ? req.params : undefined;
-				const sessionId = "sessionId" in req ? req.sessionId : undefined;
 				log.debug(`ws ${methodDiagnostic}`);
 				try {
 					const response = await requestReplays.run(

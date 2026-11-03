@@ -1,5 +1,5 @@
 import type { RemixiconComponentType } from "@remixicon/react";
-import type { MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
+import type { MatchRange, SearchPreviewTarget, WorkspaceId } from "@thinkrail/contracts";
 import type { CommandShortcut } from "../commands";
 import type { ChatTitleSource } from "../lib";
 import type { SessionAttention } from "../store";
@@ -29,7 +29,7 @@ export interface PalettePreview {
 }
 
 export interface PaletteFile {
-	readonly workspaceId: string;
+	readonly workspaceId: WorkspaceId;
 	readonly path: string;
 	readonly size?: number;
 }

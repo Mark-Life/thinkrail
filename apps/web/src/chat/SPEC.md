@@ -420,8 +420,7 @@ two routes:
   `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
   is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. Its `state.accepting` is
   true only while the host's `needsInput` names this call (`awaitingToolCallIdOf`, carried in the
-  interaction context; a pre-v93 host's `kind: "question"` / `question:<id>` is read the same way for one
-  compatibility window) or no host state has arrived yet, so a call the host is not waiting on (another
+  interaction context) or no host state has arrived yet, so a call the host is not waiting on (another
   package's same-name tool, a call to the switched-off tool) cannot submit a response. `respond(value)`
   forwards the value as is through the transport's `respondToTool` (`session.respondToTool`, or the
   retired `session.answerQuestion` below `TOOL_RESPONSE_PROTOCOL_VERSION`); the tool validates its

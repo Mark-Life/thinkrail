@@ -1,4 +1,4 @@
-import type { McpListResult, WsParams } from "@thinkrail/contracts";
+import type { McpListResult, WorkspaceId, WsParams } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { selectMcpRead, selectMcpWorkspaceStarting, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
@@ -46,20 +46,20 @@ export function requestMcpList<M extends McpListMethod>(
 	return request;
 }
 
-export interface McpWatchDeps {
+export interface McpWatchDeps<Timer> {
 	read: () => Promise<unknown>;
 	starting: () => boolean;
 	subscribe: (listener: () => void) => () => void;
-	setTimer: (run: () => void, ms: number) => ReturnType<typeof setTimeout>;
-	clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
+	setTimer: (run: () => void, ms: number) => Timer;
+	clearTimer: (timer: Timer) => void;
 	onRead?: (error: unknown) => void;
 }
 
-export function startMcpWorkspaceWatch(deps: McpWatchDeps): () => void {
+export function startMcpWorkspaceWatch<Timer>(deps: McpWatchDeps<Timer>): () => void {
 	let disposed = false;
 	let reading = false;
 	let attempt = 0;
-	let timer: ReturnType<typeof setTimeout> | null = null;
+	let timer: Timer | null = null;
 	const schedule = () => {
 		if (disposed || reading || timer !== null || !deps.starting()) return;
 		const delay = MCP_STARTING_POLL_MS[attempt];
@@ -96,7 +96,7 @@ export function startMcpWorkspaceWatch(deps: McpWatchDeps): () => void {
 }
 
 export function watchMcpWorkspace(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	onRead?: (error: unknown) => void,
 ): () => void {
 	return startMcpWorkspaceWatch({

@@ -1,3 +1,4 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
@@ -33,7 +34,7 @@ export type ResourcePreviewLayout = "split" | "unified";
 export interface ResourcePreviewProps {
 	path: string;
 	before?: string | undefined;
-	workspaceId?: string | undefined;
+	workspaceId?: WorkspaceId | undefined;
 	rendererId?: string | undefined;
 	onRendererId?: ((rendererId: string) => void) | undefined;
 	layout?: ResourcePreviewLayout | undefined;
@@ -47,8 +48,8 @@ export interface ResourcePreviewProps {
 }
 
 interface ResolvedProps extends ResourcePreviewProps {
-	workspaceId: string;
-	sessionId: string | undefined;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId | undefined;
 	rendererId: string | undefined;
 	onRendererId: (rendererId: string) => void;
 }
@@ -74,7 +75,7 @@ function implementationViewState(
 
 const loading = <LoadingRegion rows={8} className="h-full p-12" />;
 
-function useWorkspaceFile(workspaceId: string, path: string | undefined): LoadedFile {
+function useWorkspaceFile(workspaceId: WorkspaceId, path: string | undefined): LoadedFile {
 	const { readFile, subscribeFileChanges, bytesUrl } = useResourceHost();
 	const [state, setState] = useState<FileState | null>(null);
 	const fileKey = `${workspaceId}\u0000${path ?? ""}`;
@@ -115,7 +116,7 @@ export function ResourcePreview(props: ResourcePreviewProps) {
 }
 
 function ScopedResourcePreview(
-	props: ResourcePreviewProps & { workspaceId: string; sessionId: string | undefined },
+	props: ResourcePreviewProps & { workspaceId: WorkspaceId; sessionId: SessionId | undefined },
 ) {
 	const t = useT();
 	const [localRenderer, setLocalRenderer] = useState<string | undefined>(undefined);

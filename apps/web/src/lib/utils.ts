@@ -1,4 +1,4 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { SessionId, UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
@@ -36,7 +36,7 @@ type LayoutResourceIdentityInput =
 	| { kind: "diff"; path: string; before?: undefined; scope: LayoutDiffScopeInput }
 	| { kind: "diff"; path: string; before: string }
 	| { kind: "changes"; scope: LayoutDiffScopeInput }
-	| { kind: "chat"; sessionId: string }
+	| { kind: "chat"; sessionId: SessionId }
 	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
 	| { kind: "tool"; tool: string };
@@ -337,22 +337,29 @@ export const MODAL_LAYER_SELECTOR = [
 	'[role="alertdialog"][data-state="open"]',
 ].join(", ");
 
-export function hasLayer(root: Pick<Document, "querySelector">, selector: string): boolean {
+export function hasLayer(
+	root: { querySelector(selector: string): unknown },
+	selector: string,
+): boolean {
 	return root.querySelector(selector) !== null;
 }
 
 const TEXT_ENTRY_ROOT_SELECTOR = ".monaco-editor, .xterm";
 
-export function isTextEntryTarget(target: EventTarget | null): boolean {
-	const element = target as {
-		isContentEditable?: boolean;
-		tagName?: string;
-		closest?: (selector: string) => Element | null;
-	} | null;
+const TEXT_ENTRY_TAGS = /^(INPUT|TEXTAREA|SELECT)$/;
+
+export function isTextEntryTarget(target: unknown): boolean {
+	if (typeof target !== "object" || target === null) return false;
+	if ("isContentEditable" in target && target.isContentEditable === true) return true;
+	if (
+		"tagName" in target &&
+		typeof target.tagName === "string" &&
+		TEXT_ENTRY_TAGS.test(target.tagName)
+	)
+		return true;
 	return (
-		element !== null &&
-		(element.isContentEditable === true ||
-			/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
-			(typeof element.closest === "function" && element.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null))
+		"closest" in target &&
+		target instanceof Element &&
+		target.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null
 	);
 }

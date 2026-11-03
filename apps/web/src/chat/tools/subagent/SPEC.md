@@ -66,7 +66,7 @@ Adopted:
 ## Get right
 
 - **Render defensively:** `DelegationRunDetails` arrives as untyped `result.details` — narrow via
-  `readRunDetails` (childSessionId/status/task present), never trust the shape; fall back to `args`
+  `readRunDetails` (the compiled `DelegationRunDetails` schema), never trust the shape; fall back to `args`
   (`subagent_type`, `task`) before the first update lands.
 - `partialResult` is **REPLACE** — every snapshot is complete; nothing accumulates renderer-side.
 - Tool names `Agent` / `get_subagent_result` must match the `pi-subagents` capability exactly {D} the

@@ -1,4 +1,4 @@
-import type { ChangeReceipt, GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
+import type { ChangeReceipt, GitDiffScope, ResourceMeta, WorkspaceId } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
 import {
 	createAskAgentRequest,
@@ -37,7 +37,7 @@ export interface DiffSurfaceContent {
 }
 
 export interface DiffSurfaceInput {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	scope: GitDiffScope;
 	content: DiffSurfaceContent;

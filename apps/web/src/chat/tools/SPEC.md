@@ -33,7 +33,7 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 - **`RequestReviewCard`** — the verdict card for the host-owned `request_review` tool (capability: the
   server's `agent`/`host` request-review seam, which spawns a read-only review subagent). Reads the
   structured `PlanReviewResult` from the tool result's `details` (defensively, via
-  `isPlanReviewResult`), shows an approve/request-changes indicator + the reviewer's one-paragraph
+  `isPlanReviewResult`, the compiled `PlanReviewResult` schema), shows an approve/request-changes indicator + the reviewer's one-paragraph
   summary, and renders findings as the shared fold-out `ReviewPackageComments` (comment→item mapping
   and the row primitive both live in `reviewPackage.ts` + `ReviewPackageComments.tsx`, reused by the
   `reviewFix`/review-package renderers). Registered `primary` + `defaultExpanded`; `data-verdict` +

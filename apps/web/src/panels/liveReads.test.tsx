@@ -1,26 +1,31 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import type { WorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { act, type ReactNode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useAppStore } from "../store";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
-type ReactGlobals = { IS_REACT_ACT_ENVIRONMENT?: boolean | undefined; window?: unknown };
-const globals = globalThis as ReactGlobals;
-const saved = { act: globals.IS_REACT_ACT_ENVIRONMENT, window: globals.window };
+const REACT_GLOBALS = ["IS_REACT_ACT_ENVIRONMENT", "window"] as const;
+const saved = REACT_GLOBALS.map(
+	(key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+);
 
 // react-dom only touches these members when a tree renders no host elements.
 beforeAll(() => {
-	globals.IS_REACT_ACT_ENVIRONMENT = true;
-	globals.window = {
+	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+	Reflect.set(globalThis, "window", {
 		event: undefined,
 		HTMLIFrameElement: class {},
 		document: { activeElement: null },
-	};
+	});
 });
 afterAll(() => {
-	globals.IS_REACT_ACT_ENVIRONMENT = saved.act;
-	globals.window = saved.window;
+	for (const [key, descriptor] of saved) {
+		if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+		else Reflect.deleteProperty(globalThis, key);
+	}
 });
 
 function headlessContainer() {
@@ -57,7 +62,12 @@ function scriptedReads<T>() {
 
 const tick = (workspaceId: string, paths: string[], truncated = false) =>
 	act(async () => {
-		useAppStore.getState().noteFsChanged({ workspaceId, paths, truncated, skillChange: "none" });
+		useAppStore.getState().noteFsChanged({
+			workspaceId: testWorkspaceId(workspaceId),
+			paths,
+			truncated,
+			skillChange: "none",
+		});
 	});
 
 function WorkspaceRead(props: {
@@ -66,7 +76,7 @@ function WorkspaceRead(props: {
 	results: string[];
 	switched?: string[];
 }) {
-	useWorkspaceRead(props.workspaceId, props.read, {
+	useWorkspaceRead(testWorkspaceId(props.workspaceId), props.read, {
 		onResult: (value) => props.results.push(value),
 		onSwitch: (id) => props.switched?.push(id),
 	});
@@ -110,7 +120,7 @@ test("a workspace switch drops the old workspace's answer", async () => {
 });
 
 function LiveTab(props: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	read: (path: string) => Promise<string>;
 	applied: string[];
@@ -134,7 +144,12 @@ test("a slow tab read waits out further ticks, lands, then catches up once", asy
 	const host = scriptedReads<string>();
 	const applied: string[] = [];
 	const view = await mount(
-		<LiveTab workspaceId="lt-slow" path="f.ts" read={host.read} applied={applied} />,
+		<LiveTab
+			workspaceId={testWorkspaceId("lt-slow")}
+			path="f.ts"
+			read={host.read}
+			applied={applied}
+		/>,
 	);
 	expect(host.pending).toHaveLength(0);
 	for (let i = 0; i < 3; i += 1) await tick("lt-slow", ["f.ts"]);
@@ -152,7 +167,7 @@ test("a slow tab read waits out further ticks, lands, then catches up once", asy
 test("a tab that moves to another file drops the old file's answer", async () => {
 	const host = scriptedReads<string>();
 	const applied: string[] = [];
-	const props = { workspaceId: "lt-switch", read: host.read, applied };
+	const props = { workspaceId: testWorkspaceId("lt-switch"), read: host.read, applied };
 	const view = await mount(<LiveTab path="a.ts" {...props} />);
 	await tick("lt-switch", [], true);
 	await view.rerender(<LiveTab path="b.ts" {...props} />);

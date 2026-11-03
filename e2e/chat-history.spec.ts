@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type WebSocketRoute } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import {
 	defaultWorkspaceRow,
@@ -25,7 +27,7 @@ function setMtime(path: string, ms: number): void {
 	utimesSync(path, new Date(ms), new Date(ms));
 }
 
-function seedOpenTodo(sessionId: string, title: string): void {
+function seedOpenTodo(sessionId: SessionId, title: string): void {
 	const contextDir = join(repoCwd(), ".thinkrail", "context");
 	mkdirSync(contextDir, { recursive: true });
 	writeFileSync(join(contextDir, ".gitignore"), "*\n");
@@ -58,7 +60,7 @@ test("a disk chat with unfinished work auto-opens; a finished one stays in local
 		],
 	});
 	setMtime(todoChat.path, BASE_TS);
-	seedOpenTodo(todoChat.id, "run the final verification pass");
+	seedOpenTodo(testSessionId(todoChat.id), "run the final verification pass");
 
 	const doneChat = seedWorkspaceSession(repoCwd(), {
 		name: "release notes chat",

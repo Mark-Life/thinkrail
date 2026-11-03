@@ -59,10 +59,11 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   system prompt (review order, what counts as a finding, the JSON contract); `todos.renderReviewPackage`
   renders a change-set *reference* and the worker's claims, and names no tool. A package that instructs
   tools the reviewer does not have is a prompt that contradicts itself — the bug this split prevents.
-- **Model output is untrusted.** `parseVerdict` is strict on the verdict word and validates every finding
-  through contracts' `isPlanReviewResult`: each needs a non-empty `id` + `body`, a `kind` (if present) from
-  the known enum, and a coherent positive line range (a line requires a path, an `endLine` requires a
-  `startLine`, `endLine >= startLine`) — a malformed location would otherwise throw in `fileFinding`'s
+- **Model output is untrusted.** `parseVerdict` checks the reply with a private schema in `reviewVerdict.ts`:
+  the verdict word, every finding with a non-empty `id` + `body`, a `kind` (if present) from the known enum
+  and positive whole lines, and at most `REVIEW_READING_ORDER_LIMIT` reading steps with a non-empty `path` and
+  `why`. The rules a schema cannot hold stay in code: a coherent line range (a line requires a path, an
+  `endLine` requires a `startLine`, `endLine >= startLine`) — a malformed location would otherwise throw in `fileFinding`'s
   anchor resolution and drop the finding silently. Cardinality is enforced too: a `request_changes` with no
   finding is rejected (it would strand the worker with nothing to fix), while an `approve` may carry none.
   Any invalid output is a failed review, not a silent approve: the mark is cleared and the item returns to
@@ -171,7 +172,7 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 
 - **Owns / public surface:** `startPlanReview(workspaceId, sessionId, itemId, runSubagent?)`,
   `maybeAutoReReview(workspaceId, sessionId)`, `installRequestReviewSeam()`,
-  `setReviewFailedPublisher(fn)`, and the pure `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
+  `setReviewFailedPublisher(fn)`; `reviewVerdict`'s pure `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
   `releaseItemReview` / `itemReviewActive` / `planReviewRunning`.
 - **Allowed deps:** `agent` (`runReviewSubagent`, `sendReviewFixToSession`, `getSessionWorkspaceId`,
   `notifyExtUi`), `todos`, `reviews`, `settings`, and host siblings `ackSend` / `reviewLock` /

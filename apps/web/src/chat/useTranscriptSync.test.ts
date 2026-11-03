@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { SessionSummary } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { EMPTY_RUNTIME, type SessionRuntime } from "../store/appStore";
 import {
 	synchronizeTranscript,
@@ -13,8 +14,8 @@ function runtime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
 
 function summary(overrides: Partial<SessionSummary> = {}): SessionSummary {
 	return {
-		sessionId: "session-1",
-		workspaceId: "workspace-1",
+		sessionId: testSessionId("session-1"),
+		workspaceId: testWorkspaceId("workspace-1"),
 		title: "Chat",
 		model: null,
 		thinkingLevel: "medium",
@@ -63,8 +64,8 @@ test("synchronizeTranscript compare-and-installs one canonical snapshot", async 
 	const installed: unknown[][] = [];
 	const outcome = await synchronizeTranscript(
 		{
-			workspaceId: "workspace-1",
-			sessionId: "session-1",
+			workspaceId: testWorkspaceId("workspace-1"),
+			sessionId: testSessionId("session-1"),
 			expectedEventRevision: 9,
 			connectionGeneration: 6,
 			reason: "compaction",
@@ -92,8 +93,8 @@ test("synchronizeTranscript defers a reconnect-only streaming snapshot without h
 	let reconciled = false;
 	const outcome = await synchronizeTranscript(
 		{
-			workspaceId: "workspace-1",
-			sessionId: "session-1",
+			workspaceId: testWorkspaceId("workspace-1"),
+			sessionId: testSessionId("session-1"),
 			expectedEventRevision: 9,
 			connectionGeneration: 6,
 			reason: "reconnect",
@@ -128,8 +129,8 @@ test("synchronizeTranscript defers a streaming compaction snapshot without hydra
 	let reconciled = false;
 	const outcome = await synchronizeTranscript(
 		{
-			workspaceId: "workspace-1",
-			sessionId: "session-1",
+			workspaceId: testWorkspaceId("workspace-1"),
+			sessionId: testSessionId("session-1"),
 			expectedEventRevision: 9,
 			connectionGeneration: 6,
 			reason: "compaction",
@@ -169,8 +170,8 @@ test("synchronizeTranscript rejects a response from an overtaken connection gene
 	let reconciled = false;
 	const outcome = await synchronizeTranscript(
 		{
-			workspaceId: "workspace-1",
-			sessionId: "session-1",
+			workspaceId: testWorkspaceId("workspace-1"),
+			sessionId: testSessionId("session-1"),
 			expectedEventRevision: 2,
 			connectionGeneration: 4,
 			reason: "reconnect",
@@ -196,8 +197,8 @@ test("synchronizeTranscript rejects a response from an overtaken connection gene
 test("synchronizeTranscript distinguishes an idle crossed snapshot so a stale streaming UI can retry", async () => {
 	const outcome = await synchronizeTranscript(
 		{
-			workspaceId: "workspace-1",
-			sessionId: "session-1",
+			workspaceId: testWorkspaceId("workspace-1"),
+			sessionId: testSessionId("session-1"),
 			expectedEventRevision: 2,
 			connectionGeneration: 4,
 			reason: "reconnect",

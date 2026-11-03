@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -11,8 +12,10 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import type { LoginState } from "../auth";
 import { useAppStore } from "../store";
+import { type FakeRequest, fakeTransport } from "./transportFixtures.test";
 import * as wireTransport from "./wireTransport";
 import {
 	applyWorkspaceListRefresh,
@@ -73,11 +76,11 @@ test("auto plan-summary is requested only from a host at or beyond the v69 capab
 	expect(supportsPlanSummaryGeneration(null)).toBe(false);
 });
 
-function record(sessionId: string, completionId: string): SessionStateRecord {
+function record(sessionId: SessionId, completionId: string): SessionStateRecord {
 	return {
 		sessionId,
-		workspaceId: "workspace",
-		projectId: "project",
+		workspaceId: testWorkspaceId("workspace"),
+		projectId: testProjectId("project"),
 		state: {
 			execution: "idle",
 			runId: `run:${sessionId}`,
@@ -91,26 +94,29 @@ function record(sessionId: string, completionId: string): SessionStateRecord {
 }
 
 test("buffered state replaces its stale snapshot row before activation binding", () => {
-	const other = record("other", "completion:other");
+	const other = record(testSessionId("other"), "completion:other");
 	expect(
 		mergeSessionStateRecords(
-			[record("target", "completion:old"), other],
-			[record("target", "completion:newer"), record("target", "completion:latest")],
+			[record(testSessionId("target"), "completion:old"), other],
+			[
+				record(testSessionId("target"), "completion:newer"),
+				record(testSessionId("target"), "completion:latest"),
+			],
 		),
-	).toEqual([record("target", "completion:latest"), other]);
+	).toEqual([record(testSessionId("target"), "completion:latest"), other]);
 });
 
 describe("the reconnect workspace list refresh", () => {
 	const project = (id: string): Project => ({
-		id,
+		id: testProjectId(id),
 		name: id,
 		path: `/repos/${id}`,
 		slug: id,
 		lastOpened: 0,
 	});
 	const workspace = (id: string, name = id): Workspace => ({
-		id,
-		projectId: "p1",
+		id: testWorkspaceId(id),
+		projectId: testProjectId("p1"),
 		name,
 		branch: id,
 		baseBranch: "main",
@@ -126,8 +132,8 @@ describe("the reconnect workspace list refresh", () => {
 			workspaces: { p1: [workspace("w1"), workspace("w2"), workspace("w3")] },
 		});
 		applyWorkspaceListRefresh(
-			"p1",
-			["w1", "w2", "w3"],
+			testProjectId("p1"),
+			[testWorkspaceId("w1"), testWorkspaceId("w2"), testWorkspaceId("w3")],
 			[workspace("w1", "renamed"), workspace("w3")],
 		);
 		const state = useAppStore.getState();
@@ -143,34 +149,36 @@ describe("the reconnect workspace list refresh", () => {
 			projects: [project("p1")],
 			workspaces: { p1: [workspace("w1"), workspace("w-pushed")] },
 		});
-		applyWorkspaceListRefresh("p1", ["w1"], [workspace("w1"), workspace("w-unknown")]);
+		applyWorkspaceListRefresh(
+			testProjectId("p1"),
+			[testWorkspaceId("w1")],
+			[workspace("w1"), workspace("w-unknown")],
+		);
 		const state = useAppStore.getState();
-		expect(state.workspaces.p1?.map((row) => row.id)).toEqual(["w1", "w-pushed"]);
+		expect(state.workspaces.p1?.map((row) => row.id)).toEqual([
+			testWorkspaceId("w1"),
+			testWorkspaceId("w-pushed"),
+		]);
 		expect(state.removedWorkspaceIds["w-pushed"]).toBeUndefined();
 	});
 
 	test("ignores a reply for a project that closed meanwhile", () => {
 		useAppStore.setState({ projects: [], workspaces: { p1: [workspace("w1")] } });
-		applyWorkspaceListRefresh("p1", ["w1"], []);
+		applyWorkspaceListRefresh(testProjectId("p1"), [testWorkspaceId("w1")], []);
 		const state = useAppStore.getState();
-		expect(state.workspaces.p1?.map((row) => row.id)).toEqual(["w1"]);
+		expect(state.workspaces.p1?.map((row) => row.id)).toEqual([testWorkspaceId("w1")]);
 		expect(state.removedWorkspaceIds.w1).toBeUndefined();
 	});
 
 	test("cancels the MCP login of a retired workspace like a live removal does", () => {
-		const requests: [string, unknown][] = [];
-		const transport = {
-			request: (method: string, params: unknown) => {
-				requests.push([method, params]);
-				return Promise.resolve({ ok: true });
-			},
-		} as unknown as ReturnType<typeof wireTransport.getTransport>;
+		const requests: FakeRequest[] = [];
+		const transport = fakeTransport(() => ({ ok: true }), requests);
 		const spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
 		try {
 			const login: LoginState = {
 				loginId: "login_1",
 				providerId: "mcp",
-				target: { kind: "mcp", workspaceId: "w2", serverName: "docs" },
+				target: { kind: "mcp", workspaceId: testWorkspaceId("w2"), serverName: "docs" },
 				status: "active",
 			};
 			useAppStore.setState({
@@ -178,9 +186,15 @@ describe("the reconnect workspace list refresh", () => {
 				workspaces: { p1: [workspace("w1"), workspace("w2")] },
 				activeLogin: login,
 			});
-			applyWorkspaceListRefresh("p1", ["w1", "w2"], [workspace("w1")]);
+			applyWorkspaceListRefresh(
+				testProjectId("p1"),
+				[testWorkspaceId("w1"), testWorkspaceId("w2")],
+				[workspace("w1")],
+			);
 			expect(useAppStore.getState().activeLogin).toBeNull();
-			expect(requests).toEqual([["provider.loginCancel", { loginId: "login_1" }]]);
+			expect(requests).toEqual([
+				{ method: "provider.loginCancel", params: { loginId: "login_1" } },
+			]);
 		} finally {
 			spy.mockRestore();
 		}

@@ -125,10 +125,13 @@ const WireToolResultMessage = wireObj({
 });
 export type WireToolResultMessage = Static<typeof WireToolResultMessage>;
 
+/** A custom message's content: the text and image blocks a user message holds. */
+export const CustomMessageContent = UserContent;
+
 export const WireCustomMessage = wireObj({
 	role: lit("custom"),
 	customType: str(),
-	content: UserContent,
+	content: CustomMessageContent,
 	display: bool(),
 	details: opt(unknown()),
 	timestamp: num(),

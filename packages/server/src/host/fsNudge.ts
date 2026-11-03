@@ -1,4 +1,4 @@
-import type { WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type { ProjectId, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { diffBaseRef } from "../git";
 import { listWorkspaceRecords } from "../workspaces";
 
@@ -10,7 +10,7 @@ export function setFsNudgePublisher(publisher: FsNudgePublisher | null): void {
 	publish = publisher;
 }
 
-export function nudgeBaseRefWorkspaces(projectId: string, ref: string): void {
+export function nudgeBaseRefWorkspaces(projectId: ProjectId, ref: string): void {
 	if (!publish) return;
 	for (const ws of listWorkspaceRecords(projectId)) {
 		if (diffBaseRef(ws) === ref)

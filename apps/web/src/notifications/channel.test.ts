@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { NativeNotificationBridge, NativeNotificationInput } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { createDesktopNotificationChannel } from "./desktopNotifications";
 import type { NotificationSpec } from "./formatNotification";
 
@@ -9,7 +10,7 @@ function singleSpec(overrides: Partial<NotificationSpec> = {}): NotificationSpec
 		subtitle: "feature-branch",
 		body: "Waiting for your input",
 		tag: "attention:s1",
-		target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+		target: { kind: "chat", workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 		...overrides,
 	};
 }
@@ -69,13 +70,13 @@ describe("desktop notification channel", () => {
 	});
 
 	test("isWindowFocused falls back to document.hasFocus when bridge lacks it", () => {
-		const savedDoc = (globalThis as Record<string, unknown>).document;
-		(globalThis as Record<string, unknown>).document = { hasFocus: () => true };
+		const savedDoc = globalThis.document;
+		Reflect.set(globalThis, "document", { hasFocus: () => true });
 		try {
 			const { channel } = harness();
 			expect(channel.isWindowFocused()).toBe(true);
 		} finally {
-			(globalThis as Record<string, unknown>).document = savedDoc;
+			Reflect.set(globalThis, "document", savedDoc);
 		}
 	});
 });

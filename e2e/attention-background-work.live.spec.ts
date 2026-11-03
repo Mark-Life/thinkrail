@@ -1,21 +1,19 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { SessionState } from "@thinkrail/contracts";
+import type { SessionId, SessionState } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { activeWorktreeRow, openWorkspaceChat, setWindowFocus } from "./fixtures/app";
+import { readPush } from "./fixtures/wire";
 
 function observeStates(page: Page) {
 	const states = new Map<string, SessionState[]>();
 	page.on("websocket", (socket) => {
 		socket.on("framereceived", ({ payload }) => {
-			const frame = JSON.parse(payload.toString()) as {
-				channel?: string;
-				data?: { sessionId?: string; state?: SessionState };
-			};
-			const id = frame.data?.sessionId;
-			if (frame.channel !== "session.state" || !id || !frame.data?.state) return;
-			states.set(id, [...(states.get(id) ?? []), frame.data.state]);
+			const record = readPush(payload.toString(), "session.state");
+			if (!record) return;
+			states.set(record.sessionId, [...(states.get(record.sessionId) ?? []), record.state]);
 		});
 	});
-	return (sessionId: string) => states.get(sessionId) ?? [];
+	return (sessionId: SessionId) => states.get(sessionId) ?? [];
 }
 
 async function currentParentId(page: Page): Promise<string> {
@@ -23,7 +21,7 @@ async function currentParentId(page: Page): Promise<string> {
 	await expect(tab).toHaveAttribute("data-session-id", /.+/);
 	const sessionId = await tab.getAttribute("data-session-id");
 	if (!sessionId) throw new Error("Expected an attached parent chat");
-	return sessionId;
+	return testSessionId(sessionId);
 }
 
 const isIdleUnread = (state: SessionState) => state.execution === "idle" && state.completionUnread;
@@ -77,7 +75,7 @@ test("a running background command keeps the dot off until it finishes and the w
 			'Call background_command once with action start, name attention-hold, timeout 90, and command "sleep 20; printf HOLD_DONE". Then reply with the single word started. Do not call output or list, and do not wait for completion. When the completion arrives later, reply with the single word done.',
 		);
 	await page.getByTestId("chat-send").click();
-	const sessionId = await currentParentId(page);
+	const sessionId = testSessionId(await currentParentId(page));
 	await expectHeldThenLit(
 		page,
 		() => states(sessionId),
@@ -103,7 +101,7 @@ test("a running background subagent keeps the dot off until it finishes and the 
 			'Call the Agent tool once with subagent_type "worker", run_in_background set to true, and task "Run the bash command `sleep 25`, then reply with exactly: HOLD-MARKER". Then reply with the single word started. Do NOT call get_subagent_result — the result arrives on its own. When it arrives, reply with the single word done.',
 		);
 	await page.getByTestId("chat-send").click();
-	const sessionId = await currentParentId(page);
+	const sessionId = testSessionId(await currentParentId(page));
 	await expectHeldThenLit(
 		page,
 		() => states(sessionId),

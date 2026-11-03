@@ -1,4 +1,4 @@
-import type { ReviewSendResult } from "@thinkrail/contracts";
+import type { ReviewSendResult, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type CenterNavigationStamp,
@@ -10,7 +10,7 @@ import { errorText, getTransport } from "../transport";
 import { openChatInTab } from "./openChat";
 
 async function showReviewChat(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	sent: ReviewSendResult,
 	navigation: CenterNavigationStamp | null,
 	background = false,
@@ -32,9 +32,9 @@ async function showReviewChat(
 }
 
 export async function sendReviewComment(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	id: string,
-	chatSessionId?: string,
+	chatSessionId?: SessionId,
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	try {
@@ -51,9 +51,9 @@ export async function sendReviewComment(
 }
 
 export async function sendReviewBatch(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commentIds?: string[],
-	chatSessionId?: string,
+	chatSessionId?: SessionId,
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	try {

@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
@@ -192,7 +193,7 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 }
 
 export function useLayoutIntentProcessing(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commit: (document: WorkspaceLayoutDocument, attention?: LayoutAttention) => void,
 	changeAttention: (next: LayoutAttention) => void,
 	requestFocus: (request: LayoutTabFocusRequest) => void,

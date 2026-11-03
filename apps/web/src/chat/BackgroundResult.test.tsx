@@ -4,6 +4,7 @@ import {
 	type BackgroundCommandCompletionDetails,
 	type TranscriptMessage,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EMPTY_RUNTIME, reduceSessionEvent } from "@/store";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
@@ -11,9 +12,19 @@ import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { messagesToRuntime } from "./hydrate";
 import { deriveRows } from "./rows";
 
+const chatActions = (overrides: Partial<ChatActions>): ChatActions => ({
+	cancelAutomaticReveal: () => {},
+	focusComposer: () => {},
+	openSubagentTranscript: () => {},
+	respondToTool: async () => {},
+	resultOpener: () => undefined,
+	revealChatElement: () => {},
+	...overrides,
+});
+
 const details: BackgroundCommandCompletionDetails = {
 	id: "command",
-	sessionId: "chat",
+	sessionId: testSessionId("chat"),
 	name: "Build",
 	status: "completed",
 	startedAt: 1,
@@ -81,7 +92,7 @@ test("a command result rests as one collapsed row with its state, exit code and 
 test("a command result offers Open log only while the chat can still open it in Resources", () => {
 	const render = (resultOpener: ChatActions["resultOpener"]) =>
 		renderToStaticMarkup(
-			<ChatActionsContext.Provider value={{ resultOpener } as unknown as ChatActions}>
+			<ChatActionsContext.Provider value={chatActions({ resultOpener })}>
 				<BackgroundCommandResult id="row" details={details} />
 			</ChatActionsContext.Provider>,
 		);
@@ -97,13 +108,13 @@ test("a command result offers Open log only while the chat can still open it in 
 });
 
 test("a subagent result teases its report, offers the transcript and never renders the pi header", () => {
-	const actions = { resultOpener: () => () => {} } as unknown as ChatActions;
+	const actions = chatActions({ resultOpener: () => () => {} });
 	const html = renderToStaticMarkup(
 		<ChatActionsContext.Provider value={actions}>
 			<SubagentResult
 				id="sub"
 				details={{
-					childSessionId: "child-1",
+					childSessionId: testSessionId("child-1"),
 					roleName: "reviewer",
 					task: "review",
 					status: "completed",

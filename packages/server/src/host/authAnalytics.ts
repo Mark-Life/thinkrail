@@ -1,4 +1,4 @@
-import type { WireModel } from "@thinkrail/contracts";
+import type { SessionId, WireModel } from "@thinkrail/contracts";
 import { getSessionRuntimeGeneration, liveParentContext, type PiRuntimeGeneration } from "../agent";
 import {
 	type AnalyticsAuthMethod,
@@ -97,7 +97,7 @@ export function loginAuthMethod(
 }
 
 export function sessionProviderAnalytics(
-	sessionId: string,
+	sessionId: SessionId,
 	model?: Pick<WireModel, "provider" | "id">,
 ): ProviderAnalyticsProperties & { model: string } {
 	try {
@@ -116,7 +116,7 @@ export function sessionProviderAnalytics(
 }
 
 export function trackChatStarted(created: {
-	sessionId: string;
+	sessionId: SessionId;
 	model: Pick<WireModel, "provider" | "id"> | null;
 }): void {
 	track({

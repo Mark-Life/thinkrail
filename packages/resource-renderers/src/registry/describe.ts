@@ -1,4 +1,4 @@
-import type { GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
+import type { GitDiffScope, ResourceMeta, WorkspaceId } from "@thinkrail/contracts";
 import { canonicalWorkspacePath } from "./paths";
 import type { ResourceDescriptor } from "./types";
 
@@ -72,7 +72,7 @@ export function inferredMime(path: string): string | undefined {
 }
 
 export function describeResource(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	meta: ResourceMeta,
 	scope?: GitDiffScope,

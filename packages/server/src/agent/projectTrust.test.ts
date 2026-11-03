@@ -9,7 +9,8 @@ import {
 	ModelRuntime,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ProjectResourceKind } from "@thinkrail/contracts";
+import type { ProjectResourceKind, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	applyPiResourceTrust,
 	createSession,
@@ -109,13 +110,13 @@ function projectCwd(): string {
 	return cwd;
 }
 
-async function projectSession(): Promise<{ workspaceId: string; sessionId: string }> {
-	const workspaceId = `trust-${++sequence}`;
+async function projectSession(): Promise<{ workspaceId: WorkspaceId; sessionId: SessionId }> {
+	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
 	const { sessionId } = await createSession({ workspaceId, cwd: projectCwd() });
 	return { workspaceId, sessionId };
 }
 
-const hasNativeTemplate = (sessionId: string): boolean =>
+const hasNativeTemplate = (sessionId: SessionId): boolean =>
 	getSessionCommands(sessionId).some((command) => command.name === "native-kickoff");
 
 test("pi trusts a path by its nearest saved decision, else by defaultProjectTrust, and never through an unreadable store", () => {
@@ -203,7 +204,7 @@ test("an untrusted project's native resources stay out until a grant reaches the
 	expect(await applyPiResourceTrust([workspaceId])).toEqual({});
 
 	trustedWorkspaces.add(workspaceId);
-	expect(await applyPiResourceTrust(["some-other-workspace"])).toEqual({});
+	expect(await applyPiResourceTrust([testWorkspaceId("some-other-workspace")])).toEqual({});
 	expect(await applyPiResourceTrust([workspaceId])).toEqual({ [sessionId]: "reloaded" });
 	expect(hasNativeTemplate(sessionId)).toBe(true);
 	expect(await applyPiResourceTrust([workspaceId])).toEqual({});
@@ -238,7 +239,7 @@ test("a session whose trust changed while it was opening reloads into the new tr
 		flipPath,
 		"export default function flip(pi) { pi.on('session_start', () => { globalThis.__projectTrustFlip?.(); }); }\n",
 	);
-	const workspaceId = `trust-${++sequence}`;
+	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
 	hook.__projectTrustFlip = () => trustedWorkspaces.add(workspaceId);
 	try {
 		const { sessionId } = await createSession({ workspaceId, cwd: projectCwd() });
@@ -250,7 +251,7 @@ test("a session whose trust changed while it was opening reloads into the new tr
 });
 
 test("a child derives no more trust than its parent has loaded or the project record allows", async () => {
-	const childTrust = (sessionId: string) => liveParentContext(sessionId)?.isProjectTrusted?.();
+	const childTrust = (sessionId: SessionId) => liveParentContext(sessionId)?.isProjectTrusted?.();
 	const busy = await projectSession();
 	faux.setResponses([fauxAssistantMessage("word ".repeat(60))]);
 	const turn = promptSession(busy.sessionId, "Say many words.");
@@ -273,7 +274,7 @@ test("a revoke deferred on a busy parent keeps its project provider extension ou
 		__trustOwnerFaux?: typeof faux;
 	};
 	hook.__trustOwnerFaux = faux;
-	const workspaceId = `trust-${++sequence}`;
+	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
 	const cwd = projectCwd();
 	mkdirSync(join(cwd, ".pi", "extensions"), { recursive: true });
 	writeFileSync(

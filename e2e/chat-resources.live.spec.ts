@@ -1,6 +1,9 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 import { shot } from "./fixtures/screenshots";
+import { readPush } from "./fixtures/wire";
 
 const commandRows = '[data-testid="resource-command"]';
 const childRows = '[data-testid="resource-subagent"]';
@@ -9,17 +12,13 @@ function observeParentStarts(page: Page) {
 	const starts = new Map<string, number>();
 	page.on("websocket", (socket) => {
 		socket.on("framereceived", ({ payload }) => {
-			const frame = JSON.parse(payload.toString()) as {
-				channel?: string;
-				data?: { sessionId?: string; event?: { type?: string } };
-			};
-			const id = frame.data?.sessionId;
-			if (frame.channel === "pi.event" && id && frame.data?.event?.type === "agent_start") {
-				starts.set(id, (starts.get(id) ?? 0) + 1);
+			const push = readPush(payload.toString(), "pi.event");
+			if (push?.event.type === "agent_start") {
+				starts.set(push.sessionId, (starts.get(push.sessionId) ?? 0) + 1);
 			}
 		});
 	});
-	return (sessionId: string) => starts.get(sessionId) ?? 0;
+	return (sessionId: SessionId) => starts.get(sessionId) ?? 0;
 }
 
 async function currentParentId(page: Page): Promise<string> {
@@ -64,7 +63,7 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	await expect(
 		page.locator('[data-testid="stream-indicator"][data-phase="running-tool"]'),
 	).toHaveText("Running bash…", { timeout: 120_000 });
-	const parentId = await currentParentId(page);
+	const parentId = testSessionId(await currentParentId(page));
 	await expect(page.getByTestId("resources-dock")).toBeVisible();
 	const inspector = await openResources(page);
 	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
@@ -192,7 +191,7 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 	await expect(trigger).toHaveAttribute("data-active-count", "2", { timeout: 180_000 });
 	await expect(trigger).toHaveAccessibleName("Resources, 2 active");
 	await waitForAgentSettled(page, 120_000);
-	const parentId = await currentParentId(page);
+	const parentId = testSessionId(await currentParentId(page));
 	const turnsBeforeStop = starts(parentId);
 	expect(turnsBeforeStop).toBeGreaterThan(0);
 	const inspector = await openResources(page);

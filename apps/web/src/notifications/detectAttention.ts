@@ -1,4 +1,4 @@
-import type { SessionState } from "@thinkrail/contracts";
+import type { SessionId, SessionState, WorkspaceId } from "@thinkrail/contracts";
 import type { AttentionEvent, AttentionReason } from "./formatNotification";
 
 /** The green attention dot: a session is waiting for input or has an unread completion. */
@@ -15,8 +15,8 @@ export function attentionReason(state: SessionState): AttentionReason | null {
 }
 
 export interface AttentionCandidate {
-	sessionId: string;
-	workspaceId: string;
+	sessionId: SessionId;
+	workspaceId: WorkspaceId;
 	worktreeName: string;
 	state: SessionState;
 }

@@ -11,9 +11,37 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
+import { SessionId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const McpActiveExposure = oneOf(["deferred", "direct", "hidden"]);
+
+export const McpContentBlockSummary = union([
+	wireObj({ kind: lit("text"), chars: num() }),
+	wireObj({ kind: lit("image"), mimeType: str() }),
+	wireObj({ kind: lit("audio"), mimeType: str() }),
+	wireObj({ kind: lit("resource_link"), uri: str(), name: opt(str()), mimeType: opt(str()) }),
+	wireObj({ kind: lit("resource"), uri: str(), mimeType: opt(str()), chars: opt(num()) }),
+]);
+export type McpContentBlockSummary = Static<typeof McpContentBlockSummary>;
+
+/**
+ * Bounded, base64-free presentation summary written into a tool result's `details.thinkrail` by the
+ * host so cards render the same live, after reload, and on another client.
+ */
+export const McpResultSummary = wireObj({
+	blocks: arr(McpContentBlockSummary),
+	/** Blocks dropped from the end of `blocks` once the summary's byte budget was spent. */
+	omittedBlocks: opt(num()),
+	structuredContent: opt(unknown()),
+	structuredContentTruncated: opt(bool()),
+	isError: opt(bool()),
+});
+export type McpResultSummary = Static<typeof McpResultSummary>;
+
+/** pi's `McpToolDetails`, as it arrives in `mcp__*` and the three MCP resource tools' results. */
+export const McpToolDetails = wireObj({ server: str(), tool: str(), fullOutputPath: opt(str()) });
+export type McpToolDetails = Static<typeof McpToolDetails>;
 
 export const McpProjectOverride = wireObj({
 	enabled: opt(bool()),
@@ -108,8 +136,8 @@ export const McpServerStatus = wireObj({
 export type McpServerStatus = Static<typeof McpServerStatus>;
 
 export const McpStatusSnapshot = wireObj({
-	workspaceId: str(),
-	sessionId: str(),
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	/** Monotonic per session; a stale snapshot never overwrites a newer one. */
 	generation: num(),
 	servers: arr(McpServerStatus),
@@ -168,10 +196,10 @@ export type McpRenderedTarget = Static<typeof McpRenderedTarget>;
 const LoginStarted = wireObj({ loginId: str() });
 
 export const MCP_METHODS = {
-	"mcp.list": { params: wireObj({ workspaceId: str() }), result: McpListResult },
+	"mcp.list": { params: wireObj({ workspaceId: WorkspaceId }), result: McpListResult },
 	"mcp.add": {
 		params: wireObj({
-			workspaceId: str(),
+			workspaceId: WorkspaceId,
 			scope: McpServerScope,
 			name: str(),
 			entry: McpServerEntryInput,
@@ -180,7 +208,7 @@ export const MCP_METHODS = {
 	},
 	"mcp.update": {
 		params: wireObj({
-			workspaceId: str(),
+			workspaceId: WorkspaceId,
 			name: str(),
 			entry: McpServerEntryInput,
 			...RENDERED_TARGET_FIELDS,
@@ -188,12 +216,12 @@ export const MCP_METHODS = {
 		result: McpListResult,
 	},
 	"mcp.remove": {
-		params: wireObj({ workspaceId: str(), name: str(), ...RENDERED_TARGET_FIELDS }),
+		params: wireObj({ workspaceId: WorkspaceId, name: str(), ...RENDERED_TARGET_FIELDS }),
 		result: McpListResult,
 	},
 	"mcp.setProjectOverride": {
 		params: wireObj({
-			workspaceId: str(),
+			workspaceId: WorkspaceId,
 			name: str(),
 			enabled: opt(bool()),
 			exposure: opt(McpActiveExposure),
@@ -201,36 +229,44 @@ export const MCP_METHODS = {
 		result: McpListResult,
 	},
 	"mcp.setSessionOverride": {
-		params: wireObj({ workspaceId: str(), sessionId: str(), name: str(), enabled: bool() }),
+		params: wireObj({
+			workspaceId: WorkspaceId,
+			sessionId: SessionId,
+			name: str(),
+			enabled: bool(),
+		}),
 		result: Ack,
 	},
 	"mcp.approve": {
-		params: wireObj({ workspaceId: str(), name: str(), fingerprint: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, name: str(), fingerprint: str() }),
 		result: McpListResult,
 	},
 	"mcp.revokeToolGrant": {
-		params: wireObj({ workspaceId: str(), name: str(), tool: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, name: str(), tool: str() }),
 		result: McpListResult,
 	},
 	"mcp.shareWithRepo": {
-		params: wireObj({ workspaceId: str(), name: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, name: str() }),
 		result: McpListResult,
 	},
-	"mcp.login": { params: wireObj({ workspaceId: str(), name: str() }), result: LoginStarted },
-	"mcp.logout": { params: wireObj({ workspaceId: str(), name: str() }), result: Ack },
+	"mcp.login": { params: wireObj({ workspaceId: WorkspaceId, name: str() }), result: LoginStarted },
+	"mcp.logout": { params: wireObj({ workspaceId: WorkspaceId, name: str() }), result: Ack },
 	"mcp.testConnection": {
-		params: wireObj({ workspaceId: str(), name: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, name: str() }),
 		result: LoginStarted,
 	},
 	"mcp.reconnect": {
-		params: wireObj({ workspaceId: str(), sessionId: str(), name: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, sessionId: SessionId, name: str() }),
 		result: Ack,
 	},
 	"mcp.readOutput": {
-		params: wireObj({ workspaceId: str(), sessionId: str(), toolCallId: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, sessionId: SessionId, toolCallId: str() }),
 		result: McpReadOutputResult,
 	},
-	"mcp.readLog": { params: wireObj({ workspaceId: str(), name: str() }), result: McpServerLog },
+	"mcp.readLog": {
+		params: wireObj({ workspaceId: WorkspaceId, name: str() }),
+		result: McpServerLog,
+	},
 };
 
 export const MCP_CHANNELS = {

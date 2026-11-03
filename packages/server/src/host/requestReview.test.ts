@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { PlanReviewResult } from "@thinkrail/contracts";
-import { composeText, parseVerdict } from "./requestReview";
+import { composeText, parseVerdict } from "./reviewVerdict";
 
 const ID = "t_1";
 const TITLE = "Wire login redirect";
@@ -56,6 +56,45 @@ test("parseVerdict rejects malformed / missing / bad-verdict output", () => {
 	expect(
 		parseVerdict('{ "verdict": "approve", "findings": [ { "id": "f1" } ] }', ID, TITLE),
 	).toBeNull();
+});
+
+test("parseVerdict refuses an empty id or body, an unknown kind, and incoherent lines", () => {
+	const verdict = (finding: Record<string, unknown>) =>
+		parseVerdict(
+			JSON.stringify({
+				verdict: "request_changes",
+				findings: [{ id: "f1", body: "b", ...finding }],
+			}),
+			ID,
+			TITLE,
+		);
+	expect(verdict({ kind: "inline", path: "a.ts" })).not.toBeNull();
+	expect(verdict({ path: "a.ts", startLine: 3, endLine: 5 })).not.toBeNull();
+	for (const bad of [
+		{ id: "" },
+		{ body: "" },
+		{ kind: "nope" },
+		{ path: "a.ts", startLine: 0 },
+		{ path: "a.ts", startLine: 1.5 },
+		{ startLine: 3 },
+		{ path: "a.ts", endLine: 3 },
+		{ path: "a.ts", startLine: 5, endLine: 3 },
+	]) {
+		expect(verdict(bad)).toBeNull();
+	}
+});
+
+test("parseVerdict needs a finding for request_changes, and caps the reading order", () => {
+	expect(parseVerdict('{ "verdict": "request_changes", "findings": [] }', ID, TITLE)).toBeNull();
+	const step = { path: "a.ts", why: "w" };
+	const reading = (count: number) =>
+		parseVerdict(
+			JSON.stringify({ verdict: "approve", findings: [], readingOrder: Array(count).fill(step) }),
+			ID,
+			TITLE,
+		);
+	expect(reading(12)).not.toBeNull();
+	expect(reading(13)).toBeNull();
 });
 
 const CHANGES: PlanReviewResult = {

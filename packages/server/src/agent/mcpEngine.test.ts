@@ -9,7 +9,9 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest } from "@thinkrail/contracts";
+import { compile, obj, str } from "@earendil-works/pi-schema";
+import type { ExtUiRequest, SessionId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	applyPiResourceTrust,
 	createSession,
@@ -48,7 +50,7 @@ const model = {
 	id: "engine",
 	name: "engine",
 	reasoning: false,
-	input: ["text"] as ("text" | "image")[],
+	input: ["text"] satisfies ("text" | "image")[],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 100_000,
 	maxTokens: 4096,
@@ -170,12 +172,15 @@ afterAll(async () => {
 	rmSync(root, { recursive: true, force: true });
 });
 
+const FullOutputDetails = compile(obj({ fullOutputPath: str() }, { open: true }));
+
 function pids(): number[] {
 	if (!existsSync(pidFile)) return [];
 	return readFileSync(pidFile, "utf8").split("\n").filter(Boolean).map(Number);
 }
 
-function alive(pid: number): boolean {
+function alive(pid: number | undefined): boolean {
+	if (pid === undefined) throw new Error("missing MCP server pid");
 	try {
 		process.kill(pid, 0);
 		return true;
@@ -198,7 +203,7 @@ async function waitFor<T>(
 }
 
 async function chat() {
-	const workspaceId = `engine-${++sequence}`;
+	const workspaceId = testWorkspaceId(`engine-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,
@@ -217,7 +222,7 @@ async function toolTexts(p: Awaited<ReturnType<typeof chat>>): Promise<string[]>
 	);
 }
 
-const mcpCommands = (sessionId: string) =>
+const mcpCommands = (sessionId: SessionId) =>
 	getSessionCommands(sessionId).filter((command) => command.name === "mcp");
 
 test("a user-level server connects in a chat, its tools are callable, and a write tool asks first", async () => {
@@ -240,9 +245,9 @@ test("deleting a chat terminates its stdio server, even one that ignores EOF and
 	writeMcpConfig({ MCP_FIXTURE_STUBBORN: "1" });
 	const p = await chat();
 	const [pid] = await waitFor(() => (pids().length > 0 ? pids() : undefined));
-	expect(alive(pid as number)).toBe(true);
+	expect(alive(pid)).toBe(true);
 	await removeSession(p.sessionId);
-	await waitFor(() => !alive(pid as number), 6000);
+	await waitFor(() => !alive(pid), 6000);
 }, 15_000);
 
 test("quitting terminates the servers of every live chat", async () => {
@@ -250,7 +255,7 @@ test("quitting terminates the servers of every live chat", async () => {
 	const [pid] = await waitFor(() => (pids().length > 0 ? pids() : undefined));
 	await settleSessionsForShutdown();
 	disposeAllSessions();
-	await waitFor(() => !alive(pid as number), 6000);
+	await waitFor(() => !alive(pid), 6000);
 });
 
 const SHUTDOWN_DEADLINE_MS = 3500;
@@ -263,7 +268,7 @@ test("deleting a chat stops pi's MCP servers within the budget even when another
 	const [pid] = await waitFor(() => (pids().length > 0 ? pids() : undefined));
 	const started = Date.now();
 	await removeSession(p.sessionId);
-	await waitFor(() => !alive(pid as number), untilDeadline(started));
+	await waitFor(() => !alive(pid), untilDeadline(started));
 }, 15_000);
 
 test("quitting stops pi's MCP servers within the budget even when another extension's shutdown never settles", async () => {
@@ -274,7 +279,7 @@ test("quitting stops pi's MCP servers within the budget even when another extens
 	const started = Date.now();
 	await settleSessionsForShutdown();
 	disposeAllSessions();
-	await waitFor(() => !alive(pid as number), untilDeadline(started));
+	await waitFor(() => !alive(pid), untilDeadline(started));
 }, 15_000);
 
 test("a reload finishes stubborn MCP cleanup before the replacement process starts", async () => {
@@ -309,8 +314,8 @@ test("a reload finishes stubborn MCP cleanup before the replacement process star
 		await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 		expect(probeStarts()).toEqual(["old-dead"]);
 		expect(pids()).toHaveLength(2);
-		expect(alive(oldPid as number)).toBe(false);
-		expect(alive(pids()[1] as number)).toBe(true);
+		expect(alive(oldPid)).toBe(false);
+		expect(alive(pids()[1])).toBe(true);
 	} finally {
 		await removeSession(p.sessionId);
 	}
@@ -332,7 +337,7 @@ test("runner-emitted shutdown joins the captured MCP cleanup instead of observin
 		const [pid] = pids();
 		const closing = removeSession(p.sessionId);
 		await runner.emit({ type: "session_shutdown", reason: "quit" });
-		expect(alive(pid as number)).toBe(false);
+		expect(alive(pid)).toBe(false);
 		await closing;
 	} finally {
 		AgentSession.prototype.bindExtensions = originalBind;
@@ -375,7 +380,7 @@ for (const reason of ["resource", "trust"] as const) {
 			);
 			await waitFor(() => probeStarts().includes("reload"));
 			await expect(promptSession(p.sessionId, "Stay quiescent.")).rejects.toThrow(/reloading/);
-			await waitFor(() => !alive(pid as number), untilDeadline(started));
+			await waitFor(() => !alive(pid), untilDeadline(started));
 			expect(settled).toBe(false);
 			expect(pids()).toHaveLength(1);
 		} finally {
@@ -585,7 +590,7 @@ test("a chat whose preparation fails after pi started its servers still stops th
 		const started = Date.now();
 		releaseRegistration();
 		expect(await failed).toContain("Workspace is unavailable");
-		await waitFor(() => !alive(pid as number), untilDeadline(started));
+		await waitFor(() => !alive(pid), untilDeadline(started));
 	} finally {
 		releaseRegistration();
 		AgentSession.prototype.bindExtensions = originalBind;
@@ -606,7 +611,7 @@ test("pi settings that turn builtin:mcp off make MCP read-only with no chat open
 	const elsewhere = async (trusted: boolean) =>
 		(
 			await listMcpServers({
-				workspaceId: "engine-idle",
+				workspaceId: testWorkspaceId("engine-idle"),
 				cwd,
 				project: trusted ? { piResourceTrust: "granted" } : undefined,
 				waitMs: 0,
@@ -757,7 +762,7 @@ test("disabling a server in one chat stops it at the reload and reads as disable
 	const p = await chat();
 	const [pid] = await waitFor(() => (pids().length > 0 ? pids() : undefined));
 	expect(await setSessionMcpServerEnabled(p.sessionId, "fixture", false)).toBe("reloaded");
-	await waitFor(() => !alive(pid as number), 6000);
+	await waitFor(() => !alive(pid), 6000);
 	const snapshot = await refreshMcpStatus(p.sessionId, 5000);
 	expect(snapshot?.servers.find((server) => server.name === "fixture")?.state).toBe(
 		"disabled-in-chat",
@@ -825,7 +830,7 @@ test("a server that fails at startup lands in status; only clients without mcp.s
 });
 
 const second = { command: process.execPath, args: [fixture], exposure: "direct" };
-const stateOf = async (sessionId: string, name: string) =>
+const stateOf = async (sessionId: SessionId, name: string) =>
 	(await refreshMcpStatus(sessionId, 5000))?.servers.find((server) => server.name === name)?.state;
 
 test("only sessions whose effective config changed reload, and the chat resources list the servers", async () => {
@@ -1006,7 +1011,7 @@ test("results carry a durable, base64-free summary, and Full output reads only t
 		messages.find((message) => message.role === "toolResult" && message.toolCallId === toolCallId);
 	const rich = resultOf("rich");
 	if (rich?.role !== "toolResult") throw new Error("missing rich result");
-	expect((rich.details as { thinkrail?: unknown }).thinkrail).toEqual({
+	expect(rich.details).toHaveProperty("thinkrail", {
 		blocks: [
 			{ kind: "text", chars: 11 },
 			{ kind: "image", mimeType: "image/png" },
@@ -1018,8 +1023,10 @@ test("results carry a durable, base64-free summary, and Full output reads only t
 
 	const big = resultOf("big");
 	if (big?.role !== "toolResult") throw new Error("missing big result");
-	const fullOutputPath = (big.details as { fullOutputPath?: string }).fullOutputPath;
-	expect(typeof fullOutputPath).toBe("string");
+	const fullOutputPath = FullOutputDetails.check(big.details)
+		? big.details.fullOutputPath
+		: undefined;
+	if (fullOutputPath === undefined) throw new Error("missing full output path");
 	const output = await readMcpToolOutput(p.workspaceId, p.sessionId, "big", p.cwd);
 	expect(output.available && output.text.length).toBe("line of output\n".length * 20_000);
 	expect(await readMcpToolOutput(p.workspaceId, p.sessionId, "rich", p.cwd)).toEqual({
@@ -1030,7 +1037,7 @@ test("results carry a durable, base64-free summary, and Full output reads only t
 		available: false,
 		reason: "unavailable",
 	});
-	rmSync(fullOutputPath as string, { force: true });
+	rmSync(fullOutputPath, { force: true });
 	expect(await readMcpToolOutput(p.workspaceId, p.sessionId, "big", p.cwd)).toEqual({
 		available: false,
 		reason: "expired",

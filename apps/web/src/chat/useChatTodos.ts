@@ -1,4 +1,4 @@
-import type { PiEvent, TodoPlan } from "@thinkrail/contracts";
+import type { PiEvent, SessionId, TodoPlan, WorkspaceId } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { t as translate } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
@@ -61,7 +61,7 @@ export function planIsCompleteWithoutSummary(
 	return items.length > 0 && items.every((todo) => todo.status === "done");
 }
 
-export function useAutoPlanSummary(workspaceId: string, sessionId: string): void {
+export function useAutoPlanSummary(workspaceId: WorkspaceId, sessionId: SessionId): void {
 	const triedRef = useRef(false);
 	const identity = tupleKey("chat-todos", workspaceId, sessionId);
 	useEffect(() => {
@@ -111,7 +111,7 @@ export interface ChatTodos {
 	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
 }
 
-export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos {
+export function useChatTodos(workspaceId: WorkspaceId, sessionId: SessionId): ChatTodos {
 	const [data, setData] = useState<TodoPlan | null>(null);
 	const [failed, setFailed] = useState(false);
 	const status = useAppStore((state) => state.status);
@@ -344,7 +344,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 
 const runtimeHydration = new Map<string, Promise<void>>();
 
-export function hydrateSessionRuntime(workspaceId: string, sessionId: string): Promise<void> {
+export function hydrateSessionRuntime(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+): Promise<void> {
 	const state = useAppStore.getState();
 	if (
 		state.sessions[sessionId] ||
@@ -380,7 +383,11 @@ export function hydrateSessionRuntime(workspaceId: string, sessionId: string): P
 	return request;
 }
 
-async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
+async function nudgeAgent(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+	title: string,
+): Promise<void> {
 	const state = useAppStore.getState();
 	if (
 		state.removedWorkspaceIds[workspaceId] ||
@@ -401,8 +408,8 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 }
 
 async function legacyNudgeAgent(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	text: string,
 ): Promise<void> {
 	const initial = useAppStore.getState();

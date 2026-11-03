@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	type BranchStatus,
@@ -17,7 +18,7 @@ import {
 } from "./branchStatusState";
 import { createSingleFlight } from "./singleFlight";
 
-type BranchStatusRequestParams = { workspaceId: string; allowCached?: true; skipFetch?: true };
+type BranchStatusRequestParams = { workspaceId: WorkspaceId; allowCached?: true; skipFetch?: true };
 
 export const CI_POLL_INTERVAL_MS = 20_000;
 type BranchStatusRequest = (params: BranchStatusRequestParams) => Promise<BranchAnswer>;
@@ -31,7 +32,7 @@ export interface BranchStatusHookState {
 }
 
 function requestBranchStatus(options: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	key: string;
 	allowCached: boolean;
 	skipFetch?: boolean;
@@ -56,7 +57,7 @@ function requestBranchStatus(options: {
 }
 
 export function startBranchStatusSync(options: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	key: string;
 	request: BranchStatusRequest;
 	state: BranchStatusStateStore;
@@ -110,17 +111,17 @@ export function startBranchStatusSync(options: {
 	return { setConnected, refresh, reload, poll, stop };
 }
 
+type IntervalHandle = ReturnType<typeof setInterval> | number;
+
 export function startCiPoll(options: {
 	poll: () => void;
 	visible: () => boolean;
 	intervalMs?: number;
-	setInterval?: (run: () => void, ms: number) => unknown;
-	clearInterval?: (handle: unknown) => void;
+	setInterval?: (run: () => void, ms: number) => IntervalHandle;
+	clearInterval?: (handle: IntervalHandle) => void;
 }): () => void {
 	const every = options.setInterval ?? ((run, ms) => globalThis.setInterval(run, ms));
-	const clear =
-		options.clearInterval ??
-		((handle) => globalThis.clearInterval(handle as ReturnType<typeof setInterval>));
+	const clear = options.clearInterval ?? ((handle) => globalThis.clearInterval(handle));
 	const handle = every(() => {
 		if (options.visible()) options.poll();
 	}, options.intervalMs ?? CI_POLL_INTERVAL_MS);

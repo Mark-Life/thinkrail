@@ -21,7 +21,7 @@ that map.
 
 - **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
   types, the `*_METHODS` and `*_CHANNELS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`, `WS_CHANNEL_SCHEMAS`,
-  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `AnyHostWelcome`. From `wire.ts` only `Ack`: `wireObj`,
+  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `WsRequestFrame`, `WsAck`, `WsResume`, `AnyHostWelcome`, the id brands with their `as*` helpers. From `wire.ts` only `Ack`: `wireObj`,
   `partialWireObj`, `readonlyArr`, `NoParams` and `NoPayload` stay inside this directory. Schema values stay
   public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they ship in web JS.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
@@ -83,6 +83,13 @@ that map.
   shapes, so each entry is typed `Record<string, unknown>`. The client parses each project, `hostPlatform`, `hostUpdate` and
   `speech` against its schema, and the config field by field against `PartialAppConfig`, and drops and reports what fails. `ServerWelcome`
   must stay assignable to it. The test harness still checks `ServerWelcome`.
+- **Ids are branded.** `ProjectId`, `WorkspaceId` and `SessionId` in `ids.ts` are strings at run time, so the wire and the
+  stored files do not change. A wire field uses the one for its entity, so a call site cannot swap them. Each type has one
+  `as*` helper to mint it where a string enters from outside the schemas: a pi session, a new UUID, a file name, a route,
+  or a record key. Tests make an id from any string with `testProjectId`,
+  `testWorkspaceId` or `testSessionId` from `@thinkrail/contracts/test-ids`. `check:boundaries` refuses that entry outside
+  test sources, and refuses a relative import of `ids.ts` from another module. Nothing else casts to a brand.
+  `DelegationRunDetails.childSessionId` stays a `string`: it mirrors the `pi-delegation` type, and a test pins the two.
 - **A reply is a union on `ok`.** A failure always carries `error`. Its `errorCode` is any string: a newer host may send a
   code this client has no name for. `WS_ERROR_CODES` lists the names, and the client reads a code outside it as no code.
   `INVALID_REPLY` is never sent: the client mints it.

@@ -13,7 +13,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import type { ChangeReceipt, GitDiffScope, LineSpan, RevertTarget } from "@thinkrail/contracts";
+import type {
+	ChangeReceipt,
+	GitDiffScope,
+	LineSpan,
+	RevertTarget,
+	WorkspaceId,
+} from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { hashBytes } from "../fs";
 import { setTrashImplementationForTests } from "../trash";
 import { forgetWorkspaceChanges, retainReceipts, revertChange, undoChange } from "./changes";
@@ -24,7 +31,7 @@ const UNCOMMITTED: GitDiffScope = { kind: "uncommitted" };
 
 let dataDir: string;
 let repo: string;
-let workspaceId: string;
+let workspaceId: WorkspaceId;
 let trashed: string[];
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 let nextWorkspace = 0;
@@ -109,13 +116,13 @@ beforeEach(() => {
 	git("config", "core.autocrlf", "false");
 	write("a.ts", "one\ntwo\nthree\n");
 	commitAll("init");
-	workspaceId = `w${++nextWorkspace}`;
+	workspaceId = testWorkspaceId(`w${++nextWorkspace}`);
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
 				id: workspaceId,
-				projectId: "p1",
+				projectId: testProjectId("p1"),
 				name: workspaceId,
 				branch: "main",
 				worktreePath: repo,
@@ -495,8 +502,8 @@ test("a failed revert trash preserves its claim without overwriting a concurrent
 
 	expect(text("failed-race.txt")).toBe("agent recreation\n");
 	expect(readFileSync(recovery, "utf8")).toBe("claimed bytes\n");
-	expect(failure).toBeInstanceOf(Error);
-	expect((failure as Error).message).toContain(recovery);
+	if (!(failure instanceof Error)) throw new Error("the undo did not fail with an Error");
+	expect(failure.message).toContain(recovery);
 });
 
 test("a failed undo trash preserves its claim without overwriting a concurrent recreation", async () => {
@@ -537,8 +544,8 @@ test("a failed undo trash preserves its claim without overwriting a concurrent r
 
 	expect(text("a.ts")).toBe("agent recreation\n");
 	expect(readFileSync(recovery, "utf8")).toBe("one\ntwo\nthree\n");
-	expect(failure).toBeInstanceOf(Error);
-	expect((failure as Error).message).toContain(recovery);
+	if (!(failure instanceof Error)) throw new Error("the undo did not fail with an Error");
+	expect(failure.message).toContain(recovery);
 });
 
 test("a byte-only side refuses a range revert and keeps the file untouched", async () => {
@@ -811,8 +818,9 @@ test("the receipt ring keeps the newest 20 per workspace", async () => {
 			}),
 		);
 	}
-	const oldest = receipts[0] as ChangeReceipt;
-	const newest = receipts[20] as ChangeReceipt;
+	const oldest = receipts[0];
+	const newest = receipts[20];
+	if (!oldest || !newest) throw new Error("missing receipts");
 	await expect(
 		undoChange({
 			workspaceId,

@@ -8,6 +8,7 @@ import {
 	RiLoader4Line,
 	RiStopFill,
 } from "@remixicon/react";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	type BackgroundCommandSummary,
 	type McpServerResourceSummary,
@@ -71,7 +72,7 @@ export interface ResourcesInspectorProps {
 	onSelect: (resourceId: string) => void;
 	onRetry: () => void;
 	onStopCommand: (commandId: string) => void;
-	onStopSubagent: (childSessionId: string) => void;
+	onStopSubagent: (childSessionId: SessionId) => void;
 	onStopAll: () => void;
 	/** The selected row's body: bounded command output or the read-only subagent transcript. */
 	detail: ReactNode;

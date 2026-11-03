@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
 	countPushDivergence,
@@ -107,8 +108,8 @@ function seedWorkspace(extra: Partial<Workspace> = {}): void {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: "w1",
-				projectId: "p1",
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				worktreePath: repo,
@@ -132,21 +133,21 @@ function commitOnFeature(file: string, content: string, message: string): string
 test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "README.md"), "# repo\n\nedited\n");
-	const { original, modified, originalOid } = await gitDiffFile("w1", "README.md");
+	const { original, modified, originalOid } = await gitDiffFile(testWorkspaceId("w1"), "README.md");
 	expect(original).toBe("# repo\n");
 	expect(modified).toBe("# repo\n\nedited\n");
-	expect(originalOid).toBe(gitHeadSha("w1"));
+	expect(originalOid).toBe(gitHeadSha(testWorkspaceId("w1")));
 });
 
 test("gitDiffFile: untracked → empty original; deleted → empty modified", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "new.txt"), "fresh\n");
-	const added = await gitDiffFile("w1", "new.txt");
+	const added = await gitDiffFile(testWorkspaceId("w1"), "new.txt");
 	expect(added.original).toBe("");
 	expect(added.modified).toBe("fresh\n");
 
 	rmSync(join(repo, "README.md"));
-	const deleted = await gitDiffFile("w1", "README.md");
+	const deleted = await gitDiffFile(testWorkspaceId("w1"), "README.md");
 	expect(deleted.original).toBe("# repo\n");
 	expect(deleted.modified).toBe("");
 });
@@ -159,8 +160,8 @@ test("git paths preserve legal leading and trailing filename whitespace", async 
 	writeFileSync(join(repo, " tracked "), "after\n");
 	writeFileSync(join(repo, " untracked "), "new\n");
 
-	expect(gitUncommittedPaths("w1")).toEqual([" tracked ", " untracked "]);
-	const changes = (await gitStatus("w1", { kind: "uncommitted" })).changes;
+	expect(gitUncommittedPaths(testWorkspaceId("w1"))).toEqual([" tracked ", " untracked "]);
+	const changes = (await gitStatus(testWorkspaceId("w1"), { kind: "uncommitted" })).changes;
 	expect(changes.map((row) => row.path)).toEqual([" tracked ", " untracked "]);
 	expect(changes.find((row) => row.path === " tracked ")).toMatchObject({ added: 1, removed: 1 });
 });
@@ -180,7 +181,7 @@ posix("gitUncommittedPaths gives its whole-tree reads the slow budget, not the 1
 	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
 	setSyncGitTimeoutForTests(300);
 	try {
-		expect(gitUncommittedPaths("w1")).toEqual(["README.md", "new.txt"]);
+		expect(gitUncommittedPaths(testWorkspaceId("w1"))).toEqual(["README.md", "new.txt"]);
 	} finally {
 		setSyncGitTimeoutForTests(undefined);
 	}
@@ -194,8 +195,8 @@ test("git numstat preserves tabs and newlines in a literal path", async () => {
 	git(repo, "commit", "-m", "unusual path");
 	writeFileSync(join(repo, path), "before\nafter\n");
 
-	expect(gitUncommittedPaths("w1")).toEqual([path]);
-	expect((await gitStatus("w1", { kind: "uncommitted" })).changes).toEqual([
+	expect(gitUncommittedPaths(testWorkspaceId("w1"))).toEqual([path]);
+	expect((await gitStatus(testWorkspaceId("w1"), { kind: "uncommitted" })).changes).toEqual([
 		{ path, status: "modified", added: 1, removed: 0 },
 	]);
 });
@@ -205,7 +206,7 @@ test("gitStatus attaches per-file +/- counts, incl. untracked line counts", asyn
 	writeFileSync(join(repo, "README.md"), "# repo\nline two\nline three\n");
 	writeFileSync(join(repo, "new.txt"), "a\nb\n");
 
-	const { changes } = await gitStatus("w1");
+	const { changes } = await gitStatus(testWorkspaceId("w1"));
 	const readme = changes.find((c) => c.path === "README.md");
 	expect(readme).toMatchObject({ status: "modified", added: 2, removed: 0 });
 	const untracked = changes.find((c) => c.path === "new.txt");
@@ -223,7 +224,7 @@ test("gitStatus stops counting untracked lines once the read budget is spent", a
 	}
 	writeFileSync(join(repo, "z.txt"), `${"x".repeat(1_023)}\n`.repeat(maxFileBytes / 1_024));
 
-	const { changes } = await gitStatus("w1");
+	const { changes } = await gitStatus(testWorkspaceId("w1"));
 	expect(changes.find((c) => c.path === "a.txt")?.added).toBe(2);
 	const last = changes.find((c) => c.path === "z.txt");
 	expect(last).toMatchObject({ status: "untracked" });
@@ -237,7 +238,7 @@ test("gitStatus uses ResourceMeta text classification for untracked counts", asy
 	writeFileSync(join(repo, "big.txt"), `${"x".repeat(2 * 1024 * 1024 + 1)}\n`);
 	writeFileSync(join(repo, "small.txt"), "one\ntwo\n");
 
-	const { changes } = await gitStatus("w1");
+	const { changes } = await gitStatus(testWorkspaceId("w1"));
 	const bin = changes.find((c) => c.path === "blob.bin");
 	expect(bin).toMatchObject({ status: "untracked" });
 	expect(bin?.added).toBeUndefined();
@@ -245,7 +246,7 @@ test("gitStatus uses ResourceMeta text classification for untracked counts", asy
 	expect(changes.find((c) => c.path === "big.txt")?.added).toBeUndefined();
 	expect(changes.find((c) => c.path === "small.txt")).toMatchObject({ added: 2 });
 
-	const invalid = await gitDiffFile("w1", "invalid.txt", { kind: "uncommitted" });
+	const invalid = await gitDiffFile(testWorkspaceId("w1"), "invalid.txt", { kind: "uncommitted" });
 	expect(invalid.meta.modified.text).toBe(false);
 	expect(invalid.modified).toBe("");
 });
@@ -258,7 +259,7 @@ test("gitDiffFile stamps both sides with their byte identity and never decodes a
 	git(repo, "commit", "-m", "add image");
 	writeFileSync(join(repo, "shot.png"), new Uint8Array([...png, 0x02]));
 
-	const image = await gitDiffFile("w1", "shot.png", { kind: "uncommitted" });
+	const image = await gitDiffFile(testWorkspaceId("w1"), "shot.png", { kind: "uncommitted" });
 	expect(image.original).toBe("");
 	expect(image.modified).toBe("");
 	expect(image.meta.original).toMatchObject({ text: false, mime: "image/png", byteLength: 10 });
@@ -266,7 +267,7 @@ test("gitDiffFile stamps both sides with their byte identity and never decodes a
 	expect(image.meta.original.hash).not.toBe(image.meta.modified.hash);
 
 	writeFileSync(join(repo, "notes.md"), "# notes\n");
-	const added = await gitDiffFile("w1", "notes.md", { kind: "uncommitted" });
+	const added = await gitDiffFile(testWorkspaceId("w1"), "notes.md", { kind: "uncommitted" });
 	expect(added.modified).toBe("# notes\n");
 	expect(added.meta.original).toEqual({ hash: null, byteLength: null, text: true });
 	expect(added.meta.modified).toMatchObject({ text: true, mime: "text/markdown", byteLength: 8 });
@@ -274,12 +275,14 @@ test("gitDiffFile stamps both sides with their byte identity and never decodes a
 
 test("gitDiffFile refuses a path escaping the worktree", async () => {
 	seedWorkspace();
-	await expect(gitDiffFile("w1", "../outside.txt")).rejects.toThrow("Path escapes the worktree");
+	await expect(gitDiffFile(testWorkspaceId("w1"), "../outside.txt")).rejects.toThrow(
+		"Path escapes the worktree",
+	);
 });
 
 test("listBranches with no remote returns local branches and falls back to the repo HEAD", async () => {
 	git(repo, "branch", "feature/x");
-	const { local, remote, defaultBranch } = await listBranches("p1");
+	const { local, remote, defaultBranch } = await listBranches(testProjectId("p1"));
 	expect(local.sort()).toEqual(["feature/x", "main"]);
 	expect(remote).toEqual([]);
 	expect(defaultBranch).toBe("main");
@@ -302,7 +305,7 @@ test("listBranches surfaces origin branches and the origin default", async () =>
 	git(repo, "push", "origin", "main");
 	git(repo, "remote", "set-head", "origin", "main");
 
-	const { remote, defaultBranch } = await listBranches("p1");
+	const { remote, defaultBranch } = await listBranches(testProjectId("p1"));
 	expect(remote).toContain("origin/main");
 	expect(remote).not.toContain("origin/HEAD");
 	expect(remote).not.toContain("origin");
@@ -317,7 +320,7 @@ test("the origin/main default survives a local branch with the same shorthand", 
 	git(repo, "update-ref", "--no-deref", "-d", "refs/remotes/origin/HEAD");
 	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
 
-	const branches = await listBranches("p1");
+	const branches = await listBranches(testProjectId("p1"));
 	expect(branches.remote).toContain("origin/main");
 	expect(branches.defaultBranch).toBe("origin/main");
 });
@@ -338,7 +341,7 @@ function addSecondRemote(): void {
 test("listBranches lists every remote's branches, each remote's HEAD symref dropped", async () => {
 	addSecondRemote();
 
-	const { remote, remoteGroups } = await listBranches("p1");
+	const { remote, remoteGroups } = await listBranches(testProjectId("p1"));
 	expect(remote).toContain("origin/main");
 	expect(remote).toContain("upstream/trunk");
 	expect(remote).not.toContain("upstream/HEAD");
@@ -352,10 +355,10 @@ test("listBranches lists every remote's branches, each remote's HEAD symref drop
 test("another remote's HEAD is the default when origin has none, over the origin/main guess", async () => {
 	addSecondRemote();
 
-	expect((await listBranches("p1")).defaultBranch).toBe("upstream/trunk");
+	expect((await listBranches(testProjectId("p1"))).defaultBranch).toBe("upstream/trunk");
 
 	git(repo, "remote", "set-head", "origin", "main");
-	expect((await listBranches("p1")).defaultBranch).toBe("origin/main");
+	expect((await listBranches(testProjectId("p1"))).defaultBranch).toBe("origin/main");
 });
 
 test("only a remote HEAD symref can become the non-origin default", async () => {
@@ -363,7 +366,7 @@ test("only a remote HEAD symref can become the non-origin default", async () => 
 	git(repo, "update-ref", "refs/remotes/aaa/topic", "HEAD");
 	git(repo, "symbolic-ref", "refs/remotes/aaa/alias", "refs/remotes/aaa/topic");
 
-	expect((await listBranches("p1")).defaultBranch).toBe("upstream/trunk");
+	expect((await listBranches(testProjectId("p1"))).defaultBranch).toBe("upstream/trunk");
 });
 
 test("a remote HEAD still answers once its target is gone, so create can report the failed fetch", async () => {
@@ -371,17 +374,23 @@ test("a remote HEAD still answers once its target is gone, so create can report 
 	git(repo, "remote", "set-head", "origin", "main");
 	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
 
-	expect((await listBranches("p1")).defaultBranch).toBe("origin/main");
+	expect((await listBranches(testProjectId("p1"))).defaultBranch).toBe("origin/main");
 });
 
 test("prefetch fetches from the remote the ref names, and refuses a remote-shaped local branch", async () => {
 	addSecondRemote();
 
 	git(repo, "update-ref", "-d", "refs/remotes/upstream/trunk");
-	expect(await prefetchBranch("p1", "upstream/trunk")).toEqual({ ok: true, moved: true });
+	expect(await prefetchBranch(testProjectId("p1"), "upstream/trunk")).toEqual({
+		ok: true,
+		moved: true,
+	});
 
 	git(repo, "branch", "upstairs/trunk");
-	expect(await prefetchBranch("p1", "upstairs/trunk")).toEqual({ ok: false, moved: false });
+	expect(await prefetchBranch(testProjectId("p1"), "upstairs/trunk")).toEqual({
+		ok: false,
+		moved: false,
+	});
 });
 
 test("prefetch honors a legal remote name containing a slash", async () => {
@@ -391,11 +400,11 @@ test("prefetch honors a legal remote name containing a slash", async () => {
 	git(repo, "push", "team/upstream", "main:trunk");
 	git(repo, "update-ref", "-d", "refs/remotes/team/upstream/trunk");
 
-	expect(await prefetchBranch("p1", "team/upstream/trunk")).toEqual({
+	expect(await prefetchBranch(testProjectId("p1"), "team/upstream/trunk")).toEqual({
 		ok: true,
 		moved: true,
 	});
-	expect((await listBranches("p1")).remoteGroups).toEqual([
+	expect((await listBranches(testProjectId("p1"))).remoteGroups).toEqual([
 		{
 			remote: "team/upstream",
 			branches: [{ ref: "team/upstream/trunk", branch: "trunk" }],
@@ -404,19 +413,19 @@ test("prefetch honors a legal remote name containing a slash", async () => {
 });
 
 test("listBranches throws on an unknown project", async () => {
-	await expect(listBranches("nope")).rejects.toThrow(/Unknown project/);
+	await expect(listBranches(testProjectId("nope"))).rejects.toThrow(/Unknown project/);
 });
 
 test("listBranches never returns a partial catalog when either ref read fails", async () => {
 	failGitSubcommand("for-each-ref");
 
-	await expect(listBranches("p1")).rejects.toThrow(/Could not list local branches/);
+	await expect(listBranches(testProjectId("p1"))).rejects.toThrow(/Could not list local branches/);
 });
 
 test("listBranches fails rather than inventing remote ownership", async () => {
 	failGitSubcommand("remote");
 
-	await expect(listBranches("p1")).rejects.toThrow(/Could not list remotes/);
+	await expect(listBranches(testProjectId("p1"))).rejects.toThrow(/Could not list remotes/);
 });
 
 test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown project", async () => {
@@ -443,20 +452,32 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	const remoteTip = gitOut(remoteRepo, "rev-parse", "main");
 	expect(gitOut(repo, "rev-parse", "origin/main")).not.toBe(remoteTip);
 
-	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
+	expect(await prefetchBranch(testProjectId("p1"), "origin/main")).toEqual({
+		ok: true,
+		moved: true,
+	});
 	expect(gitOut(repo, "rev-parse", "origin/main")).toBe(remoteTip);
 
-	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: false });
+	expect(await prefetchBranch(testProjectId("p1"), "origin/main")).toEqual({
+		ok: true,
+		moved: false,
+	});
 
 	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
-	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
+	expect(await prefetchBranch(testProjectId("p1"), "origin/main")).toEqual({
+		ok: true,
+		moved: true,
+	});
 
 	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
 	writeFileSync(join(clone, "remote-only-2.txt"), "more\n");
 	git(clone, "add", "-A");
 	git(clone, "commit", "-m", "remote-only-2");
 	git(clone, "push", "origin", "main");
-	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
+	expect(await prefetchBranch(testProjectId("p1"), "origin/main")).toEqual({
+		ok: true,
+		moved: true,
+	});
 	git(repo, "update-ref", "-d", "refs/heads/origin/main");
 
 	writeFileSync(join(clone, "remote-only-3.txt"), "even more\n");
@@ -464,10 +485,16 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	git(clone, "commit", "-m", "remote-only-3");
 	git(clone, "push", "origin", "main");
 	installGitWrapper("fetch", true);
-	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: false, moved: true });
+	expect(await prefetchBranch(testProjectId("p1"), "origin/main")).toEqual({
+		ok: false,
+		moved: true,
+	});
 
-	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false, moved: false });
-	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false, moved: false });
+	expect(await prefetchBranch(testProjectId("p1"), "main")).toEqual({ ok: false, moved: false });
+	expect(await prefetchBranch(testProjectId("nope"), "origin/main")).toEqual({
+		ok: false,
+		moved: false,
+	});
 });
 
 test("prefetchBranch refuses a ref git would read as a refspec", async () => {
@@ -482,7 +509,7 @@ test("prefetchBranch refuses a ref git would read as a refspec", async () => {
 		"origin/main~1",
 		"origin/../../etc/passwd",
 	]) {
-		expect(await prefetchBranch("p1", ref)).toEqual({ ok: false, moved: false });
+		expect(await prefetchBranch(testProjectId("p1"), ref)).toEqual({ ok: false, moved: false });
 	}
 	expect(existsSync(join(repo, ".git", "refs", "heads", "victim"))).toBe(false);
 	expect(existsSync(join(repo, ".git", "refs", "heads", "attacker-created"))).toBe(false);
@@ -493,8 +520,8 @@ test("gitStatus reads the Default workspace's branch live, not the persisted sna
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: "w-default",
-				projectId: "p1",
+				id: testWorkspaceId("w-default"),
+				projectId: testProjectId("p1"),
 				kind: "default",
 				name: "Default",
 				branch: "main",
@@ -505,7 +532,7 @@ test("gitStatus reads the Default workspace's branch live, not the persisted sna
 		]),
 	);
 	git(repo, "switch", "-c", "feature/live");
-	expect(await (await gitStatus("w-default")).branch).toBe("feature/live");
+	expect(await (await gitStatus(testWorkspaceId("w-default"))).branch).toBe("feature/live");
 });
 
 test("gitStatus reads an external workspace's branch live, not the persisted snapshot", async () => {
@@ -513,8 +540,8 @@ test("gitStatus reads an external workspace's branch live, not the persisted sna
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: "w-external",
-				projectId: "p1",
+				id: testWorkspaceId("w-external"),
+				projectId: testProjectId("p1"),
 				kind: "external",
 				name: "existing checkout",
 				branch: "main",
@@ -525,7 +552,9 @@ test("gitStatus reads an external workspace's branch live, not the persisted sna
 		]),
 	);
 	git(repo, "switch", "-c", "feature/external-live");
-	expect(await (await gitStatus("w-external")).branch).toBe("feature/external-live");
+	expect(await (await gitStatus(testWorkspaceId("w-external"))).branch).toBe(
+		"feature/external-live",
+	);
 });
 
 test("diffBaseRef resolves the re-pointed diff target over the creation base", async () => {
@@ -630,9 +659,10 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 	});
 	expect(new TextDecoder().decode(listed.stdout)).toContain("README.md");
 	seedWorkspace();
-	expect((await gitDiffFile("w1", "README.md", { kind: "commit", sha: root })).originalOid).toBe(
-		null,
-	);
+	expect(
+		(await gitDiffFile(testWorkspaceId("w1"), "README.md", { kind: "commit", sha: root }))
+			.originalOid,
+	).toBe(null);
 });
 
 test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", async () => {
@@ -654,10 +684,12 @@ test("gitStatus scopes: branch spans the base range, uncommitted only the dirty 
 	seedWorkspace({ branch: "feature" });
 	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
 
-	const branchPaths = (await gitStatus("w1")).changes.map((c) => c.path);
+	const branchPaths = (await gitStatus(testWorkspaceId("w1"))).changes.map((c) => c.path);
 	expect(branchPaths).toEqual(["committed.txt", "dirty.txt"]);
 
-	const uncommitted = (await gitStatus("w1", { kind: "uncommitted" })).changes.map((c) => c.path);
+	const uncommitted = (await gitStatus(testWorkspaceId("w1"), { kind: "uncommitted" })).changes.map(
+		(c) => c.path,
+	);
 	expect(uncommitted).toEqual(["dirty.txt"]);
 });
 
@@ -671,9 +703,13 @@ test("branch scope measures from the merge-base: upstream commits on the base ar
 	git(repo, "switch", "feature");
 	seedWorkspace({ branch: "feature" });
 
-	expect(await (await gitStatus("w1")).changes.map((c) => c.path)).toEqual(["feature.txt"]);
-	expect(await (await listCommits("w1")).commits.map((c) => c.subject)).toEqual(["feature work"]);
-	expect(await gitDiffFile("w1", "feature.txt")).toMatchObject({
+	expect(await (await gitStatus(testWorkspaceId("w1"))).changes.map((c) => c.path)).toEqual([
+		"feature.txt",
+	]);
+	expect(await (await listCommits(testWorkspaceId("w1"))).commits.map((c) => c.subject)).toEqual([
+		"feature work",
+	]);
+	expect(await gitDiffFile(testWorkspaceId("w1"), "feature.txt")).toMatchObject({
 		original: "",
 		modified: "feature\n",
 	});
@@ -688,11 +724,11 @@ test("gitStatus/gitDiffFile for a commit scope read only that commit, from histo
 	writeFileSync(join(repo, "untracked.txt"), "nope\n");
 
 	const scope = { kind: "commit", sha } as const;
-	const changes = (await gitStatus("w1", scope)).changes;
+	const changes = (await gitStatus(testWorkspaceId("w1"), scope)).changes;
 	expect(changes.map((c) => c.path)).toEqual(["script.ts"]);
 	expect(changes[0]).toMatchObject({ status: "modified", added: 1, removed: 1 });
 
-	const diff = await gitDiffFile("w1", "script.ts", scope);
+	const diff = await gitDiffFile(testWorkspaceId("w1"), "script.ts", scope);
 	expect(diff).toMatchObject({
 		original: "export const one = 1;\n",
 		modified: "export const two = 2;\n",
@@ -711,19 +747,21 @@ test("gitStatus/listCommits measure against the re-pointed diffBase, not the cre
 	const sha = commitOnFeature("feature.txt", "feature\n", "feature-only");
 	seedWorkspace({ branch: "feature", baseBranch: "main", diffBase: "release" });
 
-	expect(await (await gitStatus("w1")).changes.map((c) => c.path)).toEqual(["feature.txt"]);
-	const { commits } = await listCommits("w1");
+	expect(await (await gitStatus(testWorkspaceId("w1"))).changes.map((c) => c.path)).toEqual([
+		"feature.txt",
+	]);
+	const { commits } = await listCommits(testWorkspaceId("w1"));
 	expect(commits.map((c) => c.sha)).toEqual([sha]);
 	expect(commits[0]).toMatchObject({ subject: "feature-only", author: "test" });
 	expect(commits[0]?.shortSha).toBe(sha.slice(0, commits[0]?.shortSha.length));
 	expect(commits[0]?.committedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
 	seedWorkspace({ branch: "feature", baseBranch: "main" });
-	expect(await (await gitStatus("w1")).changes.map((c) => c.path)).toEqual([
+	expect(await (await gitStatus(testWorkspaceId("w1"))).changes.map((c) => c.path)).toEqual([
 		"feature.txt",
 		"released.txt",
 	]);
-	expect(await (await listCommits("w1")).commits.map((c) => c.subject)).toEqual([
+	expect(await (await listCommits(testWorkspaceId("w1"))).commits.map((c) => c.subject)).toEqual([
 		"feature-only",
 		"release-only",
 	]);
@@ -731,18 +769,18 @@ test("gitStatus/listCommits measure against the re-pointed diffBase, not the cre
 
 test("listCommits keeps semantic empty-range fallback but propagates execution failure", async () => {
 	seedWorkspace({ diffBase: "missing-base" });
-	expect(await listCommits("w1")).toEqual({ commits: [] });
+	expect(await listCommits(testWorkspaceId("w1"))).toEqual({ commits: [] });
 	process.env.PATH = join(dataDir, "missing-bin");
-	await expect(listCommits("w1")).rejects.toThrow(/Could not list commits/);
+	await expect(listCommits(testWorkspaceId("w1"))).rejects.toThrow(/Could not list commits/);
 });
 
 test("listCommitsSince lists sinceSha..HEAD oldest-first and excludes the base commit", async () => {
 	seedWorkspace();
-	const base = gitHeadSha("w1");
+	const base = gitHeadSha(testWorkspaceId("w1"));
 	if (!base) throw new Error("no head");
 	commitOnFeature("a.ts", "export const a = 1;\n", "feat: first");
 	commitOnFeature("b.ts", "export const b = 2;\n", "feat: second");
-	const since = await listCommitsSince("w1", base);
+	const since = await listCommitsSince(testWorkspaceId("w1"), base);
 	expect(since.map((c) => c.subject)).toEqual(["feat: first", "feat: second"]);
 	expect(since.every((c) => /^[0-9a-f]{40}$/.test(c.sha))).toBe(true);
 	expect(since.map((c) => c.sha)).not.toContain(base);
@@ -751,9 +789,9 @@ test("listCommitsSince lists sinceSha..HEAD oldest-first and excludes the base c
 test("listCommitsSince returns [] for a null, non-hex, or unknown-range sinceSha", async () => {
 	seedWorkspace();
 	commitOnFeature("a.ts", "export const a = 1;\n", "feat: work");
-	expect(await listCommitsSince("w1", null)).toEqual([]);
-	expect(await listCommitsSince("w1", "not-a-sha")).toEqual([]);
-	expect(await listCommitsSince("w1", "deadbeef")).toEqual([]);
+	expect(await listCommitsSince(testWorkspaceId("w1"), null)).toEqual([]);
+	expect(await listCommitsSince(testWorkspaceId("w1"), "not-a-sha")).toEqual([]);
+	expect(await listCommitsSince(testWorkspaceId("w1"), "deadbeef")).toEqual([]);
 });
 
 test("listCommits: a subject carrying the field separator can't shift author or timestamp", async () => {
@@ -763,7 +801,7 @@ test("listCommits: a subject carrying the field separator can't shift author or 
 	git(repo, "commit", "-m", "subject\u001fnot-the-author\u001f1999-01-01T00:00:00+00:00");
 	seedWorkspace({ branch: "feature" });
 
-	const commit = (await listCommits("w1")).commits[0];
+	const commit = (await listCommits(testWorkspaceId("w1"))).commits[0];
 	expect(commit?.author).toBe("test");
 	expect(commit?.committedAt).not.toContain("1999");
 	expect(Number.isFinite(Date.parse(commit?.committedAt ?? ""))).toBe(true);
@@ -774,11 +812,11 @@ test("an option-shaped ref reaches git as a rev, never as an option", async () =
 	const probe = join(dataDir, "pwn-probe.txt");
 	git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
 	expect(isSafeRef(`--output=${probe}`)).toBe(false);
-	expect(await (await listBranches("p1")).local).toContain(`--output=${probe}`);
+	expect(await (await listBranches(testProjectId("p1"))).local).toContain(`--output=${probe}`);
 
 	seedWorkspace({ diffBase: `--output=${probe}` });
-	expect(await (await gitStatus("w1")).changes).toEqual([]);
-	expect(await (await listCommits("w1")).commits).toEqual([]);
+	expect(await (await gitStatus(testWorkspaceId("w1"))).changes).toEqual([]);
+	expect(await (await listCommits(testWorkspaceId("w1"))).commits).toEqual([]);
 	expect(existsSync(probe)).toBe(false);
 });
 
@@ -832,7 +870,7 @@ test("listCommits: a crafted AUTHOR name can't shift the timestamp or truncate i
 	);
 	seedWorkspace({ branch: "feature" });
 
-	const commit = (await listCommits("w1")).commits[0];
+	const commit = (await listCommits(testWorkspaceId("w1"))).commits[0];
 	expect(commit?.author).toBe("evil1999-01-01T00:00:00+00:00");
 	expect(commit?.subject).toBe("real subject");
 	expect(commit?.committedAt).not.toContain("1999");
@@ -846,7 +884,9 @@ test("plainText strips invisible deception (bidi overrides, zero-width) from rep
 	git(repo, "commit", "-m", "fix\u202egnisrever\u202c pa\u200bth — caf\u00e9 \u2713");
 	seedWorkspace({ branch: "feature" });
 
-	expect(await (await listCommits("w1")).commits[0]?.subject).toBe("fixgnisrever path — café ✓");
+	expect(await (await listCommits(testWorkspaceId("w1"))).commits[0]?.subject).toBe(
+		"fixgnisrever path — café ✓",
+	);
 });
 
 test("a base ref that also names a path still lists changes (the trailing `--`)", async () => {
@@ -858,14 +898,20 @@ test("a base ref that also names a path still lists changes (the trailing `--`)"
 	commitOnFeature("feature.txt", "feature\n", "feature work");
 	seedWorkspace({ branch: "feature", baseBranch: "docs" });
 
-	expect(await (await gitStatus("w1")).changes.map((c) => c.path)).toEqual(["feature.txt"]);
-	expect(await (await listCommits("w1")).commits.map((c) => c.subject)).toEqual(["feature work"]);
+	expect(await (await gitStatus(testWorkspaceId("w1"))).changes.map((c) => c.path)).toEqual([
+		"feature.txt",
+	]);
+	expect(await (await listCommits(testWorkspaceId("w1"))).commits.map((c) => c.subject)).toEqual([
+		"feature work",
+	]);
 });
 
 test("a failed diff throws — a broken read is never reported as a clean worktree", async () => {
 	seedWorkspace({ diffBase: "no-such-branch" });
 	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
-	await expect(gitStatus("w1")).rejects.toThrow(/Could not read the changed files/);
+	await expect(gitStatus(testWorkspaceId("w1"))).rejects.toThrow(
+		/Could not read the changed files/,
+	);
 });
 
 test("a failed untracked-file read is never reported as a clean worktree", async () => {
@@ -873,7 +919,7 @@ test("a failed untracked-file read is never reported as a clean worktree", async
 	writeFileSync(join(repo, "untracked.txt"), "work\n");
 	failGitSubcommand("ls-files");
 
-	await expect(gitStatus("w1")).rejects.toThrow(/forced ls-files failure/);
+	await expect(gitStatus(testWorkspaceId("w1"))).rejects.toThrow(/forced ls-files failure/);
 });
 
 test("a failed blob read is never reported as an empty side", async () => {
@@ -882,12 +928,14 @@ test("a failed blob read is never reported as an empty side", async () => {
 	seedWorkspace({ branch: "feature" });
 	failGitSubcommand("cat-file");
 
-	await expect(gitDiffFile("w1", "README.md")).rejects.toThrow(/forced cat-file failure/);
+	await expect(gitDiffFile(testWorkspaceId("w1"), "README.md")).rejects.toThrow(
+		/forced cat-file failure/,
+	);
 });
 
 posix("a bounded blob-read timeout throws instead of becoming an absent side", async () => {
 	seedWorkspace();
-	const head = gitHeadSha("w1");
+	const head = gitHeadSha(testWorkspaceId("w1"));
 	if (!head) throw new Error("no head");
 	stallGitSubcommand("cat-file");
 
@@ -898,14 +946,14 @@ posix("a bounded blob-read timeout throws instead of becoming an absent side", a
 
 test("a streamed blob read yields its sniff head and full body, null when absent, and throws on failure", async () => {
 	seedWorkspace();
-	const head = gitHeadSha("w1");
+	const head = gitHeadSha(testWorkspaceId("w1"));
 	if (!head) throw new Error("no head");
 	const big = new Uint8Array(200 * 1024);
 	for (let index = 0; index < big.byteLength; index++) big[index] = index & 0xff;
 	writeFileSync(join(repo, "big.bin"), big);
 	git(repo, "add", "big.bin");
 	git(repo, "commit", "-m", "big");
-	const commit = gitHeadSha("w1");
+	const commit = gitHeadSha(testWorkspaceId("w1"));
 	if (!commit) throw new Error("no commit");
 
 	const streamed = await readBlobStreamAtAsync(repo, commit, "big.bin");
@@ -927,7 +975,7 @@ posix(
 	"a client abort before the first blob byte stops the streamed read instead of waiting out its deadline",
 	async () => {
 		seedWorkspace();
-		const head = gitHeadSha("w1");
+		const head = gitHeadSha(testWorkspaceId("w1"));
 		if (!head) throw new Error("no head");
 		stallGitSubcommand("cat-file");
 		const controller = new AbortController();
@@ -947,7 +995,7 @@ test("a failed worktree read is never reported as an absent side", async () => {
 	rmSync(join(repo, "README.md"));
 	mkdirSync(join(repo, "README.md"));
 
-	await expect(gitDiffFile("w1", "README.md")).rejects.toThrow();
+	await expect(gitDiffFile(testWorkspaceId("w1"), "README.md")).rejects.toThrow();
 });
 
 test("scope resolution never turns a git launch failure into a semantic outcome", async () => {
@@ -977,14 +1025,17 @@ test("gitCommitPaths commits EXACTLY the named paths and returns the sha; commit
 	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
 	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}");
 
-	const before = gitHeadSha("w1");
-	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
+	const before = gitHeadSha(testWorkspaceId("w1"));
+	const committed = gitCommitPaths(testWorkspaceId("w1"), "feat: step", ["impl.ts"]);
 	expect(committed).not.toBeNull();
 	expect(committed?.sha).not.toBe(before);
-	expect(gitHeadSha("w1")).toBe(committed?.sha ?? "");
-	const unfolded = await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" });
+	expect(gitHeadSha(testWorkspaceId("w1"))).toBe(committed?.sha ?? "");
+	const unfolded = await gitStatus(testWorkspaceId("w1"), {
+		kind: "commit",
+		sha: committed?.sha ?? "",
+	});
 	expect(unfolded.changes.map((c) => c.path)).toEqual(["impl.ts"]);
-	const status = await gitStatus("w1", { kind: "uncommitted" });
+	const status = await gitStatus(testWorkspaceId("w1"), { kind: "uncommitted" });
 	expect(status.changes.map((c) => c.path).sort()).toEqual([
 		".thinkrail/context/todos.json",
 		"other.ts",
@@ -994,14 +1045,15 @@ test("gitCommitPaths commits EXACTLY the named paths and returns the sha; commit
 
 test("gitCommitPaths stages a deletion, and returns null for an empty set or paths with nothing to commit", async () => {
 	seedWorkspace();
-	expect(gitCommitPaths("w1", "feat: nothing named", [])).toBeNull();
-	expect(gitCommitPaths("w1", "feat: clean path", ["README.md"])).toBeNull();
+	expect(gitCommitPaths(testWorkspaceId("w1"), "feat: nothing named", [])).toBeNull();
+	expect(gitCommitPaths(testWorkspaceId("w1"), "feat: clean path", ["README.md"])).toBeNull();
 
 	rmSync(join(repo, "README.md"));
-	const committed = gitCommitPaths("w1", "chore: drop the readme", ["README.md"]);
+	const committed = gitCommitPaths(testWorkspaceId("w1"), "chore: drop the readme", ["README.md"]);
 	expect(committed).not.toBeNull();
 	expect(
-		await (await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })).changes[0],
+		await (await gitStatus(testWorkspaceId("w1"), { kind: "commit", sha: committed?.sha ?? "" }))
+			.changes[0],
 	).toMatchObject({
 		path: "README.md",
 		status: "deleted",
@@ -1014,11 +1066,11 @@ test("gitCommitPaths leaves the user's own staged work staged (never in the item
 	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
 	git(repo, "add", "--", "mine.ts");
 
-	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
+	const committed = gitCommitPaths(testWorkspaceId("w1"), "feat: step", ["impl.ts"]);
 	expect(
-		(await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })).changes.map(
-			(c) => c.path,
-		),
+		(
+			await gitStatus(testWorkspaceId("w1"), { kind: "commit", sha: committed?.sha ?? "" })
+		).changes.map((c) => c.path),
 	).toEqual(["impl.ts"]);
 	expect(stagedPaths()).toEqual(["mine.ts"]);
 });
@@ -1031,15 +1083,17 @@ test("gitCommitPaths treats paths literally — a pathspec-magic filename never 
 	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
 	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}");
 
-	const committed = gitCommitPaths("w1", "feat: magic name", [magic]);
+	const committed = gitCommitPaths(testWorkspaceId("w1"), "feat: magic name", [magic]);
 	expect(committed).not.toBeNull();
 	expect(
-		(await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })).changes.map(
-			(c) => c.path,
-		),
+		(
+			await gitStatus(testWorkspaceId("w1"), { kind: "commit", sha: committed?.sha ?? "" })
+		).changes.map((c) => c.path),
 	).toEqual([magic]);
 	expect(
-		(await gitStatus("w1", { kind: "uncommitted" })).changes.map((c) => c.path).sort(),
+		(await gitStatus(testWorkspaceId("w1"), { kind: "uncommitted" })).changes
+			.map((c) => c.path)
+			.sort(),
 	).toEqual([".thinkrail/context/todos.json", "other.ts"]);
 	expect(stagedPaths()).toEqual([]);
 });
@@ -1053,21 +1107,21 @@ test("a failed commit restores the index — the user's staging area is never le
 	git(repo, "config", "commit.gpgsign", "true");
 	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
 
-	const head = gitHeadSha("w1");
-	expect(gitCommitPaths("w1", "feat: unsignable", ["impl.ts"])).toBeNull();
-	expect(gitHeadSha("w1")).toBe(head ?? "");
+	const head = gitHeadSha(testWorkspaceId("w1"));
+	expect(gitCommitPaths(testWorkspaceId("w1"), "feat: unsignable", ["impl.ts"])).toBeNull();
+	expect(gitHeadSha(testWorkspaceId("w1"))).toBe(head ?? "");
 	expect(stagedPaths()).toEqual(["mine.ts"]);
 });
 
 posix("a commit that landed before git reported failure is kept, not rolled back", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
-	const before = gitHeadSha("w1");
+	const before = gitHeadSha(testWorkspaceId("w1"));
 	installGitWrapper("commit", true);
 
-	const committed = gitCommitPaths("w1", "feat: hook hung", ["impl.ts"]);
+	const committed = gitCommitPaths(testWorkspaceId("w1"), "feat: hook hung", ["impl.ts"]);
 	process.env.PATH = savedPath;
-	const head = gitHeadSha("w1");
+	const head = gitHeadSha(testWorkspaceId("w1"));
 	expect(head).not.toBe(before);
 	expect(committed).toEqual({ sha: head ?? "" });
 	expect(stagedPaths()).toEqual([]);
@@ -1098,7 +1152,7 @@ posix(
 		chmodSync(join(bin, "git"), 0o755);
 		process.env.PATH = bin;
 
-		const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
+		const committed = gitCommitPaths(testWorkspaceId("w1"), "feat: step", ["impl.ts"]);
 		process.env.PATH = savedPath;
 		expect(committed).toBeNull();
 		expect(stagedPaths()).toEqual(["impl.ts"]);
@@ -1121,10 +1175,10 @@ posix(
 		writeFileSync(join(hooks, "prepare-commit-msg"), '#!/bin/sh\necho "hook: rewritten" > "$1"\n');
 		chmodSync(join(hooks, "prepare-commit-msg"), 0o755);
 		git(repo, "config", "core.hooksPath", hooks);
-		const before = gitHeadSha("w1");
+		const before = gitHeadSha(testWorkspaceId("w1"));
 		installGitWrapper("commit", true);
 
-		expect(gitCommitPaths("w1", "feat: step", ["impl.ts"])).toBeNull();
+		expect(gitCommitPaths(testWorkspaceId("w1"), "feat: step", ["impl.ts"])).toBeNull();
 
 		process.env.PATH = savedPath;
 		expect(gitText("rev-parse", "HEAD^")).toBe(before ?? "");
@@ -1143,9 +1197,9 @@ test("a failed commit preserves index-only state — an intent-to-add entry surv
 	git(repo, "config", "commit.gpgsign", "true");
 	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
 
-	const head = gitHeadSha("w1");
-	expect(gitCommitPaths("w1", "feat: unsignable", ["impl.ts"])).toBeNull();
-	expect(gitHeadSha("w1")).toBe(head ?? "");
+	const head = gitHeadSha(testWorkspaceId("w1"));
+	expect(gitCommitPaths(testWorkspaceId("w1"), "feat: unsignable", ["impl.ts"])).toBeNull();
+	expect(gitHeadSha(testWorkspaceId("w1"))).toBe(head ?? "");
 	const tracked = new TextDecoder()
 		.decode(
 			Bun.spawnSync(["git", "-C", repo, "ls-files", "--", "intent.txt"], { stdout: "pipe" }).stdout,
@@ -1171,9 +1225,9 @@ test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries
 	Bun.spawnSync(["git", "-C", repo, "merge", "side"], { stdout: "ignore", stderr: "ignore" });
 
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
-	const head = gitHeadSha("w1");
-	expect(gitCommitPaths("w1", "feat: mid-merge", ["impl.ts"])).toBeNull();
-	expect(gitHeadSha("w1")).toBe(head ?? "");
+	const head = gitHeadSha(testWorkspaceId("w1"));
+	expect(gitCommitPaths(testWorkspaceId("w1"), "feat: mid-merge", ["impl.ts"])).toBeNull();
+	expect(gitHeadSha(testWorkspaceId("w1"))).toBe(head ?? "");
 });
 
 test("countPushDivergence distinguishes an absent remote ref from a failed measure", async () => {

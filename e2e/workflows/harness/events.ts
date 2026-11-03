@@ -1,5 +1,5 @@
 import "./env";
-import type { PiEvent } from "@thinkrail/contracts";
+import { JsonObject, type PiEvent, type SessionId } from "@thinkrail/contracts";
 import { setSessionPublisher } from "@thinkrail/server/agent";
 
 export interface CapturedToolCall {
@@ -31,10 +31,11 @@ export class EventLog {
 		const byId = new Map<string, CapturedToolCall>();
 		for (const event of this.events) {
 			if (event.type === "tool_execution_start") {
+				const args: unknown = event.args;
 				const call: CapturedToolCall = {
 					toolCallId: event.toolCallId,
 					toolName: event.toolName,
-					args: (event.args ?? {}) as Record<string, unknown>,
+					args: JsonObject.check(args) ? args : {},
 				};
 				calls.push(call);
 				byId.set(event.toolCallId, call);
@@ -63,11 +64,10 @@ export class EventLog {
 		const texts: string[] = [];
 		for (const event of this.events) {
 			if (event.type !== "message_end") continue;
-			const message = event.message as { role?: string; content?: unknown };
-			if (message.role !== "assistant" || !Array.isArray(message.content)) continue;
+			const { message } = event;
+			if (message.role !== "assistant") continue;
 			const text = message.content
-				.filter((c: { type?: string }) => c.type === "text")
-				.map((c: { text?: string }) => c.text ?? "")
+				.map((block) => (block.type === "text" ? block.text : ""))
 				.join("");
 			if (text.trim()) texts.push(text);
 		}
@@ -101,14 +101,14 @@ export class EventLog {
 		const lines: string[] = [];
 		for (const event of this.events) {
 			if (event.type === "message_end") {
-				const message = event.message as { role?: string; content?: unknown };
-				if (!Array.isArray(message.content)) {
-					if (typeof message.content === "string" && message.content.trim())
-						lines.push(`[${message.role}] ${message.content}`);
+				const { message } = event;
+				if (!("content" in message)) continue;
+				if (typeof message.content === "string") {
+					if (message.content.trim()) lines.push(`[${message.role}] ${message.content}`);
 					continue;
 				}
-				for (const block of message.content as Array<Record<string, unknown>>) {
-					if (block.type === "text" && String(block.text ?? "").trim())
+				for (const block of message.content) {
+					if (block.type === "text" && block.text.trim())
 						lines.push(`[${message.role}] ${block.text}`);
 					else if (block.type === "toolCall")
 						lines.push(
@@ -135,13 +135,16 @@ export class EventLog {
 function renderResult(result: unknown): string {
 	if (result == null) return "";
 	if (typeof result === "string") return result;
-	const content = (result as { content?: Array<{ type?: string; text?: string }> }).content;
-	if (Array.isArray(content))
-		return content
-			.filter((c) => c.type === "text")
-			.map((c) => c.text ?? "")
-			.join("");
-	return JSON.stringify(result);
+	const content = JsonObject.check(result) ? result.content : undefined;
+	if (!Array.isArray(content)) return JSON.stringify(result);
+	const blocks: readonly unknown[] = content;
+	return blocks
+		.map((block) =>
+			JsonObject.check(block) && block.type === "text" && typeof block.text === "string"
+				? block.text
+				: "",
+		)
+		.join("");
 }
 
 function truncate(text: string, max: number): string {
@@ -159,7 +162,7 @@ setSessionPublisher((payload) => {
 	log.push(payload.event);
 });
 
-export function captureEvents(sessionId: string): EventLog {
+export function captureEvents(sessionId: SessionId): EventLog {
 	let log = logs.get(sessionId);
 	if (!log) {
 		log = new EventLog();

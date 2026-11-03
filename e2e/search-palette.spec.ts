@@ -1,5 +1,6 @@
 import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { compile } from "@earendil-works/pi-schema";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	MATCH_TIER,
@@ -7,9 +8,10 @@ import {
 	MAX_SEARCH_QUERY_LENGTH,
 	SEARCH_PROTOCOL_VERSION,
 	WS_CHANNELS,
-	type WsClientMessage,
+	WS_METHOD_SCHEMAS,
 	type WsParams,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -19,7 +21,10 @@ import {
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
-import { E2eWire } from "./fixtures/wire";
+import { E2eWire, parseReply, parseRequest, readPush, readRequest } from "./fixtures/wire";
+
+const FS_READFILE_PARAMS = compile(WS_METHOD_SCHEMAS["fs.readFile"].params);
+const SEARCH_QUERY_PARAMS = compile(WS_METHOD_SCHEMAS["search.query"].params);
 
 const BASE_TS = 1_704_000_000_000;
 const askArgs = {
@@ -238,7 +243,7 @@ test("a chat in a workspace this window never opened is found by its title, rena
 		);
 		if (!workspace) throw new Error("default workspace missing");
 		await wire.request("session.rename", {
-			sessionId: seeded.id,
+			sessionId: testSessionId(seeded.id),
 			workspaceId: workspace.id,
 			title: "Yak shaving notes",
 		});
@@ -687,16 +692,12 @@ test("host rows that land after the user moved the selection never push it or th
 		const server = socket.connectToServer();
 		let answered = 0;
 		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as WsClientMessage;
-			if (
-				!("method" in frame) ||
-				frame.method !== "search.query" ||
-				(frame.params as WsParams<"search.query">).query !== "zqxprobe"
-			) {
+			const frame = readRequest(String(message), "search.query", SEARCH_QUERY_PARAMS);
+			if (frame?.params.query !== "zqxprobe") {
 				server.send(message);
 				return;
 			}
-			const query = frame.params as WsParams<"search.query">;
+			const query = frame.params;
 			const reply = (names: readonly string[], state: string) =>
 				socket.send(
 					JSON.stringify({
@@ -747,19 +748,18 @@ test("the preview pane reads a file only under its cap, and a refresh after it g
 		const server = socket.connectToServer();
 		const asked = new Map<string, { maxBytes?: number | undefined; grown: boolean }>();
 		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as WsClientMessage;
-			if ("method" in frame && frame.method === "fs.readFile") {
-				const params = frame.params as WsParams<"fs.readFile">;
-				if (params.path === "notes.txt") asked.set(frame.id, { maxBytes: params.maxBytes, grown });
+			const frame = readRequest(String(message), "fs.readFile", FS_READFILE_PARAMS);
+			if (frame?.params.path === "notes.txt") {
+				asked.set(frame.id, { maxBytes: frame.params.maxBytes, grown });
 			}
 			server.send(message);
 		});
 		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as { id?: string; errorCode?: string };
-			const read = frame.id ? asked.get(frame.id) : undefined;
-			if (frame.id && read) {
-				reads.push({ ...read, refused: frame.errorCode === "FILE_TOO_LARGE" });
-				asked.delete(frame.id);
+			const reply = parseReply(String(message));
+			const read = reply ? asked.get(reply.id) : undefined;
+			if (reply && read) {
+				reads.push({ ...read, refused: !reply.ok && reply.errorCode === "FILE_TOO_LARGE" });
+				asked.delete(reply.id);
 			}
 			socket.send(message);
 		});
@@ -822,8 +822,8 @@ test("a held Enter or Mod+Enter opens the Create-workspace dialog once and never
 	const creates: string[] = [];
 	page.on("websocket", (socket) =>
 		socket.on("framesent", ({ payload }) => {
-			const frame = JSON.parse(String(payload)) as { method?: string; id?: string };
-			if (frame.method === "workspace.create") creates.push(frame.id ?? "");
+			const frame = parseRequest(String(payload));
+			if (frame?.method === "workspace.create") creates.push(frame.id);
 		}),
 	);
 	const repeat = (key: string, mod = false) =>
@@ -874,16 +874,12 @@ test("a Start row the user selected keeps its place and its Enter when host rows
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
 		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as WsClientMessage;
-			if (
-				!("method" in frame) ||
-				frame.method !== "search.query" ||
-				(frame.params as WsParams<"search.query">).query !== "startprobe"
-			) {
+			const frame = readRequest(String(message), "search.query", SEARCH_QUERY_PARAMS);
+			if (frame?.params.query !== "startprobe") {
 				server.send(message);
 				return;
 			}
-			const query = frame.params as WsParams<"search.query">;
+			const query = frame.params;
 			void released.then(() =>
 				socket.send(
 					JSON.stringify({
@@ -948,18 +944,15 @@ test("an older host gets the local scopes only, with a notice, and never a searc
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
 		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as { method?: string };
-			if (frame.method?.startsWith("search.")) hostRequests.push(frame.method);
+			const frame = parseRequest(String(message));
+			if (frame?.method.startsWith("search.")) hostRequests.push(frame.method);
 			server.send(message);
 		});
 		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				channel?: string;
-				data: { protocolVersion: number };
-			};
-			if (frame.channel === WS_CHANNELS.serverWelcome) {
-				frame.data.protocolVersion = SEARCH_PROTOCOL_VERSION - 1;
-				socket.send(JSON.stringify(frame));
+			const welcome = readPush(String(message), WS_CHANNELS.serverWelcome);
+			if (welcome) {
+				const data = { ...welcome, protocolVersion: SEARCH_PROTOCOL_VERSION - 1 };
+				socket.send(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data }));
 			} else socket.send(message);
 		});
 	});
@@ -984,16 +977,12 @@ test("an incomplete search shows a yellow mark whose tip names each reason, on h
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
 		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as WsClientMessage;
-			if (
-				!("method" in frame) ||
-				frame.method !== "search.query" ||
-				(frame.params as WsParams<"search.query">).query !== "zqxcut"
-			) {
+			const frame = readRequest(String(message), "search.query", SEARCH_QUERY_PARAMS);
+			if (frame?.params.query !== "zqxcut") {
 				server.send(message);
 				return;
 			}
-			const params = frame.params as WsParams<"search.query">;
+			const params = frame.params;
 			const groups = (params.kinds ?? []).map((kind) =>
 				kind === "file"
 					? {

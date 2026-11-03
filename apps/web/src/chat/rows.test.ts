@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage, TurnChangeSet } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { assistantMessage } from "./messageFixtures.test";
 import {
 	type ChatRow,
 	deriveRows,
@@ -14,13 +16,10 @@ import type { ChatTurn, ToolResultState } from "./types";
 registerToolRenderer("primary-tool", () => null, { prominence: "primary" });
 registerToolRenderer("bare-tool", () => null, { chrome: "bare" });
 
-type Block =
-	| { type: "text"; text: string }
-	| { type: "thinking"; thinking: string }
-	| { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> };
+type Block = AssistantMessage["content"][number];
 
 function user(id: string, timestamp = 0): ChatTurn {
-	return { kind: "user", id, message: { role: "user", content: "hi", timestamp } } as ChatTurn;
+	return { kind: "user", id, message: { role: "user", content: "hi", timestamp } };
 }
 
 function userWithAttachment(id: string, names: string[]): ChatTurn {
@@ -36,7 +35,7 @@ function userWithAttachment(id: string, names: string[]): ChatTurn {
 			timestamp: 0,
 		},
 		attachmentNames: names,
-	} as ChatTurn;
+	};
 }
 
 function assistant(
@@ -52,17 +51,16 @@ function assistant(
 		kind: "assistant",
 		id,
 		streaming: opts.streaming ?? false,
-		message: {
-			role: "assistant",
+		message: assistantMessage({
 			content: blocks,
 			stopReason: opts.stopReason ?? "stop",
 			timestamp: opts.timestamp ?? 0,
-		},
-	} as unknown as ChatTurn;
+		}),
+	};
 }
 
 function done(id: string, endedAt = 0): ChatTurn {
-	return { kind: "system", id, endedAt } as ChatTurn;
+	return { kind: "system", id, endedAt };
 }
 
 const tc = (id: string, name = "bash"): Block => ({ type: "toolCall", id, name, arguments: {} });
@@ -82,7 +80,7 @@ function commandResult(
 		timestamp,
 		details: {
 			id: `bg-${id}`,
-			sessionId: "s",
+			sessionId: testSessionId("s"),
 			name: "e2e",
 			status,
 			startedAt: 0,
@@ -241,7 +239,7 @@ describe("deriveRows grouping", () => {
 
 	test("a subagentCompletion turn closes the run's round and maps 1:1 to its own row", () => {
 		const details = {
-			childSessionId: "child-1",
+			childSessionId: testSessionId("child-1"),
 			roleName: "scout",
 			task: "map",
 			status: "completed",
@@ -748,8 +746,8 @@ test("turnDivider treats every written file as a change when no classifier is su
 function agentTurn(id: string, startedAt: number, paths: string[], head = "b"): TurnChangeSet {
 	return {
 		id,
-		workspaceId: "ws",
-		sessionId: "s",
+		workspaceId: testWorkspaceId("ws"),
+		sessionId: testSessionId("s"),
 		startedAt,
 		settledAt: startedAt + 1_000,
 		baseTree: "a".repeat(40),
@@ -878,7 +876,7 @@ test("receipt paths the spec matcher claims land on the specs side", () => {
 
 describe("background results follow how they reached the agent", () => {
 	const runDetails = {
-		childSessionId: "child-1",
+		childSessionId: testSessionId("child-1"),
 		roleName: "reviewer",
 		task: "review",
 		status: "completed",
@@ -1016,7 +1014,7 @@ describe("background results follow how they reached the agent", () => {
 		});
 		const snapshot = (finished: boolean) => ({
 			id: "cmd-1",
-			sessionId: "s",
+			sessionId: testSessionId("s"),
 			command: "bun test",
 			name: "tests",
 			status: finished ? "error" : "running",
