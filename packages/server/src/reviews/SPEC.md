@@ -214,7 +214,7 @@ lands can still finish its record; archived updates persist without publishing a
   without a second read; written by `host`'s verdict recorder, never by a client) (+ the pure
   anchoring/render helpers: `reanchor`, `buildTextQuote`, `hashContent`, `lineRangeOf`, `textQuoteOf`,
   `renderPackage`).
-- **Allowed deps:** `pi-schema`, `contracts` (types and `ReviewSnapshot`), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
+- **Allowed deps:** `pi-schema`, `@thinkrail/shared/errnoCode`, `contracts` (types and `ReviewSnapshot`), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
   `git` (the review's `baseSha` resolve, the diff range behind a base anchor's `baseRef`, and blob
   reads for the base side), `fs` (`classifyBytes`/`decodeText`/`hashBytes` — textness and the sha-256
   an anchor's `contentHash` *is* are decided once, there, so a comment's hash and a revert's expectation

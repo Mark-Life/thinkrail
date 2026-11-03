@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import type { Validator } from "@earendil-works/pi-schema";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 
 export type StateFileObserver = (problem: CodedError) => void;
 
@@ -19,10 +20,6 @@ export function observeStateFileProblems(next: StateFileObserver | null): void {
 	observer = next;
 }
 
-export function hasErrorCode(error: unknown, code: string): boolean {
-	return typeof error === "object" && error !== null && "code" in error && error.code === code;
-}
-
 function report(code: "STATE_FILE_SET_ASIDE" | "STATE_FILE_UNREADABLE", message: string): void {
 	try {
 		observer?.(new CodedError(code, message));
@@ -35,7 +32,7 @@ function keepCopy(path: string, raw: string, reason: string): void {
 	try {
 		writeFileSync(copy, raw, { flag: "wx", mode: 0o600 });
 	} catch (error) {
-		if (hasErrorCode(error, "EEXIST")) return;
+		if (errnoCode(error) === "EEXIST") return;
 		refusedOverwrites.add(path);
 		report("STATE_FILE_UNREADABLE", `${basename(path)}: ${reason}, and no copy could be kept`);
 		return;
@@ -48,7 +45,7 @@ export function readStateFile(path: string): StateFile {
 	try {
 		raw = readFileSync(path, "utf8");
 	} catch (error) {
-		if (hasErrorCode(error, "ENOENT")) refusedOverwrites.delete(path);
+		if (errnoCode(error) === "ENOENT") refusedOverwrites.delete(path);
 		else if (!refusedOverwrites.has(path)) {
 			refusedOverwrites.add(path);
 			report("STATE_FILE_UNREADABLE", `${basename(path)}: could not be read`);

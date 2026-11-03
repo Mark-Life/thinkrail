@@ -12,6 +12,7 @@
 		"./jbcentral": "./src/jbcentral.ts",
 		"./paths": "./src/paths.ts",
 		"./codedError": "./src/codedError.ts",
+		"./errnoCode": "./src/errnoCode.ts",
 		"./removeTree": "./src/removeTree.ts",
 		"./spawn": "./src/spawn.ts",
 		"./toolHomes": "./src/toolHomes.ts"

@@ -1,18 +1,15 @@
 import { readFileSync } from "node:fs";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { type PollUntilOptions, pollUntil } from "./lifecycle";
 
 const RAW_PREVIEW_CHARS = 2_000;
-
-function errorCode(error: unknown): unknown {
-	return typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-}
 
 export function readSettledJson(path: string): unknown {
 	try {
 		return JSON.parse(readFileSync(path, "utf8"));
 	} catch (error) {
 		if (error instanceof SyntaxError) return undefined;
-		if (errorCode(error) === "ENOENT") return undefined;
+		if (errnoCode(error) === "ENOENT") return undefined;
 		throw error;
 	}
 }
@@ -23,7 +20,7 @@ export function describeDocument(path: string): string {
 		const preview = raw.length > RAW_PREVIEW_CHARS ? `${raw.slice(0, RAW_PREVIEW_CHARS)}…` : raw;
 		return `${path} contains ${JSON.stringify(preview)}`;
 	} catch (error) {
-		return errorCode(error) === "ENOENT"
+		return errnoCode(error) === "ENOENT"
 			? `${path} does not exist`
 			: `${path} is unreadable: ${error instanceof Error ? error.message : String(error)}`;
 	}
