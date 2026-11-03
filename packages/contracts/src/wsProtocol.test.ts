@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asSessionId } from "@thinkrail/contracts";
+import { asSessionId, PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	DEFAULT_CONFIG,
 	isSettleIdleDays,
@@ -44,7 +44,6 @@ import {
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
-	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
@@ -243,7 +242,6 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("user-selectable fonts are pinned to v102", () => {
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
-	expect(PROTOCOL_VERSION).toBe(102);
 	expect(WS_METHODS.fontsList).toBe("fonts.list");
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");

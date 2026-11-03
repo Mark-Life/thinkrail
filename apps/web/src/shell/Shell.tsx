@@ -59,6 +59,7 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
+import { ProtocolMismatchDialog } from "./ProtocolMismatchDialog";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
@@ -287,6 +288,7 @@ export function Shell() {
 				<SurveyInvitationDialog />
 			)}
 			<SurveyWindow />
+			<ProtocolMismatchDialog />
 			<SearchPaletteHost
 				onNewWorkspace={setNewWorkspaceProjectId}
 				onToggleProjectsHome={homeProjects.toggle}

@@ -1,7 +1,8 @@
 import { compile } from "@earendil-works/pi-schema";
 import {
+	parseEnvelope,
 	resultProblem,
-	WsEnvelope,
+	type WsEnvelope,
 	type WsMethodName,
 	type WsParams,
 	type WsRequest,
@@ -12,7 +13,6 @@ import { E2E_PORT } from "./paths";
 
 export class E2eWireTransientError extends Error {}
 
-const envelope = compile(WsEnvelope);
 const response = compile(WsResponse);
 
 function parseJson(message: unknown): unknown {
@@ -25,8 +25,7 @@ function parseJson(message: unknown): unknown {
 }
 
 export function parseFrame(message: unknown): WsEnvelope | null {
-	const frame = parseJson(message);
-	return envelope.check(frame) ? frame : null;
+	return typeof message === "string" ? parseEnvelope(message) : null;
 }
 
 export function readReply(message: unknown, id: string): WsResponse | null {
