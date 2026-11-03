@@ -7,7 +7,8 @@
 			"apps/*",
 			"packages/*",
 			"pi-extensions/*",
-			"thinkrail-extensions/*"
+			"thinkrail-extensions/*",
+			"tools/*"
 		],
 		"catalog": {
 			"@astrojs/check": "0.9.12",
@@ -92,6 +93,7 @@
 		"check:compiler": "bun --filter @thinkrail/web compiler:census:check",
 		"check:pi-packages": "bun scripts/check-pi-packages.ts",
 		"ci:flakes": "bun scripts/ci-flakes.ts",
+		"repo-map": "bun tools/repo-map/cli.ts",
 		"changeset": "changeset",
 		"release:version": "changeset version && bun install --no-frozen-lockfile",
 		"release:pack": "bun scripts/pack-pi-package.ts",

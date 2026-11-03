@@ -1,0 +1,161 @@
+.symbol-view {
+	display: grid;
+	grid-template-columns: 400px minmax(0, 1fr);
+	height: 100%;
+}
+
+.symbol-side {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	background: var(--panel);
+	border-right: 1px solid var(--border);
+}
+
+.symbol-header {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s1);
+	flex: none;
+	padding: var(--s3);
+	border-bottom: 1px solid var(--border);
+}
+
+.symbol-title-row {
+	display: flex;
+	align-items: baseline;
+	gap: var(--s2);
+	min-width: 0;
+}
+
+.symbol-title {
+	font-family: var(--font-mono);
+	font-size: var(--text-lg);
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.symbol-kind {
+	flex: none;
+	color: var(--text-faint);
+	font-size: var(--text-xs);
+}
+
+.symbol-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--s1) var(--s2);
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--text-sm);
+}
+
+.meta-tag {
+	padding: 0 var(--s1);
+	border: 1px solid var(--border-strong);
+	border-radius: 3px;
+	color: var(--text-muted);
+	font-size: 10px;
+	line-height: 14px;
+}
+
+.symbol-signature {
+	max-height: 96px;
+	overflow: auto;
+	padding: var(--s1) var(--s2);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	font-size: var(--text-xs);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.symbol-actions {
+	display: flex;
+	gap: var(--s1);
+	margin-top: var(--s1);
+}
+
+.symbol-sections {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s4);
+	flex: 1;
+	min-height: 0;
+	padding: var(--s3);
+	overflow: auto;
+}
+
+.symbol-list {
+	display: flex;
+	flex-direction: column;
+}
+
+.symbol-row {
+	display: flex;
+	align-items: baseline;
+	gap: var(--s1);
+	min-width: 0;
+	padding: 2px var(--s1);
+	margin: 0 calc(var(--s1) * -1);
+	border-radius: var(--radius);
+	font-size: var(--text-sm);
+}
+
+.symbol-row:hover {
+	background: var(--hover);
+}
+
+.symbol-row-active {
+	background: var(--accent-tint-strong);
+}
+
+.symbol-row-name {
+	flex: 0 1 auto;
+	min-width: 40px;
+	font-family: var(--font-mono);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.symbol-row-module {
+	flex: 1 2 0;
+	min-width: 0;
+	color: var(--text-faint);
+	font-size: var(--text-xs);
+	text-align: right;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wire-tag {
+	flex: 0 1 auto;
+	min-width: 24px;
+	padding: 0 var(--s1);
+	border: 1px solid var(--accent);
+	border-radius: 3px;
+	color: var(--accent-strong);
+	font-family: var(--font-mono);
+	font-size: 10px;
+	line-height: 14px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.aside {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+	background: var(--panel);
+}
+
+.aside .symbol-signature {
+	max-height: 64px;
+}

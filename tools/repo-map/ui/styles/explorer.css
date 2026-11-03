@@ -1,0 +1,253 @@
+.workbench {
+	display: grid;
+	height: 100%;
+	min-width: 0;
+}
+
+.workbench-body {
+	min-width: 0;
+	min-height: 0;
+}
+
+.is-resizing {
+	cursor: col-resize;
+	user-select: none;
+}
+
+.resize-handle {
+	position: relative;
+	width: 5px;
+	padding: 0;
+	border: 0;
+	background: var(--border);
+	background-clip: content-box;
+	padding-inline: 2px;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+.resize-handle:hover,
+.resize-handle:focus-visible,
+.resize-handle:active {
+	padding-inline: 1px;
+	background: var(--accent);
+	background-clip: content-box;
+}
+
+.explorer-host {
+	min-width: 0;
+	min-height: 0;
+}
+
+.explorer-host[hidden] {
+	display: none;
+}
+
+.explorer {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	background: var(--panel);
+}
+
+.explorer-tabs {
+	display: flex;
+	flex: none;
+	height: 32px;
+	border-bottom: 1px solid var(--border);
+}
+
+.explorer-tabs .tab {
+	border-left: 0;
+	border-right: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.explorer-panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.explorer-panel[hidden] {
+	display: none;
+}
+
+.explorer-filter {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--s2);
+	padding: var(--s2);
+	border-bottom: 1px solid var(--border);
+}
+
+.explorer-input {
+	flex: 1;
+	min-width: 0;
+	height: 26px;
+	padding: 0 var(--s2);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius);
+	background: var(--bg);
+	color: var(--text);
+	font-size: var(--text-sm);
+}
+
+.explorer-input::placeholder {
+	color: var(--text-faint);
+}
+
+.explorer-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+.explorer-slot {
+	position: absolute;
+	left: 0;
+	right: 0;
+}
+
+.explorer-row {
+	display: flex;
+	align-items: center;
+	gap: var(--s1);
+	width: 100%;
+	height: 24px;
+	padding-right: var(--s2);
+	border: 0;
+	background: transparent;
+	color: var(--text);
+	font-size: var(--text-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.explorer-row:hover {
+	background: var(--hover);
+}
+
+.explorer-row-active {
+	box-shadow: inset 2px 0 0 var(--accent);
+	background: var(--accent-tint-strong);
+}
+
+.explorer-row-tall {
+	height: 38px;
+	padding-left: var(--s2);
+}
+
+.explorer-chevron {
+	display: inline-flex;
+	flex: none;
+	color: var(--text-faint);
+}
+
+.explorer-chevron .icon {
+	width: 12px;
+	height: 12px;
+}
+
+.explorer-chevron-closed {
+	transform: rotate(-90deg);
+}
+
+.explorer-kind {
+	flex: none;
+	width: 30px;
+	color: var(--text-faint);
+	font-family: var(--font-mono);
+	font-size: 10px;
+}
+
+.explorer-name {
+	overflow: hidden;
+	min-width: 0;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.explorer-dir {
+	color: var(--text-muted);
+}
+
+.explorer-symbol {
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+}
+
+.explorer-row-current-file .explorer-name {
+	color: var(--accent-strong);
+}
+
+.explorer-count {
+	flex: none;
+	margin-left: auto;
+	padding-left: var(--s2);
+	color: var(--text-faint);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.explorer-recent {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.explorer-path {
+	overflow: hidden;
+	color: var(--text-faint);
+	direction: rtl;
+	font-size: 10px;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.explorer-empty {
+	margin: 0;
+	padding: var(--s4) var(--s3);
+	color: var(--text-muted);
+	font-size: var(--text-sm);
+}
+
+.header-history {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 2px;
+}
+
+.icon-button {
+	display: inline-grid;
+	width: 26px;
+	height: 26px;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+	background: var(--hover);
+	color: var(--text);
+}
+
+.icon-button:disabled {
+	color: var(--border-strong);
+	cursor: default;
+}
+
+.icon-button[aria-pressed="true"] {
+	color: var(--accent-strong);
+}
