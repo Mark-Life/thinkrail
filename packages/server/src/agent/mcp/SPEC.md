@@ -82,6 +82,11 @@ without bypassing approvals or treating an occupied name as absent.
   latest 200 lines; both files are read (the last 8 MiB each, a missing one is empty) and the result goes
   through `redactMcpText`. The format is pinned by a test against pi's own formatter; re-check it on every
   pi bump.
+- `schemas.ts` — private `pi-schema` checks for `mcp.json`. `mcpServers` is a map of `unknown`: an entry stays
+  unchecked until `validateMcpServerConfig`, so one bad entry does not refuse the file, and the fingerprint reads the
+  entry as written, never a parsed copy. `validateMcpServerConfig` keeps pi's order and messages field by field, then
+  parses the whole entry to get `McpServerConfig`. The `type` schema allows `streamable-http` under pi's `"http"` type,
+  because pi accepts the alias without rewriting it. `summarizeMcpServers` and `maskMcpEndpoint` read fields of an entry that may be invalid, so they keep their field reads.
 - `results.ts` — `summarizeMcpResult()`: the `McpResultSummary` the session host's `tool_result` handler
   writes into `details.thinkrail` for `mcp__*` and the three resource tools, built from pi's
   machine-readable result (`structuredContent` = the server's raw `CallToolResult`, or the resource
@@ -91,7 +96,8 @@ without bypassing approvals or treating an occupied name as absent.
   resource links with long URIs), and `structuredContent` is kept only if it fits what remains (else
   `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops
   `structuredContent` from finalized messages, so this is what lets a card render the same live, after
-  reload and on another client.
+  reload and on another client. A content block with a wrong-type field is dropped, like one of an unknown type, and is not
+  counted in `omittedBlocks`; an absent field keeps its default. A wrong-type `content` or `contents` reads as empty.
 - `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
   used by sessions, so probes never infer it from a presentation row. The host composes
   `writeMcpServerEntry` (pi validation plus the project `auth` ban, add vs update, project containment;
@@ -224,9 +230,9 @@ without bypassing approvals or treating an occupied name as absent.
   `removeMcpServerEntry`, `mcpEntryFingerprint`, `shareMcpOverrideWithRepo`),
   `summarizeMcpConfigErrors`, the status parsers (`parseMcpStatusText`, `parseMcpAttentionNotice`,
   `MCP_ATTENTION_PREFIX`, `deriveMcpServerStatuses`, `ParsedMcpStatus`), `summarizeMcpResult` /
-  `isMcpResultTool` / `MCP_SUMMARY_BYTES`, and the types `LoadedMcpFiles`,
+  `isMcpResultTool` / `mcpFullOutputPath` / `MCP_SUMMARY_BYTES`, and the types `LoadedMcpFiles`,
   `McpConfigFileEntry`, `McpConfigScope`, `McpServerConfigPatch`.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (types, `CONFIG_DIR_NAME`, `getAgentDir`, and the
   engine factories `createMcpExtension` / `createToolSearchExtension`); `@thinkrail/contracts` (types);
-  `@thinkrail/shared/codedError`; Node `fs`/`path`/`crypto`.
+  `@thinkrail/shared/codedError`; `@earendil-works/pi-schema`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`, `projects`, the web; no connection, OAuth or transport code — those stay in pi.
