@@ -290,6 +290,9 @@
     "packages/pi-todos": {
       "name": "pi-todos",
       "version": "0.0.0",
+      "dependencies": {
+        "@earendil-works/pi-schema": "catalog:",
+      },
       "devDependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",

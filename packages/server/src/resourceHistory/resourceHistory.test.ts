@@ -243,3 +243,23 @@ test("removing a workspace drops its history on disk and in memory", () => {
 		finishedResources({ workspaceId: "w2", sessionId: "chat-2" }, "command", none),
 	).toHaveLength(1);
 });
+
+test("a line with one wrong field is skipped, the rest load, and the file keeps its bytes", async () => {
+	const dir = join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId);
+	mkdirSync(dir, { recursive: true });
+	const good = JSON.stringify(command("good"));
+	const bad = JSON.stringify(command("bad", { finishedAt: "soon" as unknown as number }));
+	const raw = `${good}\n${bad}\n`;
+	writeFileSync(join(dir, "index.jsonl"), raw);
+	const archive = await restartedArchive();
+	expect(archive.finishedResources(scope, "command", none).map(resourceRecordId)).toEqual(["good"]);
+	archive.recordResource(scope, command("next"));
+	expect(readFileSync(join(dir, "index.jsonl"), "utf8").startsWith(raw)).toBe(true);
+});
+
+test("an archived log of the wrong shape reads as no output", () => {
+	const dir = join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId, "logs");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "c1.json"), JSON.stringify({ text: 1, truncated: false }));
+	expect(archivedCommandOutput(scope, "c1")).toBeUndefined();
+});
