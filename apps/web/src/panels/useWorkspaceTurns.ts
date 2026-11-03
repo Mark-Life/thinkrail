@@ -1,17 +1,17 @@
-import type { TurnChangeSet } from "@thinkrail/contracts";
+import type { TurnChangeSet, WorkspaceId } from "@thinkrail/contracts";
 import { useEffect } from "react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { getTransport, supportsTurnChanges } from "../transport";
 
 const EMPTY: readonly TurnChangeSet[] = [];
 
-export function useWorkspaceTurns(workspaceId: string | null): readonly TurnChangeSet[] {
+export function useWorkspaceTurns(workspaceId: WorkspaceId | null): readonly TurnChangeSet[] {
 	return (
 		useAppStore((state) => (workspaceId ? state.turnsByWorkspace[workspaceId] : undefined)) ?? EMPTY
 	);
 }
 
-export function useLoadWorkspaceTurns(workspaceId: string | null): void {
+export function useLoadWorkspaceTurns(workspaceId: WorkspaceId | null): void {
 	const supported = useAppStore((state) => supportsTurnChanges(state.protocolVersion));
 	const generation = useAppStore((state) => state.connectionGeneration);
 	useEffect(() => {

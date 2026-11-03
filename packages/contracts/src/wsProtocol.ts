@@ -13,6 +13,9 @@ import type {
 import type {
 	ModelContextSetting,
 	WireCustomMessage,
+	WsAck,
+	WsRequestFrame,
+	WsResume,
 	WsSchemaChannelMap,
 	WsSchemaMethodMap,
 } from "./schema";
@@ -484,19 +487,10 @@ export type WsMethodName = SameUnion<
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
 export type WsResult<M extends WsMethodName> = WsMethodMap[M]["result"];
 
-export interface WsRequest<M extends WsMethodName = WsMethodName> {
-	id: string;
+export interface WsRequest<M extends WsMethodName = WsMethodName>
+	extends Omit<WsRequestFrame, "method" | "params"> {
 	method: M;
 	params: WsParams<M>;
-	sessionId?: string;
-}
-
-export interface WsAck {
-	ack: string[];
-}
-
-export interface WsResume {
-	resume: string[];
 }
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;

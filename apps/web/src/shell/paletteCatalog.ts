@@ -25,7 +25,7 @@ import {
 	RiSparkling2Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
-import type { EditorInfo, Workspace } from "@thinkrail/contracts";
+import type { EditorInfo, ProjectId, Workspace, WorkspaceId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command } from "../commands";
@@ -52,7 +52,7 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 
 export interface PaletteCatalogDeps {
 	readonly t: Translator;
-	readonly contextProjectId: string | null;
+	readonly contextProjectId: ProjectId | null;
 	readonly activeWorkspace: Workspace | null;
 	readonly editors: readonly EditorInfo[];
 	readonly historyAvailable: boolean;
@@ -67,22 +67,22 @@ export interface PaletteCatalogDeps {
 }
 
 export interface PaletteCatalogActions {
-	readonly newWorkspace: (projectId: string) => void;
-	readonly openDefaultWorkspace: (projectId: string) => void;
+	readonly newWorkspace: (projectId: ProjectId) => void;
+	readonly openDefaultWorkspace: (projectId: ProjectId) => void;
 	readonly openProject: () => void;
 	readonly openProjectPath: () => void;
 	readonly createProject: () => void;
-	readonly newChat: (workspaceId: string) => void;
-	readonly newTerminal: (workspaceId: string) => void;
+	readonly newChat: (workspaceId: WorkspaceId) => void;
+	readonly newTerminal: (workspaceId: WorkspaceId) => void;
 	readonly toggleLeft: () => void;
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
-	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
+	readonly showTool: (workspaceId: WorkspaceId, tool: PaletteTool) => void;
 	readonly openHistory: () => void;
-	readonly markRead: (workspaceId: string) => void;
-	readonly markUnread: (workspaceId: string) => void;
-	readonly settle: (workspaceId: string) => void;
-	readonly unsettle: (workspaceId: string) => void;
+	readonly markRead: (workspaceId: WorkspaceId) => void;
+	readonly markUnread: (workspaceId: WorkspaceId) => void;
+	readonly settle: (workspaceId: WorkspaceId) => void;
+	readonly unsettle: (workspaceId: WorkspaceId) => void;
 	readonly reveal: (workspace: Workspace) => void;
 	readonly copyPath: (workspace: Workspace) => void;
 	readonly openIn: (workspace: Workspace, editor: EditorInfo) => void;

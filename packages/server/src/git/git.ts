@@ -8,9 +8,11 @@ import type {
 	GitFileChange,
 	GitFileStatus,
 	GitStatus,
+	ProjectId,
 	RemoteBranchGroup,
 	ResourceMeta,
 	Workspace,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import { errnoCode } from "@thinkrail/shared/errnoCode";
 import {
@@ -46,7 +48,7 @@ import { isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
 
-function workspace(workspaceId: string): Workspace {
+function workspace(workspaceId: WorkspaceId): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 	return ws;
@@ -55,7 +57,7 @@ function workspace(workspaceId: string): Workspace {
 const COMMIT_PATHS = "commit the TODO's changes";
 
 export function gitCommitPaths(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	message: string,
 	paths: string[],
 ): { sha: string } | null {
@@ -137,7 +139,7 @@ function parentOf(cwd: string, sha: string, opts: GitSyncOptions) {
 	return parent.ok && parent.out ? parent.out : null;
 }
 
-export function gitHeadSha(workspaceId: string): string | null {
+export function gitHeadSha(workspaceId: WorkspaceId): string | null {
 	return headShaAt(workspace(workspaceId).worktreePath);
 }
 
@@ -149,7 +151,7 @@ export function headShaAt(repoPath: string, opts: GitSyncOptions = {}): string |
 	return head.ok && head.out ? head.out : null;
 }
 
-export function readCommitSubject(workspaceId: string, sha: string): string | null {
+export function readCommitSubject(workspaceId: WorkspaceId, sha: string): string | null {
 	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
 	const cwd = workspace(workspaceId).worktreePath;
 	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"], {
@@ -159,7 +161,7 @@ export function readCommitSubject(workspaceId: string, sha: string): string | nu
 }
 
 // MUST stay in lock-step with listCommits' capped base..HEAD set (same COMMIT_LIST_MAX + range). see submodule-server-todos
-export function resolveListedCommit(workspaceId: string, sha: string): string | null {
+export function resolveListedCommit(workspaceId: WorkspaceId, sha: string): string | null {
 	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
 	const ws = workspace(workspaceId);
 	const cwd = ws.worktreePath;
@@ -208,7 +210,7 @@ function groupRemoteRefs(refs: string[], remotes: string[]): RemoteBranchGroup[]
 	return [...groups.values()];
 }
 
-export async function listBranches(projectId: string): Promise<BranchList> {
+export async function listBranches(projectId: ProjectId): Promise<BranchList> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	const repo = project.path;
@@ -324,7 +326,7 @@ export async function remoteRefOidAsync(repoPath: string, ref: string): Promise<
 }
 
 export async function prefetchBranch(
-	projectId: string,
+	projectId: ProjectId,
 	ref: string,
 ): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
@@ -426,7 +428,7 @@ function parseNameStatus(output: string): Array<{ code: string; path: string }> 
 	return parsed;
 }
 
-export function gitUncommittedPaths(workspaceId: string): string[] {
+export function gitUncommittedPaths(workspaceId: WorkspaceId): string[] {
 	const cwd = workspace(workspaceId).worktreePath;
 	const slow = { raw: true, timeoutMs: SLOW_GIT_TIMEOUT_MS };
 	const tracked = git(
@@ -443,7 +445,10 @@ export function gitUncommittedPaths(workspaceId: string): string[] {
 	return [...new Set([...nulFields(tracked.out), ...nulFields(untracked.out)])].sort();
 }
 
-export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Promise<GitStatus> {
+export async function gitStatus(
+	workspaceId: WorkspaceId,
+	scope?: GitDiffScope,
+): Promise<GitStatus> {
 	const ws = workspace(workspaceId);
 	const range = await resolveDiffRange(ws, scope);
 	const changes: GitFileChange[] = [];
@@ -666,7 +671,7 @@ function diffSide(bytes: Uint8Array | null, path: string): { text: string; meta:
 }
 
 export async function gitDiffFile(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	scope?: GitDiffScope,
 ): Promise<{
@@ -719,7 +724,7 @@ function plainText(raw: string): string {
 	return out;
 }
 
-export async function listCommits(workspaceId: string): Promise<{ commits: GitCommit[] }> {
+export async function listCommits(workspaceId: WorkspaceId): Promise<{ commits: GitCommit[] }> {
 	const ws = workspace(workspaceId);
 	const log = await gitAsync(ws.worktreePath, [
 		"log",
@@ -753,7 +758,7 @@ export async function listCommits(workspaceId: string): Promise<{ commits: GitCo
 // comes from the item's own baseline sidecar (`gitHeadSha` at in_progress); it is shape-checked and
 // bracketed by `--end-of-options` regardless. A null/unborn baseline head has no range → no commits.
 export async function listCommitsSince(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	sinceSha: string | null,
 ): Promise<{ sha: string; subject: string }[]> {
 	if (!sinceSha || !/^[0-9a-f]{4,64}$/.test(sinceSha)) return [];

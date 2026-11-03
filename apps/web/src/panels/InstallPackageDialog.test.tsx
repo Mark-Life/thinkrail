@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import {
+	asWorkspaceId,
 	type PiPackageScope,
 	type PiPackageSummary,
 	type PiPackagesCatalog,
@@ -63,7 +65,7 @@ test("sourceDisplayName names the package a human would", () => {
 });
 
 function render(
-	workspaceId: string | null,
+	workspaceId: WorkspaceId | null,
 	catalog: PiPackagesCatalog | null,
 	step: InstallStep = { kind: "form" },
 	source = "",
@@ -88,7 +90,7 @@ function render(
 }
 
 test("the form offers both scopes with a trusted workspace and shows the settings path", () => {
-	const markup = render("w1", CATALOG);
+	const markup = render(asWorkspaceId("w1"), CATALOG);
 	expect(markup).toContain('data-step="form"');
 	expect(markup).toContain('data-testid="install-package-source"');
 	expect(markup).toContain('data-testid="install-package-scope-project"');
@@ -98,7 +100,7 @@ test("the form offers both scopes with a trusted workspace and shows the setting
 	expect(markup).toContain('aria-label="What can I paste here?"');
 	expect(markup).toContain('data-testid="packages-gallery-link"');
 	expect(markup).toMatch(/data-testid="install-package-submit"[^>]*disabled/);
-	const typed = render("w1", CATALOG, { kind: "form" }, "npm:@acme/pi-jira@1.4.2");
+	const typed = render(asWorkspaceId("w1"), CATALOG, { kind: "form" }, "npm:@acme/pi-jira@1.4.2");
 	expect(typed).toContain('data-testid="install-package-echo"');
 	expect(typed).toContain("Install @acme/pi-jira");
 });
@@ -107,17 +109,20 @@ test("without a workspace the repository scope is disabled with a reason; untrus
 	const { projectSettingsPath: _projectSettingsPath, ...withoutRepository } = CATALOG;
 	const noWorkspace = render(null, withoutRepository);
 	expect(noWorkspace).toContain("Open a workspace to install for its repository.");
-	const untrusted = render("w1", { ...CATALOG, projectTrusted: false });
+	const untrusted = render(asWorkspaceId("w1"), { ...CATALOG, projectTrusted: false });
 	expect(untrusted).toContain("Trust this project before installing packages into its repository.");
 });
 
 test("installing, installed and failed steps", () => {
-	const installing = render("w1", CATALOG, { kind: "installing", name: "@acme/pi-jira" });
+	const installing = render(asWorkspaceId("w1"), CATALOG, {
+		kind: "installing",
+		name: "@acme/pi-jira",
+	});
 	expect(installing).toContain('data-step="installing"');
 	expect(installing).toContain('role="progressbar"');
 	expect(installing).not.toContain("install-package-submit");
 
-	const installed = render("w1", CATALOG, {
+	const installed = render(asWorkspaceId("w1"), CATALOG, {
 		kind: "installed",
 		summary: {
 			...SUMMARY,
@@ -149,7 +154,7 @@ test("installing, installed and failed steps", () => {
 	expect(installed).toContain("Installed globally");
 	expect(installed).toContain('data-testid="install-package-done"');
 
-	const failed = render("w1", CATALOG, {
+	const failed = render(asWorkspaceId("w1"), CATALOG, {
 		kind: "failed",
 		name: "pi-gone",
 		message: "npm ERR! 404 Not Found",
@@ -158,7 +163,7 @@ test("installing, installed and failed steps", () => {
 	expect(failed).toContain("npm ERR! 404 Not Found");
 	expect(failed).toContain("Nothing was added to your settings.");
 	expect(failed).toContain('data-testid="install-package-retry"');
-	const unknown = render("w1", CATALOG, {
+	const unknown = render(asWorkspaceId("w1"), CATALOG, {
 		kind: "failed",
 		name: "x",
 		message: "socket closed",
@@ -166,7 +171,7 @@ test("installing, installed and failed steps", () => {
 	});
 	expect(unknown).not.toContain("Nothing was added to your settings.");
 	expect(unknown).toContain("It may have been added anyway — check the list.");
-	const timedOut = render("w1", CATALOG, {
+	const timedOut = render(asWorkspaceId("w1"), CATALOG, {
 		kind: "failed",
 		name: "x",
 		message: "slow",
@@ -233,7 +238,7 @@ test("a pasted `pi install -l …` line selects the repository scope when it is 
 						projectTrusted: true,
 						projectSettingsPath: "/repo/.pi/settings.json",
 					}}
-					workspaceId="w1"
+					workspaceId={asWorkspaceId("w1")}
 					onSourceChange={() => {}}
 					onScopeChange={() => {}}
 					onSubmit={() => {}}

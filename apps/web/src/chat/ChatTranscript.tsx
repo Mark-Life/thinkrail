@@ -1,5 +1,5 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
-import type { GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import type { GitDiffScope, SessionId, TurnChangeSet, WorkspaceId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
@@ -169,12 +169,12 @@ const SCROLL_BUTTON_LABELS = {
 const ChatTranscript = forwardRef<
 	ChatTranscriptHandle,
 	{
-		sessionId: string;
-		workspaceId: string;
+		sessionId: SessionId;
+		workspaceId: WorkspaceId;
 		onOpenFile?: ((path: string) => void) | undefined;
 		workspaceRoot: string | undefined;
 		focusComposer: () => void;
-		openSubagentTranscript: (childSessionId: string | null) => void;
+		openSubagentTranscript: (childSessionId: SessionId | null) => void;
 		resultOpener: ChatActions["resultOpener"];
 		markResultSeen?: ChatActions["markResultSeen"];
 		onTryAgain: () => void;

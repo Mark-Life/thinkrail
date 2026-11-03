@@ -3,14 +3,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewComment, ReviewSnapshot, Workspace } from "@thinkrail/contracts";
+import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import { saveWorkspaces } from "../persistence";
 import { markClientStale } from "./todoReview";
 
 let dataDir: string;
 let worktree: string;
-const WS = "ws-stale";
-const SESSION = "sess-stale";
+const WS = asWorkspaceId("ws-stale");
+const SESSION = asSessionId("sess-stale");
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "stale-data-"));
@@ -19,7 +20,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: "p1",
+			projectId: asProjectId("p1"),
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
@@ -59,7 +60,13 @@ test("markClientStale flags only an outdated finding whose reviewed sha was supe
 	});
 	const origin = { todoId: todo.id, sessionId: SESSION, reviewedSha: "sha1" };
 	const snapshot: ReviewSnapshot = {
-		review: { id: "rev_1", workspaceId: WS, status: "open", baseSha: "x", createdAt: 0 },
+		review: {
+			id: "rev_1",
+			workspaceId: asWorkspaceId(WS),
+			status: "open",
+			baseSha: "x",
+			createdAt: 0,
+		},
 		comments: [
 			comment("rc_stale", { anchorState: "outdated", origin }),
 			comment("rc_newest", { anchorState: "outdated", origin: { ...origin, reviewedSha: "sha2" } }),

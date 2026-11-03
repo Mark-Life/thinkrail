@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
@@ -46,8 +47,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: "w1",
-				projectId: "p1",
+				id: asWorkspaceId("w1"),
+				projectId: asProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				worktreePath: repo,

@@ -1,4 +1,4 @@
-import type { FileNode } from "@thinkrail/contracts";
+import type { FileNode, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
@@ -27,7 +27,7 @@ export function FileTree({
 	workspaceId,
 	marks,
 	...focus
-}: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
+}: TreeFocus & { workspaceId: WorkspaceId; marks: ChangeMarks }) {
 	const t = useT();
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
@@ -86,7 +86,7 @@ function FileNodeRow({
 	warmFile,
 }: {
 	node: FileNode;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	marks: ChangeMarks;
 	focus: TreeFocus;
 	expandedPaths: ReadonlySet<string>;

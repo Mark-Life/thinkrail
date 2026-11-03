@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { PiEvent } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import type { AdditionalAnalyticsCapture, AdditionalAnalyticsEvent } from "../analytics";
 import { ackSend } from "./ackSend";
 import { RunObservation, runOutcome } from "./runAnalytics";
@@ -48,17 +49,27 @@ const retry: PiEvent = {
 test("canonical start precedes a fast settlement and ack; attempts never settle a run", async () => {
 	const f = fixture();
 	await ackSend(
-		f.observer.send("private-id", "user", async () => {
-			f.observer.observe("private-id", start);
+		f.observer.send(asSessionId("private-id"), "user", async () => {
+			f.observer.observe(asSessionId("private-id"), start);
 			f.advance(12_000);
-			f.observer.observe("private-id", { type: "agent_end", messages: [], willRetry: false });
-			f.observer.observe("private-id", retry);
-			f.observer.observe("private-id", start);
-			f.observer.observe("private-id", { type: "compaction_start", reason: "overflow" });
-			f.observer.observe("private-id", { type: "compaction_start", reason: "threshold" });
+			f.observer.observe(asSessionId("private-id"), {
+				type: "agent_end",
+				messages: [],
+				willRetry: false,
+			});
+			f.observer.observe(asSessionId("private-id"), retry);
+			f.observer.observe(asSessionId("private-id"), start);
+			f.observer.observe(asSessionId("private-id"), {
+				type: "compaction_start",
+				reason: "overflow",
+			});
+			f.observer.observe(asSessionId("private-id"), {
+				type: "compaction_start",
+				reason: "threshold",
+			});
 			expect(f.events).toHaveLength(1);
-			f.observer.observe("private-id", settle);
-			f.observer.observe("private-id", settle);
+			f.observer.observe(asSessionId("private-id"), settle);
+			f.observer.observe(asSessionId("private-id"), settle);
 		}),
 		1,
 	);
@@ -87,11 +98,11 @@ test("canonical start precedes a fast settlement and ack; attempts never settle 
 
 test("unknown automatic work and internal sends are never labeled user activation", async () => {
 	const f = fixture();
-	f.observer.observe("unmarked", start);
-	f.observer.observe("unmarked", settle);
-	await f.observer.send("reviewer", "internal", async () => {
-		f.observer.observe("reviewer", start);
-		f.observer.observe("reviewer", settle);
+	f.observer.observe(asSessionId("unmarked"), start);
+	f.observer.observe(asSessionId("unmarked"), settle);
+	await f.observer.send(asSessionId("reviewer"), "internal", async () => {
+		f.observer.observe(asSessionId("reviewer"), start);
+		f.observer.observe(asSessionId("reviewer"), settle);
 	});
 	expect(f.events.map((event) => ("origin" in event.params ? event.params.origin : null))).toEqual([
 		"unknown",
@@ -103,16 +114,16 @@ test("unknown automatic work and internal sends are never labeled user activatio
 
 test("an accepted internal continuation makes a user run mixed; rejected sends do not", async () => {
 	const f = fixture();
-	await f.observer.send("chat", "user", async () => {
-		f.observer.observe("chat", start);
+	await f.observer.send(asSessionId("chat"), "user", async () => {
+		f.observer.observe(asSessionId("chat"), start);
 	});
 	await expect(
-		f.observer.send("chat", "internal", async () => {
+		f.observer.send(asSessionId("chat"), "internal", async () => {
 			throw new Error("rejected");
 		}),
 	).rejects.toThrow("rejected");
-	await f.observer.send("chat", "internal", async () => {});
-	f.observer.observe("chat", settle);
+	await f.observer.send(asSessionId("chat"), "internal", async () => {});
+	f.observer.observe(asSessionId("chat"), settle);
 	expect(f.events[0]).toMatchObject({ params: { origin: "user" } });
 	expect(f.events[1]).toMatchObject({ params: { origin: "mixed" } });
 });
@@ -120,36 +131,36 @@ test("an accepted internal continuation makes a user run mixed; rejected sends d
 test("an internal follow-up accepted before delayed agent_start never becomes user-only work", async () => {
 	const f = fixture();
 	const gate = Promise.withResolvers<void>();
-	const user = f.observer.send("chat", "user", () => gate.promise);
-	await f.observer.send("chat", "internal", async () => {});
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", settle);
+	const user = f.observer.send(asSessionId("chat"), "user", () => gate.promise);
+	await f.observer.send(asSessionId("chat"), "internal", async () => {});
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), settle);
 	gate.resolve();
 	await user;
 	expect(f.events).toHaveLength(2);
 	for (const event of f.events) expect(event).toMatchObject({ params: { origin: "mixed" } });
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", settle);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), settle);
 	expect(f.events[3]).toMatchObject({ params: { origin: "unknown" } });
 });
 
 test("rejected sends before delayed agent_start contribute no origin", async () => {
 	const f = fixture();
 	const gate = Promise.withResolvers<void>();
-	const user = f.observer.send("chat", "user", () => gate.promise);
+	const user = f.observer.send(asSessionId("chat"), "user", () => gate.promise);
 	await expect(
-		f.observer.send("chat", "internal", async () => {
+		f.observer.send(asSessionId("chat"), "internal", async () => {
 			throw new Error("rejected");
 		}),
 	).rejects.toThrow("rejected");
 	expect(() =>
-		f.observer.send("chat", "internal", () => {
+		f.observer.send(asSessionId("chat"), "internal", () => {
 			throw new Error("rejected synchronously");
 		}),
 	).toThrow("rejected synchronously");
 	expect(f.events).toEqual([]);
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", settle);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), settle);
 	gate.resolve();
 	await user;
 	for (const event of f.events) expect(event).toMatchObject({ params: { origin: "user" } });
@@ -157,52 +168,52 @@ test("rejected sends before delayed agent_start contribute no origin", async () 
 
 test("accepted pre-start sends remain excluded across revocation until settlement", async () => {
 	const f = fixture();
-	await f.observer.send("chat", "internal", async () => {});
+	await f.observer.send(asSessionId("chat"), "internal", async () => {});
 	f.revoke();
 	f.grant();
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", retry);
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", settle);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), retry);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), settle);
 	expect(f.events).toEqual([]);
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", settle);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), settle);
 	expect(f.events).toHaveLength(2);
 });
 
 test("session deletion removes unresolved intents without letting late resolution affect a new cycle", async () => {
 	const f = fixture();
 	const gate = Promise.withResolvers<void>();
-	const old = f.observer.send("chat", "internal", () => gate.promise);
-	f.observer.forget("chat");
-	await f.observer.send("chat", "user", async () => {
-		f.observer.observe("chat", start);
+	const old = f.observer.send(asSessionId("chat"), "internal", () => gate.promise);
+	f.observer.forget(asSessionId("chat"));
+	await f.observer.send(asSessionId("chat"), "user", async () => {
+		f.observer.observe(asSessionId("chat"), start);
 		gate.resolve();
 		await old;
-		f.observer.observe("chat", settle);
+		f.observer.observe(asSessionId("chat"), settle);
 	});
 	for (const event of f.events) expect(event).toMatchObject({ params: { origin: "user" } });
 });
 
 test("queue clear releases accepted queued origins but preserves a pending pre-grant cycle", async () => {
 	const f = fixture();
-	await f.observer.send("cleared", "internal", async () => {});
-	f.observer.clearQueue("cleared");
-	await f.observer.send("cleared", "user", async () => {
-		f.observer.observe("cleared", start);
-		f.observer.observe("cleared", settle);
+	await f.observer.send(asSessionId("cleared"), "internal", async () => {});
+	f.observer.clearQueue(asSessionId("cleared"));
+	await f.observer.send(asSessionId("cleared"), "user", async () => {
+		f.observer.observe(asSessionId("cleared"), start);
+		f.observer.observe(asSessionId("cleared"), settle);
 	});
 	for (const event of f.events) expect(event).toMatchObject({ params: { origin: "user" } });
 	const gate = Promise.withResolvers<void>();
-	const pending = f.observer.send("pending", "user", () => gate.promise);
-	await f.observer.send("pending", "internal", async () => {});
+	const pending = f.observer.send(asSessionId("pending"), "user", () => gate.promise);
+	await f.observer.send(asSessionId("pending"), "internal", async () => {});
 	f.revoke();
-	f.observer.clearQueue("pending");
+	f.observer.clearQueue(asSessionId("pending"));
 	f.grant();
-	f.observer.observe("pending", start);
-	f.observer.clearQueue("pending");
-	f.observer.observe("pending", start);
-	f.observer.observe("pending", settle);
+	f.observer.observe(asSessionId("pending"), start);
+	f.observer.clearQueue(asSessionId("pending"));
+	f.observer.observe(asSessionId("pending"), start);
+	f.observer.observe(asSessionId("pending"), settle);
 	gate.resolve();
 	await pending;
 	expect(f.events).toHaveLength(2);
@@ -211,18 +222,18 @@ test("queue clear releases accepted queued origins but preserves a pending pre-g
 test("queue clearing before enqueue acceptance cannot retain or reapply the cleared origin", async () => {
 	const f = fixture();
 	const gate = Promise.withResolvers<void>();
-	const queued = f.observer.send("chat", "internal", () => gate.promise);
-	f.observer.clearQueue("chat");
+	const queued = f.observer.send(asSessionId("chat"), "internal", () => gate.promise);
+	f.observer.clearQueue(asSessionId("chat"));
 	gate.resolve();
 	await queued;
-	await f.observer.send("chat", "user", async () => {
-		f.observer.observe("chat", start);
+	await f.observer.send(asSessionId("chat"), "user", async () => {
+		f.observer.observe(asSessionId("chat"), start);
 		const nextGate = Promise.withResolvers<void>();
-		const next = f.observer.send("chat", "internal", () => nextGate.promise);
-		f.observer.clearQueue("chat");
+		const next = f.observer.send(asSessionId("chat"), "internal", () => nextGate.promise);
+		f.observer.clearQueue(asSessionId("chat"));
 		nextGate.resolve();
 		await next;
-		f.observer.observe("chat", settle);
+		f.observer.observe(asSessionId("chat"), settle);
 	});
 	expect(f.events).toHaveLength(2);
 	for (const event of f.events) expect(event).toMatchObject({ params: { origin: "user" } });
@@ -230,15 +241,15 @@ test("queue clearing before enqueue acceptance cannot retain or reapply the clea
 
 test("full reset releases active sessions and accepted or unresolved intents", async () => {
 	const f = fixture();
-	f.observer.observe("active", start);
-	await f.observer.send("queued", "internal", async () => {});
+	f.observer.observe(asSessionId("active"), start);
+	await f.observer.send(asSessionId("queued"), "internal", async () => {});
 	const gate = Promise.withResolvers<void>();
-	const old = f.observer.send("pending", "internal", () => gate.promise);
+	const old = f.observer.send(asSessionId("pending"), "internal", () => gate.promise);
 	f.observer.reset();
 	for (const sessionId of ["active", "queued", "pending"]) {
-		await f.observer.send(sessionId, "user", async () => {
-			f.observer.observe(sessionId, start);
-			f.observer.observe(sessionId, settle);
+		await f.observer.send(asSessionId(sessionId), "user", async () => {
+			f.observer.observe(asSessionId(sessionId), start);
+			f.observer.observe(asSessionId(sessionId), settle);
 		});
 	}
 	gate.resolve();
@@ -251,38 +262,38 @@ test("full reset releases active sessions and accepted or unresolved intents", a
 test("consent during an existing cycle never reconstructs start, retry or duration history", () => {
 	const f = fixture();
 	f.revoke();
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", retry);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), retry);
 	f.advance(100_000);
 	f.grant();
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", retry);
-	f.observer.observe("chat", settle);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), retry);
+	f.observer.observe(asSessionId("chat"), settle);
 	expect(f.events).toEqual([]);
 	expect(f.descriptions()).toBe(0);
-	f.observer.observe("chat", start);
-	f.observer.observe("chat", settle);
+	f.observer.observe(asSessionId("chat"), start);
+	f.observer.observe(asSessionId("chat"), settle);
 	expect(f.events[1]).toMatchObject({ params: { duration_bucket: "<10s", retry_bucket: "0" } });
 });
 
 test("revocation drops an active run and a delayed old send even after regrant", async () => {
 	const f = fixture();
-	f.observer.observe("active", start);
+	f.observer.observe(asSessionId("active"), start);
 	const gate = Promise.withResolvers<void>();
-	const sending = f.observer.send("delayed", "user", async () => {
+	const sending = f.observer.send(asSessionId("delayed"), "user", async () => {
 		await gate.promise;
-		f.observer.observe("delayed", start);
-		f.observer.observe("delayed", settle);
+		f.observer.observe(asSessionId("delayed"), start);
+		f.observer.observe(asSessionId("delayed"), settle);
 	});
 	f.revoke();
 	f.grant();
-	f.observer.observe("active", start);
-	f.observer.observe("active", settle);
+	f.observer.observe(asSessionId("active"), start);
+	f.observer.observe(asSessionId("active"), settle);
 	gate.resolve();
 	await sending;
 	expect(f.events).toHaveLength(1);
-	f.observer.observe("delayed", start);
-	f.observer.observe("delayed", settle);
+	f.observer.observe(asSessionId("delayed"), start);
+	f.observer.observe(asSessionId("delayed"), settle);
 	expect(f.events).toHaveLength(3);
 });
 
@@ -295,7 +306,7 @@ test("observation faults never interrupt canonical event delivery", () => {
 			throw new Error("missing workspace");
 		},
 	);
-	expect(() => observer.observe("chat", start)).not.toThrow();
+	expect(() => observer.observe(asSessionId("chat"), start)).not.toThrow();
 });
 
 describe("settlement outcomes do not equate stop with verified success", () => {

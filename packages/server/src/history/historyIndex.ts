@@ -1,12 +1,19 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { HistorySearchResult, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { MAX_HISTORY_LIMIT, MAX_HISTORY_QUERY_LENGTH } from "@thinkrail/contracts";
+import type {
+	HistorySearchResult,
+	MessageHit,
+	ProjectId,
+	PromptHit,
+	SessionId,
+	WorkspaceId,
+} from "@thinkrail/contracts";
+import { asSessionId, MAX_HISTORY_LIMIT, MAX_HISTORY_QUERY_LENGTH } from "@thinkrail/contracts";
 import { extractSession, type HistoryEntry } from "./extract";
 
 interface SessionRecord {
-	sessionId: string;
+	sessionId: SessionId;
 	cwd: string;
 	title?: string;
 	path: string;
@@ -18,7 +25,7 @@ interface SessionRecord {
 export type HistoryState = "cold" | "refreshing" | "ready";
 
 export interface HistorySession {
-	readonly sessionId: string;
+	readonly sessionId: SessionId;
 	readonly cwd: string;
 	readonly title?: string;
 	readonly entries: readonly HistoryEntry[];
@@ -91,7 +98,7 @@ export class HistoryIndex {
 				return;
 			}
 			this.records.set(path, {
-				sessionId: session.id,
+				sessionId: asSessionId(session.id),
 				cwd: session.cwd,
 				path,
 				mtimeMs,
@@ -154,8 +161,8 @@ export class HistoryIndex {
 	async search(input: {
 		query: string;
 		limit?: number;
-		filter: (cwd: string, sessionId: string) => boolean;
-		labels: (cwd: string) => { workspaceId?: string; projectId?: string };
+		filter: (cwd: string, sessionId: SessionId) => boolean;
+		labels: (cwd: string) => { workspaceId?: WorkspaceId; projectId?: ProjectId };
 	}): Promise<HistorySearchResult> {
 		const indexing = await this.freshen();
 

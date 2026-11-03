@@ -1,4 +1,4 @@
-import type { GitStatus } from "@thinkrail/contracts";
+import type { GitStatus, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
@@ -36,7 +36,7 @@ import { ViewedMark } from "./ViewedMark";
 
 function selectReviewTab(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	id: string,
 ): ChangesTab | undefined {
 	return (state.tabsByWorkspace[workspaceId] ?? []).find(
@@ -50,7 +50,7 @@ export function ChangesPanel({
 	error,
 	reload,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	status: GitStatus | null;
 	error: string | null;
 	reload: () => void;

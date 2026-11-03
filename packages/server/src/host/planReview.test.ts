@@ -9,8 +9,8 @@ import {
 	ModelRuntime,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ReviewFailedPayload, Workspace } from "@thinkrail/contracts";
-import { isPlanReviewResult } from "@thinkrail/contracts";
+import type { ReviewFailedPayload, SessionId, Workspace } from "@thinkrail/contracts";
+import { asProjectId, asSessionId, asWorkspaceId, isPlanReviewResult } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	configurePiRuntime,
@@ -48,7 +48,7 @@ const TEST_KEY = "phc_test";
 
 let dataDir: string;
 let worktree: string;
-const WS = "ws-planreview";
+const WS = asWorkspaceId("ws-planreview");
 
 function modelDef(id: string) {
 	return {
@@ -118,7 +118,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: "p1",
+			projectId: asProjectId("p1"),
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
@@ -144,7 +144,7 @@ const verdictRunner =
 	(finalText: string, onRun?: () => void): ReviewRunner =>
 	async () => {
 		onRun?.();
-		return { childSessionId: "child", status: "completed" as const, finalText };
+		return { childSessionId: asSessionId("child"), status: "completed" as const, finalText };
 	};
 
 const approve = '```json\n{ "verdict": "approve", "findings": [] }\n```';
@@ -156,7 +156,7 @@ const requestChanges = [
 ].join("\n");
 
 /** A real (faux-model) worker chat: the fix message can only land on a session that actually exists. */
-async function workerSession(): Promise<string> {
+async function workerSession(): Promise<SessionId> {
 	const created = await createSession({
 		cwd: worktree,
 		workspaceId: WS,
@@ -166,14 +166,14 @@ async function workerSession(): Promise<string> {
 	return created.sessionId;
 }
 
-function committedItem(sessionId: string, title = "step"): string {
+function committedItem(sessionId: SessionId, title = "step"): string {
 	return new TodoStore(worktree, sessionId).add({
 		title,
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
 	}).id;
 }
 
-async function settle(sessionId: string, itemId: string): Promise<void> {
+async function settle(sessionId: SessionId, itemId: string): Promise<void> {
 	const deadline = Date.now() + 10_000;
 	while (itemReviewActive(sessionId, itemId)) {
 		if (Date.now() > deadline) throw new Error("plan review never settled");
@@ -190,7 +190,7 @@ test("an approve verdict settles the step as reviewed by the agent", async () =>
 	expect(getWorkspace(WS).lastActiveAt ?? 0).toBeGreaterThan(0);
 	await settle(sessionId, id);
 
-	const record = todoReviewRecord({ workspaceId: WS, sessionId, id });
+	const record = todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id });
 	expect(record?.state).toBe("reviewed");
 	expect(record?.reviewedBy).toBe("agent");
 });
@@ -345,7 +345,7 @@ test("an approve whose record fails does not publish a successful guide", async 
 	} finally {
 		spy.mockRestore();
 	}
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })).toBeUndefined();
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })).toBeUndefined();
 	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
@@ -389,7 +389,11 @@ test("reviews of one plan run one at a time, and a step already under review is 
 		if (running > 1) overlapped = true;
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		running -= 1;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: asSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 
 	expect(startPlanReview(WS, sessionId, first, serialRunner)).toBe(true);
@@ -408,13 +412,13 @@ test("a subagent that returns no parsable verdict clears the reviewing mark inst
 	startPlanReview(WS, sessionId, id, verdictRunner("I could not decide."));
 	await settle(sessionId, id);
 
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })).toBeUndefined();
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
 test("a fix the worker never accepted gives the auto cycle back instead of stranding the step", async () => {
 	// No session exists for this id, so the structured fix send rejects before the worker's turn.
-	const sessionId = "sess-detached";
+	const sessionId = asSessionId("sess-detached");
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
 
@@ -459,7 +463,11 @@ test("a fix landing during another step's review is re-reviewed, not dropped", a
 	});
 	const slowRunner: ReviewRunner = async () => {
 		await bGate;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: asSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 	expect(startPlanReview(WS, sessionId, b, slowRunner)).toBe(true);
 
@@ -492,7 +500,11 @@ test("a tool request_review queues behind a button review of another step on the
 		if (running > 1) overlapped = true;
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		running -= 1;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: asSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 
 	installRequestReviewSeam(serialRunner);
@@ -651,7 +663,11 @@ test("an unset reviewer model resolves the host's new-chat default, not the work
 	let captured: { provider: string; id: string } | undefined;
 	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
 		captured = role.model;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: asSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 	startPlanReview(WS, sessionId, id, capturingRunner);
 	await settle(sessionId, id);
@@ -665,7 +681,11 @@ test("an unset reviewer effort resolves the host's new-chat default, not the wor
 	let captured: string | undefined;
 	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
 		captured = role.thinkingLevel;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: asSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 	startPlanReview(WS, sessionId, id, capturingRunner);
 	await settle(sessionId, id);
@@ -706,7 +726,7 @@ test("the tool path awaits artifact reconciliation before it snapshots the chang
 
 	expect(order[0]).toBe("settle");
 	expect(order.indexOf("settle")).toBeLessThan(order.indexOf("start"));
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })?.state).toBe("reviewed");
 });
 
 test("the tool path marks findings sent to the worker so resolve_comment can close them", async () => {
@@ -878,9 +898,9 @@ test("the button path delivers canonical ids even when a Review send races befor
 		const c = await realAdd(arg);
 		if (!racedOnce) {
 			racedOnce = true;
-			raced = withReviewLock(WS, () => reviews.markCommentsSent(WS, [c.id], "sess-other")).catch(
-				() => {},
-			);
+			raced = withReviewLock(WS, () =>
+				reviews.markCommentsSent(WS, [c.id], asSessionId("sess-other")),
+			).catch(() => {});
 		}
 		return c;
 	});
@@ -1004,14 +1024,14 @@ test("a request_review that fails before the review starts releases its claim, s
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
 	});
 	await expect(run()).resolves.toBeDefined();
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })?.state).toBe("reviewed");
 });
 
 test("itemTitleOf labels a Review-All adopted commit with its subject, not the commit:<sha> id", async () => {
 	// A commit no plan item owns is surfaced only as a wire-only adoptedCommits entry; the review result
 	// card / detached-failure toast must name its subject, so itemTitleOf has to look there too.
 	const wt = mkdtempSync(join(tmpdir(), "planreview-adopt-"));
-	const ws = "ws-adopt";
+	const ws = asWorkspaceId("ws-adopt");
 	sh(wt, "init", "-b", "main");
 	sh(wt, "config", "user.email", "t@thinkrail.test");
 	sh(wt, "config", "user.name", "test");
@@ -1027,7 +1047,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	saveWorkspaces([
 		{
 			id: ws,
-			projectId: "p1",
+			projectId: asProjectId("p1"),
 			name: "w",
 			branch: "feature",
 			baseBranch: "main",
@@ -1036,8 +1056,12 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 		} as Workspace,
 	]);
 	try {
-		expect(await itemTitleOf(ws, "sess-adopt", `commit:${sha}`)).toBe("feat: loose work");
-		expect(await itemTitleOf(ws, "sess-adopt", "commit:deadbeef")).toBe("commit:deadbeef");
+		expect(await itemTitleOf(asWorkspaceId(ws), asSessionId("sess-adopt"), `commit:${sha}`)).toBe(
+			"feat: loose work",
+		);
+		expect(await itemTitleOf(ws, asSessionId("sess-adopt"), "commit:deadbeef")).toBe(
+			"commit:deadbeef",
+		);
 	} finally {
 		rmSync(wt, { recursive: true, force: true });
 	}

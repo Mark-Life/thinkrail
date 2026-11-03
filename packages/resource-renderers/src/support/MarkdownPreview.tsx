@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useMemo } from "react";
 import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
 import type { ResourceViewProps } from "../registry";
@@ -42,7 +43,7 @@ export function MarkdownDocument({
 	links,
 }: {
 	content: string;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	Markdown: ResourceMarkdown;
 	links: Pick<ResourceHost, "bytesUrl" | "openFile">;

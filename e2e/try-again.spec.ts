@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
 import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -10,7 +11,7 @@ const BASE_TS = 1_700_700_000_000;
 interface ClientFrame {
 	id?: string;
 	method?: string;
-	params?: { sessionId?: string; text?: string; images?: unknown[] };
+	params?: { sessionId?: SessionId; text?: string; images?: unknown[] };
 }
 
 async function interceptTryAgain(page: Page, prompts: ClientFrame[]): Promise<void> {

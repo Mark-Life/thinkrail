@@ -1,4 +1,4 @@
-import type { GitDiffScope } from "@thinkrail/contracts";
+import type { GitDiffScope, WorkspaceId } from "@thinkrail/contracts";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	fileName,
@@ -38,12 +38,12 @@ const inFlight = new Map<
 	}
 >();
 
-function navTick(workspaceId: string): number {
+function navTick(workspaceId: WorkspaceId): number {
 	return selectWorkspaceNavTick(useAppStore.getState(), workspaceId);
 }
 
 async function openReadTab<T>(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	id: string,
 	resourceIdentity: string,
 	intent: TabIntent,
@@ -120,7 +120,7 @@ async function openReadTab<T>(
 }
 
 export function openFileInTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	reported: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
@@ -151,7 +151,7 @@ export function openFileInTab(
 }
 
 export function openDiffInTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	scope: GitDiffScope,
 	path: string,
 	intent: TabIntent,
@@ -196,7 +196,7 @@ export function openDiffInTab(
 }
 
 export function fileComparisonTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	before: string,
 	path: string,
 ): FileComparisonTab {
@@ -211,7 +211,7 @@ export function fileComparisonTab(
 }
 
 export function openFileComparisonInTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	before: string,
 	path: string,
 	intent: TabIntent,
@@ -233,7 +233,7 @@ export function openFileComparisonInTab(
 }
 
 export async function openChangesTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	scope: GitDiffScope,
 	options: { revealPath?: string | null } = {},
 	intent: TabIntent = "preview",

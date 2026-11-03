@@ -1,4 +1,5 @@
 import {
+	asSessionId,
 	type BackgroundCommandCompletionDetails,
 	completionDelivery,
 	type SubagentCompletionDetails,
@@ -89,7 +90,10 @@ export function SubagentResult({
 	const [expanded, fold, toggleRef] = useFold(`${id}:result`, false);
 	const toggle: typeof fold = (event) => {
 		if (!expanded)
-			actions?.markResultSeen?.({ kind: "subagent", childSessionId: details.childSessionId });
+			actions?.markResultSeen?.({
+				kind: "subagent",
+				childSessionId: asSessionId(details.childSessionId),
+			});
 		fold(event);
 	};
 	const report = completionReport(text);
@@ -110,7 +114,10 @@ export function SubagentResult({
 				metaLead={<RunModelLabel model={details.model} thinkingLevel={details.thinkingLevel} />}
 				meta={usageCounters(t, details).join(" · ")}
 				teaser={reportTeaser(report)}
-				onOpen={actions?.resultOpener({ kind: "subagent", childSessionId: details.childSessionId })}
+				onOpen={actions?.resultOpener({
+					kind: "subagent",
+					childSessionId: asSessionId(details.childSessionId),
+				})}
 			>
 				{report ? (
 					<div className="tr-text-reading text-text-default">

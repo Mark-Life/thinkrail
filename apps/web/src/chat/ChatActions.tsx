@@ -1,4 +1,4 @@
-import type { McpReadOutputResult, WireModel } from "@thinkrail/contracts";
+import type { McpReadOutputResult, SessionId, WireModel } from "@thinkrail/contracts";
 import type { ToolRevealOptions } from "@thinkrail/extension-api/web";
 import { createContext, useContext } from "react";
 import type { ResourceTarget } from "./resources";
@@ -10,7 +10,7 @@ export type ResultTarget = ResourceTarget;
 export interface ChatActions {
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
-	openSubagentTranscript: (childSessionId: string) => void;
+	openSubagentTranscript: (childSessionId: SessionId) => void;
 	respondToTool: (toolCallId: string, response: unknown) => Promise<void>;
 	resultOpener: (target: ResultTarget) => (() => void) | undefined;
 	markResultSeen?: ((target: ResultTarget) => void) | undefined;

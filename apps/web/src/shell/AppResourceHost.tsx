@@ -1,4 +1,4 @@
-import { MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
+import { MAX_SEARCH_PREVIEW_BYTES, type WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type ResourceEnvironment,
@@ -57,7 +57,7 @@ const HOST: ResourceHost = {
 	ReviewSend,
 };
 
-function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null): string {
+function cappedBytesUrl(workspaceId: WorkspaceId, path: string, oid?: string | null): string {
 	const url = resourceBytesUrl(workspaceId, path, oid);
 	return `${url}${url.includes("?") ? "&" : "?"}maxBytes=${MAX_SEARCH_PREVIEW_BYTES}`;
 }

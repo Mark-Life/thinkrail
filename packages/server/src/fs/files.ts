@@ -9,7 +9,7 @@ import {
 	statSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
+import type { FileNode, ResourceMeta, WorkspaceId } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { loadWorkspaces } from "../persistence";
@@ -64,7 +64,7 @@ function resolveUnderRoot(root: string, path: string, followLeaf: boolean): stri
 }
 
 function resolveInWorktree(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	followLeaf: boolean,
 ): { root: string; abs: string } {
@@ -97,7 +97,7 @@ function entryKind(root: string, dir: string, entry: Dirent): FileNode["kind"] {
 	}
 }
 
-export function readDir(workspaceId: string, path: string): FileNode[] {
+export function readDir(workspaceId: WorkspaceId, path: string): FileNode[] {
 	const { root, abs } = resolveInWorktree(workspaceId, path, true);
 
 	return readdirSync(abs, { withFileTypes: true })
@@ -139,7 +139,7 @@ function readBounded(abs: string, maxBytes: number): Uint8Array {
 }
 
 export function readFile(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	options: { readonly maxBytes?: number } = {},
 ): { content: string; meta: ResourceMeta } {
@@ -151,7 +151,7 @@ export function readFile(
 }
 
 export function resolveWorktreeFile(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	options: { followLeaf?: boolean } = {},
 ): string {

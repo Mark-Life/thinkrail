@@ -5,7 +5,7 @@ import {
 	RiRefreshLine as Refresh,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import type { WorkspaceCreation } from "@thinkrail/contracts";
+import type { WorkspaceCreation, WorkspaceId } from "@thinkrail/contracts";
 import { type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -42,7 +42,7 @@ function statusReason(t: Translator, creation: WorkspaceCreation): string | null
 	return null;
 }
 
-export function retryCreation(id: string): void {
+export function retryCreation(id: WorkspaceId): void {
 	getTransport()
 		.request("workspace.retryCreation", { id })
 		.then((creation) => useAppStore.getState().applyWorkspaceCreation(creation))
@@ -51,7 +51,7 @@ export function retryCreation(id: string): void {
 		);
 }
 
-export function dismissCreation(id: string): void {
+export function dismissCreation(id: WorkspaceId): void {
 	getTransport()
 		.request("workspace.dismissCreation", { id })
 		.catch((err: unknown) =>

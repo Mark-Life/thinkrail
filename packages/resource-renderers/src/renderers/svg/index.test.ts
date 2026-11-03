@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -38,7 +39,7 @@ test("text SVG resolves to Vector and Source without the raster renderer", () =>
 		expect(
 			resolveRenderers(
 				{
-					workspaceId: "ws",
+					workspaceId: asWorkspaceId("ws"),
 					path: "diagram.svg",
 					mime: "image/svg+xml",
 					text: true,

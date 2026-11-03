@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { type ReactNode, Suspense } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ResourceEnvironmentProvider, type ResourceHost, ResourceHostProvider } from "../host";
@@ -60,7 +61,7 @@ function testRenderer(
 		},
 	};
 	cleanups.push(registerResourceRenderer(renderer));
-	const resource = describeResource("ws", `file.${extension}`, PENDING_TEXT_META);
+	const resource = describeResource(asWorkspaceId("ws"), `file.${extension}`, PENDING_TEXT_META);
 	return { renderer, calls, resource };
 }
 

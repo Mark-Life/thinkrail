@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 export interface LoginInputSelect {
 	kind: "select";
 	message: string;
@@ -16,7 +17,7 @@ export interface LoginState {
 	loginId: string;
 	providerId: string;
 	method?: "oauth" | "api_key";
-	target?: { kind: "mcp"; workspaceId: string; serverName: string };
+	target?: { kind: "mcp"; workspaceId: WorkspaceId; serverName: string };
 	status: "active" | "success" | "error";
 	url?: string;
 	instructions?: string;

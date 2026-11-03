@@ -1,4 +1,10 @@
-import type { GitDiffScope, PiEvent, TurnChangeSet } from "@thinkrail/contracts";
+import type {
+	GitDiffScope,
+	PiEvent,
+	SessionId,
+	TurnChangeSet,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import { gitStatus, snapshotWorktree } from "../git";
 import { logger } from "../log";
 import { loadTurns, loadWorkspaces, saveTurns } from "../persistence";
@@ -8,7 +14,7 @@ const TURNS_PER_WORKSPACE = 30;
 const DRAIN_TIMEOUT_MS = 5_000;
 
 interface PendingRun {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	worktreePath: string;
 	startedAt: number;
 	baseTree: Promise<string | null>;
@@ -31,11 +37,11 @@ export function turnScope(turn: TurnChangeSet): Extract<GitDiffScope, { kind: "t
 	};
 }
 
-export function listTurns(workspaceId: string): TurnChangeSet[] {
+export function listTurns(workspaceId: WorkspaceId): TurnChangeSet[] {
 	return loadTurns().byWorkspace[workspaceId] ?? [];
 }
 
-export function forgetWorkspaceTurns(workspaceId: string): void {
+export function forgetWorkspaceTurns(workspaceId: WorkspaceId): void {
 	const turns = loadTurns();
 	if (!(workspaceId in turns.byWorkspace)) return;
 	const { [workspaceId]: _dropped, ...byWorkspace } = turns.byWorkspace;
@@ -55,13 +61,13 @@ export class TurnTracker {
 	private readonly pending = new Map<string, PendingRun>();
 	private readonly recording = new Set<Promise<void>>();
 	private readonly resolve: (
-		sessionId: string,
-	) => { workspaceId: string; worktreePath: string } | null;
+		sessionId: SessionId,
+	) => { workspaceId: WorkspaceId; worktreePath: string } | null;
 	private readonly now: () => number;
 	private readonly snapshot: (worktreePath: string) => Promise<string | null>;
 
 	constructor(
-		resolve: (sessionId: string) => { workspaceId: string; worktreePath: string } | null,
+		resolve: (sessionId: SessionId) => { workspaceId: WorkspaceId; worktreePath: string } | null,
 		now: () => number = Date.now,
 		snapshot: (worktreePath: string) => Promise<string | null> = snapshotWorktree,
 	) {
@@ -70,7 +76,7 @@ export class TurnTracker {
 		this.snapshot = snapshot;
 	}
 
-	observe(sessionId: string, event: PiEvent): Promise<void> {
+	observe(sessionId: SessionId, event: PiEvent): Promise<void> {
 		if (event.type === "agent_start") {
 			if (this.pending.has(sessionId)) return Promise.resolve();
 			const target = this.resolve(sessionId);
@@ -104,7 +110,7 @@ export class TurnTracker {
 	}
 
 	private async settle(
-		sessionId: string,
+		sessionId: SessionId,
 		run: PendingRun,
 		head: Promise<string | null>,
 	): Promise<void> {

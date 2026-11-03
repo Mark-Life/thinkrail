@@ -1,5 +1,12 @@
 import { beforeAll, expect, test } from "bun:test";
-import type { AssistantMessage, TodoGroupItem, TodoItem, UserMessage } from "@thinkrail/contracts";
+import type {
+	AssistantMessage,
+	SessionId,
+	TodoGroupItem,
+	TodoItem,
+	UserMessage,
+} from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import type { InteractionState } from "./interactionState";
 import {
 	adoptedCommits,
@@ -135,7 +142,7 @@ test("hostSessionGlance uses host blockers and execution over stale transcript f
 					kind: "dialog",
 					request: {
 						id: "d1",
-						sessionId: "s1",
+						sessionId: asSessionId("s1"),
 						kind: "confirm",
 						title: "Continue?",
 						message: "Proceed?",
@@ -444,16 +451,22 @@ test("itemOpenFindings: counts open agent comments anchored in the item's change
 	expect(itemOpenFindings(flagged, undefined)).toBe(0);
 	expect(itemOpenFindings(item("no-set", "done"), [])).toBe(0);
 	// Origin provenance wins over path overlap: same file, another step's finding never counts here.
-	const stamped = (todoId: string, sessionId: string) => ({
+	const stamped = (todoId: string, sessionId: SessionId) => ({
 		author: "agent" as const,
 		status: "draft" as const,
 		anchor: { path: "src/a.ts", side: "worktree" as const, selectors: [] },
 		origin: { todoId, sessionId, reviewedSha: "abc" },
 	});
 	expect(
-		itemOpenFindings(flagged, [stamped("t_flagged", "s1"), stamped("t_other", "s1")], "s1"),
+		itemOpenFindings(
+			flagged,
+			[stamped("t_flagged", asSessionId("s1")), stamped("t_other", asSessionId("s1"))],
+			asSessionId("s1"),
+		),
 	).toBe(1);
-	expect(itemOpenFindings(flagged, [stamped("t_flagged", "s2")], "s1")).toBe(0);
+	expect(
+		itemOpenFindings(flagged, [stamped("t_flagged", asSessionId("s2"))], asSessionId("s1")),
+	).toBe(0);
 	expect(reviewChangesRequested(flagged)).toBe(true);
 	expect(reviewChangesRequested(item("plain", "done"))).toBe(false);
 });

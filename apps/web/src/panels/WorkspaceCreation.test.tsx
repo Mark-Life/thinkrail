@@ -1,13 +1,14 @@
 import { expect, test } from "bun:test";
 import type { WorkspaceCreation } from "@thinkrail/contracts";
+import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
 import { EN } from "@thinkrail/locales";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { WorkspaceCreationRow, WorkspaceCreationView } from "./WorkspaceCreation";
 
 const creation = (over: Partial<WorkspaceCreation> = {}): WorkspaceCreation => ({
-	id: "c1",
-	projectId: "p1",
+	id: asWorkspaceId("c1"),
+	projectId: asProjectId("p1"),
 	name: "workspace-5",
 	branch: "workspace-5",
 	baseBranch: "origin/main",

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
 	openAppFresh,
@@ -46,7 +48,7 @@ async function openAnthropicSignIn(page: Page) {
 }
 
 interface NoticeWire {
-	notice(sessionId: string): void;
+	notice(sessionId: SessionId): void;
 	disableRequests: () => number;
 }
 
@@ -113,7 +115,7 @@ test("the chat banner dismisses per chat, and Don't warn again turns pi's warnin
 		page.locator('[data-testid="editor-tab"][data-kind="chat"][data-active="true"]'),
 	).toHaveAttribute("data-session-id", id);
 
-	wire.notice(id);
+	wire.notice(asSessionId(id));
 	const banner = page.getByTestId("extra-usage-notice");
 	await expect(banner).toHaveAttribute("data-context", "chat");
 	await expect(banner).toContainText(
@@ -125,7 +127,7 @@ test("the chat banner dismisses per chat, and Don't warn again turns pi's warnin
 	await expect(banner).toHaveCount(0);
 	expect(wire.disableRequests()).toBe(0);
 
-	wire.notice(id);
+	wire.notice(asSessionId(id));
 	await expect(banner).toBeVisible();
 	await banner.getByTestId("extra-usage-disable").click();
 	await expect(banner).toHaveCount(0);

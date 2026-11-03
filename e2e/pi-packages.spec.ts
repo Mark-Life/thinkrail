@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { asSessionId } from "@thinkrail/contracts";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { piExtensionSource, writePiPackageFixture } from "./fixtures/piPackage";
@@ -118,7 +119,9 @@ test("a pi package installed from Settings reaches a chat, switches off and on, 
 		await openPersistedChat(page, "package lifecycle");
 		await expect(page.getByTestId("chat-toolbar")).toBeVisible();
 		const commandNames = async () =>
-			(await wire.request("session.getCommands", { sessionId: session.id })).map((c) => c.name);
+			(await wire.request("session.getCommands", { sessionId: asSessionId(session.id) })).map(
+				(c) => c.name,
+			);
 		await expect.poll(commandNames, { timeout: 30_000 }).toContain("fixture-hello");
 
 		await openExtensionsSettings(page);

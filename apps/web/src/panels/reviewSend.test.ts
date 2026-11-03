@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import type { ReviewSendResult, ReviewSnapshot } from "@thinkrail/contracts";
+import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import * as wireTransport from "../transport/wireTransport";
 import { sendReviewBatch, sendReviewComment } from "./reviewSend";
@@ -12,18 +13,20 @@ let restore: () => void = () => {};
 beforeEach(() => {
 	useAppStore.setState(initial, true);
 	requests.length = 0;
-	results = [{ sessionId: "review-b", model: null, thinkingLevel: "medium", reused: true }];
+	results = [
+		{ sessionId: asSessionId("review-b"), model: null, thinkingLevel: "medium", reused: true },
+	];
 	const store = useAppStore.getState();
-	store.openChatSession("workspace", "review-b", null, "medium");
-	store.openChatSession("workspace", "unrelated-a", null, "medium");
+	store.openChatSession(asWorkspaceId("workspace"), asSessionId("review-b"), null, "medium");
+	store.openChatSession(asWorkspaceId("workspace"), asSessionId("unrelated-a"), null, "medium");
 	const snapshot: ReviewSnapshot = {
 		review: {
 			id: "review",
-			workspaceId: "workspace",
+			workspaceId: asWorkspaceId("workspace"),
 			status: "open",
 			baseSha: "base",
 			createdAt: 0,
-			fileSessions: { "b.ts": "review-b" },
+			fileSessions: { "b.ts": asSessionId("review-b") },
 		},
 		comments: [],
 	};
@@ -44,14 +47,14 @@ afterEach(() => {
 });
 
 test("sending a file comment does not override its pinned review chat with an unrelated open chat", async () => {
-	await sendReviewComment("workspace", "comment-b");
+	await sendReviewComment(asWorkspaceId("workspace"), "comment-b");
 	expect(requests).toEqual([
 		{ method: "review.sendComment", params: { workspaceId: "workspace", id: "comment-b" } },
 	]);
 });
 
 test("a file batch leaves the destination to the host when no chat context is supplied", async () => {
-	await sendReviewBatch("workspace", ["comment-b"]);
+	await sendReviewBatch(asWorkspaceId("workspace"), ["comment-b"]);
 	expect(requests).toEqual([
 		{
 			method: "review.sendBatch",
@@ -61,18 +64,23 @@ test("a file batch leaves the destination to the host when no chat context is su
 });
 
 test("Send all preserves per-file routing and opens every returned review chat", async () => {
-	results.push({ sessionId: "review-c", model: null, thinkingLevel: "medium", reused: false });
-	await sendReviewBatch("workspace");
+	results.push({
+		sessionId: asSessionId("review-c"),
+		model: null,
+		thinkingLevel: "medium",
+		reused: false,
+	});
+	await sendReviewBatch(asWorkspaceId("workspace"));
 	expect(requests).toEqual([{ method: "review.sendBatch", params: { workspaceId: "workspace" } }]);
 	expect(
 		useAppStore
 			.getState()
 			.tabsByWorkspace.workspace?.map((tab) => tab.kind === "chat" && tab.sessionId),
-	).toContain("review-c");
+	).toContain(asSessionId("review-c"));
 });
 
 test("a comment from a chat card still explicitly targets that card's chat", async () => {
-	await sendReviewComment("workspace", "comment-b", "review-b");
+	await sendReviewComment(asWorkspaceId("workspace"), "comment-b", asSessionId("review-b"));
 	expect(requests).toEqual([
 		{
 			method: "review.sendComment",
@@ -82,7 +90,11 @@ test("a comment from a chat card still explicitly targets that card's chat", asy
 });
 
 test("a multi-file chat card still sends one batch to its explicit chat", async () => {
-	await sendReviewBatch("workspace", ["comment-b", "comment-c"], "review-b");
+	await sendReviewBatch(
+		asWorkspaceId("workspace"),
+		["comment-b", "comment-c"],
+		asSessionId("review-b"),
+	);
 	expect(requests).toEqual([
 		{
 			method: "review.sendBatch",

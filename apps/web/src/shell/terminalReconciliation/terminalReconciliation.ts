@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import type { LayoutAttention } from "../../lib";
@@ -56,7 +57,7 @@ export function placeRecoveredTerminal(
 }
 
 export function useTerminalPlacementReconciliation(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commit: (document: WorkspaceLayoutDocument) => void,
 ): { terminals: readonly TerminalTab[]; catalogReady: boolean } {
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
@@ -69,7 +70,7 @@ export function useTerminalPlacementReconciliation(
 	const terminals = useAppStore((state) => state.terminalsByWorkspace[workspaceId] ?? NO_TERMINALS);
 	const terminalCatalogReady = useTerminalCatalog(workspaceId);
 	const reconciledTerminalCatalog = useRef<{
-		workspaceId: string;
+		workspaceId: WorkspaceId;
 		connectionGeneration: number;
 		terminals: readonly TerminalTab[];
 	} | null>(null);

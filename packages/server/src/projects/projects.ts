@@ -9,6 +9,7 @@ import type {
 	Project,
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
+import { asProjectId } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
@@ -131,7 +132,7 @@ export function openProject(inputPath: string, displayName?: string): Project {
 	const taken = new Set(projects.map((p) => p.slug));
 	const label = displayName?.replace(/\s+/g, " ").trim();
 	const project: Project = {
-		id: randomUUID(),
+		id: asProjectId(randomUUID()),
 		name: label && label.length <= PROJECT_NAME_MAX_LENGTH ? label : basename(root),
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),

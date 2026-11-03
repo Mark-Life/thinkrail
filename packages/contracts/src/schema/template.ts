@@ -1,4 +1,5 @@
 import { arr, oneOf, opt, type Schema, type Static, str } from "@earendil-works/pi-schema";
+import { ProjectId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const TemplateScope = oneOf(["global", "project"]);
@@ -19,13 +20,13 @@ export const Template = wireObj({ ...TEMPLATE_INFO_FIELDS, content: str() });
 export type Template = Static<typeof Template>;
 
 export type TemplateReadLocation =
-	| { workspaceId: string; projectId?: never }
-	| { projectId: string; workspaceId?: never }
+	| { workspaceId: WorkspaceId; projectId?: never }
+	| { projectId: ProjectId; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
 export const TemplateReadLocation: Schema<TemplateReadLocation> = {
 	type: "object",
-	properties: { workspaceId: str(), projectId: str() },
+	properties: { workspaceId: WorkspaceId, projectId: ProjectId },
 	not: { required: ["workspaceId", "projectId"] },
 };
 
@@ -41,7 +42,7 @@ export const TEMPLATE_METHODS = {
 	"template.get": { params: TemplateGetParams, result: Template },
 	"template.save": {
 		params: wireObj({
-			workspaceId: opt(str()),
+			workspaceId: opt(WorkspaceId),
 			scope: TemplateScope,
 			name: str(),
 			content: str(),
@@ -49,7 +50,7 @@ export const TEMPLATE_METHODS = {
 		result: Template,
 	},
 	"template.delete": {
-		params: wireObj({ workspaceId: opt(str()), scope: TemplateScope, name: str() }),
+		params: wireObj({ workspaceId: opt(WorkspaceId), scope: TemplateScope, name: str() }),
 		result: Ack,
 	},
 };

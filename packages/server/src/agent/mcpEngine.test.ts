@@ -9,7 +9,8 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest } from "@thinkrail/contracts";
+import type { ExtUiRequest, SessionId } from "@thinkrail/contracts";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import {
 	applyPiResourceTrust,
 	createSession,
@@ -198,7 +199,7 @@ async function waitFor<T>(
 }
 
 async function chat() {
-	const workspaceId = `engine-${++sequence}`;
+	const workspaceId = asWorkspaceId(`engine-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,
@@ -217,7 +218,7 @@ async function toolTexts(p: Awaited<ReturnType<typeof chat>>): Promise<string[]>
 	);
 }
 
-const mcpCommands = (sessionId: string) =>
+const mcpCommands = (sessionId: SessionId) =>
 	getSessionCommands(sessionId).filter((command) => command.name === "mcp");
 
 test("a user-level server connects in a chat, its tools are callable, and a write tool asks first", async () => {
@@ -606,7 +607,7 @@ test("pi settings that turn builtin:mcp off make MCP read-only with no chat open
 	const elsewhere = async (trusted: boolean) =>
 		(
 			await listMcpServers({
-				workspaceId: "engine-idle",
+				workspaceId: asWorkspaceId("engine-idle"),
 				cwd,
 				project: trusted ? { piResourceTrust: "granted" } : undefined,
 				waitMs: 0,
@@ -825,7 +826,7 @@ test("a server that fails at startup lands in status; only clients without mcp.s
 });
 
 const second = { command: process.execPath, args: [fixture], exposure: "direct" };
-const stateOf = async (sessionId: string, name: string) =>
+const stateOf = async (sessionId: SessionId, name: string) =>
 	(await refreshMcpStatus(sessionId, 5000))?.servers.find((server) => server.name === name)?.state;
 
 test("only sessions whose effective config changed reload, and the chat resources list the servers", async () => {

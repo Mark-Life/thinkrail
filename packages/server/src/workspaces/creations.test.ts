@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import type { WorkspaceCreation, WorkspaceCreationRemoved } from "@thinkrail/contracts";
+import { asProjectId, asSessionId } from "@thinkrail/contracts";
 import {
 	createProject,
 	initProject,
@@ -129,7 +130,7 @@ posix("a slow checkout never blocks the host's event loop (#874)", async () => {
 	setTimeout(() => {
 		tick = performance.now() - started;
 	}, 50);
-	const creation = startWorkspaceCreation("p1");
+	const creation = startWorkspaceCreation(asProjectId("p1"));
 	expect(performance.now() - started).toBeLessThan(500);
 	expect(creation).toMatchObject({ state: "running", phase: "preparing", branch: "workspace-1" });
 
@@ -140,7 +141,7 @@ posix("a slow checkout never blocks the host's event loop (#874)", async () => {
 	expect(existsSync(join(workspace.worktreePath, "a.txt"))).toBe(true);
 	expect(gitOut(workspace.worktreePath, "status", "--porcelain")).toBe("");
 	expect(listWorkspaceCreations()).toEqual([]);
-	expect(removed()).toEqual([{ id: creation.id, projectId: "p1", workspace }]);
+	expect(removed()).toEqual([{ id: creation.id, projectId: asProjectId("p1"), workspace }]);
 });
 
 posix(
@@ -154,11 +155,11 @@ posix(
 		const handed: unknown[] = [];
 		setWorkspaceCreationHandoff(async (workspace, kickoff) => {
 			handed.push({ id: workspace.id, kickoff });
-			return { sessionId: "s-1" };
+			return { sessionId: asSessionId("s-1") };
 		});
 		try {
 			const kickoff = { text: "Fix the login flow", images: [] };
-			const creation = startWorkspaceCreation("p1", { name: "Login fix", kickoff });
+			const creation = startWorkspaceCreation(asProjectId("p1"), { name: "Login fix", kickoff });
 			expect(creation.kickoff).toEqual({ text: "Fix the login flow", imageCount: 0 });
 			expect(creation.name).toBe("Login fix");
 
@@ -181,7 +182,7 @@ posix(
 	async () => {
 		const args = join(dataDir, "hook-args");
 		hook(`echo "$*" >> "${args}"`);
-		const creation = startWorkspaceCreation("p1");
+		const creation = startWorkspaceCreation(asProjectId("p1"));
 		await awaitWorkspaceCreation(creation.id);
 		const head = gitOut(repo, "rev-parse", "main");
 		expect(readFileSync(args, "utf8")).toBe(`${"0".repeat(head.length)} ${head} 1\n`);
@@ -190,7 +191,7 @@ posix(
 
 posix("a failing post-checkout hook fails the create like worktree add and cleans up", async () => {
 	hook("echo hook says no >&2; exit 1");
-	const creation = startWorkspaceCreation("p1");
+	const creation = startWorkspaceCreation(asProjectId("p1"));
 	await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow(
 		"The post-checkout hook failed: hook says no",
 	);
@@ -215,7 +216,7 @@ posix("a git without `git hook run` still fires post-checkout directly", async (
 	const savedPath = process.env.PATH;
 	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
 	try {
-		await awaitWorkspaceCreation(startWorkspaceCreation("p1").id);
+		await awaitWorkspaceCreation(startWorkspaceCreation(asProjectId("p1")).id);
 	} finally {
 		process.env.PATH = savedPath;
 	}
@@ -248,7 +249,7 @@ posix(
 		const savedPath = process.env.PATH;
 		process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
 		try {
-			await awaitWorkspaceCreation(startWorkspaceCreation("p1").id);
+			await awaitWorkspaceCreation(startWorkspaceCreation(asProjectId("p1")).id);
 		} finally {
 			process.env.PATH = savedPath;
 		}
@@ -267,7 +268,7 @@ posix("a repo with submodules and submodule.recurse creates like plain worktree 
 	git(repo, "commit", "-m", "sub");
 	git(repo, "config", "submodule.recurse", "true");
 
-	const workspace = await awaitWorkspaceCreation(startWorkspaceCreation("p1").id);
+	const workspace = await awaitWorkspaceCreation(startWorkspaceCreation(asProjectId("p1")).id);
 	expect(existsSync(join(workspace.worktreePath, "a.txt"))).toBe(true);
 	expect(gitOut(workspace.worktreePath, "status", "--porcelain")).toBe("");
 });
@@ -275,7 +276,7 @@ posix("a repo with submodules and submodule.recurse creates like plain worktree 
 posix("a stalled checkout fails, cleans up, and keeps a retryable record", async () => {
 	hook("sleep 3");
 	setCheckoutStallForTests(300);
-	const creation = startWorkspaceCreation("p1", { kickoff: { text: "do it" } });
+	const creation = startWorkspaceCreation(asProjectId("p1"), { kickoff: { text: "do it" } });
 	const message = await awaitWorkspaceCreation(creation.id).then(
 		() => "",
 		(err: Error) => err.message,
@@ -306,7 +307,7 @@ posix("a failing checkout reports git's error and dismiss hands the kickoff back
 	git(repo, "config", "filter.boom.smudge", "echo smudge exploded >&2; exit 1");
 	git(repo, "config", "filter.boom.required", "true");
 	const kickoff = { text: "keep me" };
-	const creation = startWorkspaceCreation("p1", { kickoff });
+	const creation = startWorkspaceCreation(asProjectId("p1"), { kickoff });
 	const message = await awaitWorkspaceCreation(creation.id).then(
 		() => "",
 		(err: Error) => err.message,
@@ -319,12 +320,12 @@ posix("a failing checkout reports git's error and dismiss hands the kickoff back
 
 	expect(await dismissWorkspaceCreation(creation.id)).toEqual({ kickoff });
 	expect(listWorkspaceCreations()).toEqual([]);
-	expect(removed().at(-1)).toEqual({ id: creation.id, projectId: "p1" });
+	expect(removed().at(-1)).toEqual({ id: creation.id, projectId: asProjectId("p1") });
 });
 
 posix("a checkout cut short by shutdown comes back interrupted and retries cleanly", async () => {
 	hook("sleep 5");
-	const creation = startWorkspaceCreation("p1");
+	const creation = startWorkspaceCreation(asProjectId("p1"));
 	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 	await stopWorkspaceCreations();
 	interruptWorkspaceCreations();
@@ -343,7 +344,7 @@ posix("a checkout cut short by shutdown comes back interrupted and retries clean
 
 posix("a folder that is still being created cannot be opened as a project", async () => {
 	hook("sleep 1");
-	const creation = startWorkspaceCreation("p1");
+	const creation = startWorkspaceCreation(asProjectId("p1"));
 	const path = join(dataDir, "worktrees", "repo", "workspace-1");
 	expect(creationOwnsPath(path)).toBe(true);
 	expect(creationOwnsPath(join(path, "nested"))).toBe(true);
@@ -356,7 +357,7 @@ posix(
 	"retrying an interrupted creation whose folder was opened since never touches it",
 	async () => {
 		hook("sleep 5");
-		const creation = startWorkspaceCreation("p1");
+		const creation = startWorkspaceCreation(asProjectId("p1"));
 		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 		await stopWorkspaceCreations();
 		interruptWorkspaceCreations();
@@ -380,7 +381,7 @@ posix(
 
 posix("discarding an interrupted creation removes its folder and branch", async () => {
 	hook("sleep 5");
-	const creation = startWorkspaceCreation("p1");
+	const creation = startWorkspaceCreation(asProjectId("p1"));
 	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 	await stopWorkspaceCreations();
 	interruptWorkspaceCreations();
@@ -393,28 +394,30 @@ posix("discarding an interrupted creation removes its folder and branch", async 
 
 posix("in-flight creates reserve names and stay out of the existing-worktree doors", async () => {
 	hook("sleep 1");
-	const first = startWorkspaceCreation("p1");
-	const second = startWorkspaceCreation("p1");
+	const first = startWorkspaceCreation(asProjectId("p1"));
+	const second = startWorkspaceCreation(asProjectId("p1"));
 	expect(first.branch).toBe("workspace-1");
 	expect(second.branch).toBe("workspace-2");
 
 	await until(() => listWorkspaceCreations().every((c) => c.phase === "checking-out"));
-	expect(await listExistingWorktrees("p1")).toEqual([]);
+	expect(await listExistingWorktrees(asProjectId("p1"))).toEqual([]);
 	const path = join(dataDir, "worktrees", "repo", "workspace-1");
-	await expect(openExistingWorktree("p1", path)).rejects.toThrow("still being created");
+	await expect(openExistingWorktree(asProjectId("p1"), path)).rejects.toThrow(
+		"still being created",
+	);
 
 	await Promise.all([awaitWorkspaceCreation(first.id), awaitWorkspaceCreation(second.id)]);
 	expect(
-		listWorkspaceRecords("p1")
+		listWorkspaceRecords(asProjectId("p1"))
 			.map((w) => w.branch)
 			.sort(),
 	).toEqual(["workspace-1", "workspace-2"]);
 });
 
 posix("renaming the base branch mid-create repoints the pending base", async () => {
-	const base = await createWorkspace("p1");
+	const base = await createWorkspace(asProjectId("p1"));
 	hook("sleep 1");
-	const creation = startWorkspaceCreation("p1", { baseRef: base.branch });
+	const creation = startWorkspaceCreation(asProjectId("p1"), { baseRef: base.branch });
 	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 	renameWorkspace(base.id, "Renamed", { branch: "renamed-base" });
 	expect(listWorkspaceCreations()[0]?.baseBranch).toBe("renamed-base");
@@ -427,7 +430,7 @@ posix(
 	"a folder opened elsewhere mid-create is left alone and cannot be retried as-is",
 	async () => {
 		hook("sleep 1");
-		const creation = startWorkspaceCreation("p1");
+		const creation = startWorkspaceCreation(asProjectId("p1"));
 		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 		const path = join(dataDir, "worktrees", "repo", "workspace-1");
 		writeFileSync(
@@ -450,7 +453,7 @@ posix(
 
 posix("dismissing an interrupted creation never touches a folder opened since", async () => {
 	hook("sleep 5");
-	const creation = startWorkspaceCreation("p1");
+	const creation = startWorkspaceCreation(asProjectId("p1"));
 	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 	await stopWorkspaceCreations();
 	interruptWorkspaceCreations();
@@ -473,7 +476,7 @@ posix("dismissing an interrupted creation never touches a folder opened since", 
 });
 
 posix("a create that fails before anything exists never claims a cleanup", async () => {
-	const creation = startWorkspaceCreation("p1", { baseRef: "no-such-branch" });
+	const creation = startWorkspaceCreation(asProjectId("p1"), { baseRef: "no-such-branch" });
 	await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("Could not resolve");
 	const [record] = listWorkspaceCreations();
 	expect(record?.failure?.code).toBe("WORKTREE_ADD_FAILED");
@@ -483,7 +486,7 @@ posix("a create that fails before anything exists never claims a cleanup", async
 posix(
 	"a host that died mid-handoff replays it at start instead of dropping the held prompt",
 	async () => {
-		const workspace = await createWorkspace("p1");
+		const workspace = await createWorkspace(asProjectId("p1"));
 		const file = join(dataDir, "workspace-creations.json");
 		writeFileSync(
 			file,
@@ -508,7 +511,7 @@ posix(
 		const handed: unknown[] = [];
 		setWorkspaceCreationHandoff(async (ws, kickoff) => {
 			handed.push({ id: ws.id, kickoff });
-			return { sessionId: "s-replayed" };
+			return { sessionId: asSessionId("s-replayed") };
 		});
 		await replayPendingHandoffs();
 		expect(handed).toEqual([{ id: workspace.id, kickoff: { text: "still here" } }]);
@@ -523,7 +526,7 @@ posix("a folder that appears at the reserved path is reported and never deleted"
 	git(repo, "remote", "add", "origin", origin);
 	git(repo, "push", "origin", "main");
 	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
-	const creation = startWorkspaceCreation("p1", { baseRef: "origin/main" });
+	const creation = startWorkspaceCreation(asProjectId("p1"), { baseRef: "origin/main" });
 	const path = join(dataDir, "worktrees", "repo", "workspace-1");
 	mkdirSync(path, { recursive: true });
 	writeFileSync(join(path, "precious.txt"), "keep\n");
@@ -538,7 +541,7 @@ posix("a folder that appears at the reserved path is reported and never deleted"
 posix("a cleanup that cannot finish claims nothing and leaves the record retryable", async () => {
 	hook("mkdir -p locked && touch locked/f && chmod 555 locked && exit 1");
 	const path = join(dataDir, "worktrees", "repo", "workspace-1");
-	const creation = startWorkspaceCreation("p1");
+	const creation = startWorkspaceCreation(asProjectId("p1"));
 	try {
 		await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("post-checkout hook failed");
 		const [record] = listWorkspaceCreations();
@@ -565,7 +568,7 @@ posix("every project door refuses a creation's folder, including a ~ path", asyn
 	process.env.HOME = dataDir;
 	hook("sleep 1");
 	try {
-		const creation = startWorkspaceCreation("p1");
+		const creation = startWorkspaceCreation(asProjectId("p1"));
 		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
 		expect(() => openProject("~/worktrees/repo/workspace-1")).toThrow("still creating");
 		expect(() => initProject("~/worktrees/repo/workspace-1")).toThrow("still creating");

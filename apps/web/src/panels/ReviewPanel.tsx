@@ -8,7 +8,7 @@ import {
 	RiSendPlaneLine as Send,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import type { ReviewComment } from "@thinkrail/contracts";
+import type { ReviewComment, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { outdatedReason } from "@thinkrail/resource-renderers";
 import { IconButton } from "@thinkrail/ui/button";
@@ -40,7 +40,13 @@ import {
 import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 
-export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
+export function ReviewPanel({
+	workspaceId,
+	failed,
+}: {
+	workspaceId: WorkspaceId;
+	failed: boolean;
+}) {
 	const t = useT();
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
 	const activeReviewedPath = useAppStore((s) => selectActiveReviewedPath(s, workspaceId));
@@ -57,7 +63,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			setExpanded(new Set(expanded).add(activeReviewedPath));
 	}
 
-	const openChat = (sessionId: string) => openChatInTab(workspaceId, sessionId);
+	const openChat = (sessionId: SessionId) => openChatInTab(workspaceId, sessionId);
 
 	const focusSurface = (surface: ReviewSurface): ReviewFocusSurface =>
 		surface.kind === "file"
@@ -245,12 +251,12 @@ function FileSection({
 	onOpenChat,
 	onNavigate,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string | null;
 	comments: ReviewComment[];
 	sending: boolean;
 	onSend: (comment: ReviewComment) => Promise<void>;
-	onOpenChat: (sessionId: string) => void;
+	onOpenChat: (sessionId: SessionId) => void;
 	onNavigate: (comment: ReviewComment) => void;
 }) {
 	const t = useT();
@@ -312,7 +318,7 @@ function FileSection({
 
 export function selectActiveReviewedPath(
 	s: {
-		activeWorkspaceId: string | null;
+		activeWorkspaceId: WorkspaceId | null;
 		tabsByWorkspace: Record<
 			string,
 			{ id: string; kind: string; path?: string; before?: string | undefined }[]
@@ -320,7 +326,7 @@ export function selectActiveReviewedPath(
 		activeTabByWorkspace: Record<string, string | null>;
 		reviewsByWorkspace: Record<string, { comments: ReviewComment[] }>;
 	},
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): string | null {
 	const activeId = s.activeTabByWorkspace[workspaceId];
 	const tab = (s.tabsByWorkspace[workspaceId] ?? []).find((t) => t.id === activeId);
@@ -344,12 +350,12 @@ function CommentRow({
 	onOpenChat,
 	onNavigate,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	comment: ReviewComment;
 	ordinal?: number;
 	sending: boolean;
 	onSend: () => void;
-	onOpenChat: (sessionId: string) => void;
+	onOpenChat: (sessionId: SessionId) => void;
 	onNavigate: () => void;
 }) {
 	const t = useT();
@@ -509,7 +515,7 @@ function ResolvedRow({
 	onOpenChat,
 }: {
 	comment: ReviewComment;
-	onOpenChat: (sessionId: string) => void;
+	onOpenChat: (sessionId: SessionId) => void;
 }) {
 	const t = useT();
 	return (

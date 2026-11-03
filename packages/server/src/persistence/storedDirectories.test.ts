@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
+import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
 import { dataDir, loadProjects, loadWorkspaces, saveProjects, saveWorkspaces } from "./persistence";
 
 let root: string;
@@ -28,8 +29,8 @@ function project(path: unknown) {
 
 function workspace(worktreePath: unknown) {
 	return {
-		id: "w",
-		projectId: "p",
+		id: asWorkspaceId("w"),
+		projectId: asProjectId("p"),
 		kind: "default",
 		name: "Default",
 		branch: "main",

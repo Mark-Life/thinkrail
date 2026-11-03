@@ -1,3 +1,4 @@
+import type { SessionId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, type Translator, t } from "@thinkrail/locales/react";
 import {
@@ -1216,7 +1217,7 @@ export function closePlacedResource(
 
 export function removeSessionLayoutTabs(
 	document: WorkspaceLayoutDocument,
-	sessionId: string,
+	sessionId: SessionId,
 ): WorkspaceLayoutDocument {
 	const ids = collectAllGroups(document)
 		.flatMap((group) => group.tabs)

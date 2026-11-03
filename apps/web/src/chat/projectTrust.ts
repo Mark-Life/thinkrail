@@ -1,5 +1,6 @@
 import type {
 	Project,
+	ProjectId,
 	ProjectResourceKind,
 	ProjectTrustSummary,
 	WsParams,
@@ -108,7 +109,7 @@ export function trustEnablesText(
 }
 
 export function trustGrantParams(
-	projectId: string,
+	projectId: ProjectId,
 	notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>,
 ): WsParams<"project.setTrust"> {
 	return {

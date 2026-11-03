@@ -1,5 +1,7 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -16,7 +18,7 @@ const IMAGE_DATA =
 
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
 
-function appendToolImageResult(path: string, sessionId: string): void {
+function appendToolImageResult(path: string, sessionId: SessionId): void {
 	const toolCallId = `${sessionId}-read-image`;
 	const entries = [
 		{
@@ -60,7 +62,7 @@ test("an image tool result previews inline and opens full screen", async ({ page
 		name: "image result",
 		messages: [{ role: "user", text: "read the mockup image", timestamp: BASE_TS }],
 	});
-	appendToolImageResult(chat.path, chat.id);
+	appendToolImageResult(chat.path, asSessionId(chat.id));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);

@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { Project, SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import type { Project, SessionId, SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import { asProjectId, asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { buildWorkItems, type WorkItemsState, waitingItems } from "./workItems";
 
 const project: Project = {
-	id: "p1",
+	id: asProjectId("p1"),
 	name: "Project One",
 	path: "/path/p1",
 	slug: "p1",
@@ -12,8 +13,8 @@ const project: Project = {
 };
 
 const workspace: Workspace = {
-	id: "w1",
-	projectId: "p1",
+	id: asWorkspaceId("w1"),
+	projectId: asProjectId("p1"),
 	name: "Auth refresh",
 	branch: "auth-refresh",
 	baseBranch: "main",
@@ -21,12 +22,12 @@ const workspace: Workspace = {
 };
 
 const record = (
-	sessionId: string,
+	sessionId: SessionId,
 	overrides: Partial<SessionStateRecord["state"]> = {},
 ): SessionStateRecord => ({
 	sessionId,
-	workspaceId: "w1",
-	projectId: "p1",
+	workspaceId: asWorkspaceId("w1"),
+	projectId: asProjectId("p1"),
 	state: {
 		execution: "idle",
 		runId: null,
@@ -60,7 +61,7 @@ function items(
 	extra: Partial<WorkItemsState> & { transcriptPreviews?: boolean } = {},
 ) {
 	const closed = Object.entries(knownTitles).map(([sessionId, title]) => ({
-		sessionId,
+		sessionId: asSessionId(sessionId),
 		title,
 		closedAt: 0,
 	}));
@@ -76,10 +77,10 @@ function items(
 	});
 }
 
-const failedRead = record("s-failed", {
+const failedRead = record(asSessionId("s-failed"), {
 	completion: { completionId: "c1", outcome: "failed", failure: "error" },
 });
-const waiting = record("s-waiting", {
+const waiting = record(asSessionId("s-waiting"), {
 	needsInput: { interactionId: "i1", kind: "tool-response", toolCallId: "q1" },
 });
 
@@ -93,14 +94,14 @@ describe("buildWorkItems", () => {
 	});
 
 	test("an idle chat is listed only once its title is known", () => {
-		expect(items([record("s-idle")]).some((item) => item.kind === "chat")).toBe(false);
-		const titled = items([record("s-idle")], { "s-idle": "Spec review" });
+		expect(items([record(asSessionId("s-idle"))]).some((item) => item.kind === "chat")).toBe(false);
+		const titled = items([record(asSessionId("s-idle"))], { "s-idle": "Spec review" });
 		expect(titled.find((item) => item.id === "chat:s-idle")?.title).toBe("Spec review");
 	});
 
 	test("an unnamed chat reads as its first prompt, findable by the whole prompt", () => {
 		const prompt = "Please refactor the authentication module so that tokens refresh quietly";
-		const idle = items([record("s-idle")], {}, { "s-idle": prompt }).find(
+		const idle = items([record(asSessionId("s-idle"))], {}, { "s-idle": prompt }).find(
 			(item) => item.id === "chat:s-idle",
 		);
 		expect(idle).toMatchObject({
@@ -109,9 +110,11 @@ describe("buildWorkItems", () => {
 			titleTooltip: prompt,
 			keywords: [prompt],
 		});
-		const named = items([record("s-idle")], { "s-idle": "Spec review" }, { "s-idle": prompt }).find(
-			(item) => item.id === "chat:s-idle",
-		);
+		const named = items(
+			[record(asSessionId("s-idle"))],
+			{ "s-idle": "Spec review" },
+			{ "s-idle": prompt },
+		).find((item) => item.id === "chat:s-idle");
 		expect(named).toMatchObject({ title: "Spec review", titleSource: "name" });
 		expect(named?.titleTooltip).toBeUndefined();
 		expect(items([waiting]).find((item) => item.id === "chat:s-waiting")).toMatchObject({
@@ -122,14 +125,24 @@ describe("buildWorkItems", () => {
 
 	test("a chat previews its transcript only against a host that searches, and the project folder is found by its branch", () => {
 		const titles = { "s-idle": "Spec review" };
-		const plain = items([record("s-idle")], titles);
+		const plain = items([record(asSessionId("s-idle"))], titles);
 		expect(plain.find((item) => item.id === "chat:s-idle")?.previewTarget).toBeUndefined();
-		const searching = items([record("s-idle")], titles, {}, { transcriptPreviews: true });
+		const searching = items(
+			[record(asSessionId("s-idle"))],
+			titles,
+			{},
+			{ transcriptPreviews: true },
+		);
 		expect(searching.find((item) => item.id === "chat:s-idle")?.previewTarget).toEqual({
 			kind: "chat",
-			sessionId: "s-idle",
+			sessionId: asSessionId("s-idle"),
 		});
-		const folder: Workspace = { ...workspace, id: "w-def", kind: "default", branch: "release-zqx" };
+		const folder: Workspace = {
+			...workspace,
+			id: asWorkspaceId("w-def"),
+			kind: "default",
+			branch: "release-zqx",
+		};
 		const withFolder = items([], {}, {}, { workspaces: { p1: [workspace, folder] } });
 		expect(withFolder.find((item) => item.id === "workspace:w-def")?.keywords).toEqual([
 			"release-zqx",
@@ -140,13 +153,13 @@ describe("buildWorkItems", () => {
 	test("Waiting lists chats that need you by urgency, leaving running and quiet chats out", () => {
 		const result = items(
 			[
-				record("s-running", { execution: "running", runId: "r1" }),
-				record("s-idle"),
-				record("s-unread", {
+				record(asSessionId("s-running"), { execution: "running", runId: "r1" }),
+				record(asSessionId("s-idle")),
+				record(asSessionId("s-unread"), {
 					completionUnread: true,
 					completion: { completionId: "c2", outcome: "succeeded" },
 				}),
-				record("s-error", {
+				record(asSessionId("s-error"), {
 					completionUnread: true,
 					completion: { completionId: "c1", outcome: "failed", failure: "error" },
 				}),
@@ -162,33 +175,37 @@ describe("buildWorkItems", () => {
 	});
 
 	test("a chat that needs input in a later project is not hidden behind unread chats of an earlier one, and ties keep project order", () => {
-		const second: Project = { ...project, id: "p2", name: "Project Two", slug: "p2" };
-		const unread = (sessionId: string) =>
+		const second: Project = { ...project, id: asProjectId("p2"), name: "Project Two", slug: "p2" };
+		const unread = (sessionId: SessionId) =>
 			record(sessionId, {
 				completionUnread: true,
 				completion: { completionId: `c-${sessionId}`, outcome: "succeeded" },
 			});
-		const blocked: SessionStateRecord = { ...waiting, workspaceId: "w2", projectId: "p2" };
+		const blocked: SessionStateRecord = {
+			...waiting,
+			workspaceId: asWorkspaceId("w2"),
+			projectId: asProjectId("p2"),
+		};
 		const laterUnread: SessionStateRecord = {
-			...unread("u-p2"),
-			workspaceId: "w2",
-			projectId: "p2",
+			...unread(asSessionId("u-p2")),
+			workspaceId: asWorkspaceId("w2"),
+			projectId: asProjectId("p2"),
 		};
 		const result = buildWorkItems({
 			t: currentTranslator(),
 			state: {
-				...state([unread("u1"), unread("u2"), unread("u3")]),
+				...state([unread(asSessionId("u1")), unread(asSessionId("u2")), unread(asSessionId("u3"))]),
 				projects: [project, second],
 				workspaces: {
 					p1: [workspace],
-					p2: [{ ...workspace, id: "w2", projectId: "p2" }],
+					p2: [{ ...workspace, id: asWorkspaceId("w2"), projectId: asProjectId("p2") }],
 				},
 				sessionStateByWorkspace: {
 					w2: { [blocked.sessionId]: blocked, [laterUnread.sessionId]: laterUnread },
 					w1: {
-						u1: unread("u1"),
-						u2: unread("u2"),
-						u3: unread("u3"),
+						u1: unread(asSessionId("u1")),
+						u2: unread(asSessionId("u2")),
+						u3: unread(asSessionId("u3")),
 					},
 				},
 			},

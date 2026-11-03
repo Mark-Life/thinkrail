@@ -4,7 +4,7 @@ import {
 	RiLoader4Line as Loader2,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
-import type { ExistingWorktreeCandidate, Workspace } from "@thinkrail/contracts";
+import type { ExistingWorktreeCandidate, ProjectId, Workspace } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -26,7 +26,7 @@ export function ExistingWorktreeDialog({
 	onOpened,
 }: {
 	open: boolean;
-	projectId: string;
+	projectId: ProjectId;
 	onOpenChange: (open: boolean) => void;
 	onOpened: (workspace: Workspace) => Promise<void>;
 }) {

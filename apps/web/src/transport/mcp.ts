@@ -1,4 +1,4 @@
-import type { McpListResult, WsParams } from "@thinkrail/contracts";
+import type { McpListResult, WorkspaceId, WsParams } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { selectMcpRead, selectMcpWorkspaceStarting, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
@@ -96,7 +96,7 @@ export function startMcpWorkspaceWatch(deps: McpWatchDeps): () => void {
 }
 
 export function watchMcpWorkspace(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	onRead?: (error: unknown) => void,
 ): () => void {
 	return startMcpWorkspaceWatch({
