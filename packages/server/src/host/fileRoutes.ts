@@ -75,9 +75,10 @@ export async function serveBlob(pathname: string, signal?: AbortSignal): Promise
 	const blob = workspace === null ? null : head(workspace.remainder);
 	const relPath = blob === null ? null : decoded(blob.remainder);
 	if (workspace === null || blob === null || relPath === null) return notFound();
-	if (!OID.test(blob.segment)) return notFound();
+	const workspaceId = parseWorkspaceId(workspace.segment);
+	if (workspaceId === null || !OID.test(blob.segment)) return notFound();
 	try {
-		const owner = loadWorkspaces().find((candidate) => candidate.id === workspace.segment);
+		const owner = loadWorkspaces().find((candidate) => candidate.id === workspaceId);
 		const worktreePath = owner?.worktreePath;
 		if (owner === undefined || worktreePath === undefined) return notFound();
 		resolveWorktreeFile(owner.id, relPath);

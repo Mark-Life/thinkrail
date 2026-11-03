@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
 import {
@@ -96,6 +97,20 @@ test("a changes_requested item with no open findings is dropped to unreviewed", 
 
 	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
 	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
+});
+
+test("a finding whose stored session id leaves the todos folder cannot read or rewrite a file there", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = flaggedItem(store, "step", "f.ts");
+	const outside = join(repo, "outside.reviews.json");
+	copyFileSync(join(repo, WORKSPACE_TODOS_DIR, `${SESSION}.reviews.json`), outside);
+	const before = readFileSync(outside, "utf8");
+	const sessionId = testSessionId(`${relative(join(repo, WORKSPACE_TODOS_DIR), repo)}/outside`);
+
+	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId, id });
+
+	expect(readFileSync(outside, "utf8")).toBe(before);
+	expect(() => todoReviewRecord({ workspaceId: WS, sessionId, id })).toThrow("Invalid session id");
 });
 
 test("dropping the verdict keeps an in-flight review's watermark and the auto-cycle cap", async () => {

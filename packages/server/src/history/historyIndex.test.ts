@@ -59,6 +59,27 @@ describe("HistoryIndex.search", () => {
 		expect(result.indexing).toBe(false);
 	});
 
+	test("a session with an id pi accepts in a file stays searchable", async () => {
+		const ids = ["edited header", "probe:mcplogin_1"];
+		for (const [index, id] of ids.entries()) {
+			writeFixtureSession(dir, {
+				id,
+				cwd: "/repo/a",
+				messages: [{ role: "user", text: `old prompt ${index}`, timestamp: 1000 + index }],
+			});
+		}
+
+		const result = await new HistoryIndex(dir).search({
+			query: "old prompt",
+			filter: allowAll,
+			labels: noLabels,
+		});
+
+		expect(result.prompts.map((prompt) => String(prompt.sessionId)).toSorted()).toEqual(
+			ids.toSorted(),
+		);
+	});
+
 	test("ignores persisted system and usage entries in extraction and search", async () => {
 		const manager = SessionManager.create("/repo/system-usage", dir, { id: "system-usage" });
 		const usage: Usage = {

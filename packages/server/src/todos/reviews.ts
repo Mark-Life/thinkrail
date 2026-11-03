@@ -53,8 +53,8 @@ interface ReviewsFile {
 	autoCycles?: Record<string, number>;
 }
 
-// The session id was validated as a safe path segment by `TodoStore` before any record exists.
 function reviewsPath(root: string, sessionId: SessionId): string {
+	if (parseSessionId(sessionId) === null) throw new Error("Invalid session id for a review file");
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${REVIEWS_SUFFIX}`);
 }
 

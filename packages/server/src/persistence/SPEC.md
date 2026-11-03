@@ -46,7 +46,8 @@ read.
 
 Each file is parsed once, at the load. A file that holds a wire shape reuses the contracts schema; the others have a private
 schema in this directory. The rest of the host trusts the type. A file any released version wrote must keep loading whole, so a
-new required wire field on `Project`, `Workspace` or a model needs a default at the load.
+new required wire field on `Project`, `Workspace` or a model needs a default at the load. Ids in a file load through the stored
+id schemas, which are lenient on purpose ([[submodule-contracts-schema]]): a strict check here would drop a project from the list.
 
 `stateFile.ts` owns the failure rules for `projects`, `workspaces`, `terminals`, `config`, `environment`, and, through the barrel (`readStateFile`, `parseEntryRecord`, `assertOverwriteAllowed`, and `isConfigOverwriteRefused` for `settings`), the `todos` sidecars and `feedback.json`:
 
