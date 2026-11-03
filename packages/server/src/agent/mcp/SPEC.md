@@ -234,5 +234,5 @@ without bypassing approvals or treating an occupied name as absent.
   `McpConfigFileEntry`, `McpConfigScope`, `McpServerConfigPatch`.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (types, `CONFIG_DIR_NAME`, `getAgentDir`, and the
   engine factories `createMcpExtension` / `createToolSearchExtension`); `@thinkrail/contracts` (types);
-  `@thinkrail/shared/codedError`; `@earendil-works/pi-schema`; Node `fs`/`path`/`crypto`.
+  `@thinkrail/shared/codedError`, `errnoCode`; `@earendil-works/pi-schema`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`, `projects`, the web; no connection, OAuth or transport code — those stay in pi.
