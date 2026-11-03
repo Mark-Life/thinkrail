@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ReviewAnchor, Workspace } from "@thinkrail/contracts";
+import type { ReviewAnchor } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { saveProjects, saveWorkspaces } from "../persistence";
@@ -36,8 +36,7 @@ beforeEach(() => {
 			branch: "main",
 			baseBranch: "main",
 			worktreePath: worktree,
-			createdAt: 0,
-		} as Workspace,
+		},
 	]);
 });
 

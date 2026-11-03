@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
 import { Type } from "typebox";
+import { requireSessionId } from "./requireSessionId";
 
 export const RESOLVE_COMMENT_TOOL_NAME = "resolve_comment";
 
@@ -46,7 +46,7 @@ export function createResolveCommentTool(): ToolDefinition<typeof ResolveComment
 		parameters: ResolveCommentSchema,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const { commentId, note } = params;
-			const outcome = handler(asSessionId(ctx.sessionManager.getSessionId()), commentId, note);
+			const outcome = handler(requireSessionId(ctx.sessionManager.getSessionId()), commentId, note);
 			return {
 				content: [
 					{

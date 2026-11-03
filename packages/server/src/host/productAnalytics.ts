@@ -63,7 +63,7 @@ export function captureAdditional(
 
 export function captureReviewCommentAdded(
 	capture: AdditionalAnalyticsCapture | null,
-	comment: ReviewComment,
+	comment: Pick<ReviewComment, "author" | "kind">,
 ): void {
 	captureAdditional(capture, {
 		name: "review_comment_added",
@@ -76,7 +76,7 @@ export function captureReviewCommentAdded(
 
 export function captureReviewCommentsSent(
 	capture: AdditionalAnalyticsCapture | null,
-	comments: readonly ReviewComment[],
+	comments: readonly Pick<ReviewComment, "anchorState">[],
 ): void {
 	for (const comment of comments) {
 		captureAdditional(capture, {

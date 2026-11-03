@@ -2,15 +2,11 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-	OpenPrResult,
-	ProviderStatusReport,
-	ReviewComment,
-	Workspace,
-} from "@thinkrail/contracts";
+import type { OpenPrResult, ProviderStatusReport } from "@thinkrail/contracts";
 import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { TodoStore } from "pi-todos/core";
+import { fakeFetch } from "../../test/fakeFetch";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
@@ -23,7 +19,7 @@ import {
 import { gitHeadSha } from "../git";
 import { resetConfigCache } from "../settings";
 import { maybeAttachChangeArtifacts, settleChangeArtifacts } from "../todos";
-import { handleRequest } from "./handlers";
+import { handleTypedRequest } from "./handlers";
 import { dropLogin, recordLoginStart, trackLoginOutcome } from "./loginAnalytics";
 import {
 	additionalAnalyticsEnabled,
@@ -69,10 +65,10 @@ beforeEach(() => {
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
-		fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
+		fetchImpl: fakeFetch(async (_url: string | URL | Request, init?: RequestInit) => {
 			sent.push(...JSON.parse(String(init?.body)).batch);
 			return new Response("{}", { status: 200 });
-		}) as typeof fetch,
+		}),
 	});
 });
 
@@ -113,7 +109,7 @@ test("an unrelated update preserves an unconfirmed legacy grant until the mount 
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: initialAdditionalAnalyticsEnabled(config),
 		env: {},
-		fetchImpl: (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,
+		fetchImpl: fakeFetch(async () => new Response("{}", { status: 200 })),
 	});
 	expect(getAdditionalAnalyticsCapture()).toBeNull();
 
@@ -306,8 +302,7 @@ test("PR created, updated, push and compare are distinct; an unrefreshed update 
 			ghProblem: "unauthenticated",
 		},
 	];
-	for (let i = 0; i < results.length; i++) {
-		const result = results[i] as OpenPrResult;
+	for (const [i, result] of results.entries()) {
 		expect(await observePrAction(async () => result, i === 0 ? "plan_page" : "other")).toBe(result);
 	}
 	await expect(
@@ -375,20 +370,20 @@ test("project opening names its typed failures; the folder picker reports select
 	const ctx = { clientKey: "private-client" };
 	const plain = join(dataDir, "plain-folder");
 	mkdirSync(plain);
-	await expect(handleRequest("project.open", { path: plain }, ctx)).rejects.toMatchObject({
+	await expect(handleTypedRequest("project.open", { path: plain }, ctx)).rejects.toMatchObject({
 		code: "NOT_GIT",
 	});
 	expect(failureReason(new CodedError("ALREADY_OPEN", "/private/worktree"))).toBe("already_open");
 	const savedPick = process.env.THINKRAIL_PICK_DIR;
 	try {
 		process.env.THINKRAIL_PICK_DIR = "/private/picked";
-		expect(await handleRequest("dialog.selectDirectory", {}, ctx)).toEqual({
+		expect(await handleTypedRequest("dialog.selectDirectory", {}, ctx)).toEqual({
 			path: "/private/picked",
 		});
 		const directive = join(dataDir, "picker-directive");
 		writeFileSync(directive, "error: private picker failure");
 		process.env.THINKRAIL_PICK_DIR = directive;
-		await expect(handleRequest("dialog.selectDirectory", {}, ctx)).rejects.toThrow(
+		await expect(handleTypedRequest("dialog.selectDirectory", {}, ctx)).rejects.toThrow(
 			"private picker failure",
 		);
 	} finally {
@@ -429,12 +424,12 @@ async function taskFixture() {
 	git(root, "add", "README.md");
 	git(root, "commit", "-m", "initial");
 	const ctx = { clientKey: "private-client" };
-	const project = (await handleRequest("project.open", { path: root }, ctx)) as { id: string };
-	const workspaces = (await handleRequest(
+	const project = await handleTypedRequest("project.open", { path: root }, ctx);
+	const workspaces = await handleTypedRequest(
 		"workspace.list",
 		{ projectId: project.id, includeDiffStats: false },
 		ctx,
-	)) as Workspace[];
+	);
 	const workspace = workspaces[0];
 	if (!workspace) throw new Error("fixture workspace missing");
 	const store = new TodoStore(root, "private-session");
@@ -453,16 +448,16 @@ async function taskFixture() {
 
 test("host handlers exclude Default provisioning and hydration; observing a mutation never adds Git writes", async () => {
 	const { root, ctx, workspace, store, item, ref } = await taskFixture();
-	await handleRequest("todo.list", ref, ctx);
-	await handleRequest("todo.update", { ...ref, status: "in_progress" }, ctx);
+	await handleTypedRequest("todo.list", ref, ctx);
+	await handleTypedRequest("todo.update", { ...ref, status: "in_progress" }, ctx);
 	await maybeAttachChangeArtifacts(workspace.id, ref.sessionId);
 	writeFileSync(join(root, "README.md"), "changed\n");
-	await handleRequest("todo.update", { ...ref, status: "done" }, ctx);
-	await handleRequest("todo.list", ref, ctx);
-	await handleRequest("todo.update", { ...ref, status: "done" }, ctx);
+	await handleTypedRequest("todo.update", { ...ref, status: "done" }, ctx);
+	await handleTypedRequest("todo.list", ref, ctx);
+	await handleTypedRequest("todo.update", { ...ref, status: "done" }, ctx);
 	expect(store.get(item.id)?.artifacts ?? []).toEqual([]);
 	await maybeAttachChangeArtifacts(workspace.id, ref.sessionId);
-	await handleRequest("todo.review", ref, ctx);
+	await handleTypedRequest("todo.review", ref, ctx);
 	await shutdownAnalytics();
 	expect(
 		sent
@@ -485,28 +480,25 @@ test("host handlers exclude Default provisioning and hydration; observing a muta
 test("review-comment analytics distinguish author/actor and stay per-comment with no content", async () => {
 	const { workspace, ctx } = await taskFixture();
 	const workspaceId = workspace.id;
-	const review = (await handleRequest(
+	const review = await handleTypedRequest(
 		"review.commentAdd",
 		{ workspaceId, kind: "review", anchor: null, body: "private remark" },
 		ctx,
-	)) as ReviewComment;
-	await handleRequest(
+	);
+	await handleTypedRequest(
 		"review.commentUpdate",
 		{ workspaceId, id: review.id, status: "dismissed" },
 		ctx,
 	);
-	await handleRequest(
+	await handleTypedRequest(
 		"review.commentUpdate",
 		{ workspaceId, id: review.id, status: "dismissed" },
 		ctx,
 	);
 	const grant = getAdditionalAnalyticsCapture();
-	captureReviewCommentAdded(grant, { author: "agent", kind: "inline" } as ReviewComment);
+	captureReviewCommentAdded(grant, { author: "agent", kind: "inline" });
 	captureReviewCommentResolved(grant, "agent", "resolved");
-	captureReviewCommentsSent(grant, [
-		{ anchorState: "anchored" } as ReviewComment,
-		{ anchorState: "outdated" } as ReviewComment,
-	]);
+	captureReviewCommentsSent(grant, [{ anchorState: "anchored" }, { anchorState: "outdated" }]);
 	await shutdownAnalytics();
 	expect(
 		sent
@@ -534,14 +526,14 @@ test("review-comment analytics distinguish author/actor and stay per-comment wit
 
 test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.add; refetches stay silent", async () => {
 	const { ref, ctx } = await taskFixture();
-	await handleRequest("todo.list", ref, ctx);
-	await handleRequest("todo.list", { ...ref, opened: "page" }, ctx);
-	await handleRequest("todo.list", { ...ref, opened: "rail" }, ctx);
-	await handleRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);
-	await handleRequest("todo.add", { ...ref, title: "page step", surface: "page" }, ctx);
-	await handleRequest("todo.add", { ...ref, title: "rail step", surface: "rail" }, ctx);
-	await handleRequest("todo.add", { ...ref, title: "defaulted step" }, ctx);
-	await expect(handleRequest("todo.add", { ...ref, title: "   " }, ctx)).rejects.toThrow();
+	await handleTypedRequest("todo.list", ref, ctx);
+	await handleTypedRequest("todo.list", { ...ref, opened: "page" }, ctx);
+	await handleTypedRequest("todo.list", { ...ref, opened: "rail" }, ctx);
+	await handleTypedRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);
+	await handleTypedRequest("todo.add", { ...ref, title: "page step", surface: "page" }, ctx);
+	await handleTypedRequest("todo.add", { ...ref, title: "rail step", surface: "rail" }, ctx);
+	await handleTypedRequest("todo.add", { ...ref, title: "defaulted step" }, ctx);
+	await expect(handleTypedRequest("todo.add", { ...ref, title: "   " }, ctx)).rejects.toThrow();
 	await shutdownAnalytics();
 	expect(
 		sent.filter((event) => event.event === "plan_opened").map((event) => event.properties.surface),

@@ -10,7 +10,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SETTLE_IDLE_DAYS, type SessionStateRecord, type Workspace } from "@thinkrail/contracts";
+import { arr, compile } from "@earendil-works/pi-schema";
+import { SETTLE_IDLE_DAYS, type SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { onBaseBranch } from "../pr";
 import { resetConfigCache, updateConfig } from "../settings";
@@ -30,6 +31,14 @@ import {
 } from "./settledLifecycle";
 
 let dataDir: string;
+
+const storedWorkspaces = compile(arr(Workspace));
+
+function readStoredWorkspaces() {
+	const all: unknown = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"));
+	if (!storedWorkspaces.check(all)) throw new Error("workspaces.json breaks the Workspace schema");
+	return all;
+}
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -144,7 +153,7 @@ test("the lifecycle pass backfills an external worktree from its gitfile, not fr
 	const path = join(dataDir, "outside");
 	git(repo, "worktree", "add", "-b", "outside", path);
 	const attached = await openExistingWorktree(testProjectId("p1"), path);
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const all = readStoredWorkspaces();
 	for (const record of all) if (record.id === attached.id) delete record.lastActiveAt;
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
 	const gitfileAt = statSync(join(path, ".git")).mtimeMs;
@@ -194,7 +203,7 @@ test("a base on a non-origin remote still counts as the base branch", async () =
 
 test("a running session stamps its workspace; idle state changes do not", async () => {
 	const ws = await createWorkspace(testProjectId("p1"));
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const all = readStoredWorkspaces();
 	for (const record of all) if (record.id === ws.id) record.lastActiveAt = 1;
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
 
@@ -226,7 +235,7 @@ test("a running session stamps its workspace; idle state changes do not", async 
 test("the lifecycle pass backfills a legacy row from its worktree and leaves stamped rows alone", async () => {
 	const legacy = await createWorkspace(testProjectId("p1"), "Legacy");
 	const stamped = await createWorkspace(testProjectId("p1"), "Stamped");
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const all = readStoredWorkspaces();
 	for (const record of all) {
 		if (record.id === legacy.id) delete record.lastActiveAt;
 		if (record.id === stamped.id) record.lastActiveAt = 1234;

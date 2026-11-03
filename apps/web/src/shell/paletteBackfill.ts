@@ -1,5 +1,4 @@
 import type { ProjectId, Workspace } from "@thinkrail/contracts";
-import { asProjectId, asWorkspaceId } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createBackfillQueue } from "./backfillQueue";
 
@@ -9,16 +8,15 @@ export function projectNeedsWorkspaceList(state: AppState, projectId: ProjectId)
 	if (!state.projects.some((project) => project.id === projectId)) return false;
 	const list = state.workspaces[projectId];
 	if (list === undefined) return true;
-	const known = new Set(list.map((workspace) => workspace.id));
-	for (const [rawWorkspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
-		const workspaceId = asWorkspaceId(rawWorkspaceId);
+	const known = new Set<string>(list.map((workspace) => workspace.id));
+	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
 		if (known.has(workspaceId) || state.removedWorkspaceIds[workspaceId]) continue;
 		if (Object.values(records).some((record) => record.projectId === projectId)) return true;
 	}
 	return false;
 }
 
-export function projectsNeedingWorkspaceLists(state: AppState): string[] {
+export function projectsNeedingWorkspaceLists(state: AppState): ProjectId[] {
 	return state.projects
 		.filter((project) => projectNeedsWorkspaceList(state, project.id))
 		.map((project) => project.id);
@@ -66,10 +64,9 @@ function scheduleKey(state: AppState): string {
 export function createPaletteBackfill(sources: PaletteBackfillSources): PaletteBackfill {
 	const projects = createBackfillQueue({
 		concurrency: sources.concurrency,
-		isWanted: (projectId) =>
-			projectNeedsWorkspaceList(useAppStore.getState(), asProjectId(projectId)),
-		run: async (key) => {
-			const projectId = asProjectId(key);
+		isWanted: (projectId: ProjectId) =>
+			projectNeedsWorkspaceList(useAppStore.getState(), projectId),
+		run: async (projectId: ProjectId) => {
 			const generation = useAppStore.getState().connectionGeneration;
 			const rows = await sources.listWorkspaces(projectId);
 			if (isConnectedGeneration(useAppStore.getState(), generation)) {

@@ -9,8 +9,8 @@ import type {
 	PrBodySource,
 	SessionId,
 	Workspace,
+	WorkspaceId,
 } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -92,7 +92,8 @@ export interface ShipRunner {
 export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	const t = useT();
 	const { workspace, sessionId, openReview, noteOpenReview, refresh } = options;
-	const workspaceId = workspace?.id ?? asWorkspaceId("");
+	const withWorkspace = <T,>(send: (workspaceId: WorkspaceId) => Promise<T>): Promise<T> =>
+		workspace ? send(workspace.id) : Promise.reject(new Error("Unknown workspace"));
 	const branch = workspace?.branch ?? "";
 	const pushToast = useAppStore((s) => s.pushToast);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
@@ -132,12 +133,14 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	};
 
 	const preview = (params: { title?: string; source?: PrBodySource; template?: string }) =>
-		getTransport().request("pr.preview", {
-			workspaceId,
-			...(sessionId ? { sessionId } : {}),
-			...(options.title ? { title: options.title } : {}),
-			...params,
-		});
+		withWorkspace((workspaceId) =>
+			getTransport().request("pr.preview", {
+				workspaceId,
+				...(sessionId ? { sessionId } : {}),
+				...(options.title ? { title: options.title } : {}),
+				...params,
+			}),
+		);
 
 	const sources: PrComposeSources = {
 		change: (source, template) =>
@@ -153,32 +156,32 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				},
 			),
 		generate: (template) =>
-			getTransport()
-				.request(
+			withWorkspace((workspaceId) =>
+				getTransport().request(
 					"pr.generate",
 					{ workspaceId, ...(sessionId ? { sessionId } : {}), ...(template ? { template } : {}) },
 					{ timeoutMs: 60_000 },
-				)
-				.then(
-					({ body }) => {
-						if (body === null) {
-							pushToast({
-								variant: "info",
-								title: t("panels.ship.noDraft.title"),
-								message: t("panels.ship.noDraft.message"),
-							});
-						}
-						return body;
-					},
-					(err) => {
-						pushToast({
-							variant: "error",
-							title: t("panels.ship.draftFailed"),
-							message: errorText(err),
-						});
-						return null;
-					},
 				),
+			).then(
+				({ body }) => {
+					if (body === null) {
+						pushToast({
+							variant: "info",
+							title: t("panels.ship.noDraft.title"),
+							message: t("panels.ship.noDraft.message"),
+						});
+					}
+					return body;
+				},
+				(err) => {
+					pushToast({
+						variant: "error",
+						title: t("panels.ship.draftFailed"),
+						message: errorText(err),
+					});
+					return null;
+				},
+			),
 	};
 
 	const toastDirty = (dirtyFiles: number) => {
@@ -253,8 +256,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		const { draft, title, body, titleEdited } = submit;
 		lastSubmit.current = submit;
 		setSubmitting(true);
-		return getTransport()
-			.request(
+		return withWorkspace((workspaceId) =>
+			getTransport().request(
 				"pr.open",
 				{
 					workspaceId,
@@ -267,7 +270,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					...(options.analyticsSource ? { source: options.analyticsSource } : {}),
 				},
 				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
-			)
+			),
+		)
 			.then(
 				(result) => onPrOpened(submit, result),
 				(err) => onPushFailed(t("panels.ship.pr.openFailed"), err, { kind: "pr", submit }),
@@ -327,8 +331,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 
 	const push = (target: PushTarget): Promise<void> => {
 		setPending("push");
-		return getTransport()
-			.request(
+		return withWorkspace((workspaceId) =>
+			getTransport().request(
 				"workspace.push",
 				{
 					workspaceId,
@@ -336,7 +340,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					...(target.confirmBase ? { confirmBase: true } : {}),
 				},
 				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
-			)
+			),
+		)
 			.then(
 				(result) => {
 					refresh();
@@ -364,9 +369,9 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		failure: string,
 		success: (label: string) => { title: string; message: string },
 	): void => {
-		if (!review) return;
+		if (!review || !workspace) return;
 		const label = openReviewLabel(review);
-		const params = { workspaceId, branch, number: review.number };
+		const params = { workspaceId: workspace.id, branch, number: review.number };
 		const timeout = { timeoutMs: PR_OPEN_TIMEOUT_MS };
 		setPending(id);
 		void (
@@ -410,7 +415,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		void getTransport()
 			.request(
 				"pr.merge",
-				{ workspaceId, branch: state.branch, number: state.number, ...submit },
+				{ workspaceId: workspace.id, branch: state.branch, number: state.number, ...submit },
 				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
 			)
 			.then(
@@ -467,12 +472,13 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 
 	const deleteRemote = (target: string): Promise<void> => {
 		setPending("deleteRemote");
-		return getTransport()
-			.request(
+		return withWorkspace((workspaceId) =>
+			getTransport().request(
 				"workspace.deleteRemoteBranch",
 				{ workspaceId, branch: target },
 				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
-			)
+			),
+		)
 			.then(
 				() => {
 					pushToast({
@@ -494,8 +500,9 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	};
 
 	const askAgent = (text: string): void => {
-		void promptWorkspaceChat(workspaceId, sessionId, text).catch((err) =>
-			pushToast({ variant: "error", title: t("panels.ship.askFailed"), message: errorText(err) }),
+		void withWorkspace((workspaceId) => promptWorkspaceChat(workspaceId, sessionId, text)).catch(
+			(err) =>
+				pushToast({ variant: "error", title: t("panels.ship.askFailed"), message: errorText(err) }),
 		);
 	};
 
@@ -563,7 +570,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	const runSetupCommand = (command: string) => {
 		setSetup(null);
 		setSyncOpen(false);
-		useAppStore.getState().addTerminal(workspaceId, command);
+		if (workspace) useAppStore.getState().addTerminal(workspace.id, command);
 	};
 
 	const dialogs = (

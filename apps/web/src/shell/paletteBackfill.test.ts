@@ -82,7 +82,10 @@ describe("project membership refresh", () => {
 		expect(projectNeedsWorkspaceList(state, testProjectId("p2"))).toBe(false);
 		expect(projectNeedsWorkspaceList(state, testProjectId("p3"))).toBe(true);
 		expect(projectNeedsWorkspaceList(state, testProjectId("closed"))).toBe(false);
-		expect(projectsNeedingWorkspaceLists(state)).toEqual(["p1", "p3"]);
+		expect(projectsNeedingWorkspaceLists(state)).toEqual([
+			testProjectId("p1"),
+			testProjectId("p3"),
+		]);
 	});
 
 	test("a refresh keeps the host's order, keeps rows that arrived meanwhile, and never replaces them", () => {

@@ -1,11 +1,11 @@
 import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
-	asSessionId,
 	type BackgroundCommandOutputResult,
 	type BackgroundCommandStatus,
 	type BackgroundCommandSummary,
 	compareResourceHistory,
 	isLiveResource,
+	parseSessionId,
 	RESOURCE_HISTORY_MAX_PAGE_LIMIT,
 	RESOURCE_HISTORY_PAGE_LIMIT,
 	type ResourceHistoryCursor,
@@ -65,10 +65,11 @@ function subagentSummary(
 	{ record, snapshot }: ChildHandle,
 	parentSessionId: SessionId,
 ): SubagentResourceSummary | undefined {
-	if (!snapshot) return undefined;
+	const childSessionId = parseSessionId(record.sessionId);
+	if (!snapshot || childSessionId === null) return undefined;
 	const live = snapshot.status === "running" || snapshot.status === "queued";
 	return {
-		childSessionId: asSessionId(record.sessionId),
+		childSessionId,
 		parentSessionId,
 		...(record.info.roleName !== undefined ? { roleName: record.info.roleName.slice(0, 200) } : {}),
 		task: snapshot.task.slice(0, 2000),
@@ -97,14 +98,17 @@ function ownedChildren(workspaceId: WorkspaceId, parentSessionId: SessionId): Re
 		});
 }
 
-function commandSummary(snapshot: BackgroundCommandSnapshot) {
-	return { ...snapshot, sessionId: asSessionId(snapshot.sessionId) };
+function commandSummary(snapshot: BackgroundCommandSnapshot, sessionId: SessionId) {
+	return { ...snapshot, sessionId };
 }
 
-function commandRecords(commands: BackgroundCommands): ResourceRecord[] {
-	return commands
-		.list()
-		.map((snapshot): ResourceRecord => ({ kind: "command", summary: commandSummary(snapshot) }));
+function commandRecords(commands: BackgroundCommands, sessionId: SessionId): ResourceRecord[] {
+	return commands.list().map(
+		(snapshot): ResourceRecord => ({
+			kind: "command",
+			summary: commandSummary(snapshot, sessionId),
+		}),
+	);
 }
 
 function historyOf(
@@ -134,7 +138,7 @@ function commandHistory(
 	sessionId: SessionId,
 	commands: BackgroundCommands,
 ): ReturnType<typeof historyOf> {
-	return historyOf({ workspaceId, sessionId }, "command", commandRecords(commands));
+	return historyOf({ workspaceId, sessionId }, "command", commandRecords(commands, sessionId));
 }
 
 function subagentHistory(
@@ -216,7 +220,7 @@ export function readBackgroundCommandOutput(
 		const handle = commands.find(commandId);
 		const output = handle?.output;
 		if (handle && output) {
-			return { available: true, command: commandSummary(handle.snapshot), output };
+			return { available: true, command: commandSummary(handle.snapshot, sessionId), output };
 		}
 		const archived = commandHistory(workspaceId, sessionId, commands).finished.find(
 			(record) => resourceRecordId(record) === commandId,
@@ -250,8 +254,8 @@ export function archiveCommandHistory(
 			const record: ResourceRecord = {
 				kind: "command",
 				summary: cutOff
-					? { ...commandSummary(snapshot), interrupted: true }
-					: commandSummary(snapshot),
+					? { ...commandSummary(snapshot, sessionId), interrupted: true }
+					: commandSummary(snapshot, sessionId),
 			};
 			recordResource(
 				scope,
@@ -273,10 +277,14 @@ export function archiveCommandHistory(
 			finished = true;
 			unsubscribe();
 			for (const snapshot of commands.list()) {
-				if (!isLiveResource({ kind: "command", summary: commandSummary(snapshot) })) continue;
+				if (!isLiveResource({ kind: "command", summary: commandSummary(snapshot, sessionId) }))
+					continue;
 				recordResource(
 					scope,
-					{ kind: "command", summary: { ...commandSummary(snapshot), interrupted: true } },
+					{
+						kind: "command",
+						summary: { ...commandSummary(snapshot, sessionId), interrupted: true },
+					},
 					commands.find(snapshot.id)?.output,
 				);
 			}
@@ -293,13 +301,15 @@ export function archiveSubagentRun(
 		return;
 	const child = service.findChild(event.sessionId);
 	if (!child || child.record.scope !== workspaceId) return;
-	const summary = subagentSummary(child, asSessionId(event.parentSessionId));
+	const parentSessionId = parseSessionId(event.parentSessionId);
+	if (parentSessionId === null) return;
+	const summary = subagentSummary(child, parentSessionId);
 	if (!summary) return;
 	const terminal = event.type === "run-terminal";
 	const cutOff =
 		terminal && summary.status === "aborted" && summary.abortReason === INTERRUPTED_ABORT_REASON;
 	recordResource(
-		{ workspaceId, sessionId: asSessionId(event.parentSessionId) },
+		{ workspaceId, sessionId: parentSessionId },
 		{
 			kind: "subagent",
 			summary: {

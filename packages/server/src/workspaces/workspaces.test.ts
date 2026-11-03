@@ -12,7 +12,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, join, relative, resolve } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import { arr, compile, map, unknown } from "@earendil-works/pi-schema";
+import { Workspace } from "@thinkrail/contracts";
 import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { setSyncGitTimeoutForTests } from "../git";
@@ -70,6 +71,15 @@ const canSymlink = (() => {
 const posix = test.skipIf(process.platform === "win32");
 
 let dataDir: string;
+
+const storedWorkspaces = compile(arr(Workspace));
+const RawRecords = compile(arr(map(unknown())));
+
+function readStoredWorkspaces() {
+	const all: unknown = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"));
+	if (!storedWorkspaces.check(all)) throw new Error("workspaces.json breaks the Workspace schema");
+	return all;
+}
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
@@ -139,7 +149,8 @@ test("a relative data dir still creates and records a managed worktree at one ab
 test("the retired eligibility marker never gains initial-terminal provisioning on read", async () => {
 	const ws = await createWorkspace(testProjectId("p1"));
 	const file = join(dataDir, "workspaces.json");
-	const records = JSON.parse(readFileSync(file, "utf8")) as Array<Record<string, unknown>>;
+	const records: unknown = JSON.parse(readFileSync(file, "utf8"));
+	if (!RawRecords.check(records)) throw new Error("workspaces.json is not a list of records");
 	const record = records.find((candidate) => candidate.id === ws.id);
 	if (!record) throw new Error("missing workspace record");
 	delete record.initialTerminalPending;
@@ -768,7 +779,8 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(await worktrees()).toHaveLength(0);
 	expect(registeredWorktrees(repo)).toContain(ws.worktreePath);
 
-	await reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
+	if (!forgotten) throw new Error("forgetWorkspace returned no record");
+	await reclaimWorktree(forgotten);
 	expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
 
 	expect(forgetWorkspace(ws.id)).toBeNull();
@@ -1250,7 +1262,7 @@ test("a diff-range execution failure omits only that workspace's badge", async (
 		diffBase: "bad\u0000ref",
 		worktreePath: repo,
 		createdAt: 1,
-	} as Workspace;
+	};
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify([workspace]));
 
 	const row = (await listWorkspaces(testProjectId("p1"))).find(
@@ -1372,7 +1384,7 @@ test("backfillWorkspaceActivity fills only a missing stamp and touches no overri
 	const stamped = ws.lastActiveAt;
 	expect(backfillWorkspaceActivity(ws.id, 5)?.lastActiveAt).toBe(stamped);
 
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const all = readStoredWorkspaces();
 	const legacy = all.find((row) => row.id === ws.id);
 	if (!legacy) throw new Error("missing");
 	delete legacy.lastActiveAt;
@@ -1387,7 +1399,7 @@ test("backfillWorkspaceActivity fills only a missing stamp and touches no overri
 test("recordWorkspaceHead stamps activity only when the sha actually moved after the first look", async () => {
 	const ws = await createWorkspace(testProjectId("p1"));
 	const t0 = ws.lastActiveAt ?? 0;
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const all = readStoredWorkspaces();
 	for (const row of all) if (row.id === ws.id) row.lastActiveAt = t0 - 3_600_000;
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
 
@@ -1412,7 +1424,7 @@ test("recordWorkspaceHead stamps activity only when the sha actually moved after
 test("watch-start observation compares a retained HEAD baseline after watcher recreation", async () => {
 	const ws = await createWorkspace(testProjectId("p1"));
 	const stale = (ws.lastActiveAt ?? 0) - 3_600_000;
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const all = readStoredWorkspaces();
 	for (const row of all) if (row.id === ws.id) row.lastActiveAt = stale;
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
 

@@ -12,8 +12,8 @@ import { dirname, join, resolve } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
 import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
-	asWorkspaceId,
 	type GitDiffScope,
+	parseWorkspaceId,
 	type ReviewAnchor,
 	type ReviewChangedPayload,
 	type ReviewComment,
@@ -609,7 +609,8 @@ export function resolveCommentFromAgent(
 		files = readdirSync(reviewsDir()).filter((file) => file.endsWith(".json"));
 	} catch {}
 	for (const file of files) {
-		const workspaceId = asWorkspaceId(file.slice(0, -".json".length));
+		const workspaceId = parseWorkspaceId(file.slice(0, -".json".length));
+		if (workspaceId === null) continue;
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = load(workspaceId);

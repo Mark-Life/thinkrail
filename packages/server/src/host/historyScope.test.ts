@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { Project, Workspace } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { buildHistoryScope } from "./historyScope";
+import { parseWsParams } from "./wsParams";
 
 test("all scope: filter matches any cwd + sessionId", () => {
 	const { filter } = buildHistoryScope({ kind: "all" }, [], () => []);
@@ -187,9 +188,8 @@ test("labels: build a worktreePath → {workspaceId, projectId} map from all pro
 	expect(labels("/unknown/path")).toEqual({});
 });
 
-test("unknown scope kind: filter always returns false, never throws", () => {
-	const { filter } = buildHistoryScope({ kind: "bogus" } as never, [], () => []);
-
-	expect(filter("/some/cwd", testSessionId("session1"))).toBe(false);
-	expect(filter("/another/cwd", testSessionId("session2"))).toBe(false);
+test("unknown scope kind is refused before a scope is built", () => {
+	expect(() => parseWsParams("history.search", { query: "x", scope: { kind: "bogus" } })).toThrow(
+		expect.objectContaining({ code: "INVALID_PARAMS" }),
+	);
 });

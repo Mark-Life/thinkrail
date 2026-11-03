@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace, WorkspaceId } from "@thinkrail/contracts";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { testProjectId, testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	createWorkspace,
@@ -223,9 +223,7 @@ test("a kept branch never moves for another chat or after a manual rename", asyn
 });
 
 test("the Default workspace keeps its name while the chat still gets one", async () => {
-	const def = (await listWorkspaces(testProjectId("p1"))).find(
-		(w): w is Workspace => w.kind === "default",
-	);
+	const def = (await listWorkspaces(testProjectId("p1"))).find((w) => w.kind === "default");
 	if (!def) throw new Error("expected a Default workspace");
 	const chat = fakeChat(def.id);
 

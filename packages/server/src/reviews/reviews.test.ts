@@ -11,7 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ReviewChangedPayload, ReviewSnapshot, Workspace } from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
+import { type ReviewChangedPayload, ReviewSnapshot, type Workspace } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { saveWorkspaces } from "../persistence";
 import { setWorkspaceDiffBase } from "../workspaces";
@@ -72,8 +73,7 @@ beforeEach(() => {
 		branch: "main",
 		baseBranch: "main",
 		worktreePath: worktree,
-		createdAt: 0,
-	} as Workspace;
+	};
 	saveWorkspaces([ws]);
 	pushes = [];
 	setReviewPublisher((payload) => pushes.push(payload));
@@ -123,10 +123,18 @@ function archiveDir(): string {
 	return join(dataDir, "reviews", "archive", WS_ID);
 }
 
+const SnapshotFile = compile(ReviewSnapshot);
+
+function readSnapshot(path: string): ReviewSnapshot {
+	const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+	if (!SnapshotFile.check(value)) throw new Error(`not a review snapshot: ${path}`);
+	return value;
+}
+
 function archivedSnapshots(): ReviewSnapshot[] {
 	return readdirSync(archiveDir())
 		.filter((file) => file.endsWith(".json"))
-		.map((file) => JSON.parse(readFileSync(join(archiveDir(), file), "utf8")) as ReviewSnapshot);
+		.map((file) => readSnapshot(join(archiveDir(), file)));
 }
 
 test("anchorProblem: real path + in-range line passes, hallucinated path and past-EOF line fail", () => {
@@ -491,12 +499,12 @@ test("clear refuses an unsafe persisted review id instead of escaping the archiv
 	const sent = await addInline();
 	await markCommentsSent(WS_ID, [sent.id], testSessionId("sess1"));
 	const activeFile = join(dataDir, "reviews", `${WS_ID}.json`);
-	const corrupted = JSON.parse(readFileSync(activeFile, "utf8")) as ReviewSnapshot;
-	corrupted.review.id = "../escape";
+	const stored = readSnapshot(activeFile);
+	const corrupted = { ...stored, review: { ...stored.review, id: "../escape" } };
 	writeFileSync(activeFile, `${JSON.stringify(corrupted)}\n`);
 
 	await expect(clearReview(WS_ID)).rejects.toThrow(/Invalid review id/);
-	expect((JSON.parse(readFileSync(activeFile, "utf8")) as ReviewSnapshot).comments).toHaveLength(1);
+	expect(readSnapshot(activeFile).comments).toHaveLength(1);
 	expect(() => statSync(join(dataDir, "reviews", "archive", "escape.json"))).toThrow();
 });
 

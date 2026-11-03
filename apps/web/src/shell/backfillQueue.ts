@@ -1,19 +1,21 @@
-export interface BackfillQueueOptions {
+export interface BackfillQueueOptions<Key extends string> {
 	readonly concurrency: number;
-	readonly run: (key: string) => Promise<unknown>;
-	readonly isWanted?: (key: string) => boolean;
+	readonly run: (key: Key) => Promise<unknown>;
+	readonly isWanted?: (key: Key) => boolean;
 }
 
-export interface BackfillQueue {
-	readonly schedule: (keys: readonly string[]) => void;
+export interface BackfillQueue<Key extends string> {
+	readonly schedule: (keys: readonly Key[]) => void;
 	readonly clearPending: () => void;
 }
 
-export function createBackfillQueue(options: BackfillQueueOptions): BackfillQueue {
-	const pending: string[] = [];
-	const inFlight = new Set<string>();
-	const rerun = new Set<string>();
-	const wanted = (key: string) => options.isWanted?.(key) ?? true;
+export function createBackfillQueue<Key extends string>(
+	options: BackfillQueueOptions<Key>,
+): BackfillQueue<Key> {
+	const pending: Key[] = [];
+	const inFlight = new Set<Key>();
+	const rerun = new Set<Key>();
+	const wanted = (key: Key) => options.isWanted?.(key) ?? true;
 
 	const pump = (): void => {
 		while (inFlight.size < options.concurrency) {

@@ -1,9 +1,6 @@
 import type { ProjectId, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
-	asProjectId,
-	asSessionId,
-	asWorkspaceId,
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
@@ -19,6 +16,8 @@ import {
 	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
+	parseSessionId,
+	parseWorkspaceId,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
 	type ResourceRecord,
@@ -517,12 +516,13 @@ export function selectAutoSettledCounts(
 	now: number,
 ): { projectId: ProjectId; count: number }[] {
 	const counts: { projectId: ProjectId; count: number }[] = [];
-	for (const [projectId, rows] of Object.entries(state.workspaces)) {
-		const count = rows.filter((workspace) => {
+	for (const rows of Object.values(state.workspaces)) {
+		const settled = rows.filter((workspace) => {
 			const reason = selectWorkspaceSettledReason(state, workspace, now);
 			return reason !== null && reason.kind !== "override";
-		}).length;
-		if (count > 0) counts.push({ projectId: asProjectId(projectId), count });
+		});
+		const [first] = settled;
+		if (first) counts.push({ projectId: first.projectId, count: settled.length });
 	}
 	return counts;
 }
@@ -767,19 +767,26 @@ interface ChatAttentionState extends LayoutAttentionState {
 	historyOpenRequest: { sessionId: SessionId } | null;
 }
 
+export function selectAttendedSessionId(
+	state: ChatAttentionState,
+	workspaceId: string,
+): SessionId | null {
+	const activeWorkspaceId = state.activeWorkspaceId;
+	if (activeWorkspaceId !== workspaceId) return null;
+	const tab = selectAttentionCenterTab(state, activeWorkspaceId);
+	if (tab?.kind !== "chat") return null;
+	return state.obscuredChatSessions[tab.sessionId] ||
+		state.historyOpenRequest?.sessionId === tab.sessionId
+		? null
+		: tab.sessionId;
+}
+
 export function selectChatAttended(
 	state: ChatAttentionState,
 	workspaceId: WorkspaceId,
 	sessionId: SessionId,
 ): boolean {
-	if (
-		state.activeWorkspaceId !== workspaceId ||
-		state.obscuredChatSessions[sessionId] ||
-		state.historyOpenRequest?.sessionId === sessionId
-	)
-		return false;
-	const tab = selectAttentionCenterTab(state, workspaceId);
-	return tab?.kind === "chat" && tab.sessionId === sessionId;
+	return selectAttendedSessionId(state, workspaceId) === sessionId;
 }
 
 export function selectComposerFocusRequested(
@@ -965,15 +972,16 @@ export function selectKnownChatLocation(
 	},
 	sessionId: SessionId,
 ): KnownChatLocation | null {
-	for (const [workspaceId, tabs] of Object.entries(state.tabsByWorkspace)) {
+	for (const tabs of Object.values(state.tabsByWorkspace)) {
 		const tab = tabs.find(
 			(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
 		);
-		if (tab?.kind === "chat") return { workspaceId: asWorkspaceId(workspaceId), title: tab.name };
+		if (tab?.kind === "chat") return { workspaceId: tab.workspaceId, title: tab.name };
 	}
-	for (const [workspaceId, chats] of Object.entries(state.closedChatsByWorkspace)) {
+	for (const [key, chats] of Object.entries(state.closedChatsByWorkspace)) {
 		const chat = chats.find((candidate) => candidate.sessionId === sessionId);
-		if (chat) return { workspaceId: asWorkspaceId(workspaceId), title: chat.title };
+		const workspaceId = parseWorkspaceId(key);
+		if (chat && workspaceId !== null) return { workspaceId, title: chat.title };
 	}
 	return null;
 }
@@ -991,7 +999,7 @@ export function selectWorkspaceSessionIds(
 			tab.kind === "chat" || tab.kind === "plan"
 				? [tab.sessionId]
 				: tab.kind === "doc"
-					? [asSessionId(tab.sourceId)]
+					? [parseSessionId(tab.sourceId)].filter((id) => id !== null)
 					: [],
 		),
 	);
@@ -1007,7 +1015,8 @@ export function selectWorkspaceSessionIds(
 		for (const tab of node.tabs) {
 			if (tab.kind === "chat") sessionIds.add(tab.sessionId);
 			if (tab.kind === "document" && tab.documentKind === "todo-plan") {
-				sessionIds.add(asSessionId(tab.sourceId));
+				const planSessionId = parseSessionId(tab.sourceId);
+				if (planSessionId !== null) sessionIds.add(planSessionId);
 			}
 		}
 	};
@@ -1178,13 +1187,9 @@ export function selectChatFirstPrompt(
 
 export function selectRecordFirstPrompts(state: ChatFirstPromptState): Record<string, string> {
 	const prompts: Record<string, string> = {};
-	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
-		for (const sessionId of Object.keys(records)) {
-			const prompt = selectChatFirstPrompt(
-				state,
-				asWorkspaceId(workspaceId),
-				asSessionId(sessionId),
-			);
+	for (const records of Object.values(state.sessionStateByWorkspace)) {
+		for (const { workspaceId, sessionId } of Object.values(records)) {
+			const prompt = selectChatFirstPrompt(state, workspaceId, sessionId);
 			if (prompt) prompts[sessionId] = prompt;
 		}
 	}

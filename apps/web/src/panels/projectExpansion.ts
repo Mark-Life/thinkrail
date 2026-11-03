@@ -1,4 +1,4 @@
-import { asProjectId, type ProjectId } from "@thinkrail/contracts";
+import { type ProjectId, parseProjectId } from "@thinkrail/contracts";
 import { STORAGE_PREFIX } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -13,7 +13,7 @@ function readPersistedExpansion(): ProjectId[] {
 		if (!raw) return [];
 		const parsed: unknown = JSON.parse(raw);
 		if (!Array.isArray(parsed)) return [];
-		return parsed.filter((id): id is string => typeof id === "string").map(asProjectId);
+		return parsed.map(parseProjectId).filter((id) => id !== null);
 	} catch {
 		return [];
 	}
