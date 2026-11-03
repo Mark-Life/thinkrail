@@ -1,6 +1,7 @@
 import { CFunction, dlopen, FFIType, type Pointer, read, toArrayBuffer } from "bun:ffi";
 import { type Dirent, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { windowsProductName } from "@thinkrail/shared/windowsIdentity";
 
 export function desktopAppUserModelId(channel: string): string {
@@ -23,15 +24,11 @@ export interface WindowsShellApi {
 
 const ELECTROBUN_UNINSTALL_MANIFEST = ".electrobun-uninstall.json";
 
-function hasCode(error: unknown, code: string): boolean {
-	return error instanceof Error && "code" in error && error.code === code;
-}
-
 function listDirectory(path: string, failures: unknown[]): Dirent[] {
 	try {
 		return readdirSync(path, { withFileTypes: true });
 	} catch (error) {
-		if (!hasCode(error, "ENOENT")) failures.push(error);
+		if (errnoCode(error) !== "ENOENT") failures.push(error);
 		return [];
 	}
 }
@@ -58,7 +55,7 @@ export function taskbarShortcutCandidates(
 			paths.push(manifest.start_menu_shortcut);
 		}
 	} catch (error) {
-		if (!hasCode(error, "ENOENT")) failures.push(error);
+		if (errnoCode(error) !== "ENOENT") failures.push(error);
 	}
 	if (appData) {
 		const pinned = join(appData, "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned");

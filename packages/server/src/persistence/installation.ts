@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { compile, lit, obj, str } from "@earendil-works/pi-schema";
-import { hasErrorCode } from "./stateFile";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 
 export interface InstallationRecord {
 	id: string;
@@ -36,7 +36,7 @@ export function ensureInstallationIn(
 			publish(temp, target);
 			return record;
 		} catch (error) {
-			if (!hasErrorCode(error, "EEXIST")) throw error;
+			if (errnoCode(error) !== "EEXIST") throw error;
 			const winner = readInstallation(directory);
 			if (InstallationIdFile.check(winner)) return { id: winner.id };
 			throw new Error("installation.json exists without a valid installation id", { cause: error });
@@ -58,7 +58,7 @@ export function claimAppInstalledIn(
 	try {
 		writeFileSync(claim, "", { flag: "wx" });
 	} catch (error) {
-		if (hasErrorCode(error, "EEXIST")) return false;
+		if (errnoCode(error) === "EEXIST") return false;
 		throw error;
 	}
 

@@ -56,7 +56,7 @@ bytes are** — the one byte-level classification every content read in the host
   string it pairs with is valid text).
 - **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
+- **Allowed deps:** `persistence` (workspace lookup); `@thinkrail/shared/errnoCode`; `contracts` (`FileNode`, `ResourceMeta`); Node
   `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.
 
