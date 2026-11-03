@@ -27,6 +27,7 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
+	E2E_WS_RESULT_LOG,
 } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -93,6 +94,9 @@ export default defineConfig({
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",
+			// The host refuses any reply that breaks its result schema and writes it here; globalTeardown fails the run on it.
+			THINKRAIL_CHECK_WS_RESULTS: "1",
+			THINKRAIL_E2E_WS_RESULT_LOG: E2E_WS_RESULT_LOG,
 			// Keep cross-agent personal skill aliases away from the developer's real homes/overrides.
 			...toolHomeEnv(E2E_HOME_DIR),
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
