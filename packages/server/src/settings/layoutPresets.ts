@@ -178,13 +178,48 @@ export function validateCustomLayoutPresets(value: unknown): LayoutPreset[] {
 	return presets;
 }
 
+function storedGroupTools(group: unknown): unknown[] {
+	const tools = record(group)?.tools;
+	return Array.isArray(tools) ? tools : [];
+}
+
+/** Older hosts stored a separate `changes` tool, which is now part of `files`. */
+function withChangesMergedIntoFiles(candidate: unknown): unknown {
+	const preset = record(candidate);
+	if (!preset) return candidate;
+	const regions = ["left", "right", "bottom"];
+	const groupsOf = (region: unknown): unknown[] => {
+		const groups = record(region)?.groups;
+		return Array.isArray(groups) ? groups : [];
+	};
+	let filesPlaced = regions.some((region) =>
+		groupsOf(preset[region]).some((group) => storedGroupTools(group).includes("files")),
+	);
+	const merged = { ...preset };
+	for (const region of regions) {
+		const stored = record(preset[region]);
+		if (!stored || !Array.isArray(stored.groups)) continue;
+		const groups = stored.groups.map((group) => {
+			const tools = storedGroupTools(group).flatMap((tool) => {
+				if (tool !== "changes") return [tool];
+				if (filesPlaced) return [];
+				filesPlaced = true;
+				return ["files"];
+			});
+			return record(group) ? { ...record(group), tools } : group;
+		});
+		merged[region] = { ...stored, groups };
+	}
+	return merged;
+}
+
 export function normalizeStoredCustomLayoutPresets(value: unknown): LayoutPreset[] {
 	if (!Array.isArray(value)) return [];
 	const presets: LayoutPreset[] = [];
 	const ids = new Set<string>();
 	for (const candidate of value.slice(0, MAX_PRESETS)) {
 		try {
-			const preset = validateLayoutPreset(candidate);
+			const preset = validateLayoutPreset(withChangesMergedIntoFiles(candidate));
 			if (ids.has(preset.id)) continue;
 			ids.add(preset.id);
 			presets.push(preset);

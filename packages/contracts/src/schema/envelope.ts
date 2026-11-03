@@ -10,6 +10,8 @@ import {
 import { wireObj } from "./wire";
 
 export type WsErrorCode =
+	| "STATE_FILE_SET_ASIDE"
+	| "STATE_FILE_UNREADABLE"
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
 	| "NOT_GIT"

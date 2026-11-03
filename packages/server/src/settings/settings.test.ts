@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -8,6 +16,7 @@ import {
 	DEFAULT_CONFIG,
 	type LayoutPreset,
 } from "@thinkrail/contracts";
+import { loadConfig } from "../persistence";
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import {
 	getConfig,
@@ -761,6 +770,35 @@ test("stored custom presets keep only complete current-schema entries", () => {
 	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
 });
 
+test("a stored preset from before Changes joined Files keeps its layout", () => {
+	const withTools = (name: string, left: string[], right: string[]) => {
+		const base = preset(name);
+		const group = (id: string, tools: string[]) => ({ id, weight: 1, folded: false, tools });
+		return {
+			...base,
+			left: { visible: true, width: 0.2, groups: [group(`${name}-l`, left)] },
+			right: { visible: true, width: 0.2, groups: [group(`${name}-r`, right)] },
+		};
+	};
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			customLayoutPresets: [
+				withTools("alone", ["projects", "changes"], ["review"]),
+				withTools("both", ["changes"], ["files", "review"]),
+			],
+		}),
+	);
+	resetConfigCache();
+	const [alone, both] = getConfig().customLayoutPresets;
+	expect(alone?.left.groups[0]?.tools).toEqual(["projects", "files"]);
+	expect(both?.left.groups[0]?.tools).toEqual([]);
+	expect(both?.right.groups[0]?.tools).toEqual(["files", "review"]);
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk.customLayoutPresets).toHaveLength(2);
+});
+
 const wireModel = (id: string, provider = "p") => ({
 	id,
 	name: id.toUpperCase(),
@@ -926,4 +964,105 @@ test("invalid font updates are rejected before persistence or broadcast", () => 
 	expect(getConfig()).toEqual(before);
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
+function makeConfigUnreadable() {
+	mkdirSync(join(dataDir, "config.json"));
+}
+
+function restoreConfig(config: Partial<AppConfig>) {
+	rmSync(join(dataDir, "config.json"), { recursive: true });
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(config));
+}
+
+function storedConfig() {
+	return JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+}
+
+test("a config unreadable at load refuses saves, then saves onto the stored values once it reads again", () => {
+	makeConfigUnreadable();
+	expect(getConfig()).toEqual(DEFAULT_CONFIG);
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+
+	restoreConfig({ locale: "de" });
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(getConfig().locale).toBe("de");
+});
+
+test("another read of a recovered config cannot make a save write the defaults from the failed load", () => {
+	makeConfigUnreadable();
+	getConfig();
+	restoreConfig({ locale: "de", defaultModel: wireModel("m", "p") });
+	expect(loadConfig().locale).toBe("de");
+
+	updateConfig({ codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({
+		locale: "de",
+		defaultModel: wireModel("m", "p"),
+		codeFontSize: 15,
+	});
+});
+
+test("one failed read beside a good cache does not refuse the next save", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ locale: "de" }));
+	expect(getConfig().locale).toBe("de");
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+	restoreConfig({ locale: "de" });
+
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+});
+
+test("a refused save keeps a good cache while the file stays unreadable", () => {
+	const stored = { locale: "de", analyticsEnabled: true, disabledExtensions: ["x"] };
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(stored));
+	expect(getConfig()).toMatchObject(stored);
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+	expect(getConfig()).toMatchObject(stored);
+	noteRecentModel(wireModel("m", "p"));
+	expect(getConfig()).toMatchObject({ ...stored, recentModels: [] });
+
+	restoreConfig(stored);
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ ...stored, codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ ...stored, codeFontSize: 15 });
+});
+
+test("noteRecentModel does not throw when the save fails, and keeps the last good list", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	makeConfigUnreadable();
+	getConfig();
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(getConfig().recentModels).toEqual([]);
+	expect(published).toEqual([]);
+
+	restoreConfig({ locale: "de" });
+	noteRecentModel(wireModel("m", "p"));
+	expect(storedConfig()).toMatchObject({ locale: "de", recentModels: [wireModel("m", "p")] });
+});
+
+test("noteRecentModel does not throw when the first load cannot save its repair", () => {
+	const path = join(dataDir, "config.json");
+	writeFileSync(path, JSON.stringify({ customLayoutPresets: [{ id: "broken" }] }));
+	chmodSync(path, 0o444);
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toBeUndefined();
+});
+
+test("noteRecentModel does not throw when publishing fails, and keeps the saved list", () => {
+	setSettingsPublisher(() => {
+		throw new Error("publish failed");
+	});
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toEqual([wireModel("m", "p")]);
+	expect(getConfig().recentModels).toEqual([wireModel("m", "p")]);
 });
