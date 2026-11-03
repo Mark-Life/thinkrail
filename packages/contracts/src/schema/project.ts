@@ -118,3 +118,7 @@ export const PROJECT_METHODS = {
 	},
 	"project.skills": { params: wireObj({ projectId: str() }), result: arr(SkillCatalogEntry) },
 };
+
+export const PROJECT_CHANNELS = {
+	"project.updated": Project,
+};

@@ -5,40 +5,19 @@ import type {
 	SubagentCompletionDetails,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
-import type { ToolResponseDetails, ToolResponsePendingDetails } from "./piProtocol";
 import type {
-	AppConfig,
-	McpStatusSnapshot,
+	SessionEventPayload,
+	ToolResponseDetails,
+	ToolResponsePendingDetails,
+} from "./piProtocol";
+import type {
 	ModelContextSetting,
-	Project,
-	SessionSummary,
-	TerminalTabInfo,
 	WireCustomMessage,
+	WsSchemaChannelMap,
 	WsSchemaMethodMap,
 } from "./schema";
 
-export interface TerminalDataPush {
-	id: string;
-	data: string;
-	truncated?: boolean;
-}
-
-export interface TerminalExitPush {
-	id: string;
-	exitCode: number;
-}
-
-export interface TerminalDetachedPush {
-	workspaceId: string;
-	tabKey: string;
-}
-
 export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
-
-export interface TerminalTabsPush {
-	workspaceId: string;
-	tabs: TerminalTabInfo[];
-}
 
 export const PROTOCOL_VERSION = 102;
 export const FONTS_PROTOCOL_VERSION = 102;
@@ -95,39 +74,6 @@ export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_SURVEY_PROTOCOL_VERSION = 97;
-
-export type HostPlatform = "darwin" | "linux" | "win32";
-
-export type HostUpdateStatus = "available" | "running" | "succeeded" | "failed";
-
-export interface HostUpdateNotice {
-	currentVersion: string;
-	availableVersion: string;
-	channel: string;
-	status?: HostUpdateStatus;
-}
-
-export interface ServerWelcome {
-	protocolVersion: number;
-	appVersion?: string;
-	hostPlatform?: HostPlatform;
-	hostUpdate?: HostUpdateNotice;
-	projects: Project[];
-	recentProjects: Project[];
-	config: AppConfig;
-}
-
-export interface WorkspaceRemoved {
-	projectId: string;
-	id: string;
-}
-
-export type SessionCreatedPayload = SessionSummary;
-
-export interface SessionDeletedPayload {
-	workspaceId: string;
-	sessionId: string;
-}
 
 export const WS_METHODS = {
 	projectOpen: "project.open",
@@ -349,7 +295,15 @@ export const WS_CHANNELS = {
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
-export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
+export interface WsChannelMap extends WsSchemaChannelMap {
+	"pi.event": SessionEventPayload;
+}
+
+export type WsChannel = SameUnion<
+	keyof WsChannelMap,
+	(typeof WS_CHANNELS)[keyof typeof WS_CHANNELS]
+>;
+export type WsChannelPayload<C extends WsChannel> = WsChannelMap[C];
 
 export const TOOL_RESPONSE_CUSTOM_TYPE = "tool-response";
 const LEGACY_ASK_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
@@ -504,9 +458,6 @@ export function isSharedModelContextTarget(
 
 export interface WsMethodMap extends WsSchemaMethodMap {}
 
-/** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
-export type McpStatusPayload = McpStatusSnapshot;
-
 export type WsMethodName = SameUnion<
 	keyof WsMethodMap,
 	(typeof WS_METHODS)[keyof typeof WS_METHODS]
@@ -575,9 +526,8 @@ export interface WsResponse {
 	errorCode?: WsErrorCode;
 }
 
-export interface WsPush {
-	channel: WsChannel;
-	data: unknown;
-}
+export type WsPush<C extends WsChannel = WsChannel> = {
+	[K in C]: { channel: K; data: WsChannelPayload<K> };
+}[C];
 
 export type WsServerMessage = WsResponse | WsPush;

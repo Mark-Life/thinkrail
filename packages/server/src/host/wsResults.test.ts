@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { compile } from "@earendil-works/pi-schema";
-import { WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
+import { WS_CHANNEL_SCHEMAS, WS_CHANNELS, WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
 import { handleRequest } from "./handlers";
-import { checkWsResult } from "./wsResults";
+import { checkWsPush, checkWsResult, pushFrame } from "./wsResults";
 
 const SAVED = process.env.THINKRAIL_CHECK_WS_RESULTS;
 
@@ -50,4 +50,34 @@ test("handleRequest refuses a handler's reply that breaks its schema", async () 
 test("every result schema compiles", () => {
 	for (const { result } of Object.values(WS_METHOD_SCHEMAS))
 		expect(() => compile(result)).not.toThrow();
+});
+
+test("a push that breaks its schema fails with the channel and the field", () => {
+	expect(() => checkWsPush("workspace.removed", { projectId: 1, id: "w" })).toThrow(
+		/ws push check failed: workspace\.removed: \/projectId /,
+	);
+});
+
+test("with the switch off, a bad push is not looked at", () => {
+	delete process.env.THINKRAIL_CHECK_WS_RESULTS;
+	expect(() => checkWsPush("workspace.removed", null)).not.toThrow();
+});
+
+test("pi.event checks only the type tag", () => {
+	const push = { sessionId: "s", event: { type: "from_a_newer_pi", anything: 1 } };
+	expect(() => checkWsPush("pi.event", push)).not.toThrow();
+	expect(() => checkWsPush("pi.event", { sessionId: "s", event: {} })).toThrow(/\/event\/type /);
+});
+
+test("pushFrame sends the channel and payload the client reads", () => {
+	const frame = pushFrame(WS_CHANNELS.workspaceRemoved, { projectId: "p", id: "w" });
+	expect(JSON.parse(frame)).toEqual({
+		channel: "workspace.removed",
+		data: { projectId: "p", id: "w" },
+	});
+});
+
+test("every channel has a schema that compiles", () => {
+	for (const channel of Object.values(WS_CHANNELS))
+		expect(() => compile(WS_CHANNEL_SCHEMAS[channel])).not.toThrow();
 });

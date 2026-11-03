@@ -33,7 +33,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   Receipts are deliberately best-effort and never retransmitted — one can die in a socket buffer exactly like a
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
-  `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
+  `subscribe`, typed by `WsChannelPayload<C>`, with last-value replay for snapshots; append-only terminal data and the one-shot terminal
   exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`
   channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
