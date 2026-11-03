@@ -80,7 +80,7 @@ test("a reply that fails its schema is an error for that request, and only its m
 		});
 });
 
-test("extra fields, bad pushes and channels of a newer host leave the app working", async ({
+test("extra fields, bad pushes and unknown channels at this protocol version leave the app working", async ({
 	page,
 }) => {
 	const errors: Error[] = [];
@@ -90,9 +90,9 @@ test("extra fields, bad pushes and channels of a newer host leave the app workin
 		ws.onMessage((message) => server.send(message));
 		server.onMessage((message) => {
 			const frame = JSON.parse(String(message)) as Frame & Record<string, unknown>;
-			frame.fromNewerHost = true;
-			if (isObject(frame.data)) frame.data.fromNewerHost = true;
-			if (isObject(frame.result)) frame.result.fromNewerHost = true;
+			frame.fromLaterBuild = true;
+			if (isObject(frame.data)) frame.data.fromLaterBuild = true;
+			if (isObject(frame.result)) frame.result.fromLaterBuild = true;
 			ws.send("not json");
 			ws.send(JSON.stringify({ channel: "from.a.newer.host", data: {} }));
 			ws.send(JSON.stringify({ channel: WS_CHANNELS.workspaceRemoved, data: { projectId: 7 } }));
@@ -105,7 +105,7 @@ test("extra fields, bad pushes and channels of a newer host leave the app workin
 	expect(errors).toEqual([]);
 });
 
-test("a welcome from an older host with no recent projects or config still starts the app", async ({
+test("a welcome at this protocol version with no recent projects or config still starts the app", async ({
 	page,
 }) => {
 	await rewriteHostFrames(page, (frame) => {

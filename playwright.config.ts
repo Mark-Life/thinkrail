@@ -46,10 +46,11 @@ if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi
 	throw new Error("e2e host PATH must not contain pi");
 const isShardLane =
 	process.env.THINKRAIL_E2E_LANE !== undefined || !!process.env.THINKRAIL_E2E_JOB_SHARD;
+const hostEntry = `${JSON.stringify(bunExecutable)} --preload ./packages/server/src/host/closedWireSchemasPreload.ts packages/server/src/dev.ts`;
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
-		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`
-		: `${JSON.stringify(bunExecutable)} run build:web && ${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`;
+		? hostEntry
+		: `${JSON.stringify(bunExecutable)} run build:web && ${hostEntry}`;
 export default defineConfig({
 	testDir: "./e2e",
 	// The headless workflow-test suite has its own config (playwright.workflows.config.ts) — no browser,
@@ -94,7 +95,7 @@ export default defineConfig({
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",
-			// The host refuses any reply that breaks its result schema and writes it here; globalTeardown fails the run on it.
+			// The host refuses any reply that breaks its result schema or carries an unknown field, and writes it here; globalTeardown fails the run on it.
 			THINKRAIL_CHECK_WS_RESULTS: "1",
 			THINKRAIL_E2E_WS_RESULT_LOG: E2E_WS_RESULT_LOG,
 			// Keep cross-agent personal skill aliases away from the developer's real homes/overrides.

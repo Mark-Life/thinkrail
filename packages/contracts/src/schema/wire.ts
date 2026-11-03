@@ -8,7 +8,7 @@ import {
 	type StaticObject,
 } from "@earendil-works/pi-schema";
 
-/** A wire object: unknown fields pass, so a UI and a host of different versions keep working together. */
+/** A wire object: unknown fields pass, so a UI and a host of different builds keep working together. */
 export function wireObj<const P extends Properties>(properties: P): Schema<StaticObject<P>> {
 	return obj(properties, { open: true });
 }
