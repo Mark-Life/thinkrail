@@ -55,6 +55,7 @@ import {
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import {
 	type BackgroundCommands,
 	createBackgroundCommands,
@@ -1629,10 +1630,6 @@ const SavedModelRef = compile(
 	obj({ provider: str({ minLength: 1 }), modelId: str({ minLength: 1 }) }, { open: true }),
 );
 
-function hasErrorCode(error: unknown, code: string): boolean {
-	return typeof error === "object" && error !== null && Reflect.get(error, "code") === code;
-}
-
 /** Null when the file is not a pi session: pi's own listing skips those too. */
 async function readSessionFileIdentity(path: string): Promise<SessionFileIdentity | null> {
 	const input = createReadStream(path, { encoding: "utf8" });
@@ -1670,7 +1667,7 @@ async function scanSessionFiles(
 	try {
 		names = await readdir(dir);
 	} catch (error) {
-		if (hasErrorCode(error, "ENOENT")) return [];
+		if (errnoCode(error) === "ENOENT") return [];
 		throw new Error(`Session directory is unreadable: ${dir}`, { cause: error });
 	}
 	const scanned: ScannedSessionFile[] = [];
