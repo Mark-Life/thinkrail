@@ -10,13 +10,13 @@ import {
 	type Static,
 	str,
 } from "@earendil-works/pi-schema";
-import { ProjectId } from "./ids";
+import { ProjectId, StoredProjectId } from "./ids";
 import { McpProjectOverride, McpToolGrant } from "./mcp";
 import { SkillCatalogEntry } from "./skill";
 import { Ack, NoParams, wireObj } from "./wire";
 
 export const Project = wireObj({
-	id: ProjectId,
+	id: StoredProjectId,
 	name: str(),
 	path: str(),
 	slug: str(),

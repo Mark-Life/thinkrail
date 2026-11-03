@@ -8,7 +8,7 @@ import { WS_METHOD_SCHEMAS } from "./methods";
 
 const STORED = {
 	protocolVersion: 103,
-	hash: "3d3409b5a0b5281f9b0576ae8e0f3c5a921b3e84ac409dd97c9bfbec66aad9c6",
+	hash: "4448520e18cf6cdcafec7955a9e3719eedfa104f2b3104999799f0fe89443cb4",
 };
 
 function sortedKeys(value: unknown): unknown {

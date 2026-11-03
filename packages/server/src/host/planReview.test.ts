@@ -45,11 +45,14 @@ import * as reviewLock from "./reviewLock";
 import { withReviewLock } from "./reviewLock";
 import { claimItemFix, isItemUnderActiveReview, releaseItemFix } from "./todoReview";
 
+const PROJECT_ID = testProjectId("00000000-0000-4000-8000-0000000000a1");
+const WORKSPACE_ID = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
+
 const TEST_KEY = "phc_test";
 
 let dataDir: string;
 let worktree: string;
-const WS = testWorkspaceId("ws-planreview");
+const WS = WORKSPACE_ID;
 
 function modelDef(id: string) {
 	return {
@@ -119,7 +122,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: testProjectId("p1"),
+			projectId: PROJECT_ID,
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
@@ -1032,7 +1035,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	// A commit no plan item owns is surfaced only as a wire-only adoptedCommits entry; the review result
 	// card / detached-failure toast must name its subject, so itemTitleOf has to look there too.
 	const wt = mkdtempSync(join(tmpdir(), "planreview-adopt-"));
-	const ws = testWorkspaceId("ws-adopt");
+	const ws = testWorkspaceId("00000000-0000-4000-8000-4a37f1967e1b");
 	sh(wt, "init", "-b", "main");
 	sh(wt, "config", "user.email", "t@thinkrail.test");
 	sh(wt, "config", "user.name", "test");
@@ -1048,7 +1051,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	saveWorkspaces([
 		{
 			id: ws,
-			projectId: testProjectId("p1"),
+			projectId: PROJECT_ID,
 			name: "w",
 			branch: "feature",
 			baseBranch: "main",

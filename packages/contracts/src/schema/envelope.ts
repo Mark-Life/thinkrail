@@ -8,7 +8,6 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
-import { SessionId } from "./ids";
 import { wireObj } from "./wire";
 
 export type WsErrorCode =
@@ -73,7 +72,7 @@ export const WsRequestFrame = wireObj({
 	id: str(),
 	method: str(),
 	params: opt(unknown()),
-	sessionId: opt(SessionId),
+	sessionId: opt(str()),
 });
 export type WsRequestFrame = Static<typeof WsRequestFrame>;
 

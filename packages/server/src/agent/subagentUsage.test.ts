@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -133,6 +133,14 @@ test("reconcileSubagentUsage is idempotent and records a child file again once i
 	appendFileSync(file, `\n${assistant(20, 0.2)}`);
 	await parent.reconcile();
 	expect(parent.inputs()).toEqual([10, 20]);
+});
+
+test("a child file whose name is not a path-safe id still counts", async () => {
+	const { dir, file } = childDir(assistant(10, 0.1));
+	renameSync(file, join(dir, "2026-01-01T00-00-00-000Z_edited header.jsonl"));
+	const parent = parentRecords(dir);
+	await parent.reconcile();
+	expect(parent.inputs()).toEqual([10]);
 });
 
 test("a lost earlier record is recovered even when a later record of that child survives", async () => {

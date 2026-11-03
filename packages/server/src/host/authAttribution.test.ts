@@ -31,7 +31,7 @@ const TEST_KEY = "phc_test";
 
 const PRIVATE = "private-auth-attribution";
 const context = { clientKey: `${PRIVATE}-client` };
-const workspaceId = testWorkspaceId(`${PRIVATE}-workspace`);
+const workspaceId = testWorkspaceId("00000000-0000-4000-8000-0000000000e1");
 const saved = {
 	THINKRAIL_DATA_DIR: process.env.THINKRAIL_DATA_DIR,
 	PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR,
@@ -162,7 +162,8 @@ afterEach(async () => {
 	}
 	expect(unexpectedAuthCalls).toEqual([]);
 	const payload = outgoing.join("\n");
-	for (const value of [PRIVATE, directory, ...sessionIds]) expect(payload).not.toContain(value);
+	for (const value of [PRIVATE, directory, workspaceId, ...sessionIds])
+		expect(payload).not.toContain(value);
 	expect(
 		events.some(({ event }) => event === "provider_login" || event.startsWith("agent_run_")),
 	).toBe(false);

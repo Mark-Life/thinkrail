@@ -8,7 +8,7 @@ import {
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type { SessionId } from "@thinkrail/contracts";
-import { parseSessionId } from "@thinkrail/contracts";
+import { parseStoredSessionId } from "@thinkrail/contracts";
 import { logger } from "../log";
 
 const log = logger("agent");
@@ -210,7 +210,7 @@ async function readChildTotals(
 	for (const name of names) {
 		const separator = name.indexOf("_");
 		if (separator < 0 || !name.endsWith(".jsonl")) continue;
-		const childSessionId = parseSessionId(name.slice(separator + 1, -".jsonl".length));
+		const childSessionId = parseStoredSessionId(name.slice(separator + 1, -".jsonl".length));
 		if (childSessionId === null || isLive(childSessionId)) continue;
 		const path = join(dir, name);
 		try {
