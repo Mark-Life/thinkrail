@@ -6,7 +6,8 @@ import {
 	getAgentDir,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { LoginFrame, LoginPush } from "@thinkrail/contracts";
+import type { LoginFrame, LoginPush, WorkspaceId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { liveSessionIdsOf, mcpSessionView } from "./agentSessionManager";
 import {
@@ -33,7 +34,7 @@ interface Probe {
 	loginId: string;
 	ownerClientKey: string;
 	serverName: string;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	pendingInput?: (value: string | undefined) => void;
 	session?: AgentSession;
 	settled: boolean;
@@ -82,7 +83,7 @@ function frame(probe: Probe, raw: LoginFrame): void {
 function probeUi(probe: Probe, notices: { message: string; level: string }[]): ExtensionUIContext {
 	const noop = () => {};
 	return {
-		...createWebUiContext(`probe:${probe.loginId}`),
+		...createWebUiContext(asSessionId(`probe:${probe.loginId}`)),
 		notify(message, type) {
 			notices.push({ message, level: type ?? "info" });
 		},
@@ -204,7 +205,7 @@ function outcome(
 	return { kind: "error", message: last?.message ?? "Sign-in did not finish." };
 }
 
-async function reconnectSignedIn(workspaceId: string, serverName: string): Promise<void> {
+async function reconnectSignedIn(workspaceId: WorkspaceId, serverName: string): Promise<void> {
 	for (const sessionId of liveSessionIdsOf(workspaceId)) {
 		const snapshot = await refreshMcpStatus(sessionId, 0);
 		const state = snapshot?.servers.find((server) => server.name === serverName)?.state;
@@ -217,7 +218,7 @@ async function reconnectSignedIn(workspaceId: string, serverName: string): Promi
 
 export function startMcpProbe(options: {
 	action: McpProbeAction;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	cwd: string;
 	projectTrusted: boolean;
 	policy: McpProjectPolicy;

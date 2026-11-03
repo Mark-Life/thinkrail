@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { useAppStore } from "../../store";
 import {
 	BUILTIN_LAYOUT_PRESETS,
@@ -88,8 +89,8 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "atomic-surface");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		await ensureWorkspaceLayoutState("A");
-		await ensureWorkspaceLayoutState("B");
+		await ensureWorkspaceLayoutState(asWorkspaceId("A"));
+		await ensureWorkspaceLayoutState(asWorkspaceId("B"));
 		const before = useAppStore.getState();
 		const base = before.layoutDocumentsByWorkspace.A;
 		const attention = before.layoutAttentionByWorkspace.A;
@@ -117,7 +118,7 @@ describe("frontend-local layout state", () => {
 			}),
 		);
 		try {
-			await commitWorkspaceLayout("A", resizeSideRegion(base, "left", 0.31), {
+			await commitWorkspaceLayout(asWorkspaceId("A"), resizeSideRegion(base, "left", 0.31), {
 				baseDocument: base,
 				attention: selectTab(attention, group.location, tool.id),
 			});
@@ -132,8 +133,8 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "retired-fields");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		const doc = await ensureWorkspaceLayoutState("A");
-		await commitWorkspaceLayout("A", resizeSideRegion(doc, "left", 0.33));
+		const doc = await ensureWorkspaceLayoutState(asWorkspaceId("A"));
+		await commitWorkspaceLayout(asWorkspaceId("A"), resizeSideRegion(doc, "left", 0.33));
 		const key = localLayoutStorageKey(endpoint, "retired-fields");
 		const raw = local.getItem(key);
 		if (!raw) throw new Error("Missing persistence");
@@ -159,7 +160,7 @@ describe("frontend-local layout state", () => {
 		resetLayoutStateForTests();
 		resetStore();
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		const restored = await ensureWorkspaceLayoutState("A");
+		const restored = await ensureWorkspaceLayoutState(asWorkspaceId("A"));
 		expect(restored.left.width).toBe(0.33);
 		expect(
 			"lastTerminalByGroup" in (useAppStore.getState().layoutAttentionByWorkspace.A ?? {}),
@@ -221,8 +222,8 @@ describe("frontend-local layout state", () => {
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 
-		const first = await ensureWorkspaceLayoutState("workspace");
-		const second = await ensureWorkspaceLayoutState("workspace");
+		const first = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
+		const second = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 
 		expect(first.center).toMatchObject({ kind: "group", tabs: [] });
 		expect(first.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
@@ -247,7 +248,7 @@ describe("frontend-local layout state", () => {
 		const state = useAppStore.getState();
 		expect(state.layoutStateReady).toBe(true);
 		expect(state.workbenchFrame).not.toBeNull();
-		const document = await ensureWorkspaceLayoutState("new-workspace");
+		const document = await ensureWorkspaceLayoutState(asWorkspaceId("new-workspace"));
 
 		expect(useAppStore.getState().layoutDocumentsByWorkspace["new-workspace"]).toBe(document);
 	});
@@ -257,8 +258,8 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		await ensureWorkspaceLayoutState("A");
-		await ensureWorkspaceLayoutState("B");
+		await ensureWorkspaceLayoutState(asWorkspaceId("A"));
+		await ensureWorkspaceLayoutState(asWorkspaceId("B"));
 
 		const state = useAppStore.getState();
 		const document = state.layoutDocumentsByWorkspace.A;
@@ -278,7 +279,7 @@ describe("frontend-local layout state", () => {
 		}
 		const next = selectTab(attention, group.location, selectedTool.id);
 
-		applyLayoutAttention("A", next);
+		applyLayoutAttention(asWorkspaceId("A"), next);
 
 		const after = useAppStore.getState();
 		expect(after.layoutAttentionByWorkspace.A).toEqual(next);
@@ -292,7 +293,7 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		await ensureWorkspaceLayoutState("A");
+		await ensureWorkspaceLayoutState(asWorkspaceId("A"));
 		const before = useAppStore.getState();
 		const attention = before.layoutAttentionByWorkspace.A;
 		const document = before.layoutDocumentsByWorkspace.A;
@@ -304,10 +305,13 @@ describe("frontend-local layout state", () => {
 			writes += 1;
 		});
 
-		applyLayoutAttention("A", attention);
-		applyLayoutAttention("A", { ...attention, selectedByGroup: { ...attention.selectedByGroup } });
+		applyLayoutAttention(asWorkspaceId("A"), attention);
+		applyLayoutAttention(asWorkspaceId("A"), {
+			...attention,
+			selectedByGroup: { ...attention.selectedByGroup },
+		});
 		applyLayoutAttention(
-			"A",
+			asWorkspaceId("A"),
 			selectTab(attention, center.location, center.tabs[0]?.id ?? "", false),
 		);
 		unsubscribe();
@@ -321,8 +325,8 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		await ensureWorkspaceLayoutState("A");
-		await ensureWorkspaceLayoutState("B");
+		await ensureWorkspaceLayoutState(asWorkspaceId("A"));
+		await ensureWorkspaceLayoutState(asWorkspaceId("B"));
 
 		const initial = useAppStore.getState();
 		const documentA = initial.layoutDocumentsByWorkspace.A;
@@ -346,11 +350,14 @@ describe("frontend-local layout state", () => {
 			name: "Layout test terminal",
 			tabKey: "layout-test",
 		});
-		await commitWorkspaceLayout("B", documentB);
+		await commitWorkspaceLayout(asWorkspaceId("B"), documentB);
 		const afterCommit = useAppStore.getState();
 		const attentionB = afterCommit.layoutAttentionByWorkspace.B;
 		if (!attentionB) throw new Error("missing workspace B attention");
-		afterCommit.setLayoutAttention("B", selectTab(attentionB, group.location, terminalId));
+		afterCommit.setLayoutAttention(
+			asWorkspaceId("B"),
+			selectTab(attentionB, group.location, terminalId),
+		);
 
 		const selectedTool = group.tabs.find(
 			(tab) => tab.kind === "tool" && tab.id !== attentionA.selectedByGroup[group.location.groupId],
@@ -358,7 +365,10 @@ describe("frontend-local layout state", () => {
 		if (selectedTool?.kind !== "tool") {
 			throw new Error("missing alternate tool in side group");
 		}
-		applyLayoutAttention("A", selectTab(attentionA, group.location, selectedTool.id));
+		applyLayoutAttention(
+			asWorkspaceId("A"),
+			selectTab(attentionA, group.location, selectedTool.id),
+		);
 
 		expect(
 			useAppStore.getState().layoutAttentionByWorkspace.B?.selectedByGroup[group.location.groupId],
@@ -375,7 +385,7 @@ describe("frontend-local layout state", () => {
 		const frame = useAppStore.getState().workbenchFrame;
 		if (!frame) throw new Error("The local workbench frame is not ready");
 		const pending = emptyWorkspaceProjection(frame);
-		const installed = await ensureWorkspaceLayoutState("first-visit");
+		const installed = await ensureWorkspaceLayoutState(asWorkspaceId("first-visit"));
 
 		expect(installed).toEqual(pending.document);
 		expect(useAppStore.getState().layoutAttentionByWorkspace["first-visit"]).toEqual(
@@ -388,7 +398,7 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		await ensureWorkspaceLayoutState("A");
+		await ensureWorkspaceLayoutState(asWorkspaceId("A"));
 		const initial = useAppStore.getState();
 		const document = initial.layoutDocumentsByWorkspace.A;
 		const attention = initial.layoutAttentionByWorkspace.A;
@@ -406,12 +416,12 @@ describe("frontend-local layout state", () => {
 		if (selectedTool?.kind !== "tool") {
 			throw new Error("missing alternate tool in side group");
 		}
-		applyLayoutAttention("A", selectTab(attention, group.location, selectedTool.id));
-		useAppStore.setState({ workspaceSelectionHistory: ["A"] });
+		applyLayoutAttention(asWorkspaceId("A"), selectTab(attention, group.location, selectedTool.id));
+		useAppStore.setState({ workspaceSelectionHistory: [asWorkspaceId("A")] });
 
-		const reference = workspaceProjectionReference("C");
+		const reference = workspaceProjectionReference(asWorkspaceId("C"));
 		const pending = emptyWorkspaceProjection(frame, reference);
-		const installed = await ensureWorkspaceLayoutState("C");
+		const installed = await ensureWorkspaceLayoutState(asWorkspaceId("C"));
 
 		expect(reference?.document).toBe(document);
 		expect(pending.attention.selectedByGroup[group.location.groupId]).toBe(selectedTool.id);
@@ -446,7 +456,7 @@ describe("frontend-local layout state", () => {
 		);
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 
-		const restored = await ensureWorkspaceLayoutState("workspace");
+		const restored = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 		expect(restored.center).toMatchObject({ kind: "group", tabs: [] });
 		expect(restored.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
 		expect(restored.bottom.visible).toBe(true);
@@ -457,7 +467,7 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		const initial = await ensureWorkspaceLayoutState("workspace");
+		const initial = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 		if (initial.center.kind !== "group") throw new Error("expected a single center group");
 		const opened = openCenterTab(
 			initial,
@@ -466,13 +476,13 @@ describe("frontend-local layout state", () => {
 			"preview",
 		);
 		if (!("document" in opened)) throw new Error(opened.reason);
-		await commitWorkspaceLayout("workspace", opened.document);
+		await commitWorkspaceLayout(asWorkspaceId("workspace"), opened.document);
 
 		resetLayoutStateForTests();
 		resetStore();
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 
-		const restored = await ensureWorkspaceLayoutState("workspace");
+		const restored = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 		expect(restored.center).toMatchObject({
 			kind: "group",
 			previewTabId: "ws:changes:branch",
@@ -485,14 +495,17 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		const initial = await ensureWorkspaceLayoutState("workspace");
-		await commitWorkspaceLayout("workspace", resizeSideRegion(initial, "left", 0.31));
+		const initial = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
+		await commitWorkspaceLayout(
+			asWorkspaceId("workspace"),
+			resizeSideRegion(initial, "left", 0.31),
+		);
 
 		resetLayoutStateForTests();
 		resetStore();
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 
-		const restored = await ensureWorkspaceLayoutState("workspace");
+		const restored = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 		expect(restored.left.width).toBe(0.31);
 	});
 
@@ -502,15 +515,18 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		setLayoutStateStorageForTests({ local, session }, "http://127.0.0.1:4311");
 		setLayoutStateStablePreferencesForTests(stablePreferences);
-		const initial = await ensureWorkspaceLayoutState("workspace");
-		await commitWorkspaceLayout("workspace", resizeSideRegion(initial, "left", 0.29));
+		const initial = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
+		await commitWorkspaceLayout(
+			asWorkspaceId("workspace"),
+			resizeSideRegion(initial, "left", 0.29),
+		);
 
 		resetLayoutStateForTests();
 		resetStore();
 		setLayoutStateStorageForTests({ local, session }, "http://127.0.0.1:5099");
 		setLayoutStateStablePreferencesForTests(stablePreferences);
 
-		const restored = await ensureWorkspaceLayoutState("workspace");
+		const restored = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 		expect(restored.left.width).toBe(0.29);
 		expect(local.length).toBe(0);
 		expect(session.length).toBe(0);
@@ -525,7 +541,7 @@ describe("frontend-local layout state", () => {
 		setLayoutStateStablePreferencesForTests(stablePreferences);
 		await initializeLocalLayoutState();
 
-		const oversizedWorkspaceId = `workspace-${"x".repeat(256 * 1024)}`;
+		const oversizedWorkspaceId = asWorkspaceId(`workspace-${"x".repeat(256 * 1024)}`);
 		useAppStore.setState({
 			workspaceViewsByWorkspace: { [oversizedWorkspaceId]: { groups: {} } },
 		});
@@ -542,12 +558,12 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		const base = await ensureWorkspaceLayoutState("workspace");
+		const base = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 
-		await commitWorkspaceLayout("workspace", resizeBottomRegion(base, 0.45), {
+		await commitWorkspaceLayout(asWorkspaceId("workspace"), resizeBottomRegion(base, 0.45), {
 			baseDocument: base,
 		});
-		await commitWorkspaceLayout("workspace", resizeSideRegion(base, "left", 0.31), {
+		await commitWorkspaceLayout(asWorkspaceId("workspace"), resizeSideRegion(base, "left", 0.31), {
 			baseDocument: base,
 		});
 
@@ -561,17 +577,17 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		const base = await ensureWorkspaceLayoutState("workspace");
+		const base = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 		const epoch = useAppStore.getState().layoutProjectionEpoch;
 
 		const resized = await commitWorkspaceLayout(
-			"workspace",
+			asWorkspaceId("workspace"),
 			resizeBottomRegion(resizeSideRegion(base, "left", 0.31), 0.4),
 		);
 		expect(resized.left.width).toBe(0.31);
 		expect(useAppStore.getState().layoutProjectionEpoch).toBe(epoch);
 
-		await commitWorkspaceLayout("workspace", {
+		await commitWorkspaceLayout(asWorkspaceId("workspace"), {
 			...resized,
 			left: { ...resized.left, visible: false },
 		});
@@ -583,12 +599,12 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		await ensureWorkspaceLayoutState("workspace-one");
-		await ensureWorkspaceLayoutState("workspace-two");
+		await ensureWorkspaceLayoutState(asWorkspaceId("workspace-one"));
+		await ensureWorkspaceLayoutState(asWorkspaceId("workspace-two"));
 		const withReview = useAppStore.getState().layoutDocumentsByWorkspace["workspace-one"];
 		if (!withReview) throw new Error("missing first workspace");
 		await commitWorkspaceLayout(
-			"workspace-one",
+			asWorkspaceId("workspace-one"),
 			closeLayoutTab(withReview, "tool:review").document,
 		);
 
@@ -605,7 +621,7 @@ describe("frontend-local layout state", () => {
 			},
 		];
 		delete hidden.center.previewTabId;
-		await commitWorkspaceLayout("workspace-two", hidden);
+		await commitWorkspaceLayout(asWorkspaceId("workspace-two"), hidden);
 
 		const active = structuredClone(
 			useAppStore.getState().layoutDocumentsByWorkspace["workspace-one"],
@@ -614,7 +630,7 @@ describe("frontend-local layout state", () => {
 		active.right.groups[0].tabs.push(toolTab("review"));
 		const activeAttention = useAppStore.getState().layoutAttentionByWorkspace["workspace-one"];
 		if (!activeAttention) throw new Error("Missing active attention");
-		await commitWorkspaceLayout("workspace-one", active, {
+		await commitWorkspaceLayout(asWorkspaceId("workspace-one"), active, {
 			attention: selectTab(
 				activeAttention,
 				{ area: "right", groupId: active.right.groups[0].id },
@@ -647,10 +663,12 @@ describe("frontend-local layout state", () => {
 			["workspace", "one.ts"],
 			["other", "two.ts"],
 		] as const) {
-			const document = structuredClone(await ensureWorkspaceLayoutState(workspaceId));
+			const document = structuredClone(
+				await ensureWorkspaceLayoutState(asWorkspaceId(workspaceId)),
+			);
 			if (document.center.kind !== "group") throw new Error("missing center group");
 			document.center.tabs = [{ kind: "file", id: path, name: path, path }];
-			await commitWorkspaceLayout(workspaceId, document);
+			await commitWorkspaceLayout(asWorkspaceId(workspaceId), document);
 		}
 		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
 		if (!focus) throw new Error("missing Focus preset");
@@ -679,8 +697,8 @@ describe("frontend-local layout state", () => {
 		const firstSession = new MemoryStorage();
 		firstSession.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session: firstSession }, endpoint);
-		const first = await ensureWorkspaceLayoutState("workspace");
-		await commitWorkspaceLayout("workspace", resizeSideRegion(first, "left", 0.33));
+		const first = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
+		await commitWorkspaceLayout(asWorkspaceId("workspace"), resizeSideRegion(first, "left", 0.33));
 
 		resetLayoutStateForTests();
 		resetStore();
@@ -688,7 +706,7 @@ describe("frontend-local layout state", () => {
 		secondSession.setItem("thinkrail:layout-surface-id", "surface-b");
 		setLayoutStateStorageForTests({ local, session: secondSession }, endpoint);
 
-		const second = await ensureWorkspaceLayoutState("workspace");
+		const second = await ensureWorkspaceLayoutState(asWorkspaceId("workspace"));
 		expect(second.left.width).toBe(0.18);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-b"))).not.toBeNull();

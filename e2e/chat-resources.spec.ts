@@ -1,7 +1,9 @@
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
 import {
+	asSessionId,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type ResourceRecord,
 	type SessionResources,
@@ -49,7 +51,7 @@ async function observeResourceWire(
 						commands: [],
 						subagents: [
 							{
-								childSessionId: options.completedChildId,
+								childSessionId: asSessionId(options.completedChildId),
 								parentSessionId: resourceScope.sessionId,
 								task: "Focus fixture",
 								status: "completed",
@@ -192,7 +194,7 @@ test("an older host hides Resources without issuing unsupported resource reads",
 test("an older welcome retires the inspector with its transcript and returns focus to the composer", async ({
 	page,
 }) => {
-	const childSessionId = "resource-focus-child";
+	const childSessionId = asSessionId("resource-focus-child");
 	const wire = await observeResourceWire(page, { completedChildId: childSessionId });
 	await openResourceChat(page);
 	const trigger = page.getByTestId("resources-trigger");
@@ -231,7 +233,7 @@ test("an older welcome retires the inspector with its transcript and returns foc
 
 const MINUTE = 60_000;
 
-function archivedHistory(sessionId: string, base: number): ResourceRecord[] {
+function archivedHistory(sessionId: SessionId, base: number): ResourceRecord[] {
 	const suites = Array.from({ length: 26 }, (_, index): ResourceRecord => {
 		const n = String(index + 1).padStart(2, "0");
 		const failed = n === "03" || n === "11";
@@ -258,7 +260,7 @@ function archivedHistory(sessionId: string, base: number): ResourceRecord[] {
 	): ResourceRecord => ({
 		kind: "subagent",
 		summary: {
-			childSessionId: `019a0000-0000-7000-8000-00000000000${id}`,
+			childSessionId: asSessionId(`019a0000-0000-7000-8000-00000000000${id}`),
 			parentSessionId: sessionId,
 			roleName,
 			task: `${roleName} the archive`,
@@ -302,7 +304,7 @@ function writeArchive(scope: WsParams<"session.resources">, records: ResourceRec
 test("Resources keeps a chat's archived history: the dock sums it, the inspector folds and pages it, and an interrupted run says its log is gone", async ({
 	page,
 }) => {
-	let sessionId: string | undefined;
+	let sessionId: SessionId | undefined;
 	const historyReads: WsParams<"session.resourceHistory">[] = [];
 	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
 		const server = browser.connectToServer();
@@ -322,10 +324,12 @@ test("Resources keeps a chat's archived history: the dock sums it, the inspector
 		});
 	});
 	await openFixtureProject(page);
-	sessionId = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
-		name: "Resource history",
-		messages: [{ role: "user", text: "Show the archived resources.", timestamp: Date.now() }],
-	}).id;
+	sessionId = asSessionId(
+		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+			name: "Resource history",
+			messages: [{ role: "user", text: "Show the archived resources.", timestamp: Date.now() }],
+		}).id,
+	);
 	await enterDefaultWorkspace(page);
 	await openPersistedChat(page, "Resource history");
 

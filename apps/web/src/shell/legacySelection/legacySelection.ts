@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { doubleClickPendingMs } from "../../lib";
 import {
@@ -8,7 +9,7 @@ import {
 import type { LayoutCenterTab } from "../layout";
 
 function syncLegacySelectedResource(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tab: LayoutCenterTab | null,
 	cacheKey: string | null,
 ): void {
@@ -30,7 +31,7 @@ function syncLegacySelectedResource(
 	state.syncLegacySelection(workspaceId, cache ? { kind: "editor", tabId: cache.id } : null);
 }
 
-export function syncLegacySelectionFromAttention(workspaceId: string): void {
+export function syncLegacySelectionFromAttention(workspaceId: WorkspaceId): void {
 	const state = useAppStore.getState();
 	syncLegacySelectedResource(
 		workspaceId,
@@ -61,7 +62,7 @@ export function scheduleReviewReveal(
 }
 
 export function useLegacySelectionAdapter(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	activeReviewedPath: string | null,
 	readActiveReviewedPath: () => string | null,
 	readAuxiliary: () => AuxiliaryView,
@@ -72,7 +73,7 @@ export function useLegacySelectionAdapter(
 	);
 	const activeLegacyTabId = useAppStore((state) => state.activeTabByWorkspace[workspaceId] ?? null);
 	const previousReviewedSelection = useRef<{
-		workspaceId: string;
+		workspaceId: WorkspaceId;
 		selection: string | null;
 	} | null>(null);
 

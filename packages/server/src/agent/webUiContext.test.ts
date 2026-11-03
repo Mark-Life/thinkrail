@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Theme } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
@@ -20,12 +21,12 @@ test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dis
 		if (!f) throw new Error("expected an ext-ui frame to have been pushed");
 		return f;
 	};
-	const ui = createWebUiContext("sess-extui");
+	const ui = createWebUiContext(asSessionId("sess-extui"));
 
 	const confirmP = ui.confirm("Proceed?", "Apply the change?");
 	const confirmFrame = lastFrame();
 	expect(confirmFrame.kind).toBe("confirm");
-	expect(confirmFrame.sessionId).toBe("sess-extui");
+	expect(confirmFrame.sessionId).toBe(asSessionId("sess-extui"));
 	resolveExtUi({ id: confirmFrame.id, value: true });
 	expect(await confirmP).toBe(true);
 
@@ -35,7 +36,7 @@ test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dis
 
 	const inputP = ui.input("Name?");
 	const inputFrame = lastFrame();
-	cancelExtUiForSession("sess-extui");
+	cancelExtUiForSession(asSessionId("sess-extui"));
 	expect(await inputP).toBeUndefined();
 	expect(frames.some((f) => f.kind === "dismiss" && f.id === inputFrame.id)).toBe(true);
 
@@ -46,7 +47,7 @@ test("extension-UI bridge: a dialog names the running tool call it is about, if 
 	const frames: ExtUiRequest[] = [];
 	setExtUiPublisher((f) => frames.push(f));
 	let running: string | undefined = "call-7";
-	const ui = createWebUiContext("sess-anchor", () => running);
+	const ui = createWebUiContext(asSessionId("sess-anchor"), () => running);
 
 	const anchored = ui.confirm("Run rm?", "It deletes files.");
 	expect(frames.at(-1)).toMatchObject({ kind: "confirm", toolCallId: "call-7" });
@@ -54,7 +55,7 @@ test("extension-UI bridge: a dialog names the running tool call it is about, if 
 	const loose = ui.input("Paste the code");
 	expect(frames.at(-1)).not.toHaveProperty("toolCallId");
 	const explicit = selectForToolCall(
-		"sess-anchor",
+		asSessionId("sess-anchor"),
 		{ toolCallId: "call-9", toolInput: { path: "/etc/hosts" } },
 		"Allow?",
 		["Deny", "Allow once"],
@@ -67,14 +68,14 @@ test("extension-UI bridge: a dialog names the running tool call it is about, if 
 	resolveExtUi({ id: frames.at(-1)?.id ?? "", value: "Allow once" });
 	expect(await explicit).toBe("Allow once");
 
-	cancelExtUiForSession("sess-anchor");
+	cancelExtUiForSession(asSessionId("sess-anchor"));
 	expect(await anchored).toBe(false);
 	expect(await loose).toBeUndefined();
 	setExtUiPublisher(() => {});
 });
 
 test("theme: pi's Theme contract is implemented and every method yields plain text", () => {
-	const { theme } = createWebUiContext("sess-theme");
+	const { theme } = createWebUiContext(asSessionId("sess-theme"));
 
 	expect(theme).toBeInstanceOf(Theme);
 	for (const name of Object.getOwnPropertyNames(Theme.prototype)) {
@@ -102,14 +103,14 @@ test("theme: pi's Theme contract is implemented and every method yields plain te
 });
 
 test("theme: the methods inherited from pi stay plain text too", () => {
-	const { theme } = createWebUiContext("sess-theme-inherited");
+	const { theme } = createWebUiContext(asSessionId("sess-theme-inherited"));
 
 	expect(theme.getThinkingBorderColor("high")("Theme works")).toBe("Theme works");
 	expect(theme.getBashModeBorderColor()("Theme works")).toBe("Theme works");
 });
 
 test("theme: nothing the theme renders carries terminal escapes", () => {
-	const { theme } = createWebUiContext("sess-theme-ansi");
+	const { theme } = createWebUiContext(asSessionId("sess-theme-ansi"));
 
 	const rendered = [
 		theme.fg("accent", "x"),
@@ -129,7 +130,7 @@ test("theme: nothing the theme renders carries terminal escapes", () => {
 });
 
 test("no member of the context is left undefined", () => {
-	const ui = createWebUiContext("sess-members");
+	const ui = createWebUiContext(asSessionId("sess-members"));
 
 	for (const [key, value] of Object.entries(ui)) {
 		expect(value).toBeDefined();
@@ -141,7 +142,7 @@ test("an extension error reaches the client with the extension, the event and th
 	const frames: ExtUiRequest[] = [];
 	setExtUiPublisher((f) => frames.push(f));
 
-	notifyExtensionError("sess-err", {
+	notifyExtensionError(asSessionId("sess-err"), {
 		extensionPath: "/home/u/.pi/agent/extensions/theme-probe.ts",
 		event: "session_start",
 		error: "theme.fg is not a function",
@@ -149,7 +150,7 @@ test("an extension error reaches the client with the extension, the event and th
 	});
 
 	expect(frames.at(-1)).toMatchObject({
-		sessionId: "sess-err",
+		sessionId: asSessionId("sess-err"),
 		kind: "notify",
 		level: "error",
 		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
@@ -162,7 +163,7 @@ test("an extension error is bounded and named by its directory when the file is 
 	const frames: ExtUiRequest[] = [];
 	setExtUiPublisher((f) => frames.push(f));
 
-	notifyExtensionError("sess-err", {
+	notifyExtensionError(asSessionId("sess-err"), {
 		extensionPath: "/home/u/.pi/agent/extensions/branch-status/SKILL.md",
 		event: "turn_start",
 		error: "x".repeat(5_000),

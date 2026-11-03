@@ -7,6 +7,7 @@ import {
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
+import type { ProjectId } from "@thinkrail/contracts";
 import {
 	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
@@ -96,7 +97,7 @@ export function reconcileModel(
 const PILL =
 	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
-async function refreshProjectWorkspaces(projectId: string): Promise<void> {
+async function refreshProjectWorkspaces(projectId: ProjectId): Promise<void> {
 	useAppStore.getState().expandProject(projectId);
 	const rows = await getTransport().request("workspace.list", { projectId });
 	useAppStore.getState().setWorkspaces(projectId, rows);
@@ -110,7 +111,7 @@ export function NewWorkspaceDialog({
 	onOpenChange,
 }: {
 	open: boolean;
-	projectId: string;
+	projectId: ProjectId;
 	initialPrompt?: string;
 	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
@@ -754,10 +755,10 @@ function ProjectPicker({
 	container,
 	onSelect,
 }: {
-	projects: { id: string; name: string }[];
+	projects: { id: ProjectId; name: string }[];
 	current: string;
 	container: HTMLElement | null;
-	onSelect: (projectId: string) => void;
+	onSelect: (projectId: ProjectId) => void;
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Review, ReviewComment } from "@thinkrail/contracts";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import { buildTextQuote, hashContent } from "./anchoring";
 import { buildReviewFixDetails, renderPackage, toReviewFixComment } from "./packageRender";
 
@@ -8,7 +9,7 @@ const BASE_CONTENT = Array.from({ length: 40 }, (_, i) => `old ${i + 1}`).join("
 
 const review: Review = {
 	id: "rev_1",
-	workspaceId: "ws1",
+	workspaceId: asWorkspaceId("ws1"),
 	status: "open",
 	baseSha: "abc123",
 	createdAt: 0,

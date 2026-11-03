@@ -1,4 +1,4 @@
-import type { SessionCompletion } from "@thinkrail/contracts";
+import type { SessionCompletion, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 
 /** Why a worktree's attention dot lit up, captured when the event is enqueued. */
@@ -8,15 +8,15 @@ export type AttentionReason =
 
 /** One worktree that transitioned into needs-attention. */
 export interface AttentionEvent {
-	sessionId: string;
-	workspaceId: string;
+	sessionId: SessionId;
+	workspaceId: WorkspaceId;
 	worktreeName: string;
 	reason: AttentionReason;
 }
 
 /** Where a click on the emitted notification should land. */
 export type NotificationTarget =
-	| { kind: "chat"; workspaceId: string; sessionId: string }
+	| { kind: "chat"; workspaceId: WorkspaceId; sessionId: SessionId }
 	| { kind: "search" };
 
 /** A ready-to-show notification derived from one flush of accumulated events. */

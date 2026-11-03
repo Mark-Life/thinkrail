@@ -2,6 +2,7 @@ import type {
 	AssistantMessage,
 	PiEvent,
 	SessionEventPayload,
+	SessionId,
 	ToolCall,
 	ToolResultMessage,
 	WsPush,
@@ -143,7 +144,7 @@ export interface ChatReplay {
 	deltaCount: number;
 }
 
-export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
+export function buildChatReplay(sessionId: SessionId, seed = 7): ChatReplay {
 	const random = seededRandom(seed);
 	const plans: MessagePlan[] = [
 		{ text: prose(random, 4), tools: toolPlans(1, random) },
@@ -153,7 +154,7 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 	return replayPlans(sessionId, plans, random, { deltaChars: [3, 8], deltasPerStep: 3 });
 }
 
-export function buildTextReplay(sessionId: string, text: string, seed = 13): ChatReplay {
+export function buildTextReplay(sessionId: SessionId, text: string, seed = 13): ChatReplay {
 	return replayPlans(sessionId, [{ text, tools: [] }], seededRandom(seed), {
 		deltaChars: [10, 60],
 		deltasPerStep: 1,
@@ -161,7 +162,7 @@ export function buildTextReplay(sessionId: string, text: string, seed = 13): Cha
 }
 
 function replayPlans(
-	sessionId: string,
+	sessionId: SessionId,
 	plans: MessagePlan[],
 	random: () => number,
 	shape: StreamShape,

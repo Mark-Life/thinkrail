@@ -4,6 +4,7 @@ import {
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
+import type { ProjectId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -92,7 +93,7 @@ export function WelcomePanel() {
 		if (wizard === "shown" && !noProjects) setWizard("hidden");
 	}, [wizard, noProjects, setWizard]);
 
-	const projectFolderCard = (projectId: string) => (
+	const projectFolderCard = (projectId: ProjectId) => (
 		<Card
 			icon={House}
 			title={t("panels.welcome.projectFolderTitle")}

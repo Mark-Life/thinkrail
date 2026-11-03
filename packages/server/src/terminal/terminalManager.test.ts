@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { asProjectId, asWorkspaceId, WS_CHANNELS } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
@@ -26,7 +26,7 @@ interface PublishedFrame {
 	data: unknown;
 }
 
-const WS = "ws-1";
+const WS = asWorkspaceId("ws-1");
 // An external, real child process on every platform (PowerShell's `sleep` alias runs in-process; see terminal/SPEC.md).
 const BUSY_LOOP_COMMAND = process.platform === "win32" ? "ping -n 30 127.0.0.1" : "sleep 30";
 const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
@@ -141,7 +141,7 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: "project-1",
+			projectId: asProjectId("project-1"),
 			name: "Workspace",
 			branch: "main",
 			baseBranch: "main",

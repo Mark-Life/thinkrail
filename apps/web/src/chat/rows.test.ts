@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage, TurnChangeSet } from "@thinkrail/contracts";
+import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import {
 	type ChatRow,
 	deriveRows,
@@ -82,7 +83,7 @@ function commandResult(
 		timestamp,
 		details: {
 			id: `bg-${id}`,
-			sessionId: "s",
+			sessionId: asSessionId("s"),
 			name: "e2e",
 			status,
 			startedAt: 0,
@@ -249,7 +250,7 @@ describe("deriveRows grouping", () => {
 
 	test("a subagentCompletion turn closes the run's round and maps 1:1 to its own row", () => {
 		const details = {
-			childSessionId: "child-1",
+			childSessionId: asSessionId("child-1"),
 			roleName: "scout",
 			task: "map",
 			status: "completed",
@@ -703,8 +704,8 @@ test("turnDivider treats every written file as a change when no classifier is su
 function agentTurn(id: string, startedAt: number, paths: string[], head = "b"): TurnChangeSet {
 	return {
 		id,
-		workspaceId: "ws",
-		sessionId: "s",
+		workspaceId: asWorkspaceId("ws"),
+		sessionId: asSessionId("s"),
 		startedAt,
 		settledAt: startedAt + 1_000,
 		baseTree: "a".repeat(40),
@@ -833,7 +834,7 @@ test("receipt paths the spec matcher claims land on the specs side", () => {
 
 describe("background results follow how they reached the agent", () => {
 	const runDetails = {
-		childSessionId: "child-1",
+		childSessionId: asSessionId("child-1"),
 		roleName: "reviewer",
 		task: "review",
 		status: "completed",
@@ -971,7 +972,7 @@ describe("background results follow how they reached the agent", () => {
 		});
 		const snapshot = (finished: boolean) => ({
 			id: "cmd-1",
-			sessionId: "s",
+			sessionId: asSessionId("s"),
 			command: "bun test",
 			name: "tests",
 			status: finished ? "error" : "running",

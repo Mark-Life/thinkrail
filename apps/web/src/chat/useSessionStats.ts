@@ -1,4 +1,4 @@
-import type { SessionStats } from "@thinkrail/contracts";
+import type { SessionId, SessionStats } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef } from "react";
 import type { SessionRuntime } from "../store";
 import { isConnectedGeneration, useAppStore } from "../store";
@@ -8,16 +8,16 @@ interface SessionStatsRefreshState {
 	status: ConnectionStatus;
 	connectionGeneration: number;
 	sessions: Record<string, Pick<SessionRuntime, "statsRefreshTick"> | undefined>;
-	setStats: (sessionId: string, stats: SessionStats) => void;
+	setStats: (sessionId: SessionId, stats: SessionStats) => void;
 }
 
 interface SessionStatsRefreshDependencies {
-	read: (sessionId: string) => Promise<SessionStats>;
+	read: (sessionId: SessionId) => Promise<SessionStats>;
 	state: () => SessionStatsRefreshState;
 }
 
 interface SessionStatsRefreshInput {
-	sessionId: string;
+	sessionId: SessionId;
 	expectedStatsRefreshTick: number;
 	connectionGeneration: number;
 	isCurrent: () => boolean;
@@ -59,7 +59,7 @@ export function useSessionStats({
 	connectionGeneration,
 	enabled = true,
 }: {
-	sessionId: string;
+	sessionId: SessionId;
 	statsRefreshTick: number;
 	syncedConnectionGeneration: number;
 	status: ConnectionStatus;

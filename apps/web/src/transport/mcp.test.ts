@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import type { SessionId } from "@thinkrail/contracts";
 import {
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
 	MCP_PROTOCOL_VERSION,
 	type McpListResult,
 	type McpStatusSnapshot,
@@ -120,9 +124,9 @@ test("a quiet workspace is read once, and a disposed watch reports nothing", asy
 	expect(late.timers).toHaveLength(0);
 });
 
-const workspaceId = "mcp-ordering";
+const workspaceId = asWorkspaceId("mcp-ordering");
 const state = useAppStore.getState;
-const snapshot = (sessionId: string, workspace = workspaceId): McpStatusSnapshot => ({
+const snapshot = (sessionId: SessionId, workspace = workspaceId): McpStatusSnapshot => ({
 	workspaceId: workspace,
 	sessionId,
 	generation: 1,
@@ -145,7 +149,7 @@ const listResult = (name: string, workspace = workspaceId): McpListResult => ({
 	],
 	configErrors: [{ source: "/project/.pi/mcp.json", message: name }],
 	handledElsewhere: { by: name },
-	statuses: [snapshot(name, workspace)],
+	statuses: [snapshot(asSessionId(name), workspace)],
 });
 
 function expectInstalled(result: McpListResult, workspace = workspaceId) {
@@ -335,21 +339,21 @@ describe("MCP list request ordering", () => {
 		const first = read();
 		const mutation = remove();
 		const last = read();
-		state().applyMcpStatus(snapshot("before-mutation"));
+		state().applyMcpStatus(snapshot(asSessionId("before-mutation")));
 		transport.at(0).resolve({ servers: [], statuses: [] });
 		await first;
 		expect(Object.keys(state().mcpByWorkspace[workspaceId]?.sessions ?? {})).toEqual([
 			"before-mutation",
 		]);
-		state().applyMcpStatus(snapshot("during-mutation"));
+		state().applyMcpStatus(snapshot(asSessionId("during-mutation")));
 		transport.at(1).resolve({ servers: [], statuses: [] });
 		await mutation;
 		expect(Object.keys(state().mcpByWorkspace[workspaceId]?.sessions ?? {})).toEqual([
 			"during-mutation",
 		]);
-		state().applyMcpStatus(snapshot("during-last-read"));
-		state().deleteChat(workspaceId, "deleted");
-		transport.at(2).resolve({ servers: [], statuses: [snapshot("deleted")] });
+		state().applyMcpStatus(snapshot(asSessionId("during-last-read")));
+		state().deleteChat(workspaceId, asSessionId("deleted"));
+		transport.at(2).resolve({ servers: [], statuses: [snapshot(asSessionId("deleted"))] });
 		await last;
 		expect(Object.keys(state().mcpByWorkspace[workspaceId]?.sessions ?? {})).toEqual([
 			"during-last-read",
@@ -439,7 +443,7 @@ describe("MCP list request ordering", () => {
 	test.each([
 		["disconnect", () => state().setStatus("disconnected")],
 		["unsupported host", () => state().installWelcomeSnapshot(MCP_PROTOCOL_VERSION - 1, [], [])],
-		["workspace removal", () => state().applyWorkspaceRemoved("project", workspaceId)],
+		["workspace removal", () => state().applyWorkspaceRemoved(asProjectId("project"), workspaceId)],
 	] as const)("%s prevents queued work from dispatching and late replies from installing", async (_name, invalidate) => {
 		const first = read();
 		const mutation = remove();
@@ -468,7 +472,7 @@ describe("MCP list request ordering", () => {
 	test("workspaces dispatch independently and install only their own results", async () => {
 		const first = read();
 		const queued = remove();
-		const otherWorkspace = "other-workspace";
+		const otherWorkspace = asWorkspaceId("other-workspace");
 		const other = requestMcpList("mcp.remove", {
 			workspaceId: otherWorkspace,
 			scope: "user",

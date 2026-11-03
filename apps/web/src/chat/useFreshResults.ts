@@ -1,4 +1,9 @@
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import type {
+	BackgroundCommandSummary,
+	SessionId,
+	SubagentResourceSummary,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { STORAGE_PREFIX } from "@/constants/branding";
 import { getTransport } from "@/transport";
@@ -41,7 +46,7 @@ export function freshOf(finished: FinishedResources, seen: ReadonlySet<string> |
 export function inspectedResult(
 	finished: FinishedResources,
 	commandId: string | null,
-	childSessionId: string | null,
+	childSessionId: SessionId | null,
 ): ResultTarget | null {
 	if (commandId && finished.finishedCommands.some((command) => command.id === commandId))
 		return { kind: "command", id: commandId };
@@ -63,7 +68,7 @@ export function rememberSeen(
 	return new Set([...seen, ...keys]);
 }
 
-function storageKey(workspaceId: string, sessionId: string): string {
+function storageKey(workspaceId: WorkspaceId, sessionId: SessionId): string {
 	return `${STORAGE_PREFIX}seen-results:${getTransport().httpBase()}:${workspaceId}:${sessionId}`;
 }
 
@@ -86,8 +91,8 @@ function writeSeen(key: string, seen: ReadonlySet<string>): void {
 }
 
 export function useFreshResults(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	finished: FinishedResources,
 	authoritative: boolean,
 ) {

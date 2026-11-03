@@ -4,6 +4,7 @@ import type {
 	GitFileChange,
 	GitFileStatus,
 	TurnChangeSet,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
@@ -61,11 +62,11 @@ export function turnScope(turn: TurnChangeSet): Extract<GitDiffScope, { kind: "t
 	};
 }
 
-export function diffTabId(workspaceId: string, scope: GitDiffScope, path: string): string {
+export function diffTabId(workspaceId: WorkspaceId, scope: GitDiffScope, path: string): string {
 	return tupleKey("diff", workspaceId, scopeKey(scope), path);
 }
 
-export function changesTabId(workspaceId: string, scope: GitDiffScope): string {
+export function changesTabId(workspaceId: WorkspaceId, scope: GitDiffScope): string {
 	return tupleKey("changes", workspaceId, scopeKey(scope));
 }
 

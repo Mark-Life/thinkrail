@@ -9,6 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
+import { SessionId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const BackgroundCommandStatus = oneOf([
@@ -22,7 +23,7 @@ export type BackgroundCommandStatus = Static<typeof BackgroundCommandStatus>;
 
 export const BackgroundCommandSummary = wireObj({
 	id: str(),
-	sessionId: str(),
+	sessionId: SessionId,
 	name: str(),
 	command: str(),
 	status: BackgroundCommandStatus,
@@ -45,7 +46,7 @@ export const BackgroundCommandOutputResult = union([
 ]);
 export type BackgroundCommandOutputResult = Static<typeof BackgroundCommandOutputResult>;
 
-const CommandTarget = wireObj({ workspaceId: str(), sessionId: str(), commandId: str() });
+const CommandTarget = wireObj({ workspaceId: WorkspaceId, sessionId: SessionId, commandId: str() });
 
 export const BACKGROUND_COMMAND_METHODS = {
 	"backgroundCommand.output": { params: CommandTarget, result: BackgroundCommandOutputResult },

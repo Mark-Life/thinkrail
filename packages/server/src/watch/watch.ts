@@ -2,6 +2,7 @@ import { type FSWatcher, readFileSync, statSync, watch } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type {
 	WorkspaceFsChangedPayload,
+	WorkspaceId,
 	WorkspaceSkillChange,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
@@ -23,8 +24,8 @@ const REPO_META_DEBOUNCE_MS = 300;
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 type SkillPathClassifier = (relativePath: string) => boolean;
-type RepoMetaPublisher = (workspaceId: string) => void;
-type WatchStartedPublisher = (workspaceId: string) => void;
+type RepoMetaPublisher = (workspaceId: WorkspaceId) => void;
+type WatchStartedPublisher = (workspaceId: WorkspaceId) => void;
 
 const ALREADY_READY: WorkspaceWatchReadyResult = { startupNudge: false };
 const STARTUP_NUDGE: WorkspaceWatchReadyResult = { startupNudge: true };
@@ -72,7 +73,7 @@ function resolveExternalGitDir(worktreePath: string): string | null {
 }
 
 function watchGitDir(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	gitDir: string,
 	rootWatcher: FSWatcher,
 ): FSWatcher | null {
@@ -93,7 +94,7 @@ function watchGitDir(
 	}
 }
 
-function deliver(sink: string, workspaceId: string, send: () => void): void {
+function deliver(sink: string, workspaceId: WorkspaceId, send: () => void): void {
 	try {
 		send();
 	} catch (error) {
@@ -101,7 +102,7 @@ function deliver(sink: string, workspaceId: string, send: () => void): void {
 	}
 }
 
-function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
+function scheduleRepoMeta(workspaceId: WorkspaceId, watcher: FSWatcher): void {
 	const entry = entries.get(workspaceId);
 	if (entry && entry.watcher !== watcher) return;
 	if (entry?.metaTimer) clearTimeout(entry.metaTimer);
@@ -134,7 +135,7 @@ interface WatchEntry {
 	metaWatcher: FSWatcher | null;
 }
 
-const entries = new Map<string, WatchEntry>();
+const entries = new Map<WorkspaceId, WatchEntry>();
 
 function settleReady(entry: WatchEntry): void {
 	if (entry.readySettled) return;
@@ -149,7 +150,7 @@ function evictExcessPrewarmOnlyWatches(): void {
 }
 
 export function ensureWatch(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	options?: { prewarm?: boolean },
 ): Promise<WorkspaceWatchReadyResult> {
 	const prewarm = options?.prewarm === true;
@@ -247,7 +248,7 @@ export function ensureWatch(
 	}
 }
 
-export function stopWatch(workspaceId: string): void {
+export function stopWatch(workspaceId: WorkspaceId): void {
 	const entry = entries.get(workspaceId);
 	if (!entry) return;
 	entries.delete(workspaceId);

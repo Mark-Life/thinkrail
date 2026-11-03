@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { SessionState } from "@thinkrail/contracts";
+import type { SessionId, SessionState } from "@thinkrail/contracts";
+import { asSessionId, asWorkspaceId } from "@thinkrail/contracts";
 import { createAttentionObserver } from "./attentionObserver";
 import type { AttentionCandidate } from "./detectAttention";
 import type { AttentionEvent } from "./formatNotification";
@@ -21,8 +22,8 @@ const lit = state({
 	needsInput: { interactionId: "tool:i", kind: "tool-response", toolCallId: "i" },
 });
 
-function candidate(sessionId: string, s: SessionState): AttentionCandidate {
-	return { sessionId, workspaceId: "w1", worktreeName: "branch", state: s };
+function candidate(sessionId: SessionId, s: SessionState): AttentionCandidate {
+	return { sessionId, workspaceId: asWorkspaceId("w1"), worktreeName: "branch", state: s };
 }
 
 describe("createAttentionObserver", () => {
@@ -37,7 +38,7 @@ describe("createAttentionObserver", () => {
 		observer.observe({
 			snapshotInstalled: false,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", lit)],
+			candidates: [candidate(asSessionId("s1"), lit)],
 		});
 		expect(events).toHaveLength(0);
 	});
@@ -48,16 +49,16 @@ describe("createAttentionObserver", () => {
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", lit)],
+			candidates: [candidate(asSessionId("s1"), lit)],
 		});
 		expect(events).toHaveLength(0);
 		// A new session lighting up afterwards is a real edge.
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", lit), candidate("s2", lit)],
+			candidates: [candidate(asSessionId("s1"), lit), candidate(asSessionId("s2"), lit)],
 		});
-		expect(events.map((e) => e.sessionId)).toEqual(["s2"]);
+		expect(events.map((e) => e.sessionId)).toEqual([asSessionId("s2")]);
 	});
 
 	test("a reconnect re-primes so the fresh snapshot never storms", () => {
@@ -65,13 +66,13 @@ describe("createAttentionObserver", () => {
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", state())],
+			candidates: [candidate(asSessionId("s1"), state())],
 		});
 		// Reconnect: generation bumps and the snapshot comes back with s1 already lit.
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 2,
-			candidates: [candidate("s1", lit)],
+			candidates: [candidate(asSessionId("s1"), lit)],
 		});
 		expect(events).toHaveLength(0);
 	});
@@ -82,7 +83,7 @@ describe("createAttentionObserver", () => {
 			observer.observe({
 				snapshotInstalled: true,
 				connectionGeneration: 1,
-				candidates: [candidate("s1", state()), candidate("s2", state())],
+				candidates: [candidate(asSessionId("s1"), state()), candidate(asSessionId("s2"), state())],
 			});
 		}
 		expect(events).toHaveLength(0);
@@ -93,7 +94,7 @@ describe("createAttentionObserver", () => {
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", lit)],
+			candidates: [candidate(asSessionId("s1"), lit)],
 		});
 		// s1 lit at prime "-> no event; now it leaves the set entirely
 		observer.observe({ snapshotInstalled: true, connectionGeneration: 1, candidates: [] });
@@ -101,9 +102,9 @@ describe("createAttentionObserver", () => {
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", lit)],
+			candidates: [candidate(asSessionId("s1"), lit)],
 		});
-		expect(events.map((e) => e.sessionId)).toEqual(["s1"]);
+		expect(events.map((e) => e.sessionId)).toEqual([asSessionId("s1")]);
 	});
 
 	test("a session going dark then lit again re-emits", () => {
@@ -111,22 +112,22 @@ describe("createAttentionObserver", () => {
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", state())],
+			candidates: [candidate(asSessionId("s1"), state())],
 		});
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", lit)],
+			candidates: [candidate(asSessionId("s1"), lit)],
 		});
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", state())],
+			candidates: [candidate(asSessionId("s1"), state())],
 		});
 		observer.observe({
 			snapshotInstalled: true,
 			connectionGeneration: 1,
-			candidates: [candidate("s1", lit)],
+			candidates: [candidate(asSessionId("s1"), lit)],
 		});
 		expect(events).toHaveLength(2);
 	});

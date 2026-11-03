@@ -12,6 +12,7 @@ import type {
 } from "./piProtocol";
 import type {
 	ModelContextSetting,
+	SessionId,
 	WireCustomMessage,
 	WsSchemaChannelMap,
 	WsSchemaMethodMap,
@@ -469,7 +470,7 @@ export interface WsRequest<M extends WsMethodName = WsMethodName> {
 	id: string;
 	method: M;
 	params: WsParams<M>;
-	sessionId?: string;
+	sessionId?: SessionId;
 }
 
 export interface WsAck {

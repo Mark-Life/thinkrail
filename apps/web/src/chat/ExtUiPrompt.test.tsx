@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { asSessionId } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ExtUiPrompt, PendingExtUiContext } from "./ExtUiPrompt";
 import { type ChatRow, type RoutineToolStep, rowsHaveToolCall, type ThinkingStep } from "./rows";
@@ -18,7 +19,7 @@ const tool = (id: string, toolName: string): RoutineToolStep => ({
 
 const approval: ExtUiDialogRequest = {
 	id: "extui_1",
-	sessionId: "s",
+	sessionId: asSessionId("s"),
 	kind: "select",
 	title: "Allow linear/create_issue? It may change data.",
 	options: ["Deny", "Allow once", "Allow in this chat", "Always allow"],
@@ -80,7 +81,7 @@ describe("ExtUiPrompt", () => {
 			<ExtUiPrompt
 				request={{
 					id: "i",
-					sessionId: "s",
+					sessionId: asSessionId("s"),
 					kind: "input",
 					title: "Paste the code\nIt is shown once the browser sign-in completes.",
 				}}
@@ -100,7 +101,7 @@ describe("ExtUiPrompt", () => {
 			<ExtUiPrompt
 				request={{
 					id: "c",
-					sessionId: "s",
+					sessionId: asSessionId("s"),
 					kind: "confirm",
 					title: "Run rm?",
 					message: "It deletes.",
@@ -113,7 +114,7 @@ describe("ExtUiPrompt", () => {
 		expect(confirm).toContain(">OK<");
 		const input = renderToStaticMarkup(
 			<ExtUiPrompt
-				request={{ id: "i", sessionId: "s", kind: "input", title: "Paste the code" }}
+				request={{ id: "i", sessionId: asSessionId("s"), kind: "input", title: "Paste the code" }}
 				onReply={() => {}}
 			/>,
 		);
@@ -121,14 +122,26 @@ describe("ExtUiPrompt", () => {
 		expect(input).toContain(">Submit<");
 		const editor = renderToStaticMarkup(
 			<ExtUiPrompt
-				request={{ id: "e", sessionId: "s", kind: "editor", title: "Edit", prefill: "draft" }}
+				request={{
+					id: "e",
+					sessionId: asSessionId("s"),
+					kind: "editor",
+					title: "Edit",
+					prefill: "draft",
+				}}
 				onReply={() => {}}
 			/>,
 		);
 		expect(editor).toContain(">draft</textarea>");
 		const remembered = renderToStaticMarkup(
 			<ExtUiPrompt
-				request={{ id: "e", sessionId: "s", kind: "editor", title: "Edit", prefill: "draft" }}
+				request={{
+					id: "e",
+					sessionId: asSessionId("s"),
+					kind: "editor",
+					title: "Edit",
+					prefill: "draft",
+				}}
 				draft="user changed draft"
 				onReply={() => {}}
 			/>,

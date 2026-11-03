@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	type BranchStatus,
@@ -15,7 +16,7 @@ import {
 	branchStatusState,
 } from "./branchStatusState";
 
-type BranchStatusRequestParams = { workspaceId: string; allowCached?: true; skipFetch?: true };
+type BranchStatusRequestParams = { workspaceId: WorkspaceId; allowCached?: true; skipFetch?: true };
 
 export const CI_POLL_INTERVAL_MS = 20_000;
 type BranchStatusRequest = (params: BranchStatusRequestParams) => Promise<BranchAnswer>;
@@ -29,7 +30,7 @@ export interface BranchStatusHookState {
 }
 
 function requestBranchStatus(options: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	key: string;
 	allowCached: boolean;
 	skipFetch?: boolean;
@@ -54,7 +55,7 @@ function requestBranchStatus(options: {
 }
 
 export function startBranchStatusSync(options: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	key: string;
 	request: BranchStatusRequest;
 	state: BranchStatusStateStore;

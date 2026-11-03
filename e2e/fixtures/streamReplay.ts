@@ -1,4 +1,5 @@
 import type { Page, WebSocketRoute } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	type AssistantMessage,
 	type PiEvent,
@@ -59,7 +60,7 @@ const assistantShell = (timestamp: number): AssistantMessage => ({
 });
 
 export const textStreamReplay = (
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	timestamp: number,
 ): StreamReplay => {

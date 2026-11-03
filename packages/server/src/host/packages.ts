@@ -3,6 +3,7 @@ import type {
 	PiPackageScope,
 	PiPackageSummary,
 	PiPackagesCatalog,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import {
 	type PiPackagesTarget,
@@ -19,7 +20,7 @@ import { getProjects } from "../projects";
 import { getConfig, updateConfig } from "../settings";
 import { getWorkspace } from "../workspaces";
 
-function target(workspaceId: string | undefined): PiPackagesTarget {
+function target(workspaceId: WorkspaceId | undefined): PiPackagesTarget {
 	if (workspaceId === undefined) return { projectTrusted: () => false };
 	const workspace = getWorkspace(workspaceId);
 	return {
@@ -32,7 +33,7 @@ function target(workspaceId: string | undefined): PiPackagesTarget {
 
 const disabledPackages = (): ReadonlySet<string> => new Set(getConfig().disabledPackages);
 
-export function packagesList(params: { workspaceId?: string }): Promise<PiPackagesCatalog> {
+export function packagesList(params: { workspaceId?: WorkspaceId }): Promise<PiPackagesCatalog> {
 	return piPackagesCatalog(target(params.workspaceId), disabledPackages());
 }
 
@@ -40,7 +41,7 @@ export function packagesList(params: { workspaceId?: string }): Promise<PiPackag
 export async function packagesInstall(params: {
 	source: string;
 	scope: PiPackageScope;
-	workspaceId?: string;
+	workspaceId?: WorkspaceId;
 }): Promise<PiPackageSummary> {
 	const { identity, summary } = await piPackagesInstall(
 		target(params.workspaceId),
@@ -58,7 +59,7 @@ export async function packagesInstall(params: {
 export async function packagesRemove(params: {
 	source: string;
 	scope: PiPackageScope;
-	workspaceId?: string;
+	workspaceId?: WorkspaceId;
 }): Promise<{ ok: true }> {
 	await piPackagesRemove(target(params.workspaceId), {
 		source: params.source,
@@ -69,14 +70,14 @@ export async function packagesRemove(params: {
 
 export async function packagesUpdate(params: {
 	packages: { source: string; scope: PiPackageScope }[];
-	workspaceId?: string;
+	workspaceId?: WorkspaceId;
 }): Promise<{ ok: true }> {
 	await piPackagesUpdate(target(params.workspaceId), params.packages);
 	return { ok: true };
 }
 
 export function packagesCheckUpdates(params: {
-	workspaceId?: string;
+	workspaceId?: WorkspaceId;
 	force?: boolean;
 }): Promise<{ source: string; scope: PiPackageScope }[]> {
 	return piPackagesCheckUpdates(target(params.workspaceId), { force: params.force === true });
@@ -87,7 +88,7 @@ export async function packagesSetResourceEnabled(params: {
 	type: PiPackageResourceType;
 	scope: PiPackageScope;
 	enabled: boolean;
-	workspaceId?: string;
+	workspaceId?: WorkspaceId;
 }): Promise<{ ok: true }> {
 	await piPackagesSetResourceEnabled(target(params.workspaceId), {
 		path: params.path,
@@ -100,7 +101,7 @@ export async function packagesSetResourceEnabled(params: {
 
 export async function packagesReveal(params: {
 	path: string;
-	workspaceId?: string;
+	workspaceId?: WorkspaceId;
 }): Promise<{ ok: true }> {
 	const folder = await piPackagesRevealTarget(target(params.workspaceId), params.path);
 	revealInFileManager(folder);

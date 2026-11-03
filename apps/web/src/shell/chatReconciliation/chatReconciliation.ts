@@ -1,3 +1,5 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
 import { messagesToRuntime } from "../../chat/hydrate";
@@ -32,9 +34,9 @@ const sessionHydration = new Map<string, Promise<boolean>>();
 const AUTO_OPEN_CHAT_LIMIT = 4;
 
 let autoOpenAttemptGeneration = 0;
-const autoOpenAttemptedWorkspaceIds = new Set<string>();
+const autoOpenAttemptedWorkspaceIds = new Set<WorkspaceId>();
 
-function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number): boolean {
+function claimAutoOpenAttempt(workspaceId: WorkspaceId, connectionGeneration: number): boolean {
 	if (connectionGeneration !== autoOpenAttemptGeneration) {
 		autoOpenAttemptGeneration = connectionGeneration;
 		autoOpenAttemptedWorkspaceIds.clear();
@@ -44,7 +46,10 @@ function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number)
 	return true;
 }
 
-export function hydrateChatResource(workspaceId: string, sessionId: string): Promise<boolean> {
+export function hydrateChatResource(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+): Promise<boolean> {
 	const state = useAppStore.getState();
 	if (
 		state.removedWorkspaceIds[workspaceId] ||
@@ -107,7 +112,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 }
 
 export function currentChatDestination(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>,
 	navigation: CenterNavigationStamp | null | undefined,
 ) {
@@ -126,7 +131,7 @@ export function currentChatDestination(
 	};
 }
 
-export function useDeletedChatPlacementReconciliation(workspaceId: string): void {
+export function useDeletedChatPlacementReconciliation(workspaceId: WorkspaceId): void {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
@@ -149,7 +154,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 							tab.kind === "chat"
 								? tab.sessionId
 								: tab.kind === "document" && tab.documentKind === "todo-plan"
-									? tab.sourceId
+									? asSessionId(tab.sourceId)
 									: null;
 						return sessionId && Object.hasOwn(deletedSessions, sessionId) ? [sessionId] : [];
 					}),
@@ -176,7 +181,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 }
 
 export function useWorkspaceChatCatalogReconciliation(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commit: (document: WorkspaceLayoutDocument) => void,
 ): void {
 	const status = useAppStore((state) => state.status);
@@ -215,7 +220,7 @@ export function useWorkspaceChatCatalogReconciliation(
 						tab.kind === "chat"
 							? [tab.sessionId]
 							: tab.kind === "document" && tab.documentKind === "todo-plan"
-								? [tab.sourceId]
+								? [asSessionId(tab.sourceId)]
 								: [],
 					)
 			: [];
@@ -235,7 +240,7 @@ export function useWorkspaceChatCatalogReconciliation(
 				!state.removedWorkspaceIds[workspaceId]
 			);
 		};
-		const fetchMessages = (sessionId: string) =>
+		const fetchMessages = (sessionId: SessionId) =>
 			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId }).catch((error: unknown) => {
 				if (live()) toast.error(errorText(error), t("workbench.chat.loadFailed"));
 				return null;
@@ -272,7 +277,7 @@ export function useWorkspaceChatCatalogReconciliation(
 								.map((tab) => tab.sessionId)
 						: [],
 				);
-				let handledRouteSessionId: string | null = null;
+				let handledRouteSessionId: SessionId | null = null;
 				const target = selectCurrentRouteChatTarget(useAppStore.getState());
 				if (target?.workspaceId === workspaceId) {
 					const targetSummary = summaries.find((summary) => summary.sessionId === target.sessionId);
@@ -474,7 +479,7 @@ export function useWorkspaceChatCatalogReconciliation(
 }
 
 export function useChatLocationReconciliation(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	changeAttention: (next: LayoutAttention) => void,
 ): void {
 	const status = useAppStore((state) => state.status);

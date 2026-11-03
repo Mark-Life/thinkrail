@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { isPreviewCompatibleTabKind, layoutResourceIdentity, nullProto } from "../../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -335,7 +336,7 @@ export function normalizeWorkspaceView(
 
 export function applyProjectedLayoutDocument(
 	state: NormalizedLayoutState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	document: WorkspaceLayoutDocument,
 ): NormalizedLayoutState {
 	const candidateFrame = workbenchFrameFromDocument(document);

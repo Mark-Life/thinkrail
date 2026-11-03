@@ -3,8 +3,11 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { compile, type Schema, type Validator } from "@earendil-works/pi-schema";
 import {
+	asSessionId,
 	LoginPush,
+	type SessionId,
 	type ToolResultMessage,
+	type WorkspaceId,
 	WS_METHOD_SCHEMAS,
 	WsEnvelope,
 	type WsMethodName,
@@ -131,8 +134,8 @@ function findToolResult(
 
 async function assertMcpServersReported(
 	socket: WebSocket,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): Promise<void> {
 	const until = Date.now() + 30_000;
 	for (;;) {
@@ -237,8 +240,8 @@ async function assertCentralConfigured(socket: WebSocket, label: string): Promis
 
 async function assertStrictVisualizeValidation(
 	socket: WebSocket,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): Promise<void> {
 	await within(
 		rpc(socket, "session.prompt", { sessionId, text: "Draw the broken flowchart." }),
@@ -266,7 +269,7 @@ async function assertStrictVisualizeValidation(
 	);
 }
 
-async function sessionState(socket: WebSocket, sessionId: string) {
+async function sessionState(socket: WebSocket, sessionId: SessionId) {
 	const states = await within(rpc(socket, "session.stateList", {}), 10_000, "session.stateList");
 	const state = states.find((entry) => entry.sessionId === sessionId)?.state;
 	assert(state, `session ${sessionId} is missing from session.stateList`);
@@ -275,8 +278,8 @@ async function sessionState(socket: WebSocket, sessionId: string) {
 
 async function assertAskUserQuestionRoundTrip(
 	socket: WebSocket,
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 ): Promise<void> {
 	const prompting = rpc(socket, "session.prompt", { sessionId, text: ASK_PROMPT });
 	prompting.catch(() => {});
@@ -558,7 +561,10 @@ export default function syntheticExternalExtension(pi) {
 			messages: [{ role: "user", text: "move to trash", timestamp: Date.now() }],
 		});
 		await within(
-			rpc(socket, "session.delete", { sessionId: transcript.id, workspaceId: workspace.id }),
+			rpc(socket, "session.delete", {
+				sessionId: asSessionId(transcript.id),
+				workspaceId: workspace.id,
+			}),
 			10_000,
 			"session.delete",
 		);

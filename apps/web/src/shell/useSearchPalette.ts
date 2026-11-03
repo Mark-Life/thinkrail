@@ -1,3 +1,4 @@
+import type { ProjectId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -75,7 +76,7 @@ function useWorkspaceBackfill(): void {
 }
 
 export interface SearchPaletteOptions {
-	readonly openNewWorkspace: (projectId: string) => void;
+	readonly openNewWorkspace: (projectId: ProjectId) => void;
 	readonly toggleProjectsHome: () => void;
 	readonly pickAndOpenProject: () => Promise<void>;
 	readonly enterHostPath: () => void;

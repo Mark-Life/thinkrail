@@ -1,4 +1,5 @@
 import { RiAddLine as Plus } from "@remixicon/react";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
@@ -11,7 +12,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
-export function useTerminalCatalog(workspaceId: string | null): boolean {
+export function useTerminalCatalog(workspaceId: WorkspaceId | null): boolean {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const status = useAppStore((state) => state.status);
 	const [readyFor, setReadyFor] = useState<string | null>(null);

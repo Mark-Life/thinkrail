@@ -13,6 +13,8 @@ import {
 	str,
 	unknown,
 } from "@earendil-works/pi-schema";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
 
@@ -64,11 +66,11 @@ interface ReviewsFile {
 }
 
 // The session id was validated as a safe path segment by `TodoStore` before any record exists.
-function reviewsPath(root: string, sessionId: string): string {
+function reviewsPath(root: string, sessionId: SessionId): string {
 	return join(root, WORKSPACE_TODOS_DIR, `${sessionId}${REVIEWS_SUFFIX}`);
 }
 
-function readFile(root: string, sessionId: string): ReviewsFile {
+function readFile(root: string, sessionId: SessionId): ReviewsFile {
 	const stored = readStateFile(reviewsPath(root, sessionId));
 	if (stored.value === undefined) return { version: 1, items: {} };
 	if (!StoredReviews.check(stored.value)) {
@@ -86,7 +88,7 @@ function readFile(root: string, sessionId: string): ReviewsFile {
 	return file;
 }
 
-function writeFile(root: string, sessionId: string, file: ReviewsFile): void {
+function writeFile(root: string, sessionId: SessionId, file: ReviewsFile): void {
 	const path = reviewsPath(root, sessionId);
 	assertOverwriteAllowed(path);
 	const empty =
@@ -103,13 +105,13 @@ function writeFile(root: string, sessionId: string, file: ReviewsFile): void {
 	renameSync(tmp, path);
 }
 
-export function readReviewMeta(root: string, sessionId: string): TodoReviewMeta {
+export function readReviewMeta(root: string, sessionId: SessionId): TodoReviewMeta {
 	return { pending: readFile(root, sessionId).pending ?? {} };
 }
 
 export function markReviewPending(
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 	id: string,
 	shas?: string[],
 ): void {
@@ -121,18 +123,18 @@ export function markReviewPending(
 	writeFile(root, sessionId, file);
 }
 
-export function clearReviewPending(root: string, sessionId: string, id: string): void {
+export function clearReviewPending(root: string, sessionId: SessionId, id: string): void {
 	const file = readFile(root, sessionId);
 	if (!file.pending?.[id]) return;
 	delete file.pending[id];
 	writeFile(root, sessionId, file);
 }
 
-export function readAutoCycles(root: string, sessionId: string, id: string): number | undefined {
+export function readAutoCycles(root: string, sessionId: SessionId, id: string): number | undefined {
 	return readFile(root, sessionId).autoCycles?.[id];
 }
 
-export function setAutoCycles(root: string, sessionId: string, id: string, value: number): void {
+export function setAutoCycles(root: string, sessionId: SessionId, id: string, value: number): void {
 	const file = readFile(root, sessionId);
 	file.autoCycles = { ...(file.autoCycles ?? {}), [id]: value };
 	writeFile(root, sessionId, file);
@@ -140,14 +142,14 @@ export function setAutoCycles(root: string, sessionId: string, id: string, value
 
 export function readReviewRecords(
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 ): Record<string, TodoReviewRecord> {
 	return readFile(root, sessionId).items;
 }
 
 export function putReviewRecord(
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 	id: string,
 	record: TodoReviewRecord,
 ): TodoReviewRecord | undefined {
@@ -164,7 +166,7 @@ export function putReviewRecord(
  * flow). `autoCycles` is a number to set or `"clear"` to drop. See host/planReview.SPEC.md. */
 export function commitReviewTransition(
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 	id: string,
 	opts: { record: TodoReviewRecord; autoCycles: number | "clear"; clearPending?: boolean },
 ): void {
@@ -181,7 +183,7 @@ export function commitReviewTransition(
 
 export function restoreReviewRecord(
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 	id: string,
 	expected: TodoReviewRecord,
 	previous: TodoReviewRecord | undefined,
@@ -194,7 +196,7 @@ export function restoreReviewRecord(
 	return true;
 }
 
-export function clearAutoCycles(root: string, sessionId: string, id: string): void {
+export function clearAutoCycles(root: string, sessionId: SessionId, id: string): void {
 	const file = readFile(root, sessionId);
 	if (!file.autoCycles?.[id]) return;
 	delete file.autoCycles[id];
@@ -203,7 +205,7 @@ export function clearAutoCycles(root: string, sessionId: string, id: string): vo
 
 export function dropReviewRecord(
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 	id: string,
 	previous?: TodoReviewRecord,
 ): void {
@@ -214,23 +216,25 @@ export function dropReviewRecord(
 	writeFile(root, sessionId, file);
 }
 
-export function removeSessionReviews(root: string, sessionId: string): void {
+export function removeSessionReviews(root: string, sessionId: SessionId): void {
 	try {
 		rmSync(reviewsPath(root, sessionId), { force: true });
 	} catch {}
 }
 
 /** Host-restart reconciliation — see host/SPEC.md ("reconcilePendingReviewsOnBoot"). */
-export function clearAllPendingReviews(root: string): { sessionId: string; itemIds: string[] }[] {
+export function clearAllPendingReviews(
+	root: string,
+): { sessionId: SessionId; itemIds: string[] }[] {
 	let names: string[];
 	try {
 		names = readdirSync(join(root, WORKSPACE_TODOS_DIR)).filter((n) => n.endsWith(REVIEWS_SUFFIX));
 	} catch {
 		return [];
 	}
-	const cleared: { sessionId: string; itemIds: string[] }[] = [];
+	const cleared: { sessionId: SessionId; itemIds: string[] }[] = [];
 	for (const name of names) {
-		const sessionId = name.slice(0, -REVIEWS_SUFFIX.length);
+		const sessionId = asSessionId(name.slice(0, -REVIEWS_SUFFIX.length));
 		const file = readFile(root, sessionId);
 		const itemIds = Object.keys(file.pending ?? {});
 		if (itemIds.length === 0) continue;

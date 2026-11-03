@@ -1,4 +1,4 @@
-import type { ReviewComment, ReviewSnapshot } from "@thinkrail/contracts";
+import type { ReviewComment, ReviewSnapshot, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { getProjects } from "../projects";
 import { getReviewSnapshot } from "../reviews";
 import {
@@ -11,32 +11,32 @@ import { listWorkspaceRecords } from "../workspaces";
 import { itemReviewActive } from "./planReviewQueue";
 
 interface ItemRef {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	id: string;
 }
 
 const activeFixItems = new Set<string>();
-const activeFixKey = (sessionId: string, todoId: string): string =>
+const activeFixKey = (sessionId: SessionId, todoId: string): string =>
 	JSON.stringify([sessionId, todoId]);
 
-export function claimItemFix(sessionId: string, todoId: string): boolean {
+export function claimItemFix(sessionId: SessionId, todoId: string): boolean {
 	const key = activeFixKey(sessionId, todoId);
 	if (activeFixItems.has(key)) return false;
 	activeFixItems.add(key);
 	return true;
 }
 
-export function releaseItemFix(sessionId: string, todoId: string): void {
+export function releaseItemFix(sessionId: SessionId, todoId: string): void {
 	activeFixItems.delete(activeFixKey(sessionId, todoId));
 }
 
 /** See host/SPEC.md for the active-review contract. */
-export function isItemUnderActiveReview(sessionId: string, id: string): boolean {
+export function isItemUnderActiveReview(sessionId: SessionId, id: string): boolean {
 	return activeFixItems.has(activeFixKey(sessionId, id)) || itemReviewActive(sessionId, id);
 }
 
-function isFindingStale(workspaceId: string, comment: ReviewComment): boolean {
+function isFindingStale(workspaceId: WorkspaceId, comment: ReviewComment): boolean {
 	const origin = comment.origin;
 	return (
 		comment.anchorState === "outdated" &&
@@ -48,7 +48,10 @@ function isFindingStale(workspaceId: string, comment: ReviewComment): boolean {
 	);
 }
 
-export function markClientStale<T extends ReviewSnapshot>(snapshot: T, workspaceId: string): T {
+export function markClientStale<T extends ReviewSnapshot>(
+	snapshot: T,
+	workspaceId: WorkspaceId,
+): T {
 	return {
 		...snapshot,
 		comments: snapshot.comments.map((c) =>

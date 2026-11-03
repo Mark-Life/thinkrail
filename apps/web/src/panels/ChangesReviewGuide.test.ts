@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ReviewComment, ReviewGuide } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { guideCursorIndex, guideStepKey, guideSteps, nextGuideStep } from "./ChangesReviewGuide";
 
 function comment(over: Partial<ReviewComment>): ReviewComment {
@@ -24,7 +25,7 @@ const guide: ReviewGuide = {
 	],
 	verdict: "request_changes",
 	todoId: "t",
-	sessionId: "s",
+	sessionId: asSessionId("s"),
 	reviewedSha: "abc",
 	at: 1,
 };

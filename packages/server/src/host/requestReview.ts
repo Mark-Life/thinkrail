@@ -4,6 +4,8 @@ import type {
 	ReviewComment,
 	ReviewFailedPayload,
 	ReviewFixComment,
+	SessionId,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import { isPlanReviewResult } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
@@ -68,15 +70,15 @@ export function setReviewFailedPublisher(fn: (payload: ReviewFailedPayload) => v
 	reviewFailedPublisher = fn;
 }
 
-type ReviewParams = { workspaceId: string; sessionId: string; id: string };
+type ReviewParams = { workspaceId: WorkspaceId; sessionId: SessionId; id: string };
 
 /** Resolve an item's display title across every plan collection — stored todos, grouped todos, AND
  * wire-only `adoptedCommits` (a Review-All target the plan never stored) — so a result card or a
  * detached-review failure toast names the commit subject, not the opaque `commit:<sha>` id. Falls back
  * to the id when nothing matches. */
 export function itemTitleOf(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	itemId: string,
 ): Promise<string> {
 	return listTodos({ workspaceId, sessionId }).then((plan) => {
@@ -498,7 +500,7 @@ async function runReview(
 }
 
 async function handleRequestReview(
-	sessionId: string,
+	sessionId: SessionId,
 	itemId: string,
 	signal: AbortSignal | undefined,
 	runSubagent: ReviewRunner,
@@ -533,8 +535,8 @@ async function handleRequestReview(
 /** Button-triggered plan review; returns immediately. The `reviewing` mark MUST stay synchronous —
  * see planReview.SPEC.md. */
 export function startPlanReview(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	itemId: string,
 	runSubagent: ReviewRunner = runReviewSubagent,
 ): boolean {
@@ -571,8 +573,8 @@ export function startPlanReview(
  * Eligible items are enqueued onto the plan's serial chain even while another review runs; the per-item
  * claim dedupes, so a fix landing mid-review is not dropped. */
 export async function maybeAutoReReview(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	runSubagent: ReviewRunner = runReviewSubagent,
 ): Promise<void> {
 	try {

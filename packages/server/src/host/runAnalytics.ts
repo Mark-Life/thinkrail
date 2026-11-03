@@ -1,4 +1,4 @@
-import type { PiEvent } from "@thinkrail/contracts";
+import type { PiEvent, SessionId } from "@thinkrail/contracts";
 import { getSessionWorkspaceId } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
@@ -54,7 +54,7 @@ function combineOrigin(left: Origin, right: Origin): Origin {
 	return "mixed";
 }
 
-function describeRun(sessionId: string): Omit<RunProperties, "origin"> | null {
+function describeRun(sessionId: SessionId): Omit<RunProperties, "origin"> | null {
 	const workspaceId = getSessionWorkspaceId(sessionId);
 	if (!workspaceId) return null;
 	const workspace = getWorkspace(workspaceId);
@@ -90,13 +90,13 @@ export class RunObservation {
 		this.intents.clear();
 	}
 
-	forget(sessionId: string): void {
+	forget(sessionId: SessionId): void {
 		this.runs.delete(sessionId);
 		this.activeSessions.delete(sessionId);
 		this.intents.delete(sessionId);
 	}
 
-	clearQueue(sessionId: string): void {
+	clearQueue(sessionId: SessionId): void {
 		const pending = this.intents.get(sessionId);
 		if (!pending) return;
 		for (const intent of pending) {
@@ -115,7 +115,11 @@ export class RunObservation {
 		return capture;
 	}
 
-	send<T>(sessionId: string, origin: "user" | "internal", operation: () => Promise<T>): Promise<T> {
+	send<T>(
+		sessionId: SessionId,
+		origin: "user" | "internal",
+		operation: () => Promise<T>,
+	): Promise<T> {
 		const capture = this.currentCapture();
 		const intent: SendIntent = { capture, origin: capture ? origin : "unknown", state: "pending" };
 		let pending = this.intents.get(sessionId);
@@ -157,7 +161,7 @@ export class RunObservation {
 		}
 	}
 
-	observe(sessionId: string, event: PiEvent): void {
+	observe(sessionId: SessionId, event: PiEvent): void {
 		try {
 			const capture = this.currentCapture();
 			const starting = event.type === "agent_start" && !this.activeSessions.has(sessionId);

@@ -1,9 +1,10 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
-export function useWorkspaceReview(workspaceId: string | null): { failed: boolean } {
+export function useWorkspaceReview(workspaceId: WorkspaceId | null): { failed: boolean } {
 	const [failedFor, setFailedFor] = useState<string | null>(null);
 	useWorkspaceRead(workspaceId, (id) => getTransport().request("review.get", { workspaceId: id }), {
 		onResult: (result, id) => {

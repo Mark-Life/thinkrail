@@ -16,6 +16,7 @@ export type {
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type {
 	AgentSettlement,
+	SessionId,
 	SessionState,
 	ThinkingLevel,
 	TranscriptMessage,
@@ -112,7 +113,7 @@ export interface CompactionEndResult {
 }
 
 export interface SessionEventPayload {
-	sessionId: string;
+	sessionId: SessionId;
 	event: PiEvent;
 }
 

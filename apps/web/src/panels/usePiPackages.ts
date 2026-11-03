@@ -3,6 +3,7 @@ import type {
 	PiPackageScope,
 	PiPackageSummary,
 	PiPackagesCatalog,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
@@ -54,7 +55,7 @@ export function usePiPackages({
 	disabledPackages,
 }: {
 	enabled: boolean;
-	workspaceId: string | undefined;
+	workspaceId: WorkspaceId | undefined;
 	packagesVersion: number;
 	disabledPackages: readonly string[];
 }): PiPackagesController {

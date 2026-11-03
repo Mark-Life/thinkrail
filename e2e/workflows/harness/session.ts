@@ -1,4 +1,6 @@
 import "./env";
+import type { SessionId } from "@thinkrail/contracts";
+import { asWorkspaceId } from "@thinkrail/contracts";
 import {
 	abortSession,
 	createSession,
@@ -8,20 +10,23 @@ import {
 } from "@thinkrail/server/agent";
 
 export interface StartedSession {
-	sessionId: string;
+	sessionId: SessionId;
 	model: string;
 }
 
 let counter = 0;
 
 export async function startSession(cwd: string): Promise<StartedSession> {
-	const result = await createSession({ cwd, workspaceId: `workflow-test-${++counter}` });
+	const result = await createSession({
+		cwd,
+		workspaceId: asWorkspaceId(`workflow-test-${++counter}`),
+	});
 	const model = result.model ? `${result.model.provider}/${result.model.id}` : "unknown";
 	return { sessionId: result.sessionId, model };
 }
 
 export async function promptTurn(
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	expectedAbort: () => boolean = () => false,
 ): Promise<void> {
@@ -38,13 +43,13 @@ function isAbortError(error: unknown): boolean {
 	return /abort/i.test(message);
 }
 
-export async function stopTurn(sessionId: string): Promise<void> {
+export async function stopTurn(sessionId: SessionId): Promise<void> {
 	try {
 		await abortSession(sessionId);
 	} catch {}
 }
 
-export function endSession(sessionId: string): void {
+export function endSession(sessionId: SessionId): void {
 	removeSession(sessionId);
 }
 

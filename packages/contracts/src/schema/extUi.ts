@@ -12,6 +12,7 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
+import { SessionId } from "./ids";
 import { ProviderWarning } from "./provider";
 import { wireObj } from "./wire";
 
@@ -25,7 +26,7 @@ const ExtUiDialogAnchor = {
 export const ExtUiDialogRequest = union([
 	wireObj({
 		id: str(),
-		sessionId: str(),
+		sessionId: SessionId,
 		kind: lit("select"),
 		title: str(),
 		options: arr(str()),
@@ -33,7 +34,7 @@ export const ExtUiDialogRequest = union([
 	}),
 	wireObj({
 		id: str(),
-		sessionId: str(),
+		sessionId: SessionId,
 		kind: lit("confirm"),
 		title: str(),
 		message: str(),
@@ -41,7 +42,7 @@ export const ExtUiDialogRequest = union([
 	}),
 	wireObj({
 		id: str(),
-		sessionId: str(),
+		sessionId: SessionId,
 		kind: lit("input"),
 		title: str(),
 		placeholder: opt(str()),
@@ -49,7 +50,7 @@ export const ExtUiDialogRequest = union([
 	}),
 	wireObj({
 		id: str(),
-		sessionId: str(),
+		sessionId: SessionId,
 		kind: lit("editor"),
 		title: str(),
 		prefill: opt(str()),
@@ -61,28 +62,28 @@ export const ExtUiRequest = union([
 	ExtUiDialogRequest,
 	wireObj({
 		id: str(),
-		sessionId: str(),
+		sessionId: SessionId,
 		kind: lit("notify"),
 		message: str(),
 		level: oneOf(["info", "warning", "error"]),
 	}),
 	wireObj({
 		id: str(),
-		sessionId: str(),
+		sessionId: SessionId,
 		kind: lit("setStatus"),
 		key: str(),
 		text: nullable(str()),
 	}),
 	wireObj({
 		id: str(),
-		sessionId: str(),
+		sessionId: SessionId,
 		kind: lit("setWidget"),
 		key: str(),
 		content: nullable(arr(str())),
 	}),
-	wireObj({ id: str(), sessionId: str(), kind: lit("setTitle"), title: str() }),
-	wireObj({ id: str(), sessionId: str(), kind: lit("notice"), notice: ProviderWarning }),
-	wireObj({ id: str(), sessionId: str(), kind: lit("dismiss") }),
+	wireObj({ id: str(), sessionId: SessionId, kind: lit("setTitle"), title: str() }),
+	wireObj({ id: str(), sessionId: SessionId, kind: lit("notice"), notice: ProviderWarning }),
+	wireObj({ id: str(), sessionId: SessionId, kind: lit("dismiss") }),
 ]);
 export type ExtUiRequest = Static<typeof ExtUiRequest>;
 

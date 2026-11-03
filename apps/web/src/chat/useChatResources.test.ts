@@ -1,5 +1,8 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
+	asProjectId,
+	asSessionId,
+	asWorkspaceId,
 	type BackgroundCommandOutputResult,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type ResourceHistoryPage,
@@ -16,7 +19,7 @@ import {
 	startCommandLogPolling,
 } from "./useChatResources";
 
-const scope = { workspaceId: "w-resource", sessionId: "s-resource" };
+const scope = { workspaceId: asWorkspaceId("w-resource"), sessionId: asSessionId("s-resource") };
 const snapshot: SessionResources = {
 	...scope,
 	commands: [
@@ -31,7 +34,7 @@ const snapshot: SessionResources = {
 	],
 	subagents: [
 		{
-			childSessionId: "child",
+			childSessionId: asSessionId("child"),
 			parentSessionId: scope.sessionId,
 			task: "inspect",
 			status: "queued",
@@ -132,8 +135,8 @@ function syncFixture(timers = manualScheduler()) {
 test("mount hydration and scoped invalidations coalesce behind one read, rejecting its obsolete result", async () => {
 	const f = syncFixture();
 	expect(f.reads).toHaveLength(1);
-	f.invalidate({ ...scope, sessionId: "other" });
-	f.invalidate({ ...scope, workspaceId: "other" });
+	f.invalidate({ ...scope, sessionId: asSessionId("other") });
+	f.invalidate({ ...scope, workspaceId: asWorkspaceId("other") });
 	expect(projection()?.revision).toBe(1);
 	f.invalidate();
 	f.invalidate();
@@ -218,7 +221,7 @@ test("a permanent read failure stays visible without scheduling a retry", async 
 	expect(f.timers.delays()).toEqual([]);
 
 	f.invalidate();
-	f.reads[1]?.resolve({ ...snapshot, sessionId: "foreign" });
+	f.reads[1]?.resolve({ ...snapshot, sessionId: asSessionId("foreign") });
 	await flush();
 	expect(projection()).toMatchObject({
 		fresh: false,
@@ -241,7 +244,7 @@ test("disposed views, generations, unsupported welcomes, cleared entries and tom
 		() => state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION - 1, [], []),
 		() => state().clearChatResources(scope),
 		() => state().deleteChat(scope.workspaceId, scope.sessionId),
-		() => state().applyWorkspaceRemoved("p", scope.workspaceId),
+		() => state().applyWorkspaceRemoved(asProjectId("p"), scope.workspaceId),
 	]) {
 		useAppStore.setState({
 			status: "connected",
@@ -261,7 +264,7 @@ test("disposed views, generations, unsupported welcomes, cleared entries and tom
 
 test("mismatched read identity is a visible error, not a catalog installation", async () => {
 	const f = syncFixture();
-	f.reads[0]?.resolve({ ...snapshot, workspaceId: "foreign" });
+	f.reads[0]?.resolve({ ...snapshot, workspaceId: asWorkspaceId("foreign") });
 	await flush();
 	expect(projection()).toMatchObject({
 		snapshot: null,
@@ -387,7 +390,7 @@ test("individual controls prevent duplicates, expose row errors and never synthe
 	f.controls.stopCommand("cmd");
 	f.controls.stopCommand("cmd");
 	f.controls.stopCommand("foreign");
-	f.controls.stopSubagent("child");
+	f.controls.stopSubagent(asSessionId("child"));
 	f.controls.stopAll();
 	expect(f.requests.map((item) => item.key)).toEqual(["command:cmd", "subagent:child"]);
 	f.requests[0]?.request.reject(new Error("Command cannot stop"));
@@ -398,7 +401,7 @@ test("individual controls prevent duplicates, expose row errors and never synthe
 	expect(projection()?.snapshot).toBe(snapshot);
 	f.controls.stopAll();
 	f.controls.stopAll();
-	f.controls.stopSubagent("child");
+	f.controls.stopSubagent(asSessionId("child"));
 	expect(f.requests.map((item) => item.key)).toEqual(["command:cmd", "subagent:child", "all"]);
 	f.requests[2]?.request.reject(new Error("Stop all failed"));
 	await flush();
@@ -426,7 +429,7 @@ test("stale controls do not dispatch and late acknowledgements/errors cannot aff
 		f.controls.stopCommand("cmd");
 		const before = f.actions();
 		retire(f);
-		f.controls.stopSubagent("child");
+		f.controls.stopSubagent(asSessionId("child"));
 		f.requests[0]?.request.reject(new Error("late"));
 		await flush();
 		expect(f.requests).toHaveLength(1);
@@ -551,7 +554,7 @@ test("closed logs, old connections, foreign responses and removed parents cannot
 			state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION, [], []);
 		},
 		() => state().deleteChat(scope.workspaceId, scope.sessionId),
-		() => state().applyWorkspaceRemoved("p", scope.workspaceId),
+		() => state().applyWorkspaceRemoved(asProjectId("p"), scope.workspaceId),
 	]) {
 		useAppStore.setState({
 			status: "connected",

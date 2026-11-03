@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
 import { useEffect } from "react";
 import { whenPageActive } from "../lib";
@@ -8,7 +9,7 @@ const FALLBACK_DELAY_MS = 1500;
 
 let preloaded = false;
 
-export function useIdleEditorPreload(workspaceId: string): void {
+export function useIdleEditorPreload(workspaceId: WorkspaceId): void {
 	const warm = useEditorWarm();
 	useEffect(() => {
 		if (!warm || preloaded) return;

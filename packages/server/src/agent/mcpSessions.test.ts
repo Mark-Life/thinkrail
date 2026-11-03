@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { type ExtUiRequest, MCP_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { asWorkspaceId, type ExtUiRequest, MCP_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	createSession,
 	disposeAllSessions,
@@ -117,7 +117,7 @@ afterAll(() => {
 
 const chat = () =>
 	createSession({
-		workspaceId: "mcp-status-workspace",
+		workspaceId: asWorkspaceId("mcp-status-workspace"),
 		cwd,
 		model: { ...faux.getModel(), thinkingLevels: ["off"] },
 	});
