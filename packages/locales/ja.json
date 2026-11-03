@@ -1,5 +1,6 @@
 {
 	"app.errorBoundary.label": "アプリ",
+	"app.transport.invalidReply": "ホストから「{{method}}」への応答が届きましたが、このアプリでは読み取れません。アプリまたはホストをアップデートしてください。",
 	"app.transport.mcpUnavailable": "ホストが再接続するまで MCP サーバーは利用できません。",
 	"app.transport.requestFailed": "リクエストに失敗しました",
 	"app.transport.requestFailedFallback": "リクエストに失敗しました。",

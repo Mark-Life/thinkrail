@@ -1,5 +1,6 @@
 {
 	"app.errorBoundary.label": "aplicación",
+	"app.transport.invalidReply": "El host envió una respuesta a \"{{method}}\" que esta app no puede leer. Actualiza la app o el host.",
 	"app.transport.mcpUnavailable": "Los servidores MCP no están disponibles hasta que el host se vuelva a conectar.",
 	"app.transport.requestFailed": "la solicitud falló",
 	"app.transport.requestFailedFallback": "La solicitud falló.",

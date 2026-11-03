@@ -2,6 +2,8 @@ import {
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	type ClientErrorKind,
 	type ClientErrorReport,
+	WS_METHODS,
+	type WsMethodName,
 } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
@@ -66,6 +68,15 @@ export function clientErrorReport(
 		...(boundary ? { boundary } : {}),
 		...(chunkIds ? { chunkIds } : {}),
 	};
+}
+
+export function reportInvalidReply(method: WsMethodName): void {
+	if (method === WS_METHODS.clientReportError) return;
+	reportClientError({
+		kind: "rejection",
+		type: "RequestError",
+		boundary: `INVALID_REPLY:${method}`,
+	});
 }
 
 function deliver(report: ClientErrorReport, protocolVersion: number): void {
