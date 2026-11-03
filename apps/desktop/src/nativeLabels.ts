@@ -1,19 +1,22 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { compile, map, unknown } from "@earendil-works/pi-schema";
 import { DESKTOP_DIALOG_KEYS, EN, type EnglishCatalog } from "@thinkrail/locales";
 import { desktopError } from "./errorReporting";
 
 const MAX_DIALOG_LABEL_LENGTH = 200;
+const LabelFile = compile(map(unknown()));
+
+export type RawLabels = Readonly<Record<string, unknown>>;
 
 export function readLabels<K extends keyof EnglishCatalog & string>(
 	keys: readonly K[],
 	maxLength: number,
-	raw: unknown,
+	raw: RawLabels,
 ): Readonly<Record<K, string>> {
-	const source = typeof raw === "object" && raw !== null ? raw : {};
 	return Object.fromEntries(
 		keys.map((key) => {
-			const value: unknown = Reflect.get(source, key);
+			const value = raw[key];
 			return [
 				key,
 				typeof value === "string" && value.trim() && value.length <= maxLength
@@ -26,15 +29,16 @@ export function readLabels<K extends keyof EnglishCatalog & string>(
 
 export type DesktopDialogLabels = Readonly<Record<(typeof DESKTOP_DIALOG_KEYS)[number], string>>;
 
-export function readDialogLabels(raw: unknown): DesktopDialogLabels {
+export function readDialogLabels(raw: RawLabels): DesktopDialogLabels {
 	return readLabels(DESKTOP_DIALOG_KEYS, MAX_DIALOG_LABEL_LENGTH, raw);
 }
 
 export const DEFAULT_DIALOG_LABELS: DesktopDialogLabels = readDialogLabels({});
 
-export function readNativeLabels(path: string): unknown {
+export function readNativeLabels(path: string): RawLabels {
 	try {
-		return JSON.parse(readFileSync(path, "utf8"));
+		const labels: unknown = JSON.parse(readFileSync(path, "utf8"));
+		return LabelFile.check(labels) ? labels : {};
 	} catch {
 		return {};
 	}

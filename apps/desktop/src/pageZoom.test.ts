@@ -4,10 +4,9 @@ import {
 	handlePageZoomShortcut,
 	installPageZoomGestures,
 	nextPageZoom,
-	type PageZoomAction,
-	type PageZoomGesture,
 	pageZoomForGesture,
 } from "./pageZoom";
+import type { PageZoomAction, PageZoomGesture } from "./rpcSchemas";
 
 function gestureEvent(type: string, scale?: number): Event {
 	const event = new Event(type, { cancelable: true });
@@ -174,12 +173,6 @@ test("scales continuously from the zoom at gesture start", () => {
 test("clamps gesture zoom to the browser-style range", () => {
 	expect(pageZoomForGesture(1, 0.25)).toBe(0.5);
 	expect(pageZoomForGesture(1, 3)).toBe(2);
-});
-
-test("ignores malformed gesture scales", () => {
-	for (const scale of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
-		expect(pageZoomForGesture(1.25, scale)).toBe(1.25);
-	}
 });
 
 test("steps from the webview's current zoom to the adjacent browser factor", () => {

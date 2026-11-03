@@ -1,6 +1,17 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
+import { compile, type Schema, type Validator } from "@earendil-works/pi-schema";
+import {
+	LoginPush,
+	type ToolResultMessage,
+	WS_METHOD_SCHEMAS,
+	WsEnvelope,
+	type WsMethodName,
+	type WsParams,
+	WsResponse,
+	type WsResult,
+} from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
@@ -109,6 +120,15 @@ function writeMcpFixtures(root: string, agentDir: string, httpUrl: string): void
 	);
 }
 
+function findToolResult(
+	messages: WsResult<"session.getMessages">["messages"],
+	matches: (message: ToolResultMessage) => boolean,
+) {
+	return messages.find(
+		(message): message is ToolResultMessage => message.role === "toolResult" && matches(message),
+	);
+}
+
 async function assertMcpServersReported(
 	socket: WebSocket,
 	workspaceId: string,
@@ -116,12 +136,7 @@ async function assertMcpServersReported(
 ): Promise<void> {
 	const until = Date.now() + 30_000;
 	for (;;) {
-		const listed = (await within(rpc(socket, "mcp.list", { workspaceId }), 10_000, "mcp.list")) as {
-			statuses?: {
-				sessionId: string;
-				servers: { name: string; state: string; toolCount?: number }[];
-			}[];
-		};
+		const listed = await within(rpc(socket, "mcp.list", { workspaceId }), 10_000, "mcp.list");
 		const servers = listed.statuses?.find((snapshot) => snapshot.sessionId === sessionId)?.servers;
 		const stdio = servers?.find((server) => server.name === "smoke-stdio");
 		const http = servers?.find((server) => server.name === "smoke-oauth");
@@ -150,56 +165,69 @@ async function connectRpc(baseUrl: string): Promise<WebSocket> {
 }
 
 let requestSequence = 0;
-function rpc(socket: WebSocket, method: string, params: unknown): Promise<unknown> {
+const replyFrame = compile(WsResponse);
+const anyFrame = compile(WsEnvelope);
+const loginPush = compile(LoginPush);
+const resultValidators = new Map<Schema<unknown>, Validator>();
+
+function parseJson(data: unknown): unknown {
+	if (typeof data !== "string") return undefined;
+	try {
+		return JSON.parse(data);
+	} catch {
+		return undefined;
+	}
+}
+
+function resultProblem(method: WsMethodName, result: unknown): string | null {
+	const schema: Schema<unknown> = WS_METHOD_SCHEMAS[method].result;
+	const validator = resultValidators.get(schema) ?? compile(schema);
+	resultValidators.set(schema, validator);
+	if (validator.check(result)) return null;
+	const [first] = validator.errors(result);
+	return `${method} replied with a shape its schema refuses: ${first?.path} ${first?.message}`;
+}
+
+function rpc<M extends WsMethodName>(
+	socket: WebSocket,
+	method: M,
+	params: WsParams<M>,
+): Promise<WsResult<M>> {
 	const id = `artifact_${++requestSequence}`;
 	return new Promise((resolve, reject) => {
 		const onMessage = (event: MessageEvent) => {
-			if (typeof event.data !== "string") return;
-			const frame = JSON.parse(event.data) as {
-				id?: string;
-				ok?: boolean;
-				result?: unknown;
-				error?: string;
-			};
-			if (frame.id !== id) return;
+			const frame = parseJson(event.data);
+			if (!replyFrame.check(frame) || frame.id !== id) return;
 			socket.removeEventListener("message", onMessage);
-			if (frame.ok) resolve(frame.result);
-			else reject(new Error(frame.error ?? `${method} failed`));
+			if (!frame.ok) {
+				reject(new Error(frame.error ?? `${method} failed`));
+				return;
+			}
+			const problem = resultProblem(method, frame.result);
+			if (problem) reject(new Error(problem));
+			else resolve(frame.result as WsResult<M>);
 		};
 		socket.addEventListener("message", onMessage);
 		socket.send(JSON.stringify({ id, method, params }));
 	});
 }
 
-function assertExternalModel(models: unknown): asserts models is Record<string, unknown>[] {
-	assert(Array.isArray(models), "model.list did not return an array");
-	assert(
-		models.some(
-			(model) =>
-				typeof model === "object" &&
-				model !== null &&
-				(model as { provider?: string; id?: string; name?: string }).provider ===
-					"compiled-external" &&
-				(model as { provider?: string; id?: string; name?: string }).id ===
-					"compiled-external-model" &&
-				(model as { provider?: string; id?: string; name?: string }).name ===
-					"Compiled external extension model (.pi)",
-		),
-		"global external extension model (value-importing pi) is missing",
+function findExternalModel(models: WsResult<"model.list">) {
+	const model = models.find(
+		(entry) =>
+			entry.provider === "compiled-external" &&
+			entry.id === "compiled-external-model" &&
+			entry.name === "Compiled external extension model (.pi)",
 	);
+	assert(model, "global external extension model (value-importing pi) is missing");
+	return model;
 }
 
 async function assertCentralConfigured(socket: WebSocket, label: string): Promise<void> {
-	let state: unknown;
+	let state: string | undefined;
 	for (let attempt = 0; attempt < 40; attempt += 1) {
-		const status = (await within(
-			rpc(socket, "provider.status", {}),
-			10_000,
-			`${label} status`,
-		)) as {
-			jbcentral?: { state?: unknown };
-		};
-		state = status.jbcentral?.state;
+		const status = await within(rpc(socket, "provider.status", {}), 10_000, `${label} status`);
+		state = status.jbcentral.state;
 		if (state === "configured") return;
 		if (state !== "configuring") break;
 		await Bun.sleep(250);
@@ -218,46 +246,28 @@ async function assertStrictVisualizeValidation(
 		"session.prompt",
 	);
 	for (let attempt = 0; attempt < 240; attempt += 1) {
-		const states = (await within(
-			rpc(socket, "session.stateList", {}),
-			10_000,
-			"session.stateList",
-		)) as { sessionId: string; state: { execution: string; completion: unknown } }[];
+		const states = await within(rpc(socket, "session.stateList", {}), 10_000, "session.stateList");
 		const state = states.find((entry) => entry.sessionId === sessionId)?.state;
 		if (state?.execution === "idle" && state.completion !== null) break;
 		await Bun.sleep(250);
 	}
-	const transcript = (await within(
+	const transcript = await within(
 		rpc(socket, "session.getMessages", { sessionId, workspaceId }),
 		10_000,
 		"session.getMessages",
-	)) as { messages: { role: string; toolName?: string; isError?: boolean; content?: unknown }[] };
-	const result = transcript.messages.find(
-		(message) => message.role === "toolResult" && message.toolName === "visualize",
 	);
+	const result = findToolResult(transcript.messages, (message) => message.toolName === "visualize");
 	assert(result, "the scripted visualize tool call never executed in the artifact session");
 	assert(result.isError === true, "strict mermaid validation accepted a dangling flowchart edge");
-	const text = Array.isArray(result.content)
-		? result.content.map((block) => (block as { text?: string }).text ?? "").join("\n")
-		: "";
+	const text = result.content.map((block) => (block.type === "text" ? block.text : "")).join("\n");
 	assert(
 		/invalid Mermaid syntax in `mermaid`/.test(text) && /Parse error/.test(text),
 		`visualize rejected the diagram without the strict mermaid parse error: ${text}`,
 	);
 }
 
-async function sessionState(
-	socket: WebSocket,
-	sessionId: string,
-): Promise<{ execution: string; completion: unknown; needsInput: { kind: string } | null }> {
-	const states = (await within(
-		rpc(socket, "session.stateList", {}),
-		10_000,
-		"session.stateList",
-	)) as {
-		sessionId: string;
-		state: { execution: string; completion: unknown; needsInput: { kind: string } | null };
-	}[];
+async function sessionState(socket: WebSocket, sessionId: string) {
+	const states = await within(rpc(socket, "session.stateList", {}), 10_000, "session.stateList");
 	const state = states.find((entry) => entry.sessionId === sessionId)?.state;
 	assert(state, `session ${sessionId} is missing from session.stateList`);
 	return state;
@@ -291,15 +301,14 @@ async function assertAskUserQuestionRoundTrip(
 		if (state.execution === "idle" && state.completion !== null) break;
 		await Bun.sleep(250);
 	}
-	const transcript = (await within(
+	const transcript = await within(
 		rpc(socket, "session.getMessages", { sessionId, workspaceId }),
 		10_000,
 		"session.getMessages",
-	)) as {
-		messages: { role: string; toolCallId?: string; isError?: boolean; details?: unknown }[];
-	};
-	const result = transcript.messages.find(
-		(message) => message.role === "toolResult" && message.toolCallId === ASK_TOOL_CALL_ID,
+	);
+	const result = findToolResult(
+		transcript.messages,
+		(message) => message.toolCallId === ASK_TOOL_CALL_ID,
 	);
 	assert(result, "the answered ask_user_question call left no tool result in the transcript");
 	assert(result.isError !== true, "the answered ask_user_question call persisted as an error");
@@ -317,27 +326,16 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 			fn();
 		};
 		const onPush = (event: MessageEvent) => {
-			if (typeof event.data !== "string") return;
-			const message = JSON.parse(event.data) as {
-				channel?: string;
-				data?: {
-					loginId?: string;
-					frame?: {
-						kind: string;
-						url?: string;
-						message?: string;
-						options?: { id: string; label: string }[];
-					};
-				};
-			};
-			if (message.channel !== "provider.login" || !message.data?.frame) return;
+			const message = parseJson(event.data);
+			if (!anyFrame.check(message) || !("channel" in message)) return;
+			if (message.channel !== "provider.login" || !loginPush.check(message.data)) return;
 			const { loginId: pushLoginId, frame } = message.data;
 			if (frame.kind === "select") {
-				const browser = frame.options?.find((option) =>
+				const browser = frame.options.find((option) =>
 					/browser/i.test(`${option.id} ${option.label}`),
 				);
-				const optionId = browser?.id ?? frame.options?.[0]?.id;
-				if (!optionId || !pushLoginId) {
+				const optionId = browser?.id ?? frame.options[0]?.id;
+				if (!optionId) {
 					settle(() => reject(new Error(`unanswerable select frame: ${JSON.stringify(frame)}`)));
 					return;
 				}
@@ -347,7 +345,7 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 				);
 				return;
 			}
-			if (frame.kind === "authUrl") settle(() => resolve(frame.url ?? ""));
+			if (frame.kind === "authUrl") settle(() => resolve(frame.url));
 			if (frame.kind === "error") {
 				settle(() => reject(new Error(`login flow failed: ${frame.message}`)));
 			}
@@ -355,7 +353,7 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 		socket.addEventListener("message", onPush);
 		rpc(socket, "provider.loginStart", { providerId: "openai-codex" }).then(
 			(result) => {
-				loginId = (result as { loginId?: string }).loginId;
+				loginId = result.loginId;
 			},
 			(error) => settle(() => reject(error instanceof Error ? error : new Error(String(error)))),
 		);
@@ -518,7 +516,7 @@ export default function syntheticExternalExtension(pi) {
 		);
 		defaultHost = await adapter.launch(defaultEnv, "default-agent");
 		socket = await within(connectRpc(defaultHost.origin), 10_000, "default host WebSocket");
-		assertExternalModel(await within(rpc(socket, "model.list", {}), 20_000, "default model.list"));
+		findExternalModel(await within(rpc(socket, "model.list", {}), 20_000, "default model.list"));
 		await assertCentralConfigured(socket, "default-agent");
 		socket.close();
 		socket = undefined;
@@ -537,27 +535,23 @@ export default function syntheticExternalExtension(pi) {
 		const index = await within(fetch(customHost.origin), 10_000, "GET /");
 		assert(index.ok && (await index.text()).includes("ThinkRail"), "web UI was not served");
 		socket = await within(connectRpc(customHost.origin), 10_000, "custom host WebSocket");
-		const models = await within(rpc(socket, "model.list", {}), 20_000, "custom model.list");
-		assertExternalModel(models);
-		await assertCentralConfigured(socket, "custom-agent");
-		const externalModel = models.find(
-			(model) => model.provider === "compiled-external" && model.id === "compiled-external-model",
+		const externalModel = findExternalModel(
+			await within(rpc(socket, "model.list", {}), 20_000, "custom model.list"),
 		);
-		assert(externalModel, "external model lookup failed after assertion");
+		await assertCentralConfigured(socket, "custom-agent");
 
-		const project = (await within(
+		const project = await within(
 			rpc(socket, "project.open", { path: projectDir }),
 			10_000,
 			"project.open",
-		)) as { id?: string };
-		assert(project.id, "project.open returned no project id");
-		const workspaces = (await within(
+		);
+		const workspaces = await within(
 			rpc(socket, "workspace.list", { projectId: project.id }),
 			10_000,
 			"workspace.list",
-		)) as { id?: string; kind?: string; worktreePath?: string }[];
+		);
 		const workspace = workspaces.find((entry) => entry.kind === "default");
-		assert(workspace?.id && workspace.worktreePath, "Default workspace is missing");
+		assert(workspace?.worktreePath, "Default workspace is missing");
 		const transcript = writeFixtureSession(defaultSessionDirFor(agentDir, workspace.worktreePath), {
 			cwd: resolve(workspace.worktreePath),
 			name: "artifact trash probe",
@@ -579,45 +573,27 @@ export default function syntheticExternalExtension(pi) {
 			30_000,
 			"skill.list",
 		);
-		assert(Array.isArray(skills), "skill.list did not return an array");
-		const portable = skills.find(
-			(entry) =>
-				typeof entry === "object" &&
-				entry !== null &&
-				(entry as { name?: string }).name === "skill:compiled-portable",
-		) as { description?: string; sourceInfo?: { scope?: string } } | undefined;
+		const portable = skills.find((entry) => entry.name === "skill:compiled-portable");
 		assert(portable?.description === "Compiled portable smoke skill", "portable skill is missing");
 		assert(portable.sourceInfo?.scope === "project", "portable skill provenance is wrong");
 		assert(
-			skills.some(
-				(entry) =>
-					typeof entry === "object" &&
-					entry !== null &&
-					(entry as { name?: string }).name === "skill:brainstorming",
-			),
+			skills.some((entry) => entry.name === "skill:brainstorming"),
 			"bundled workflow skill is missing",
 		);
 		writeMcpFixtures(root, agentDir, needsSignIn.url);
-		const created = (await within(
+		const created = await within(
 			rpc(socket, "session.create", { workspaceId: workspace.id, model: externalModel }),
 			30_000,
 			"session.create with bundled factories",
-		)) as { sessionId?: string };
-		assert(created.sessionId, "session.create returned no session id");
+		);
 		await assertMcpServersReported(socket, workspace.id, created.sessionId);
 		const commands = await within(
 			rpc(socket, "session.getCommands", { sessionId: created.sessionId }),
 			10_000,
 			"session.getCommands",
 		);
-		assert(Array.isArray(commands), "session.getCommands did not return an array");
 		assert(
-			commands.some(
-				(entry) =>
-					typeof entry === "object" &&
-					entry !== null &&
-					(entry as { name?: string }).name === "skill:brainstorming",
-			),
+			commands.some((entry) => entry.name === "skill:brainstorming"),
 			"session resource loader omitted bundled skills",
 		);
 		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);

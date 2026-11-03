@@ -1,13 +1,47 @@
-import type { WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
+import { compile, type Schema, type Validator } from "@earendil-works/pi-schema";
+import {
+	WS_METHOD_SCHEMAS,
+	WsEnvelope,
+	type WsMethodName,
+	type WsParams,
+	type WsRequest,
+	WsResponse,
+	type WsResult,
+} from "@thinkrail/contracts";
 import { E2E_PORT } from "./paths";
 
 export class E2eWireTransientError extends Error {}
 
-function readResponse(data: unknown, id: string): { ok: boolean; result?: unknown } | null {
-	if (typeof data !== "object" || data === null) return null;
-	const frame = data as Record<string, unknown>;
-	if (frame.id !== id || typeof frame.ok !== "boolean") return null;
-	return frame.ok ? { ok: true, result: frame.result } : { ok: false };
+const envelope = compile(WsEnvelope);
+const response = compile(WsResponse);
+const validators = new Map<Schema<unknown>, Validator>();
+
+function parseJson(message: unknown): unknown {
+	if (typeof message !== "string") return undefined;
+	try {
+		return JSON.parse(message);
+	} catch {
+		return undefined;
+	}
+}
+
+export function parseFrame(message: unknown): WsEnvelope | null {
+	const frame = parseJson(message);
+	return envelope.check(frame) ? frame : null;
+}
+
+export function readReply(message: unknown, id: string): WsResponse | null {
+	const frame = parseJson(message);
+	return response.check(frame) && frame.id === id ? frame : null;
+}
+
+export function resultProblem(method: WsMethodName, result: unknown): string | null {
+	const schema: Schema<unknown> = WS_METHOD_SCHEMAS[method].result;
+	const validator = validators.get(schema) ?? compile(schema);
+	validators.set(schema, validator);
+	if (validator.check(result)) return null;
+	const [first] = validator.errors(result);
+	return `${method} replied with a shape its schema refuses: ${first?.path} ${first?.message}`;
 }
 
 export class E2eWire {
@@ -58,18 +92,16 @@ export class E2eWire {
 				this.socket.removeEventListener("error", onError);
 			};
 			const onMessage = (event: MessageEvent) => {
-				if (typeof event.data !== "string") return;
-				let parsed: unknown;
-				try {
-					parsed = JSON.parse(event.data);
-				} catch {
+				const reply = readReply(event.data, id);
+				if (!reply) return;
+				cleanup();
+				if (!reply.ok) {
+					reject(new Error(`${method} failed on the isolated host wire`));
 					return;
 				}
-				const response = readResponse(parsed, id);
-				if (!response) return;
-				cleanup();
-				if (response.ok) resolve(response.result as WsResult<M>);
-				else reject(new Error(`${method} failed on the isolated host wire`));
+				const problem = resultProblem(method, reply.result);
+				if (problem) reject(new Error(problem));
+				else resolve(reply.result as WsResult<M>);
 			};
 			const onClose = () => {
 				cleanup();

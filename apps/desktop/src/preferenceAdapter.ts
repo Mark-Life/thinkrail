@@ -36,21 +36,6 @@ export function isDesktopPreferenceScopeId(value: unknown): value is string {
 	);
 }
 
-export function readDesktopPreferenceWrite(
-	payload: unknown,
-): { key: string; value: string } | null {
-	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
-	const key = Reflect.get(payload, "key");
-	const value = Reflect.get(payload, "value");
-	return isDesktopPreferenceKey(key) && isDesktopPreferenceValue(value) ? { key, value } : null;
-}
-
-export function readDesktopPreferenceRemove(payload: unknown): { key: string } | null {
-	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
-	const key = Reflect.get(payload, "key");
-	return isDesktopPreferenceKey(key) ? { key } : null;
-}
-
 export function injectInitialDesktopPreferences(
 	preloadSource: string,
 	values: Readonly<Record<string, string>>,
