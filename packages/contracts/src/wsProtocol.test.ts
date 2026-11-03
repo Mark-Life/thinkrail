@@ -44,6 +44,8 @@ import {
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
+	PROTOCOL_MAX_VERSION,
+	PROTOCOL_MIN_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
@@ -243,7 +245,8 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("user-selectable fonts are pinned to v102", () => {
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
-	expect(PROTOCOL_VERSION).toBe(102);
+	expect(PROTOCOL_MIN_VERSION).toBeLessThanOrEqual(PROTOCOL_VERSION);
+	expect(PROTOCOL_MAX_VERSION).toBeGreaterThanOrEqual(PROTOCOL_VERSION);
 	expect(WS_METHODS.fontsList).toBe("fonts.list");
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");

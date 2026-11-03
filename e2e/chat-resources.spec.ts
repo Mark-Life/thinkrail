@@ -4,7 +4,6 @@ import { expect, type Page, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
 import {
 	asSessionId,
-	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type ResourceRecord,
 	type SessionResources,
 	type WsClientMessage,
@@ -27,13 +26,8 @@ async function openResourceChat(page: Page) {
 	await expect(page.getByTestId("chat-toolbar")).toBeVisible();
 }
 
-async function observeResourceWire(
-	page: Page,
-	options: { protocolVersion?: number; completedChildId?: string } = {},
-) {
-	let protocolVersion = options.protocolVersion;
+async function observeResourceWire(page: Page, options: { completedChildId?: string } = {}) {
 	let reads = 0;
-	let welcomes = 0;
 	let resourceScope: WsParams<"session.resources"> | undefined;
 	const transcriptRequests: WsParams<"subagent.getTranscript">[] = [];
 	let disconnect = () => {};
@@ -88,32 +82,17 @@ async function observeResourceWire(
 			server.send(message);
 		});
 		server.onMessage((message) => {
-			const frame = JSON.parse(message.toString()) as {
-				channel?: string;
-				data?: Record<string, unknown>;
-			};
-			if (frame.channel === "server.welcome") welcomes++;
-			if (protocolVersion !== undefined && frame.channel === "server.welcome") {
-				browser.send(JSON.stringify({ ...frame, data: { ...frame.data, protocolVersion } }));
-			} else {
-				browser.send(message);
-			}
+			browser.send(message);
 		});
 	});
 	return {
 		get reads() {
 			return reads;
 		},
-		get welcomes() {
-			return welcomes;
-		},
 		get resourceScope() {
 			return resourceScope;
 		},
 		transcriptRequests,
-		setProtocolVersion: (version: number) => {
-			protocolVersion = version;
-		},
 		disconnect: () => disconnect(),
 	};
 }
@@ -179,26 +158,13 @@ test("Resources rehydrates on welcome after a real socket reconnect and browser 
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
 });
 
-test("an older host hides Resources without issuing unsupported resource reads", async ({
-	page,
-}) => {
-	const wire = await observeResourceWire(page, {
-		protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION - 1,
-	});
-	await openResourceChat(page);
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(page.getByTestId("resources-trigger")).toHaveCount(0);
-	expect(wire.reads).toBe(0);
-});
-
-test("an older welcome retires the inspector with its transcript and returns focus to the composer", async ({
+test("a finished subagent row shows its details and transcript in the inspector", async ({
 	page,
 }) => {
 	const childSessionId = asSessionId("resource-focus-child");
 	const wire = await observeResourceWire(page, { completedChildId: childSessionId });
 	await openResourceChat(page);
-	const trigger = page.getByTestId("resources-trigger");
-	await trigger.click();
+	await page.getByTestId("resources-trigger").click();
 	const inspector = page.getByTestId("resources-inspector");
 	await expect(inspector).toBeVisible();
 	const row = inspector.getByTestId("resource-subagent");
@@ -218,17 +184,6 @@ test("an older welcome retires the inspector with its transcript and returns foc
 			childSessionId,
 		},
 	]);
-	await row.getByRole("option").focus();
-	await expect(row.getByRole("option")).toBeFocused();
-
-	const initialWelcomes = wire.welcomes;
-	wire.setProtocolVersion(CHAT_RESOURCES_PROTOCOL_VERSION - 1);
-	wire.disconnect();
-	await expect.poll(() => wire.welcomes).toBeGreaterThan(initialWelcomes);
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(trigger).toHaveCount(0);
-	await expect(inspector).toHaveCount(0);
-	await expect(page.getByTestId("chat-input")).toBeFocused();
 });
 
 const MINUTE = 60_000;

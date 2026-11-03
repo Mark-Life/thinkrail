@@ -1,7 +1,7 @@
 import { chmodSync, copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import { openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2E_CENTRAL_EXTENSION_SOURCE, E2E_PI_AGENT_DIR } from "./fixtures/paths";
@@ -358,41 +358,4 @@ test("the compact selector supports keyboard changes at mobile width", async ({ 
 		false,
 	);
 	await shot(section, "models-settings", "context-mobile");
-});
-
-test("pre-v76 hosts hide context controls without sending unsupported requests", async ({
-	page,
-}) => {
-	let reads = 0;
-	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
-		const server = browser.connectToServer();
-		browser.onMessage((message) => {
-			const frame = JSON.parse(message.toString()) as { method?: string };
-			if (frame.method === "model.contextSettings" || frame.method === "model.setContextWindow")
-				reads++;
-			server.send(message);
-		});
-		server.onMessage((message) => {
-			const frame = JSON.parse(message.toString()) as {
-				channel?: string;
-				data?: Record<string, unknown>;
-			};
-			browser.send(
-				frame.channel === "server.welcome"
-					? JSON.stringify({
-							...frame,
-							data: {
-								...frame.data,
-								protocolVersion: CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION - 1,
-							},
-						})
-					: message,
-			);
-		});
-	});
-	await page.reload();
-	await openModels(page);
-	await expect(page.getByTestId("settings-models")).toBeVisible();
-	await expect(page.getByTestId("settings-model-context")).toHaveCount(0);
-	expect(reads).toBe(0);
 });

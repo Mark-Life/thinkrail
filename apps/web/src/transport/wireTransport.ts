@@ -27,6 +27,7 @@ import {
 import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
+import { protocolMismatch } from "./protocolRange";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
@@ -256,6 +257,9 @@ export function initTransport(onInvalidReply?: (method: WsMethodName) => void): 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome: AnyHostWelcome = data;
 		useAppStore.getState().hideSurveyInvitation();
+		const mismatch = protocolMismatch(welcome);
+		useAppStore.getState().setProtocolMismatch(mismatch);
+		if (mismatch) return;
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(

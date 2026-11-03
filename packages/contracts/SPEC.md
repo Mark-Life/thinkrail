@@ -109,7 +109,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `PROTOCOL_MIN_VERSION`, `PROTOCOL_MAX_VERSION`, and
+  feature-introduction versions).
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).
@@ -895,7 +896,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
   The `WsMethodMap` typed request/result map, derived whole from `WS_METHOD_SCHEMAS` +
-  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
+  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. **The protocol range:** a build works with peers from
+  `PROTOCOL_MIN_VERSION` to `PROTOCOL_MAX_VERSION`, and `server.welcome` sends the host's three values. An additive change
+  raises only `PROTOCOL_VERSION`, because wire objects are open and feature constants gate new methods. A breaking change
+  also raises the minimum above the versions it breaks. The minimum must be a version whose replies all pass this build's
+  schemas: 102 is the first, since older hosts send `AppConfig` without the font fields and `settings.update` fails. The
+  maximum is a hundred-version ceiling, so a build refuses a far newer peer it was never tested with; once the version passes it,
+  raise it, and older builds then prompt once. A private type check ties `WS_METHODS` to `WsMethodMap`
   in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
   `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close

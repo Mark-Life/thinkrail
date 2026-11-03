@@ -16,6 +16,8 @@ import {
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
+	PROTOCOL_MAX_VERSION,
+	PROTOCOL_MIN_VERSION,
 	PROTOCOL_VERSION,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -437,6 +439,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				const setupCapture = additionalCapture();
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
+					protocolMin: PROTOCOL_MIN_VERSION,
+					protocolMax: PROTOCOL_MAX_VERSION,
 					hostPlatform,
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),

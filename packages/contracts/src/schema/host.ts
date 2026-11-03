@@ -19,6 +19,8 @@ export type HostUpdateNotice = Static<typeof HostUpdateNotice>;
 
 export const ServerWelcome = wireObj({
 	protocolVersion: num(),
+	protocolMin: num(),
+	protocolMax: num(),
 	appVersion: opt(str()),
 	hostPlatform: opt(HostPlatform),
 	hostUpdate: opt(HostUpdateNotice),
@@ -35,6 +37,8 @@ function bareObject<T>(): Schema<T> {
 /** What a client needs from a welcome of any host version. Older hosts omit later fields and send older shapes. */
 export const AnyHostWelcome = wireObj({
 	protocolVersion: num(),
+	protocolMin: opt(num()),
+	protocolMax: opt(num()),
 	appVersion: opt(str()),
 	hostPlatform: opt(str()),
 	hostUpdate: opt(bareObject<HostUpdateNotice>()),

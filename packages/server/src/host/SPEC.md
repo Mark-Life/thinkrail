@@ -634,7 +634,7 @@ enabled/confirmed choice before entering analytics attribution.
 
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
-- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
+- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, the protocol range, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes; `boot.ts` logs `observeStateFileProblems`); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`

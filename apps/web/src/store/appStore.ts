@@ -148,6 +148,8 @@ import {
 	supportsWorkspaceSettling,
 } from "./selectors";
 
+export type ProtocolMismatch = "uiOutdated" | "hostOutdated";
+
 export interface StreamingResponseMovement {
 	settle: number;
 	trigger: number;
@@ -987,6 +989,7 @@ interface AppState {
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
+	protocolMismatch: ProtocolMismatch | null;
 	hostPlatform: HostPlatform | null;
 	hostAppVersion: string | null;
 	hostUpdate: HostUpdateNotice | null;
@@ -1134,6 +1137,7 @@ interface AppState {
 		hostUpdate?: HostUpdateNotice,
 		hostAppVersion?: string,
 	) => void;
+	setProtocolMismatch: (mismatch: ProtocolMismatch | null) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
@@ -2297,6 +2301,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
 	protocolVersion: null,
+	protocolMismatch: null,
 	hostPlatform: null,
 	hostAppVersion: null,
 	hostUpdate: null,
@@ -2622,6 +2627,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				providerStatusVersion: state.providerStatusVersion + 1,
 			};
 		}),
+	setProtocolMismatch: (protocolMismatch) => set({ protocolMismatch }),
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {

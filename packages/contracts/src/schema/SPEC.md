@@ -66,6 +66,8 @@ that map.
 - **`server.welcome` has a floor.** The client checks `AnyHostWelcome`, not `ServerWelcome`: it is the only frame that names
   the host's version, and refusing it would leave the app with no projects. Older hosts omit later fields, so entries are
   bare objects. `ServerWelcome` must stay assignable to it. The test harness still checks `ServerWelcome`.
+- **A stored hash guards the wire.** `wireHash.test.ts` holds a hash of `WS_METHOD_SCHEMAS` plus `WS_CHANNEL_SCHEMAS` beside the
+  `PROTOCOL_VERSION` it was taken at. A schema edit with no version bump fails, and the message gives the new value to store.
 - **Ids are branded.** `ProjectId`, `WorkspaceId` and `SessionId` in `ids.ts` are strings at run time, so the wire and the
   stored files do not change. A wire field uses the one for its entity, so a call site cannot swap them. Each type has one
   `as*` helper to mint it where a string enters from outside the schemas: a pi session, a new UUID, a file name, a route,

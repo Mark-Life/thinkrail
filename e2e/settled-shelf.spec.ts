@@ -1,11 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import {
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
-	type Workspace,
-	WS_CHANNELS,
-} from "@thinkrail/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
@@ -113,45 +109,6 @@ test("the shelf's first automatic move is announced once, and Show opens it", as
 	await page.waitForTimeout(PAST_NOTICE_QUIET_MS);
 	await expect(page.getByTestId("toast").filter({ hasText: "quiet workspace" })).toHaveCount(0);
 	await expect(shelf).toHaveAttribute("data-expanded", "false");
-});
-
-test("a pre-v78 host keeps the legacy workspace list without shelf affordances", async ({
-	page,
-}) => {
-	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
-		const server = socket.connectToServer();
-		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				channel?: string;
-				data: { protocolVersion: number };
-			};
-			if (frame.channel === WS_CHANNELS.serverWelcome) {
-				frame.data.protocolVersion = WORKSPACE_SETTLE_PROTOCOL_VERSION - 1;
-				socket.send(JSON.stringify(frame));
-			} else socket.send(message);
-		});
-	});
-	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
-	await createWorkspaceViaDialog(page);
-
-	const rows = worktreeRows(page);
-	await expect(rows).toHaveCount(2);
-	await expect(rows.nth(0).getByTestId("workspace-name")).toHaveText("workspace-1");
-	await expect(rows.nth(1).getByTestId("workspace-name")).toHaveText("workspace-2");
-	await expect(page.getByTestId("settled-shelf")).toHaveCount(0);
-	await rows.nth(0).hover();
-	await expect(rows.nth(0).getByTestId("workspace-settle")).toHaveCount(0);
-
-	await page.getByTestId("scope-workspace").click();
-	const options = page.getByTestId("scope-workspace-option");
-	await expect(options).toHaveCount(2);
-	await expect(options.nth(0)).toContainText("Default");
-	await expect(options.nth(1)).toContainText("workspace-1");
-	await expect(page.getByTestId("scope-workspace-settled-group")).toHaveCount(0);
-	await page.keyboard.press("Escape");
-	await page.getByTestId("open-settings").click();
-	await expect(page.getByTestId("settings-nav-workspaces")).toHaveCount(0);
 });
 
 test("the settle window is a host setting that survives a reload", async ({ page }) => {

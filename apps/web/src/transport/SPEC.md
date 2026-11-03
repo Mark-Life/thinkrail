@@ -218,6 +218,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   - A frame that is no valid envelope is dropped; a request it would have answered ends at its own timeout.
   - Objects are open, so extra fields from a newer host pass. A required field that an older host lacks fails. Only
     `server.welcome` has a floor ([[submodule-contracts-schema]]).
+  - **The protocol range decides on the welcome.** `protocolRange.ts` compares the host's version with this build's range,
+    and this build's version with the host's range; a host that sends no range is judged by the first test only. Outside
+    it, the welcome handler sets `protocolMismatch` and installs nothing, so no snapshot of an unknown shape reaches the store. Only the
+    next welcome clears it. `uiOutdated` means the host is newer, so Reload can help; `hostOutdated` means the UI is newer, for
+    example a remote or separately shipped UI, so the prompt asks for a host update instead.
 - **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**
   The server bounds network `git` at 55s precisely so its own error — naming the ref, carrying git's
   stderr — wins the race against the causeless `request "…" timed out` this side raises at 60s (issue #209;
