@@ -95,6 +95,53 @@ async function measure(
 	record({ scenario, run, cpuRate: CPU_RATE, wallMs, counters, mainThread, profile });
 }
 
+interface FollowSample {
+	streaming: boolean;
+	following: boolean;
+	edgeGap: number | null;
+	scrollTop: number;
+}
+
+async function installFollowProbe(page: Page): Promise<() => Promise<Counters>> {
+	await page.evaluate(() => {
+		const samples: FollowSample[] = [];
+		(window as unknown as { __followSamples: FollowSample[] }).__followSamples = samples;
+		const chat = [...document.querySelectorAll<HTMLElement>('[data-testid="chat-scroll"]')].find(
+			(element) => element.offsetParent !== null,
+		);
+		const scroller = chat?.querySelector<HTMLElement>('[data-testid="virtuoso-scroller"]');
+		const list = scroller?.querySelector<HTMLElement>('[data-testid="virtuoso-item-list"]');
+		if (!chat || !scroller || !list) throw new Error("chat transcript is not mounted");
+		new ResizeObserver(() => {
+			const edge = chat.querySelector<HTMLElement>('[data-testid="chat-stream-edge"]');
+			const box = scroller.getBoundingClientRect();
+			samples.push({
+				streaming: chat.dataset.streaming === "true",
+				following: chat.dataset.followState === "following",
+				edgeGap: edge ? box.bottom - edge.getBoundingClientRect().bottom : null,
+				scrollTop: scroller.scrollTop,
+			});
+		}).observe(list);
+	});
+	return async () => {
+		const samples = await page.evaluate(
+			() => (window as unknown as { __followSamples: FollowSample[] }).__followSamples,
+		);
+		const streaming = samples.filter((sample) => sample.streaming);
+		const following = streaming.filter((sample) => sample.following);
+		const gaps = following.flatMap((sample) => (sample.edgeGap === null ? [] : [sample.edgeGap]));
+		const atBottom = gaps.filter((gap) => Math.abs(gap) <= 4).length;
+		const tops = streaming.map((sample) => sample.scrollTop);
+		return {
+			followStreamingSamples: streaming.length,
+			followFollowingSamples: following.length,
+			followEdgeAtBottomSamples: atBottom,
+			followEdgeGapMinPx: gaps.length > 0 ? Math.round(Math.min(...gaps)) : -1,
+			followScrollTravelPx: tops.length > 1 ? Math.round((tops.at(-1) ?? 0) - (tops[0] ?? 0)) : 0,
+		};
+	};
+}
+
 async function interceptWire(page: Page): Promise<() => WebSocketRoute> {
 	let current: WebSocketRoute | null = null;
 	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
@@ -149,6 +196,7 @@ async function chatStreaming(page: Page, run: number): Promise<void> {
 	).toBeVisible();
 
 	const replay = buildChatReplay(seeded.id);
+	const readFollow = await installFollowProbe(page);
 	await measure(page, "chat-streaming", run, async () => {
 		const socket = wire();
 		for (const step of replay.steps) {
@@ -157,7 +205,7 @@ async function chatStreaming(page: Page, run: number): Promise<void> {
 		}
 		await expect(chat).toContainText(replay.finalText);
 		await expect(chat).toHaveAttribute("data-streaming", "false");
-		return { deltas: replay.deltaCount };
+		return { deltas: replay.deltaCount, ...(await readFollow()) };
 	});
 }
 
@@ -177,6 +225,7 @@ function longStream(scenario: string, targetChars: number) {
 		await expect(chat).toBeVisible();
 
 		const replay = buildTextReplay(seeded.id, longMarkdown(targetChars));
+		const readFollow = await installFollowProbe(page);
 		await measure(page, scenario, run, async () => {
 			const socket = wire();
 			for (const step of replay.steps) {
@@ -185,7 +234,7 @@ function longStream(scenario: string, targetChars: number) {
 			}
 			await expect(chat).toContainText(replay.finalText, { timeout: 120_000 });
 			await expect(chat).toHaveAttribute("data-streaming", "false");
-			return { deltas: replay.deltaCount };
+			return { deltas: replay.deltaCount, ...(await readFollow()) };
 		});
 	};
 }

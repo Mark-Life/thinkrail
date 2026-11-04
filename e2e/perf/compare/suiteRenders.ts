@@ -10,7 +10,7 @@ import type { Measurement, MetricSummary, SampleResult, Suite, SuiteContext } fr
 const DEFAULT_ROUNDS = 5;
 const TOP_COMPONENTS = 15;
 
-type ScenarioRun = Pick<RenderRun, "scenario" | "wallMs" | "mainThread" | "profile">;
+type ScenarioRun = Pick<RenderRun, "scenario" | "wallMs" | "mainThread" | "profile" | "counters">;
 
 const trackedComponents = new Map<string, readonly string[]>();
 
@@ -53,7 +53,10 @@ export function scenarioMeasurements(run: ScenarioRun): Measurement[] {
 				] as const)
 			: []),
 	];
-	return rows.map(([key, label, unit, value]) =>
+	const counters = Object.entries(run.counters ?? {}).map(
+		([key, value]) => [`counter/${key}`, `counter ${key}`, "count", value] as const,
+	);
+	return [...rows, ...counters].map(([key, label, unit, value]) =>
 		timed({ id: `renders/${run.scenario}/${key}`, group: run.scenario, label, unit, value }),
 	);
 }
