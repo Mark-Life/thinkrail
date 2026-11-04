@@ -3,7 +3,7 @@ import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { shikiStub } from "./shikiStub";
+import { diffsStub } from "./diffsStub";
 import { posthogSourceMapUpload, sourceMapRelease } from "./sourceMapUpload";
 
 const hostPort = process.env.THINKRAIL_PORT ?? 24242;
@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
 	const release = profile ? null : sourceMapRelease();
 	return {
 		plugins: [
-			shikiStub(),
+			diffsStub(),
 			react(),
 			babel({ presets: [reactCompilerPreset()] }),
 			tailwindcss(),
@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
 				"/fonts": { target: `http://localhost:${hostPort}` },
 			},
 		},
-		worker: { format: "es", plugins: () => [shikiStub()] },
+		worker: { format: "es", plugins: () => [diffsStub()] },
 		build: profile
 			? { outDir: "dist-profile", minify: false }
 			: { outDir: "dist", ...(release ? { sourcemap: "hidden" as const } : {}) },
