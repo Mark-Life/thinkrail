@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -202,4 +202,49 @@ test("THINKRAIL_PICK_DIR reads its value from a file when it names one (live per
 		else process.env.THINKRAIL_PICK_DIR = saved;
 		rmSync(dir, { recursive: true, force: true });
 	}
+});
+
+describe("launcher-supplied picker", () => {
+	const failingRunner = async () => {
+		throw new Error("spawned picker should not run");
+	};
+
+	test("returns the launcher's folder without spawning", async () => {
+		const result = await selectDirectory({
+			env: {},
+			runPicker: failingRunner,
+			nativePicker: async () => "/repos/alpha/",
+		});
+		expect(result).toEqual({ path: "/repos/alpha" });
+	});
+
+	test("a cancel stays a cancel", async () => {
+		const result = await selectDirectory({
+			env: {},
+			runPicker: failingRunner,
+			nativePicker: async () => null,
+		});
+		expect(result).toEqual({ path: null });
+	});
+
+	test("a failure falls through to the spawned picker", async () => {
+		const result = await selectDirectory({
+			platform: "darwin",
+			env: {},
+			runPicker: async () => ({ stdout: "/repos/beta/\n", stderr: "", code: 0 }),
+			nativePicker: async () => {
+				throw new Error("symbol missing");
+			},
+		});
+		expect(result).toEqual({ path: "/repos/beta" });
+	});
+
+	test("the e2e override still wins", async () => {
+		const result = await selectDirectory({
+			env: { THINKRAIL_PICK_DIR: "/forced" },
+			runPicker: failingRunner,
+			nativePicker: async () => "/repos/alpha",
+		});
+		expect(result).toEqual({ path: "/forced" });
+	});
 });

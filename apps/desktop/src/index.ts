@@ -22,6 +22,7 @@ import {
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
+import { createFolderPicker } from "./folderPicker";
 import { createKeyStateReader } from "./keyState";
 import {
 	type DesktopDialogLabels,
@@ -304,6 +305,7 @@ async function start(): Promise<void> {
 		...(Electrobun.app.isPackaged
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
+		...(process.platform === "darwin" ? { pickDirectory: createFolderPicker(runtimeDir) } : {}),
 	});
 	setDesktopErrorReporter(host.reportError);
 	const quitCoordinator = createElectrobunQuitCoordinator(

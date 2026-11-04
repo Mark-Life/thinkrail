@@ -12,6 +12,7 @@ import {
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import type { BuildRuntimeSources } from "@thinkrail/server/build-support";
+import { FOLDER_PICKER_WORKER } from "./src/folderPicker";
 import { injectChunkId, type SourceMapJson } from "./src/runtimeSourceMap";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
@@ -132,12 +133,18 @@ for (const helper of Object.values(sources.trashHelpers)) {
 	copyFileSync(helper, join(runtimeDir, basename(helper)));
 }
 if (process.platform !== "win32") chmodSync(join(runtimeDir, "macos-trash"), 0o755);
+copyFileSync(join(desktopDir, "src", FOLDER_PICKER_WORKER), join(runtimeDir, FOLDER_PICKER_WORKER));
 
 try {
 	writeFileSync(
 		generatedEntry,
 		`${sources.extensions.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`).join("\n")}
-import { bootHost, registerBundledRuntime, reportDesktopError } from "@thinkrail/server";
+import {
+  bootHost,
+  registerBundledRuntime,
+  registerNativeDirectoryPicker,
+  reportDesktopError,
+} from "@thinkrail/server";
 
 export async function startDesktopHost(options) {
   await registerBundledRuntime({
@@ -148,6 +155,7 @@ export async function startDesktopHost(options) {
       windows: options.runtimeDir + "/windows-trash.exe",
     },
   });
+  if (options.pickDirectory) registerNativeDirectoryPicker(options.pickDirectory);
   const host = await bootHost({
     port: 0,
     host: "127.0.0.1",

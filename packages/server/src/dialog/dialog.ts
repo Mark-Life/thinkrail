@@ -1,5 +1,8 @@
 import { readFileSync, statSync } from "node:fs";
 import { posix, win32 } from "node:path";
+import { logger } from "../log";
+
+const log = logger("dialog");
 
 interface PickerExecution {
 	stdout: string;
@@ -19,6 +22,15 @@ interface SelectDirectoryOptions {
 	platform?: NodeJS.Platform;
 	env?: NodeJS.ProcessEnv;
 	runPicker?: PickerRunner;
+	nativePicker?: NativeDirectoryPicker | null;
+}
+
+export type NativeDirectoryPicker = () => Promise<string | null>;
+
+let registeredNativePicker: NativeDirectoryPicker | null = null;
+
+export function registerNativeDirectoryPicker(picker: NativeDirectoryPicker): void {
+	registeredNativePicker = picker;
 }
 
 type PickerOverride = { kind: "path"; path: string } | { kind: "error"; message: string };
@@ -151,10 +163,19 @@ export async function selectDirectory({
 	platform = process.platform,
 	env = process.env,
 	runPicker = defaultRunPicker,
+	nativePicker = registeredNativePicker,
 }: SelectDirectoryOptions = {}): Promise<{ path: string | null }> {
 	const override = resolveOverride(env);
 	if (override?.kind === "error") throw new Error(override.message);
 	if (override?.kind === "path") return { path: override.path };
+	if (nativePicker) {
+		try {
+			const picked = await nativePicker();
+			return { path: picked ? toPosixPath(picked) : null };
+		} catch (error) {
+			log.error("native folder picker failed", error);
+		}
+	}
 	if (platform === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY) {
 		throw new Error("No graphical session is available for the folder picker on this Linux host.");
 	}
