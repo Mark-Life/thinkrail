@@ -49,6 +49,16 @@ independent serving port and initializes its own in-process services. If multipl
 state, their persistence and event streams are not coordinated and concurrent changes may overwrite one
 another.
 
+## Native folder picker
+
+On macOS the launcher passes `pickDirectory` to the host, which registers it with
+[[submodule-server-dialog]]. Each pick starts `folderPickerWorker.ts`, staged in the runtime directory, and
+calls `openFileDialog` from `libNativeWrapper` there. `Utils.openFileDialog` is forbidden: its FFI call blocks
+until the panel closes, and on the host's thread that stops all server work. The worker loads the symbol
+directly because the SDK is built for the main process, so an Electrobun upgrade must recheck its signature.
+The panel is modal to the app, starts in the home folder, and has no New Folder button: `openFileDialog`
+exposes neither option.
+
 ## Startup and packaged runtime
 
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server

@@ -5,6 +5,7 @@ export interface DesktopHostOptions {
 	channel: string;
 	posthogProjectKey: string;
 	openExternal?: (url: string) => void;
+	pickDirectory?: () => Promise<string | null>;
 }
 
 export interface DesktopHost {

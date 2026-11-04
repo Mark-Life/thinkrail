@@ -30,6 +30,9 @@ The host's native directory picker, so the browser "Open project" gets a real OS
   failure before native availability checks. One shared source, binary, or desktop e2e host can therefore
   hand different folders or failures to different tests by rewriting the pointer (a directory value is
   returned as-is).
+- **Launcher-supplied picker:** `registerNativeDirectoryPicker` lets a launcher replace the spawned picker.
+  The desktop app does this on macOS, where a new `osascript` process costs about 750 ms on every click.
+  `THINKRAIL_PICK_DIR` still wins. A rejected call is logged and falls through to `pickersFor`.
 - **Windows: the dialog must come up focused, in front of the browser.** The host is a background
   process, and Windows only lets the process that *owns* the foreground call `SetForegroundWindow` — so a
   plain `ShowDialog()` opens behind the browser, unfocused, reading as "the button does nothing". An
@@ -45,8 +48,8 @@ The host's native directory picker, so the browser "Open project" gets a real OS
   The script is handed over as `-EncodedCommand` (base64/UTF-16LE), not `-Command`: it is multi-line and
   contains the double quotes of P/Invoke signatures, which Windows argv quoting plus PowerShell's own
   re-parse do not preserve.
-- **Public surface (barrel):** `selectDirectory` (+ `pickersFor` / `Picker` and the two message builders
-  `pickerFailure` / `noPickerMessage`, exposed for unit tests).
+- **Public surface (barrel):** `selectDirectory`, `registerNativeDirectoryPicker` (+ `pickersFor` / `Picker`
+  and the two message builders `pickerFailure` / `noPickerMessage`, exposed for unit tests).
 - **Allowed deps:** Bun (`Bun.spawn`, with `windowsHide`; see `architecture.md` Invariants),
-  `process.env`.
+  `process.env`, `log`.
 - **Forbidden:** `host`; sibling features; `contracts` (none needed).
