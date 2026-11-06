@@ -38,10 +38,7 @@ export default function PdfDiff({
 	const [worktreePages, setWorktreePages] = useState<ReadonlySet<number>>(NO_PAGES);
 	const originalLoaded = usePdfDocument(original);
 	const modifiedLoaded = usePdfDocument(modified);
-	const queue = useMemo(
-		() => new PdfRenderQueue(2),
-		[modifiedLoaded.identity, originalLoaded.identity],
-	);
+	const [queue] = useState(() => new PdfRenderQueue(2));
 	const pageRefs = useRef(new Map<number, HTMLElement>());
 	const placementReportedRef = useRef(false);
 	const basePageCount = originalLoaded.settled ? (originalLoaded.document?.numPages ?? 0) : null;
@@ -66,15 +63,17 @@ export default function PdfDiff({
 		() => pdfRenderWindow(visiblePages, pageCount ?? 0, focusPage),
 		[focusPage, pageCount, visiblePages],
 	);
+	const baseThreads = review?.base.threads;
+	const worktreeThreads = review?.worktree.threads;
 	const placed = useMemo(() => {
 		if (basePageCount === null || worktreePageCount === null) return null;
 		const ids = new Set<string>();
-		for (const id of placedPdfThreadIds(review?.base.threads ?? [], basePageCount)) ids.add(id);
-		for (const id of placedPdfThreadIds(review?.worktree.threads ?? [], worktreePageCount)) {
+		for (const id of placedPdfThreadIds(baseThreads ?? [], basePageCount)) ids.add(id);
+		for (const id of placedPdfThreadIds(worktreeThreads ?? [], worktreePageCount)) {
 			ids.add(id);
 		}
 		return ids;
-	}, [basePageCount, review?.base.threads, review?.worktree.threads, worktreePageCount]);
+	}, [basePageCount, baseThreads, worktreeThreads, worktreePageCount]);
 	const registerElement = useCallback((pageNumber: number, element: HTMLElement | null) => {
 		if (element) pageRefs.current.set(pageNumber, element);
 		else pageRefs.current.delete(pageNumber);
