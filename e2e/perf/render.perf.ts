@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
@@ -18,18 +18,17 @@ import { longMarkdown } from "./longMarkdown";
 import {
 	assertProfilingReady,
 	attachRenderProfiler,
+	type Counters,
 	detachRenderProfiler,
 	MARKDOWN_SUBTREE,
-	type MainThreadCost,
-	type RenderProfile,
 	readRenderProfile,
+	recordScenarioRun,
 	resetRenderProfile,
 	startMainThreadProbe,
 } from "./renderProfiler";
 import { DEFAULT_SCENARIOS, SCENARIO_NAMES, type ScenarioName } from "./scenarios";
 
 const RUNS = Number(process.env.THINKRAIL_PERF_RUNS ?? 5);
-const OUT_DIR = process.env.THINKRAIL_PERF_OUT ?? join(process.cwd(), "test-results", "perf-runs");
 const STEP_GAP_MS = 40;
 const LIVE_EDITS = 20;
 const DIFF_LINES = 3_000;
@@ -49,25 +48,6 @@ const SUBTREE_ROOTS = {
 
 function pause(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-interface Counters {
-	[name: string]: number;
-}
-
-export interface ScenarioRun {
-	scenario: string;
-	run: number;
-	cpuRate: number;
-	wallMs: number;
-	counters: Counters;
-	mainThread: MainThreadCost;
-	profile: RenderProfile;
-}
-
-function record(result: ScenarioRun): void {
-	mkdirSync(OUT_DIR, { recursive: true });
-	writeFileSync(join(OUT_DIR, `${result.scenario}-${result.run}.json`), JSON.stringify(result));
 }
 
 async function nextFrames(page: Page, count = 2): Promise<void> {
@@ -91,7 +71,7 @@ async function measure(
 	const wallMs = performance.now() - startedAt;
 	const profile = await readRenderProfile(page);
 	const mainThread = await stopProbe();
-	record({ scenario, run, cpuRate: CPU_RATE, wallMs, counters, mainThread, profile });
+	recordScenarioRun({ scenario, run, cpuRate: CPU_RATE, wallMs, counters, mainThread, profile });
 }
 
 async function interceptWire(page: Page): Promise<() => WebSocketRoute> {
