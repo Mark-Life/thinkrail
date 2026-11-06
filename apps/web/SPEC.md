@@ -142,7 +142,7 @@ coverage of every file/diff renderer.
   state would cost a render per scroll), `useWorkspaceRead`, `useBranchStatus`,
   `useTemplateCommandPicker`, `AskUserQuestionCard`,
   `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
-  image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
+  `PdfView`, `usePdfDocument`.
 - Manual memo dependencies cannot be preserved: `PdfDiff`.
 - Other: `useLiveTabContent` (`??=`).
 

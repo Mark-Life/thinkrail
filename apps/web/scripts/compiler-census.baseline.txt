@@ -2,8 +2,6 @@
 ../../packages/resource-renderers/src/renderers/code/PierreDiff.tsx useThreadAnnotations
 ../../packages/resource-renderers/src/renderers/code/PierreFile.tsx PierreFileSurface
 ../../packages/resource-renderers/src/renderers/code/PierreFile.tsx useThreadAnnotations
-../../packages/resource-renderers/src/renderers/image/Diff.tsx ImageContent
-../../packages/resource-renderers/src/renderers/image/View.tsx ImageView
 ../../packages/resource-renderers/src/renderers/pdf/Diff.tsx PdfDiff
 ../../packages/resource-renderers/src/renderers/pdf/View.tsx PdfView
 ../../packages/resource-renderers/src/renderers/pdf/usePdfDocument.ts usePdfDocument
