@@ -56,7 +56,7 @@ declare global {
 	}
 }
 
-function installRenderProfiler(subtreeRoots: SubtreeRoots): void {
+export function installRenderProfiler(subtreeRoots: SubtreeRoots): void {
 	interface Fiber {
 		tag: number;
 		type: unknown;
