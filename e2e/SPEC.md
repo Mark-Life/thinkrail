@@ -220,6 +220,12 @@ Playwright run writes no output, so the last good file survives.
   frames), CDP main-thread task/script/layout/style ms and heap delta, scenario counters (deltas, mounted
   chats), and markdown subtree root renders, self ms, and self ms per delta. Main-thread time includes
   Playwright's `routeWebSocket` relay, so compare it only across variants of the same scenario.
+- **Interactions.** `interactions.perf.ts` replays short user actions on the renderers and panes the host rarely
+  streams into: CSV, JSON, notebook, PDF and image diffs, image zoom, the Resources inspector, history search and
+  the tool rail. It runs only when `THINKRAIL_PERF_INTERACTIONS` names scenarios or `all`, for example
+  `THINKRAIL_PERF_INTERACTIONS=all bun run perf:render interactions.perf`; `--scenario` does not select it. One
+  in-page driver (`interactionDriver.ts`) runs the setup and the measured steps as synthetic input; seeding uses
+  the Playwright page.
 - **Variants.** Run the command from a worktree root to measure that worktree; the output records
   `rootDir`, `gitHead`, `dirty` and `dirtyTreeHash` (sha256 of `git status --porcelain` plus `git diff HEAD`;
   untracked file contents are not hashed).
