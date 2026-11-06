@@ -143,7 +143,6 @@ coverage of every file/diff renderer.
   `useTemplateCommandPicker`, `AskUserQuestionCard`,
   `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
   `PdfView`, `usePdfDocument`.
-- Manual memo dependencies cannot be preserved: `PdfDiff`.
 - Other: `useLiveTabContent` (`??=`).
 
 A new bailout is a regression unless it joins this list. A `useMemo` dependency that continues past an optional
