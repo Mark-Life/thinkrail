@@ -1,4 +1,6 @@
-import { readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Page, test } from "@playwright/test";
 import {
@@ -16,14 +18,17 @@ import {
 	assertProfilingReady,
 	attachRenderProfiler,
 	detachRenderProfiler,
+	installRenderProfiler,
 	recordScenarioRun,
 	type ScenarioRun,
 	startMainThreadProbe,
 } from "./renderProfiler";
 
 const RUNS = Number(process.env.THINKRAIL_PERF_RUNS ?? 5);
+const ENGINES = (process.env.THINKRAIL_PERF_ENGINES ?? "chromium").split(",");
 const SELECTED = process.env.THINKRAIL_PERF_INTERACTIONS?.split(",") ?? [];
 const CPU_RATE = Number(process.env.THINKRAIL_PERF_CPU ?? 1);
+const WK_TIMEOUT_MS = 170_000;
 const RESOURCE_ROWS = 60;
 
 const testid = (id: string) => `[data-testid="${id}"]`;
@@ -201,7 +206,53 @@ const INTERACTIONS = {
 	},
 } satisfies Record<string, Interaction>;
 
+function wkHarness(): string {
+	if (process.platform !== "darwin") throw new Error("the wkwebview engine needs macOS");
+	if (CPU_RATE !== 1) throw new Error("the wkwebview engine cannot throttle the CPU");
+	const binary = join(tmpdir(), "thinkrail-wk-harness");
+	execFileSync("swiftc", [
+		"-O",
+		join(import.meta.dirname, "wkwebview/harness.swift"),
+		"-o",
+		binary,
+	]);
+	return binary;
+}
+
+function runInWebView(binary: string, url: string, interaction: Interaction): string {
+	const dir = mkdtempSync(join(tmpdir(), "thinkrail-wk-"));
+	const init = [
+		`(${installRenderProfiler.toString()})({});`,
+		...(interaction.resources ? [`(${stubResourceWire.toString()})(${RESOURCE_ROWS});`] : []),
+	].join("\n");
+	const { setup, measured } = interaction;
+	const drive = `(${driveInteraction.toString()})(${JSON.stringify({ setup, measured })})`;
+	writeFileSync(join(dir, "init.js"), init);
+	writeFileSync(join(dir, "drive.js"), drive);
+	const out = join(dir, "out.json");
+	try {
+		execFileSync(binary, [url, join(dir, "init.js"), join(dir, "drive.js"), out], {
+			timeout: WK_TIMEOUT_MS,
+		});
+		return readFileSync(out, "utf8");
+	} catch (error) {
+		const detail = (() => {
+			try {
+				return readFileSync(out, "utf8");
+			} catch {
+				return String(error);
+			}
+		})();
+		throw new Error(`WKWebView run failed: ${detail}`);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
 type DrivenRun = Pick<ScenarioRun, "wallMs" | "profile">;
+
+const NO_MAIN_THREAD = { taskMs: 0, scriptMs: 0, layoutMs: 0, styleMs: 0, heapDeltaMb: 0 };
+let harness: string | undefined;
 
 test.beforeEach(async ({ page, baseURL }) => {
 	if (!baseURL) throw new Error("perf runs need a baseURL");
@@ -215,28 +266,47 @@ test.afterEach(async ({ page }) => {
 for (let run = 1; run <= RUNS; run += 1) {
 	for (const [name, interaction] of Object.entries(INTERACTIONS) as [string, Interaction][]) {
 		if (!SELECTED.includes("all") && !SELECTED.includes(name)) continue;
-		test(`${name} run ${run}`, async ({ page }) => {
-			test.setTimeout(240_000);
-			await openFixtureProject(page);
-			await interaction.seed(page);
-			const { setup, measured } = interaction;
-			if (interaction.resources) await page.addInitScript(stubResourceWire, RESOURCE_ROWS);
-			await page.reload();
-			await page.evaluate(driveInteraction, { setup, measured: [] });
-			const stop = await startMainThreadProbe(page, CPU_RATE);
-			const result = JSON.parse(
-				await page.evaluate(driveInteraction, { setup: [], measured }),
-			) as DrivenRun;
-			const mainThread = await stop();
-			await assertProfilingReady(page);
-			recordScenarioRun({
-				scenario: name,
-				run,
-				cpuRate: CPU_RATE,
-				counters: {},
-				mainThread,
-				...result,
+		for (const engine of ENGINES) {
+			test(`${name} ${engine} run ${run}`, async ({ page }) => {
+				test.setTimeout(240_000);
+				await openFixtureProject(page);
+				await interaction.seed(page);
+				const url = page.url();
+				const { setup, measured } = interaction;
+				if (engine === "chromium") {
+					if (interaction.resources) await page.addInitScript(stubResourceWire, RESOURCE_ROWS);
+					await page.reload();
+					await page.evaluate(driveInteraction, { setup, measured: [] });
+					const stop = await startMainThreadProbe(page, CPU_RATE);
+					const result = JSON.parse(
+						await page.evaluate(driveInteraction, { setup: [], measured }),
+					) as DrivenRun;
+					const mainThread = await stop();
+					await assertProfilingReady(page);
+					recordScenarioRun({
+						scenario: name,
+						run,
+						cpuRate: CPU_RATE,
+						counters: {},
+						mainThread,
+						...result,
+					});
+					return;
+				}
+				await page.goto("about:blank");
+				harness ??= wkHarness();
+				const result = JSON.parse(runInWebView(harness, url, interaction)) as DrivenRun;
+				if (result.profile.commits === 0 || result.profile.totalMs <= 0)
+					throw new Error("no profiled commits: the host is not serving the profiling build");
+				recordScenarioRun({
+					scenario: `${name}@wkwebview`,
+					run,
+					cpuRate: 1,
+					counters: {},
+					mainThread: NO_MAIN_THREAD,
+					...result,
+				});
 			});
-		});
+		}
 	}
 }
