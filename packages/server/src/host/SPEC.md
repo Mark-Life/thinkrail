@@ -735,6 +735,14 @@ enabled/confirmed choice before entering analytics attribution.
   `terminalSend.ts`), so the host lifts the latch and resumes that client's terminals. A socket with
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
+- **A pushed frame is delivered or the socket closes, never dropped silently.** Past `backpressureLimit`,
+  `server.publish` skips that socket and keeps it open. Bun's 16 MiB default is reachable on localhost:
+  `message_start`, `message_end`, `turn_end` and `agent_end` each repeat a run's image bytes, so one
+  image-heavy run queues a burst past 16 MiB, `agent_settled` is lost, and every tab stays on streaming.
+  `WS_BACKPRESSURE_LIMIT` (1 GiB) sits far above any real burst. `closeOnBackpressureLimit` turns a truly
+  stalled client into a close, whose reconnect resyncs the transcript. The limit stays high because the
+  close also applies to `ws.send`: a limit below a chat's inline-image history would make the reconnect's
+  `session.getMessages` reply trip it again, in a loop.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
