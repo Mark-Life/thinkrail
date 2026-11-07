@@ -245,6 +245,7 @@ interface SocketData {
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
+const WS_BACKPRESSURE_LIMIT = 1024 * 1024 * 1024;
 
 const log = logger("host");
 
@@ -393,6 +394,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return new Response("not found", { status: 404 });
 		},
 		websocket: {
+			backpressureLimit: WS_BACKPRESSURE_LIMIT,
+			closeOnBackpressureLimit: true,
 			open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
