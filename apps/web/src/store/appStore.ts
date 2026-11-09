@@ -1346,7 +1346,6 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
-	closeChatRuntime: (sessionId: string) => void;
 	closeChatToHistory: (
 		sessionId: string,
 		syncLayout?: boolean,
@@ -3843,8 +3842,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		replayExtUiOrphans(sessionId, set, get);
 	},
-	closeChatRuntime: (sessionId) =>
-		set((s) => (s.sessions[sessionId] ? withoutRuntime(s, sessionId) : {})),
 	closeChatToHistory: (sessionId, syncLayout = true, workspaceId, countNavigation = true) =>
 		set((s) => {
 			const wsId = workspaceId ?? s.activeWorkspaceId;

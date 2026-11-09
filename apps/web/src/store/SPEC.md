@@ -295,7 +295,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   promise) + `extUiStatus` / `extUiWidget`), and **`notice`**: the host's closed `ProviderWarning` code
   (ExtUi `notice`, replayed like `notify`). `dismissSessionNotice(sessionId)` clears one chat;
   `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
-  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
+  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatToHistory`, `deleteChat` and
   `clearWorkspaceState` drop it. **A runtime is a watch:** the keys of `sessions` are the ids
   `transport`'s `sessionWatch` asks the host to stream, so installing or dropping a runtime anywhere is
   enough to start or stop that session's `pi.event` frames; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
@@ -666,7 +666,7 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
   a successful reload (`markSkillsSynced` is **monotonic** — `Math.max`, so an out-of-order reload completion
   can't move the baseline backward — and a **no-op for a disposed session**, so a late completion can't
-  resurrect an entry dropped by `closeChatRuntime`/`clearWorkspaceState`). A **live** `hydrateSession` restore
+  resurrect an entry dropped by `closeChatToHistory`/`clearWorkspaceState`). A **live** `hydrateSession` restore
   reuses the server session's already-loaded skills (`getMessages` returns only the transcript, no reload)
   which the client can't date, so it advances **nothing** — the chat stays *conservatively stale* if a skill
   change has been observed, never falsely clearing. That

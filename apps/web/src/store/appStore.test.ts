@@ -1066,7 +1066,7 @@ test("a run's closer lands before a mid-run result that woke nobody, as hydratio
 				.turns.map((turn) => turn.kind)
 				.slice(-2),
 		).toEqual([closer, "backgroundCommandCompletion"]);
-		store.closeChatRuntime("a");
+		store.closeChatToHistory("a", false, "ws1");
 	}
 });
 
@@ -1534,13 +1534,13 @@ test("an event for an unknown session is a no-op (no runtime is conjured)", () =
 	expect(after.extUiOrphans).toEqual([]);
 });
 
-test("closeChatRuntime drops only its own runtime", () => {
+test("closing a chat to history drops only its own runtime", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 	store.openChatSession("ws1", "b", null, "medium");
 	store.handlePiEvent(agentStart, "b");
 
-	store.closeChatRuntime("a");
+	store.closeChatToHistory("a", false, "ws1");
 	expect(useAppStore.getState().sessions.a).toBeUndefined();
 	expect(rt("b").isStreaming).toBe(true);
 });
@@ -4567,7 +4567,7 @@ test("skills badge: closing a chat runtime drops its sync baseline (no leak)", (
 	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
 	expect(s().skillsSyncedTickBySession.a).toBeDefined();
 
-	s().closeChatRuntime("a");
+	s().closeChatToHistory("a", false, "ws1");
 	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
 });
 
@@ -4579,7 +4579,7 @@ test("skills badge: markSkillsSynced is monotonic and ignores a disposed session
 	s().markSkillsSynced("a", 2);
 	expect(s().skillsSyncedTickBySession.a).toBe(5);
 
-	s().closeChatRuntime("a");
+	s().closeChatToHistory("a", false, "ws1");
 	s().markSkillsSynced("a", 9);
 	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
 });
