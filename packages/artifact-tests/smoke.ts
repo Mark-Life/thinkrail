@@ -173,6 +173,25 @@ async function verifyExternalNavigation(
 	}
 }
 
+async function verifyShellMarker(
+	controlPath: string,
+	server: NavigationProbeServer,
+	exited: Promise<number>,
+	exitError: (code: number) => Error,
+): Promise<void> {
+	const reports = () => server.requests.filter((path) => path.startsWith("/shell-marker-"));
+	writeFileSync(controlPath, "shell-marker");
+	await pollUntil(() => reports().length > 0, {
+		timeoutMs: 15_000,
+		what: "desktop shell marker report",
+		exited,
+		exitError,
+	});
+	if (reports().join() !== "/shell-marker-locked") {
+		throw new Error(`desktop shell marker is not a locked preload global: ${reports().join()}`);
+	}
+}
+
 type WindowControlsProbe = {
 	requests?: string[];
 	state?: { maximized?: boolean; fullScreen?: boolean } | null;
@@ -367,6 +386,7 @@ async function launchDesktop(
 					proc.exited,
 					exitedEarly,
 				);
+				await verifyShellMarker(controlPath, navigationProbeServer, proc.exited, exitedEarly);
 			}
 		}
 		let stopPromise: Promise<void> | undefined;

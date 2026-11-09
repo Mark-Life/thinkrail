@@ -98,6 +98,7 @@ export {
 	prepareContent,
 } from "./match";
 export type * from "./nativeClient";
+export { DESKTOP_SHELL_GLOBAL } from "./nativeClient";
 export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,

@@ -55,7 +55,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
-  labels), the optional shell-local desktop capabilities);
+  labels), the optional shell-local desktop capabilities) plus its one value, `DESKTOP_SHELL_GLOBAL`
+  (the name of the global the desktop launcher defines in its window; the launcher and the web client
+  both read it from here, so the two sides cannot drift);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
