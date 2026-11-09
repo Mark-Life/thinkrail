@@ -1,13 +1,9 @@
 import type { Page } from "@playwright/test";
+import { parseFrame } from "./wire";
 
-function parseFrame(message: unknown): Record<string, unknown> | null {
-	if (typeof message !== "string") return null;
-	try {
-		const value: unknown = JSON.parse(message);
-		return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
-	} catch {
-		return null;
-	}
+function channelOf(message: unknown): string | null {
+	const frame = parseFrame(message);
+	return frame && "channel" in frame ? frame.channel : null;
 }
 
 function signal() {
@@ -31,7 +27,7 @@ export async function installChannelHold(page: Page) {
 		browserSocket.onMessage((message) => serverSocket.send(message));
 		serverSocket.onMessage((message) => {
 			const pending = armed;
-			if (pending && parseFrame(message)?.channel === pending.channel) {
+			if (pending && channelOf(message) === pending.channel) {
 				armed = undefined;
 				pending.held.send();
 				void pending.release.received.then(() => browserSocket.send(message));

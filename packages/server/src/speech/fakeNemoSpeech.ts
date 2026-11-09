@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /** Test stand-in for the `nemo-speech` CLI; its behavior is specified in the speech SPEC (Engine). */
 import { appendFileSync } from "node:fs";
+import { compile, obj, opt, str, unknown } from "@earendil-works/pi-schema";
 
 const args = process.argv.slice(2);
 const BYTES_PER_WORD = 16_000 * 2 * 0.16;
@@ -34,6 +35,8 @@ if (process.env.FAKE_SPEECH_START_DELAY_MS) {
 const port = Number(flag("--port"));
 const apiKey = flag("--api-key");
 const words = (process.env.FAKE_SPEECH_TEXT ?? "Hello from the fake engine").split(/\s+/);
+
+const ClientEvent = compile(obj({ type: str(), session: opt(unknown()) }, { open: true }));
 
 interface Session {
 	received: number;
@@ -85,7 +88,8 @@ Bun.serve<Session, never>({
 				}
 				return;
 			}
-			const event = JSON.parse(message);
+			const event: unknown = JSON.parse(message);
+			if (!ClientEvent.check(event)) return;
 			if (event.type === "session.update") {
 				if (process.env.FAKE_SPEECH_LOG) {
 					appendFileSync(process.env.FAKE_SPEECH_LOG, `${JSON.stringify(event.session)}\n`);

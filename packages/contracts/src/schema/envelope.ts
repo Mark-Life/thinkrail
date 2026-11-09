@@ -55,6 +55,7 @@ export type WsErrorCode =
 	| "FILE_TOO_LARGE"
 	| "INVALID_PARAMS"
 	| "INVALID_REPLY"
+	| "NATIVE_RPC_INVALID"
 	| SpeechErrorCode;
 
 /** Any string passes: a newer host may send a code this client does not know. */

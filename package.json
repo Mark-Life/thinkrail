@@ -112,6 +112,7 @@
 		"@changesets/cli": "catalog:",
 		"@biomejs/biome": "2.5.0",
 		"@earendil-works/pi-coding-agent": "catalog:",
+		"@earendil-works/pi-schema": "catalog:",
 		"@thinkrail/artifact-tests": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/pi-ask-user-question": "workspace:*",

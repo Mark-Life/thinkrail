@@ -109,3 +109,21 @@ test("the journal store round-trips, ignores corrupt files, and clears", () => {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+test("a journal over its bounds or with a non-finite number reads as no journal", () => {
+	const pending = {
+		schemaVersion: 1,
+		state: "pending",
+		fromVersion: "1.0.0",
+		toVersion: "1.1.0",
+		startedAt: 5,
+		log: [],
+	};
+	const entry = { at: 1, source: "host", level: "info", event: { kind: "restarting" } };
+	expect(parseUpdateJournal(pending)).not.toBeNull();
+	expect(parseUpdateJournal({ ...pending, startedAt: JSON.parse("1e999") })).toBeNull();
+	expect(parseUpdateJournal({ ...pending, toVersion: "" })).toBeNull();
+	expect(parseUpdateJournal({ ...pending, toVersion: "1".repeat(4097) })).toBeNull();
+	expect(parseUpdateJournal({ ...pending, log: Array(200).fill(entry) })).not.toBeNull();
+	expect(parseUpdateJournal({ ...pending, log: Array(201).fill(entry) })).toBeNull();
+});
