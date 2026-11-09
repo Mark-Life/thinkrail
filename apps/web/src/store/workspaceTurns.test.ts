@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import { TURN_CHANGES_PROTOCOL_VERSION, type TurnChangeSet } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, type TurnChangeSet } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "./index";
 
@@ -34,7 +34,7 @@ function readTurns(id = workspaceId) {
 beforeEach(() => {
 	useAppStore.setState(useAppStore.getInitialState(), true);
 	state().setStatus("connected");
-	state().installWelcomeSnapshot(TURN_CHANGES_PROTOCOL_VERSION, [], []);
+	state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 });
 
 test("a live receipt seeds a workspace before its first turns read", () => {
@@ -64,7 +64,7 @@ test("an empty reconnect snapshot prunes baseline receipts but preserves interve
 	readTurns()([turn("old", 1)]);
 	state().setStatus("disconnected");
 	state().setStatus("connected");
-	state().installWelcomeSnapshot(TURN_CHANGES_PROTOCOL_VERSION, [], []);
+	state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 	const finish = readTurns();
 	const live = turn("live", 2);
 	state().applyTurnChanged(live);
@@ -124,7 +124,7 @@ test("a response cannot seed turns after disconnect or from an earlier connectio
 	finish([stale]);
 	expect(state().turnsByWorkspace[workspaceId]).toBeUndefined();
 	state().setStatus("connected");
-	state().installWelcomeSnapshot(TURN_CHANGES_PROTOCOL_VERSION, [], []);
+	state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 	finish([stale]);
 	expect(state().turnsByWorkspace[workspaceId]).toBeUndefined();
 	const current = turn("current", 2);

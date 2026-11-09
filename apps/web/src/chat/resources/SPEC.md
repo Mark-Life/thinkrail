@@ -121,7 +121,7 @@ Retry; `unavailable` (a permanent failure the sync will not retry) → "out of d
 resources." and Retry, never promising a retry that will not come; a brief in-flight `refreshing` → "updating" with no banner, so a push no longer flashes the stale
 banner. "Reconnecting" is reserved for a socket that is actually down.
 
-**MCP servers.** When the snapshot carries `mcpServers` (a host at `MCP_PROTOCOL_VERSION`; `null` hides
+**MCP servers.** When the snapshot carries `mcpServers` (`null` hides
 the list) the roster adds a third section after Finished. Rows are not listbox options and never in the
 dock — a server is not work: plug glyph with a state dot · name · the shared state label (with the tool
 count when connected) · transport (stdio "runs on host"), attention rows first. Actions follow the state:
@@ -159,14 +159,10 @@ from an older host it was evicted with the host's runtime history.
 Successful Stop means cancellation was requested, not that a terminal state may be fabricated. While a
 control request is pending, avoid duplicate submission; subsequent state comes from the host. A
 finished resource racing a click is harmless. A stale/disconnected view cannot offer active controls
-until it has current authority, and an old-host connection hides the trigger, dock and inspector rather
-than displaying an empty list as proof nothing is running.
+until it has current authority.
 
 Closing the inspector, the dock, or the chat placement never stops work. Keyboard focus returns to the
-header trigger when the inspector closes; if a known older host removes that trigger, focus returns to
-the composer instead. A supported-to-known-unsupported welcome retires the inspector and the Stop-all
-confirmation. A transient reconnect with unknown protocol support preserves the open inspector as stale
-instead of misclassifying the host. Use existing Radix primitives (the in-place `DialogPanel`), token-only
+header trigger when the inspector closes. A transient reconnect preserves the open inspector as stale. Use existing Radix primitives (the in-place `DialogPanel`), token-only
 styling and visible text alongside status icons.
 
 The subagent list includes this chat's direct foreground and background children. A summary says
@@ -182,7 +178,7 @@ Cover empty/active/finished/stale/unavailable states, exact live counts, the doc
 finished line (totals, new count, landing) and its collapse and hidden-while-inspecting rules, the
 inspector's grouping by kind, its fold (newest five, pinned new and selected rows, hidden tally, expanded
 order, paging with what is left, older-host absence), the Interrupted state and its log message, the trigger's breathing-only-while-working and unknown-count marks, the MCP
-section's per-state actions, absence for older hosts and the attention marker, keyboard navigation and
+section's per-state actions, absence and the attention marker, keyboard navigation and
 focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation, the subagent
 detail's model item (absent without a model), and the result row's state mapping, teaser derivation, controlled expansion and optional open action.
 Browser coverage must prove current-chat isolation, reload/reconnect rehydration, late completion while

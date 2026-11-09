@@ -87,8 +87,8 @@ beforeAll(async () => {
 	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
 	setMcpLoginPublisher((push, owner) => pushes.push({ push, owner }));
 	setMcpStatusPublisher((snapshot) => statuses.push(snapshot));
-	setExtUiPublisher((request, audience) => {
-		if (!audience) requests.push(request);
+	setExtUiPublisher((request) => {
+		requests.push(request);
 	});
 });
 

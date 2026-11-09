@@ -10,27 +10,7 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
-import {
-	CHANGE_MUTATIONS_PROTOCOL_VERSION,
-	EXTENSION_SETTINGS_PROTOCOL_VERSION,
-	FEEDBACK_SURVEY_PROTOCOL_VERSION,
-	FONTS_PROTOCOL_VERSION,
-	HOST_UPDATE_RUN_PROTOCOL_VERSION,
-	LOCALES_PROTOCOL_VERSION,
-	PI_PACKAGES_PROTOCOL_VERSION,
-	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
-	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
-	protocolMismatch,
-	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
-	SESSION_STATE_PROTOCOL_VERSION,
-	SPEECH_PROTOCOL_VERSION,
-	TOOL_RESPONSE_PROTOCOL_VERSION,
-	TURN_CHANGES_PROTOCOL_VERSION,
-	USER_THEMES_PROTOCOL_VERSION,
-	WORKSPACE_CREATION_PROTOCOL_VERSION,
-	WS_CHANNELS,
-	welcomeFailure,
-} from "@thinkrail/contracts";
+import { protocolMismatch, WS_CHANNELS, welcomeFailure } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
@@ -39,72 +19,18 @@ import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
 
-export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
-}
-
-export function supportsUserThemes(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
-}
-
-export function supportsExtensionSettings(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
-}
-
-export function supportsPiPackages(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION;
-}
-
-export function supportsFonts(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= FONTS_PROTOCOL_VERSION;
-}
-
-export function supportsSpeech(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= SPEECH_PROTOCOL_VERSION;
-}
-
-export function supportsToolResponses(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= TOOL_RESPONSE_PROTOCOL_VERSION;
-}
-
 export function respondToTool(
 	sessionId: SessionId,
 	toolCallId: string,
 	response: unknown,
 ): Promise<void> {
-	const transport = getTransport();
-	const sent = supportsToolResponses(useAppStore.getState().protocolVersion)
-		? transport.request("session.respondToTool", { sessionId, toolCallId, response })
-		: transport.request("session.answerQuestion", { sessionId, toolCallId, result: response });
-	return sent.then(() => undefined);
-}
-
-export function supportsChangeMutations(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= CHANGE_MUTATIONS_PROTOCOL_VERSION;
-}
-
-export function supportsRichAnchors(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= REVIEW_RICH_ANCHORS_PROTOCOL_VERSION;
-}
-
-export function supportsTurnChanges(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= TURN_CHANGES_PROTOCOL_VERSION;
+	return getTransport()
+		.request("session.respondToTool", { sessionId, toolCallId, response })
+		.then(() => undefined);
 }
 
 export function runHostUpdate(): Promise<Ack> {
 	return getTransport().request("host.update", {});
-}
-
-/** The agent plan-review capability (`todo.startReview`/`reviewAll` + the hidden review subagent) landed at
- * v67. An older host serves neither, so the UI must not offer it — see [[submodule-web-transport]]. */
-export function supportsPlanReview(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION;
-}
-
-/** Host-side auto plan-summary drafting (`todo.generateSummary`) landed at v69. An older host serves no
- * such method, so the client must not issue the request. See [[submodule-web-transport]]. */
-export function supportsPlanSummaryGeneration(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION;
 }
 
 interface SessionStateHydration {
@@ -182,12 +108,11 @@ type FolderSnapshotMethod = "locales.list" | "themes.list" | "fonts.list";
 function refreshFolderSnapshot<M extends FolderSnapshotMethod>(
 	method: M,
 	params: WsParams<M>,
-	minProtocolVersion: number,
 	install: (store: ReturnType<typeof useAppStore.getState>, snapshot: WsResult<M> | null) => void,
 	connectionGeneration: number,
 ): void {
 	const store = useAppStore.getState();
-	if (store.protocolVersion === null || store.protocolVersion < minProtocolVersion) {
+	if (store.protocolVersion === null) {
 		install(store, null);
 		return;
 	}
@@ -204,7 +129,6 @@ function refreshLocalLocales(connectionGeneration: number): void {
 	refreshFolderSnapshot(
 		"locales.list",
 		{},
-		LOCALES_PROTOCOL_VERSION,
 		(store, snapshot) => store.installLocalLocales(snapshot),
 		connectionGeneration,
 	);
@@ -214,7 +138,6 @@ function refreshUserThemes(connectionGeneration: number): void {
 	refreshFolderSnapshot(
 		"themes.list",
 		{},
-		USER_THEMES_PROTOCOL_VERSION,
 		(store, snapshot) => store.installUserThemes(snapshot),
 		connectionGeneration,
 	);
@@ -224,7 +147,6 @@ function refreshUserFonts(connectionGeneration: number): void {
 	refreshFolderSnapshot(
 		"fonts.list",
 		{},
-		FONTS_PROTOCOL_VERSION,
 		(store, snapshot) => store.installUserFonts(snapshot),
 		connectionGeneration,
 	);
@@ -352,15 +274,8 @@ export function initTransport(onInvalidReply?: (method: WsMethodName) => void): 
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
 		refreshUserFonts(connectionGeneration);
-		if (welcome.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION)
-			refreshWorkspaceCreations(connectionGeneration);
-		else useAppStore.getState().setWorkspaceCreations([]);
-		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
-			hydrateSessionStates(connectionGeneration);
-		} else {
-			sessionStateHydration = null;
-			useAppStore.getState().installSessionStateSnapshot([]);
-		}
+		refreshWorkspaceCreations(connectionGeneration);
+		hydrateSessionStates(connectionGeneration);
 		void loadInAppSurvey();
 	});
 
@@ -457,7 +372,7 @@ export function initTransport(onInvalidReply?: (method: WsMethodName) => void): 
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
 		const state = useAppStore.getState();
-		if ((state.protocolVersion ?? 0) < FEEDBACK_SURVEY_PROTOCOL_VERSION) return;
+		if (state.protocolVersion === null) return;
 		state.showSurveyInvitation();
 	});
 
@@ -468,11 +383,7 @@ export function initTransport(onInvalidReply?: (method: WsMethodName) => void): 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
 		const store = useAppStore.getState();
 		store.addWorkspace(data);
-		if (
-			store.protocolVersion !== null &&
-			store.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION &&
-			store.status === "connected"
-		) {
+		if (store.protocolVersion !== null && store.status === "connected") {
 			hydrateSessionStates(store.connectionGeneration);
 		}
 	});
@@ -522,8 +433,7 @@ export function getTransport(): WsTransport {
 let surveyLoadGeneration = 0;
 
 export function loadInAppSurvey(): Promise<void> {
-	const protocol = useAppStore.getState().protocolVersion;
-	if (protocol === null || protocol < FEEDBACK_SURVEY_PROTOCOL_VERSION) {
+	if (useAppStore.getState().protocolVersion === null) {
 		useAppStore.getState().setInAppSurvey(null);
 		return Promise.resolve();
 	}

@@ -42,14 +42,7 @@ import {
 	readThemeHint,
 	writeThemeHint,
 } from "../themes";
-import {
-	type ConnectionStatus,
-	hostUrl,
-	runHostUpdate,
-	supportsFonts,
-	supportsHostUpdateRun,
-	supportsUserThemes,
-} from "../transport";
+import { type ConnectionStatus, hostUrl, runHostUpdate } from "../transport";
 import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
@@ -102,7 +95,7 @@ export function Shell() {
 		openReview && openReviewUrl ? { ...openReview, url: openReviewUrl } : openReview;
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
+	const updates = useUpdates(protocolVersion !== null ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<ProjectId | null>(null);
 	const activeCreation = useAppStore((s) =>
@@ -121,7 +114,7 @@ export function Shell() {
 	const themeMode = useAppStore((s) => s.themeMode);
 	const systemThemePair = useAppStore((s) => s.systemThemePair);
 	const userThemes = useAppStore((s) => s.userThemes);
-	const userThemesUnsupported = welcomeGeneration > 0 && !supportsUserThemes(protocolVersion);
+	const userThemesUnsupported = welcomeGeneration > 0 && protocolVersion === null;
 	useEffect(() => {
 		if (userThemes) installUserThemes(userThemes.files);
 		else if (userThemesUnsupported) clearUserThemes();
@@ -148,7 +141,7 @@ export function Shell() {
 	const codeLigatures = useAppStore((s) => s.codeLigatures);
 	const fontWeightOffset = useAppStore((s) => s.fontWeightOffset);
 	const userFonts = useAppStore((s) => s.userFonts);
-	const fontsSupported = supportsFonts(protocolVersion);
+	const fontsSupported = protocolVersion !== null;
 	useEffect(() => {
 		if (welcomeGeneration === 0) return;
 		if (!fontsSupported) {

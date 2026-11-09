@@ -501,8 +501,7 @@ re-opened transcripts provider-valid.
     `agent.state.pendingToolCalls` and a dialog anchors only while **exactly one** call is running (the
     common gate-before-a-tool case; parallel calls stay unanchored rather than guess), and
     `selectForToolCall` anchors explicitly and carries the call's `toolInput` (the MCP guard). `setExtUiPublisher`
-    (server→client push seam; an optional `ExtUiAudience` narrows a push to clients below a protocol
-    version), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose, and once pi accepts a
+    (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose, and once pi accepts a
     user message — a steer or follow-up pi `"queued"`, or an idle prompt whose `preflightResult` says
     `"started"`/`"queued"` — which then answers every pending dialog of that chat; a message an input
     extension `"handled"`, or one preflight rejects (no model, no credentials), leaves the dialog open, and
@@ -1568,9 +1567,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   where `builtin:mcp` does not own `/mcp` is refused with `MCP_HANDLED_ELSEWHERE`. pi's startup "MCP
   servers need attention" notice is unsolicited, so it alone is recognised by its fixed prefix through
   `interceptExtUiNotify` ([`webUiContext`]), installed before `bindExtensions`: it becomes a partial status
-  update plus a full refresh instead of a toast — except for clients below `MCP_PROTOCOL_VERSION`, which
-  are not subscribed to `mcp.status` and still receive the notice as a toast (`notifyExtUi` with an
-  `ExtUiAudience`, delivered per socket and redacted before delivery), since the web client and host ship independently. pi's `/mcp` awaits every startup connection before it
+  update plus a full refresh instead of a toast. pi's `/mcp` awaits every startup connection before it
   answers, so registration and every successful gated reload first seed the snapshot from what pi was given
   (`McpSessionHost.loaded()` plus the servers extensions registered): each enabled one reads `starting`, a
   disabled one its disabled state through the same derivation, and the previous load's report never

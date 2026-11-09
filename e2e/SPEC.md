@@ -369,8 +369,7 @@ variables still reach the no-agent host, so a check that depends on whether any 
 the host's `provider.status` over the wire first, never a one-shot snapshot of UI still loading it. Model-context
 coverage exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
 retained live-chat limits versus new-chat metadata, Custom validation and Apply focus, cross-client
-convergence with draft invalidation, sanitized read/write failures with Retry, mobile keyboard use,
-and pre-v76 hiding.
+convergence with draft invalidation, sanitized read/write failures with Retry, and mobile keyboard use.
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
 unrelated scenarios stay unblocked. The shared fixture (`global-setup.ts`) also seeds the automatic survey
@@ -388,7 +387,7 @@ deletes transcript storage, it lists and disposes every live session through the
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
 behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
 Done/ordinary-close acceptance, immediate off refusal, persistence failures and retries, confirmed reloads,
-cross-client convergence, prompt priority, and pre-v65 fallback.
+cross-client convergence, and prompt priority.
 
 Each scenario's app reset also removes the lane fixture repository's `origin` remote: the topbar's Remote /
 Pull request segments read the shared repo config, so an origin a push scenario added must never reshape a

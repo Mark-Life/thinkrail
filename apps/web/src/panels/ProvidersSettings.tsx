@@ -3,11 +3,7 @@ import {
 	RiLogoutBoxLine as LogOut,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
-import {
-	type AppConfigUpdate,
-	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
-	type ProviderStatus,
-} from "@thinkrail/contracts";
+import type { AppConfigUpdate, ProviderStatus } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
@@ -52,7 +48,7 @@ export function ProvidersSettings() {
 	}, []);
 
 	const quotaSettings =
-		protocolVersion !== null && protocolVersion >= JBCENTRAL_QUOTA_PROTOCOL_VERSION
+		protocolVersion !== null
 			? {
 					enabled: quotaEnabled,
 					refreshSeconds: quotaRefreshSeconds,

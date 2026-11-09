@@ -1,10 +1,10 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { SessionId } from "@thinkrail/contracts";
 import {
-	MCP_PROTOCOL_VERSION,
 	type McpListResult,
 	type McpServerStatus,
 	type McpStatusSnapshot,
+	PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "./index";
@@ -42,7 +42,7 @@ beforeEach(() => {
 		deletedSessionsByWorkspace: {},
 		status: "connected",
 		connectionGeneration: 3,
-		protocolVersion: MCP_PROTOCOL_VERSION,
+		protocolVersion: PROTOCOL_VERSION,
 		activeLogin: null,
 	});
 });
@@ -139,19 +139,15 @@ test("a list installs only for the connection it was read on and never resurrect
 	);
 	expect(Object.keys(state().mcpByWorkspace[workspaceId]?.sessions ?? {})).toEqual(["live"]);
 	state().setStatus("connected");
-	useAppStore.setState({ protocolVersion: MCP_PROTOCOL_VERSION });
+	useAppStore.setState({ protocolVersion: PROTOCOL_VERSION });
 	state().installMcpList(read, list([snapshot(testSessionId("next"), 1)]));
 	expect(state().mcpByWorkspace[workspaceId]?.sessions.next).toBeUndefined();
 });
 
-test("an older host has no MCP reads, its welcome clears the slice, and workspace removal drops it", () => {
+test("a welcome keeps the MCP slice and workspace removal drops it", () => {
 	state().applyMcpStatus(snapshot(testSessionId("s"), 1));
-	state().installWelcomeSnapshot(MCP_PROTOCOL_VERSION, [], []);
+	state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 	expect(state().mcpByWorkspace[workspaceId]).toBeDefined();
-	state().installWelcomeSnapshot(MCP_PROTOCOL_VERSION - 1, [], []);
-	expect(state().mcpByWorkspace).toEqual({});
-	expect(selectMcpRead(state(), workspaceId)).toBeNull();
-	useAppStore.setState({ protocolVersion: MCP_PROTOCOL_VERSION });
 	state().applyMcpStatus(snapshot(testSessionId("s"), 1));
 	state().applyWorkspaceRemoved(testProjectId("project"), workspaceId);
 	expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();

@@ -73,7 +73,6 @@ const probeMarker = join(root, "probe-starts.log");
 const writtenExtensions: string[] = [];
 let extensionSequence = 0;
 let requests: ExtUiRequest[] = [];
-let legacyRequests: ExtUiRequest[] = [];
 let sequence = 0;
 
 function writeMcpConfig(
@@ -117,7 +116,7 @@ beforeAll(async () => {
 	});
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
-	setExtUiPublisher((request, audience) => (audience ? legacyRequests : requests).push(request));
+	setExtUiPublisher((request) => requests.push(request));
 });
 
 function killFixtures(): void {
@@ -130,7 +129,6 @@ function killFixtures(): void {
 
 beforeEach(() => {
 	requests = [];
-	legacyRequests = [];
 	killFixtures();
 	rmSync(pidFile, { force: true });
 	rmSync(join(agentDir, "settings.json"), { force: true });
@@ -807,7 +805,7 @@ test("MCP enable and disable validate file provenance even for unchanged request
 	await removeSession(p.sessionId);
 });
 
-test("a server that fails at startup lands in status; only clients without mcp.status still get the toast", async () => {
+test("a server that fails at startup lands in status, not in a toast", async () => {
 	writeMcpConfig({}, { broken: { command: join(root, "missing-binary"), exposure: "direct" } });
 	const p = await chat();
 	const snapshot = await waitFor(async () => {
@@ -818,10 +816,6 @@ test("a server that fails at startup lands in status; only clients without mcp.s
 	});
 	expect(snapshot).toBeDefined();
 	expect(notices().some((message) => message.startsWith("MCP servers need attention"))).toBe(false);
-	const legacy = legacyRequests.find((request) => request.kind === "notify");
-	expect(legacy?.kind === "notify" && legacy.message.startsWith("MCP servers need attention")).toBe(
-		true,
-	);
 	await removeSession(p.sessionId);
 });
 

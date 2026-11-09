@@ -3,11 +3,7 @@ import {
 	RiSearchLine as Search,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import {
-	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
-	type CustomEndpoint,
-	type CustomEndpointModel,
-} from "@thinkrail/contracts";
+import type { CustomEndpoint, CustomEndpointModel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import {
@@ -48,7 +44,7 @@ const INPUT_CLASS =
 type Status = { tone: "ok" | "error"; text: string } | null;
 
 function supported(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= CUSTOM_ENDPOINTS_PROTOCOL_VERSION;
+	return protocolVersion !== null;
 }
 
 function Field({

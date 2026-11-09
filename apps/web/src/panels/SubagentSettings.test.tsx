@@ -1,10 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
-	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
-	type SubagentOverride,
-	type Workspace,
-} from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, type SubagentOverride, type Workspace } from "@thinkrail/contracts";
 import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -27,7 +22,7 @@ function workspace(
 }
 
 function render({
-	protocolVersion = SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
+	protocolVersion = PROTOCOL_VERSION,
 	globalEnabled = true,
 	globalLimit = 4,
 	activeWorkspace,
@@ -58,22 +53,6 @@ function element(markup: string, testId: string): string {
 	if (!match) throw new Error(`missing ${testId}`);
 	return match[0];
 }
-
-test("the block stays hidden against hosts older than the subagent settings protocol", () => {
-	const markup = render({ protocolVersion: SUBAGENT_SETTINGS_PROTOCOL_VERSION - 1 });
-	expect(markup).toBe("");
-});
-
-test("hosts older than the concurrency protocol get only the Allow row", () => {
-	const markup = render({
-		protocolVersion: SUBAGENT_CONCURRENCY_PROTOCOL_VERSION - 1,
-		activeWorkspace: workspace(undefined, 6),
-	});
-	expect(markup).toContain('data-testid="subagents-global-toggle"');
-	expect(markup).toContain('data-testid="subagents-workspace-toggle"');
-	expect(markup).not.toContain("Per chat at once");
-	expect(markup).not.toContain("subagent-limit-");
-});
 
 test("without an active workspace only the global rows render", () => {
 	const markup = render({ globalLimit: 7 });

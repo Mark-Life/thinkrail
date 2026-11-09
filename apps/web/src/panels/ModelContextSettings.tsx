@@ -1,6 +1,5 @@
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import {
-	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	isModelContextWindow,
 	isSharedModelContextTarget,
 	MODEL_CONTEXT_WINDOW_LIMITS,
@@ -37,7 +36,7 @@ const tokenRange = (t: Translator) =>
 	`${tokens(t, MODEL_CONTEXT_WINDOW_LIMITS.min)}–${tokens(t, MODEL_CONTEXT_WINDOW_LIMITS.max)}`;
 
 function supported(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION;
+	return protocolVersion !== null;
 }
 
 function isCustomText(text: string): boolean {

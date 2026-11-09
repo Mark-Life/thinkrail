@@ -10,7 +10,7 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
-import { getTransport, supportsExtensionSettings, supportsPiPackages } from "@/transport";
+import { getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { InstallPackageDialog } from "./InstallPackageDialog";
 import { PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
@@ -172,8 +172,8 @@ export function ExtensionsSettings() {
 	const packagesVersion = useAppStore((state) => state.packagesVersion);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const workspaceId = useAppStore((state) => selectActiveWorkspace(state)?.id);
-	const packagesSupported = supportsPiPackages(protocolVersion);
-	const settingsSupported = supportsExtensionSettings(protocolVersion);
+	const packagesSupported = protocolVersion !== null;
+	const settingsSupported = protocolVersion !== null;
 	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | "loading" | "failed">("loading");
 	const [installOpen, setInstallOpen] = useState(false);
 	const packages = usePiPackages({

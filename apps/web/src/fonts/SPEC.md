@@ -83,7 +83,7 @@ font rather than a missing one.
 The first-paint hint (`thinkrail-fonts`, version 1) holds the preference and only the custom files it
 names, in the stable preference adapter (localStorage in a browser); `initializeFonts` applies it before
 React, like the theme hint, and the shell rewrites it once the host's settings and custom-font snapshot
-are known. Below `FONTS_PROTOCOL_VERSION` the shell clears custom faces and applies the defaults.
+are known.
 
 The weight preview writes `--tr-font-weight-offset` directly while the slider drags; the committed value
 arrives through `settings.changed`, and a failed save re-applies the last applied preference.

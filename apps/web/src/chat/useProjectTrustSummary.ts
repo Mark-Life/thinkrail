@@ -1,6 +1,6 @@
 import type { ProjectId, ProjectTrustSummary } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { selectSupportsProjectTrust, useAppStore } from "@/store";
+import { selectHostWelcomed, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
 const NOTHING_GATED: ProjectTrustSummary = {
@@ -13,7 +13,7 @@ export function useProjectTrustSummary(
 	projectId: ProjectId,
 	enabled = true,
 ): ProjectTrustSummary | null {
-	const supportsProjectTrust = useAppStore(selectSupportsProjectTrust);
+	const supportsProjectTrust = useAppStore(selectHostWelcomed);
 	const [summary, setSummary] = useState<ProjectTrustSummary | null>(null);
 
 	useEffect(() => {

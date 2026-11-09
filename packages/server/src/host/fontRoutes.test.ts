@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-	FONTS_PROTOCOL_VERSION,
+	PROTOCOL_VERSION,
 	USER_FONT_UPLOAD_HEADER,
 	type UserFontFile,
 	WS_CHANNELS,
@@ -184,7 +184,7 @@ test("other methods, a CORS preflight included, are not allowed", async () => {
 	}
 });
 
-test("the host routes /fonts/ and nudges only sockets that speak the fonts protocol", async () => {
+test("the host routes /fonts/ and nudges its sockets when a font file changes", async () => {
 	resetConfigCache();
 	await resetJbcentralStateForTests();
 	configurePiRuntime(null);
@@ -219,8 +219,7 @@ test("the host routes /fonts/ and nudges only sockets that speak the fonts proto
 			await welcomed.promise;
 			return socket;
 		};
-		const current = await connect(FONTS_PROTOCOL_VERSION);
-		await connect(FONTS_PROTOCOL_VERSION - 1);
+		const current = await connect(PROTOCOL_VERSION);
 
 		const count = (protocol: number, matches: (message: Record<string, unknown>) => boolean) =>
 			(messages.get(protocol) ?? []).filter((message) =>
@@ -230,8 +229,8 @@ test("the host routes /fonts/ and nudges only sockets that speak the fonts proto
 			for (let waited = 0; waited < 5_000 && !condition(); waited += 50) await Bun.sleep(50);
 		};
 		current.send(JSON.stringify({ id: "list-1", method: "fonts.list", params: {} }));
-		await within(() => count(FONTS_PROTOCOL_VERSION, (message) => message.id === "list-1") > 0);
-		expect(messages.get(FONTS_PROTOCOL_VERSION)).toContainEqual({
+		await within(() => count(PROTOCOL_VERSION, (message) => message.id === "list-1") > 0);
+		expect(messages.get(PROTOCOL_VERSION)).toContainEqual({
 			id: "list-1",
 			ok: true,
 			result: {
@@ -241,11 +240,10 @@ test("the host routes /fonts/ and nudges only sockets that speak the fonts proto
 		});
 		const nudge = (message: Record<string, unknown>) =>
 			message.channel === WS_CHANNELS.fontsChanged;
-		const before = count(FONTS_PROTOCOL_VERSION, nudge);
+		const before = count(PROTOCOL_VERSION, nudge);
 		writeFileSync(join(fontsDir(), "Later.otf"), buildTestFont("otf", { family: "Later" }));
-		await within(() => count(FONTS_PROTOCOL_VERSION, nudge) > before);
-		expect(count(FONTS_PROTOCOL_VERSION, nudge)).toBeGreaterThan(before);
-		expect(count(FONTS_PROTOCOL_VERSION - 1, nudge)).toBe(0);
+		await within(() => count(PROTOCOL_VERSION, nudge) > before);
+		expect(count(PROTOCOL_VERSION, nudge)).toBeGreaterThan(before);
 	} finally {
 		for (const socket of sockets) socket.close();
 		await server?.shutdown();

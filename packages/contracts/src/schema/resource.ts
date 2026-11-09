@@ -52,9 +52,8 @@ export const SessionResources = wireObj({
 	sessionId: StoredSessionId,
 	commands: arr(BackgroundCommandSummary),
 	subagents: arr(SubagentResourceSummary),
-	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */
 	mcpServers: opt(arr(McpServerResourceSummary)),
-	/** Every finished record of this chat by outcome; absent before `RESOURCE_HISTORY_PROTOCOL_VERSION`. */
+	/** Every finished record of this chat by outcome. */
 	history: opt(SessionResourceHistory),
 });
 export type SessionResources = Static<typeof SessionResources>;

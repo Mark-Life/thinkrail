@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	canRenameWorkspace,
@@ -16,13 +16,10 @@ const managed: Workspace = {
 	baseBranch: "main",
 };
 
-test("manual rename requires its introducing host protocol and a ThinkRail-managed workspace", () => {
-	expect(WORKSPACE_RENAME_PROTOCOL_VERSION).toBe(55);
-	expect(canRenameWorkspace(54, managed)).toBe(false);
-	expect(canRenameWorkspace(55, managed)).toBe(true);
-	expect(canRenameWorkspace(56, managed)).toBe(true);
-	expect(canRenameWorkspace(55, { ...managed, kind: "default" })).toBe(false);
-	expect(canRenameWorkspace(55, { ...managed, kind: "external" })).toBe(false);
+test("manual rename requires a welcomed host and a ThinkRail-managed workspace", () => {
+	expect(canRenameWorkspace(PROTOCOL_VERSION, managed)).toBe(true);
+	expect(canRenameWorkspace(PROTOCOL_VERSION, { ...managed, kind: "default" })).toBe(false);
+	expect(canRenameWorkspace(PROTOCOL_VERSION, { ...managed, kind: "external" })).toBe(false);
 	expect(canRenameWorkspace(null, managed)).toBe(false);
 });
 

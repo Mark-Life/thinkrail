@@ -1,11 +1,4 @@
-import type { ProjectId, WorkspaceId } from "@thinkrail/contracts";
-import {
-	type EditorInfo,
-	PROJECT_RENAME_PROTOCOL_VERSION,
-	type Project,
-	WORKSPACE_RENAME_PROTOCOL_VERSION,
-	type Workspace,
-} from "@thinkrail/contracts";
+import type { EditorInfo, Project, ProjectId, Workspace, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import {
@@ -17,7 +10,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { supportsWorkspaceSettling, toast, useAppStore } from "../store";
+import { toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
@@ -40,16 +33,11 @@ export async function loadProjectWorkspaces(projectId: ProjectId): Promise<Works
 }
 
 export function canRenameWorkspace(protocolVersion: number | null, workspace: Workspace): boolean {
-	return (
-		protocolVersion !== null &&
-		protocolVersion >= WORKSPACE_RENAME_PROTOCOL_VERSION &&
-		workspace.kind !== "default" &&
-		workspace.kind !== "external"
-	);
+	return protocolVersion !== null && workspace.kind !== "default" && workspace.kind !== "external";
 }
 
 export function canSettleWorkspace(protocolVersion: number | null, workspace: Workspace): boolean {
-	return supportsWorkspaceSettling(protocolVersion) && workspace.kind !== "default";
+	return protocolVersion !== null && workspace.kind !== "default";
 }
 
 export function settleWorkspace(workspaceId: WorkspaceId): void {
@@ -289,10 +277,6 @@ export function revealWorkspace(workspace: Workspace): void {
 	void getTransport()
 		.request("workspace.reveal", { id: workspace.id })
 		.catch((err) => toast.error(errorText(err, t("panels.workspaceActions.revealFailed"))));
-}
-
-export function canRenameProject(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= PROJECT_RENAME_PROTOCOL_VERSION;
 }
 
 export function renameProject(project: Project, name: string): void {

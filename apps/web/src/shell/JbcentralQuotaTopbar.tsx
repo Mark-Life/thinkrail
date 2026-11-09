@@ -1,8 +1,4 @@
-import {
-	isJbcentralConnected,
-	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
-	type JbcentralQuotaSnapshot,
-} from "@thinkrail/contracts";
+import { isJbcentralConnected, type JbcentralQuotaSnapshot } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -31,7 +27,7 @@ export function JbcentralQuotaTopbar() {
 	const [centralConnected, setCentralConnected] = useState(false);
 	const [snapshot, setSnapshot] = useState<JbcentralQuotaViewSnapshot>({ state: "hidden" });
 	const pollingRef = useRef<JbcentralQuotaPolling | null>(null);
-	const supported = protocolVersion !== null && protocolVersion >= JBCENTRAL_QUOTA_PROTOCOL_VERSION;
+	const supported = protocolVersion !== null;
 
 	useEffect(() => {
 		const update = () => setVisible(document.visibilityState === "visible");

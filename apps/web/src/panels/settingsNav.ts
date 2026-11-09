@@ -19,15 +19,6 @@ import {
 	RiTerminalBoxLine,
 	RiTranslate2,
 } from "@remixicon/react";
-import {
-	DEFAULT_MODEL_PROTOCOL_VERSION,
-	EXTENSION_CATALOG_PROTOCOL_VERSION,
-	HOST_ENVIRONMENT_PROTOCOL_VERSION,
-	LOCALES_PROTOCOL_VERSION,
-	MCP_PROTOCOL_VERSION,
-	SPEECH_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
-} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { SettingsSection } from "@/store";
 
@@ -36,7 +27,7 @@ export interface SettingsNavSection {
 	label: MessageKey;
 	icon: RemixiconComponentType;
 	requiresInjectedContent?: true;
-	requiresProtocolVersion?: number;
+	requiresHost?: true;
 }
 
 export interface SettingsNavGroup {
@@ -52,21 +43,21 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				id: SettingsSection.Models,
 				label: "settings.nav.models",
 				icon: RiBrainLine,
-				requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
+				requiresHost: true,
 			},
 			{ id: SettingsSection.Providers, label: "settings.nav.providers", icon: RiKeyLine },
 			{
 				id: SettingsSection.Mcp,
 				label: "settings.nav.mcp",
 				icon: RiPlugLine,
-				requiresProtocolVersion: MCP_PROTOCOL_VERSION,
+				requiresHost: true,
 			},
 			{ id: SettingsSection.Templates, label: "settings.nav.templates", icon: RiLayoutGridLine },
 			{
 				id: SettingsSection.Environment,
 				label: "settings.nav.environment",
 				icon: RiFolderSettingsLine,
-				requiresProtocolVersion: HOST_ENVIRONMENT_PROTOCOL_VERSION,
+				requiresHost: true,
 			},
 		],
 	},
@@ -79,7 +70,7 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				id: SettingsSection.Language,
 				label: "settings.nav.language",
 				icon: RiTranslate2,
-				requiresProtocolVersion: LOCALES_PROTOCOL_VERSION,
+				requiresHost: true,
 			},
 			{ id: SettingsSection.Layout, label: "settings.nav.layout", icon: RiLayoutTop2Line },
 			{ id: SettingsSection.Keyboard, label: "settings.nav.keyboard", icon: RiKeyboardLine },
@@ -87,7 +78,7 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				id: SettingsSection.Voice,
 				label: "settings.nav.voice",
 				icon: RiMicLine,
-				requiresProtocolVersion: SPEECH_PROTOCOL_VERSION,
+				requiresHost: true,
 			},
 			{ id: SettingsSection.Terminal, label: "settings.nav.terminal", icon: RiTerminalBoxLine },
 		],
@@ -99,14 +90,14 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				id: SettingsSection.Workspaces,
 				label: "settings.nav.workspaces",
 				icon: RiGitRepositoryLine,
-				requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
+				requiresHost: true,
 			},
 			{ id: SettingsSection.Github, label: "settings.nav.github", icon: RiApps2Line },
 			{
 				id: SettingsSection.Extensions,
 				label: "settings.nav.extensions",
 				icon: RiPuzzle2Line,
-				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
+				requiresHost: true,
 			},
 			{
 				id: SettingsSection.Notifications,
@@ -131,8 +122,7 @@ function isAvailable(
 ): boolean {
 	return (
 		(!section.requiresInjectedContent || hasUpdates) &&
-		(section.requiresProtocolVersion === undefined ||
-			(protocolVersion !== null && protocolVersion >= section.requiresProtocolVersion))
+		(!section.requiresHost || protocolVersion !== null)
 	);
 }
 

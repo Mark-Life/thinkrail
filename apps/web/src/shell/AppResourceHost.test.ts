@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { SEARCH_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "../store";
 import { PALETTE_PREVIEW_HOST } from "./AppResourceHost";
@@ -27,13 +27,12 @@ test("the palette's preview host reads and refreshes only once the current host 
 		await expect(PALETTE_PREVIEW_HOST.readFile(testWorkspaceId("w1"), "a.ts")).rejects.toThrow(
 			"Reconnect",
 		);
-		welcome(SEARCH_PROTOCOL_VERSION);
+		welcome(PROTOCOL_VERSION);
 		expect(refreshes).toEqual([null]);
 
 		useAppStore.setState({ status: "disconnected", protocolVersion: null });
 		useAppStore.setState({ status: "connected", connectionGeneration: 2 });
 		expect(refreshes).toEqual([null]);
-		welcome(SEARCH_PROTOCOL_VERSION - 1);
 		expect(refreshes).toEqual([null]);
 		await expect(PALETTE_PREVIEW_HOST.readFile(testWorkspaceId("w1"), "a.ts")).rejects.toThrow(
 			"Reconnect",

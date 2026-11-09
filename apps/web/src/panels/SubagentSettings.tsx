@@ -1,9 +1,7 @@
 import { RiArrowGoBackLine } from "@remixicon/react";
 import {
 	isSubagentMaxConcurrent,
-	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_MAX_CONCURRENT,
-	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -137,10 +135,7 @@ export function SubagentSettings({
 	onWorkspaceLimitChange: (value: number | null) => void;
 }) {
 	const t = useT();
-	if (protocolVersion === null || protocolVersion < SUBAGENT_SETTINGS_PROTOCOL_VERSION) {
-		return null;
-	}
-	const limitSupported = protocolVersion >= SUBAGENT_CONCURRENCY_PROTOCOL_VERSION;
+	if (protocolVersion === null) return null;
 	const enabledOverride = workspace?.subagentsOverride;
 	const workspaceEnabled = enabledOverride === undefined ? globalEnabled : enabledOverride === "on";
 	const rawLimitOverride = workspace?.subagentMaxConcurrentOverride;
@@ -169,23 +164,21 @@ export function SubagentSettings({
 					/>
 				}
 			/>
-			{limitSupported ? (
-				<SettingsRow
-					label={t("settings.subagents.perChat")}
-					description={t("settings.subagents.perChatDescription")}
-					control={
-						<LimitField
-							saved={globalLimit}
-							allowEmpty={false}
-							label={t("settings.subagents.globalLimitLabel")}
-							testId="subagent-limit-global-input"
-							onCommit={(value) => {
-								if (value !== null) onGlobalLimitChange(value);
-							}}
-						/>
-					}
-				/>
-			) : null}
+			<SettingsRow
+				label={t("settings.subagents.perChat")}
+				description={t("settings.subagents.perChatDescription")}
+				control={
+					<LimitField
+						saved={globalLimit}
+						allowEmpty={false}
+						label={t("settings.subagents.globalLimitLabel")}
+						testId="subagent-limit-global-input"
+						onCommit={(value) => {
+							if (value !== null) onGlobalLimitChange(value);
+						}}
+					/>
+				}
+			/>
 			{workspace ? (
 				<SettingsSubheading
 					testId="subagents-workspace-heading"
@@ -215,7 +208,7 @@ export function SubagentSettings({
 					}
 				/>
 			) : null}
-			{workspace && limitSupported ? (
+			{workspace ? (
 				<SettingsRow
 					label={t("settings.subagents.perChat")}
 					control={

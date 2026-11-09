@@ -1,5 +1,4 @@
 import {
-	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	type ClientErrorKind,
 	type ClientErrorReport,
 	WS_METHODS,
@@ -14,10 +13,6 @@ const MAX_PENDING = 10;
 let sent = 0;
 let pending: ClientErrorReport[] = [];
 let unsubscribe: (() => void) | null = null;
-
-export function supportsClientErrorReports(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= CLIENT_ERROR_REPORT_PROTOCOL_VERSION;
-}
 
 const MAX_CHUNK_IDS = 20;
 const STACK_URL = /((?:https?|views):\/\/[^\s()@]+):\d+:\d+(?=[)\s]|$)/gm;
@@ -80,7 +75,7 @@ export function reportInvalidReply(method: WsMethodName): void {
 }
 
 function deliver(report: ClientErrorReport, protocolVersion: number): void {
-	if (!supportsClientErrorReports(protocolVersion) || sent >= MAX_REPORTS_PER_PAGE) return;
+	if (protocolVersion === null || sent >= MAX_REPORTS_PER_PAGE) return;
 	sent++;
 	try {
 		getTransport()

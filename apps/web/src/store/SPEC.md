@@ -19,7 +19,7 @@ The Resources view keeps host snapshots separately from the Pi conversation runt
 identity and current connection authority. Installing/invalidation/clearing a resource snapshot is
 one atomic store action. A monotonic invalidation revision and connection generation fence every
 read installation and failure; tombstones and cleared entries reject late replies. Connection status
-changes mark retained snapshots stale, and an unsupported welcome clears them. `selectors.ts` is the
+changes mark retained snapshots stale. `selectors.ts` is the
 canonical owner of Resources selectors and predicates, including active counts and active/finished
 grouping (through the contracts' `isLiveResource`, so an interrupted run is never live) and the finished
 totals: the host's per-kind `history` tallies, or tallies of the snapshot's own finished records from an
@@ -37,9 +37,9 @@ types and the `staleChatResources` state transform. A parent settling does not c
 resources or change the Projects rail's existing activity contract. The optional `mcpServers` list is part
 of the same resource snapshot; `selectChatResourceGroups(snapshot, includeMcp)` orders it (attention
 first) and counts its active (connected/starting) and attention (needs sign-in, failed, pending approval)
-servers apart from the work count, and hands back `null` for an older protocol.
+servers apart from the work count, and hands back `null` until a host is welcomed.
 
-Resource snapshots are not browser-persisted. Reconnect or an unsupported host removes control
+Resource snapshots are not browser-persisted. Reconnect removes control
 authority until a fresh read succeeds; failed reads preserve visibly stale data, never fabricate an
 empty catalog. Chat deletion/workspace removal clears the corresponding projections. Popover and
 selected-log state belong to chat integration, not domain persistence. See
@@ -51,15 +51,14 @@ selected-log state belong to chat integration, not domain persistence. See
 workspace, the last `mcp.list` answer — `servers`, the file-level `configErrors` (empty from an older
 host) and `handledElsewhere` — and the held per-session status snapshots, beside a monotonic
 **`mcpRevision`**. Two atomic actions write it.
-**`applyMcpStatus(snapshot)`** (the `mcp.status` channel) installs only while connected on an MCP-capable
-protocol, for a live scope (removed workspaces and deleted chats are rejected), and only
+**`applyMcpStatus(snapshot)`** (the `mcp.status` channel) installs only while connected, for a live scope (removed workspaces and deleted chats are rejected), and only
 through the **generation guard**: a snapshot replaces the held one when its generation is newer or it
 arrived on a newer connection — a restarted host restarts its counters, so a pure number comparison would
 freeze the view. **`installMcpList(read, result)`** (every `mcp.list` and list-returning mutation) is fenced
 by the `selectMcpRead` token captured before the request: a list is the authoritative live-chat set as of
 that read, so held sessions it omits drop unless a push landed after the read began, newer held
 generations survive, and deleted chats never reinstall. Each held snapshot also carries the time a server
-was first seen `starting` on that connection. An unsupported welcome clears the slice, workspace removal
+was first seen `starting` on that connection. Workspace removal
 drops its entry, and chat deletion drops its snapshot. **`deriveMcpServerRows(projection, now)`** is the
 one aggregation: one row per configured entry; with no live chat the state comes from configuration
 (invalid, pending approval, disabled / disabled in this project, else not running); otherwise a problem in
@@ -68,8 +67,8 @@ any chat wins by a fixed precedence, `connected` counts the chats reporting it (
 Reload now target), an unreported server reads unknown, and `starting` past one minute
 reads unknown (stalled). The host's optional `summary.effective` identifies the admitted entry that
 receives session status and can offer name-only login/logout/test actions; a replaced user entry reads
-`replaced`. For older hosts, status projection retains the valid-approved-project/user fallback, but
-runtime actions are withheld for ambiguous same-name rows. A folded invalid project override does not
+`replaced`. When the host omits `effective`, status projection falls back to the valid-approved-project/user
+row, and runtime actions are withheld for ambiguous same-name rows. A folded invalid project override does not
 revoke a valid user row's explicitly reported authority. A pending repo override flags its user row for attention. Attention rows sort
 first and disabled/replaced rows last. `selectMcpWorkspaceStarting` drives the bounded
 re-read while a server starts. The state vocabulary and the attention/active predicates live in `lib`
@@ -82,15 +81,15 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   for reconnect hydration, **`protocolMismatch`** holds the protocol version check until the next welcome replaces it
   ([[submodule-web-transport]]), while **`welcomeGeneration`** advances only when one complete
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
-  capabilities remain unavailable between sockets and until the current socket's welcome is installed;
+  features that need a host stay unavailable between sockets and until the current socket's welcome is
+  installed (**`selectHostWelcomed`**: `protocolVersion !== null`);
   **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory
   only), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
   palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
   connection's welcome — when a host search request may go out).
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
-  host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
-  pre-v107 host) + navigation repair and then advances that readiness
+  host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` when the welcome carries none) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused
@@ -125,12 +124,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*
   menu, and the shelf alike so the three can never disagree; **`selectAutoSettledCounts(state, now)`**
   reuses its per-row rule to count, per loaded project, only the rows the shelf took on its own (never an
-  `override`), which is what the rail's one-time first-move notice announces. Below
-  `WORKSPACE_SETTLE_PROTOCOL_VERSION` it returns the host's raw list as `live`, unsorted, and ignores even
-  stale persisted settle fields; activation uses the same gate, preserving the legacy host's order and
-  behavior. `workspaceSettlingSupported` records the last completed welcome's verdict rather than clearing
-  during a transient disconnect, so reconnect cannot remount the rail and discard an in-place rename; a
-  later older welcome turns it off authoritatively. On a capable host, rules in order are: a row with an agent
+  `override`), which is what the rail's one-time first-move notice announces.
+  `workspaceSettlingSupported` is set by every welcome and is not cleared during a transient disconnect, so
+  reconnect cannot remount the rail and discard an in-place rename. Rules in order are: a row with an agent
   working or needing attention, or the Default workspace, is live; `settledOverride: "settled"` settles,
   `"active"` keeps live (the user's word beats the latch below — settling the row you are in must move
   it); the active workspace while **`activeWorkspaceLiveLatch`** holds is live; a `review.state` of
@@ -162,7 +158,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   before ordinary locally placed-chat hydration; successful authoritative absence consumes it, while failures
   retain it for reconnect.
   The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It owns the
-  **background-creation slice** (v104): `workspaceCreations` by id, folded from `workspace.creationChanged`
+  **background-creation slice**: `workspaceCreations` by id, folded from `workspace.creationChanged`
   (`applyWorkspaceCreation`, which also raises one error toast when a running creation turns `failed`) and
   replaced on hydration (`setWorkspaceCreations`), and **`activeCreationId`** — mutually exclusive with
   `activeWorkspaceId`: `selectCreation` clears the workspace, and every workspace activation, `selectProject`,
@@ -350,7 +346,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
     through `useShallow` so a streamed delta does not rebuild the palette. The record's `title` likewise
     leads **`selectKnownChatTitle`** (the palette's chat name): when the host sends it, it wins — `""` reads
     as unnamed, so a stale tab name or history row cannot outlive a rename or clear that happened while
-    this client was away — and only a record from an older host without the field falls back to the named
+    this client was away — and only a record without the field falls back to the named
     layout tab, then the history row.
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
     events. A result is **read when it is seen**, not on a gesture: `selectReadyCompletionAck` returns the
@@ -566,15 +562,15 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
-  `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent from an older host reads as on),
+  `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent reads as on),
   **`customLayoutPresets: LayoutPreset[]`**,
   optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats, the picker's
-  **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),
+  **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]`),
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
-  (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
-  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`jbcentralQuotaEnabled: boolean`**,
+  (defaulting to `[]`, reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
+  (defaulting to `{}`, reads as "every declared default"), **`jbcentralQuotaEnabled: boolean`**,
   **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
@@ -586,7 +582,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
 holds it (and the survey invitation) while the client-local **`onboardingWizard`** gate
 (`pending | shown | hidden`, set by Welcome through `setOnboardingWizard`) is shown — including its done
 screen, after `onboardingDismissed` is already persisted, until a project opens — or still pending on a
-cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same
+cold-start-shaped store (welcomed host, not dismissed, no open or recent projects). Project Home reads the same
 selector to hide its Projects rail and pane, so onboarding has the whole window. Persisted preference priming
   and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
   **`chatMessageOrder: ChatMessageOrder`** is instead a client-local presentation preference, hydrated by
@@ -805,7 +801,6 @@ branch's review — a commit sha means nothing in another worktree — and dropp
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
   one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
   `openFileInTab`/`ChatView` read the worktree root through it),
-  `selectCanRenameChat` (the one protocol-capability derivation shared by ChatView and shell controls),
   `selectWorkspaceTerminals` (the host-owned terminal catalog; the layout visibility gate derives mounted
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
@@ -835,9 +830,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   through this; callers fall back to the snapshot when the ref has left the catalog);
   `selectPickerModels` + `ModelRef` (the hidden-models picker filter above);
   the MCP derivations `deriveMcpServerRows` + `McpServerRow` / `McpRowState`, `MCP_STARTING_BOUND_MS`,
-  `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`, `selectSupportsMcp`,
-  and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
-  `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
+  `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`,
+  and the resource helper `orderMcpResources`;
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +

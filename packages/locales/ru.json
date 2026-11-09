@@ -2986,7 +2986,6 @@
 	"workbench.layoutSettings.maxSideGroups": "Максимум боковых групп",
 	"workbench.layoutSettings.nameLabel": "Название пользовательского шаблона",
 	"workbench.layoutSettings.namePlaceholder": "Название макета",
-	"workbench.layoutSettings.planNeedsNewerHost": "Эта версия приложения слишком старая, чтобы сохранить макет со списком TODO. Обновите приложение или удалите список TODO из макета и повторите попытку.",
 	"workbench.layoutSettings.renameNamed": "Переименовать {{name}}",
 	"workbench.layoutSettings.reset": "Сбросить…",
 	"workbench.layoutSettings.resetDescription": "Перестроить это окно согласно макету «{{name}}».",

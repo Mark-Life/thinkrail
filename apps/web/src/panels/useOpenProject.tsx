@@ -1,7 +1,7 @@
 import type { Project } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { type ReactNode, useState } from "react";
-import { selectSupportsProjectClone, useAppStore } from "../store";
+import { selectHostWelcomed, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { CloneProjectDialog } from "./CloneProjectDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -27,7 +27,7 @@ export function useOpenProject(
 	dialogs: ReactNode;
 } {
 	const t = useT();
-	const supportsClone = useAppStore(selectSupportsProjectClone);
+	const supportsClone = useAppStore(selectHostWelcomed);
 	const [cloneIntent, setCloneIntent] = useState<{ isCurrent: () => boolean } | null>(null);
 	const [initTarget, setInitTarget] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);

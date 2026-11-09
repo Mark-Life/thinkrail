@@ -15,7 +15,6 @@ export const ExtensionCatalogEntry = wireObj({
 	enabled: bool(),
 	tools: arr(str()),
 	hasChildExtensions: bool(),
-	/** Absent before `EXTENSION_SETTINGS_PROTOCOL_VERSION`. */
 	settings: opt(arr(ExtensionSettingDescriptor)),
 });
 export type ExtensionCatalogEntry = Static<typeof ExtensionCatalogEntry>;

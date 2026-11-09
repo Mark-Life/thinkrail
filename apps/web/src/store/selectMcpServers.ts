@@ -8,7 +8,7 @@ import type {
 } from "@thinkrail/contracts";
 import { isMcpAttentionState } from "../lib";
 import type { McpHeldSnapshot, McpRead, McpWorkspaceProjection } from "./mcp";
-import { selectSupportsMcp } from "./selectors";
+import { selectHostWelcomed } from "./selectors";
 
 export const MCP_STARTING_BOUND_MS = 60_000;
 
@@ -194,7 +194,7 @@ export function selectMcpRead(
 ): McpRead | null {
 	if (
 		state.status !== "connected" ||
-		!selectSupportsMcp(state) ||
+		!selectHostWelcomed(state) ||
 		state.removedWorkspaceIds[workspaceId]
 	) {
 		return null;

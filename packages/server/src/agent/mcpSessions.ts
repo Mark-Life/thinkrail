@@ -9,16 +9,16 @@ import {
 } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
-import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
-import {
-	MCP_PROTOCOL_VERSION,
-	type McpListResult,
-	type McpReadOutputResult,
-	type McpServerResourceSummary,
-	type McpServerStatus,
-	type McpStatusSnapshot,
-	type McpTransportKind,
-	type Project,
+import type {
+	McpListResult,
+	McpReadOutputResult,
+	McpServerResourceSummary,
+	McpServerStatus,
+	McpStatusSnapshot,
+	McpTransportKind,
+	Project,
+	SessionId,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
@@ -368,12 +368,11 @@ function trackedOf(sessionId: SessionId): Tracked {
 		stopAttention: () => {},
 	};
 	tracked.set(sessionId, state);
-	state.stopAttention = interceptExtUiNotify(sessionId, (message, level) => {
+	state.stopAttention = interceptExtUiNotify(sessionId, (message) => {
 		const parsed = parseMcpAttentionNotice(message);
 		if (!parsed) return false;
 		apply(sessionId, parsed, true);
 		queueMicrotask(() => scheduleMcpStatusRefresh(sessionId));
-		notifyExtUi(sessionId, redactMcpText(message), level, { belowProtocol: MCP_PROTOCOL_VERSION });
 		return true;
 	});
 	return state;

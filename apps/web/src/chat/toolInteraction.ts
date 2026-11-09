@@ -1,6 +1,5 @@
 import type { ToolInteraction, ToolInteractionState } from "@thinkrail/extension-api/web";
 import { useMemo } from "react";
-import { useAppStore } from "@/store";
 import { useChatActions } from "./ChatActions";
 import { useFoldGeometry } from "./foldState";
 import {
@@ -22,7 +21,6 @@ export function useToolInteraction(
 	const superseded = interaction?.superseded ?? false;
 	const ended = interaction?.terminal ?? false;
 	const accepting = useInteractionAccepting(toolCallId);
-	const hostProtocol = useAppStore((store) => store.protocolVersion) ?? undefined;
 	const state = useMemo<ToolInteractionState>(
 		() => ({ response, superseded, ended, accepting }),
 		[response, superseded, ended, accepting],
@@ -37,7 +35,6 @@ export function useToolInteraction(
 			revealElement: actions.revealChatElement,
 			cancelAutomaticReveal: actions.cancelAutomaticReveal,
 			focusComposer: actions.focusComposer,
-			hostProtocol,
 		};
-	}, [actions, focusScope, hostProtocol, prepareLayoutChange, state, toolCallId, toolName]);
+	}, [actions, focusScope, prepareLayoutChange, state, toolCallId, toolName]);
 }

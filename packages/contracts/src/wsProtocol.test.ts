@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	DEFAULT_CONFIG,
@@ -11,67 +10,18 @@ import {
 	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
 import {
-	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
-	ANALYTICS_CONSENT_PROTOCOL_VERSION,
-	ASK_DISCUSS_PROTOCOL_VERSION,
-	BRANCH_STATUS_PROTOCOL_VERSION,
-	CHANGE_MUTATIONS_PROTOCOL_VERSION,
-	CHAT_RESOURCES_PROTOCOL_VERSION,
-	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
-	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
-	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	completionDelivery,
 	customMessageText,
-	DEFAULT_MODEL_PROTOCOL_VERSION,
-	EXTENSION_CATALOG_PROTOCOL_VERSION,
-	EXTENSION_SETTINGS_PROTOCOL_VERSION,
-	FEEDBACK_SURVEY_PROTOCOL_VERSION,
-	FONTS_PROTOCOL_VERSION,
-	GITHUB_STAR_PROTOCOL_VERSION,
-	HOST_ENVIRONMENT_PROTOCOL_VERSION,
-	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCustomEndpointId,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
-	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
-	LOCALES_PROTOCOL_VERSION,
-	MCP_PROTOCOL_VERSION,
-	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
-	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
-	ONBOARDING_PROTOCOL_VERSION,
-	PI_PACKAGES_PROTOCOL_VERSION,
-	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
-	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
-	PROJECT_RENAME_PROTOCOL_VERSION,
-	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
-	PROJECT_TRUST_PROTOCOL_VERSION,
-	PROVIDER_WARNINGS_PROTOCOL_VERSION,
-	RESOURCE_HISTORY_PROTOCOL_VERSION,
-	RESOURCE_META_PROTOCOL_VERSION,
-	REVIEW_ACTIONS_PROTOCOL_VERSION,
-	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	readToolResponseMessage,
-	SEARCH_PROTOCOL_VERSION,
-	SESSION_RENAME_PROTOCOL_VERSION,
-	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
-	SPEECH_PROTOCOL_VERSION,
-	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
-	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
-	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
-	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
-	TOOL_RESPONSE_PROTOCOL_VERSION,
-	TURN_CHANGES_PROTOCOL_VERSION,
-	USER_THEMES_PROTOCOL_VERSION,
-	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
-	WORKSPACE_CREATION_PROTOCOL_VERSION,
-	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -81,55 +31,25 @@ test("retired workspace activity keeps only its empty snapshot compatibility met
 	expect(Object.hasOwn(WS_CHANNELS, "sessionActivity")).toBe(false);
 });
 
-test("system theme settings advance the protocol", () => {
-	expect(THEME_SYSTEM_PROTOCOL_VERSION).toBe(58);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(THEME_SYSTEM_PROTOCOL_VERSION);
-});
-
 test("subagent settings advance the protocol and name the workspace override mutation", () => {
-	expect(SUBAGENT_SETTINGS_PROTOCOL_VERSION).toBe(57);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_SETTINGS_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceSetSubagentsOverride).toBe("workspace.setSubagentsOverride");
 });
 
 test("JetBrains quota advances the protocol and names its read", () => {
-	expect(JBCENTRAL_QUOTA_PROTOCOL_VERSION).toBe(59);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(JBCENTRAL_QUOTA_PROTOCOL_VERSION);
 	expect(WS_METHODS.providerJbcentralQuota).toBe("provider.jbcentralQuota");
 });
 
-test("Windows shell settings advance the protocol", () => {
-	expect(WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION).toBe(62);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION);
-});
-
-test("project template previews advance the additive wire shape to v63", () => {
-	expect(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION).toBe(63);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
-});
-
 test("host update execution advances the additive lifecycle protocol", () => {
-	expect(HOST_UPDATE_RUN_PROTOCOL_VERSION).toBe(70);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(HOST_UPDATE_RUN_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
 	expect(WS_METHODS.hostUpdate).toBe("host.update");
 });
 
-test("explicit analytics consent is available from protocol v65", () => {
-	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
-});
-
 test("session rename is versioned and bounded", () => {
-	expect(SESSION_RENAME_PROTOCOL_VERSION).toBe(66);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SESSION_RENAME_PROTOCOL_VERSION);
 	expect(SESSION_TITLE_MAX_LENGTH).toBe(80);
 	expect(WS_METHODS.sessionRename).toBe("session.rename");
 });
 
 test("normalized session state advances the protocol and names one snapshot/push channel", () => {
-	expect(SESSION_STATE_PROTOCOL_VERSION).toBe(73);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SESSION_STATE_PROTOCOL_VERSION);
 	expect(WS_METHODS.sessionStateList).toBe("session.stateList");
 	expect(WS_METHODS.sessionAcknowledgeCompletion).toBe("session.acknowledgeCompletion");
 	expect(WS_METHODS.sessionNudge).toBe("session.nudge");
@@ -146,40 +66,25 @@ test("session titles normalize to one bounded non-blank line", () => {
 });
 
 test("the plan-review subagent reshapes the review wire and advances the protocol", () => {
-	expect(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION).toBe(67);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.reviewChanged).toBe("review.changed");
 	expect(WS_CHANNELS.reviewFailed).toBe("review.failed");
 });
 
-test("the agent-review setting advances the protocol to v68", () => {
-	expect(AGENT_REVIEW_SETTING_PROTOCOL_VERSION).toBe(68);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(AGENT_REVIEW_SETTING_PROTOCOL_VERSION);
-});
-
 test("auto plan-summary generation advances the protocol to v69", () => {
-	expect(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION).toBe(69);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION);
 	expect(WS_METHODS.todoGenerateSummary).toBe("todo.generateSummary");
 });
 
 test("host-owned new-chat defaults are pinned to v72", () => {
-	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(72);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(DEFAULT_MODEL_PROTOCOL_VERSION);
 	expect(WS_METHODS.modelDefault).toBe("model.default");
 	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
 });
 
 test("per-turn change sets, the turn diff scope and the turn.changed push are pinned to v80", () => {
-	expect(TURN_CHANGES_PROTOCOL_VERSION).toBe(80);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TURN_CHANGES_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceTurns).toBe("workspace.turns");
 	expect(WS_CHANNELS.turnChanged).toBe("turn.changed");
 });
 
 test("the subagent concurrency limit is pinned to v79", () => {
-	expect(SUBAGENT_CONCURRENCY_PROTOCOL_VERSION).toBe(79);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_CONCURRENCY_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceSetSubagentMaxConcurrent).toBe("workspace.setSubagentMaxConcurrent");
 	expect(DEFAULT_CONFIG.subagentMaxConcurrent).toBe(SUBAGENT_MAX_CONCURRENT.default);
 	expect(SUBAGENT_MAX_CONCURRENT).toEqual({ min: 1, max: 16, default: 4 });
@@ -192,8 +97,6 @@ test("the subagent concurrency limit is pinned to v79", () => {
 });
 
 test("the settled workspace shelf is pinned to v78", () => {
-	expect(WORKSPACE_SETTLE_PROTOCOL_VERSION).toBe(78);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_SETTLE_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceSettle).toBe("workspace.settle");
 	expect(WS_METHODS.workspaceUnsettle).toBe("workspace.unsettle");
 	expect(DEFAULT_CONFIG.settleIdleDays).toBe(SETTLE_IDLE_DAYS.default);
@@ -205,51 +108,37 @@ test("the settled workspace shelf is pinned to v78", () => {
 });
 
 test("picker metadata and host-kept favorites/recents are pinned to v77", () => {
-	expect(MODEL_PICKER_PROTOCOL_VERSION).toBe(77);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MODEL_PICKER_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.favoriteModels).toEqual([]);
 	expect(DEFAULT_CONFIG.recentModels).toEqual([]);
 	expect(RECENT_MODELS_LIMIT).toBe(5);
 });
 
 test("the extension catalog and its on/off setting are pinned to v82", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_CATALOG_PROTOCOL_VERSION);
-	expect(EXTENSION_CATALOG_PROTOCOL_VERSION).toBe(82);
 	expect(WS_METHODS.extensionList).toBe("extension.list");
 	expect(DEFAULT_CONFIG.disabledExtensions).toEqual([]);
 });
 
 test("the project trust summary and pi-level resource consent are pinned to v81", () => {
-	expect(PROJECT_TRUST_PROTOCOL_VERSION).toBe(81);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TRUST_PROTOCOL_VERSION);
 	expect(WS_METHODS.projectTrustSummary).toBe("project.trustSummary");
 });
 
 test("workspace read state is pinned to v86", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_READ_STATE_PROTOCOL_VERSION);
-	expect(WORKSPACE_READ_STATE_PROTOCOL_VERSION).toBe(86);
 	expect(WS_METHODS.workspaceMarkUnread).toBe("workspace.markUnread");
 	expect(WS_METHODS.workspaceMarkRead).toBe("workspace.markRead");
 });
 
 test("local language files and the locale setting are pinned to v89", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(LOCALES_PROTOCOL_VERSION);
-	expect(LOCALES_PROTOCOL_VERSION).toBe(89);
 	expect(WS_METHODS.localesList).toBe("locales.list");
 	expect(WS_METHODS.localesReveal).toBe("locales.reveal");
 	expect(WS_CHANNELS.localesChanged).toBe("locales.changed");
 });
 
 test("tool responses replace the ask-only answer method at v93", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TOOL_RESPONSE_PROTOCOL_VERSION);
-	expect(TOOL_RESPONSE_PROTOCOL_VERSION).toBe(93);
 	expect(WS_METHODS.sessionRespondToTool).toBe("session.respondToTool");
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
 test("voice input is pinned to v107", () => {
-	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
 	expect(WS_METHODS.speechInstall).toBe("speech.install");
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
@@ -257,8 +146,6 @@ test("voice input is pinned to v107", () => {
 });
 
 test("user-selectable fonts are pinned to v102", () => {
-	expect(FONTS_PROTOCOL_VERSION).toBe(102);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fontsList).toBe("fonts.list");
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");
@@ -266,8 +153,6 @@ test("user-selectable fonts are pinned to v102", () => {
 });
 
 test("background workspace creation is pinned to v104", () => {
-	expect(WORKSPACE_CREATION_PROTOCOL_VERSION).toBe(104);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceStartCreate).toBe("workspace.startCreate");
 	expect(WS_METHODS.workspaceListCreations).toBe("workspace.listCreations");
 	expect(WS_METHODS.workspaceRetryCreation).toBe("workspace.retryCreation");
@@ -277,42 +162,30 @@ test("background workspace creation is pinned to v104", () => {
 });
 
 test("user theme files are pinned to v92", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(USER_THEMES_PROTOCOL_VERSION);
-	expect(USER_THEMES_PROTOCOL_VERSION).toBe(92);
 	expect(WS_METHODS.themesList).toBe("themes.list");
 	expect(WS_METHODS.themesReveal).toBe("themes.reveal");
 	expect(WS_CHANNELS.themesChanged).toBe("themes.changed");
 });
 
 test("the stored host environment is pinned to v91", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(HOST_ENVIRONMENT_PROTOCOL_VERSION);
-	expect(HOST_ENVIRONMENT_PROTOCOL_VERSION).toBe(91);
 	expect(WS_METHODS.environmentGet).toBe("environment.get");
 	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
 });
 
 test("client error reports are pinned to v90", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CLIENT_ERROR_REPORT_PROTOCOL_VERSION);
-	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
 	expect(WS_METHODS.clientReportError).toBe("client.reportError");
 });
 
 test("host search and its previews are pinned to v106", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SEARCH_PROTOCOL_VERSION);
-	expect(SEARCH_PROTOCOL_VERSION).toBe(106);
 	expect(WS_METHODS.searchQuery).toBe("search.query");
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
 test("project rename is pinned to v85", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_RENAME_PROTOCOL_VERSION);
-	expect(PROJECT_RENAME_PROTOCOL_VERSION).toBe(85);
 	expect(WS_METHODS.projectRename).toBe("project.rename");
 });
 
 test("branch status, review-free push, and PR description sources are pinned to v87", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BRANCH_STATUS_PROTOCOL_VERSION);
-	expect(BRANCH_STATUS_PROTOCOL_VERSION).toBe(87);
 	expect(WS_METHODS.workspaceBranchStatus).toBe("workspace.branchStatus");
 	expect(WS_METHODS.workspacePush).toBe("workspace.push");
 	expect(WS_METHODS.prGenerate).toBe("pr.generate");
@@ -320,8 +193,6 @@ test("branch status, review-free push, and PR description sources are pinned to 
 });
 
 test("review details and the GitHub review actions are pinned to v88", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_ACTIONS_PROTOCOL_VERSION);
-	expect(REVIEW_ACTIONS_PROTOCOL_VERSION).toBe(88);
 	expect(WS_METHODS.prReady).toBe("pr.ready");
 	expect(WS_METHODS.prMerge).toBe("pr.merge");
 	expect(WS_METHODS.prReopen).toBe("pr.reopen");
@@ -329,8 +200,6 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 });
 
 test("pi package management and the package switch are pinned to v100", () => {
-	expect(PI_PACKAGES_PROTOCOL_VERSION).toBe(100);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PI_PACKAGES_PROTOCOL_VERSION);
 	expect(WS_METHODS.packagesList).toBe("packages.list");
 	expect(WS_METHODS.packagesInstall).toBe("packages.install");
 	expect(WS_METHODS.packagesRemove).toBe("packages.remove");
@@ -343,22 +212,16 @@ test("pi package management and the package switch are pinned to v100", () => {
 });
 
 test("project create and the onboarding dismissal are pinned to v94", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
-	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
 });
 
 test("the GitHub star ask is pinned to v103", () => {
-	expect(GITHUB_STAR_PROTOCOL_VERSION).toBe(103);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.feedbackGithubStar).toBe("feedback.githubStar");
 });
 
 test("in-app surveys are pinned to v97", () => {
-	expect(FEEDBACK_SURVEY_PROTOCOL_VERSION).toBe(97);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FEEDBACK_SURVEY_PROTOCOL_VERSION);
 	expect(WS_METHODS.feedbackSurvey).toBe("feedback.survey");
 	expect(WS_METHODS.feedbackSurveySubmit).toBe("feedback.survey.submit");
 });
@@ -370,8 +233,6 @@ test("repository cloning and cancellation are registered", () => {
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {
-	expect(MCP_PROTOCOL_VERSION).toBe(83);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_PROTOCOL_VERSION);
 	expect(WS_METHODS.mcpList).toBe("mcp.list");
 	expect(WS_METHODS.mcpSetSessionOverride).toBe("mcp.setSessionOverride");
 	expect(WS_METHODS.mcpLogin).toBe("mcp.login");
@@ -382,21 +243,14 @@ test("MCP server management, status and chat resources are pinned to v83", () =>
 });
 
 test("always-allowed MCP tools and their revoke are pinned to v84", () => {
-	expect(MCP_TOOL_GRANTS_PROTOCOL_VERSION).toBe(84);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_TOOL_GRANTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.mcpRevokeToolGrant).toBe("mcp.revokeToolGrant");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {
-	expect(REVIEW_RICH_ANCHORS_PROTOCOL_VERSION).toBe(74);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_RICH_ANCHORS_PROTOCOL_VERSION);
 	expect(WS_METHODS.reviewCommentAdd).toBe("review.commentAdd");
 });
 
 test("change mutations name their two methods at v75", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(75);
-	expect(CHANGE_MUTATIONS_PROTOCOL_VERSION).toBe(75);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHANGE_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.changeRevert).toBe("change.revert");
 	expect(WS_METHODS.changeUndo).toBe("change.undo");
 });
@@ -404,13 +258,9 @@ test("change mutations name their two methods at v75", () => {
 test("model context settings name their two methods at v76", () => {
 	expect(WS_METHODS.modelContextSettings).toBe("model.contextSettings");
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
-	expect(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION).toBe(76);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
 });
 
 test("resource metadata rides the two content reads from v75", () => {
-	expect(RESOURCE_META_PROTOCOL_VERSION).toBe(75);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(RESOURCE_META_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsReadFile).toBe("fs.readFile");
 	expect(WS_METHODS.gitDiffFile).toBe("git.diffFile");
 });
@@ -512,8 +362,6 @@ test("command completion guards accept displayed terminal notices, not malformed
 });
 
 test("chat resources introduce scoped reads and cancellation, never browser command execution", () => {
-	expect(CHAT_RESOURCES_PROTOCOL_VERSION).toBe(71);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHAT_RESOURCES_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.sessionResourcesChanged).toBe("session.resourcesChanged");
 	expect(WS_METHODS.sessionResources).toBe("session.resources");
 	expect(WS_METHODS.backgroundCommandOutput).toBe("backgroundCommand.output");
@@ -524,8 +372,6 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 });
 
 test("resource history pages a chat's finished records from v96", () => {
-	expect(RESOURCE_HISTORY_PROTOCOL_VERSION).toBe(96);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(RESOURCE_HISTORY_PROTOCOL_VERSION);
 	expect(WS_METHODS.sessionResourceHistory).toBe("session.resourceHistory");
 });
 
@@ -584,33 +430,16 @@ describe("tool response guards", () => {
 	});
 });
 
-test("survey translations and separate Other text are pinned to v98", () => {
-	expect(SURVEY_TRANSLATIONS_PROTOCOL_VERSION).toBe(98);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SURVEY_TRANSLATIONS_PROTOCOL_VERSION);
-});
-
 test("provider warnings are pinned to v99", () => {
-	expect(PROVIDER_WARNINGS_PROTOCOL_VERSION).toBe(99);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROVIDER_WARNINGS_PROTOCOL_VERSION);
 	expect(WS_METHODS.providerDisableWarning).toBe("provider.disableWarning");
 });
 
 test("custom endpoints are pinned to v101 and own only custom-* providers", () => {
-	expect(CUSTOM_ENDPOINTS_PROTOCOL_VERSION).toBe(101);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_ENDPOINTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.customEndpointsProbe).toBe("customEndpoints.probe");
 	expect(isCustomEndpointId(`${CUSTOM_ENDPOINT_ID_PREFIX}gateway`)).toBe(true);
 	expect(isCustomEndpointId("ollama")).toBe(false);
 });
 
 test("extension settings are pinned to v105", () => {
-	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_SETTINGS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
-});
-
-test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {
-	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
-	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
 });

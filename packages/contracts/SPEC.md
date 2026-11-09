@@ -88,9 +88,8 @@ every client reads the wire one way. The one package
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
   BCP-47 tag — the `AppConfig.locale` contract; local language file shapes are `LocalLocalesSnapshot` /
-  `LocalLocaleFile` with closed error codes, served by `locales.list` from `LOCALES_PROTOCOL_VERSION`, v89;
-  user theme files are `UserThemesSnapshot` / `UserThemeFile`, served by `themes.list` from
-  `USER_THEMES_PROTOCOL_VERSION`, v92, with each ok file's `manifest` deliberately `unknown` because the
+  `LocalLocaleFile` with closed error codes, served by `locales.list`;
+  user theme files are `UserThemesSnapshot` / `UserThemeFile`, served by `themes.list`, with each ok file's `manifest` deliberately `unknown` because the
   theme schema is owned by [[submodule-web-themes]]),
   the font settings — `FONT_ROLES`, `FontFamilyRef` (a bundled face named by its role, or a family name),
   `FontChoice` (family or `null` for the role's default, plus ≤ `FONT_FALLBACKS_MAX` distinct fallbacks),
@@ -100,12 +99,12 @@ every client reads the wire one way. The one package
   `normalizeFontSettings`, and `hasControlCharacter` (shared with the host's font file-name rule) — and user font files as
   `UserFontsSnapshot` / `UserFontFile` (closed error codes, guarded by `isUserFontFile`) plus
   `InstalledFontsResult`, served by `fonts.list` /
-  `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
+  `fonts.installed`, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `parsePiPackageInput` (§ pi packages),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
-  `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
+  `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
   **`clampToCodePoints(text, maxUnits)`** (the one shared reading of a chat's first prompt for the
   unnamed-chat label: the first user text that is not a control message and has a head; a head is the first
@@ -145,7 +144,7 @@ every client reads the wire one way. The one package
   silent? })` (fire-and-forget OS notification, no callback or id) and an optional `isWindowFocused()`
   that reports OS-level window focus (true even when DevTools has renderer focus). The
   same web bundle discovers these capabilities without importing a native SDK. An optional
-  `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
+  `HostUpdateNotice` carries a closed CLI-host update lifecycle; `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
   channel, version, URL, restart, or feed authority.
 - **Forbidden:** any *value* import of another `pi` package; **any** import (even `type`) of
@@ -174,8 +173,7 @@ every client reads the wire one way. The one package
     (`{input, output}` list prices per Mtok, a subset of pi's `ModelCost`), `input` (accepted modalities) and
     **`auth`** (`WireModelAuth`: the provider's `ProviderAuthKind` plus pi's `detail` label — the same
     vocabulary `provider.status` reports, projected per model so a picker can say "plan" instead of a
-    per-token price without the heavyweight status call) — optional because a host older than
-    **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) omits them; the shape a model takes **on the wire**
+    per-token price without the heavyweight status call) — optional; the shape a model takes **on the wire**
     (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: extension/provider `Model.baseUrl` and `headers` can carry routing credentials, and an allowlist
@@ -216,10 +214,7 @@ every client reads the wire one way. The one package
   - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions, settings? }`) — one
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
     `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
-    `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
-    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares.
-    `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
-    `kind: "discuss"` answers; the card withholds Discuss below it.
+    `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`) the boolean settings the extension declares.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session from a disk-only one. A frontend hydrates locally placed sessions and
     lists the rest in chat history for explicit reopen. The optional **`openTodos`** (count of non-`done`
@@ -255,31 +250,28 @@ every client reads the wire one way. The one package
     the session has none; clients word that default in their own language (no English placeholder crosses
     the wire). The additive `session.rename` mutation takes
     `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
-    `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
-    mutation and controls to v66 so a newer client hides them against older hosts. The existing Pi event
+    `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack. The existing Pi event
     `session_info_changed { name?: string }` is the live event for manual and automatic changes, and
     `session.list`/`session.getMessages` repair a missed event. **`SessionStateRecord.title`** (optional,
     additive, no version gate) carries the same durable name on every normalized-state record — the
     `session.stateList` snapshot and each `session.state` push, including the full record a host publishes
     after renaming a chat that is not live — so a client knows every chat's name, and catches up on a rename
     it missed, from the state it already installs. A host that sends the field always sends it: `""` is
-    authoritatively unnamed, absent means an older host. No title source/provenance, uniqueness, workspace
+    authoritatively unnamed. No title source/provenance, uniqueness, workspace
     coupling, or new push channel crosses the wire; session ids remain canonical.
     **`SessionSummary.firstPrompt`** and **`SessionStateRecord.firstPrompt`** (optional, additive, no
     version gate) carry `firstPromptHead` of the transcript's first user prompt beside the title: the
     display fallback for a chat that has no name, never a name — no mutation accepts it, nothing writes
-    it into the session, and an older host simply omits it (the client shows its generic label).
+    it into the session (the client shows its generic label when absent).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. One member is
     host-authored, not pi's: `notice` (v99) carries a closed `ProviderWarning` code for a session, such
-    as the Anthropic extra-usage warning. It has no text, so the client localizes it, and older clients
-    ignore the unknown kind. A round-trip
+    as the Anthropic extra-usage warning. It has no text, so the client localizes it. A round-trip
     request's optional `toolCallId` names the tool call it is about; absent, it is tied to none (the host
     anchors a dialog only when it knows the call: explicitly, or while exactly one call runs). An explicit
     anchor may add `toolInput` — the input that call will run with, as the asking host saw it — which the
-    client lists in full inside the prompt. Both fields are additive: an older client ignores them, an
-    older host never sends them. A pending dialog ends with the
+    client lists in full inside the prompt. Both fields are additive. A pending dialog ends with the
     client's `session.extUiReply` or a host `dismiss` frame; the host dismisses it on abort, dispose, or
     when it accepts a user message for that chat (a message an extension handles or preflight rejects
     leaves it pending), so a client never treats its own message send as an answer.
@@ -301,13 +293,9 @@ every client reads the wire one way. The one package
     mailbox (server `agent/toolResponses` — see its SPEC for the design rationale); the chat renders the
     card **inline** and replies via `session.respondToTool` (correlated by the tool call id; the value is
     opaque to the wire and validated by the tool; rejected loud when the call is unknown/responded/
-    superseded). `TOOL_RESPONSE_PROTOCOL_VERSION` (93) marks the rename from the ask-only
-    `session.answerQuestion` and the `needsInput` arm `question` → `tool-response`. **One compatibility
-    window, both directions:** the request registry keeps `session.answerQuestion` (`result: unknown`)
-    forwarding to the same delivery, so an already-loaded older client still answers; and the client
-    sends `session.answerQuestion` to a host below v93 (`supportsToolResponses`) and reads that host's
-    `needsInput.kind: "question"` / `question:<toolCallId>` as the awaiting call, because the UI ships
-    independently of the host (Decision 3). Both go when the window closes.
+    superseded). The `needsInput` arm is `tool-response`. The request registry also keeps the
+    older ask-only `session.answerQuestion` (`result: unknown`), forwarding to the same delivery; the web
+    always calls `session.respondToTool`.
   - the **todo plan-review fix** wire types — the **`TODO_REVIEW_FIX_CUSTOM_TYPE`** constant,
     **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** guard (in
     `wsProtocol`), and **`ReviewFixDetails`** / **`ReviewFixComment`** (in `domain`): a plan-review
@@ -332,7 +320,7 @@ every client reads the wire one way. The one package
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
   `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet named** (a fresh `workspace-N`, or a
-  record an older host's provisional pass left unlocked), so the agent's `set_title` may still name it; `true` = named (automatically or by the user), never auto-touched
+  record a provisional pass left unlocked), so the agent's `set_title` may still name it; `true` = named (automatically or by the user), never auto-touched
   again, except that optional **`branchNamePending`** (the naming chat's session id) marks a `set_title` that
   set the name but had to keep the branch (detached `HEAD`, or a branch checked out outside ThinkRail), so
   one later call from that chat may still move the branch; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
@@ -349,20 +337,19 @@ every client reads the wire one way. The one package
   override never goes stale) with its **`settledAt`** stamp, and **`review`** (the host's last-known
   `OpenBranchReview` for the branch, refreshed host-side so every client sees one PR state without each
   fetching it) — the *partition* into live rows and the Settled shelf is a client selector over these facts
-  plus session state, never a wire field; **`WORKSPACE_SETTLE_PROTOCOL_VERSION`** (v78) pins the fields
-  together with **`workspace.settle`** / **`workspace.unsettle`** (`{ id }` — Default rejected server-side;
+  plus session state, never a wire field; the fields come with **`workspace.settle`** / **`workspace.unsettle`** (`{ id }` — Default rejected server-side;
   the response is the updated record and the `workspace.updated` push converges every client). Settling
   never touches disk; `workspace.remove` stays the only teardown, one row at a time),
   **`OpenBranchReview`** (the review reference for the active branch: PR vs MR + number, plus an optional
-  **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
-  **`changedAt`**, the ms time the provider merged or closed it; v88 adds lookup-only **`details`** for an
+  **`state`** — `"open" | "merged" | "closed"`, absent is read as open — and
+  **`changedAt`**, the ms time the provider merged or closed it; lookup-only **`details`** for an
   open GitHub PR — `draft`, `base` (the branch it merges into now, which GitHub may have retargeted),
   `checks` (passing / pending / failing counts plus bounded failing names),
   `reviewDecision`, the approving / change-requesting `reviewers`, `mergeState` (GitHub's
   `mergeStateStatus`, lower-cased), the repository's `mergeMethods` and `deleteBranchOnMerge`; details ride
   `workspace.branchStatus` only (the `workspace.openReview` answer strips them) and never enter the host-kept `Workspace.review` snapshot, whose state the
   client overlays them onto only for the same review),
-  **`BranchStatus`** (`workspace.branchStatus`'s answer, v87 `BRANCH_STATUS_PROTOCOL_VERSION`: `hasOrigin`,
+  **`BranchStatus`** (`workspace.branchStatus`'s answer: `hasOrigin`,
   `provider` (`"github" | "gitlab" | null`), `published` (the push repository has the branch; `null` when a split origin's push repository
   couldn't be read), `pushesElsewhere` (origin's
   push URL differs from its fetch URL, so `ahead` / `behind` describe the push repository), `ahead` / `behind` vs
@@ -372,8 +359,7 @@ every client reads the wire one way. The one package
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
   `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
-  **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
-  `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
+  **`ResourceMeta`** (what a resource's bytes *are*, host-decided and sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
   PDF is a byte-only document; an SVG is text); optional `mime`, sniffed from magic bytes first and the
   filename second. It rides `fs.readFile` and both sides of `git.diffFile`, whose `content` is `""`
@@ -395,12 +381,10 @@ every client reads the wire one way. The one package
   around one agent run (`{ id, baseTree, headTree, startedAt }`, both sides immutable, v80); omitted on
   the wire = `branch`, so an older client is unchanged), **`TurnChangeSet`** (one recorded agent run:
   `{ id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree, changes }` — what the run
-  actually left behind, served by **`workspace.turns`** and pushed on **`turn.changed`**,
-  `TURN_CHANGES_PROTOCOL_VERSION` = v80),
+  actually left behind, served by **`workspace.turns`** and pushed on **`turn.changed`**),
   **`GitCommit`** (a commit row of the scope menu's list), and **`BranchList`**: `remote` remains the
   canonical full-ref string list, while optional host-authored `remoteGroups` carries each configured
-  remote and its `{ ref, branch }` rows for two-layer presentation. The field is additive so a newer UI
-  falls back to full refs against an older host; a `null` remote group preserves tracking refs whose
+  remote and its `{ ref, branch }` rows for two-layer presentation. The field is additive; a `null` remote group preserves tracking refs whose
   configuration was removed without inventing ownership in the browser. The two meanings of a workspace's base are
   **two fields**: `Workspace.baseBranch` is *creation provenance* (the ref the worktree was cut from — what
   the receipt's `branch · from baseBranch` shows; for a **user-owned** workspace, whose provenance isn't
@@ -416,7 +400,7 @@ every client reads the wire one way. The one package
   which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
   auth.json credential, false for env / runtime / models.json auth the host can't unset; optional
   `warnings`, v99: pi's global `warnings.*` switches keyed by the closed **`ProviderWarning`** code
-  (`anthropicExtraUsage`), absent from older hosts, where the client treats them as on); the **in-app login wire** — **`LoginFrame`** (the streamed
+  (`anthropicExtraUsage`); the **in-app login wire** — **`LoginFrame`** (the streamed
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
   **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
@@ -449,75 +433,52 @@ every client reads the wire one way. The one package
   light id plus one opaque dark id. `AppConfig.theme` remains the reversible fixed choice in both modes;
   `AppConfig.systemThemePair` is absent until system mode is first configured, then survives returns to
   fixed mode. Effective appearance never crosses the wire: every system-mode client resolves the same pair
-  against its own operating-system color scheme. `THEME_SYSTEM_PROTOCOL_VERSION` pins this to v58.
-  These fields are additive on purpose: replacing `theme`
+  against its own operating-system color scheme. These fields are additive on purpose: replacing `theme`
   with a nested object would break old clients (or create two fixed-theme authorities), while encoding a
-  pair inside the opaque id would turn a simple id into an unvalidated mini-protocol. A later web client
-  hides the controls against an older host using that feature-introduction constant;
+  pair inside the opaque id would turn a simple id into an unvalidated mini-protocol;
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
   **`LINE_WIDTH_COLUMNS`** owns the shared `{ min: 40, max: 240, default: 120 }` integer contract for
   the independently bounded chat/file visual wrap columns; **`isLineWidth`** is the one validator consumed
   on both sides of the wire;
-  **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
-  introduction so a later web client hides them against an older host without comparing against the moving
-  latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
-  **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
-  hides it against a host that can preserve but cannot apply that config field;
-  **`PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`** pins the v67 review reshape — the reviewer chat is gone, so
-  `TodoPlan.reviewerSessionId` and `ReviewComment.reflection` left the wire, `todo.startReview` returns
-  a bare ack, and its detached failure arrives on the additive `review.failed` push (`ReviewFailedPayload`)
-  since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
-  is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
+  the plan review has no reviewer chat: `todo.startReview` returns a bare ack, and its detached failure
+  arrives on the `review.failed` push (`ReviewFailedPayload`) since the review has no chat to carry it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, onboardingDismissed, interfaceFont,
-  codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields join at
-  v102 and normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
-  the wire at protocol v61, `terminalWindowsShell` at v62, and `voiceInputEnabled` (default `true`) with voice input
-  at v107. `onboardingDismissed` (v94, default `false`)
-  records that the user finished or skipped the cold-start onboarding wizard, so it never returns. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
-  v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
-  hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
+  codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); `voiceInputEnabled` defaults to `true`. `onboardingDismissed` (default `false`)
+  records that the user finished or skipped the cold-start onboarding wizard, so it never returns. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
   `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value.
-  **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) pins the picker's host-kept lists: **`favoriteModels`** (full
+  The picker's host-kept lists are **`favoriteModels`** (full
   `WireModel`s in the user's display order — the client writes the whole list through `settings.update`,
   identity by `sameModel`) and **`recentModels`** (newest-first, at most **`RECENT_MODELS_LIMIT`** = 5,
   **host-maintained**: it is excluded from `AppConfigUpdate`, and the host appends on every explicit model
-  choice — a `session.create` that names a model and every `session.setModel`). Both default to `[]`, so a
-  client gates only on the version, never on field presence. Snapshots in either list are re-pointed to the
+  choice — a `session.create` that names a model and every `session.setModel`). Both default to `[]`. Snapshots in either list are re-pointed to the
   live catalog by the client before rendering; a model that left the catalog is simply not offered.
   `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
-  **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
-  `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
-  without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
+  `template.list` / `template.get` take a project location, so Create Workspace previews global plus
+  current-checkout project templates without sending host paths. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
-  **`SUBAGENT_MAX_CONCURRENT`** = 1–16, default 4, validated by `isSubagentMaxConcurrent`; on the wire from
-  **`SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`** = v79) is how many subagents one chat runs at once — more
-  spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
-  from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
-  into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `agentReviewEnabled` (default `false`, on the
-  wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
-  tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
-  from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —
+  **`SUBAGENT_MAX_CONCURRENT`** = 1–16, default 4, validated by `isSubagentMaxConcurrent`) is how many subagents one chat runs at once — more
+  spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never) is the idle window after which a quiet workspace settles
+  into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `agentReviewEnabled` (default `false`) gates the worker's in-session `request_review`
+  tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`) names the host-registry extensions the user switched off —
   unknown names are kept and ignored, and the host applies it to new and open sessions (see
-  [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
-  `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
+  [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`) maps extension name → setting key → boolean for the settings
   an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
   `settings.update { extensionSettings }` merges per key; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
   and group limits are web-local); `analyticsEnabled` is the additional-data preference and host gate,
   default `false`, while `analyticsConsentConfirmed` defaults `false` and records completion of the initial
-  choice. `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent
-  flow against older hosts that cannot persist it. The initial dialog first writes the enabled preference
+  choice. The initial dialog first writes the enabled preference
   alone, then completion and the current preference together; Privacy Settings writes both together. An older
   client's preference-only write cannot create the new confirmation. The installation id remains entirely
   server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries
@@ -589,7 +550,7 @@ every client reads the wire one way. The one package
   so the jump affordance lives there instead; `messageIndex` anchors jump-to-message into
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
-  the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`transcript` / `file` /
+  the **search palette DTOs**: **`SearchKind`** (`transcript` / `file` /
   `spec` / `plan` — chats and workspaces are the palette's own rows), **`SearchContext`** (the active workspace + context project the
   host turns into its one file/spec root), **`SearchHit`** (a union per kind over shared base fields — a stable
   `kind:id[:locator]` id, title / subtitle, the shared matcher's `MatchTier` + `score` and highlight `ranges`
@@ -627,9 +588,7 @@ every client reads the wire one way. The one package
   1-based `page` for paged media, so a comment can name an image region or a notebook cell instead of a
   line; Ask-agent hunk comments populate `diffHunk` with the exact displayed hunk header, and `contentHash` is sha-256 over the
   resource's BYTES (byte-identical to the former text hash for valid UTF-8).
-  **`REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`** pins the additive `region` member and the now-populated
-  `structural` slot to v74, so a renderer-rich client tells a host that preserves them from one that
-  predates them instead of having a region anchor silently dropped; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
+  A `side: "base"` anchor additionally carries **`baseRef`**, the ref
   its lines and fragment were captured against, since the two diff sides are two line spaces, plus the
   **`scope`** it was captured in — the diff identity that reopens the one surface rendering that blob),
   **`ReviewSnapshot`** (`{ review, comments }` — the `review.get`
@@ -642,8 +601,7 @@ every client reads the wire one way. The one package
   `template.get`/`template.save` shape);
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
-  bottom alignment, and singleton tools (`plan`, the TODO List, is accepted from
-  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94), but no workspace, file, diff, chat, document, terminal, preview,
+  bottom alignment, and singleton tools (`plan`, the TODO List, is accepted), but no workspace, file, diff, chat, document, terminal, preview,
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
@@ -677,14 +635,11 @@ every client reads the wire one way. The one package
   the wire.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
-  changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
-  `PROJECT_RENAME_PROTOCOL_VERSION` pins its v85 introduction so a newer client omits the action against
-  an older host), **`project.inspect`** (classify a path) + **`project.init`**
+  changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`),
+  **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.create`** (`{ parentPath, name, displayName? }` → the opened
   `Project`: make the folder `name` under `parentPath`, creating missing parents, then the same bootstrap as
-  init, and name the project `displayName` — what the user typed — when it differs from the folder;
-  `ONBOARDING_PROTOCOL_VERSION` pins its v94 introduction together with `AppConfig.onboardingDismissed`
-  and `provider.detect`). **`PROJECT_CLONE_PROTOCOL_VERSION`** (v95) gates
+  init, and name the project `displayName` — what the user typed — when it differs from the folder) + the clone methods
   **`project.cloneDestination`** (`{ parentPath, name }` → `{ path }`, resolved absolute destination
   after host validation), **`project.clone`** (`{ operationId, url, parentPath, name, depth? }` →
   opened `Project`, or `null` after cancellation and cleanup), and **`project.cancelClone`**
@@ -731,7 +686,7 @@ every client reads the wire one way. The one package
   override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
   **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
-  **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible
+  **`customEndpoints.remove`** (the user's OpenAI-compatible
   servers stored as pi `models.json` providers whose ids carry **`CUSTOM_ENDPOINT_ID_PREFIX`** (`custom-`,
   tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
   `contextWindow` / `maxTokens` / `reasoning` / `vision` are `null` when it did not say (distinct from an
@@ -752,16 +707,14 @@ every client reads the wire one way. The one package
   (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
-  correlated by `loginId` / **`loginCancel`** / **`logout`** / **`disableWarning`** (v99,
-  **`PROVIDER_WARNINGS_PROTOCOL_VERSION`**: `{ warning: ProviderWarning }` turns off pi's global
+  correlated by `loginId` / **`loginCancel`** / **`logout`** / **`disableWarning`** (`{ warning: ProviderWarning }` turns off pi's global
   `warnings.<warning>`, the chat notice's "Don't warn again"; no client-side way to turn it back on) /
   the **JetBrains AI** set **`jbcentralConnect`** / **`jbcentralDisconnect`** /
   **`jbcentralStartProxy`** / **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
   the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
-  the **background-creation set** (v104, **`WORKSPACE_CREATION_PROTOCOL_VERSION`**; a client facing an
-  older host falls back to `workspace.create`): **`workspace.startCreate`** (`{ projectId, name?, baseRef?,
+  the **background-creation set**: **`workspace.startCreate`** (`{ projectId, name?, baseRef?,
   kickoff? }` → a **`WorkspaceCreation`** as soon as the host has reserved its branch and path — the
   checkout runs afterwards; `kickoff` is a **`WorkspaceKickoff`** `{ text, images?, model?, thinkingLevel? }`
   the host holds and sends as the first chat message once the workspace exists, so it survives the window
@@ -782,22 +735,20 @@ every client reads the wire one way. The one package
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
   **`workspace.rename`** (`{ id, name }` → the locked updated `Workspace`; managed worktrees only;
   changes the display name while preserving the Git branch + cwd, and broadcasts the ordinary full-snapshot
-  `workspace.updated`; `WORKSPACE_RENAME_PROTOCOL_VERSION` pins its v55 introduction so a newer client with
-  this action omits it against an older host) / **`workspace.openReview`** (the active
+  `workspace.updated`) / **`workspace.openReview`** (the active
   branch's optional `OpenBranchReview` metadata; optional `allowCached: true` permits a settled host
   cache hit while omission preserves the original force-fresh behavior for older independently shipped
-  clients; either form still joins a lookup already in flight) / **`workspace.branchStatus`** (v87, same
-  params and freshness rules → `BranchStatus`; supersedes `openReview` for v87 clients, which stays for
-  older ones; v88 adds `skipFetch: true` — a CI poll: a fresh review lookup without fetching origin) /
-  **`workspace.push`** (v87, `{ workspaceId, branch, confirmBase? }` → `{ dirtyFiles }`: publish or
+  clients; either form still joins a lookup already in flight) / **`workspace.branchStatus`** (same
+  params and freshness rules → `BranchStatus`; `skipFetch: true` — a CI poll: a fresh review lookup without fetching origin) /
+  **`workspace.push`** (`{ workspaceId, branch, confirmBase? }` → `{ dirtyFiles }`: publish or
   push the branch to `origin` without touching any PR; a branch that is its own base is refused unless
-  `confirmBase: true`, and `branch` — the one the user saw and confirmed — must still be the live branch; `PUSH_AUTH_FAILED` as for `pr.open`) / **`pr.preview`** (v87 adds optional
+  `confirmBase: true`, and `branch` — the one the user saw and confirmed — must still be the live branch; `PUSH_AUTH_FAILED` as for `pr.open`) / **`pr.preview`** (optional
   `source: "plan" | "commits" | "template" | "empty"` and `template`, makes `sessionId` optional, and
   returns the discovered `templates` and `planAvailable`; an older client's `{ sessionId }` call keeps the
-  plan body — `host` sends it `source: "plan"` explicitly, since a v87 source-less default may be `commits`) / **`pr.generate`** (v87, `{ workspaceId, sessionId?, template? }` → `{ body: string | null }`,
-  a best-effort one-shot draft; `null` when no model answered; `pr.open` v87 accepts no `sessionId` when
+  plan body — `host` sends it `source: "plan"` explicitly, since a v87 source-less default may be `commits`) / **`pr.generate`** (`{ workspaceId, sessionId?, template? }` → `{ body: string | null }`,
+  a best-effort one-shot draft; `null` when no model answered; `pr.open` accepts no `sessionId` when
   the caller supplies the `body`, and an optional `branch` — the branch the draft was composed for — that
-  must still be the live branch, as for `workspace.push`) / the v88 **review actions** (`REVIEW_ACTIONS_PROTOCOL_VERSION`), each
+  must still be the live branch, as for `workspace.push`) / the **review actions**, each
   naming the `branch` the user saw and, for a PR, the `number` it showed: **`pr.ready`** / **`pr.reopen`**
   (`{ workspaceId, branch, number }` → `Ack`), **`pr.merge`** (`… , method: "squash" | "merge" | "rebase",
   deleteBranch` → `MergePrResult { merged, branchDeleted, deleteError? }` — `merged: false` when GitHub only
@@ -830,7 +781,7 @@ every client reads the wire one way. The one package
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
   host-side — the scope menu's lazily-fetched list) / **`workspace.turns`** (`{ workspaceId }` → the
   workspace's recorded agent runs, oldest first, capped host-side) / the **`change.*` write path**
-  (`CHANGE_MUTATIONS_PROTOCOL_VERSION` = v75) — **`change.revert`** (`{ workspaceId, path, scope,
+  — **`change.revert`** (`{ workspaceId, path, scope,
   target, expect: { originalHash, modifiedHash } }` → `{ receipt }`: the client names *what it saw*, the
   host re-derives the change from its own reads under a per-workspace lock, and either side's hash
   mismatching is `STALE_VIEW` with nothing written — the agent keeps working during review, so
@@ -845,7 +796,7 @@ every client reads the wire one way. The one package
   actually moved the local remote-tracking ref the host follows up with pathless `workspace.fsChanged`
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
-  no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
+  no params — the host registry joined with `disabledExtensions`;
   there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`packages.*`**
   (installed pi packages; v99, § pi packages below) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
@@ -866,7 +817,7 @@ every client reads the wire one way. The one package
   `systemThemePair` are complete replacements; entering system mode requires a complete existing-or-incoming
   pair. A legacy `{ theme }` mutation without explicit `themeMode` means a fixed-theme selection and exits
   system mode; returns the merged config) /
-  **`environment.get`** / **`environment.update`** (`HOST_ENVIRONMENT_PROTOCOL_VERSION`, v91; the stored host environment — optional pi config folder
+  **`environment.get`** / **`environment.update`** (the stored host environment — optional pi config folder
   plus ordered `{ name, value }` variables — outside `AppConfig`, never broadcast or in `server.welcome`
   because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
   names and the `effectiveAgentDir`; `update` replaces the whole record and returns
@@ -882,15 +833,11 @@ every client reads the wire one way. The one package
   while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
   one call when the user presses Send, whatever the analytics setting; dispatch refuses a wrong shape with `INVALID_PARAMS`; a value rule fails with `SURVEY_INVALID`, and it also fails with
   `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
-  and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
-  invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
-  a client sends a pre-v98 host the older shape, Other text inline in `answers` and no `language`, and a
-  submission without `others` is read in that shape) /
+  and restarts) or `SURVEY_NOT_SENT`) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
-  the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
-  newer client never sends it to an older host) / **`search.query`** + **`search.preview`** (the palette's host
-  providers from `SEARCH_PROTOCOL_VERSION`, v106: `{ query, kinds?, context, limit? }` → per-kind
+  the host is the only sanitizer) / **`search.query`** + **`search.preview`** (the palette's host
+  providers: `{ query, kinds?, context, limit? }` → per-kind
   groups with the shared matcher's tiers; a preview is a bounded
   transcript read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
@@ -920,9 +867,9 @@ every client reads the wire one way. The one package
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed, minus closed records whose
   folder is definitively gone), plus optional
-  **`hostUpdate: HostUpdateNotice`**, **`configReadFailed: true`** (v108: the host's `config` is defaults because
-  its `config.json` could not be read; absent otherwise and from an older host, so it needs no gate) and **`hostPlatform`**
-  (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
+  **`hostUpdate: HostUpdateNotice`**, **`configReadFailed: true`** (the host's `config` is defaults because
+  its `config.json` could not be read; absent otherwise) and **`hostPlatform`**
+  (`darwin | linux | win32`, optional) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
   the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
   published when a launcher finds a newer release, then replaced as a v70 host-run moves through
@@ -933,10 +880,10 @@ every client reads the wire one way. The one package
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v97
+  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the connecting
   client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`feedback.githubStar`**
   (`GithubStarAsk { stars: number | null }`, the addressed one-time GitHub star ask with the host-read star count, sent
-  only to a client at `GITHUB_STAR_PROTOCOL_VERSION`, v103; not
+  only to the connecting client; not
   broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
@@ -984,8 +931,8 @@ every client reads the wire one way. The one package
   that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names
   responses the client has *read* — the only thing that distinguishes a reply the page received from one that
   died in a socket buffer, and so the only thing that lets the host free a retained result — or requests whose
-  client deadline fired, which the host then abandons ([[submodule-server-host]]); an older host ignores a receipt
-  for work still running, so this needs no protocol bump — and **`WsResume`**
+  client deadline fired, which the host then abandons ([[submodule-server-host]]); a receipt
+  for work still running is ignored — and **`WsResume`**
   (`{ resume: string[] }`), sent on every (re)connect ahead of the replays, names the complete set the page
   still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
@@ -995,22 +942,20 @@ every client reads the wire one way. The one package
 ## Chat Resources
 
 The current-chat resource view is a projection of two existing capability owners, not a generic
-process API. `CHAT_RESOURCES_PROTOCOL_VERSION` (71) gates its methods and affordances; hosts through
-v70 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs mirror [[module-pi-background-commands]]
+process API. No native Pi background-task protocol is implied. The command DTOs mirror [[module-pi-background-commands]]
 without importing that package. Subagents retain their Pi child session ids and delegation statuses.
 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
   every live record plus the newest twenty finished ones per kind. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
-  effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
-  `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
-  an older host) and — once terminal — the run duration [[module-pi-delegation]] measured
-  (`durationMs`) and, from a v96 host, the finish time (`finishedAt`); not usage or reports.
+  effective `thinkingLevel` (both optional), optional abort reason,
+  `detached: true` for a background run (from the child's `info`; absent for a foreground run) and — once terminal — the run duration [[module-pi-delegation]] measured
+  (`durationMs`) and the finish time (`finishedAt`); not usage or reports.
   Subagent role/task summaries are capped at 200/2,000 characters. Finished records outlive the host
   ([[submodule-server-resource-history]]) but never carry authority: neither archived records,
   historical tool acknowledgements nor persisted PIDs make anything stoppable after a restart.
-- **History (v96, `RESOURCE_HISTORY_PROTOCOL_VERSION`).** The snapshot adds `history`: per kind, a
+- **History.** The snapshot adds `history`: per kind, a
   `ResourceTally` of every finished record by `ResourceOutcome` (`done` / `failed` / `stopped` /
   `interrupted`). `interrupted: true` on either summary means the host or the chat's teardown ended the
   run, and such a run always travels with a terminal status — the owner's, or `stopped` / `aborted` when the
@@ -1023,7 +968,7 @@ without importing that package. Subagents retain their Pi child session ids and 
   ties), `resourceOutcome`, `isLiveResource` and `resourceRecordId` over the `ResourceRecord` union, so the
   host and the UI never derive them twice.
 - `backgroundCommand.output({workspaceId, sessionId, commandId})` returns the current bounded
-  `{available: true, command, output: {text, truncated}}` — from a v96 host also the archived tail of a
+  `{available: true, command, output: {text, truncated}}` — also the archived tail of a
   finished command the owner no longer holds — or `{available: false}` for an unknown, foreign or
   unarchived command after validating its parent. Output REPLACES the previous snapshot; truncation is
   explicit. It accepts no filesystem path or PID.
@@ -1066,15 +1011,14 @@ own existing Pi transcript persistence, not a second wire-owned history store.
 
 ## Project trust
 
-`PROJECT_TRUST_PROTOCOL_VERSION` (81) gates the generalized project-trust surface: the trust summary and
-the pi-level resource grant. A client talking to an older host sends neither.
+The generalized project-trust surface is the trust summary and the pi-level resource grant.
 
 - `project.trustSummary { projectId }` returns `ProjectTrustSummary` for the generalized trust notice: the
   project checkout's alias skill names and the kinds of its own pi resources a pi-level grant would load
   (`piResources: ProjectResourceKind[]`, empty when none), so the notice names exactly what is there and
   says it runs code only when `extensions` or `settings` are among them, plus how many `.pi/mcp.json`
   entries would then await approval (`mcpServers`).
-  An older host only answers `project.aliasSkills`, which the client reads as "aliases only". It reads the
+  It reads the
   project's own checkout and takes no `workspaceId`: trust is per project, and two of the surfaces that show
   it (the Welcome notice and New Workspace) run before the workspace they lead to exists; the Skills dialog
   adds its worktree catalog's untrusted aliases client-side.
@@ -1085,9 +1029,8 @@ the pi-level resource grant. A client talking to an older host sends neither.
 
 ## MCP servers
 
-`MCP_PROTOCOL_VERSION` (83, after the extension catalog at 82) gates the `mcp.*` methods, the `mcp.status` channel and the optional
-`SessionResources.mcpServers` list; a client talking to an older host sends none of them and treats the
-missing list as "no MCP". The engine is pi's built-in MCP ([[submodule-server-agent]]); these DTOs mirror
+The `mcp.*` methods, the `mcp.status` channel and the optional
+`SessionResources.mcpServers` list carry MCP state. The engine is pi's built-in MCP ([[submodule-server-agent]]); these DTOs mirror
 what the host reads from pi and from the two `mcp.json` files, never pi's own types — the web depends on
 contracts only.
 
@@ -1116,16 +1059,14 @@ contracts only.
   never overwrites a newer one. A live chat has a snapshot from the moment it opens: until pi answers, and
   again after each reload, the servers it starts read `starting`. `configErrors` (`McpConfigFileError`:
   the file's path and the pi-equivalent message, masked) lists problems with a whole file — unparsable
-  JSON, `mcpServers` not an object, a mistyped top-level key — that no server row can carry; older hosts
-  omit it. `handledElsewhere` marks a host
+  JSON, `mcpServers` not an object, a mistyped top-level key — that no server row can carry. `handledElsewhere` marks a host
   where a user-installed extension or `-builtin:mcp` owns MCP and management is read-only; pi settings
   are read even with no chat open (`by: "pi settings (-builtin:mcp)"` — Settings recognises that exact
   value to say which entry to remove, so it stays stable), a replacing extension is seen through a live
   chat (`by` = its path).
-- `MCP_TOOL_GRANTS_PROTOCOL_VERSION` (84) adds the optional `McpServerSummary.alwaysAllowed`
-  (`{ tool, label }`: grants still valid for the effective entry, listed on that row only) and
+- The wire carries `McpServerSummary.alwaysAllowed` (optional `{ tool, label }`: grants still valid for the effective
+  entry, listed on that row only) and
   `mcp.revokeToolGrant { workspaceId, name, tool }`, a record-only mutation like `setProjectOverride`.
-  An older host never lists grants, so a client needs no gate to hide the revoke.
 - Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`, `revokeToolGrant`) re-check that
   ownership and the current project policy in the same synchronous step as the write and fail with `MCP_HANDLED_ELSEWHERE` where
   `mcp.list` would set `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
@@ -1152,8 +1093,7 @@ contracts only.
   (`expectedFingerprint`), and the host refuses, file untouched, when the entry in that scope's file no
   longer has it — so a stale Edit or Remove never rewrites or deletes content the user has not seen,
   whether a checkout changed the repository entry or another client or editor replaced the user entry
-  under an open dialog. The field is required rather than optional on the wire: the MCP surface ships
-  whole at `MCP_PROTOCOL_VERSION`, so there is no older host or client to tolerate. Dispatch refuses a
+  under an open dialog. The field is required on the wire. Dispatch refuses a
   missing fingerprint, and a `scope` other than `user` / `project`, before any path is chosen. Fields a method
   does not declare are never written: only `entry` is free-form, and it reaches the file as given. `shareWithRepo` refuses when the project file already defines that name or
   holds an override that is not approved at its current fingerprint.
@@ -1190,8 +1130,8 @@ contracts only.
 
 ## pi packages
 
-`PI_PACKAGES_PROTOCOL_VERSION` (100) gates the `packages.*` methods, the `packages.changed` channel and
-the `disabledPackages` setting. The DTOs describe what the host reads through pi's `DefaultPackageManager`
+The `packages.*` methods, the `packages.changed` channel and
+the `disabledPackages` setting carry pi package state. The DTOs describe what the host reads through pi's `DefaultPackageManager`
 and what it loaded, never pi's own types.
 
 - **`parsePiPackageInput(raw)`** (value export from `domain`) is the one reading of the Install field,
@@ -1265,9 +1205,9 @@ and what it loaded, never pi's own types.
 
 ## Voice input
 
-`speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v107:
+`speech.ts` (re-exported from `index.ts`) is the wire for local dictation:
 
-- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (a v107 host always
+- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (the host always
   sends it):
   - `supported` — whether the host platform has a pinned runtime;
   - `install` — `not-installed` | `installing` with phase, byte progress and model | `ready` | `failed`
@@ -1302,8 +1242,7 @@ pending dialog its exact replayable request), nullable latest `completion` (stab
 `succeeded | failed(error|length) | interrupted | cancelled` outcome), Pi's queue count, the live
 `backgroundWork` flag (the session still owns running background commands or subagents), and the
 owner-global `completionUnread` receipt projection (held false while an idle session has background work).
-`isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`; an older host omits
-the flag, which reads as false. `SessionStateRecord` adds session/workspace/project
+`isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`. `SessionStateRecord` adds session/workspace/project
 attribution plus the chat's `title` and `firstPrompt`; `SessionSummary.state` carries the exact attached
 session's state.
 
@@ -1311,15 +1250,14 @@ session's state.
 fails rather than returning an incomplete scan. `session.state` pushes a full record after the causative Pi
 event. `session.acknowledgeCompletion` compare-and-sets one exact completion id; needs-input is never
 acknowledgeable. `session.nudge` atomically no-ops for needs-input, queues during running work, and prompts
-an idle session. These coordinated methods start at `SESSION_STATE_PROTOCOL_VERSION`; older hosts simply
-provide no cross-workspace state.
+an idle session.
 
-`workspace.markUnread` / `workspace.markRead` (`{ id }`, v86, **`WORKSPACE_READ_STATE_PROTOCOL_VERSION`**)
+`workspace.markUnread` / `workspace.markRead` (`{ id }`)
 are the explicit read gestures over the same receipts. *Unread* relights the workspace's most recently
 active idle, unblocked, background-free session whose latest completion is read and not cancelled, and
 answers that `record` (or `null` when none qualifies); *read* acknowledges every unread completion in the
 workspace and answers the changed `records`. Both cover disk-only sessions, never touch needs-input, and
-converge other clients through `session.state` pushes. A pre-v86 host offers neither, so clients hide them.
+converge other clients through `session.state` pushes.
 
 The request registry also keeps `session.activityList` returning literal `[]` for one compatibility window,
 so an already-loaded old client clears retired markers after reconnect. No activity push or type returns.

@@ -47,9 +47,9 @@ import {
 	isExternalWorkspace,
 	isFileComparison,
 	type LayoutIntent,
-	selectCanRenameChat,
 	selectContextProject,
 	selectDiffTabTargetRef,
+	selectHostWelcomed,
 	selectRailPlanSessionId,
 	selectReviewDraftCount,
 	selectUnnamedChatFirstPrompts,
@@ -321,7 +321,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: WorkspaceId }
 	const t = useT();
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
-	const canRenameChat = useAppStore(selectCanRenameChat);
+	const canRenameChat = useAppStore(selectHostWelcomed);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
 	const frame = useAppStore((state) => state.workbenchFrame);

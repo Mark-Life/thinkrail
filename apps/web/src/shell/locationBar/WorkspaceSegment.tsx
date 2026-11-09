@@ -53,7 +53,6 @@ import {
 	selectWorkspaceSettleBlocked,
 	selectWorkspaceSettledReason,
 	settledReasonLabel,
-	supportsWorkspaceReadState,
 	useAppStore,
 	workspaceName,
 } from "../../store";
@@ -103,7 +102,7 @@ export function WorkspaceSegment({
 	);
 	const canSettle = workspace !== null && canSettleWorkspace(protocolVersion, workspace);
 	const readAction = useAppStore((s) =>
-		workspace !== null && supportsWorkspaceReadState(protocolVersion)
+		workspace !== null && protocolVersion !== null
 			? selectWorkspaceReadAction(s, workspace.id)
 			: null,
 	);

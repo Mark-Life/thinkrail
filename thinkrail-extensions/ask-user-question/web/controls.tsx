@@ -143,12 +143,10 @@ export function ModeHint({
 	multiSelect,
 	multipleQuestions,
 	previewKeys,
-	discussKey,
 }: {
 	multiSelect: boolean;
 	multipleQuestions: boolean;
 	previewKeys: boolean;
-	discussKey: boolean;
 }) {
 	const t = useT();
 	return (
@@ -164,7 +162,7 @@ export function ModeHint({
 			<span>{t("tools.ask.hintMove")}</span>
 			<span>{multiSelect ? t("tools.ask.hintEnterToggle") : t("tools.ask.hintEnterSelect")}</span>
 			<span>{t("tools.ask.hintSpaceNote")}</span>
-			{discussKey ? <span>{t("tools.ask.hintDiscussKey")}</span> : null}
+			<span>{t("tools.ask.hintDiscussKey")}</span>
 			<span>
 				{isApplePlatform() ? t("tools.ask.hintSubmitApple") : t("tools.ask.hintSubmitOther")}
 			</span>
@@ -186,7 +184,6 @@ export function OptionRow({
 	multi,
 	pageKeys,
 	previewKeys,
-	discussKey,
 	glyph,
 	onFocus,
 	onKeyDown,
@@ -202,7 +199,6 @@ export function OptionRow({
 	multi: boolean;
 	pageKeys: boolean;
 	previewKeys: boolean;
-	discussKey: boolean;
 	glyph?: ReactNode;
 	onFocus: () => void;
 	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
@@ -218,7 +214,7 @@ export function OptionRow({
 			{...(multi
 				? { role: "checkbox", "aria-checked": selected }
 				: { role: "radio", "aria-checked": selected })}
-			aria-keyshortcuts={`ArrowUp ArrowDown Home End Enter Space${discussKey ? " D" : ""}${pageKeys ? " ArrowLeft ArrowRight" : ""}${previewKeys ? " PageUp PageDown" : ""} Meta+Enter Control+Enter Shift+Escape`}
+			aria-keyshortcuts={`ArrowUp ArrowDown Home End Enter Space D${pageKeys ? " ArrowLeft ArrowRight" : ""}${previewKeys ? " PageUp PageDown" : ""} Meta+Enter Control+Enter Shift+Escape`}
 			tabIndex={cursor ? 0 : -1}
 			data-testid={tid("ask-option")}
 			data-ask-option=""

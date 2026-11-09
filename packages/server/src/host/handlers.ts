@@ -1,7 +1,6 @@
 import { mkdirSync } from "node:fs";
 import type {
 	Ack,
-	OpenBranchReview,
 	ResourceHistoryCursor,
 	ResourceKind,
 	ReviewComment,
@@ -17,12 +16,7 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
-import {
-	BRANCH_STATUS_PROTOCOL_VERSION,
-	isControlMessage,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
-	WS_METHODS,
-} from "@thinkrail/contracts";
+import { isControlMessage, WS_METHODS } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
@@ -324,8 +318,6 @@ const log = logger("host");
 
 export interface RequestContext {
 	clientKey: string;
-	/** The socket's advertised protocol; absent for in-process callers, who speak the current one. */
-	protocolVersion?: number;
 	runHostUpdate?: () => void;
 }
 
@@ -687,7 +679,7 @@ const handlers: WsHandlers = {
 		);
 		return rows;
 	},
-	"workspace.openReview": async (p, ctx) => {
+	"workspace.openReview": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		const fresh = shouldRefreshOpenReview(p.allowCached);
 		const [outcome, divergence] = await Promise.all([
@@ -696,7 +688,7 @@ const handlers: WsHandlers = {
 			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }),
 		]);
 		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
-		const review = openReviewForClient(outcome.value, ctx.protocolVersion);
+		const review = outcome.value;
 		if (!review) return review;
 		const { details: _details, ...reference } = review;
 		return {
@@ -705,7 +697,7 @@ const handlers: WsHandlers = {
 			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
 		};
 	},
-	"workspace.branchStatus": async (p, ctx) => {
+	"workspace.branchStatus": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		const fresh = shouldRefreshOpenReview(p.allowCached);
 		const origin = await originUrls(ws.worktreePath);
@@ -738,7 +730,7 @@ const handlers: WsHandlers = {
 				: {}),
 			aheadOfBase,
 			onBase: onBaseBranch(ws),
-			review: openReviewForClient(outcome.value, ctx.protocolVersion),
+			review: outcome.value,
 		};
 	},
 	"workspace.push": async (p) => {
@@ -791,12 +783,7 @@ const handlers: WsHandlers = {
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
-	"pr.preview": (params, ctx) =>
-		previewPr(
-			params.sessionId && !params.source && !supportsBranchStatus(ctx.protocolVersion)
-				? { ...params, source: "plan" }
-				: params,
-		),
+	"pr.preview": (params) => previewPr(params),
 	"pr.generate": async (params) => ({
 		body: await suggestPrDescription(await prDraftInput(params)),
 	}),
@@ -1566,25 +1553,8 @@ export function reportsRequestFailure(method: string): boolean {
 	return method !== WS_METHODS.clientReportError;
 }
 
-function supportsBranchStatus(protocolVersion: number | undefined): boolean {
-	return protocolVersion === undefined || protocolVersion >= BRANCH_STATUS_PROTOCOL_VERSION;
-}
-
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {
 	return allowCached !== true;
-}
-
-export function openReviewForClient(
-	review: OpenBranchReview | null,
-	protocolVersion: number | undefined,
-): OpenBranchReview | null {
-	if (
-		!review ||
-		protocolVersion === undefined ||
-		protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION
-	)
-		return review;
-	return review.state === undefined || review.state === "open" ? review : null;
 }
 
 export async function handleRequest(

@@ -138,12 +138,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   panel under the question offers optional reason chips (Unclear / Not relevant / Need more context) and
   optional text. The options stay visible, muted; choosing one, checking one, opening a
   note or typing Other cancels the mark while keeping the typed reason and text for a re-mark. The chip
-  shows an info chat glyph (plus screen-reader text). The answer is `kind: "discuss"`. The toggle appears
-  only for a host at `ASK_DISCUSS_PROTOCOL_VERSION` (v105) or later (`interaction.hostProtocol`), the
-  version whose server half renders discuss answers; an older host keeps the card without it, since its
-  formatter would report an empty discuss as `(no answer)` and let the agent continue. The last known version is latched per
-  call (and cached with its state), because the version is unknown between a disconnect and the next
-  welcome, and dropping the toggle then would reflow the page and unmount a panel being typed in.
+  shows an info chat glyph (plus screen-reader text). The answer is `kind: "discuss"`.
 - **The answered record is a receipt.** A header ("Answered N questions", "Answered N of M questions" or
   "N questions to discuss", plus "· K to discuss") folds a left-ruled list of question → answer pairs;
   expanded by default, collapsed it is one line of `·`-joined answers. Each pair shows the muted question,

@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
 	type BackgroundCommandOutputResult,
-	CHAT_RESOURCES_PROTOCOL_VERSION,
+	PROTOCOL_VERSION,
 	type ResourceHistoryPage,
 	type SessionResources,
 } from "@thinkrail/contracts";
@@ -11,7 +11,6 @@ import { RequestError } from "@/transport";
 import type { DetailPollScheduler } from "./detailPolling";
 import {
 	createChatResourceControls,
-	isChatResourcesKnownUnsupported,
 	type ResourceActionState,
 	startChatResourceSync,
 	startCommandLogPolling,
@@ -64,17 +63,11 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
-test("only a known older protocol retires resource-only UI", () => {
-	expect(isChatResourcesKnownUnsupported(null)).toBe(false);
-	expect(isChatResourcesKnownUnsupported(CHAT_RESOURCES_PROTOCOL_VERSION)).toBe(false);
-	expect(isChatResourcesKnownUnsupported(CHAT_RESOURCES_PROTOCOL_VERSION - 1)).toBe(true);
-});
-
 beforeEach(() => {
 	useAppStore.setState({
 		status: "connected",
 		connectionGeneration: 10,
-		protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION,
+		protocolVersion: PROTOCOL_VERSION,
 		resourceSnapshots: {},
 		resourceRevision: 0,
 		removedWorkspaceIds: {},
@@ -234,22 +227,21 @@ test("a permanent read failure stays visible without scheduling a retry", async 
 	f.sync.dispose();
 });
 
-test("disposed views, generations, unsupported welcomes, cleared entries and tombstones reject late reads", async () => {
+test("disposed views, generations, cleared entries and tombstones reject late reads", async () => {
 	for (const retire of [
 		(f: ReturnType<typeof syncFixture>) => f.sync.dispose(),
 		() => {
 			state().setStatus("disconnected");
 			state().setStatus("connected");
-			state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION, [], []);
+			state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 		},
-		() => state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION - 1, [], []),
 		() => state().clearChatResources(scope),
 		() => state().deleteChat(scope.workspaceId, scope.sessionId),
 		() => state().applyWorkspaceRemoved(testProjectId("p"), scope.workspaceId),
 	]) {
 		useAppStore.setState({
 			status: "connected",
-			protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION,
+			protocolVersion: PROTOCOL_VERSION,
 			resourceSnapshots: {},
 			removedWorkspaceIds: {},
 			deletedSessionsByWorkspace: {},
@@ -416,13 +408,13 @@ test("stale controls do not dispatch and late acknowledgements/errors cannot aff
 		() => state().setStatus("disconnected"),
 		() => {
 			state().setStatus("connected");
-			state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION, [], []);
+			state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 		},
 		() => state().deleteChat(scope.workspaceId, scope.sessionId),
 	]) {
 		useAppStore.setState({
 			status: "connected",
-			protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION,
+			protocolVersion: PROTOCOL_VERSION,
 			removedWorkspaceIds: {},
 			deletedSessionsByWorkspace: {},
 		});
@@ -552,14 +544,14 @@ test("closed logs, old connections, foreign responses and removed parents cannot
 		() => state().setStatus("disconnected"),
 		() => {
 			state().setStatus("connected");
-			state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION, [], []);
+			state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 		},
 		() => state().deleteChat(scope.workspaceId, scope.sessionId),
 		() => state().applyWorkspaceRemoved(testProjectId("p"), scope.workspaceId),
 	]) {
 		useAppStore.setState({
 			status: "connected",
-			protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION,
+			protocolVersion: PROTOCOL_VERSION,
 			removedWorkspaceIds: {},
 			deletedSessionsByWorkspace: {},
 		});
@@ -573,7 +565,7 @@ test("closed logs, old connections, foreign responses and removed parents cannot
 	}
 	useAppStore.setState({
 		status: "connected",
-		protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION,
+		protocolVersion: PROTOCOL_VERSION,
 		removedWorkspaceIds: {},
 		deletedSessionsByWorkspace: {},
 	});

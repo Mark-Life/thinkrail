@@ -314,13 +314,10 @@ test("only rows the shelf took on its own count toward the first-move notice", (
 	).toEqual([]);
 });
 
-test("settled capability survives reconnect limbo until the next welcome decides", () => {
-	const store = useAppStore.getState();
-	store.setStatus("disconnected");
+test("settled capability survives reconnect limbo", () => {
+	useAppStore.getState().setStatus("disconnected");
 	expect(useAppStore.getState().protocolVersion).toBeNull();
 	expect(useAppStore.getState().workspaceSettlingSupported).toBe(true);
-	store.installWelcomeSnapshot(77, [], []);
-	expect(useAppStore.getState().workspaceSettlingSupported).toBe(false);
 });
 
 describe("the active-workspace live latch", () => {

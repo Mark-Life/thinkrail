@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { CLIENT_ERROR_REPORT_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import {
 	chunkIdsForStack,
@@ -8,7 +8,6 @@ import {
 	reportClientError,
 	reportInvalidReply,
 	resetClientErrorReportsForTests,
-	supportsClientErrorReports,
 } from "./errorReports";
 import type { WsTransport } from "./transport";
 import * as wireTransport from "./wireTransport";
@@ -35,7 +34,7 @@ afterEach(() => {
 });
 
 test("an invalid reply reports its method and code only, and a report's own reply never reports", () => {
-	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	useAppStore.setState({ protocolVersion: PROTOCOL_VERSION });
 	reportInvalidReply("client.reportError");
 	expect(requests).toEqual([]);
 	reportInvalidReply("project.list");
@@ -49,12 +48,6 @@ test("an invalid reply reports its method and code only, and a report's own repl
 			},
 		},
 	]);
-});
-
-test("reports are offered only to a host at or beyond the v90 capability", () => {
-	expect(supportsClientErrorReports(CLIENT_ERROR_REPORT_PROTOCOL_VERSION)).toBe(true);
-	expect(supportsClientErrorReports(CLIENT_ERROR_REPORT_PROTOCOL_VERSION - 1)).toBe(false);
-	expect(supportsClientErrorReports(null)).toBe(false);
 });
 
 test("a report carries the error's class, stack and boundary, never its message", () => {
@@ -96,26 +89,21 @@ test("an error with a non-string name still reports a string type", () => {
 	expect(clientErrorReport("window", error).type).toBe("Error");
 });
 
-test("reports before the welcome wait for the protocol and are dropped by older hosts", () => {
+test("reports before the welcome wait for it", () => {
 	reportClientError(clientErrorReport("window", new Error("early")));
 	expect(requests).toEqual([]);
-	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	useAppStore.setState({ protocolVersion: PROTOCOL_VERSION });
 	expect(requests.map((request) => request.method)).toEqual(["client.reportError"]);
-
-	requests.length = 0;
-	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION - 1 });
-	reportClientError(clientErrorReport("window", new Error("old host")));
-	expect(requests).toEqual([]);
 });
 
 test("a page sends at most 50 reports", () => {
-	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	useAppStore.setState({ protocolVersion: PROTOCOL_VERSION });
 	for (let i = 0; i < 60; i++) reportClientError(clientErrorReport("window", new Error(`e${i}`)));
 	expect(requests).toHaveLength(50);
 });
 
 test("window errors and unhandled rejections are forwarded until uninstalled", () => {
-	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	useAppStore.setState({ protocolVersion: PROTOCOL_VERSION });
 	const target = new EventTarget() as unknown as Window;
 	const uninstall = installClientErrorReporting(target);
 	const error = Object.assign(new Event("error"), {

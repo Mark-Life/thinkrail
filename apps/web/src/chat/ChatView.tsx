@@ -24,12 +24,11 @@ import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker }
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
-	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectHostWelcomed,
 	selectPickerModels,
 	selectSkillsStale,
-	selectSupportsMcp,
 	selectWorkspaceById,
 	toast,
 	useAppStore,
@@ -125,8 +124,8 @@ export default function ChatView({
 
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
-	const canRenameChat = useAppStore(selectCanRenameChat);
-	const supportsMcp = useAppStore(selectSupportsMcp);
+	const canRenameChat = useAppStore(selectHostWelcomed);
+	const supportsMcp = useAppStore(selectHostWelcomed);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
@@ -301,11 +300,6 @@ export default function ChatView({
 		if (resourcesTrigger.current) resourcesTrigger.current.focus();
 		else composerRef.current?.refocus();
 	};
-	useEffect(() => {
-		if (!resources.knownUnsupported) return;
-		setInspector(null);
-		setStopAllOpen(false);
-	}, [resources.knownUnsupported]);
 	const watchesMcp = inspectorOpen && !!resources.groups.mcpServers?.length;
 	useEffect(
 		() => (watchesMcp && connectionGeneration > 0 ? watchMcpWorkspace(workspaceId) : undefined),

@@ -1,30 +1,19 @@
 import type { ProjectId, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
-	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
-	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
 	firstPromptOfTexts,
 	type GitDiffScope,
 	isLiveResource,
 	isSessionWorking,
-	MCP_PROTOCOL_VERSION,
 	type McpServerResourceSummary,
-	MODEL_PICKER_PROTOCOL_VERSION,
-	ONBOARDING_PROTOCOL_VERSION,
-	PROJECT_CLONE_PROTOCOL_VERSION,
-	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
 	parseSessionId,
 	parseStoredWorkspaceId,
-	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
 	type ResourceRecord,
 	resourceTallyTotal,
-	SEARCH_PROTOCOL_VERSION,
-	SESSION_RENAME_PROTOCOL_VERSION,
-	SESSION_STATE_PROTOCOL_VERSION,
 	type SessionResourceHistory,
 	type SessionResources,
 	type SessionState,
@@ -34,8 +23,6 @@ import {
 	sameModel,
 	tallyResources,
 	type WireModel,
-	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
@@ -90,19 +77,9 @@ interface AnalyticsConsentState {
 	analyticsConsentConfirmed: boolean;
 }
 
-export function selectAnalyticsConsentSupported(
-	state: Pick<AnalyticsConsentState, "protocolVersion">,
-): boolean {
-	return (
-		state.protocolVersion !== null && state.protocolVersion >= ANALYTICS_CONSENT_PROTOCOL_VERSION
-	);
-}
-
 export function selectAnalyticsConsentPromptOpen(state: AnalyticsConsentState): boolean {
 	return (
-		selectAnalyticsConsentSupported(state) &&
-		state.welcomeGeneration > 0 &&
-		!state.analyticsConsentConfirmed
+		selectHostWelcomed(state) && state.welcomeGeneration > 0 && !state.analyticsConsentConfirmed
 	);
 }
 
@@ -122,12 +99,15 @@ interface ProtocolState {
 	protocolVersion: number | null;
 }
 
+/** A host at this UI's protocol version has sent its welcome on the current connection. */
+export function selectHostWelcomed(state: ProtocolState): boolean {
+	return state.protocolVersion !== null;
+}
+
 export function selectHostSearchAvailable(state: {
 	welcomeProtocolVersion: number | null;
 }): boolean {
-	return (
-		state.welcomeProtocolVersion !== null && state.welcomeProtocolVersion >= SEARCH_PROTOCOL_VERSION
-	);
+	return state.welcomeProtocolVersion !== null;
 }
 
 export function selectHostReachable(
@@ -136,32 +116,6 @@ export function selectHostReachable(
 	return (
 		state.status === "connected" && state.welcomeGeneration > 0 && state.protocolVersion !== null
 	);
-}
-
-export function selectHostSearchReady(
-	state: ProtocolState & { status: string; welcomeGeneration: number },
-): boolean {
-	return (
-		selectHostReachable(state) &&
-		state.protocolVersion !== null &&
-		state.protocolVersion >= SEARCH_PROTOCOL_VERSION
-	);
-}
-
-export function selectCanRenameChat(state: ProtocolState): boolean {
-	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
-}
-
-export function selectSupportsProjectTrust(state: ProtocolState): boolean {
-	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_TRUST_PROTOCOL_VERSION;
-}
-
-export function selectSupportsProjectClone(state: ProtocolState): boolean {
-	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_CLONE_PROTOCOL_VERSION;
-}
-
-export function selectSupportsOnboarding(state: ProtocolState): boolean {
-	return state.protocolVersion !== null && state.protocolVersion >= ONBOARDING_PROTOCOL_VERSION;
 }
 
 type OnboardingState = ProtocolState & {
@@ -173,7 +127,7 @@ type OnboardingState = ProtocolState & {
 export function selectOnboardingEligible(state: OnboardingState): boolean {
 	return (
 		!state.onboardingDismissed &&
-		selectSupportsOnboarding(state) &&
+		selectHostWelcomed(state) &&
 		state.projects.length === 0 &&
 		state.recentProjects.length === 0
 	);
@@ -184,19 +138,6 @@ export function selectOnboardingActive(
 ): boolean {
 	if (state.onboardingWizard === "shown") return state.projects.length === 0;
 	return state.onboardingWizard === "pending" && selectOnboardingEligible(state);
-}
-
-export function selectSupportsMcp(state: ProtocolState): boolean {
-	return state.protocolVersion !== null && state.protocolVersion >= MCP_PROTOCOL_VERSION;
-}
-
-export function supportsChatResources(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= CHAT_RESOURCES_PROTOCOL_VERSION;
-}
-
-/** Whether the host keeps picker favorites/recents and projects picker metadata onto the catalog. */
-export function selectSupportsModelPicker(state: ProtocolState): boolean {
-	return state.protocolVersion !== null && state.protocolVersion >= MODEL_PICKER_PROTOCOL_VERSION;
 }
 
 export function isChatResourceScopeAlive(
@@ -220,7 +161,7 @@ export function isChatResourceConnectionCurrent(
 	return (
 		isChatResourceScopeAlive(state, read) &&
 		state.status === "connected" &&
-		supportsChatResources(state.protocolVersion) &&
+		state.protocolVersion !== null &&
 		state.connectionGeneration === read.connectionGeneration
 	);
 }
@@ -244,7 +185,7 @@ export function selectChatResourceAuthority(
 		!!projection?.fresh &&
 		projection.connectionGeneration === state.connectionGeneration &&
 		state.status === "connected" &&
-		supportsChatResources(state.protocolVersion) &&
+		state.protocolVersion !== null &&
 		isChatResourceScopeAlive(state, scope)
 	);
 }
@@ -255,8 +196,7 @@ export function selectChatResourcesVisible(
 ): boolean {
 	return (
 		isChatResourceScopeAlive(state, scope) &&
-		(supportsChatResources(state.protocolVersion) ||
-			(state.protocolVersion === null && !!selectChatResourceProjection(state, scope)))
+		(state.protocolVersion !== null || !!selectChatResourceProjection(state, scope))
 	);
 }
 
@@ -269,7 +209,7 @@ export function selectChatResourcesLoading(
 		!projection?.snapshot &&
 		!projection?.error &&
 		state.status === "connected" &&
-		supportsChatResources(state.protocolVersion)
+		state.protocolVersion !== null
 	);
 }
 
@@ -284,8 +224,7 @@ export function selectChatResourcesStaleness(
 	scope: ChatResourceScope,
 ): ChatResourcesStaleness | null {
 	if (selectChatResourceAuthority(state, scope)) return null;
-	if (state.status !== "connected" || !supportsChatResources(state.protocolVersion))
-		return "disconnected";
+	if (state.status !== "connected" || state.protocolVersion === null) return "disconnected";
 	const projection = selectChatResourceProjection(state, scope);
 	if (projection?.error) return projection.retrying ? "refreshFailed" : "unavailable";
 	return projection?.snapshot ? "refreshing" : null;
@@ -368,14 +307,6 @@ export function selectChatResourceOldest(
 	return finishedChain(selectChatResourceProjection(state, scope), kind).at(-1);
 }
 
-export function supportsResourceHistory(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= RESOURCE_HISTORY_PROTOCOL_VERSION;
-}
-
-export function selectHasNormalizedSessionState(state: ProtocolState): boolean {
-	return state.protocolVersion !== null && state.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION;
-}
-
 interface SessionStateProjection {
 	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
 }
@@ -389,10 +320,6 @@ export function selectSessionState(
 }
 
 export type WorkspaceOrder = "created" | "recent";
-
-export function supportsWorkspaceSettling(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
-}
 
 export const SETTLED_SHELF_PAGE = 10;
 export const SETTLED_SHELF_MORE = 25;
@@ -533,10 +460,6 @@ export function selectWorkspaceNeedsAttention(
 	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some(
 		(record) => record.state.needsInput !== null || record.state.completionUnread,
 	);
-}
-
-export function supportsWorkspaceReadState(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= WORKSPACE_READ_STATE_PROTOCOL_VERSION;
 }
 
 export type WorkspaceReadAction = "markRead" | "markUnread";

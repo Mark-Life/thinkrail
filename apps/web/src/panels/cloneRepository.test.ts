@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import { PROJECT_CLONE_PROTOCOL_VERSION } from "@thinkrail/contracts";
-import { selectSupportsProjectClone } from "../store";
+
 import { cloneDepth, repositoryFolderName } from "./cloneRepository";
 
 test("repository URLs suggest editable folder names across Git hosts and transports", () => {
@@ -28,14 +27,4 @@ test("clone depth is optional but otherwise a bounded positive integer", () => {
 	expect(cloneDepth(" 20 ")).toBe(20);
 	for (const value of ["0", "-1", "1.5", "1e2", "abc", "2147483648"])
 		expect(cloneDepth(value)).toBeNull();
-});
-
-test("cloning is hidden until a capable host welcomes the client", () => {
-	expect(selectSupportsProjectClone({ protocolVersion: null })).toBe(false);
-	expect(selectSupportsProjectClone({ protocolVersion: PROJECT_CLONE_PROTOCOL_VERSION - 1 })).toBe(
-		false,
-	);
-	expect(selectSupportsProjectClone({ protocolVersion: PROJECT_CLONE_PROTOCOL_VERSION })).toBe(
-		true,
-	);
 });

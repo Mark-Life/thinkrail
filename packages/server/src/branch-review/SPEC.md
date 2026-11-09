@@ -23,10 +23,7 @@ answer would shelve a workspace whose PR is still open. The answer carries `stat
 merged = info, closed = neutral) and the Settled shelf's "PR merged/closed" rule, instead of two polls
 disagreeing. A merged/closed row is reliable only with its matching merge/close timestamp; without that
 ordering fact the host cannot prove whether later work should stay live, so it rejects the answer rather
-than persisting incomplete shelf authority. A pre-v78
-consumer that only understood open reviews reads a merged/closed row as a live PR, which is why the
-contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host answers such a client's
-`workspace.openReview` with `null` for a merged or closed review.
+than persisting incomplete shelf authority.
 
 ## Boundary
 

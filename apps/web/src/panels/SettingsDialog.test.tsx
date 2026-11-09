@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RiBrainLine } from "@remixicon/react";
-import {
-	DEFAULT_MODEL_PROTOCOL_VERSION,
-	EXTENSION_CATALOG_PROTOCOL_VERSION,
-	MCP_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
-} from "@thinkrail/contracts";
+import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { SettingsSection } from "@/store";
 import {
@@ -15,12 +10,6 @@ import {
 	settingsNavGroups,
 } from "./settingsNav";
 
-const LATEST = Math.max(
-	DEFAULT_MODEL_PROTOCOL_VERSION,
-	EXTENSION_CATALOG_PROTOCOL_VERSION,
-	MCP_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
-);
 const GATED = [
 	SettingsSection.Models,
 	SettingsSection.Mcp,
@@ -34,7 +23,10 @@ const ids = (protocolVersion: number | null, hasUpdates: boolean) =>
 describe("settingsNavGroups", () => {
 	test("current hosts with injected updates list every section in its group", () => {
 		expect(
-			settingsNavGroups(LATEST, true).map((g) => [t(g.label), g.sections.map((s) => s.id)]),
+			settingsNavGroups(PROTOCOL_VERSION, true).map((g) => [
+				t(g.label),
+				g.sections.map((s) => s.id),
+			]),
 		).toEqual([
 			[
 				"Agent",
@@ -43,6 +35,7 @@ describe("settingsNavGroups", () => {
 					SettingsSection.Providers,
 					SettingsSection.Mcp,
 					SettingsSection.Templates,
+					SettingsSection.Environment,
 				],
 			],
 			[
@@ -50,8 +43,10 @@ describe("settingsNavGroups", () => {
 				[
 					SettingsSection.Chat,
 					SettingsSection.Appearance,
+					SettingsSection.Language,
 					SettingsSection.Layout,
 					SettingsSection.Keyboard,
+					SettingsSection.Voice,
 					SettingsSection.Terminal,
 				],
 			],
@@ -69,35 +64,20 @@ describe("settingsNavGroups", () => {
 		]);
 	});
 
-	test("protocol-gated sections are hidden on old or unnegotiated hosts", () => {
-		for (const version of [1, null]) {
-			const available = ids(version, true);
-			for (const gated of GATED) expect(available).not.toContain(gated);
-			expect(available).toContain(SettingsSection.Providers);
-			expect(available).toContain(SettingsSection.Appearance);
-		}
-	});
-
-	test("each gated section appears exactly at its protocol version", () => {
-		const gates = [
-			[SettingsSection.Models, DEFAULT_MODEL_PROTOCOL_VERSION],
-			[SettingsSection.Mcp, MCP_PROTOCOL_VERSION],
-			[SettingsSection.Extensions, EXTENSION_CATALOG_PROTOCOL_VERSION],
-			[SettingsSection.Workspaces, WORKSPACE_SETTLE_PROTOCOL_VERSION],
-		] as const;
-		for (const [id, version] of gates) {
-			expect(ids(version - 1, false)).not.toContain(id);
-			expect(ids(version, false)).toContain(id);
-		}
+	test("host-only sections are hidden until a host is welcomed", () => {
+		const available = ids(null, true);
+		for (const gated of GATED) expect(available).not.toContain(gated);
+		expect(available).toContain(SettingsSection.Providers);
+		expect(available).toContain(SettingsSection.Appearance);
 	});
 
 	test("Updates is listed only with injected content", () => {
-		expect(ids(LATEST, false)).not.toContain(SettingsSection.Updates);
-		expect(ids(LATEST, true)).toContain(SettingsSection.Updates);
+		expect(ids(PROTOCOL_VERSION, false)).not.toContain(SettingsSection.Updates);
+		expect(ids(PROTOCOL_VERSION, true)).toContain(SettingsSection.Updates);
 	});
 
 	test("removed sections are never listed", () => {
-		const available = ids(LATEST, true);
+		const available = ids(PROTOCOL_VERSION, true);
 		expect(available).not.toContain(SettingsSection.Review);
 		expect(available).not.toContain(SettingsSection.LineWidth);
 		expect(available).not.toContain(SettingsSection.Feedback);
@@ -112,7 +92,7 @@ describe("settingsNavGroups", () => {
 						id: SettingsSection.Models,
 						label: "settings.nav.models",
 						icon: RiBrainLine,
-						requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
+						requiresHost: true,
 					},
 					{
 						id: SettingsSection.Updates,
@@ -127,7 +107,7 @@ describe("settingsNavGroups", () => {
 				sections: [{ id: SettingsSection.Chat, label: "settings.nav.chat", icon: RiBrainLine }],
 			},
 		];
-		expect(filterSettingsNavGroups(groups, 1, false).map((g) => g.label)).toEqual([
+		expect(filterSettingsNavGroups(groups, null, false).map((g) => g.label)).toEqual([
 			"settings.nav.group.interface",
 		]);
 		expect(filterSettingsNavGroups(groups, 1, true).map((g) => g.label)).toEqual([
@@ -140,12 +120,13 @@ describe("settingsNavGroups", () => {
 
 describe("resolveSettingsSection", () => {
 	test("keeps an available section", () => {
-		const groups = settingsNavGroups(LATEST, true);
-		for (const id of ids(LATEST, true)) expect(resolveSettingsSection(id, groups)).toBe(id);
+		const groups = settingsNavGroups(PROTOCOL_VERSION, true);
+		for (const id of ids(PROTOCOL_VERSION, true))
+			expect(resolveSettingsSection(id, groups)).toBe(id);
 	});
 
 	test("Feedback is always resolvable", () => {
-		for (const version of [LATEST, 1, null]) {
+		for (const version of [PROTOCOL_VERSION, null]) {
 			const groups = settingsNavGroups(version, false);
 			expect(resolveSettingsSection(SettingsSection.Feedback, groups)).toBe(
 				SettingsSection.Feedback,
@@ -155,17 +136,17 @@ describe("resolveSettingsSection", () => {
 	});
 
 	test("unavailable sections fall back to Appearance", () => {
-		const old = settingsNavGroups(1, false);
+		const old = settingsNavGroups(null, false);
 		for (const gated of GATED) {
 			expect(resolveSettingsSection(gated, old)).toBe(SettingsSection.Appearance);
 		}
-		expect(resolveSettingsSection(SettingsSection.Updates, settingsNavGroups(LATEST, false))).toBe(
-			SettingsSection.Appearance,
-		);
+		expect(
+			resolveSettingsSection(SettingsSection.Updates, settingsNavGroups(PROTOCOL_VERSION, false)),
+		).toBe(SettingsSection.Appearance);
 	});
 
 	test("removed sections fall back to Appearance", () => {
-		const groups = settingsNavGroups(LATEST, true);
+		const groups = settingsNavGroups(PROTOCOL_VERSION, true);
 		expect(resolveSettingsSection(SettingsSection.Review, groups)).toBe(SettingsSection.Appearance);
 		expect(resolveSettingsSection(SettingsSection.LineWidth, groups)).toBe(
 			SettingsSection.Appearance,
@@ -176,7 +157,7 @@ describe("resolveSettingsSection", () => {
 		const groups: SettingsNavGroup[] = [
 			{
 				label: "settings.nav.group.system",
-				sections: settingsNavGroups(LATEST, true)
+				sections: settingsNavGroups(PROTOCOL_VERSION, true)
 					.flatMap((g) => g.sections)
 					.filter((s) => s.id === SettingsSection.Privacy),
 			},

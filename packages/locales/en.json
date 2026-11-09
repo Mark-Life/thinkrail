@@ -2939,7 +2939,6 @@
 	"workbench.layoutSettings.maxSideGroups": "Maximum side groups",
 	"workbench.layoutSettings.nameLabel": "Custom preset name",
 	"workbench.layoutSettings.namePlaceholder": "Layout name",
-	"workbench.layoutSettings.planNeedsNewerHost": "This host is too old to save a layout with the TODO List. Update it, or remove the TODO List from the layout and try again.",
 	"workbench.layoutSettings.renameNamed": "Rename {{name}}",
 	"workbench.layoutSettings.reset": "Reset…",
 	"workbench.layoutSettings.resetDescription": "Rearranges this window into {{name}}.",

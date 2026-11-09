@@ -13,14 +13,14 @@ import {
 	untrustedNoticeText,
 } from "@/chat/projectTrust";
 import { useProjectTrustSummary } from "@/chat/useProjectTrustSummary";
-import { selectSupportsProjectTrust, toast, useAppStore } from "@/store";
+import { selectHostWelcomed, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 export function ProjectTrustNotice({ projectId }: { projectId: ProjectId }) {
 	const t = useT();
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
-	const supportsProjectTrust = useAppStore(selectSupportsProjectTrust);
+	const supportsProjectTrust = useAppStore(selectHostWelcomed);
 	const summary = useProjectTrustSummary(projectId);
 	const [busy, setBusy] = useState(false);
 	const [confirmingRevoke, setConfirmingRevoke] = useState(false);
