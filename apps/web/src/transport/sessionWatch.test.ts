@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
 import { useAppStore } from "../store";
-import { createSessionWatch } from "./sessionWatch";
+import { createSessionWatch, syncSessionWatchWithRuntimes } from "./sessionWatch";
 
 function harness(options: { runtimeIds?: () => readonly string[]; graceMs?: number } = {}) {
-	const calls: [string, string[]][] = [];
+	const calls: (readonly [string, string[]] | readonly [string, string[], "replace"])[] = [];
 	let supported = true;
 	const watch = createSessionWatch({
 		supported: () => supported,
 		runtimeIds: options.runtimeIds ?? (() => Object.keys(useAppStore.getState().sessions)),
-		send: async (method, sessionIds) => {
-			calls.push([method, sessionIds]);
+		send: async (method, sessionIds, replace) => {
+			calls.push(replace ? [method, sessionIds, "replace"] : [method, sessionIds]);
 		},
 		graceMs: options.graceMs ?? 0,
 	});
@@ -25,9 +25,7 @@ function harness(options: { runtimeIds?: () => readonly string[]; graceMs?: numb
 
 test("installing and dropping chat runtimes watches and unwatches their sessions", () => {
 	const { watch, drain } = harness();
-	const unsubscribe = useAppStore.subscribe((state, prev) => {
-		if (state.sessions !== prev.sessions) watch.sync();
-	});
+	const unsubscribe = syncSessionWatchWithRuntimes(watch, useAppStore);
 	try {
 		const store = useAppStore.getState();
 		store.openChatSession("watch-ws", "watch-a", null, "medium");
@@ -52,24 +50,35 @@ test("installing and dropping chat runtimes watches and unwatches their sessions
 	}
 });
 
-test("a welcome restates the whole set as one add-only watch, and an older host gets nothing", () => {
+test("a welcome replaces the host set, so a runtime dropped while disconnected is unwatched", () => {
 	const runtimes = ["a", "b"];
 	const { watch, drain, setSupported } = harness({ runtimeIds: () => runtimes });
 	watch.sync();
 	expect(drain()).toEqual([["session.watch", ["a", "b"]]]);
 
 	watch.restate();
-	expect(drain()).toEqual([["session.watch", ["a", "b"]]]);
+	expect(drain()).toEqual([["session.watch", ["a", "b"], "replace"]]);
 
 	setSupported(false);
 	runtimes.pop();
-	watch.restate();
 	watch.sync();
 	expect(drain()).toEqual([]);
 
 	setSupported(true);
 	watch.restate();
-	expect(drain()).toEqual([["session.watch", ["a"]]]);
+	expect(drain()).toEqual([["session.watch", ["a"], "replace"]]);
+
+	runtimes.pop();
+	watch.restate();
+	expect(drain()).toEqual([["session.watch", [], "replace"]]);
+});
+
+test("an older host gets no watch calls, not even on welcome", () => {
+	const { watch, drain, setSupported } = harness({ runtimeIds: () => ["a"] });
+	setSupported(false);
+	watch.sync();
+	watch.restate();
+	expect(drain()).toEqual([]);
 });
 
 test("a read lease watches at once and unwatches after its grace unless a runtime took over", async () => {
@@ -92,12 +101,18 @@ test("a read lease watches at once and unwatches after its grace unless a runtim
 	expect(drain()).toEqual([["session.watch", ["installed"]]]);
 });
 
-test("a large set is split to the host's per-call limit", () => {
+test("a large set is split to the host's per-call limit, and only the first restate chunk replaces", () => {
 	const runtimes = Array.from({ length: 1001 }, (_, i) => `s${i}`);
-	const { watch, calls } = harness({ runtimeIds: () => runtimes });
+	const { watch, drain } = harness({ runtimeIds: () => runtimes });
+	const shape = () => drain().map(([method, ids, replace]) => [method, ids.length, replace]);
 	watch.sync();
-	expect(calls.map(([method, ids]) => [method, ids.length])).toEqual([
-		["session.watch", 1000],
-		["session.watch", 1],
+	expect(shape()).toEqual([
+		["session.watch", 1000, undefined],
+		["session.watch", 1, undefined],
+	]);
+	watch.restate();
+	expect(shape()).toEqual([
+		["session.watch", 1000, "replace"],
+		["session.watch", 1, undefined],
 	]);
 });

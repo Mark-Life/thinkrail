@@ -1109,7 +1109,7 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
-	"session.watch": { params: { sessionIds: string[] }; result: Ack };
+	"session.watch": { params: { sessionIds: string[]; replace?: boolean }; result: Ack };
 	"session.unwatch": { params: { sessionIds: string[] }; result: Ack };
 	"session.resources": {
 		params: { workspaceId: string; sessionId: string };

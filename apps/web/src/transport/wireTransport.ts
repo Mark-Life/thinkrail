@@ -46,7 +46,7 @@ import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
-import { createSessionWatch } from "./sessionWatch";
+import { createSessionWatch, syncSessionWatchWithRuntimes } from "./sessionWatch";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
@@ -82,7 +82,8 @@ export function supportsSessionTopics(protocolVersion: number | null): boolean {
 const sessionWatch = createSessionWatch({
 	supported: () => supportsSessionTopics(useAppStore.getState().protocolVersion),
 	runtimeIds: () => Object.keys(useAppStore.getState().sessions),
-	send: (method, sessionIds) => getTransport().request(method, { sessionIds }),
+	send: (method, sessionIds, replace) =>
+		getTransport().request(method, replace ? { sessionIds, replace } : { sessionIds }),
 });
 
 export function leaseSessionWatch(sessionId: string): () => void {
@@ -345,9 +346,7 @@ export function initTransport(): WsTransport {
 		},
 	);
 
-	useAppStore.subscribe((state, prev) => {
-		if (state.sessions !== prev.sessions) sessionWatch.sync();
-	});
+	syncSessionWatchWithRuntimes(sessionWatch, useAppStore);
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;

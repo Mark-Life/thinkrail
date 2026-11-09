@@ -157,7 +157,7 @@ async function connect(port: number, client: string, protocol?: number) {
 	});
 	const send = (method: string, params: unknown) => {
 		next += 1;
-		const id = `${client}-${next}`;
+		const id = `${client}-${crypto.randomUUID()}-${next}`;
 		const reply = new Promise<Frame>((resolve) => replies.set(id, resolve));
 		socket.send(JSON.stringify({ id, method, params }));
 		return reply;
@@ -237,6 +237,25 @@ test("unwatch stops delivery", async () => {
 	await scoped.barrier();
 
 	expect(scoped.piEvents().length).toBe(before);
+}, 60_000);
+
+test("a replacing watch drops ids the client no longer wants, also across a reconnect", async () => {
+	const { port, sessionIds } = await startHost(2);
+	const [kept, dropped] = sessionIds;
+	if (!kept || !dropped) throw new Error("expected sessions");
+	const legacy = await connect(port, "legacy");
+	const first = await connect(port, "page", SESSION_TOPICS_PROTOCOL_VERSION);
+	await first.send("session.watch", { sessionIds: [kept, dropped] });
+	first.socket.close();
+	await first.closed;
+
+	const second = await connect(port, "page", SESSION_TOPICS_PROTOCOL_VERSION);
+	expect((await second.send("session.watch", { sessionIds: [kept], replace: true })).ok).toBe(true);
+	for (const id of sessionIds) await runTurn(id, legacy);
+	await second.barrier();
+
+	expect(second.sessionsSeen()).toEqual(new Set([kept]));
+	expect((await second.send("session.watch", { sessionIds: [], replace: "yes" })).ok).toBe(false);
 }, 60_000);
 
 test("a reconnect with the same client key keeps its watches without restating them", async () => {

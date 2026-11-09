@@ -23,17 +23,26 @@ export function setSessionWatchSockets(lookup: SocketLookup | null) {
 export function sessionWatchParams(params: unknown): WsParams<"session.watch"> {
 	if (!params || typeof params !== "object" || Array.isArray(params))
 		throw new Error("Invalid session watch request");
-	const { sessionIds } = params as Record<string, unknown>;
+	const { sessionIds, replace } = params as Record<string, unknown>;
 	if (
 		!Array.isArray(sessionIds) ||
 		sessionIds.length > SESSION_WATCH_MAX_IDS ||
 		!sessionIds.every(isPiSessionId)
 	)
 		throw new Error("Invalid session watch ids");
-	return { sessionIds };
+	if (replace !== undefined && typeof replace !== "boolean")
+		throw new Error("Invalid session watch replace flag");
+	return replace ? { sessionIds, replace } : { sessionIds };
 }
 
-export function watchSessions(clientKey: string, sessionIds: readonly string[]) {
+export function watchSessions(clientKey: string, sessionIds: readonly string[], replace = false) {
+	if (replace) {
+		const keep = new Set(sessionIds);
+		unwatchSessions(
+			clientKey,
+			watchedSessionIds(clientKey).filter((id) => !keep.has(id)),
+		);
+	}
 	let watched = watches.get(clientKey);
 	if (!watched) {
 		watched = new Set();
@@ -41,8 +50,10 @@ export function watchSessions(clientKey: string, sessionIds: readonly string[]) 
 	}
 	const added = sessionIds.filter((id) => !watched.has(id));
 	for (const id of added) watched.add(id);
+	if (watched.size === 0) watches.delete(clientKey);
 	const ws = socketFor(clientKey);
 	for (const id of added) ws?.subscribe(sessionTopic(id));
+	return added;
 }
 
 export function unwatchSessions(clientKey: string, sessionIds: readonly string[]) {

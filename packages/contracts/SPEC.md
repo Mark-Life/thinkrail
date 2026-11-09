@@ -1308,9 +1308,10 @@ From **`SESSION_TOPICS_PROTOCOL_VERSION`**, v108, a socket that connects with `?
 `pi.event` frames only for the sessions its client watches. The frame shape and the `pi.event` channel
 name do not change.
 
-- **`session.watch {sessionIds}`** adds ids to the client's watch set. It never replaces the set, so a
-  resent or reordered call cannot drop a watch. **`session.unwatch {sessionIds}`** removes ids. Both
-  answer `Ack` and take at most **`SESSION_WATCH_MAX_IDS`** (1000) ids per call.
+- **`session.watch {sessionIds, replace?}`** adds ids to the client's watch set. With `replace: true` the
+  set becomes exactly those ids; a client sends it once per `server.welcome` to drop ids it removed while
+  disconnected. **`session.unwatch {sessionIds}`** removes ids. Both answer `Ack` and take at most
+  **`SESSION_WATCH_MAX_IDS`** (1000) ids per call.
 - The set belongs to the `?client=` key, not to one socket. It survives a reconnect inside the host's
   reap window and is gone after it, so a client restates its set after every `server.welcome`.
 - Both are client-scoped. `session.dispose` stays the global unload.

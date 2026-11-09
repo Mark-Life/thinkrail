@@ -143,10 +143,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   same socket and the host subscribes before it takes the snapshot. A lease ends a grace period (5 s)
   after the read settles, which covers callers that install the runtime a moment later; a read whose
   result is discarded therefore unwatches itself, and no discard path calls `unwatch`. Each supported
-  `server.welcome` forgets what was sent and restates the whole set as one add-only `session.watch` (the
-  host's set survives a short reconnect but not a reap or a restart). It never replaces the host set, so a
-  read resent after a reconnect keeps its watch. Below v108 it sends nothing: that host still broadcasts
+  `server.welcome` restates the whole set as `session.watch {replace: true}` (later chunks past the
+  per-call limit add). The host set survives a short reconnect but not a reap or a restart, and a runtime
+  removed while disconnected sent no unwatch, so the restate must replace. Open leases are in the set, so
+  a read resent after a reconnect keeps its watch. Below v108 it sends nothing: that host still broadcasts
   every session. Failed watch calls are dropped; the next welcome restates the set.
+  `syncSessionWatchWithRuntimes` is the one store subscription, shared by `initTransport` and the tests.
 - **`mcp.ts`** is the one MCP read path shared by Settings and the chat Resources view:
   **`requestMcpList(method, params)`** serializes `mcp.list` and every list-returning mutation per workspace
   and connection generation, including installation through `installMcpList` before dispatching the next

@@ -508,12 +508,17 @@ function reviewSendGroups(
 	return [...groups.values()];
 }
 
+interface ReviewSender {
+	clientKey: string;
+	watched: string[];
+}
+
 async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
 	capture: AdditionalAnalyticsCapture | null,
-	sender: string,
+	sender: ReviewSender,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
@@ -523,7 +528,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		await markCommentsSent(workspaceId, ids, existing);
-		watchSessions(sender, [existing]);
+		sender.watched.push(...watchSessions(sender.clientKey, [existing]));
 		fireReviewPrompt(workspaceId, comments, existing, pkg, capture, followUpSession);
 		return {
 			sessionId: existing,
@@ -550,7 +555,7 @@ async function sendToFileChat(
 		model: defaults.model ? created.model : null,
 	});
 	await markCommentsSent(workspaceId, ids, created.sessionId);
-	watchSessions(sender, [created.sessionId]);
+	sender.watched.push(...watchSessions(sender.clientKey, [created.sessionId]));
 	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg, capture);
 	return { ...created, reused: false };
 }
@@ -1265,7 +1270,8 @@ const handlers: WsHandlers = {
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 	},
 	"session.watch": (params, ctx) => {
-		watchSessions(ctx.clientKey, sessionWatchParams(params).sessionIds);
+		const { sessionIds, replace } = sessionWatchParams(params);
+		watchSessions(ctx.clientKey, sessionIds, replace ?? false);
 		return { ok: true } as const;
 	},
 	"session.unwatch": (params, ctx) => {
@@ -1555,13 +1561,10 @@ const handlers: WsHandlers = {
 	"review.sendComment": (p, ctx) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(
-				p.workspaceId,
-				await sendableComments(p.workspaceId, [p.id]),
-				p,
-				capture,
-				ctx.clientKey,
-			),
+			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p, capture, {
+				clientKey: ctx.clientKey,
+				watched: [],
+			}),
 		);
 	},
 	"review.sendBatch": (p, ctx) => {
@@ -1569,8 +1572,14 @@ const handlers: WsHandlers = {
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const sessions: ReviewSendResult[] = [];
-			for (const group of reviewSendGroups(comments, p.sessionId)) {
-				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture, ctx.clientKey));
+			const sender: ReviewSender = { clientKey: ctx.clientKey, watched: [] };
+			try {
+				for (const group of reviewSendGroups(comments, p.sessionId)) {
+					sessions.push(await sendToFileChat(p.workspaceId, group, p, capture, sender));
+				}
+			} catch (error) {
+				unwatchSessions(ctx.clientKey, sender.watched);
+				throw error;
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
 			return { sessions };

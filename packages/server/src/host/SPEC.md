@@ -656,8 +656,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   send the answers twice.
 - **Session watches (`sessionWatch.ts`):** the `clientKey → Set<sessionId>` record of which sessions a
   v108 client streams, kept beside the socket registry on the terminal pattern, because a handler has a
-  `clientKey` but no socket. `session.watch` adds ids and `session.unwatch` removes them (validated pi
-  ids, at most `SESSION_WATCH_MAX_IDS`). Both change the map synchronously, before any `await`, and then
+  `clientKey` but no socket. `session.watch` adds ids, or with `replace` sets exactly those ids, and
+  `session.unwatch` removes them (validated pi ids, at most `SESSION_WATCH_MAX_IDS`). Both change the map synchronously, before any `await`, and then
   subscribe or unsubscribe the client's current socket through the lookup `server.ts` injects. That
   lookup hides a socket below v108, which already holds the global topic and would otherwise get each frame
   twice. The host
@@ -669,6 +669,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   discarded read would then leak a subscription. The one server-side watch is `review.sendComment` /
   `review.sendBatch`, which start the turn on the host before the sender has a chat runtime, so they watch
   the target session for the sender before `fireReviewPrompt` on both the reused and the new-chat path.
+  The client never learns the session of a `review.sendBatch` that throws, so that batch unwatches the
+  ids it newly added before it rethrows. A lost response still leaves the watch until the next welcome
+  restate or the reap.
   Any client may watch any session; `session.state` still carries every session's title and first prompt.
 - **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
   unconditional durable write to `agent`; it never patches one client directly. Automatic titles come only
