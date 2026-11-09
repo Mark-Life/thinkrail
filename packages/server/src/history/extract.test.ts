@@ -14,6 +14,23 @@ const entriesOf = (jsonl: string) => {
 };
 
 describe("extractSession", () => {
+	test("a wrong-type content block is skipped and the text blocks stay", () => {
+		const jsonl = [
+			header(),
+			line({
+				type: "message",
+				id: "a",
+				parentId: null,
+				message: {
+					role: "user",
+					timestamp: 100,
+					content: [null, 5, { type: "text", text: 5 }, { type: "text", text: "kept" }],
+				},
+			}),
+		].join("\n");
+		expect(extractSession(jsonl)?.entries.map((entry) => entry.text)).toEqual(["kept"]);
+	});
+
 	test("extracts user + assistant text with getMessages-aligned messageIndex", () => {
 		const jsonl = [
 			header(),

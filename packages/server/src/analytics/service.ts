@@ -1,3 +1,4 @@
+import type { ClientErrorReport } from "@thinkrail/contracts";
 import { logger } from "../log";
 import {
 	type AcquisitionRecord,
@@ -207,14 +208,6 @@ export interface ErrorReport {
 	chunkIds?: Record<string, string>;
 }
 
-export interface ClientErrorInput {
-	kind?: unknown;
-	type?: unknown;
-	stack?: unknown;
-	boundary?: unknown;
-	chunkIds?: unknown;
-}
-
 const MAX_ERROR_REPORTS = 100;
 const MAX_ERROR_REPORTS_PER_SOURCE = 50;
 const ERROR_DEDUPE_MS = 60_000;
@@ -316,41 +309,31 @@ export async function reportFatalError(error: unknown, kind?: FatalErrorKind): P
 	}
 }
 
-const CLIENT_ERROR_KINDS = new Set(["render", "window", "rejection"]);
-
-function boundedString(value: unknown, max: number): string {
-	return typeof value === "string" ? value.slice(0, max) : "";
-}
-
-function clientError(input: ClientErrorInput): Error {
+function clientError(input: ClientErrorReport): Error {
 	const error = new Error();
-	error.name = boundedString(input.type, 128) || "Error";
-	error.stack = toV8Stack(boundedString(input.stack, 16_000));
+	error.name = input.type.slice(0, 128) || "Error";
+	error.stack = toV8Stack((input.stack ?? "").slice(0, 16_000));
 	return error;
 }
 
 const MAX_CLIENT_CHUNK_IDS = 20;
 
-function clientChunkIds(value: unknown): Record<string, string> | undefined {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-	const entries = Object.entries(value)
-		.filter(
-			(entry): entry is [string, string] =>
-				entry[0].length <= 2_048 && typeof entry[1] === "string" && entry[1].length <= 64,
-		)
+function clientChunkIds(
+	value: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+	const entries = Object.entries(value ?? {})
+		.filter(([file, id]) => file.length <= 2_048 && id.length <= 64)
 		.slice(0, MAX_CLIENT_CHUNK_IDS);
 	return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
-export function reportClientError(input: ClientErrorInput): void {
-	const kind =
-		typeof input.kind === "string" && CLIENT_ERROR_KINDS.has(input.kind) ? input.kind : "window";
-	const boundary = boundedString(input.boundary, 64).trim().replace(/\s+/g, "_");
+export function reportClientError(input: ClientErrorReport): void {
+	const boundary = (input.boundary ?? "").slice(0, 64).trim().replace(/\s+/g, "_");
 	const chunkIds = clientChunkIds(input.chunkIds);
 	reportError(clientError(input), {
 		source: "ui",
-		handled: kind === "render",
-		scope: boundary ? `${kind}:${boundary}` : kind,
+		handled: input.kind === "render",
+		scope: boundary ? `${input.kind}:${boundary}` : input.kind,
 		...(chunkIds ? { chunkIds } : {}),
 	});
 }

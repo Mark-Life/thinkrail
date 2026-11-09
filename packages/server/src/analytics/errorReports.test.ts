@@ -286,7 +286,7 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 		type: "TypeError",
 		stack: "render@http://127.0.0.1:4317/assets/index-abc.js:10:5\nhttps://evil.example/x.js:1:1",
 	});
-	reportClientError({ kind: "bogus", type: 42, stack: { jane: true } });
+	reportClientError({ kind: "window", type: "x".repeat(200) });
 	await shutdownAnalytics();
 	expect(
 		exceptions(sent)

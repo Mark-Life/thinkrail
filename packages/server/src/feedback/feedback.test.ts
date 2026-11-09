@@ -22,7 +22,7 @@ import {
 	setGithubStarPublisher,
 	surveyIsCompleted,
 } from "./feedback";
-import { setGithubStarsFetchForTests } from "./githubStars";
+import { fetchGithubStars, setGithubStarsFetchForTests } from "./githubStars";
 import {
 	configureSurveySource,
 	refreshInAppSurvey,
@@ -485,14 +485,35 @@ function publisher(
 	return { canAsk, ask };
 }
 
-function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
+function githubReply(reply: unknown, calls: { count: number } = { count: 0 }): typeof fetch {
 	return (async () => {
 		calls.count += 1;
-		return stars === null
+		return reply === undefined
 			? new Response("rate limited", { status: 403 })
-			: new Response(JSON.stringify({ stargazers_count: stars }));
+			: new Response(JSON.stringify(reply));
 	}) as unknown as typeof fetch;
 }
+
+function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
+	return githubReply(stars === null ? undefined : { stargazers_count: stars }, calls);
+}
+
+test("a star count reply that fails its schema reads as no count", async () => {
+	const replies: unknown[] = [
+		{ stargazers_count: 12 },
+		{ stargazers_count: "12" },
+		{ stargazers_count: -1 },
+		{ stargazers_count: 1.5 },
+		[],
+		null,
+	];
+	const counts: Array<number | null> = [];
+	for (const reply of replies) {
+		setGithubStarsFetchForTests(githubReply(reply));
+		counts.push(await fetchGithubStars());
+	}
+	expect(counts).toEqual([12, null, null, null, null, null]);
+});
 
 test("the GitHub star ask goes once, on the tenth accepted message, with the star count", async () => {
 	const asked: Array<[string, GithubStarAsk]> = [];
