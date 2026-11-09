@@ -186,12 +186,13 @@ chat), so the plan tab is worded at render and follows the real title once it la
 rows read `selectChatFirstPrompt` (the host's state record first, so a row a peer's `session.created` added
 without a prompt picks it up from the next state push); the palette's chat rows read the same selector
 through `selectRecordFirstPrompts` ([[submodule-web-search]]). Nothing writes the label: the agent's
-`set_title` or a manual rename replaces it everywhere through the same `session_info_changed` fold.
+`set_title` or a manual rename replaces it everywhere through the same title fold: `session_info_changed` for a
+chat with a runtime, the titled `session.state` record for a history row or a tab without one.
 
 The shell injects the chat-only mutation callback into the otherwise domain-neutral Workbench tab menu rather
 than teaching the pure layout engine how sessions are persisted. A commit has no optimistic domain write: the
-inline editor returns to the prior host-owned label until the existing `session_info_changed` store fold
-updates open tabs and closed history everywhere; rejection retains that snapshot and raises the standard
+inline editor returns to the prior host-owned label until the existing store title fold
+(`session_info_changed` or the titled `session.state` record) updates open tabs and closed history everywhere; rejection retains that snapshot and raises the standard
 error toast. Renaming a closed chat does not open or select it; renaming an open chat does not change placement
 or focus. Automatic title arrival uses this same label fold but opens no editor, notification, or focus
 transition. ChatView's `/name` command is the independent keyboard entry point to the same wire mutation.

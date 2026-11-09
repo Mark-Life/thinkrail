@@ -654,12 +654,26 @@ channel fan-out, and the process-boot wrapper both launchers share.
   capture is accepted (`SURVEY_NOT_SENT` otherwise, and when the list cannot be read). Once accepted the
   answer counts as sent: a failed completion write is logged, never reported as unsent, so a retry cannot
   send the answers twice.
+- **Session watches (`sessionWatch.ts`):** the `clientKey → Set<sessionId>` record of which sessions a
+  v108 client streams, kept beside the socket registry on the terminal pattern, because a handler has a
+  `clientKey` but no socket. `session.watch` adds ids and `session.unwatch` removes them (validated pi
+  ids, at most `SESSION_WATCH_MAX_IDS`). Both change the map synchronously, before any `await`, and then
+  subscribe or unsubscribe the client's current socket through the lookup `server.ts` injects. The host
+  starts frame N's handler before it reads frame N+1, so a `session.watch` followed by
+  `session.getMessages` is subscribed before the snapshot is taken. Bun topics belong to one socket and a
+  replayed request does not re-run its handler, so `open` re-applies the client's whole set; the map is
+  dropped at the real reap, next to `clearTerminalClient`, and an id leaves every set on `session.delete`.
+  The `/speech` socket never touches it. Watching is client-driven: no read implicitly watches, because a
+  discarded read would then leak a subscription. The one server-side watch is `review.sendComment` /
+  `review.sendBatch`, which start the turn on the host before the sender has a chat runtime, so they watch
+  the target session for the sender before `fireReviewPrompt` on both the reused and the new-chat path.
+  Any client may watch any session; `session.state` still carries every session's title and first prompt.
 - **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
   unconditional durable write to `agent`; it never patches one client directly. Automatic titles come only
   from the agent's `set_title` (above); sends carry no naming work. Both manual and automatic
-  writes converge every client through the existing `pi.event`/`session_info_changed` channel and the
-  titled `session.state` record (see Session-state composition), with `session.list` repair; no new push
-  channel exists.
+  writes converge every client through the titled `session.state` record (see Session-state
+  composition) and, for clients that watch the session, `pi.event`/`session_info_changed`, with
+  `session.list` repair; no new push channel exists.
 
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
@@ -746,7 +760,12 @@ enabled/confirmed choice before entering analytics attribution.
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. **`pi.event` is the one
+  carve-out:** only sockets below `SESSION_TOPICS_PROTOCOL_VERSION` (v108, including a socket with no
+  `?protocol`) subscribe the global topic. The session publisher builds each frame once and publishes it to
+  both the global topic and the server-only topic `pi.event:<sessionId>` (`sessionTopic`, never a
+  `WsChannel`; the frame still says `channel: "pi.event"`). A v108 socket subscribes only the session topics
+  its client watches (below). Five channels are deliberately
   **not** subscribed and not broadcast: `feedback.interview`, `feedback.githubStar`, `terminal.data`, `terminal.exit`, and
   `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.

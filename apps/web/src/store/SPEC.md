@@ -255,6 +255,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
   An event for a session this surface has never listed remains a no-op—`session.list`/`session.getMessages`
   supply reconnect and later-hydration truth, so there is no title-specific event buffer.
+  The `session.state` install (`applySessionState` and `installSessionStateSnapshot`) feeds each record's
+  `title` into the same fold when it differs from a history row or from a tab that has no runtime. A v108
+  host streams `pi.event` only for watched sessions, which are exactly the sessions with a runtime, so
+  without this a history row or an unhydrated tab would keep a stale name. A tab with a runtime keeps
+  taking its name from `session_info_changed`, so the two sources never race on the same row.
   `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
   state without becoming placement authority; its selector includes the matched cache/catalog key so identity
   repair retriggers the mirror.
@@ -291,7 +296,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   (ExtUi `notice`, replayed like `notify`). `dismissSessionNotice(sessionId)` clears one chat;
   `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
   buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
-  `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
+  `clearWorkspaceState` drop it. **A runtime is a watch:** the keys of `sessions` are the ids
+  `transport`'s `sessionWatch` asks the host to stream, so installing or dropping a runtime anywhere is
+  enough to start or stop that session's `pi.event` frames; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —

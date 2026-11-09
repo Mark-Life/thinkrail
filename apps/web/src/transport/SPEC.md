@@ -100,6 +100,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   bounded push buffer restarts the complete read instead of growing without limit, while stale-generation
   outcomes discard their buffers. Pending dialog records replay their exact request, and adding/opening a
   workspace restarts the generation-guarded complete read so pre-existing disk sessions are included.
+  Each installed record's `title` also renames that chat's history row and any tab without a runtime
+  (`renameChat`), because a v108 host sends no `session_info_changed` for an unwatched session.
   Unsupported hosts clear the map. The old `session.activityList` tombstone
   is never requested by this client. Before `WsTransport` dispatches a state push, any queued Pi events flush
   synchronously, so the runtime transcript/render state precedes the host state that refers to it;
@@ -131,7 +133,20 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   promotes the watcher; a failure stays retryable by the next load) and reports the tick captured before the
   read — conservative should a disk-only summary ever arrive. It also rejects unless the returned summary
   exactly matches both requested workspace and session, making that untrusted-response identity check one
-  shared installation boundary rather than a caller convention).
+  shared installation boundary rather than a caller convention. Every transcript read goes through it, so
+  it is also where a read takes a **`sessionWatch` lease** before the request is sent, see below).
+- **`sessionWatch.ts`** keeps the host's per-client `pi.event` set in step with the store, from a
+  `SESSION_TOPICS_PROTOCOL_VERSION` (v108) host. The desired set is the keys of `s.sessions` (every chat
+  runtime) plus open read leases. One store subscription, wired once at init, sends the difference against
+  what it already sent: new ids go out as `session.watch`, dropped ids as `session.unwatch`. A lease is
+  taken synchronously before `session.getMessages` is queued, so the watch frame precedes the read on the
+  same socket and the host subscribes before it takes the snapshot. A lease ends a grace period (5 s)
+  after the read settles, which covers callers that install the runtime a moment later; a read whose
+  result is discarded therefore unwatches itself, and no discard path calls `unwatch`. Each supported
+  `server.welcome` forgets what was sent and restates the whole set as one add-only `session.watch` (the
+  host's set survives a short reconnect but not a reap or a restart). It never replaces the host set, so a
+  read resent after a reconnect keeps its watch. Below v108 it sends nothing: that host still broadcasts
+  every session. Failed watch calls are dropped; the next welcome restates the set.
 - **`mcp.ts`** is the one MCP read path shared by Settings and the chat Resources view:
   **`requestMcpList(method, params)`** serializes `mcp.list` and every list-returning mutation per workspace
   and connection generation, including installation through `installMcpList` before dispatching the next
