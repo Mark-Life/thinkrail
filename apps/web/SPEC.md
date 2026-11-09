@@ -69,6 +69,14 @@ never ships, and turns those three JSON sources into `styles/generated/` (plus t
 marks into `chat/generated/`).
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
+It also carries the page's one Content-Security-Policy, `frame-src 'none'`, as a `meta` right after the
+charset, so it holds for the host, Vite dev and the desktop app alike. The app page embeds `srcdoc` frames
+only (HTML, SVG and notebook output previews), and `srcdoc` documents are exempt from `frame-src`. No
+preview frame can therefore navigate to a network URL or to the app's own origin, whose pages carry none of
+a preview's own policy; `'self'` would not stop that. `about:blank` still loads, in Chromium and WebKit; it
+is an empty document. Chromium replaces a frame whose navigation was blocked
+with an error page (its `contentDocument` is then `null`); WebKit keeps the `srcdoc` document. A feature
+that needs a URL frame (`src`, `blob:`, `data:`) changes this policy and this paragraph first.
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
 applies the versioned first-paint theme-preference hint (including the current system color scheme) pre-React,
 initializes transport and its client error reporting (window listeners + the error-boundary reporter
