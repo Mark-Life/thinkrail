@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 import {
+	appendFileSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -694,6 +695,45 @@ test("marking a live chat's workspace read and unread publishes through the live
 		} finally {
 			await removeSession(id);
 		}
+	}));
+
+test("a first line that is not a session header is skipped, and a bare value is malformed", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-header-shapes-ws-");
+		const { id, dir } = writeFinishedDiskSession(cwd);
+		const workspace = { id: "ws-header-shapes", projectId: "p-header-shapes", cwd };
+		await initializeSessionStates([workspace]);
+		const other = join(dir, "0_other.jsonl");
+		for (const line of ["[1]", '{"type":"session","id":5}', '{"type":"note","id":"x"}']) {
+			writeFileSync(other, `${line}\n`);
+			expect((await listSessionStates([workspace])).map((row) => row.sessionId)).toEqual([id]);
+		}
+		for (const line of ["5", "null", '"text"']) {
+			writeFileSync(other, `${line}\n`);
+			await expect(listSessionStates([workspace])).rejects.toThrow("unreadable or malformed");
+		}
+	}));
+
+test("a saved model with a wrong-type field stops the chat from opening", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-saved-model-ws-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const { id, path } = writeFixtureSession(dir, {
+			cwd,
+			messages: [{ role: "user", text: "hi", timestamp: 1_000 }],
+		});
+		const change = {
+			type: "model_change",
+			id: "m",
+			parentId: `${id}-m0`,
+			timestamp: new Date(2_000).toISOString(),
+			provider: 5,
+			modelId: "x",
+		};
+		appendFileSync(path, `${JSON.stringify(change)}\n`);
+		await expect(ensureSessionAttached(id, "ws-saved-model", cwd)).rejects.toThrow(
+			"The chat's saved model is unavailable.",
+		);
 	}));
 
 test("the startup baseline skips an unreadable transcript instead of failing", () =>

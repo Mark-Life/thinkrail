@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GithubStarAsk } from "@thinkrail/contracts";
+import { fakeFetch } from "../../test/fakeFetch";
 import {
 	completeSurvey,
 	recordAcceptedMessage,
@@ -22,7 +23,7 @@ import {
 	setGithubStarPublisher,
 	surveyIsCompleted,
 } from "./feedback";
-import { setGithubStarsFetchForTests } from "./githubStars";
+import { fetchGithubStars, setGithubStarsFetchForTests } from "./githubStars";
 import {
 	configureSurveySource,
 	refreshInAppSurvey,
@@ -63,7 +64,7 @@ async function launch(...surveys: Array<{ id: string; iteration: number }>): Pro
 	}));
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (async () => new Response(JSON.stringify(list))) as unknown as typeof fetch,
+		fetchImpl: fakeFetch(async () => new Response(JSON.stringify(list))),
 	});
 	await refreshInAppSurvey();
 }
@@ -381,7 +382,7 @@ test("an idle host does not invite from a copy it can no longer refresh", async 
 	setSurveyClockForTests(() => at);
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (async () =>
+		fetchImpl: fakeFetch(async () =>
 			status === 200
 				? new Response(
 						JSON.stringify([
@@ -393,7 +394,8 @@ test("an idle host does not invite from a copy it can no longer refresh", async 
 							},
 						]),
 					)
-				: new Response("down", { status })) as unknown as typeof fetch,
+				: new Response("down", { status }),
+		),
 	});
 	await refreshInAppSurvey();
 	const delivered: string[] = [];
@@ -424,18 +426,20 @@ test("PostHog's wait period keeps a postponed invitation away for that many days
 	setSurveyClockForTests(() => at);
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (async () =>
-			new Response(
-				JSON.stringify([
-					{
-						id: "survey-1",
-						name: "in-app-feedback",
-						start_date: "2026-10-28T00:00:00.000Z",
-						conditions: { seenSurveyWaitPeriodInDays: 7 },
-						questions: [{ id: "q1", type: "open", question: "How is it going?" }],
-					},
-				]),
-			)) as unknown as typeof fetch,
+		fetchImpl: fakeFetch(
+			async () =>
+				new Response(
+					JSON.stringify([
+						{
+							id: "survey-1",
+							name: "in-app-feedback",
+							start_date: "2026-10-28T00:00:00.000Z",
+							conditions: { seenSurveyWaitPeriodInDays: 7 },
+							questions: [{ id: "q1", type: "open", question: "How is it going?" }],
+						},
+					]),
+				),
+		),
 	});
 	await refreshInAppSurvey();
 	const delivered: string[] = [];
@@ -485,14 +489,35 @@ function publisher(
 	return { canAsk, ask };
 }
 
-function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
-	return (async () => {
+function githubReply(reply: unknown, calls: { count: number } = { count: 0 }): typeof fetch {
+	return fakeFetch(async () => {
 		calls.count += 1;
-		return stars === null
+		return reply === undefined
 			? new Response("rate limited", { status: 403 })
-			: new Response(JSON.stringify({ stargazers_count: stars }));
-	}) as unknown as typeof fetch;
+			: new Response(JSON.stringify(reply));
+	});
 }
+
+function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
+	return githubReply(stars === null ? undefined : { stargazers_count: stars }, calls);
+}
+
+test("a star count reply that fails its schema reads as no count", async () => {
+	const replies: unknown[] = [
+		{ stargazers_count: 12 },
+		{ stargazers_count: "12" },
+		{ stargazers_count: -1 },
+		{ stargazers_count: 1.5 },
+		[],
+		null,
+	];
+	const counts: Array<number | null> = [];
+	for (const reply of replies) {
+		setGithubStarsFetchForTests(githubReply(reply));
+		counts.push(await fetchGithubStars());
+	}
+	expect(counts).toEqual([12, null, null, null, null, null]);
+});
 
 test("the GitHub star ask goes once, on the tenth accepted message, with the star count", async () => {
 	const asked: Array<[string, GithubStarAsk]> = [];
@@ -532,9 +557,11 @@ test("the GitHub star ask goes once, on the tenth accepted message, with the sta
 
 test("an unreachable GitHub still asks, without a count", async () => {
 	const asked: GithubStarAsk[] = [];
-	setGithubStarsFetchForTests((async () => {
-		throw new Error("offline");
-	}) as unknown as typeof fetch);
+	setGithubStarsFetchForTests(
+		fakeFetch(async () => {
+			throw new Error("offline");
+		}),
+	);
 	setGithubStarPublisher(
 		publisher((_clientKey, ask) => {
 			asked.push(ask);

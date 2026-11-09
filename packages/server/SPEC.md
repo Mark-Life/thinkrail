@@ -216,6 +216,8 @@ and calls `refreshExtensionTools()` after an applied update that contains `disab
   `GEMINI_CLI_HOME` / `PI_CODING_AGENT_DIR` (turbo passes the last one through). Portable
   skill aliases and pi's `~/.agents/skills` otherwise imported the machine's real libraries, so the skill
   catalog budget and its hint made results depend on whoever ran the suite.
+- **Test fakes carry their real type** — a test hands a fake `fetch` over through `test/fakeFetch.ts`, which
+  adds Bun's `fetch.preconnect`, never through a `typeof fetch` cast.
 
 ## Later
 

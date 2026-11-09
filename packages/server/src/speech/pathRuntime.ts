@@ -1,3 +1,4 @@
+import { compile, map, obj, unknown } from "@earendil-works/pi-schema";
 import { runBounded } from "../subprocess";
 
 export interface PathRuntime {
@@ -19,16 +20,20 @@ export function compatibleVersion(reported: string, pinned: string): string | nu
 		: null;
 }
 
+const DoctorReport = compile(obj({ features: map(unknown()) }, { open: true }));
+
 export function backendFromDoctor(out: string): string {
+	let report: unknown;
 	try {
-		const features = Reflect.get(JSON.parse(out), "features");
-		if (typeof features === "object" && features !== null) {
-			for (const backend of ["cuda", "metal", "vulkan"]) {
-				if (Reflect.get(features, `backend_${backend}`) === true) return backend;
-			}
-		}
-	} catch {}
-	return "cpu";
+		report = JSON.parse(out);
+	} catch {
+		return "cpu";
+	}
+	if (!DoctorReport.check(report)) return "cpu";
+	const { features } = report;
+	return (
+		["cuda", "metal", "vulkan"].find((backend) => features[`backend_${backend}`] === true) ?? "cpu"
+	);
 }
 
 export async function probePathRuntime(pinnedVersion: string): Promise<PathRuntime | null> {

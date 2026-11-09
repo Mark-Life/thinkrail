@@ -45,7 +45,9 @@ boundary, digest and size. The consumer retains bytes; core validates/captures/f
 history store. `fork-captured` adds immutable input while existing live-source fork/seeded placeholders
 remain rejected. Empty cuts are explicit, tool-incomplete/corrupt captures fail, compaction and labels
 are preserved, and source history is never mutated. Resource transcript lookup is strict and shared
-by capture/reopen, not an arbitrary file importer.
+by capture/reopen, not an arbitrary file importer. A transcript is read through pi's `parseSessionEntries`, so
+its types are pi's own; a line pi skips as malformed or blank fails the read, and every field the replay uses is
+then checked by hand.
 
 `reopenChild` consumes the saved immutable birth record excluding its path, plus saved declarative
 session configuration. It validates owner/scope/file identity and preserves birth metadata, resolving

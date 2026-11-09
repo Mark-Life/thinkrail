@@ -4,6 +4,7 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
+import { arr, compile, lit, obj, str, unknown } from "@earendil-works/pi-schema";
 import { isControlMessage, isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
 
 export interface HistoryEntry {
@@ -21,16 +22,14 @@ export interface ExtractedSession {
 	entries: HistoryEntry[];
 }
 
+const TextBlocks = compile(arr(unknown()));
+const TextBlock = compile(obj({ type: lit("text"), text: str() }, { open: true }));
+
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
-	if (!Array.isArray(content)) return "";
+	if (!TextBlocks.check(content)) return "";
 	return content
-		.map((b) =>
-			b && typeof b === "object" && (b as { type?: string }).type === "text"
-				? String((b as { text?: unknown }).text ?? "")
-				: "",
-		)
-		.filter(Boolean)
+		.flatMap((block) => (TextBlock.check(block) && block.text ? [block.text] : []))
 		.join("\n");
 }
 

@@ -67,4 +67,6 @@ test("the doctor report names the accelerated backend", () => {
 	);
 	expect(backendFromDoctor('{"features":{}}')).toBe("cpu");
 	expect(backendFromDoctor("not json")).toBe("cpu");
+	expect(backendFromDoctor('{"features":[true]}')).toBe("cpu");
+	expect(backendFromDoctor('{"features":{"backend_vulkan":"yes"}}')).toBe("cpu");
 });

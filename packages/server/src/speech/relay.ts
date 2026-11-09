@@ -1,3 +1,4 @@
+import { compile, lit, obj, opt, str, union, unknown } from "@earendil-works/pi-schema";
 import {
 	parseSpeechClientMessage,
 	SPEECH_SAMPLE_RATE,
@@ -11,6 +12,24 @@ import { type EngineEndpoint, ensureEngine, holdEngine, isLiveEngine } from "./e
 import { engineInputs } from "./install";
 
 const log = logger("speech");
+
+const EngineEvent = compile(
+	union([
+		obj(
+			{ type: lit("conversation.item.input_audio_transcription.delta"), delta: str() },
+			{ open: true },
+		),
+		obj(
+			{
+				type: lit("conversation.item.input_audio_transcription.completed"),
+				transcript: opt(unknown()),
+			},
+			{ open: true },
+		),
+		obj({ type: lit("input_audio_buffer.committed") }, { open: true }),
+		obj({ type: lit("error"), code: opt(unknown()) }, { open: true }),
+	]),
+);
 
 const MAX_PENDING_BYTES = SPEECH_SAMPLE_RATE * 2 * 30;
 const MAX_FRAME_BYTES = 64 * 1024;
@@ -130,22 +149,20 @@ class Dictation {
 		} catch {
 			return;
 		}
-		if (typeof event !== "object" || event === null) return;
-		const type = Reflect.get(event, "type");
-		if (type === "conversation.item.input_audio_transcription.delta") {
-			const delta = Reflect.get(event, "delta");
-			if (typeof delta !== "string" || delta === "") return;
-			this.partial += delta;
+		if (!EngineEvent.check(event)) return;
+		if (event.type === "conversation.item.input_audio_transcription.delta") {
+			if (event.delta === "") return;
+			this.partial += event.delta;
 			this.send({ type: "partial", text: clean(this.partial) });
-		} else if (type === "conversation.item.input_audio_transcription.completed") {
-			const transcript = Reflect.get(event, "transcript");
+		} else if (event.type === "conversation.item.input_audio_transcription.completed") {
+			const { transcript } = event;
 			const text = clean(typeof transcript === "string" ? transcript : this.partial).trim();
 			this.partial = "";
 			if (text) this.send({ type: "final", text });
-		} else if (type === "input_audio_buffer.committed") {
+		} else if (event.type === "input_audio_buffer.committed") {
 			if (this.stopping) this.finish();
-		} else if (type === "error") {
-			const code = Reflect.get(event, "code");
+		} else {
+			const { code } = event;
 			this.engineBroke(
 				`the speech engine reported an error (${typeof code === "string" ? code : "unknown"})`,
 			);
