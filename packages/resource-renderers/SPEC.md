@@ -447,9 +447,36 @@ starts in 2-up and can switch among the shared swipe, onion, and difference mode
 represented by an explicit empty page frame.
 
 `thinkrail/html` parses source into a document before previewing it in an empty-capability `sandbox=""`
-iframe. The sanitizer removes active, navigational, embedding, and form elements; strips event handlers and
-non-`data:` resource URLs; and turns anchors into inert text-bearing elements. Styles remain. Notebook HTML
-output uses this same sanitizer. The injected CSP is exactly `default-src 'none'; img-src data: blob:;
+iframe. The sanitizer removes active, navigational, embedding, and form elements; strips event handlers,
+`srcset`/`imagesrcset` and non-`data:` resource URLs; and turns anchors into inert text-bearing elements.
+`template` is removed whole: its content is not in `children`, so the walk never reaches it, and the frame
+would attach a `shadowrootmode` template as live DOM. SVG `set` and `animate` are removed only when their
+`attributeName` contains `href` (they can give an inert link a target); other animations stay. `noscript`
+stays: no frame runs scripts, so the parser and the frame read it the same way. Styles remain. Notebook HTML
+output uses this same sanitizer.
+
+The frame parses the serialized output again, and a second parse can read it differently. Under a
+foster-parented `mglyph` a `style` is an HTML raw-text element in the first parse, so the sanitizer sees
+only text, and a MathML element in the second, where that text becomes live elements (`link`, `img
+srcset`, `meta` refresh, `iframe`, handlers). So `buildHtmlPreviewDocument`
+checks the exact string the frame gets: it parses it, detaches the CSP `meta` it wrote (it must be the
+head's second child) and runs the sanitizer over it. If that pass removes anything, the output is the
+policy-only document. It is one check, not a loop of sanitize and serialize: a nested vector is clean after
+one pass and live again after two, and the frame parses once. This matters most in Firefox, which does not
+apply the `meta` CSP `img-src` to `srcset` and `imagesrcset` loads (a `link rel=preload imagesrcset` loads
+in a plain page with the same policy), so there the sanitizer is the only barrier against those requests:
+before the check a crafted mockup made real requests in Firefox 151.
+e2e runs no Firefox, so `e2e/visualize-mockups.spec.ts` pins the `mglyph`
+vector by the loaded frame's DOM in Chromium and WebKit.
+
+Author markup can shadow DOM properties by name: `<img name="head">` replaces `document.head` in WebKit, and
+a control named `localName` replaces that property on its form. So `htmlDocument.ts` reads the root and head
+and creates elements through `Document.prototype`, treats an element whose `localName` is not a string as a
+form (removed), and removes a child through its parent. After the policy is installed it checks that the
+root is `html`, the head is its child and the CSP `meta` is in the head; otherwise the output is an empty
+document that holds only the charset and the CSP. Unit tests install a fake `Document` class, so they run
+the same prototype reads and pin each part of that check; the browsers' own shadowing by name is covered in
+a real browser by `e2e/visualize-mockups.spec.ts`. The injected CSP is exactly `default-src 'none'; img-src data: blob:;
 style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src
 'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
 It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the

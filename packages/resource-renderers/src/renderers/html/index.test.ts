@@ -1,102 +1,26 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import {
+	FakeDocument,
+	FakeElement,
+	installFakeDocument,
+	parseFakeMarkup,
+} from "../../testing/fakeDocument";
 import { htmlRenderer } from ".";
 import { HtmlFrame } from "./HtmlFrame";
-import { HTML_PREVIEW_CSP, prepareHtmlPreviewDocument } from "./htmlDocument";
+import {
+	buildHtmlPreviewDocument,
+	HTML_PREVIEW_CSP,
+	prepareHtmlPreviewDocument,
+} from "./htmlDocument";
 
-interface FakeAttribute {
-	name: string;
-	value: string;
-}
-
-class FakeElement {
-	readonly children: FakeElement[] = [];
-	private readonly values = new Map<string, string>();
-	private parent: FakeElement | null = null;
-	readonly localName: string;
-	private readonly text: string;
-
-	constructor(
-		localName: string,
-		attributes: Record<string, string> = {},
-		text = "",
-		children: readonly FakeElement[] = [],
-	) {
-		this.localName = localName;
-		this.text = text;
-		for (const [name, value] of Object.entries(attributes)) this.values.set(name, value);
-		for (const child of children) this.append(child);
-	}
-
-	get attributes(): FakeAttribute[] {
-		return [...this.values].map(([name, value]) => ({ name, value }));
-	}
-
-	get outerHTML(): string {
-		const attributes = [...this.values]
-			.map(([name, value]) => ` ${name}="${escapeMarkup(value)}"`)
-			.join("");
-		const body = `${escapeMarkup(this.text)}${this.children.map((child) => child.outerHTML).join("")}`;
-		return `<${this.localName}${attributes}>${body}</${this.localName}>`;
-	}
-
-	append(child: FakeElement): void {
-		child.remove();
-		child.parent = this;
-		this.children.push(child);
-	}
-
-	prepend(...children: FakeElement[]): void {
-		for (const child of children) child.remove();
-		for (const child of [...children].reverse()) {
-			child.parent = this;
-			this.children.unshift(child);
-		}
-	}
-
-	getAttribute(name: string): string | null {
-		return this.values.get(name) ?? null;
-	}
-
-	setAttribute(name: string, value: string): void {
-		this.values.set(name, value);
-	}
-
-	removeAttribute(name: string): void {
-		this.values.delete(name);
-	}
-
-	remove(): void {
-		if (!this.parent) return;
-		const index = this.parent.children.indexOf(this);
-		if (index >= 0) this.parent.children.splice(index, 1);
-		this.parent = null;
-	}
-}
-
-class FakeDocument {
-	readonly head: FakeElement;
-	readonly documentElement: FakeElement;
-
-	constructor(head: FakeElement, body: FakeElement) {
-		this.head = head;
-		this.documentElement = new FakeElement("html", {}, "", [head, body]);
-	}
-
-	createElement(name: string): FakeElement {
-		return new FakeElement(name);
-	}
-}
-
-function escapeMarkup(value: string): string {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll('"', "&quot;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;");
-}
+let restoreDocument = () => {};
+beforeAll(() => {
+	restoreDocument = installFakeDocument();
+});
+afterAll(() => restoreDocument());
 
 function hostileDocument(): FakeDocument {
 	const head = new FakeElement("head", {}, "", [
@@ -128,9 +52,23 @@ function hostileDocument(): FakeDocument {
 		new FakeElement("img", { src: "javascript:attack()", onerror: "attack()" }),
 		new FakeElement("img", { src: "vbscript:attack()" }),
 		new FakeElement("img", { src: "data:image/png;base64,cG5n" }),
+		new FakeElement("img", { srcset: "https://attacker.invalid/set.png 1x" }),
+		new FakeElement("source", { imagesrcset: "https://attacker.invalid/source.png 1x" }),
+		new FakeElement("frame", { src: "data:text/html,<p>frame</p>" }),
+		new FakeElement("div", {}, "", [
+			new FakeElement("template", { shadowrootmode: "open" }, "", [
+				new FakeElement("a", { href: "https://attacker.invalid/shadow" }, "shadow"),
+			]),
+		]),
 		new FakeElement("div", { style: "color: red", onmouseover: "attack()" }, "styled"),
 		new FakeElement("svg", {}, "", [
 			new FakeElement("use", { "xlink:href": "javascript:attack()" }),
+			new FakeElement("a", {}, "", [
+				new FakeElement("set", { attributeName: "href", to: "javascript:attack()" }),
+				new FakeElement("animate", { attributeName: "xlink:HREF", values: "https://smil.invalid" }),
+				new FakeElement("animate", { attributeName: "opacity", values: "0;1" }),
+			]),
+			new FakeElement("animateTransform", { attributeName: "transform", type: "rotate" }),
 		]),
 	]);
 	return new FakeDocument(head, body);
@@ -162,6 +100,10 @@ test("HTML preview sanitization neutralizes active elements, navigation, and hos
 	);
 	expect(document).toContain('<img src="data:image/png;base64,cG5n"></img>');
 	expect(document).toContain('<div style="color: red">styled</div>');
+	expect(document).toContain('<animate attributeName="opacity" values="0;1"></animate>');
+	expect(document).toContain(
+		'<animateTransform attributeName="transform" type="rotate"></animateTransform>',
+	);
 	for (const fragment of [
 		'http-equiv="refresh"',
 		"<base",
@@ -176,6 +118,12 @@ test("HTML preview sanitization neutralizes active elements, navigation, and hos
 		"<select",
 		"<textarea",
 		"<area",
+		"<frame",
+		"<template",
+		"<set",
+		"shadow",
+		"smil.invalid",
+		"srcset=",
 		"javascript:",
 		"vbscript:",
 		"https://attacker.invalid/pixel.png",
@@ -188,6 +136,86 @@ test("HTML preview sanitization neutralizes active elements, navigation, and hos
 		"xlink:href=",
 	]) {
 		expect(document).not.toContain(fragment);
+	}
+});
+
+const policyOnly = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}"></head><body></body></html>`;
+const authorBody = () => new FakeElement("body", {}, "", [new FakeElement("p", {}, "author")]);
+
+class DroppingHead extends FakeElement {
+	override prepend(): void {
+		return;
+	}
+}
+
+test("a document without a real root or head, or whose head does not hold the policy, yields only the policy", () => {
+	const detachedHead = new FakeElement("head");
+	const detached = new FakeDocument(detachedHead, authorBody());
+	detached.documentElement?.removeChild(detachedHead);
+	const documents = {
+		"a root that is not html": new FakeDocument(new FakeElement("head"), authorBody(), "form"),
+		"no root": new FakeDocument(new FakeElement("head"), authorBody(), null),
+		"no head": new FakeDocument(null, authorBody()),
+		"a head outside the root": detached,
+		"a head that drops the policy": new FakeDocument(new DroppingHead("head"), authorBody()),
+	};
+	for (const [name, document] of Object.entries(documents)) {
+		expect(prepareHtmlPreviewDocument(document as unknown as Document), name).toBe(policyOnly);
+	}
+});
+
+test("properties that author markup can shadow on the document are not read", () => {
+	const shadowed = new FakeDocument(new FakeElement("head"), authorBody());
+	for (const name of ["head", "documentElement", "createElement"]) {
+		Object.defineProperty(shadowed, name, { value: new FakeElement("img", { name }) });
+	}
+	expect(prepareHtmlPreviewDocument(shadowed as unknown as Document)).toBe(
+		`<!doctype html><html><head><meta charset="utf-8"></meta><meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}"></meta></head><body><p>author</p></body></html>`,
+	);
+});
+
+const hostileSource = () => hostileDocument().documentElement?.outerHTML ?? "";
+
+test("a built document is the sanitized document when it parses back with nothing to remove", () => {
+	const sanitized = prepareHtmlPreviewDocument(hostileDocument() as unknown as Document);
+	expect(sanitized).toContain("styled");
+	expect(buildHtmlPreviewDocument(hostileSource())).toBe(sanitized);
+});
+
+test("a built document that parses back with something to remove is only the policy", () => {
+	const secondParses: Record<string, (reparsed: FakeDocument) => FakeDocument> = {
+		"a revived element": (reparsed) => {
+			reparsed.documentElement?.children[1]?.append(
+				new FakeElement("link", { rel: "preload", as: "image" }),
+			);
+			return reparsed;
+		},
+		"a revived attribute": (reparsed) => {
+			reparsed.documentElement?.children[1]?.append(
+				new FakeElement("img", { srcset: "https://attacker.invalid/set.png 1x" }),
+			);
+			return reparsed;
+		},
+		"a head without the policy": () =>
+			new FakeDocument(
+				new FakeElement("head", {}, "", [
+					new FakeElement("meta", { charset: "utf-8" }),
+					new FakeElement("style"),
+				]),
+				new FakeElement("body"),
+			),
+	};
+	for (const [name, secondParse] of Object.entries(secondParses)) {
+		const restore = installFakeDocument((markup) =>
+			markup.startsWith("<!doctype html>")
+				? secondParse(parseFakeMarkup(markup))
+				: parseFakeMarkup(markup),
+		);
+		try {
+			expect(buildHtmlPreviewDocument(hostileSource()), name).toBe(policyOnly);
+		} finally {
+			restore();
+		}
 	}
 });
 
