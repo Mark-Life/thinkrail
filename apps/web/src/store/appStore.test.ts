@@ -452,6 +452,51 @@ test("queue_update folds pi's queue into the runtime; the canonical echo lands t
 	expect(rt("a").queue).toEqual({ steering: [], followUp: [] });
 });
 
+test("a state record's title renames a history row and leaves a watched chat to its own events", () => {
+	const record = (sessionId: string, title: string): SessionStateRecord => ({
+		sessionId,
+		workspaceId: "title-ws",
+		projectId: "title-project",
+		state: {
+			execution: "idle",
+			runId: null,
+			needsInput: null,
+			completion: null,
+			completionUnread: false,
+			queuedCount: 0,
+			backgroundWork: false,
+		},
+		title,
+	});
+	const store = useAppStore.getState();
+	store.noteClosedChats("title-ws", [
+		{ sessionId: "closed", title: "", closedAt: 1 },
+		{ sessionId: "other", title: "Keep", closedAt: 2 },
+	]);
+	store.openChatSession("title-ws", "open", null, "medium");
+	const closedTitle = () =>
+		useAppStore
+			.getState()
+			.closedChatsByWorkspace["title-ws"]?.find((chat) => chat.sessionId === "closed")?.title;
+	const openName = () =>
+		useAppStore
+			.getState()
+			.tabsByWorkspace["title-ws"]?.find((tab) => tab.kind === "chat" && tab.sessionId === "open")
+			?.name;
+	const openBefore = openName();
+
+	store.installSessionStateSnapshot([record("closed", "From snapshot"), record("open", "Ignored")]);
+	expect(closedTitle()).toBe("From snapshot");
+	expect(openName()).toBe(openBefore);
+
+	const rows = useAppStore.getState().closedChatsByWorkspace;
+	store.applySessionState(record("other", "Keep"));
+	expect(useAppStore.getState().closedChatsByWorkspace).toBe(rows);
+
+	store.applySessionState(record("closed", "  From push "));
+	expect(closedTitle()).toBe("From push");
+});
+
 test("normalized session snapshots and pushes gate acknowledgement on the exact rendered result", () => {
 	const record = (completionId: string): SessionStateRecord => ({
 		sessionId: "state-session",
