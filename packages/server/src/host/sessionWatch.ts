@@ -53,7 +53,6 @@ export function watchSessions(clientKey: string, sessionIds: readonly string[], 
 	if (watched.size === 0) watches.delete(clientKey);
 	const ws = socketFor(clientKey);
 	for (const id of added) ws?.subscribe(sessionTopic(id));
-	return added;
 }
 
 export function unwatchSessions(clientKey: string, sessionIds: readonly string[]) {

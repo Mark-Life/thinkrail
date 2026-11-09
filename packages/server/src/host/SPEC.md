@@ -669,9 +669,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   discarded read would then leak a subscription. The one server-side watch is `review.sendComment` /
   `review.sendBatch`, which start the turn on the host before the sender has a chat runtime, so they watch
   the target session for the sender before `fireReviewPrompt` on both the reused and the new-chat path.
-  The client never learns the session of a `review.sendBatch` that throws, so that batch unwatches the
-  ids it newly added before it rethrows. A lost response still leaves the watch until the next welcome
-  restate or the reap.
+  A pre-v108 sender gets no watch: it already hears every session on the shared `pi.event` channel.
+  A `review.sendBatch` that throws partway keeps the watches of groups it already sent, since their
+  prompts are running. A watch the client never learns of (a thrown batch, a lost response) stays until
+  the next welcome restate or the reap.
   Any client may watch any session; `session.state` still carries every session's title and first prompt.
 - **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
   unconditional durable write to `agent`; it never patches one client directly. Automatic titles come only

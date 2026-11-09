@@ -1242,6 +1242,21 @@ test("a review send that starts a new chat watches that chat for the sender", as
 		expect(sent.reused).toBe(false);
 		expect(watchedSessionIds(CTX.clientKey)).toEqual([sent.sessionId]);
 		expect(watchedSessionIds("another-client")).toEqual([]);
+
+		const legacy = { clientKey: "legacy-client", protocolVersion: 107 };
+		const again = await addComment({
+			workspaceId: workspace.id,
+			kind: "inline",
+			anchor: {
+				path: "README.md",
+				side: "worktree",
+				contentHash: "",
+				selectors: [{ kind: "lineRange", startLine: 2, endLine: 2 }],
+			},
+			body: "again about README.md",
+		});
+		await handleRequest("review.sendComment", { workspaceId: workspace.id, id: again.id }, legacy);
+		expect(watchedSessionIds(legacy.clientKey)).toEqual([]);
 	} finally {
 		setSessionWatchSockets(null);
 		disposeAllSessions();

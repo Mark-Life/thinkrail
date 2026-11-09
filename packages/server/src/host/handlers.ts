@@ -17,6 +17,7 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
 	isSpeechModel,
+	SESSION_TOPICS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -508,17 +509,12 @@ function reviewSendGroups(
 	return [...groups.values()];
 }
 
-interface ReviewSender {
-	clientKey: string;
-	watched: string[];
-}
-
 async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
 	capture: AdditionalAnalyticsCapture | null,
-	sender: ReviewSender,
+	watcher: string | null,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
@@ -528,7 +524,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		await markCommentsSent(workspaceId, ids, existing);
-		sender.watched.push(...watchSessions(sender.clientKey, [existing]));
+		if (watcher) watchSessions(watcher, [existing]);
 		fireReviewPrompt(workspaceId, comments, existing, pkg, capture, followUpSession);
 		return {
 			sessionId: existing,
@@ -555,7 +551,7 @@ async function sendToFileChat(
 		model: defaults.model ? created.model : null,
 	});
 	await markCommentsSent(workspaceId, ids, created.sessionId);
-	sender.watched.push(...watchSessions(sender.clientKey, [created.sessionId]));
+	if (watcher) watchSessions(watcher, [created.sessionId]);
 	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg, capture);
 	return { ...created, reused: false };
 }
@@ -1561,10 +1557,13 @@ const handlers: WsHandlers = {
 	"review.sendComment": (p, ctx) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p, capture, {
-				clientKey: ctx.clientKey,
-				watched: [],
-			}),
+			sendToFileChat(
+				p.workspaceId,
+				await sendableComments(p.workspaceId, [p.id]),
+				p,
+				capture,
+				sessionWatcher(ctx),
+			),
 		);
 	},
 	"review.sendBatch": (p, ctx) => {
@@ -1572,14 +1571,8 @@ const handlers: WsHandlers = {
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const sessions: ReviewSendResult[] = [];
-			const sender: ReviewSender = { clientKey: ctx.clientKey, watched: [] };
-			try {
-				for (const group of reviewSendGroups(comments, p.sessionId)) {
-					sessions.push(await sendToFileChat(p.workspaceId, group, p, capture, sender));
-				}
-			} catch (error) {
-				unwatchSessions(ctx.clientKey, sender.watched);
-				throw error;
+			for (const group of reviewSendGroups(comments, p.sessionId)) {
+				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture, sessionWatcher(ctx)));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
 			return { sessions };
@@ -1620,6 +1613,12 @@ export function requestErrorReport(method: string): ErrorReport {
 		handled: true,
 		...(isWsMethod(method) ? { requestMethod: method } : {}),
 	};
+}
+
+function sessionWatcher(ctx: RequestContext): string | null {
+	return ctx.protocolVersion === undefined || ctx.protocolVersion >= SESSION_TOPICS_PROTOCOL_VERSION
+		? ctx.clientKey
+		: null;
 }
 
 function supportsBranchStatus(protocolVersion: number | undefined): boolean {
