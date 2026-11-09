@@ -2233,6 +2233,7 @@ function renameChat(s: AppState, sessionId: string, title: string): Partial<AppS
 	for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
 		if (!chats.some((chat) => chat.sessionId === sessionId)) continue;
 		found = true;
+		if (!chats.some((chat) => chat.sessionId === sessionId && chat.title !== title)) break;
 		patch = {
 			...patch,
 			closedChatsByWorkspace: {
@@ -2243,6 +2244,12 @@ function renameChat(s: AppState, sessionId: string, title: string): Partial<AppS
 		break;
 	}
 	return found ? patch : null;
+}
+
+function foldRecordTitle(s: AppState, record: SessionStateRecord): AppState {
+	if (record.title === undefined || s.sessions[record.sessionId]) return s;
+	const renamed = renameChat(s, record.sessionId, record.title.trim());
+	return renamed && Object.keys(renamed).length > 0 ? { ...s, ...renamed } : s;
 }
 
 function withRuntime(
@@ -3886,6 +3893,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			const sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>> = {};
 			const stateBySession = new Map<string, SessionState>();
+			let titled = s;
 			for (const record of records) {
 				if (
 					s.removedWorkspaceIds[record.workspaceId] ||
@@ -3893,6 +3901,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				) {
 					continue;
 				}
+				titled = foldRecordTitle(titled, record);
 				const workspaceStates = sessionStateByWorkspace[record.workspaceId] ?? {};
 				workspaceStates[record.sessionId] = record;
 				sessionStateByWorkspace[record.workspaceId] = workspaceStates;
@@ -3909,6 +3918,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					!isDialogRequest(frame) || dialogIsAuthorized(stateBySession.get(frame.sessionId), frame),
 			);
 			return {
+				layoutIntents: titled.layoutIntents,
+				tabsByWorkspace: titled.tabsByWorkspace,
+				closedChatsByWorkspace: titled.closedChatsByWorkspace,
 				sessionStateByWorkspace,
 				sessions,
 				extUiOrphans,
@@ -3948,7 +3960,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 				};
 			}
 			const sessionStateClock = s.sessionStateClock + 1;
+			const titled = foldRecordTitle(s, record);
 			return {
+				...(titled === s
+					? {}
+					: {
+							layoutIntents: titled.layoutIntents,
+							tabsByWorkspace: titled.tabsByWorkspace,
+							closedChatsByWorkspace: titled.closedChatsByWorkspace,
+						}),
 				sessionStateClock,
 				sessionStateByWorkspace: {
 					...s.sessionStateByWorkspace,

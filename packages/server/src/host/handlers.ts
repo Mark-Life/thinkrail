@@ -17,6 +17,7 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
 	isSpeechModel,
+	SESSION_TOPICS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -303,6 +304,7 @@ import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
 import { hostSearch } from "./search";
+import { sessionWatchParams, unwatchSessions, watchSessions } from "./sessionWatch";
 import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -512,6 +514,7 @@ async function sendToFileChat(
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
 	capture: AdditionalAnalyticsCapture | null,
+	watcher: string | null,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
@@ -521,6 +524,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		await markCommentsSent(workspaceId, ids, existing);
+		if (watcher) watchSessions(watcher, [existing]);
 		fireReviewPrompt(workspaceId, comments, existing, pkg, capture, followUpSession);
 		return {
 			sessionId: existing,
@@ -547,6 +551,7 @@ async function sendToFileChat(
 		model: defaults.model ? created.model : null,
 	});
 	await markCommentsSent(workspaceId, ids, created.sessionId);
+	if (watcher) watchSessions(watcher, [created.sessionId]);
 	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg, capture);
 	return { ...created, reused: false };
 }
@@ -1260,6 +1265,15 @@ const handlers: WsHandlers = {
 	"session.getMessages": (p) => {
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 	},
+	"session.watch": (params, ctx) => {
+		const { sessionIds, replace } = sessionWatchParams(params);
+		watchSessions(ctx.clientKey, sessionIds, replace ?? false);
+		return { ok: true } as const;
+	},
+	"session.unwatch": (params, ctx) => {
+		unwatchSessions(ctx.clientKey, sessionWatchParams(params).sessionIds);
+		return { ok: true } as const;
+	},
 	"mcp.list": (params) => mcpList(params),
 	"mcp.add": (params) => mcpAdd(params),
 	"mcp.update": (params) => mcpUpdate(params),
@@ -1540,19 +1554,25 @@ const handlers: WsHandlers = {
 			return { ok: true } as const;
 		});
 	},
-	"review.sendComment": (p) => {
+	"review.sendComment": (p, ctx) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p, capture),
+			sendToFileChat(
+				p.workspaceId,
+				await sendableComments(p.workspaceId, [p.id]),
+				p,
+				capture,
+				sessionWatcher(ctx),
+			),
 		);
 	},
-	"review.sendBatch": (p) => {
+	"review.sendBatch": (p, ctx) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const sessions: ReviewSendResult[] = [];
 			for (const group of reviewSendGroups(comments, p.sessionId)) {
-				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture));
+				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture, sessionWatcher(ctx)));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
 			return { sessions };
@@ -1593,6 +1613,12 @@ export function requestErrorReport(method: string): ErrorReport {
 		handled: true,
 		...(isWsMethod(method) ? { requestMethod: method } : {}),
 	};
+}
+
+function sessionWatcher(ctx: RequestContext): string | null {
+	return ctx.protocolVersion === undefined || ctx.protocolVersion >= SESSION_TOPICS_PROTOCOL_VERSION
+		? ctx.clientKey
+		: null;
 }
 
 function supportsBranchStatus(protocolVersion: number | undefined): boolean {

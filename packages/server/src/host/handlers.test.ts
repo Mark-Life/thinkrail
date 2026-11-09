@@ -64,6 +64,7 @@ import {
 	shouldRefreshOpenReview,
 	workspaceCreationHandoff,
 } from "./handlers";
+import { setSessionWatchSockets, watchedSessionIds } from "./sessionWatch";
 
 const CTX = { clientKey: "test-client" };
 
@@ -1203,7 +1204,61 @@ test("a review send that names its chat lands every file's drafts there as one p
 			["sent", chat.sessionId],
 			["sent", chat.sessionId],
 		]);
+		expect(watchedSessionIds(CTX.clientKey)).toEqual([chat.sessionId]);
 	} finally {
+		setSessionWatchSockets(null);
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
+	}
+});
+
+test("a review send that starts a new chat watches that chat for the sender", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "review-send-new" }));
+	try {
+		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		const workspace = rows[0];
+		if (!workspace) throw new Error("expected a workspace");
+		const draft = await addComment({
+			workspaceId: workspace.id,
+			kind: "inline",
+			anchor: {
+				path: "README.md",
+				side: "worktree",
+				contentHash: "",
+				selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+			},
+			body: "about README.md",
+		});
+
+		const sent = (await handleRequest(
+			"review.sendComment",
+			{ workspaceId: workspace.id, id: draft.id },
+			CTX,
+		)) as { sessionId: string; reused: boolean };
+
+		expect(sent.reused).toBe(false);
+		expect(watchedSessionIds(CTX.clientKey)).toEqual([sent.sessionId]);
+		expect(watchedSessionIds("another-client")).toEqual([]);
+
+		const legacy = { clientKey: "legacy-client", protocolVersion: 107 };
+		const again = await addComment({
+			workspaceId: workspace.id,
+			kind: "inline",
+			anchor: {
+				path: "README.md",
+				side: "worktree",
+				contentHash: "",
+				selectors: [{ kind: "lineRange", startLine: 2, endLine: 2 }],
+			},
+			body: "again about README.md",
+		});
+		await handleRequest("review.sendComment", { workspaceId: workspace.id, id: again.id }, legacy);
+		expect(watchedSessionIds(legacy.clientKey)).toEqual([]);
+	} finally {
+		setSessionWatchSockets(null);
 		disposeAllSessions();
 		configurePiRuntime(null);
 		setSessionManagerFactory((cwd) => SessionManager.create(cwd));

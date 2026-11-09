@@ -1,0 +1,95 @@
+import { SESSION_WATCH_MAX_IDS } from "@thinkrail/contracts";
+
+export const SESSION_WATCH_LEASE_GRACE_MS = 5_000;
+
+export interface SessionWatchDependencies {
+	welcomed: () => boolean;
+	supported: () => boolean;
+	runtimeIds: () => readonly string[];
+	send: (
+		method: "session.watch" | "session.unwatch",
+		sessionIds: string[],
+		replace?: boolean,
+	) => Promise<unknown>;
+	graceMs?: number;
+}
+
+interface RuntimeStore {
+	subscribe: (
+		listener: (state: { sessions: object }, prev: { sessions: object }) => void,
+	) => () => void;
+}
+
+function chunks(ids: readonly string[]): string[][] {
+	const out: string[][] = [];
+	for (let i = 0; i < ids.length; i += SESSION_WATCH_MAX_IDS)
+		out.push(ids.slice(i, i + SESSION_WATCH_MAX_IDS));
+	return out;
+}
+
+export function createSessionWatch(deps: SessionWatchDependencies) {
+	const sent = new Set<string>();
+	const leases = new Map<string, number>();
+	const awaitingWelcome: (() => void)[] = [];
+	const graceMs = deps.graceMs ?? SESSION_WATCH_LEASE_GRACE_MS;
+
+	const send = (method: "session.watch" | "session.unwatch", ids: readonly string[]) => {
+		for (const batch of chunks(ids)) deps.send(method, batch).catch(() => {});
+	};
+
+	const desiredIds = () => new Set([...deps.runtimeIds(), ...leases.keys()]);
+
+	const sync = () => {
+		if (!deps.supported()) {
+			sent.clear();
+			return;
+		}
+		const desired = desiredIds();
+		const added = [...desired].filter((id) => !sent.has(id));
+		const removed = [...sent].filter((id) => !desired.has(id));
+		for (const id of added) sent.add(id);
+		for (const id of removed) sent.delete(id);
+		send("session.watch", added);
+		send("session.unwatch", removed);
+	};
+
+	const release = (sessionId: string) => {
+		const count = leases.get(sessionId) ?? 0;
+		if (count <= 1) leases.delete(sessionId);
+		else leases.set(sessionId, count - 1);
+		sync();
+	};
+
+	return {
+		sync,
+		restate() {
+			for (const resume of awaitingWelcome.splice(0)) resume();
+			sent.clear();
+			if (!deps.supported()) return;
+			const desired = [...desiredIds()];
+			for (const id of desired) sent.add(id);
+			deps.send("session.watch", desired.slice(0, SESSION_WATCH_MAX_IDS), true).catch(() => {});
+			send("session.watch", desired.slice(SESSION_WATCH_MAX_IDS));
+		},
+		async lease(sessionId: string) {
+			if (!deps.welcomed()) await new Promise<void>((resume) => awaitingWelcome.push(resume));
+			leases.set(sessionId, (leases.get(sessionId) ?? 0) + 1);
+			sync();
+			let released = false;
+			return () => {
+				if (released) return;
+				released = true;
+				setTimeout(() => release(sessionId), graceMs);
+			};
+		},
+	};
+}
+
+export function syncSessionWatchWithRuntimes(
+	watch: Pick<ReturnType<typeof createSessionWatch>, "sync">,
+	store: RuntimeStore,
+) {
+	return store.subscribe((state, prev) => {
+		if (state.sessions !== prev.sessions) watch.sync();
+	});
+}

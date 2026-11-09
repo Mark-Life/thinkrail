@@ -1483,7 +1483,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `shell/WorkspaceWorkbench` through one `PlanSummaryAutoDraft` anchor per unique sessionId of any open
   session-backed tab (chat, the live Plan page, the markdown plan `doc` export) via
   `editorSessionId(tab)`, so it fires regardless of which tab is selected or which plan surface is
-  open. Plan writes signal other mounted `useChatTodos` instances for the same chat to refetch.
+  open. It holds a `leaseSessionWatch` lease while mounted, because a plan or doc tab whose chat is
+  in history has no runtime, so without it a v108 host never sends that session's `pi.event`. Plan writes signal other mounted `useChatTodos` instances for the same chat to refetch.
   Frontend-local workspace view state
   persists the Plan page as a registered `todo-plan` reference (resolver kind + session identity,
   never plan content); another

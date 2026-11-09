@@ -20,6 +20,7 @@ import {
 	errorText,
 	getSessionMessagesWithSkillBaseline,
 	getTransport,
+	leaseSessionWatch,
 	supportsPlanSummaryGeneration,
 } from "../transport";
 import { messagesToRuntime } from "./hydrate";
@@ -99,10 +100,17 @@ export function useAutoPlanSummary(workspaceId: string, sessionId: string): void
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) void check();
 		});
+		let release: (() => void) | null = null;
+		void leaseSessionWatch(sessionId).then((done) => {
+			if (cancelled) return done();
+			release = done;
+			void check();
+		});
 		void check();
 		return () => {
 			cancelled = true;
 			unsub();
+			release?.();
 		};
 	}, [workspaceId, sessionId, identity]);
 }

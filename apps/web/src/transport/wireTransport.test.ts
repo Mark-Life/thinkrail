@@ -6,6 +6,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	type Project,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	SESSION_TOPICS_PROTOCOL_VERSION,
 	type SessionStateRecord,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -22,6 +23,7 @@ import {
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
+	supportsSessionTopics,
 	supportsToolResponses,
 	supportsUserThemes,
 } from "./wireTransport";
@@ -30,6 +32,12 @@ test("tool responses go to session.respondToTool only from a v93 host; older hos
 	expect(supportsToolResponses(TOOL_RESPONSE_PROTOCOL_VERSION)).toBe(true);
 	expect(supportsToolResponses(TOOL_RESPONSE_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsToolResponses(null)).toBe(false);
+});
+
+test("session watches are sent only to a host that scopes pi.event per session", () => {
+	expect(supportsSessionTopics(SESSION_TOPICS_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsSessionTopics(SESSION_TOPICS_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsSessionTopics(null)).toBe(false);
 });
 
 test("user theme files are read only from a host at or beyond their capability version", () => {

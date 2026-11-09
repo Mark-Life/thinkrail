@@ -135,6 +135,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    so a workspace never lands empty while chat history exists), and lists everything else in history for
    explicit reopen. This one auto-open attempt fires once per surface-workspace connection, not on every
    catalog re-read, and a surface resolving an exact-chat route target defers it entirely to that target.
+   From protocol v108 a client streams only the sessions it **watches**: it watches a session before it
+   reads that session's transcript, keeps the watch while the chat runtime lives, and restates the set after
+   every `server.welcome`. Every other session reaches it only as `session.state` (running, needs-input,
+   completion, title). An older client still gets every session's `pi.event`.
    `session.created` supplies that history-only live delta when another frontend starts a session; reconnect
    repairs a missed delta through `session.list`, and the normalized state snapshot carries every chat's
    name, so a chat this client never listed is named without a `session.list`. The client is a **stateless
@@ -168,7 +172,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    so chat and workspace agree, but they stay independent identities written separately — not a cascade. If the agent never calls the tool, the target stays unnamed (accepted); an unnamed chat is *displayed* by
    the head of its first prompt, which the host projects beside the title (`firstPrompt`) and never writes
    anywhere — a read-only label, not a name: rename fields start from the real (empty) title, and the
-   agent's or user's title replaces the label on every surface at once. Clients hydrate `SessionSummary.title`, converge live on `session_info_changed`, and continue to
+   agent's or user's title replaces the label on every surface at once. Clients hydrate `SessionSummary.title`, converge live on the
+   titled `session.state` record (and on `session_info_changed` for watched sessions), and continue to
    route by session id, so duplicate human titles are legal.
 9. **Domain state, frontend-local frame, and workspace-local views.** *Domain* state — projects,
    workspaces, **sessions + their transcripts**, terminal catalogs/PTYs, and git — is backend-owned, shared,

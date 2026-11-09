@@ -100,6 +100,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   bounded push buffer restarts the complete read instead of growing without limit, while stale-generation
   outcomes discard their buffers. Pending dialog records replay their exact request, and adding/opening a
   workspace restarts the generation-guarded complete read so pre-existing disk sessions are included.
+  Each installed record's `title` also renames that chat's history row and any tab without a runtime
+  (`renameChat`), because a v108 host sends no `session_info_changed` for an unwatched session.
   Unsupported hosts clear the map. The old `session.activityList` tombstone
   is never requested by this client. Before `WsTransport` dispatches a state push, any queued Pi events flush
   synchronously, so the runtime transcript/render state precedes the host state that refers to it;
@@ -131,7 +133,26 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   promotes the watcher; a failure stays retryable by the next load) and reports the tick captured before the
   read — conservative should a disk-only summary ever arrive. It also rejects unless the returned summary
   exactly matches both requested workspace and session, making that untrusted-response identity check one
-  shared installation boundary rather than a caller convention).
+  shared installation boundary rather than a caller convention. Every transcript read goes through it, so
+  it is also where a read takes a **`sessionWatch` lease** before the request is sent, see below).
+- **`sessionWatch.ts`** keeps the host's per-client `pi.event` set in step with the store, from a
+  `SESSION_TOPICS_PROTOCOL_VERSION` (v108) host. The desired set is the keys of `s.sessions` (every chat
+  runtime) plus open leases: a transcript read, or `leaseSessionWatch(sessionId)` held by a
+  runtime-free listener such as the plan auto-summary. One store subscription, wired once at init, sends the difference against
+  what it already sent: new ids go out as `session.watch`, dropped ids as `session.unwatch`. A read
+  takes its lease before `session.getMessages` is queued, so the watch frame precedes the read on the same
+  socket and the host subscribes before it takes the snapshot. Until this connection's `server.welcome`
+  the protocol is unknown and no watch can be sent, so the lease, and the read behind it, waits for the
+  welcome's restate; every read path (chat, plan pane, placed-tab hydration) is covered by this one gate. A lease ends a grace period (5 s)
+  after the read settles, which covers callers that install the runtime a moment later; a read whose
+  result is discarded therefore unwatches itself, and no discard path calls `unwatch`. Each supported
+  `server.welcome` restates the whole set as `session.watch {replace: true}` (later chunks past the
+  per-call limit add). The host set survives a short reconnect but not a reap or a restart, and a runtime
+  removed while disconnected sent no unwatch, so the restate must replace. Open leases are in the set, so
+  a read resent after a reconnect is watched again by the restate; the transport resends it on open, before
+  the welcome, so only the host's retained set covers the gap, which a host restart empties. Below v108 it sends nothing: that host still broadcasts
+  every session. Failed watch calls are dropped; the next welcome restates the set.
+  `syncSessionWatchWithRuntimes` is the one store subscription, shared by `initTransport` and the tests.
 - **`mcp.ts`** is the one MCP read path shared by Settings and the chat Resources view:
   **`requestMcpList(method, params)`** serializes `mcp.list` and every list-returning mutation per workspace
   and connection generation, including installation through `installMcpList` before dispatching the next
@@ -171,7 +192,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
-  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`, `leaseSessionWatch`,
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
