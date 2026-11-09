@@ -1,8 +1,13 @@
 import { CFunction, dlopen, FFIType, type Pointer, read, toArrayBuffer } from "bun:ffi";
 import { type Dirent, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
+import { compile, lit, obj, str } from "@earendil-works/pi-schema";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { windowsProductName } from "@thinkrail/shared/windowsIdentity";
+
+const UninstallManifest = compile(
+	obj({ schema_version: lit(1), start_menu_shortcut: str({ minLength: 1 }) }, { open: true }),
+);
 
 export function desktopAppUserModelId(channel: string): string {
 	return `JetBrains.${windowsProductName(channel).replaceAll(" ", ".")}`;
@@ -43,17 +48,7 @@ export function taskbarShortcutCandidates(
 		const manifest: unknown = JSON.parse(
 			readFileSync(join(dirname(appDir), ELECTROBUN_UNINSTALL_MANIFEST), "utf8"),
 		);
-		if (
-			manifest &&
-			typeof manifest === "object" &&
-			"schema_version" in manifest &&
-			manifest.schema_version === 1 &&
-			"start_menu_shortcut" in manifest &&
-			typeof manifest.start_menu_shortcut === "string" &&
-			manifest.start_menu_shortcut
-		) {
-			paths.push(manifest.start_menu_shortcut);
-		}
+		if (UninstallManifest.check(manifest)) paths.push(manifest.start_menu_shortcut);
 	} catch (error) {
 		if (!hasErrno(error, "ENOENT")) failures.push(error);
 	}

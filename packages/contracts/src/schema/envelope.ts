@@ -48,6 +48,7 @@ export const WS_ERROR_CODES = [
 	"FILE_TOO_LARGE",
 	"INVALID_PARAMS",
 	"INVALID_REPLY",
+	"NATIVE_RPC_INVALID",
 	...SPEECH_ERROR_CODES,
 ] as const;
 export type WsErrorCode = (typeof WS_ERROR_CODES)[number];

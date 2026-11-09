@@ -7,8 +7,6 @@ import {
 	injectInitialDesktopPreferences,
 	MAX_DESKTOP_PREFERENCE_KEY_LENGTH,
 	MAX_DESKTOP_PREFERENCE_VALUE_LENGTH,
-	readDesktopPreferenceRemove,
-	readDesktopPreferenceWrite,
 } from "./preferenceAdapter";
 import { PreferenceStore } from "./preferenceStore";
 
@@ -121,20 +119,6 @@ test("filesystem failures reject a write without changing the in-memory document
 	const preferences = new PreferenceStore(join(blocker, "preferences.json"));
 	expect(preferences.write("local", "main", "chat-message-order", "newest-first")).toBe(false);
 	expect(preferences.read("local", "main")).toEqual({});
-});
-
-test("RPC preference payloads are narrowed before handlers read them", () => {
-	expect(readDesktopPreferenceWrite({ key: "density", value: "compact" })).toEqual({
-		key: "density",
-		value: "compact",
-	});
-	expect(readDesktopPreferenceRemove({ key: "density" })).toEqual({ key: "density" });
-	for (const malformed of [null, [], "density", { key: "density" }, { key: 1, value: "compact" }]) {
-		expect(readDesktopPreferenceWrite(malformed)).toBeNull();
-	}
-	for (const malformed of [null, [], "density", { key: 1 }]) {
-		expect(readDesktopPreferenceRemove(malformed)).toBeNull();
-	}
 });
 
 test("preload injection installs initial values before the bundled source", () => {

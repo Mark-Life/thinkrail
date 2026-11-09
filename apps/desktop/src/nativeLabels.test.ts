@@ -20,7 +20,6 @@ test("dialog labels take the pushed translation and fall back to English per lab
 	expect(labels["desktop.dialog.updateRestartFailed"]).toBe(
 		"ThinkRail could not restart to install the update",
 	);
-	expect(readDialogLabels(null)).toEqual(DEFAULT_DIALOG_LABELS);
 });
 
 test("the last pushed labels survive a restart so a startup failure can speak the user's language", () => {
@@ -29,6 +28,8 @@ test("the last pushed labels survive a restart so a startup failure can speak th
 	expect(readDialogLabels(readNativeLabels(path))).toEqual(DEFAULT_DIALOG_LABELS);
 	writeNativeLabels(path, { "desktop.dialog.quit": "Beenden" });
 	expect(readDialogLabels(readNativeLabels(path))["desktop.dialog.quit"]).toBe("Beenden");
-	writeFileSync(path, "{ not json");
-	expect(readDialogLabels(readNativeLabels(path))).toEqual(DEFAULT_DIALOG_LABELS);
+	for (const damaged of ["{ not json", "null", "[]", '"text"']) {
+		writeFileSync(path, damaged);
+		expect(readDialogLabels(readNativeLabels(path))).toEqual(DEFAULT_DIALOG_LABELS);
+	}
 });

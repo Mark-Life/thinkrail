@@ -38,7 +38,7 @@ const BROWSER_SAFE_PI_PACKAGE = /^@earendil-works\/pi-schema(?:\/|$)/;
 const MODULE_RULES: readonly ModuleRule[] = [
 	{
 		root: "packages/artifact-tests",
-		allowed: ["apps/cli", "packages/server", "packages/shared"],
+		allowed: ["apps/cli", "packages/contracts", "packages/server", "packages/shared"],
 	},
 	{ root: "packages/contracts", allowed: [] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },

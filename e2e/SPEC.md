@@ -536,7 +536,8 @@ tolerates an error reply still cannot hide a mismatch. Artifact hosts do not set
   `e2e/no-webassembly.spec.ts` launches Chromium with `--js-flags=--jitless`, which removes
   `WebAssembly` from the page and its workers alike, and pins that a diff, a phone-class code file, Monaco
   and a chat fence still show their source as plain text.
-- **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
+- **Consumes:** the built web artifact, the host's public boot/wire behavior, contracts' wire schemas through
+  `pi-schema` (`fixtures/wire.ts` parses frames and results with them, so a fixture cannot drift from the wire), sanctioned server test-fixture
   exports, CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
   retrying teardown and `errnoCode` helpers, git, Chromium, and Playwright. Standalone native/installer smoke and shared
   artifact probes are owned by that test workspace, outside Playwright discovery.
