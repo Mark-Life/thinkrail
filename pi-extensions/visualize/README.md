@@ -66,6 +66,17 @@ export default createVisualizeExtension({
 
 Without `checkFile` paths are not checked (the package stays `node:`-free).
 
+A host with its own mockup rules (a theme file to link, a different preview sandbox) can replace how the
+guideline tells the model to write one. The package keeps the rest: show it with `type: "file"`, and copy
+a proposal to keep it as `before`. With `mockupGuideline`, `scratchDir` is not used: the text names the
+location itself.
+
+```ts
+export default createVisualizeExtension({
+  mockupGuideline: "write a self-contained HTML file under `.scratch/mockups/` that links `theme.css`",
+});
+```
+
 ## Requirements
 
 pi ≥ the version listed under `devDependencies` in this package's `package.json` (the pi SDK packages

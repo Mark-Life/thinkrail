@@ -6,6 +6,17 @@ export const SOURCE_PATH = join(STYLES_DIR, "colors.json");
 export const GENERATED_CSS_PATH = join(STYLES_DIR, "generated", "colors.css");
 export const THEMES_DIR = join(import.meta.dir, "..", "src", "themes");
 export const THEME_SCHEMA_PATH = join(THEMES_DIR, "schema.ts");
+export const THEME_FILE_PATH = join(
+	import.meta.dir,
+	"..",
+	"..",
+	"..",
+	"thinkrail-extensions",
+	"visualize",
+	"server",
+	"generated",
+	"thinkrail-theme.css",
+);
 
 export const paletteVar = (key: string) =>
 	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
@@ -105,23 +116,27 @@ const HEADER = (version: string, kind: string) => `/*
  */
 `;
 
+function roleLines(colors: Colors, indent: string, withNotes = false): string[] {
+	return Object.entries(colors.roles)
+		.filter(([name, role]) => !aliasesPaletteVar(name, role))
+		.map(([name, role]) => {
+			const note = withNotes && role.note ? ` /* ${role.note} */` : "";
+			return `${indent}${roleVar(name)}: ${derive(colors, role)};${note}`;
+		});
+}
+
+function effectLines(colors: Colors, appearance: "dark" | "light", indent: string): string[] {
+	return Object.entries(colors.effects).map(([n, e]) => `${indent}--${n}: ${e[appearance]};`);
+}
+
 export function renderCss(colors: Colors): string {
 	const roles = Object.entries(colors.roles);
 	const effects = Object.entries(colors.effects).filter(([, e]) => e.publish);
 
-	const rootLines = roles
-		.filter(([name, role]) => !aliasesPaletteVar(name, role))
-		.map(([name, role]) => {
-			const note = role.note ? ` /* ${role.note} */` : "";
-			return `\t${roleVar(name)}: ${derive(colors, role)};${note}`;
-		});
-
-	const effectBlocks = ["dark", "light"].map((appearance) =>
+	const effectBlocks = (["dark", "light"] as const).map((appearance) =>
 		[
 			`:root[data-theme-appearance="${appearance}"] {`,
-			...Object.entries(colors.effects).map(
-				([n, e]) => `\t--${n}: ${e[appearance as "dark" | "light"]};`,
-			),
+			...effectLines(colors, appearance, "\t"),
 			"}",
 		].join("\n"),
 	);
@@ -139,7 +154,7 @@ export function renderCss(colors: Colors): string {
 			"The semantic roles, then the Tailwind utility map. The palette they read is written to the\n * document root by `themes/runtime.ts` before React mounts.",
 		),
 		":root {",
-		...rootLines,
+		...roleLines(colors, "\t", true),
 		"}",
 		"",
 		"/* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so",
@@ -148,6 +163,64 @@ export function renderCss(colors: Colors): string {
 		"",
 		"@theme inline {",
 		...themeLines,
+		"}",
+		"",
+	].join("\n");
+}
+
+export interface ThemePalette {
+	readonly colors: Readonly<Record<string, string | null>>;
+	readonly ansi: Readonly<Record<string, string>>;
+}
+
+export function loadThemePalette(id: "light" | "dark"): ThemePalette {
+	const manifest = JSON.parse(
+		readFileSync(join(THEMES_DIR, "bundled", `${id}.theme.json`), "utf8"),
+	) as ThemePalette;
+	return { colors: manifest.colors, ansi: manifest.ansi };
+}
+
+function paletteLines(palette: ThemePalette, indent: string): string[] {
+	return [
+		...Object.entries(palette.colors)
+			.filter((entry): entry is [string, string] => entry[1] !== null)
+			.map(([key, color]) => `${indent}${paletteVar(key)}: ${color};`),
+		...Object.entries(palette.ansi).map(
+			([key, color]) => `${indent}${paletteVar(`ansi-${key}`)}: ${color};`,
+		),
+	];
+}
+
+export function renderThemeFile(
+	colors: Colors,
+	themes: { readonly light: ThemePalette; readonly dark: ThemePalette },
+): string {
+	return [
+		HEADER(
+			colors.metadata.version,
+			"ThinkRail's semantic colour tokens for standalone HTML mockups: the bundled Light theme, and\n * Dark under `prefers-color-scheme: dark`. Inside ThinkRail the live theme replaces this file.\n * Link it before the mockup's own styles: every rule here is in a cascade layer that any of them outranks.",
+		),
+		"@layer thinkrail-theme {",
+		"\t:root {",
+		"\t\tcolor-scheme: light dark;",
+		...paletteLines(themes.light, "\t\t"),
+		...effectLines(colors, "light", "\t\t"),
+		...roleLines(colors, "\t\t"),
+		"\t}",
+		"",
+		"\t@media (prefers-color-scheme: dark) {",
+		"\t\t:root {",
+		...paletteLines(themes.dark, "\t\t\t"),
+		...effectLines(colors, "dark", "\t\t\t"),
+		"\t\t}",
+		"\t}",
+		"",
+		"\thtml {",
+		"\t\tbackground: var(--container-workspace-bg);",
+		"\t\tcolor: var(--text-default);",
+		'\t\tfont-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+		"\t\tfont-size: 13px;",
+		"\t}",
 		"}",
 		"",
 	].join("\n");

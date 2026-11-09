@@ -171,6 +171,10 @@ so an active placement motion restores the latest edge; on slow runners the rest
 mousedown and mouseup, or puts a preview iframe under the pointer, and the click is lost while the action
 reports success. Settling cannot stop a motion that later growth starts, so the probe first waits for the
 control's own content (a preview's frames or notice), and a click after a dialog waits for it to hide.
+A click inside a mockup frame settles the same way (`clickInTranscriptFrame`). Actionability checks the
+target in the frame's own document, which does not move while the chat glides after a card that just grew,
+so the pointer goes to where the target was: on a loaded Linux runner the mouseup of a click on the last
+20 px of a card landed under the card's edge and the `details` stayed closed.
 `visualize.spec.ts` and `tool-file-links.spec.ts` click every transcript control this way: a file card's
 fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
 sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
@@ -577,7 +581,44 @@ the renderer's plain-source fallback, not the tool-error branch. File previews w
 fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
 width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
-reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+reload. `visualize-mockups.spec.ts` (Chromium and WebKit; it shares `fixtures/visualize.ts` with
+`visualize.spec.ts`) pins themed mockups: the card of a mockup under the scratch dir takes the document's
+height (clamped at 1600 px, Fill width by default) and follows it when a `details` opens, closes and opens
+again; a re-measure leaves the scroll offset of a `scroll-behavior: smooth` document where it was in every
+frame; absolutely positioned boxes and a fixed dialog over a `body` with a pixel `min-height` are whole
+inside the card; a mockup sized
+from its frame (a `100vh` body with the default margin, a full-height shell, a height
+media query) keeps the 480 px card and no height changes over 45 frames, alone and as one side of a
+comparison; an endless height animation is followed and then left at its tallest value; in WebKit a mockup
+wider than the card gets the height of a styled horizontal scrollbar added, and a mockup that would wrap
+onto a second row under the app's 6 px vertical scrollbar keeps its one-row height with no scrollbar; a theme switch recolours a
+token-coloured element in the same frame document, which keeps its opened `details`; a before/after comparison
+sizes both sides to the taller one; an HTML file outside the scratch dir, also when reached through a
+`mockups/../` path, stays `sandbox=""` and unthemed. It also pins the safety rules in a real browser, where
+the unit tests only have fake documents: the frame's sandbox is exactly `allow-same-origin`, and neither an
+author script or handler nor one the test adds to the loaded frame runs; markup that shadows `document.head`,
+`documentElement` (a form, removed, and an `img`, which stays and shadows it in the loaded frame too) or a
+form's `localName` still yields a document that starts with the charset, the CSP and the theme style, and its
+card still fits; a `shadowrootmode` template is gone and an author variable set on `html` wins over the
+injected token, as do author rules inside an `@layer`; a frame the test sends to `about:blank` keeps
+its card height; markup that only the frame's second parse makes live (a `style` under a foster-parented
+`mglyph` that holds an `img srcset`, a preload `link`, a `meta` refresh, a link and a handler) leaves the
+frame with the policy and an empty body, themed and static, with no request (the suite runs no Firefox,
+where those `srcset` loads pass the CSP, so the pin is the frame's DOM); and the app page answers an `iframe` with a URL, direct or through a `srcdoc` meta refresh,
+with a `frame-src` violation and no request. Two cases pin the card's height over time: a mockup edited 20
+times on disk never loses `data-natural-height` or `data-content-height` between two documents (WebKit
+notifies the old document's observer after the new `load`), and a 1600 px card in a chat with 40 rows
+after it is scrolled away until it unmounts and wheeled back in, with every on-screen row sampled per
+frame: no row edge moves against the wheel or by more than two wheel steps, and each frame shares a row
+with the one before. It wheels to an edge with a fixed 100 ms poll: Linux WebKit animates a wheel step
+for about 220 ms and a scroll-offset write ends the animation, so while Virtuoso corrects the offset for
+newly measured rows a 600 px step moves 50–450 px (600 px at once on macOS and in Chromium), and the
+default poll back-off of 1 s does not reach the edge in the test's time. `visualize-mockups-scale.spec.ts` (Chromium only) is its
+own file because a launch argument is a worker option: it starts the browser with
+`--force-device-scale-factor=0.9`, the layout scale of browser zoom, which the emulated `deviceScaleFactor`
+does not reproduce, and pins that a card fits and follows three heights, two of which read 1 px apart
+there. A huge comparison opts in through Show diff anyway while an
+unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
@@ -606,9 +647,11 @@ submits or nudges) (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes 
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
-preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
-is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
-exists for). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
+preview on the plan page. These three specs and `visualize-mockups.spec.ts` also run in a **`webkit`
+Playwright project**: the macOS desktop is the system WKWebView, whose Tab skips buttons without an explicit
+`tabindex` (the regression this lane exists for), whose computed styles do not list custom properties
+(which the mockup theme collection must not rely on) and whose parsed documents let named elements shadow
+`document` properties (which the HTML sanitizer must not read). CI installs WebKit with its system deps; Linux WebKitGTK may not reproduce the macOS Tab rule,
 so the card's markup guard (every control an explicit tab stop) is the platform-independent net. All of this
 runs without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains

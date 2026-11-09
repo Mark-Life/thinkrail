@@ -195,4 +195,32 @@ describe("visualize extension", () => {
 			loadTool(undefined, { scratchDir: ".scratch/mockups/" }).promptGuidelines?.[0],
 		).toContain("`.scratch/mockups/`");
 	});
+
+	test("the prompt guideline without a host mockup guideline keeps its exact text", () => {
+		const rest =
+			" (inline CSS and data: images only — hosts may strip scripts, form controls and external resources, so draw buttons and inputs with styled elements) and show it with visualize type 'file'; set `before` to a mockup of the current UI to show the change. Hosts render a file's current content, so editing a mockup updates every place it was shown; to keep an earlier proposal visible, copy it and pass the copy as `before`.";
+		const start =
+			"When you propose or ask about a visual/UI change, write a self-contained HTML mockup ";
+		expect(loadTool().promptGuidelines).toEqual([
+			`${start}in a scratch location outside version control${rest}`,
+		]);
+		expect(loadTool(undefined, { scratchDir: ".scratch/mockups/" }).promptGuidelines).toEqual([
+			`${start}under \`.scratch/mockups/\`${rest}`,
+		]);
+	});
+
+	test("a host mockup guideline replaces how to write the mockup but keeps how to show it", () => {
+		const guideline = loadTool(undefined, {
+			mockupGuideline: "write an HTML file that links `theme.css`",
+		}).promptGuidelines?.[0];
+		expect(guideline).toContain("write an HTML file that links `theme.css` and show it");
+		expect(guideline).toContain("current content");
+		expect(guideline).not.toContain("hosts may strip scripts");
+		expect(
+			loadTool(undefined, {
+				scratchDir: ".scratch/mockups/",
+				mockupGuideline: "write an HTML file that links `theme.css`",
+			}).promptGuidelines?.[0],
+		).toBe(guideline);
+	});
 });
