@@ -303,6 +303,7 @@ import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
 import { hostSearch } from "./search";
+import { sessionWatchParams, unwatchSessions, watchSessions } from "./sessionWatch";
 import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -1259,6 +1260,14 @@ const handlers: WsHandlers = {
 	"session.activityList": () => [],
 	"session.getMessages": (p) => {
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+	},
+	"session.watch": (params, ctx) => {
+		watchSessions(ctx.clientKey, sessionWatchParams(params).sessionIds);
+		return { ok: true } as const;
+	},
+	"session.unwatch": (params, ctx) => {
+		unwatchSessions(ctx.clientKey, sessionWatchParams(params).sessionIds);
+		return { ok: true } as const;
 	},
 	"mcp.list": (params) => mcpList(params),
 	"mcp.add": (params) => mcpAdd(params),

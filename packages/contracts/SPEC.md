@@ -845,7 +845,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   session reaches idle, which is Stop's lossless path)/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`respondToTool`** (the inline
   reply to an interactive tool call, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; rejects a
+  read side)/**`watch`**/**`unwatch`** (the client's `pi.event` set, § Per-session `pi.event` delivery) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; rejects a
   non-object payload or unknown key and drops retired keys; when present, `customLayoutPresets` and
   `systemThemePair` are complete replacements; entering system mode requires a complete existing-or-incoming
   pair. A legacy `{ theme }` mutation without explicit `themeMode` means a fixed-theme selection and exits
@@ -1301,6 +1301,21 @@ converge other clients through `session.state` pushes. A pre-v86 host offers nei
 
 The request registry also keeps `session.activityList` returning literal `[]` for one compatibility window,
 so an already-loaded old client clears retired markers after reconnect. No activity push or type returns.
+
+## Per-session `pi.event` delivery
+
+From **`SESSION_TOPICS_PROTOCOL_VERSION`**, v108, a socket that connects with `?protocol=108` or later gets
+`pi.event` frames only for the sessions its client watches. The frame shape and the `pi.event` channel
+name do not change.
+
+- **`session.watch {sessionIds}`** adds ids to the client's watch set. It never replaces the set, so a
+  resent or reordered call cannot drop a watch. **`session.unwatch {sessionIds}`** removes ids. Both
+  answer `Ack` and take at most **`SESSION_WATCH_MAX_IDS`** (1000) ids per call.
+- The set belongs to the `?client=` key, not to one socket. It survives a reconnect inside the host's
+  reap window and is gone after it, so a client restates its set after every `server.welcome`.
+- Both are client-scoped. `session.dispose` stays the global unload.
+- A socket below v108, or with no `?protocol`, still gets every session's `pi.event`.
+- `session.state` stays a broadcast. It is the summary every client reads for sessions it does not watch.
 
 ## Get right
 

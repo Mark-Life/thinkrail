@@ -141,7 +141,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 107;
+export const PROTOCOL_VERSION = 108;
+export const SESSION_TOPICS_PROTOCOL_VERSION = 108;
+export const SESSION_WATCH_MAX_IDS = 1000;
 export const SPEECH_PROTOCOL_VERSION = 107;
 export const SEARCH_PROTOCOL_VERSION = 106;
 export const WORKSPACE_CREATION_PROTOCOL_VERSION = 104;
@@ -396,6 +398,8 @@ export const WS_METHODS = {
 	sessionNudge: "session.nudge",
 	sessionActivityList: "session.activityList",
 	sessionGetMessages: "session.getMessages",
+	sessionWatch: "session.watch",
+	sessionUnwatch: "session.unwatch",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
 	sessionResourceHistory: "session.resourceHistory",
@@ -1105,6 +1109,8 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
+	"session.watch": { params: { sessionIds: string[] }; result: Ack };
+	"session.unwatch": { params: { sessionIds: string[] }; result: Ack };
 	"session.resources": {
 		params: { workspaceId: string; sessionId: string };
 		result: SessionResources;

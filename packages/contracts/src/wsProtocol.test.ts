@@ -57,6 +57,8 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SESSION_TOPICS_PROTOCOL_VERSION,
+	SESSION_WATCH_MAX_IDS,
 	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
@@ -248,11 +250,19 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("voice input is pinned to v107", () => {
 	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
-	expect(PROTOCOL_VERSION).toBe(107);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
 	expect(WS_METHODS.speechInstall).toBe("speech.install");
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
 	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
+});
+
+test("per-session pi.event topics are pinned to v108", () => {
+	expect(SESSION_TOPICS_PROTOCOL_VERSION).toBe(108);
+	expect(PROTOCOL_VERSION).toBe(108);
+	expect(WS_METHODS.sessionWatch).toBe("session.watch");
+	expect(WS_METHODS.sessionUnwatch).toBe("session.unwatch");
+	expect(SESSION_WATCH_MAX_IDS).toBe(1000);
 });
 
 test("user-selectable fonts are pinned to v102", () => {
