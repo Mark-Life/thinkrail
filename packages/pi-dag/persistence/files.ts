@@ -4,8 +4,21 @@ import { type FileHandle, link, lstat, mkdir, open, unlink } from "node:fs/promi
 import { basename, dirname, join, parse, resolve } from "node:path";
 import { DagError, fail } from "../domain/index.ts";
 
-export function hasCode(error: unknown, code: string): boolean {
-	return error instanceof Error && "code" in error && error.code === code;
+type ErrnoCode =
+	| "EACCES"
+	| "EEXIST"
+	| "EISDIR"
+	| "ELOOP"
+	| "ENOENT"
+	| "ENOTDIR"
+	| "ENOTEMPTY"
+	| "EPERM"
+	| "EROFS"
+	| "ESRCH"
+	| "EXDEV";
+
+export function hasCode(error: unknown, ...codes: readonly ErrnoCode[]): boolean {
+	return error instanceof Error && "code" in error && codes.some((code) => code === error.code);
 }
 
 export function storageError(error: unknown): DagError {

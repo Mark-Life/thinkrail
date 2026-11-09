@@ -383,7 +383,7 @@ ref off the workspace-create critical path.
   the one content classification, so a diff side's metadata cannot disagree with `fs.readFile`'s);
   `contracts` (`Git*`/`BranchList`/`ResourceMeta` types);
   `subprocess` (`runBounded`, the bounded child behind both async runners);
-  `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/spawn`
+  `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/errnoCode`; `@thinkrail/shared/spawn`
   (`spawnSyncCaptured` / `spawnSyncCapturedBytes`, the sync runners with `windowsHide`).
 - **Forbidden:** `host`; sibling features.
 
