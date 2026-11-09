@@ -136,9 +136,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    explicit reopen. This one auto-open attempt fires once per surface-workspace connection, not on every
    catalog re-read, and a surface resolving an exact-chat route target defers it entirely to that target.
    From protocol v108 a client streams only the sessions it **watches**: it watches a session before it
-   reads that session's transcript, keeps the watch while the chat runtime lives, and restates the set after
-   every `server.welcome`. Every other session reaches it only as `session.state` (running, needs-input,
-   completion, title). An older client still gets every session's `pi.event`.
+   reads that session's transcript, keeps the watch while the chat runtime lives (closing a chat to
+   history usually drops both), and restates the set after every `server.welcome`. Every other session
+   reaches it only as `session.state` (running, needs-input, completion, title). An older client still
+   gets every session's `pi.event`.
    `session.created` supplies that history-only live delta when another frontend starts a session; reconnect
    repairs a missed delta through `session.list`, and the normalized state snapshot carries every chat's
    name, so a chat this client never listed is named without a `session.list`. The client is a **stateless

@@ -1633,8 +1633,8 @@ own section. The kebab menu (`plan-menu`, a
   the host-atomic close flow. A busy close remains one correlated request through confirmation and forced
   retry; dialog auto-close cannot release that request, authoritative catalog removal dismisses stale
   confirmation, and a rejected force clears exactly that request with an error so a later close can start
-  cleanly. The workbench close command for a chat routes to `store.closeChatToHistory` (keeps the session
-  alive) and shows a
+  cleanly. The workbench close command for a chat routes to `store.closeChatToHistory` (keeps the host session
+  alive, usually drops the local runtime) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
   `session.deleted` broadcast drives the same fold in every connected client. On workspace activation and
