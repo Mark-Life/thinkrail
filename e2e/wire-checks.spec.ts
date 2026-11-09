@@ -1,15 +1,18 @@
-import { realpathSync } from "node:fs";
+import { realpathSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { SessionId } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openAppFresh,
 	openFixtureProject,
 } from "./fixtures/app";
-import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { E2eWire } from "./fixtures/wire";
 
 interface Frame {
 	id?: string;
@@ -120,4 +123,72 @@ test("a welcome from an older host with no recent projects or config still start
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
+});
+
+test("a project with a hand-edited id and a session with an edited header stay listed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const worktree = realpathSync(E2E_FIXTURE_REPO);
+		const workspace = (
+			await wire.request("workspace.list", {
+				projectId: (await wire.request("project.list", {}))[0]?.id ?? testProjectId(""),
+			})
+		).find((candidate) => candidate.kind === "default");
+		if (!workspace) throw new Error("Missing default workspace");
+		const edited = seedWorkspaceSession(worktree, {
+			id: "edited header",
+			name: "Edited header",
+			messages: [{ role: "user", text: "An old session", timestamp: Date.now() }],
+		});
+		const sessions = await wire.request("session.list", { workspaceId: workspace.id });
+		expect(sessions.map((session) => session.sessionId)).toContain(testSessionId(edited.id));
+
+		writeFileSync(
+			join(E2E_DATA_DIR, "projects.json"),
+			JSON.stringify([
+				{
+					id: "hand-edited-project",
+					name: "sample-project",
+					path: E2E_FIXTURE_REPO,
+					slug: "sample-project",
+					lastOpened: Date.now(),
+				},
+			]),
+		);
+		await page.reload();
+		await expect(
+			page.getByTestId("project-item").filter({ hasText: "sample-project" }),
+		).toBeVisible();
+		await expect(page.getByTestId("project-item")).toHaveCount(1);
+		const projects = await wire.request("project.list", {});
+		expect(projects.map((project) => project.id)).toEqual([testProjectId("hand-edited-project")]);
+	} finally {
+		wire.close();
+	}
+});
+
+test("a request with a bad id is refused over the socket", async ({ page }) => {
+	await openFixtureProject(page);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		for (const id of ["", "w1", "../escape", "..%2Fescape", "a/b"]) {
+			await expect(
+				wire.request("workspace.list", { projectId: testProjectId(id) }),
+			).rejects.toThrow("workspace.list failed");
+			await expect(
+				wire.request("session.list", { workspaceId: testWorkspaceId(id) }),
+			).rejects.toThrow("session.list failed");
+		}
+		const workspaceId = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
+		for (const id of ["", "../escape", "a/b", "a".repeat(201)]) {
+			await expect(
+				wire.request("session.resources", { workspaceId, sessionId: testSessionId(id) }),
+			).rejects.toThrow("session.resources failed");
+		}
+	} finally {
+		wire.close();
+	}
 });

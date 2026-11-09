@@ -9,7 +9,11 @@ import type {
 	SessionId,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { MAX_HISTORY_LIMIT, MAX_HISTORY_QUERY_LENGTH, parseSessionId } from "@thinkrail/contracts";
+import {
+	MAX_HISTORY_LIMIT,
+	MAX_HISTORY_QUERY_LENGTH,
+	parseStoredSessionId,
+} from "@thinkrail/contracts";
 import { extractSession, type HistoryEntry } from "./extract";
 
 interface SessionRecord {
@@ -93,7 +97,7 @@ export class HistoryIndex {
 	private async loadRecord(path: string, mtimeMs: number, size: number): Promise<void> {
 		try {
 			const session = extractSession(await readFile(path, "utf8"));
-			const sessionId = session ? parseSessionId(session.id) : null;
+			const sessionId = session ? parseStoredSessionId(session.id) : null;
 			if (!session || sessionId === null) {
 				this.records.delete(path);
 				return;

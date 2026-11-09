@@ -17,7 +17,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
 	parseSessionId,
-	parseWorkspaceId,
+	parseStoredWorkspaceId,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
 	type ResourceRecord,
@@ -932,7 +932,7 @@ export function selectKnownChatLocation(
 	}
 	for (const [key, chats] of Object.entries(state.closedChatsByWorkspace)) {
 		const chat = chats.find((candidate) => candidate.sessionId === sessionId);
-		const workspaceId = parseWorkspaceId(key);
+		const workspaceId = parseStoredWorkspaceId(key);
 		if (chat && workspaceId !== null) return { workspaceId, title: chat.title };
 	}
 	return null;

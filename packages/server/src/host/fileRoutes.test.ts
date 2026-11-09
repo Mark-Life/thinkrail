@@ -10,6 +10,7 @@ import { resetConfigCache } from "../settings";
 import { BLOB_SIZE_LIMIT, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { createServer, type RunningServer } from "./server";
 
+const WORKSPACE = "00000000-0000-4000-8000-0000000000b1";
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x7f]);
 
 let dataDir: string;
@@ -47,7 +48,7 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: testWorkspaceId("w1"),
+				id: testWorkspaceId(WORKSPACE),
 				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
@@ -66,7 +67,7 @@ afterEach(() => {
 });
 
 test("/blob serves a commit's bytes with the shared type, cacheable forever", async () => {
-	const response = await serveBlob(`/blob/w1/${head}/docs%2Fshot.png`);
+	const response = await serveBlob(`/blob/${WORKSPACE}/${head}/docs%2Fshot.png`);
 	expect(response.status).toBe(200);
 	expect(response.headers.get("Content-Type")).toBe("image/png");
 	expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
@@ -76,8 +77,8 @@ test("/blob serves a commit's bytes with the shared type, cacheable forever", as
 });
 
 test("/files and /blob use the same extension fallback as ResourceMeta", async () => {
-	const worktree = await serveWorktreeFile("/files/w1/notes.md");
-	const blob = await serveBlob(`/blob/w1/${head}/notes.md`);
+	const worktree = await serveWorktreeFile(`/files/${WORKSPACE}/notes.md`);
+	const blob = await serveBlob(`/blob/${WORKSPACE}/${head}/notes.md`);
 	for (const response of [worktree, blob]) {
 		expect(response.status).toBe(200);
 		expect(response.headers.get("Content-Type")).toBe("text/markdown");
@@ -91,8 +92,8 @@ test("active resource types are sandboxed on both raw routes", async () => {
 		["page.xhtml", "application/xhtml+xml"],
 		["vector.svg", "image/svg+xml"],
 	] as const) {
-		const worktree = await serveWorktreeFile(`/files/w1/${path}`);
-		const blob = await serveBlob(`/blob/w1/${head}/${path}`);
+		const worktree = await serveWorktreeFile(`/files/${WORKSPACE}/${path}`);
+		const blob = await serveBlob(`/blob/${WORKSPACE}/${head}/${path}`);
 		for (const response of [worktree, blob]) {
 			expect(response.status).toBe(200);
 			expect(response.headers.get("Content-Type")).toBe(mime);
@@ -102,20 +103,32 @@ test("active resource types are sandboxed on both raw routes", async () => {
 	}
 });
 
+test.each([
+	"w1",
+	"..",
+	"..%2F..%2Fescape",
+	"a%2Fb",
+	"%2Fabsolute",
+	"a%00b",
+])("both raw routes 404 on the workspace id %s", async (id) => {
+	expect((await serveWorktreeFile(`/files/${id}/notes.md`)).status).toBe(404);
+	expect((await serveBlob(`/blob/${id}/${head}/notes.md`)).status).toBe(404);
+});
+
 test("/blob 404s on malformed locations, absent blobs, and tree paths", async () => {
-	expect((await serveBlob("/blob/w1/not-an-oid/notes.md")).status).toBe(404);
-	expect((await serveBlob(`/blob/w1/${head.slice(0, 12)}/notes.md`)).status).toBe(404);
+	expect((await serveBlob(`/blob/${WORKSPACE}/not-an-oid/notes.md`)).status).toBe(404);
+	expect((await serveBlob(`/blob/${WORKSPACE}/${head.slice(0, 12)}/notes.md`)).status).toBe(404);
 	expect((await serveBlob(`/blob/nope/${head}/notes.md`)).status).toBe(404);
-	expect((await serveBlob(`/blob/w1/${head}/..%2F..%2Fescaped.txt`)).status).toBe(404);
-	expect((await serveBlob(`/blob/w1/${head}/gone.txt`)).status).toBe(404);
-	expect((await serveBlob(`/blob/w1/${head}/docs`)).status).toBe(404);
-	expect((await serveBlob(`/blob/w1/${head}/`)).status).toBe(404);
-	expect((await serveBlob("/blob/w1/")).status).toBe(404);
+	expect((await serveBlob(`/blob/${WORKSPACE}/${head}/..%2F..%2Fescaped.txt`)).status).toBe(404);
+	expect((await serveBlob(`/blob/${WORKSPACE}/${head}/gone.txt`)).status).toBe(404);
+	expect((await serveBlob(`/blob/${WORKSPACE}/${head}/docs`)).status).toBe(404);
+	expect((await serveBlob(`/blob/${WORKSPACE}/${head}/`)).status).toBe(404);
+	expect((await serveBlob(`/blob/${WORKSPACE}/`)).status).toBe(404);
 });
 
 test("/files streams the worktree's current bytes with sniffed headers and never caches them", async () => {
 	writeFileSync(join(repo, "notes.md"), "# edited\n");
-	const response = await serveWorktreeFile("/files/w1/notes.md");
+	const response = await serveWorktreeFile(`/files/${WORKSPACE}/notes.md`);
 	expect(response.status).toBe(200);
 	expect(response.headers.get("Cache-Control")).toBe("no-store");
 	expect(response.headers.get("Content-Type")).toBe("text/markdown");
@@ -123,27 +136,27 @@ test("/files streams the worktree's current bytes with sniffed headers and never
 	expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
 	expect(await response.text()).toBe("# edited\n");
 
-	const missing = await serveWorktreeFile("/files/w1/gone.md");
+	const missing = await serveWorktreeFile(`/files/${WORKSPACE}/gone.md`);
 	expect(missing.status).toBe(404);
 	expect(missing.headers.get("Cache-Control")).toBe("no-store");
-	expect((await serveWorktreeFile("/files/w1/..%2Fescaped.txt")).status).toBe(404);
-	expect((await serveWorktreeFile("/files/w1/docs")).status).toBe(404);
-	expect((await serveWorktreeFile("/files/w1")).status).toBe(404);
+	expect((await serveWorktreeFile(`/files/${WORKSPACE}/..%2Fescaped.txt`)).status).toBe(404);
+	expect((await serveWorktreeFile(`/files/${WORKSPACE}/docs`)).status).toBe(404);
+	expect((await serveWorktreeFile(`/files/${WORKSPACE}`)).status).toBe(404);
 });
 
 test("/files with maxBytes serves a file within the cap, refuses a larger one, and rejects a bad cap", async () => {
 	writeFileSync(join(repo, "notes.md"), "# edited\n");
-	const within = await serveWorktreeFile("/files/w1/notes.md", "9");
+	const within = await serveWorktreeFile(`/files/${WORKSPACE}/notes.md`, "9");
 	expect(within.status).toBe(200);
 	expect(within.headers.get("Content-Length")).toBe("9");
 	expect(await within.text()).toBe("# edited\n");
-	const over = await serveWorktreeFile("/files/w1/notes.md", "8");
+	const over = await serveWorktreeFile(`/files/${WORKSPACE}/notes.md`, "8");
 	expect(over.status).toBe(413);
 	expect(over.headers.get("Cache-Control")).toBe("no-store");
 	for (const bad of ["-1", "1.5", "lots", ""]) {
-		expect((await serveWorktreeFile("/files/w1/notes.md", bad)).status).toBe(400);
+		expect((await serveWorktreeFile(`/files/${WORKSPACE}/notes.md`, bad)).status).toBe(400);
 	}
-	expect((await serveWorktreeFile("/files/w1/gone.md", "9")).status).toBe(404);
+	expect((await serveWorktreeFile(`/files/${WORKSPACE}/gone.md`, "9")).status).toBe(404);
 });
 
 test("the host passes /files its maxBytes from the request URL", async () => {
@@ -158,7 +171,7 @@ test("the host passes /files its maxBytes from the request URL", async () => {
 	let server: RunningServer | undefined;
 	try {
 		server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
-		const base = `http://127.0.0.1:${server.port}/files/w1/notes.md`;
+		const base = `http://127.0.0.1:${server.port}/files/${WORKSPACE}/notes.md`;
 		expect((await fetch(`${base}?maxBytes=8`)).status).toBe(200);
 		expect((await fetch(`${base}?maxBytes=7`)).status).toBe(413);
 		expect((await fetch(`${base}?maxBytes=x`)).status).toBe(400);
@@ -184,7 +197,7 @@ test("/blob refuses objects above the response cap before reading their content"
 	git("commit", "-m", "large blob");
 	const oid = git("rev-parse", "HEAD");
 
-	const response = await serveBlob(`/blob/w1/${oid}/large.bin`);
+	const response = await serveBlob(`/blob/${WORKSPACE}/${oid}/large.bin`);
 	expect(response.status).toBe(413);
 	expect(await response.text()).toBe("blob too large");
 });
@@ -193,10 +206,12 @@ test("file routes refuse .git and symlinks escaping the worktree", async () => {
 	symlinkSync(dataDir, join(repo, "outside"));
 	symlinkSync(join(repo, ".git"), join(repo, "metadata"));
 
-	expect((await serveWorktreeFile("/files/w1/.git%2Fconfig")).status).toBe(404);
-	expect((await serveWorktreeFile("/files/w1/metadata%2Fconfig")).status).toBe(404);
-	expect((await serveWorktreeFile("/files/w1/outside%2Fworkspaces.json")).status).toBe(404);
-	expect((await serveBlob(`/blob/w1/${head}/.git%2Fconfig`)).status).toBe(404);
+	expect((await serveWorktreeFile(`/files/${WORKSPACE}/.git%2Fconfig`)).status).toBe(404);
+	expect((await serveWorktreeFile(`/files/${WORKSPACE}/metadata%2Fconfig`)).status).toBe(404);
+	expect((await serveWorktreeFile(`/files/${WORKSPACE}/outside%2Fworkspaces.json`)).status).toBe(
+		404,
+	);
+	expect((await serveBlob(`/blob/${WORKSPACE}/${head}/.git%2Fconfig`)).status).toBe(404);
 });
 
 test("/blob streams a multi-megabyte blob through a live server", async () => {
@@ -212,7 +227,7 @@ test("/blob streams a multi-megabyte blob through a live server", async () => {
 	});
 	try {
 		const response = await fetch(
-			`http://127.0.0.1:${server.port}/blob/w1/${commit}/docs%2Fbig.bin`,
+			`http://127.0.0.1:${server.port}/blob/${WORKSPACE}/${commit}/docs%2Fbig.bin`,
 		);
 		expect(response.status).toBe(200);
 		expect(response.headers.get("Content-Type")).toBe("application/octet-stream");
