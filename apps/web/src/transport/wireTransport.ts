@@ -80,13 +80,14 @@ export function supportsSessionTopics(protocolVersion: number | null): boolean {
 }
 
 const sessionWatch = createSessionWatch({
+	welcomed: () => useAppStore.getState().protocolVersion !== null,
 	supported: () => supportsSessionTopics(useAppStore.getState().protocolVersion),
 	runtimeIds: () => Object.keys(useAppStore.getState().sessions),
 	send: (method, sessionIds, replace) =>
 		getTransport().request(method, replace ? { sessionIds, replace } : { sessionIds }),
 });
 
-export function leaseSessionWatch(sessionId: string): () => void {
+export function leaseSessionWatch(sessionId: string): Promise<() => void> {
 	return sessionWatch.lease(sessionId);
 }
 

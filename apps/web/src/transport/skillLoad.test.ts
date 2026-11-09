@@ -24,7 +24,7 @@ test("session-message loads reject a response for a different workspace or sessi
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
-		leaseSessionWatch: () => () => {},
+		leaseSessionWatch: async () => () => {},
 	});
 	const params = { workspaceId: "requested-workspace", sessionId: "requested-session" };
 	await expect(requests.getSessionMessages(params)).rejects.toThrow(
@@ -85,7 +85,7 @@ test("resource loads share startup, fold the replay fallback before the baseline
 			order.push("reload");
 			return { ok: true };
 		},
-		leaseSessionWatch: () => () => {},
+		leaseSessionWatch: async () => () => {},
 	});
 
 	const creating = requests.createSession({ workspaceId: "ws1" });
@@ -142,7 +142,7 @@ test("a prewarm-started preparation never becomes a real load's baseline: the fi
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
-		leaseSessionWatch: () => () => {},
+		leaseSessionWatch: async () => () => {},
 	});
 
 	const prewarming = requests.prewarmWorkspaceSkillLoad("ws1");
@@ -195,7 +195,7 @@ test("a failed prewarm leaves the eventual session load able to retry preparatio
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
-		leaseSessionWatch: () => () => {},
+		leaseSessionWatch: async () => () => {},
 	});
 
 	await expect(requests.prewarmWorkspaceSkillLoad("ws1")).rejects.toThrow("watch failed");
@@ -243,7 +243,7 @@ test("a transcript read starts the shared preparation but never waits for watche
 			};
 		},
 		reloadSessionResources: async () => ({ ok: true }),
-		leaseSessionWatch: () => () => {},
+		leaseSessionWatch: async () => () => {},
 	});
 
 	const read = await requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
@@ -286,13 +286,14 @@ test("a transcript read watches its session before the read and releases it once
 			};
 		},
 		reloadSessionResources: async () => ({ ok: true }),
-		leaseSessionWatch: (sessionId) => {
+		leaseSessionWatch: async (sessionId) => {
 			order.push(`lease ${sessionId}`);
 			return () => order.push(`release ${sessionId}`);
 		},
 	});
 
 	const reading = requests.getSessionMessages({ workspaceId: "ws1", sessionId: "s1" });
+	await Bun.sleep(0);
 	expect(order).toEqual(["lease s1", "read"]);
 	finishRead();
 	await reading;

@@ -1672,9 +1672,7 @@ Unknown custom messages retain their existing behavior.
   receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), the
   `isSpec` classifier from the store's `specsByWorkspace` snapshot (subscribed as the stored array — a
   stable ref — and memoized into a matcher, never a fresh Set inside the selector), and the guarded
-  **`useTranscriptSync.ts`** authoritative read that converges an existing runtime. That read waits for
-  `server.welcome` (`protocolVersion` set), so the restated session watch reaches the host before the
-  snapshot and no event falls between them. A
+  **`useTranscriptSync.ts`** authoritative read that converges an existing runtime. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
   events instead.

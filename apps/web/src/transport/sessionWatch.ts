@@ -3,6 +3,7 @@ import { SESSION_WATCH_MAX_IDS } from "@thinkrail/contracts";
 export const SESSION_WATCH_LEASE_GRACE_MS = 5_000;
 
 export interface SessionWatchDependencies {
+	welcomed: () => boolean;
 	supported: () => boolean;
 	runtimeIds: () => readonly string[];
 	send: (
@@ -29,6 +30,7 @@ function chunks(ids: readonly string[]): string[][] {
 export function createSessionWatch(deps: SessionWatchDependencies) {
 	const sent = new Set<string>();
 	const leases = new Map<string, number>();
+	const awaitingWelcome: (() => void)[] = [];
 	const graceMs = deps.graceMs ?? SESSION_WATCH_LEASE_GRACE_MS;
 
 	const send = (method: "session.watch" | "session.unwatch", ids: readonly string[]) => {
@@ -61,6 +63,7 @@ export function createSessionWatch(deps: SessionWatchDependencies) {
 	return {
 		sync,
 		restate() {
+			for (const resume of awaitingWelcome.splice(0)) resume();
 			sent.clear();
 			if (!deps.supported()) return;
 			const desired = [...desiredIds()];
@@ -68,7 +71,8 @@ export function createSessionWatch(deps: SessionWatchDependencies) {
 			deps.send("session.watch", desired.slice(0, SESSION_WATCH_MAX_IDS), true).catch(() => {});
 			send("session.watch", desired.slice(SESSION_WATCH_MAX_IDS));
 		},
-		lease(sessionId: string) {
+		async lease(sessionId: string) {
+			if (!deps.welcomed()) await new Promise<void>((resume) => awaitingWelcome.push(resume));
 			leases.set(sessionId, (leases.get(sessionId) ?? 0) + 1);
 			sync();
 			let released = false;

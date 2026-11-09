@@ -5,7 +5,9 @@ import { createSessionWatch, syncSessionWatchWithRuntimes } from "./sessionWatch
 function harness(options: { runtimeIds?: () => readonly string[]; graceMs?: number } = {}) {
 	const calls: (readonly [string, string[]] | readonly [string, string[], "replace"])[] = [];
 	let supported = true;
+	let welcomed = true;
 	const watch = createSessionWatch({
+		welcomed: () => welcomed,
 		supported: () => supported,
 		runtimeIds: options.runtimeIds ?? (() => Object.keys(useAppStore.getState().sessions)),
 		send: async (method, sessionIds, replace) => {
@@ -18,6 +20,9 @@ function harness(options: { runtimeIds?: () => readonly string[]; graceMs?: numb
 		calls,
 		setSupported: (value: boolean) => {
 			supported = value;
+		},
+		setWelcomed: (value: boolean) => {
+			welcomed = value;
 		},
 		drain: () => calls.splice(0),
 	};
@@ -85,7 +90,7 @@ test("a read lease watches at once and unwatches after its grace unless a runtim
 	const runtimes: string[] = [];
 	const { watch, drain } = harness({ runtimeIds: () => runtimes });
 
-	const discarded = watch.lease("discarded");
+	const discarded = await watch.lease("discarded");
 	expect(drain()).toEqual([["session.watch", ["discarded"]]]);
 	discarded();
 	discarded();
@@ -93,12 +98,33 @@ test("a read lease watches at once and unwatches after its grace unless a runtim
 	await Bun.sleep(5);
 	expect(drain()).toEqual([["session.unwatch", ["discarded"]]]);
 
-	const installed = watch.lease("installed");
+	const installed = await watch.lease("installed");
 	runtimes.push("installed");
 	watch.sync();
 	installed();
 	await Bun.sleep(5);
 	expect(drain()).toEqual([["session.watch", ["installed"]]]);
+});
+
+test("a lease taken before the welcome waits for the restate, so its watch follows it", async () => {
+	const { watch, drain, setWelcomed } = harness({ runtimeIds: () => ["a"] });
+	setWelcomed(false);
+	let leased = false;
+	const leasing = watch.lease("early").then((release) => {
+		leased = true;
+		return release;
+	});
+	await Bun.sleep(1);
+	expect(leased).toBe(false);
+	expect(drain()).toEqual([]);
+
+	setWelcomed(true);
+	watch.restate();
+	(await leasing)();
+	expect(drain()).toEqual([
+		["session.watch", ["a"], "replace"],
+		["session.watch", ["early"]],
+	]);
 });
 
 test("a large set is split to the host's per-call limit, and only the first restate chunk replaces", () => {

@@ -232,14 +232,13 @@ const ChatTranscript = forwardRef<
 	);
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
-	const welcomed = useAppStore((s) => s.protocolVersion !== null);
 	useTranscriptSync({
 		workspaceId,
 		sessionId,
 		runtime,
 		status,
 		connectionGeneration,
-		enabled: sessionExists && welcomed,
+		enabled: sessionExists,
 	});
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);

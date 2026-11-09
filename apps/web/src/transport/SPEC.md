@@ -138,15 +138,18 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **`sessionWatch.ts`** keeps the host's per-client `pi.event` set in step with the store, from a
   `SESSION_TOPICS_PROTOCOL_VERSION` (v108) host. The desired set is the keys of `s.sessions` (every chat
   runtime) plus open read leases. One store subscription, wired once at init, sends the difference against
-  what it already sent: new ids go out as `session.watch`, dropped ids as `session.unwatch`. A lease is
-  taken synchronously before `session.getMessages` is queued, so the watch frame precedes the read on the
-  same socket and the host subscribes before it takes the snapshot. A lease ends a grace period (5 s)
+  what it already sent: new ids go out as `session.watch`, dropped ids as `session.unwatch`. A read
+  takes its lease before `session.getMessages` is queued, so the watch frame precedes the read on the same
+  socket and the host subscribes before it takes the snapshot. Until this connection's `server.welcome`
+  the protocol is unknown and no watch can be sent, so the lease, and the read behind it, waits for the
+  welcome's restate; every read path (chat, plan pane, placed-tab hydration) is covered by this one gate. A lease ends a grace period (5 s)
   after the read settles, which covers callers that install the runtime a moment later; a read whose
   result is discarded therefore unwatches itself, and no discard path calls `unwatch`. Each supported
   `server.welcome` restates the whole set as `session.watch {replace: true}` (later chunks past the
   per-call limit add). The host set survives a short reconnect but not a reap or a restart, and a runtime
   removed while disconnected sent no unwatch, so the restate must replace. Open leases are in the set, so
-  a read resent after a reconnect keeps its watch. Below v108 it sends nothing: that host still broadcasts
+  a read resent after a reconnect is watched again by the restate; the transport resends it on open, before
+  the welcome, so only the host's retained set covers the gap, which a host restart empties. Below v108 it sends nothing: that host still broadcasts
   every session. Failed watch calls are dropped; the next welcome restates the set.
   `syncSessionWatchWithRuntimes` is the one store subscription, shared by `initTransport` and the tests.
 - **`mcp.ts`** is the one MCP read path shared by Settings and the chat Resources view:

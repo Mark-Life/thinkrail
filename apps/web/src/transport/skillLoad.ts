@@ -18,7 +18,7 @@ export interface SkillLoadDependencies {
 	reloadSessionResources: (
 		params: WsParams<"session.reloadResources">,
 	) => Promise<WsResult<"session.reloadResources">>;
-	leaseSessionWatch: (sessionId: string) => () => void;
+	leaseSessionWatch: (sessionId: string) => Promise<() => void>;
 }
 
 export function createSkillLoadRequests(deps: SkillLoadDependencies) {
@@ -58,7 +58,7 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 		async getSessionMessages(params: WsParams<"session.getMessages">) {
 			const syncedTick = deps.workspaceTick(params.workspaceId);
 			prepare(params.workspaceId, false).catch(() => {});
-			const release = deps.leaseSessionWatch(params.sessionId);
+			const release = await deps.leaseSessionWatch(params.sessionId);
 			const result = await deps.getSessionMessages(params).finally(release);
 			if (
 				result.summary.workspaceId !== params.workspaceId ||
