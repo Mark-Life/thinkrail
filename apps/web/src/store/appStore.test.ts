@@ -1977,11 +1977,12 @@ test("a second dialog for a busy session queues instead of orphaning the first",
 	expect(rt("a").extUiQueue).toHaveLength(0);
 });
 
-test("closing a chat moves it to history with its runtime kept; reopening restores full state", () => {
+test("closing a chat with a draft keeps its runtime; reopening restores full state", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	store.openChatSession("ws1", "a", null, "medium");
 	store.handlePiEvent(agentStart, "a");
+	store.setChatDraft("a", "unsent");
 	useAppStore.setState({
 		chatLocationRequest: {
 			workspaceId: "ws1",
@@ -2023,6 +2024,41 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	expect(st.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "a"));
 	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0);
 	expect(st.sessions.a?.isStreaming).toBe(true);
+});
+
+test("closing a chat to history drops its runtime and skill baseline when nothing else holds it", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium", 3);
+	store.handlePiEvent(agentStart, "a");
+	store.closeChatToHistory("a", true, "ws1");
+	const st = useAppStore.getState();
+	expect(st.closedChatsByWorkspace.ws1?.map((c) => c.sessionId)).toEqual(["a"]);
+	expect(st.sessions.a).toBeUndefined();
+	expect(st.skillsSyncedTickBySession.a).toBeUndefined();
+});
+
+test("a plan tab, a pending dialog, or a draft keeps a closed chat's runtime", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "planned", null, "medium");
+	store.openDoc({
+		kind: "plan",
+		id: "ws1:plan:planned",
+		workspaceId: "ws1",
+		name: "",
+		sessionId: "planned",
+	});
+	store.closeChatToHistory("planned", true, "ws1");
+	expect(useAppStore.getState().sessions.planned).toBeDefined();
+
+	store.openChatSession("ws1", "asking", null, "medium");
+	store.applyExtUi({ id: "d1", sessionId: "asking", kind: "input", title: "name?" });
+	store.closeChatToHistory("asking", true, "ws1");
+	expect(useAppStore.getState().sessions.asking?.pendingExtUi?.id).toBe("d1");
+
+	store.openChatSession("ws1", "drafted", null, "medium");
+	store.setChatDraft("drafted", "half a thought");
+	store.closeChatToHistory("drafted", true, "ws1");
+	expect(useAppStore.getState().sessions.drafted?.draft).toBe("half a thought");
 });
 
 test("reopening a chat targets its captured workspace after the user switches away", () => {

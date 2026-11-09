@@ -55,6 +55,28 @@ test("installing and dropping chat runtimes watches and unwatches their sessions
 	}
 });
 
+test("closing a chat to history unwatches it, and the reopen read watches it again", async () => {
+	const { watch, drain } = harness();
+	const unsubscribe = syncSessionWatchWithRuntimes(watch, useAppStore);
+	try {
+		const store = useAppStore.getState();
+		store.openChatSession("close-ws", "close-a", null, "medium");
+		drain();
+
+		store.closeChatToHistory("close-a", false, "close-ws");
+		expect(drain()).toEqual([["session.unwatch", ["close-a"]]]);
+
+		const release = await watch.lease("close-a");
+		expect(drain()).toEqual([["session.watch", ["close-a"]]]);
+		store.openChatSession("close-ws", "close-a", null, "medium");
+		release();
+		await Bun.sleep(5);
+		expect(drain()).toEqual([]);
+	} finally {
+		unsubscribe();
+	}
+});
+
 test("a welcome replaces the host set, so a runtime dropped while disconnected is unwatched", () => {
 	const runtimes = ["a", "b"];
 	const { watch, drain, setSupported } = harness({ runtimeIds: () => runtimes });

@@ -1701,6 +1701,27 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	return rest;
 }
 
+function withoutRuntime(
+	s: AppState,
+	sessionId: string,
+): Pick<AppState, "sessions" | "skillsSyncedTickBySession"> {
+	return {
+		sessions: omitKey(s.sessions, sessionId),
+		skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
+	};
+}
+
+function runtimeOutlivesClose(
+	rt: SessionRuntime,
+	sessionId: string,
+	tabsByWorkspace: AppState["tabsByWorkspace"],
+): boolean {
+	if (rt.draft !== "" || rt.pendingExtUi !== null || rt.extUiQueue.length > 0) return true;
+	return Object.values(tabsByWorkspace).some((tabs) =>
+		tabs.some((tab) => (tab.kind === "chat" || tab.kind === "plan") && tab.sessionId === sessionId),
+	);
+}
+
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
 	return [...intents, { ...input, id: randomId("layout-intent") } as LayoutIntent];
 }
@@ -3823,13 +3844,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		replayExtUiOrphans(sessionId, set, get);
 	},
 	closeChatRuntime: (sessionId) =>
-		set((s) => {
-			if (!s.sessions[sessionId]) return {};
-			return {
-				sessions: omitKey(s.sessions, sessionId),
-				skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
-			};
-		}),
+		set((s) => (s.sessions[sessionId] ? withoutRuntime(s, sessionId) : {})),
 	closeChatToHistory: (sessionId, syncLayout = true, workspaceId, countNavigation = true) =>
 		set((s) => {
 			const wsId = workspaceId ?? s.activeWorkspaceId;
@@ -3850,7 +3865,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.chatLocationRequest?.workspaceId === wsId &&
 				s.chatLocationRequest.sessionId === sessionId;
 			const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
+			const tabsByWorkspace = { ...s.tabsByWorkspace, [wsId]: remaining };
+			const rt = s.sessions[sessionId];
+			const evict = rt !== undefined && !runtimeOutlivesClose(rt, sessionId, tabsByWorkspace);
 			return {
+				...(evict ? withoutRuntime(s, sessionId) : {}),
 				...(syncLayout
 					? {
 							layoutIntents: appendLayoutIntent(s.layoutIntents, {
@@ -3860,7 +3879,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							}),
 						}
 					: {}),
-				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
+				tabsByWorkspace,
 				navTickByWorkspace: wasActive && countNavigation ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				activeTabByWorkspace: {
 					...s.activeTabByWorkspace,
