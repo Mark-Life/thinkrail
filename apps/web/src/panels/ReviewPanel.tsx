@@ -19,9 +19,15 @@ import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
-import { sessionGlance } from "../chat/planView";
+import { hostSessionGlance, sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
-import { type ReviewFocusSurface, selectDiffScope, toast, useAppStore } from "../store";
+import {
+	type ReviewFocusSurface,
+	selectDiffScope,
+	selectSessionState,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openChatInTab } from "./openChat";
@@ -357,8 +363,12 @@ function CommentRow({
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
 	const glance = useAppStore((s) => {
-		const runtime = comment.sessionId ? s.sessions[comment.sessionId] : undefined;
-		return runtime ? sessionGlance(runtime) : "waiting";
+		if (!comment.sessionId) return "waiting";
+		const runtime = s.sessions[comment.sessionId];
+		return hostSessionGlance(
+			selectSessionState(s, workspaceId, comment.sessionId),
+			runtime ? sessionGlance(runtime) : "waiting",
+		);
 	});
 
 	const update = async (patch: { status?: ReviewComment["status"] }) => {

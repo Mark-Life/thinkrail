@@ -1633,8 +1633,8 @@ own section. The kebab menu (`plan-menu`, a
   the host-atomic close flow. A busy close remains one correlated request through confirmation and forced
   retry; dialog auto-close cannot release that request, authoritative catalog removal dismisses stale
   confirmation, and a rejected force clears exactly that request with an error so a later close can start
-  cleanly. The workbench close command for a chat routes to `store.closeChatToHistory` (keeps the session
-  alive) and shows a
+  cleanly. The workbench close command for a chat routes to `store.closeChatToHistory` (keeps the host session
+  alive, usually drops the local runtime) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
   `session.deleted` broadcast drives the same fold in every connected client. On workspace activation and
@@ -1775,8 +1775,8 @@ own section. The kebab menu (`plan-menu`, a
   strip, not buried below sent rows) → **In
   progress** (the sent — the chat took them; the glyph is GLANCE-AWARE exactly like a TODO's
   in-progress item, via `sessionGlance` + `TodoList.glanceIcon`: working dot / **(?)** while the
-  session waits on an `ask_user_question` / pause when it's idle on the user — no loaded runtime reads
-  as waiting) → **Resolved** (muted Done styling: primary check + struck hint text;
+  session waits on an `ask_user_question` / pause when it's idle on the user; with no loaded runtime,
+  the row reads the chat's `session.state` record, and no record reads as waiting) → **Resolved** (muted Done styling: primary check + struck hint text;
   the chat action reveals on hover — resolved is final, no reopen). No per-row status words — the section names the status; rows carry
   only the glyph, the clamped text, and the `L3` ref (+ an `outdated` eyebrow when the anchor died,
   whose native tooltip — `outdatedReason` from [[module-resource-renderers]], shared with the thread card's label — says what

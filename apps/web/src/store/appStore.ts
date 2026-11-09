@@ -129,6 +129,8 @@ import {
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
+	layoutCenterTabs,
+	layoutTodoPlanSessionId,
 	type ModelRef,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
@@ -1346,7 +1348,6 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
-	closeChatRuntime: (sessionId: string) => void;
 	closeChatToHistory: (
 		sessionId: string,
 		syncLayout?: boolean,
@@ -1699,6 +1700,45 @@ function patchFilesTreeView(
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	const { [key]: _dropped, ...rest } = record;
 	return rest;
+}
+
+function withoutRuntime(
+	s: AppState,
+	sessionId: string,
+): Pick<AppState, "sessions" | "skillsSyncedTickBySession"> {
+	return {
+		sessions: omitKey(s.sessions, sessionId),
+		skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
+	};
+}
+
+function runtimeOutlivesClose(
+	rt: SessionRuntime,
+	sessionId: string,
+	s: Pick<AppState, "tabsByWorkspace" | "layoutDocumentsByWorkspace">,
+): boolean {
+	if (
+		rt.draft !== "" ||
+		rt.notice !== null ||
+		rt.pendingExtUi !== null ||
+		rt.extUiQueue.length > 0 ||
+		Object.keys(rt.extUiStatus).length > 0 ||
+		Object.keys(rt.extUiWidget).length > 0
+	)
+		return true;
+	const cached = Object.values(s.tabsByWorkspace).some((tabs) =>
+		tabs.some((tab) =>
+			tab.kind === "chat" || tab.kind === "plan"
+				? tab.sessionId === sessionId
+				: tab.kind === "doc" && tab.sourceId === sessionId,
+		),
+	);
+	return (
+		cached ||
+		Object.values(s.layoutDocumentsByWorkspace).some((document) =>
+			layoutCenterTabs(document.center).some((tab) => layoutTodoPlanSessionId(tab) === sessionId),
+		)
+	);
 }
 
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
@@ -3822,14 +3862,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		replayExtUiOrphans(sessionId, set, get);
 	},
-	closeChatRuntime: (sessionId) =>
-		set((s) => {
-			if (!s.sessions[sessionId]) return {};
-			return {
-				sessions: omitKey(s.sessions, sessionId),
-				skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
-			};
-		}),
 	closeChatToHistory: (sessionId, syncLayout = true, workspaceId, countNavigation = true) =>
 		set((s) => {
 			const wsId = workspaceId ?? s.activeWorkspaceId;
@@ -3850,7 +3882,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 				s.chatLocationRequest?.workspaceId === wsId &&
 				s.chatLocationRequest.sessionId === sessionId;
 			const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
+			const tabsByWorkspace = { ...s.tabsByWorkspace, [wsId]: remaining };
+			const rt = s.sessions[sessionId];
+			const evict =
+				rt !== undefined &&
+				!runtimeOutlivesClose(rt, sessionId, {
+					tabsByWorkspace,
+					layoutDocumentsByWorkspace: s.layoutDocumentsByWorkspace,
+				});
 			return {
+				...(evict ? withoutRuntime(s, sessionId) : {}),
 				...(syncLayout
 					? {
 							layoutIntents: appendLayoutIntent(s.layoutIntents, {
@@ -3860,7 +3901,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							}),
 						}
 					: {}),
-				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
+				tabsByWorkspace,
 				navTickByWorkspace: wasActive && countNavigation ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				activeTabByWorkspace: {
 					...s.activeTabByWorkspace,

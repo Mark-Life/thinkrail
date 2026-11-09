@@ -295,8 +295,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   promise) + `extUiStatus` / `extUiWidget`), and **`notice`**: the host's closed `ProviderWarning` code
   (ExtUi `notice`, replayed like `notify`). `dismissSessionNotice(sessionId)` clears one chat;
   `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
-  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
-  `clearWorkspaceState` drop it. **A runtime is a watch:** the keys of `sessions` are the ids
+  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `deleteChat`,
+  `reconcileWorkspaceSessions` (for a session gone from the host) and `clearWorkspaceState` drop it, and
+  `closeChatToHistory` drops it unless something the chat still shows keeps it (below). **A runtime is a watch:** the keys of `sessions` are the ids
   `transport`'s `sessionWatch` asks the host to stream, so installing or dropping a runtime anywhere is
   enough to start or stop that session's `pi.event` frames; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
@@ -384,12 +385,19 @@ re-read while a server starts. The state vocabulary and the attention/active pre
     unread, else `markUnread` when contracts' `canMarkCompletionUnread` admits one, else hidden), and
     `selectCompletionMarkedUnread` is the shared self-marked test.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
-  **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
+  **`closeChatToHistory`**, which keeps the host session alive, **drops the runtime** (so `sessionWatch`
+  stops that session's `pi.event` frames), records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
   jump/history-open requests—but never a newer `routeChatTarget`, whose lifecycle belongs to navigation
   supersession and reconciliation. File, diff, and registered-document render caches follow the same local
   transition; after queued opens settle, shell reclaims only caches absent from local placement and queued
-  intent. No peer can restore placement remotely. **`reopenChat(workspaceId, …)`** restores runtime/history
+  intent. No peer can restore placement remotely. The runtime stays when dropping it would lose something
+  the chat still shows or owes: another chat, plan or doc tab in any workspace still names the session, or
+  a layout-restored todo-plan document does (a plan pane reads the runtime and would rehydrate it at once),
+  the composer `draft` is not empty, an extension dialog is pending or queued, or an extension status or
+  widget line or an undismissed `notice` is set (the host sends those once and never replays them). A
+  reopen without a runtime refetches the transcript like a first open; fire-and-forget frames
+  that arrive while closed wait in `extUiOrphans`. **`reopenChat(workspaceId, …)`** restores runtime/history
   membership in its captured workspace even after another workspace becomes active; shell adds placement to
   that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
   disk-only sessions (from the active workspace's `session.list` reconciliation) and peer-created sessions
@@ -461,12 +469,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission
   test is **"no runtime"**, not "unknown session": every kind except `setTitle` is reduced by
   `withRuntime`, so a session that merely has a tab or a `closedChats` entry would pass a "do we know it"
-  test and then be dropped by `withRuntime` — neither applied nor buffered. **No path builds that state
-  today** — `closeChatToHistory` keeps the runtime, `closeChatRuntime` has no production caller, and both
-  `openTab` sites that place a chat tab are guarded by its runtime already existing — so this rule is a
-  guard, not a live fix, and it is pinned by seeding the store directly rather than through an action
-  sequence no user can perform. It starts earning its keep the moment anything places a chat tab before
-  its transcript is hydrated. `setTitle` is
+  test and then be dropped by `withRuntime` — neither applied nor buffered. `closeChatToHistory` builds
+  that state for every closed chat whose runtime it drops, so frames for a closed chat buffer here and
+  replay on reopen. `setTitle` is
   the one exception, and it decides for itself: `renameChat` renames the tab or the `closedChats` entry
   and reports whether it found the session **at all**, so only a title for a session in neither map is
   buffered. Admission falls out of the rename instead of being computed beside it — one walk over
@@ -663,7 +668,7 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
   a successful reload (`markSkillsSynced` is **monotonic** — `Math.max`, so an out-of-order reload completion
   can't move the baseline backward — and a **no-op for a disposed session**, so a late completion can't
-  resurrect an entry dropped by `closeChatRuntime`/`clearWorkspaceState`). A **live** `hydrateSession` restore
+  resurrect an entry dropped by `closeChatToHistory`/`clearWorkspaceState`). A **live** `hydrateSession` restore
   reuses the server session's already-loaded skills (`getMessages` returns only the transcript, no reload)
   which the client can't date, so it advances **nothing** — the chat stays *conservatively stale* if a skill
   change has been observed, never falsely clearing. That

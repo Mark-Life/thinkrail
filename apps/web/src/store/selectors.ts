@@ -943,22 +943,23 @@ export function selectWorkspaceSessionIds(
 	for (const chat of state.closedChatsByWorkspace[workspaceId] ?? []) {
 		sessionIds.add(chat.sessionId);
 	}
-	const visit = (node: WorkspaceLayoutDocument["center"]): void => {
-		if (node.kind === "split") {
-			visit(node.children[0]);
-			visit(node.children[1]);
-			return;
-		}
-		for (const tab of node.tabs) {
-			if (tab.kind === "chat") sessionIds.add(tab.sessionId);
-			if (tab.kind === "document" && tab.documentKind === "todo-plan") {
-				sessionIds.add(tab.sourceId);
-			}
-		}
-	};
 	const document = state.layoutDocumentsByWorkspace?.[workspaceId];
-	if (document) visit(document.center);
+	for (const tab of document ? layoutCenterTabs(document.center) : []) {
+		if (tab.kind === "chat") sessionIds.add(tab.sessionId);
+		const planId = layoutTodoPlanSessionId(tab);
+		if (planId) sessionIds.add(planId);
+	}
 	return [...sessionIds];
+}
+
+export function layoutCenterTabs(node: WorkspaceLayoutDocument["center"]): LayoutTab[] {
+	return node.kind === "split"
+		? [...layoutCenterTabs(node.children[0]), ...layoutCenterTabs(node.children[1])]
+		: node.tabs;
+}
+
+export function layoutTodoPlanSessionId(tab: LayoutTab) {
+	return tab.kind === "document" && tab.documentKind === "todo-plan" ? tab.sourceId : null;
 }
 
 export function selectCatalogModel(
