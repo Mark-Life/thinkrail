@@ -2061,7 +2061,7 @@ test("a plan tab, a pending dialog, or a draft keeps a closed chat's runtime", (
 	expect(useAppStore.getState().sessions.drafted?.draft).toBe("half a thought");
 });
 
-test("extension status or widget lines keep a closed chat's runtime, since the host never resends them", () => {
+test("extension status or widget lines or a provider notice keep a closed chat's runtime, since the host never resends them", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "status", null, "medium");
 	store.applyExtUi({ id: "s1", sessionId: "status", kind: "setStatus", key: "ext", text: "busy" });
@@ -2078,6 +2078,15 @@ test("extension status or widget lines keep a closed chat's runtime, since the h
 	});
 	store.closeChatToHistory("widget", true, "ws1");
 	expect(useAppStore.getState().sessions.widget?.extUiWidget).toEqual({ ext: ["a"] });
+	store.openChatSession("ws1", "noticed", null, "medium");
+	store.applyExtUi({
+		id: "n1",
+		sessionId: "noticed",
+		kind: "notice",
+		notice: "anthropicExtraUsage",
+	});
+	store.closeChatToHistory("noticed", true, "ws1");
+	expect(useAppStore.getState().sessions.noticed?.notice).toBe("anthropicExtraUsage");
 });
 
 test("a todo-plan document restored into the layout keeps a closed chat's runtime", () => {

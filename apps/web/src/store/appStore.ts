@@ -1719,6 +1719,7 @@ function runtimeOutlivesClose(
 ): boolean {
 	if (
 		rt.draft !== "" ||
+		rt.notice !== null ||
 		rt.pendingExtUi !== null ||
 		rt.extUiQueue.length > 0 ||
 		Object.keys(rt.extUiStatus).length > 0 ||

@@ -395,8 +395,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   the chat still shows or owes: another chat, plan or doc tab in any workspace still names the session, or
   a layout-restored todo-plan document does (a plan pane reads the runtime and would rehydrate it at once),
   the composer `draft` is not empty, an extension dialog is pending or queued, or an extension status or
-  widget line is set (the host sends those once and never replays them). A reopen without a runtime
-  refetches the transcript like a first open; a cleared `notice` is not kept, and fire-and-forget frames
+  widget line or an undismissed `notice` is set (the host sends those once and never replays them). A
+  reopen without a runtime refetches the transcript like a first open; fire-and-forget frames
   that arrive while closed wait in `extUiOrphans`. **`reopenChat(workspaceId, …)`** restores runtime/history
   membership in its captured workspace even after another workspace becomes active; shell adds placement to
   that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
