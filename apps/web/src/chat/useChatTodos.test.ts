@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import type { PiEvent, TodoItem, TodoPlan } from "@thinkrail/contracts";
-import { PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION } from "@thinkrail/contracts";
-import { supportsPlanSummaryGeneration } from "../transport";
+
 import {
 	planIsCompleteWithoutSummary,
 	shouldRefreshTodos,
@@ -44,15 +43,6 @@ test("auto-summary is eligible only when every step is done and no summary exist
 		false,
 	);
 	expect(planIsCompleteWithoutSummary(plan({}))).toBe(false);
-});
-
-test("a completed plan requests a draft only from a host that advertises the v69 capability", () => {
-	const completed = plan({ todos: [item("done")] });
-	const wouldRequest = (pv: number | null) =>
-		planIsCompleteWithoutSummary(completed) && supportsPlanSummaryGeneration(pv);
-	expect(wouldRequest(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION)).toBe(true);
-	expect(wouldRequest(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION - 1)).toBe(false);
-	expect(wouldRequest(null)).toBe(false);
 });
 
 test("the refetch bus fans out to every subscriber for a chat key and isolates sibling chats", () => {

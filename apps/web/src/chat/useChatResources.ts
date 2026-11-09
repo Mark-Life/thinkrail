@@ -24,9 +24,6 @@ import {
 	selectChatResourcesLoading,
 	selectChatResourcesStaleness,
 	selectChatResourcesVisible,
-	selectSupportsMcp,
-	supportsChatResources,
-	supportsResourceHistory,
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
@@ -118,10 +115,6 @@ export function startChatResourceSync(
 }
 
 export type ResourceActionState = Record<string, { pending: boolean; error: string | null }>;
-
-export function isChatResourcesKnownUnsupported(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && !supportsChatResources(protocolVersion);
-}
 
 const EMPTY_RESOURCE_ACTIONS: ResourceActionState = {};
 
@@ -234,14 +227,12 @@ export function useChatResources(workspaceId: WorkspaceId, sessionId: SessionId)
 	const welcome = useAppStore((state) => state.welcomeGeneration);
 	const protocol = useAppStore((state) => state.protocolVersion);
 	const alive = useAppStore((state) => isChatResourceScopeAlive(state, scope));
-	const supported = supportsChatResources(protocol);
-	const knownUnsupported = isChatResourcesKnownUnsupported(protocol);
-	const supportsMcp = selectSupportsMcp({ protocolVersion: protocol });
+	const supported = protocol !== null;
 	const groups = useMemo(
-		() => selectChatResourceGroups(projection?.snapshot, supportsMcp, projection?.older),
-		[projection?.snapshot, supportsMcp, projection?.older],
+		() => selectChatResourceGroups(projection?.snapshot, supported, projection?.older),
+		[projection?.snapshot, supported, projection?.older],
 	);
-	const pageable = supportsResourceHistory(protocol) && !!projection?.snapshot?.history;
+	const pageable = supported && !!projection?.snapshot?.history;
 	const sync = useRef<ReturnType<typeof startChatResourceSync> | null>(null);
 	const controls = useRef<ReturnType<typeof createChatResourceControls> | null>(null);
 	const [actionState, setActionState] = useState<{
@@ -279,12 +270,8 @@ export function useChatResources(workspaceId: WorkspaceId, sessionId: SessionId)
 			setMcpEnabled: (name, enabled) =>
 				transport.request("mcp.setSessionOverride", { ...scope, name, enabled }),
 			reconnectMcp: (name) => transport.request("mcp.reconnect", { ...scope, name }),
-			...(supportsResourceHistory(protocol)
-				? {
-						readHistory: (kind: ResourceKind, before: ResourceHistoryCursor) =>
-							transport.request("session.resourceHistory", { ...scope, kind, before }),
-					}
-				: {}),
+			readHistory: (kind: ResourceKind, before: ResourceHistoryCursor) =>
+				transport.request("session.resourceHistory", { ...scope, kind, before }),
 			onChange: (actions) => setActionState({ scope, generation, actions }),
 		});
 		sync.current = reader;
@@ -303,7 +290,6 @@ export function useChatResources(workspaceId: WorkspaceId, sessionId: SessionId)
 		loading,
 		staleness,
 		authoritative,
-		knownUnsupported,
 		projection,
 		groups,
 		actions,
@@ -373,7 +359,7 @@ export function useCommandLog(
 	const ready = useAppStore(
 		(state) =>
 			state.status === "connected" &&
-			supportsChatResources(state.protocolVersion) &&
+			state.protocolVersion !== null &&
 			isChatResourceScopeAlive(state, { workspaceId, sessionId }),
 	);
 	const [stored, setStored] = useState<{

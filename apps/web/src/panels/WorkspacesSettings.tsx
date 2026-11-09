@@ -1,4 +1,3 @@
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { toast, useAppStore } from "../store";
@@ -55,8 +54,7 @@ export function WorkspacesSettings() {
 	const t = useT();
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const supported =
-		protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
+	const supported = protocolVersion !== null;
 
 	const select = (choice: IdleChoice) => {
 		const next = choice === "never" ? null : Number(choice);

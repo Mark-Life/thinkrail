@@ -8,7 +8,7 @@ import type { ProjectId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
-import { selectOnboardingEligible, selectSupportsOnboarding, toast, useAppStore } from "../store";
+import { selectHostWelcomed, selectOnboardingEligible, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
@@ -33,7 +33,7 @@ export function WelcomePanel() {
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const supportsOnboarding = useAppStore(selectSupportsOnboarding);
+	const supportsOnboarding = useAppStore(selectHostWelcomed);
 	const onboardingEligible = useAppStore(selectOnboardingEligible);
 	const hasProvider = useHasProvider();
 	const [dialog, setDialog] = useState<WorkspaceDialogRequest | null>(null);

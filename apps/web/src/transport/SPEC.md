@@ -20,8 +20,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   **`?protocol=` current wire version** it appends to the socket URL (the identity is minted lazily and *not*
   via the secure-context-only `crypto.randomUUID`, so a plain-http remote origin still boots; it spans
   reconnects but not reloads, correlating replayed requests and terminal stream routing while host-owned PTY
-  tabs/shells survive and a reloaded page takes them over by durable `tabKey`; the version lets a newer host
-  avoid claiming an addressed feature for an independently shipped older client that cannot render it), **reconnect-safe unresolved requests** — a
+  tabs/shells survive and a reloaded page takes them over by durable `tabKey`), **reconnect-safe unresolved requests** — a
   frame that was in flight when its socket died returns to the queue and is replayed under the same request id,
   while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
   execute twice —, the two frames that are this side's half of that bargain — **`{ ack: [id] }` receipts**
@@ -60,7 +59,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   the store still holds, so a pushed full workspace snapshot or
   removal missed while disconnected (including a rename) cannot stay stale; rows that arrived after the
   read was sent are never retired by it, and it adds no rows (creation stays with the push and backfill);
-  on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
+  it also re-reads `workspace.listCreations`, first
   re-listing the watched creation's project when the creation is gone, so a create that finished while
   disconnected lands on its workspace instead of racing the list refresh;
   the welcome's `configReadFailed` and every `settings.changed` (a good read) via `syncConfigReadNotice`,
@@ -77,8 +76,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
   `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
-  then `feedback.interview` via the idempotent `showSurveyInvitation()`, only from a v97+ host (an older host
-  still sends the retired interview invitation on that channel) — the shell holds the invitation
+  then `feedback.interview` via the idempotent `showSurveyInvitation()` — the shell holds the invitation
   behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
   re-delivers the addressed event immediately after welcome). `feedback.githubStar` raises one info toast (`githubStar.ts`: 60 s,
   a "View on GitHub" action opening `REPO_URL`, labelled `| ☆ 7.1k` with the host-read star count formatted like the
@@ -101,7 +99,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   bounded push buffer restarts the complete read instead of growing without limit, while stale-generation
   outcomes discard their buffers. Pending dialog records replay their exact request, and adding/opening a
   workspace restarts the generation-guarded complete read so pre-existing disk sessions are included.
-  Unsupported hosts clear the map. The old `session.activityList` tombstone
+  The old `session.activityList` tombstone
   is never requested by this client. Before `WsTransport` dispatches a state push, any queued Pi events flush
   synchronously, so the runtime transcript/render state precedes the host state that refers to it;
   connection-status transitions keep the same barrier.
@@ -159,8 +157,7 @@ the existing reconnect-safe request transport; the host's bounded probe lifetime
 **Client error reports** (`errorReports.ts`): `installClientErrorReporting()` listens for window `error` /
 `unhandledrejection`, and `reportClientError(clientErrorReport(kind, error, boundary?))` forwards the raw
 class and the stack with the message cut out of it (a V8 stack header repeats the message, and its lines
-can look like frames) over fire-and-forget `client.reportError` — only to a host with
-`CLIENT_ERROR_REPORT_PROTOCOL_VERSION` (v90); reports raised before the welcome wait for it (≤ 10 queued), and a
+can look like frames) over fire-and-forget `client.reportError`; reports raised before the welcome wait for it (≤ 10 queued), and a
 page sends at most 50. Each report carries the PostHog chunk ids (≤ 20) that the release build's
 injected `_posthogChunkIds` registry assigns to URLs in its own stack, so uploaded maps resolve its frames.
 The browser never scrubs or holds a vendor client: the host is the only sanitizer.
@@ -169,50 +166,26 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
   `watchMcpWorkspace`, `ConnectionStatus`,
-  `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
-  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
-  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `TransportOptions`, `runHostUpdate`, `openSpeechSocket`,
+  `hostUrl`, `uploadUserFont`, `respondToTool`,
   `installClientErrorReporting`, `reportClientError`, `reportInvalidReply`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
-  it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
-  (`supportsToolResponses`), for one compatibility window — [[module-contracts]]. `runHostUpdate` is the typed empty host action
-  and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsUserThemes` (v92) is
-  exported because `Shell` must drop user themes (cached or from an earlier host) once a host that cannot
-  serve theme files has welcomed it; `supportsFonts` (v102) gates the same way for the font settings and the
-  custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
+  it): it sends `session.respondToTool` — [[module-contracts]]. `runHostUpdate` is the typed empty host action.
+  The custom-font snapshot (`fonts.list`) is refreshed on every welcome and `fonts.changed`, and `uploadUserFont`
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
-  (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
-  offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
+  (custom face URLs) against the endpoint. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
-  push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.
-  `supportsPlanReview` is exported
-  because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
-  `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
-  exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older
-  host has no such method; `supportsChangeMutations` is exported because `DiffPane` must withhold every
-  `change.*` affordance before that protocol lands; `supportsRichAnchors` (`REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`)
-  is exported because `panels/useReviewCommenting` refuses to send a `region`/`structural` draft to a host
-  that predates them — such a host stores the selector unvalidated and re-anchors it as if it were text, so
-  the comment would survive but mean something else; the refusal is a plain error toast at the one place
-  drafts become `review.commentAdd` requests, and line/whole-file drafts are unaffected;
-  `supportsTurnChanges` (`TURN_CHANGES_PROTOCOL_VERSION`, v80) is exported because `panels/useWorkspaceTurns`
-  must not issue `workspace.turns` to a host that has no such method — without it the Changes scope menu
-  simply shows no agent turns. The transport also subscribes to `turn.changed` and folds each recorded run
-  into `store.turnsByWorkspace` through `applyTurnChanged`. The byte-only
-  resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
-  and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
-  client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.
+  push install the store's `speech` status whole. The transport also subscribes to `turn.changed` and folds each
+  recorded run into `store.turnsByWorkspace` through `applyTurnChanged`. `/blob` is only ever addressed for a
+  side the host itself reported as byte-only.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `parseEnvelope` + `pushFailure` + `resultFailure` + `protocolMismatch` for the wire checks,
   `SessionDeletedPayload` for `session.deleted`,
-  `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
-  `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
-  `CHANGE_MUTATIONS_PROTOCOL_VERSION` for the diff-mutation gate, `REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`
-  for the rich-anchor authoring gate, `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` + `ClientErrorReport` for
+  `Ack` + the typed `host.update` method for the CLI-host update action,
+  `ClientErrorReport` for
   `client.reportError`, `provider.changed`, the empty
   addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
   `host.updateAvailable`,

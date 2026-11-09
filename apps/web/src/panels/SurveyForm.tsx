@@ -1,9 +1,4 @@
-import {
-	type AppSurvey,
-	SURVEY_OPEN_TEXT_LIMIT,
-	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
-	type SurveyQuestion,
-} from "@thinkrail/contracts";
+import { type AppSurvey, SURVEY_OPEN_TEXT_LIMIT, type SurveyQuestion } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
@@ -14,7 +9,6 @@ import { getTransport, wsErrorCode } from "@/transport";
 import {
 	committedAnswers,
 	emptySurveyDraft,
-	inlineOthers,
 	presentSurvey,
 	ratingMark,
 	ratingPoints,
@@ -57,15 +51,13 @@ export function SurveyForm({
 		setPending(true);
 		setFailure(null);
 		const committed = committedAnswers(questions, draft);
-		const legacyHost = hostProtocol < SURVEY_TRANSLATIONS_PROTOCOL_VERSION;
 		void getTransport()
 			.request("feedback.survey.submit", {
 				submissionId,
 				surveyId: survey.id,
 				iteration: survey.iteration,
-				...(legacyHost
-					? { answers: inlineOthers(questions, committed) }
-					: { ...(survey.language ? { language: survey.language } : {}), ...committed }),
+				...(survey.language ? { language: survey.language } : {}),
+				...committed,
 			})
 			.then(() => onSent())
 			.catch((error: unknown) => {

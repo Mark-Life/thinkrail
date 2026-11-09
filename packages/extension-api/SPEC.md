@@ -46,9 +46,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   - the chat's `focusScope`, so the card claims attention focus once per chat mount;
   - `prepareLayoutChange`, which keeps the reader's place when the card changes size;
   - `revealElement(element, ToolRevealOptions)` and `cancelAutomaticReveal()`;
-  - `focusComposer()`;
-  - `hostProtocol` — the connected host's protocol version, so a renderer can withhold an affordance an
-    older host would not understand (the app's `supports*` gates, handed through tool-agnostically).
+  - `focusComposer()`.
 
   Without it, a renderer shows the call read-only from `result`, as in a subagent transcript. The
   renderer stays props-driven: it never reaches the chat's contexts, store or transport. `state` and

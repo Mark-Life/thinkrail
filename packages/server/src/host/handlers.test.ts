@@ -27,12 +27,7 @@ import type {
 	WorkspaceCreationRemoved,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
-import {
-	BRANCH_STATUS_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
-	WS_METHOD_SCHEMAS,
-	WS_METHODS,
-} from "@thinkrail/contracts";
+import { WS_METHOD_SCHEMAS, WS_METHODS } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import {
@@ -63,7 +58,6 @@ import {
 } from "../workspaces";
 import {
 	handleRequest,
-	openReviewForClient,
 	requestMethodDiagnostic,
 	shouldRefreshOpenReview,
 	workspaceCreationHandoff,
@@ -191,18 +185,6 @@ test("open-review cache reuse is opt-in so older clients remain fresh", () => {
 	expect(shouldRefreshOpenReview(undefined)).toBe(true);
 	expect(shouldRefreshOpenReview(false)).toBe(true);
 	expect(shouldRefreshOpenReview(true)).toBe(false);
-});
-
-test("a client older than the settled protocol never hears about a merged or closed review", () => {
-	const merged = { kind: "pull-request", number: 9, state: "merged" } as const;
-	const open = { kind: "pull-request", number: 10, state: "open" } as const;
-	const stateless = { kind: "pull-request", number: 11 } as const;
-	expect(openReviewForClient(merged, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBeNull();
-	expect(openReviewForClient(open, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBe(open);
-	expect(openReviewForClient(stateless, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBe(stateless);
-	expect(openReviewForClient(merged, WORKSPACE_SETTLE_PROTOCOL_VERSION)).toBe(merged);
-	expect(openReviewForClient(merged, undefined)).toBe(merged);
-	expect(openReviewForClient(null, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBeNull();
 });
 
 test("starting a PR mutation reactivates a parked workspace before any network await", async () => {
@@ -474,22 +456,17 @@ test("a split origin whose push repository can't be read reports publication as 
 	expect(status).not.toHaveProperty("ahead");
 });
 
-test("a pre-v87 client's source-less PR preview keeps the session's plan body", async () => {
+test("a source-less PR preview with a session reads the commits", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
-		{ projectId: PROJECT_ID, name: "Legacy preview" },
+		{ projectId: PROJECT_ID, name: "Commit preview" },
 		CTX,
 	)) as Workspace;
 	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
 	git(workspace.worktreePath, "add", "-A");
 	git(workspace.worktreePath, "commit", "-m", "ship it");
-	const params = { workspaceId: workspace.id, sessionId: testSessionId("legacy-session") };
+	const params = { workspaceId: workspace.id, sessionId: testSessionId("plan-session") };
 
-	const legacy = (await handleRequest("pr.preview", params, {
-		...CTX,
-		protocolVersion: BRANCH_STATUS_PROTOCOL_VERSION - 1,
-	})) as { body: string };
-	expect(legacy.body).toContain("## Committed outside the plan");
 	const current = (await handleRequest("pr.preview", params, CTX)) as {
 		body: string;
 		source: string;

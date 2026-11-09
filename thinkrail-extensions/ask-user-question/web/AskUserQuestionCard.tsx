@@ -1,4 +1,3 @@
-import { ASK_DISCUSS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
@@ -67,7 +66,6 @@ interface CachedCardState {
 	states: Record<number, QState>;
 	tab: number;
 	submitted: boolean;
-	hostProtocol: number | undefined;
 }
 const cardStateCache = new Map<string, CachedCardState>();
 const stackHeights = new Map<string, { width: number; height: number }>();
@@ -128,12 +126,6 @@ export function AskUserQuestionCard({
 	const superseded = interaction?.state.superseded ?? false;
 	const ended = interaction?.state.ended ?? false;
 	const canRespond = !!interaction && interaction.state.accepting;
-	const [hostProtocol, setHostProtocol] = useState(
-		() => interaction?.hostProtocol ?? cardStateCache.get(toolCallId)?.hostProtocol,
-	);
-	const liveProtocol = interaction?.hostProtocol;
-	if (liveProtocol !== undefined && liveProtocol !== hostProtocol) setHostProtocol(liveProtocol);
-	const discussAvailable = (hostProtocol ?? 0) >= ASK_DISCUSS_PROTOCOL_VERSION;
 	const awaiting = !resolvedResult && !superseded && !ended && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
@@ -160,12 +152,12 @@ export function AskUserQuestionCard({
 
 	useEffect(() => {
 		if (awaiting) {
-			cardStateCache.set(toolCallId, { states, tab, submitted, hostProtocol });
+			cardStateCache.set(toolCallId, { states, tab, submitted });
 			return;
 		}
 		cardStateCache.delete(toolCallId);
 		stackHeights.delete(toolCallId);
-	}, [toolCallId, awaiting, states, tab, submitted, hostProtocol]);
+	}, [toolCallId, awaiting, states, tab, submitted]);
 
 	useEffect(() => {
 		setNudgeSpoken(false);
@@ -449,7 +441,6 @@ export function AskUserQuestionCard({
 											question={question}
 											state={pageState}
 											pageKeys={multipleQuestions}
-											discussAvailable={discussAvailable}
 											primaryEnabled={page < lastPage || canSubmit}
 											onFocusPrimary={focusPrimary}
 											onOpenFile={onOpenFile}
@@ -495,7 +486,6 @@ export function AskUserQuestionCard({
 							multiSelect={!!q.multiSelect}
 							multipleQuestions={multipleQuestions}
 							previewKeys={!q.multiSelect && q.options.some(hasPreview)}
-							discussKey={discussAvailable}
 						/>
 						<div className="flex items-center justify-end gap-12">
 							{nudgeVisible ? (

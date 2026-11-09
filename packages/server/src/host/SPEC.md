@@ -51,14 +51,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
-  `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
-  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/speech` socket**
-  (`SPEECH_SOCKET_ROUTE`, refused below `SPEECH_PROTOCOL_VERSION`), which shares the one `Bun.serve`
+  `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge to every socket; the **`/speech` socket**
+  (`SPEECH_SOCKET_ROUTE`), which shares the one `Bun.serve`
   websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that
   socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
   replay cache or any channel: binary 20 ms audio frames would otherwise be hashed and retained
   per request. `host` publishes
-  `speech.changed` whole to v107 sockets, which also get `ServerWelcome.speech`; static serving with
+  `speech.changed` whole to every socket, which also get `ServerWelcome.speech`; static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
@@ -256,8 +255,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
   `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
-  service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
-  subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
+  service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots plus `session.resourcesChanged`
   invalidations. Every request resolves its workspace and that workspace's project. Management mutations
   and probes re-read both after asynchronous ownership resolution, then check ownership and admit work
   in one synchronous call stack. A changed project identity, cwd or pi-level trust rejects the request
@@ -464,7 +462,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   routes a `.pi/settings.json` workspace nudge to `handleProjectPiSettingsChanged` only for a project
   whose pi-level trust is granted — an untrusted repository's file never affects resolution, so it must
   not fan out a reload; a `disabledPackages` change also publishes `packages.changed` so a re-enabled
-  row regains its chips. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
+  row regains its chips. The channel is published
   through `setPiPackagesPublisher`. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
@@ -489,7 +487,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
     detached `HEAD`; when the branch is kept the name is still set and the result text says which branch
     was kept, why, and that a later call can still move it — see [[submodule-server-workspaces]]). A `renamed` record whose `branchNamePending`
     is this chat's session id accepts one more call with a `branch` (`branchMoveOwed`): the name stays, only
-    the branch moves. Other chats get "already named". There is no branch-shape gate, so records an older host's
+    the branch moves. Other chats get "already named". There is no branch-shape gate, so records a
     provisional pass left unlocked are still nameable.
   - The result text states, per target, whether it was applied or kept because it was already named, so
     the agent stops. A `branch` without a usable `workspace_name` is rejected before any write (the slug
@@ -574,10 +572,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   goes through one `startChat` that calls `workspaces`' `ensureWorkspaceScratchDir` before creating the
   session — the Default workspace's gitignored `.thinkrail/context/` lands in the user's repo only when a chat
   actually starts there (and a worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
-- **Background workspace creation (v104):** `workspace.startCreate` / `listCreations` / `retryCreation` /
+- **Background workspace creation:** `workspace.startCreate` / `listCreations` / `retryCreation` /
   `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
   `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
-  `workspace.creationRemoved`, subscribed only by v104+ sockets) and the **handoff**
+  `workspace.creationRemoved`) and the **handoff**
   `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
   carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
   awaits) and starts the chat through `startChat` (the kickoff's model/effort, else the saved defaults)
@@ -643,12 +641,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Survey invitation delivery:** the three user-send handlers share one post-`ackSend` path that
   filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
   feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery
-  for that request's opaque client key only when its socket-advertised protocol version supports the channel;
+  for that request's opaque client key;
   delivery failure or final client reap after the reconnect grace releases the claim, while a transient
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
-  replay-safe requests and never alter the Settings link. A second injected publisher (`canAsk` + `ask`, both
-  true only for a v103+ socket) sends the one-time star ask (`GithubStarAsk`, the star count the feedback module
+  replay-safe requests and never alter the Settings link. A second injected publisher (`canAsk` + `ask`) sends the one-time star ask (`GithubStarAsk`, the star count the feedback module
   read) as addressed `feedback.githubStar` to the same client key.
 - **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
   analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
@@ -679,7 +676,7 @@ enabled/confirmed choice before entering analytics attribution.
 
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
-- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
+- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes; `boot.ts` logs `observeStateFileProblems`); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
@@ -713,11 +710,7 @@ enabled/confirmed choice before entering analytics attribution.
   branch has moved underneath it. All three go through `findWorkspaceReviewOutcome`, which **never looks up
   a review while a workspace of any kind sits on its base branch** (`pr`'s `onBaseBranch`): `gh pr list
   --head main` matches any fork's `main` and would mark the row settled with a foreign PR. It answers a
-  reliable `null`, so a foreign snapshot stored earlier is cleared. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
-  advertised protocol (absent for in-process callers, who speak the current one); `workspace.openReview`
-  (and `workspace.branchStatus`, whose callers are always newer) answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
-  review, because such a client reads any review as an open PR and its plan pane would offer *Push
-  updates* that creates a new PR — the host snapshot itself still records the true state. **Branch status / push / generate (v87):**
+  reliable `null`, so a foreign snapshot stored earlier is cleared. **Branch status / push / generate:**
   `workspace.branchStatus` composes the same review lookup + divergence as `openReview` with `git`'s
   `commitsAheadOf` (ahead of the base), `pr`'s `onBaseBranch`, and the provider of origin's push URL (`originUrls`, as `pr.open` reads it); for an
   origin whose push URL differs from its fetch URL the divergence is `countPushTargetDivergence` against the
@@ -726,7 +719,7 @@ enabled/confirmed choice before entering analytics attribution.
   reports `published: null` (unknown) rather than the fetch repository's answer; `workspace.push` stamps activity
   like `pr.open` and drops the worktree's review cache through `pr`; `pr.generate` is composed here —
   `pr` gathers the bounded input (`prDraftInput`), `assist` drafts — so `pr` gains no `assist` edge. **Review
-  actions (v88):** `pr.ready` / `pr.merge` / `pr.reopen` / `workspace.deleteRemoteBranch` delegate to `pr` and
+  actions:** `pr.ready` / `pr.merge` / `pr.reopen` / `workspace.deleteRemoteBranch` delegate to `pr` and
   stamp activity like a push; the snapshot follows on the client's next fresh `workspace.branchStatus`
   (a merged review needs the provider's merge time, which only the lookup has). `skipFetch` on
   `workspace.branchStatus` skips only the origin fetch, never the review lookup. **Backfill:**

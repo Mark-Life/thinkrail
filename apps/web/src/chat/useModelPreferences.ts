@@ -1,7 +1,7 @@
 import { sameModel, type ThinkingLevel, type WireModel } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useCallback, useMemo } from "react";
-import { selectCatalogModel, selectSupportsModelPicker, toast, useAppStore } from "@/store";
+import { selectCatalogModel, selectHostWelcomed, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
 export interface ModelPreferences {
@@ -32,7 +32,7 @@ export function resolveAgainstCatalog(
 let favoritesWrite: Promise<void> = Promise.resolve();
 
 export function useModelPreferences(models: readonly WireModel[]): ModelPreferences {
-	const supported = useAppStore(selectSupportsModelPicker);
+	const supported = useAppStore(selectHostWelcomed);
 	const favoriteModels = useAppStore((s) => s.favoriteModels);
 	const recentModels = useAppStore((s) => s.recentModels);
 	const defaultModelRef = useAppStore((s) => s.defaultModel);

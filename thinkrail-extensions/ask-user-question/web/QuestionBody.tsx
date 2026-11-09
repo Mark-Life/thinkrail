@@ -21,7 +21,6 @@ export interface QuestionBodyProps {
 	question: AskUserQuestionItem;
 	state: QState;
 	pageKeys: boolean;
-	discussAvailable: boolean;
 	primaryEnabled: boolean;
 	onFocusPrimary: () => boolean;
 	onOpenFile?: ((path: string) => void) | undefined;
@@ -47,7 +46,6 @@ export function QuestionBody({
 	question,
 	state,
 	pageKeys,
-	discussAvailable,
 	primaryEnabled,
 	onFocusPrimary,
 	onOpenFile,
@@ -78,7 +76,7 @@ export function QuestionBody({
 	const otherIndex = question.options.length;
 	const choiceCount = otherIndex + (primaryEnabled ? 2 : 1);
 	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
-	const discussing = discussAvailable && state.discuss;
+	const discussing = state.discuss;
 	const customOwnsPageFocus =
 		!discussing && state.customActive && (!question.multiSelect || state.multi.length === 0);
 	const questionPreview = previewSource(question);
@@ -142,7 +140,7 @@ export function QuestionBody({
 			return;
 		}
 		const action = choiceKeyAction(event.key, index, choiceCount, otherIndex);
-		if (action.type === "none" || (action.type === "discuss" && !discussAvailable)) return;
+		if (action.type === "none") return;
 		event.preventDefault();
 		if (action.type === "move") moveTo(action.index);
 		else if (action.type === "select") {
@@ -163,15 +161,13 @@ export function QuestionBody({
 				>
 					{question.question}
 				</p>
-				{discussAvailable ? (
-					<DiscussToggle
-						active={state.discuss}
-						buttonRef={(node) => {
-							discussToggleRef.current = node;
-						}}
-						onToggle={toggleDiscuss}
-					/>
-				) : null}
+				<DiscussToggle
+					active={state.discuss}
+					buttonRef={(node) => {
+						discussToggleRef.current = node;
+					}}
+					onToggle={toggleDiscuss}
+				/>
 			</div>
 			{discussing ? (
 				<DiscussPanel
@@ -235,7 +231,6 @@ export function QuestionBody({
 										multi={!!question.multiSelect}
 										pageKeys={pageKeys}
 										previewKeys={paneShown}
-										discussKey={discussAvailable}
 										glyph={source ? <PreviewGlyph source={source} /> : null}
 										onFocus={() => onCursor(index)}
 										onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}

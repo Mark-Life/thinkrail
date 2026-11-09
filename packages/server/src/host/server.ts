@@ -11,18 +11,9 @@ import type {
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import {
-	FEEDBACK_SURVEY_PROTOCOL_VERSION,
-	FONTS_PROTOCOL_VERSION,
-	GITHUB_STAR_PROTOCOL_VERSION,
-	LOCALES_PROTOCOL_VERSION,
-	MCP_PROTOCOL_VERSION,
-	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
-	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
 	USER_FONTS_ROUTE,
-	USER_THEMES_PROTOCOL_VERSION,
-	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
@@ -254,7 +245,6 @@ export interface RunningServer {
 
 interface SocketData {
 	clientKey: string;
-	protocolVersion: number;
 	/** Present only on a `/speech` socket, which bypasses the JSON request wire entirely. */
 	speech?: SpeechRelay;
 	speechSocket?: true;
@@ -291,11 +281,6 @@ function countMethods(methods: readonly string[]): string {
 	const counts = new Map<string, number>();
 	for (const method of methods) counts.set(method, (counts.get(method) ?? 0) + 1);
 	return [...counts].map(([method, count]) => `${method} ×${count}`).join(", ");
-}
-
-function clientProtocolVersion(value: string | null): number {
-	const parsed = Number(value);
-	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function sameHostUpdateRelease(
@@ -394,19 +379,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
-				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
 				await refreshRecentProjectFolders(RECENT_FOLDER_CHECK_BUDGET_MS);
-				return srv.upgrade(req, { data: { clientKey, protocolVersion } })
+				return srv.upgrade(req, { data: { clientKey } })
 					? undefined
 					: new Response("ws upgrade failed", { status: 400 });
 			}
 			if (url.pathname === SPEECH_SOCKET_ROUTE) {
-				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
-				if (protocolVersion < SPEECH_PROTOCOL_VERSION) {
-					return new Response("speech needs a newer client", { status: 400 });
-				}
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
-				return srv.upgrade(req, { data: { clientKey, protocolVersion, speechSocket: true } })
+				return srv.upgrade(req, { data: { clientKey, speechSocket: true } })
 					? undefined
 					: new Response("ws upgrade failed", { status: 400 });
 			}
@@ -456,26 +436,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
-				if (ws.data.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
-					ws.subscribe(WS_CHANNELS.workspaceCreationChanged);
-					ws.subscribe(WS_CHANNELS.workspaceCreationRemoved);
-				}
+				ws.subscribe(WS_CHANNELS.workspaceCreationChanged);
+				ws.subscribe(WS_CHANNELS.workspaceCreationRemoved);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				ws.subscribe(WS_CHANNELS.reviewFailed);
 				ws.subscribe(WS_CHANNELS.turnChanged);
-				if (ws.data.protocolVersion >= MCP_PROTOCOL_VERSION) ws.subscribe(WS_CHANNELS.mcpStatus);
-				if (ws.data.protocolVersion >= LOCALES_PROTOCOL_VERSION)
-					ws.subscribe(WS_CHANNELS.localesChanged);
-				if (ws.data.protocolVersion >= USER_THEMES_PROTOCOL_VERSION)
-					ws.subscribe(WS_CHANNELS.themesChanged);
-				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
-					ws.subscribe(WS_CHANNELS.packagesChanged);
-				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
-					ws.subscribe(WS_CHANNELS.fontsChanged);
-				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
-				if (speech) ws.subscribe(WS_CHANNELS.speechChanged);
+				ws.subscribe(WS_CHANNELS.mcpStatus);
+				ws.subscribe(WS_CHANNELS.localesChanged);
+				ws.subscribe(WS_CHANNELS.themesChanged);
+				ws.subscribe(WS_CHANNELS.packagesChanged);
+				ws.subscribe(WS_CHANNELS.fontsChanged);
+				ws.subscribe(WS_CHANNELS.speechChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -488,7 +461,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
-					...(speech ? { speech: speechStatus() } : {}),
+					speech: speechStatus(),
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
 					...(configUnreadable ? { configReadFailed: true } : {}),
@@ -536,7 +509,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							try {
 								const result = await handleRequest(method, params, {
 									clientKey: ws.data.clientKey,
-									protocolVersion: ws.data.protocolVersion,
 									...(hostUpdate ? { runHostUpdate: requestHostUpdate } : {}),
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
@@ -690,7 +662,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setFeedbackPublisher((clientKey) => {
 		const ws = sockets.get(clientKey);
-		if (!ws || ws.data.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION) return false;
+		if (!ws) return false;
 		try {
 			return ws.send(pushFrame(WS_CHANNELS.feedbackInterview, {})) !== 0;
 		} catch {
@@ -699,14 +671,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
-	const githubStarSocket = (clientKey: string) => {
-		const ws = sockets.get(clientKey);
-		return ws && ws.data.protocolVersion >= GITHUB_STAR_PROTOCOL_VERSION ? ws : undefined;
-	};
 	setGithubStarPublisher({
-		canAsk: (clientKey) => githubStarSocket(clientKey) !== undefined,
+		canAsk: (clientKey) => sockets.has(clientKey),
 		ask: (clientKey, ask) => {
-			const ws = githubStarSocket(clientKey);
+			const ws = sockets.get(clientKey);
 			if (!ws) return false;
 			try {
 				return ws.send(pushFrame(WS_CHANNELS.feedbackGithubStar, ask)) !== 0;
@@ -980,18 +948,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
-	setExtUiPublisher((request, audience) => {
-		const frame = pushFrame(WS_CHANNELS.piExtensionUi, request);
-		if (!audience) {
-			server.publish(WS_CHANNELS.piExtensionUi, frame);
-			return;
-		}
-		for (const ws of sockets.values()) {
-			if (ws.data.protocolVersion >= audience.belowProtocol) continue;
-			try {
-				ws.send(frame);
-			} catch {}
-		}
+	setExtUiPublisher((request) => {
+		server.publish(WS_CHANNELS.piExtensionUi, pushFrame(WS_CHANNELS.piExtensionUi, request));
 	});
 
 	const publishProviderChanged = () => {

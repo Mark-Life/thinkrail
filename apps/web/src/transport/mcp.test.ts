@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import type { SessionId } from "@thinkrail/contracts";
 import {
-	MCP_PROTOCOL_VERSION,
 	type McpListResult,
 	type McpStatusSnapshot,
+	PROTOCOL_VERSION,
 	type WsMethodName,
 	type WsParams,
 	type WsResult,
@@ -249,7 +249,7 @@ describe("MCP list request ordering", () => {
 			deletedSessionsByWorkspace: {},
 			status: "connected",
 			connectionGeneration: 3,
-			protocolVersion: MCP_PROTOCOL_VERSION,
+			protocolVersion: PROTOCOL_VERSION,
 		});
 		transport = new DeferredTransport({ url: "ws://localhost:24242/ws" });
 		const spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
@@ -413,7 +413,7 @@ describe("MCP list request ordering", () => {
 		const failures = Promise.allSettled([mutation, afterMutation]);
 		state().setStatus("disconnected");
 		state().setStatus("connected");
-		useAppStore.setState({ protocolVersion: MCP_PROTOCOL_VERSION });
+		useAppStore.setState({ protocolVersion: PROTOCOL_VERSION });
 		const fresh = read();
 		expect(fresh).not.toBe(old);
 		expect(transport.requests).toHaveLength(2);
@@ -440,7 +440,6 @@ describe("MCP list request ordering", () => {
 
 	test.each([
 		["disconnect", () => state().setStatus("disconnected")],
-		["unsupported host", () => state().installWelcomeSnapshot(MCP_PROTOCOL_VERSION - 1, [], [])],
 		[
 			"workspace removal",
 			() => state().applyWorkspaceRemoved(testProjectId("project"), workspaceId),

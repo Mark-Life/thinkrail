@@ -16,11 +16,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiUploadCloud2Line as UploadCloud,
 } from "@remixicon/react";
-import {
-	type OpenBranchReview,
-	REVIEW_ACTIONS_PROTOCOL_VERSION,
-	type Workspace,
-} from "@thinkrail/contracts";
+import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
@@ -227,7 +223,7 @@ function ShipSegments({
 		canSettle: canSettleWorkspace(protocolVersion, workspace),
 		settled,
 		removable: !isDefaultWorkspace(workspace),
-		reviewActions: protocolVersion !== null && protocolVersion >= REVIEW_ACTIONS_PROTOCOL_VERSION,
+		reviewActions: protocolVersion !== null,
 	});
 	const remoteAction = model.remote.primary;
 	const showRemoteValue = !remoteAction || remoteAction.id === "sync";

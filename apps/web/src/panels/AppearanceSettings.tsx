@@ -5,12 +5,7 @@ import {
 	RiComputerLine as Device,
 	RiPaletteLine as Palette,
 } from "@remixicon/react";
-import {
-	type AppConfigUpdate,
-	type SystemThemePair,
-	THEME_SYSTEM_PROTOCOL_VERSION,
-	type ThemeId,
-} from "@thinkrail/contracts";
+import type { AppConfigUpdate, SystemThemePair, ThemeId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -36,7 +31,7 @@ import {
 	type ThemeDescriptor,
 	type ThemeResolution,
 } from "@/themes";
-import { errorText, getTransport, supportsFonts } from "@/transport";
+import { errorText, getTransport } from "@/transport";
 import { CustomFontsGroup } from "./CustomFontsSettings";
 import { CustomThemesGroup } from "./CustomThemesSettings";
 import { FontsGroup } from "./FontsSettings";
@@ -216,8 +211,7 @@ export function AppearanceSettings() {
 	const userThemes = useAppStore((state) => state.userThemes);
 	const appVersion = useAppStore((state) => state.hostAppVersion);
 
-	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
-	const fontsSupported = supportsFonts(protocolVersion);
+	const hostWelcomed = protocolVersion !== null;
 	const activeTheme = resolveTheme(theme);
 	const fixedResolution = resolveThemePreference({ theme, themeMode: "fixed" });
 	const pair = systemThemePair ?? deriveSystemThemePair(theme);
@@ -225,7 +219,7 @@ export function AppearanceSettings() {
 	const currentResolution = resolveThemePreference(preference, systemAppearance);
 	const lightResolution = resolveThemePreference(preference, "light");
 	const darkResolution = resolveThemePreference(preference, "dark");
-	const systemMode = systemSupported && themeMode === "system";
+	const systemMode = hostWelcomed && themeMode === "system";
 	const effectiveMode: ThemeModeOption = systemMode ? "system" : activeTheme.appearance;
 	const currentContrast = (systemMode ? currentResolution.theme : activeTheme).contrast;
 
@@ -246,7 +240,7 @@ export function AppearanceSettings() {
 		Object.values(contrastTargets(contrast)).some((target) => target !== null);
 
 	const modeOptions: SegmentedControlOption<ThemeModeOption>[] = [
-		...(systemSupported
+		...(hostWelcomed
 			? [
 					{
 						id: "system" as const,
@@ -464,8 +458,8 @@ export function AppearanceSettings() {
 					}
 				/>
 			</SettingsGroup>
-			{fontsSupported ? <FontsGroup /> : null}
-			{fontsSupported ? <CustomFontsGroup /> : null}
+			{hostWelcomed ? <FontsGroup /> : null}
+			{hostWelcomed ? <CustomFontsGroup /> : null}
 			<CustomThemesGroup
 				snapshot={userThemes}
 				issues={userThemeIssues}

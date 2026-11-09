@@ -1,9 +1,4 @@
-import {
-	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
-	type ModelDefault,
-	type ThinkingLevel,
-	type WireModel,
-} from "@thinkrail/contracts";
+import type { ModelDefault, ThinkingLevel, WireModel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -180,7 +175,7 @@ export function ModelsSettings() {
 						/>
 					</div>
 				</div>
-				{protocolVersion !== null && protocolVersion >= AGENT_REVIEW_SETTING_PROTOCOL_VERSION && (
+				{protocolVersion !== null && (
 					<SettingsRow
 						testId="agent-review-row"
 						label={t("settings.models.agentReview")}

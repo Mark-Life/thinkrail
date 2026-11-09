@@ -42,7 +42,7 @@ client resolves, and the client confirms rendering and monospacing by measuremen
   signature (name, inode, size, mtime, ctime) changes — the poll [[submodule-server-locales]] explains.
 - `listInstalledFonts()` → `{ families: [{ name, monospaceHint }] }`, asked of the OS on every call (no
   cache), through `subprocess`'s bounded runner (15 s budget, `windowsHide`).
-- **Wire** (gated by `FONTS_PROTOCOL_VERSION`): `fonts.list` → `readUserFonts()`; `fonts.installed` →
+- **Wire:** `fonts.list` → `readUserFonts()`; `fonts.installed` →
   `listInstalledFonts()`; `fonts.reveal` → `Ack`; `fonts.changed` is an invalidation nudge, not data. `host`
   composes all of them, the reveal with `editors`' file-manager reveal, and owns the HTTP route.
 - `testFonts.ts` is a test-only builder of minimal TTF/OTF/WOFF/WOFF2 fonts and a `ttcf` header, outside

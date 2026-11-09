@@ -7,17 +7,15 @@ import {
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type { ProjectId } from "@thinkrail/contracts";
-import {
-	type ModelDefault,
-	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
-	type SlashCommandInfo,
-	type TemplateInfo,
-	type TemplateReadLocation,
-	type ThinkingLevel,
-	type WireModel,
-	WORKSPACE_CREATION_PROTOCOL_VERSION,
-	type Workspace,
+import type {
+	ModelDefault,
+	ProjectId,
+	SlashCommandInfo,
+	TemplateInfo,
+	TemplateReadLocation,
+	ThinkingLevel,
+	WireModel,
+	Workspace,
 } from "@thinkrail/contracts";
 import { i18n, T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -159,8 +157,7 @@ export function NewWorkspaceDialog({
 
 	const focusPromptSelection = usePendingSelection(promptRef);
 
-	const supportsProjectTemplatePreview =
-		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
+	const supportsProjectTemplatePreview = protocolVersion !== null;
 	const loadTemplate = useCallback(
 		(name: string) => {
 			const location: TemplateReadLocation = supportsProjectTemplatePreview
@@ -402,7 +399,7 @@ export function NewWorkspaceDialog({
 				return;
 			}
 			workspace = def;
-		} else if (protocolVersion !== null && protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
+		} else {
 			const kickoff = {
 				text,
 				...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
@@ -426,26 +423,9 @@ export function NewWorkspaceDialog({
 			store.selectCreation(creation.id);
 			onOpenChange(false);
 			return;
-		} else {
-			const createWorktree = async () =>
-				getTransport().request("workspace.create", {
-					projectId: selectedProjectId,
-					...(baseRef ? { baseRef } : {}),
-				});
-			const created = await createWorktree().catch((err: unknown) => {
-				toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
-				setCreating(false);
-				return null;
-			});
-			if (!created) return;
-			workspace = created;
 		}
 
 		const store = useAppStore.getState();
-		if (target === "worktree") {
-			void refreshProjectWorkspaces(workspace.projectId).catch(() => {});
-			store.activateWorkspace(workspace);
-		}
 		onOpenChange(false);
 
 		store.beginChatStart(workspace.id);

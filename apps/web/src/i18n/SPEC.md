@@ -16,9 +16,8 @@ instance ([[module-locales]] `./react`). Components never do this themselves: th
 
 ## Boundary
 
-- **Hydration:** `transport` reads `locales.list` after each welcome from a v89+ host and again on every
-  `locales.changed` nudge, installing the snapshot with `installLocalLocales` (an older host installs
-  `null`, so only bundled languages exist). This module only derives from the store.
+- **Hydration:** `transport` reads `locales.list` after each welcome and again on every
+  `locales.changed` nudge, installing the snapshot with `installLocalLocales`. This module only derives from the store.
 - **Owns:** the `languageOptions` derivation (System + every available tag with its own-language name via
   `Intl.DisplayNames` and its source: `builtin`, `local`, `builtin+local`, or a broken/missing entry),
   the effective-tag derivation (`resolveLocale` over the browser's `navigator.languages`, re-read on
@@ -40,7 +39,6 @@ instance ([[module-locales]] `./react`). Components never do this themselves: th
 
 - English is installed synchronously before first paint, so nothing renders keys while the host
   connects; local strings arrive later and re-render in place.
-- A selected local tag that disappears (file deleted, now broken, or a host without
-  `LOCALES_PROTOCOL_VERSION`) renders English while the preference stays untouched, and returns when the
+- A selected local tag that disappears (file deleted or now broken) renders English while the preference stays untouched, and returns when the
   file does.
 - Dates and numbers use `currentLocale()`, never a hardcoded `"en-US"` or the bare browser default.

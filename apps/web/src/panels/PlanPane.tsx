@@ -81,7 +81,7 @@ import {
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
+import { errorText, getTransport, respondToTool } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab, openFileInTab } from "./openTabs";
@@ -926,7 +926,7 @@ export default function PlanPane({
 	}, [connection, hasRuntime, workspaceId, sessionId]);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
-	const canReview = supportsPlanReview(protocolVersion);
+	const canReview = protocolVersion !== null;
 	const {
 		review: branchReview,
 		url: branchReviewUrl,

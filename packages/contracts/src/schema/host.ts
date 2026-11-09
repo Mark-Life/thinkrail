@@ -38,7 +38,7 @@ export const ServerWelcome = wireObj({
 	projects: arr(Project),
 	recentProjects: arr(Project),
 	config: AppConfig,
-	/** Voice input state, from `SPEECH_PROTOCOL_VERSION`; later changes arrive on `speech.changed`. */
+	/** Voice input state; later changes arrive on `speech.changed`. */
 	speech: opt(SpeechStatus),
 });
 export type ServerWelcome = Static<typeof ServerWelcome>;

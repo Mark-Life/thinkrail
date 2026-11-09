@@ -140,16 +140,14 @@ import {
 	selectChatAttended,
 	selectChatFirstPrompt,
 	selectFilesTreeView,
+	selectHostWelcomed,
 	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
-	selectSupportsMcp,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
 	selectWorkspaceSettledReason,
 	selectWorkspaceTick,
-	supportsChatResources,
-	supportsWorkspaceSettling,
 } from "./selectors";
 
 export interface FileTab {
@@ -1134,7 +1132,7 @@ interface AppState {
 	fontWeightOffset: number;
 	userFonts: UserFontsSnapshot | null;
 	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
-	/** Voice input as the host reports it; `null` before a v107 welcome or from an older host. */
+	/** Voice input as the host reports it; `null` before a welcome. */
 	speech: SpeechStatus | null;
 	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;
@@ -2484,7 +2482,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	installMcpList: (read, result) =>
 		set((state) => {
 			if (
-				!selectSupportsMcp(state) ||
+				!selectHostWelcomed(state) ||
 				!isConnectedGeneration(state, read.connectionGeneration) ||
 				state.removedWorkspaceIds[read.workspaceId]
 			)
@@ -2507,7 +2505,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyMcpStatus: (snapshot) =>
 		set((state) => {
 			if (
-				!selectSupportsMcp(state) ||
+				!selectHostWelcomed(state) ||
 				state.status !== "connected" ||
 				!isChatResourceScopeAlive(state, snapshot)
 			)
@@ -2536,7 +2534,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => {
 			if (
 				!isChatResourceScopeAlive(state, scope) ||
-				!supportsChatResources(state.protocolVersion) ||
+				state.protocolVersion === null ||
 				state.status !== "connected"
 			)
 				return {};
@@ -2660,11 +2658,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return {
 				protocolVersion,
 				welcomeProtocolVersion: protocolVersion,
-				workspaceSettlingSupported: supportsWorkspaceSettling(protocolVersion),
-				resourceSnapshots: supportsChatResources(protocolVersion)
-					? staleChatResources(state.resourceSnapshots)
-					: {},
-				mcpByWorkspace: selectSupportsMcp({ protocolVersion }) ? state.mcpByWorkspace : {},
+				workspaceSettlingSupported: true,
+				resourceSnapshots: staleChatResources(state.resourceSnapshots),
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,

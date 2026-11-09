@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
 	type BackgroundCommandSummary,
-	CHAT_RESOURCES_PROTOCOL_VERSION,
+	PROTOCOL_VERSION,
 	type SessionResources,
 } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
@@ -58,7 +58,7 @@ beforeEach(() => {
 		deletedSessionsByWorkspace: {},
 		status: "connected",
 		connectionGeneration: 4,
-		protocolVersion: CHAT_RESOURCES_PROTOCOL_VERSION,
+		protocolVersion: PROTOCOL_VERSION,
 	});
 });
 
@@ -162,7 +162,7 @@ test("paged history continues the chain it was asked from, rides along new windo
 	expect(ids()).toEqual(["x1", "x2", "x3", "c0"]);
 	state().setStatus("disconnected");
 	state().setStatus("connected");
-	state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION, [], []);
+	state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 	state().invalidateChatResources(scope);
 	state().installChatResources(read(), windowed(done("x1", 30), done("x2", 29), done("x3", 28)));
 	expect(ids()).toEqual(["x1", "x2", "x3"]);
@@ -193,7 +193,7 @@ test("workspace and session response identity cannot cross authority", () => {
 	expect(projection()?.snapshot).toBeNull();
 });
 
-test("disconnect preserves stale data; reconnect fences late responses and old hosts clear it", () => {
+test("disconnect preserves stale data and reconnect fences late responses", () => {
 	state().invalidateChatResources(scope);
 	const first = read();
 	state().installChatResources(first, snapshot);
@@ -201,17 +201,12 @@ test("disconnect preserves stale data; reconnect fences late responses and old h
 	expect(projection()).toMatchObject({ snapshot, fresh: false });
 	expect(selectChatResourceAuthority(state(), scope)).toBe(false);
 	state().setStatus("connected");
-	state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION, [], []);
+	state().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 	state().installChatResources(first, snapshot);
 	expect(selectChatResourceAuthority(state(), scope)).toBe(false);
 	state().invalidateChatResources(scope);
 	state().installChatResources(read(), snapshot);
 	expect(selectChatResourceAuthority(state(), scope)).toBe(true);
-	const current = read();
-	state().installWelcomeSnapshot(CHAT_RESOURCES_PROTOCOL_VERSION - 1, [], []);
-	expect(state().resourceSnapshots).toEqual({});
-	state().installChatResources(current, snapshot);
-	expect(state().resourceSnapshots).toEqual({});
 });
 
 test("staleness names a dropped socket apart from a failed or in-flight refresh", () => {

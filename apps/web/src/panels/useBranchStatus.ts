@@ -1,10 +1,4 @@
-import type { WorkspaceId } from "@thinkrail/contracts";
-import {
-	BRANCH_STATUS_PROTOCOL_VERSION,
-	type BranchStatus,
-	type OpenBranchReview,
-	type Workspace,
-} from "@thinkrail/contracts";
+import type { BranchStatus, OpenBranchReview, Workspace, WorkspaceId } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useAppStore } from "../store";
 import { type ConnectionStatus, getTransport } from "../transport";
@@ -134,20 +128,12 @@ export function ciPollWanted(snapshot: BranchStatusSnapshot | null): boolean {
 	return (review.details.checks?.pending ?? 0) > 0 || (snapshot.discovery ?? 0) > 0;
 }
 
-export function supportsBranchStatus(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= BRANCH_STATUS_PROTOCOL_VERSION;
-}
-
 export function branchAnswer({ review, ...facts }: BranchStatus): BranchAnswer {
 	return { review: review ? withDivergence(review, facts) : null, status: facts };
 }
 
-const transportRequest: BranchStatusRequest = async (params) => {
-	if (supportsBranchStatus(useAppStore.getState().protocolVersion)) {
-		return branchAnswer(await getTransport().request("workspace.branchStatus", params));
-	}
-	return { review: await getTransport().request("workspace.openReview", params), status: null };
-};
+const transportRequest: BranchStatusRequest = async (params) =>
+	branchAnswer(await getTransport().request("workspace.branchStatus", params));
 
 type BranchStatusSync = ReturnType<typeof startBranchStatusSync>;
 

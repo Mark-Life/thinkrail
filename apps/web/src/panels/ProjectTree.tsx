@@ -63,16 +63,15 @@ import {
 	type SettledReason,
 	selectActiveWorkspaceProjectId,
 	selectAutoSettledCounts,
+	selectHostWelcomed,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
-	selectSupportsOnboarding,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
 	selectWorkspaceReadAction,
 	settledReasonLabel,
 	settledReasonTitle,
-	supportsWorkspaceReadState,
 	toast,
 	useAppStore,
 	type WorkspaceReadAction,
@@ -93,7 +92,6 @@ import { startProjectSetupChat } from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
 import { WorkspaceCreationRow } from "./WorkspaceCreation";
 import {
-	canRenameProject,
 	canRenameWorkspace,
 	canSettleWorkspace,
 	loadProjectWorkspaces,
@@ -135,7 +133,7 @@ export function ProjectTree() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const supportsCreate = useAppStore(selectSupportsOnboarding);
+	const supportsCreate = useAppStore(selectHostWelcomed);
 	const supportsSettling = useAppStore((s) => s.workspaceSettlingSupported);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
@@ -328,7 +326,7 @@ export function ProjectTree() {
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
-								canRename={canRenameProject(protocolVersion)}
+								canRename={protocolVersion !== null}
 								onRename={(name) => renameProject(project, name)}
 								onClose={() => closeProject(project)}
 								onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
@@ -360,7 +358,7 @@ export function ProjectTree() {
 												canRename={canRenameWorkspace(protocolVersion, ws)}
 												canSettle={canSettleWorkspace(protocolVersion, ws)}
 												readAction={
-													supportsWorkspaceReadState(protocolVersion)
+													protocolVersion !== null
 														? selectWorkspaceReadAction(stateProjection, ws.id)
 														: null
 												}

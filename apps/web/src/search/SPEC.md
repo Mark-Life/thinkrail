@@ -37,9 +37,8 @@ opens its Settings section), and every verb runs through the command it was list
 
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
 workspaces, chats, transcripts, plans), `>` commands and settings, `/` files, `#` specs — the last two
-exist only when the last welcome's host serves `search.query` (`selectHostSearchAvailable`) and a
-context project gives them a root; otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
-also shows a notice), so a doubled prefix (`##`, `//src`) never lands in an empty scope. `#<digits>` is a
+exist only once a host has welcomed (`selectHostSearchAvailable`) and a
+context project gives them a root; otherwise a prefix whose scope is not offered searches the rest of the query in All, so a doubled prefix (`##`, `//src`) never lands in an empty scope. `#<digits>` is a
 pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that carries
 that review. Quoted text is one contiguous literal term — never matched as an acronym or a subsequence —
 and escapes a prefix; an unterminated quote runs to the end of the query, so a phrase matches while it is
@@ -71,7 +70,7 @@ the cap of eight rows before an in-place "Show N more" never hides a blocked cha
 
 A chat row is worded by `lib`'s `chatLabel` over the known title (`selectKnownChatTitle`: the title on the
 host's state record, which every rename republishes, so no palette request is needed to name a chat in a
-workspace this client never opened; against an older host that omits it, a named layout tab, else a history
+workspace this client never opened; when the record omits it, a named layout tab, else a history
 row — and an unvisited chat then reads as its first prompt, so a word only its title holds does not find it)
 and the host-reported first prompt (`selectRecordFirstPrompts`): an unnamed chat reads as
 its first prompt, carries `data-title-source` and the full first line as its tooltip, and is matchable by

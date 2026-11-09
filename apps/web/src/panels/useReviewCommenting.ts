@@ -8,7 +8,7 @@ import type {
 } from "@thinkrail/resource-renderers";
 import { useMemo, useState } from "react";
 import { toast, useAppStore } from "../store";
-import { errorText, getTransport, supportsRichAnchors } from "../transport";
+import { errorText, getTransport } from "../transport";
 import { scopeKey } from "./changesModel";
 import { fileThreads, sameThreads } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
@@ -160,10 +160,7 @@ function sideCommenting(
 	chatSessionId: SessionId | undefined,
 ): SurfaceReview["commenting"] {
 	const add = (draft: AnchorDraft, body: string) => {
-		if (
-			draftNeedsRichAnchors(draft) &&
-			!supportsRichAnchors(useAppStore.getState().protocolVersion)
-		) {
+		if (draftNeedsRichAnchors(draft) && useAppStore.getState().protocolVersion === null) {
 			return Promise.reject(new Error(t("panels.reviewCommenting.hostTooOld")));
 		}
 		return getTransport().request("review.commentAdd", {

@@ -34,12 +34,11 @@ import {
 	selectHistoryTarget,
 	selectHostReachable,
 	selectHostSearchAvailable,
+	selectHostWelcomed,
 	selectRecordFirstPrompts,
-	selectSupportsOnboarding,
 	selectWorkspaceReadAction,
 	selectWorkspaceSettleBlocked,
 	selectWorkspaceSettledReason,
-	supportsWorkspaceReadState,
 	toast,
 	useAppStore,
 	workspaceName,
@@ -116,7 +115,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const contextProject = useAppStore(selectContextProject);
 	const historySessionId = useAppStore((s) => selectHistoryTarget(s)?.sessionId ?? null);
 	const readAction = useAppStore((s) =>
-		activeWorkspaceId && supportsWorkspaceReadState(s.protocolVersion)
+		activeWorkspaceId && s.protocolVersion !== null
 			? selectWorkspaceReadAction(s, activeWorkspaceId)
 			: null,
 	);
@@ -178,7 +177,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			activeWorkspace,
 			editors,
 			historyAvailable: historySessionId !== null,
-			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
+			canCreateProject: selectHostWelcomed({ protocolVersion }),
 			nativeShortcuts,
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),

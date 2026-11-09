@@ -24,7 +24,7 @@ file container, not the theme: the manifest schema, id rules, and catalog belong
 - **Public surface (barrel):** `themesDir()`, `readUserThemes(dir?)` (read on every request — a handful
   of small files, so no cache), `watchUserThemes({ dir?, onChange, intervalMs? })` → stop function,
   and the caps `MAX_THEME_FILE_BYTES` / `MAX_THEME_FILES` / `MAX_THEME_NESTING`.
-- **Wire** (gated by `USER_THEMES_PROTOCOL_VERSION`): `themes.list` → `{ dir, files }`, each file
+- **Wire:** `themes.list` → `{ dir, files }`, each file
   `{ fileName, ok: true, manifest } | { fileName, ok: false, error, detail? }` with `error` one of
   `too-large`, `too-many`, `unreadable`, `invalid-json` and `manifest` the parsed, unvalidated JSON;
   `themes.changed` is an invalidation nudge, not data; `themes.reveal` → `Ack` (`host` composes

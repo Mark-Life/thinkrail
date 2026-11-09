@@ -1,7 +1,7 @@
 import type { TurnChangeSet, WorkspaceId } from "@thinkrail/contracts";
 import { useEffect } from "react";
 import { isConnectedGeneration, useAppStore } from "../store";
-import { getTransport, supportsTurnChanges } from "../transport";
+import { getTransport } from "../transport";
 
 const EMPTY: readonly TurnChangeSet[] = [];
 
@@ -12,7 +12,7 @@ export function useWorkspaceTurns(workspaceId: WorkspaceId | null): readonly Tur
 }
 
 export function useLoadWorkspaceTurns(workspaceId: WorkspaceId | null): void {
-	const supported = useAppStore((state) => supportsTurnChanges(state.protocolVersion));
+	const supported = useAppStore((state) => state.protocolVersion !== null);
 	const generation = useAppStore((state) => state.connectionGeneration);
 	useEffect(() => {
 		if (!workspaceId || !supported) return;

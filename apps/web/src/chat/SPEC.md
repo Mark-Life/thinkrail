@@ -310,7 +310,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `ChatTranscript` routes to `requestChangesView(workspaceId, null, scope)`: the Changes panel adopts the turn
   scope and opens the review tab for it; the chip's `+a −r` is summed over the files it counts (specs
   are their own chip), and a multi-run round's per-file stats are the last run's for that path — the
-  review tab shows the true first-base → last-head diff. Without a receipt (older host, zero-change run) the divider
+  review tab shows the true first-base → last-head diff. Without a receipt (zero-change run) the divider
   behaves exactly as before; a receipt whose snapshot has since been pruned still renders (the client cannot
   know), and the pruning surfaces only when *Review turn* is clicked — as the review tab's scope-aware
   `UNKNOWN_COMMIT` notice.
@@ -408,15 +408,12 @@ two routes:
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
   (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
-  `interactionState`, the fold-geometry context and the store's `protocolVersion` (passed as
-  `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
+  `interactionState` and the fold-geometry context, and fills `interaction` for every tool whose renderer
   is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. Its `state.accepting` is
   true only while the host's `needsInput` names this call (`awaitingToolCallIdOf`, carried in the
-  interaction context; a pre-v93 host's `kind: "question"` / `question:<id>` is read the same way for one
-  compatibility window) or no host state has arrived yet, so a call the host is not waiting on (another
+  interaction context) or no host state has arrived yet, so a call the host is not waiting on (another
   package's same-name tool, a call to the switched-off tool) cannot submit a response. `respond(value)`
-  forwards the value as is through the transport's `respondToTool` (`session.respondToTool`, or the
-  retired `session.answerQuestion` below `TOOL_RESPONSE_PROTOCOL_VERSION`); the tool validates its
+  forwards the value as is through the transport's `respondToTool` (`session.respondToTool`); the tool validates its
   shape. The renderer never reads those contexts itself.
 
 Worked example: the `ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
@@ -502,8 +499,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
   cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. The optional MCP actions —
   `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
-  servers) — are supplied (through `ChatTranscript`'s provider) only on an MCP-capable host;
-  without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
+  servers) — are supplied (through `ChatTranscript`'s provider);
+  without them (the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
   ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)). Optional `findModel(ref)` resolves a run's `provider/id`
   against the full model catalog (`ChatView` over `useModelCatalog`, hidden models included — a run may use
   one); without it a run label shows the raw reference.
@@ -916,8 +913,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   tinted with brand colours — the colour system owns colour. Pinned/recents/default come in through
   **`useModelPreferences(models)`** (the one store+transport seam both callers share: lists re-pointed to
   the live catalog with vanished models dropped, `toggleFavorite` as a whole-list `settings.update`,
-  `setDefault` writing model + effort together, all gated on `MODEL_PICKER_PROTOCOL_VERSION` so an older
-  host shows neither pin toggles nor sections). The footer holds **Set as default** (reads "Default for new
+  `setDefault` writing model + effort together). The footer holds **Set as default** (reads "Default for new
   chats" once the pair matches) and the **Refresh** row (`force: true`, spins and reads "Updating…" while
   the awaited refresh runs; opening fires an unforced read served from the host snapshot). The web still keeps **no
   enumeration of the level vocabulary**: rows are `WireModel.thinkingLevels` verbatim, the host clamps,
@@ -1518,9 +1514,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in
   sections" surfaces read identically.
   **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end).
-  On protocol v73+, `session.nudge` makes the host-authoritative blocker/execution decision atomically:
-  needs-input no-ops, running queues, and idle prompts. Independently shipped clients retain the prior
-  glance-based prompt/follow-up plus hydration fallback only for older hosts; the compatibility path skips
+  Once a host is welcomed, `session.nudge` makes the host-authoritative blocker/execution decision atomically:
+  needs-input no-ops, running queues, and idle prompts. Before that, a glance-based prompt/follow-up plus
+  hydration fallback runs; it skips
   an awaiting question rather than waking the agent past its blocker.
 
 ## Chat Resources
@@ -1535,8 +1531,7 @@ subagent — and the subagent detail header's `renderSubagentModel` with `RunMod
 kind or terminal attachment is involved. Tool/command completion rendering remains in the conversation primitives, joined through tool/custom-message
 names rather than imports of the capability packages; the latest turn divider carries the "still
 running" chip as a parent-supplied deep link into the inspector. The resources view has a third list,
-the session's MCP servers (`SessionResources.mcpServers`): `useChatResources` passes it only on an
-MCP-capable protocol (older hosts omit the field; either way there is no list) and
+the session's MCP servers (`SessionResources.mcpServers`): `useChatResources` passes it when the snapshot carries it and
 extends the shared controls with `mcp.setSessionOverride` (Disable / Enable in this chat, applied at the
 next idle reload) and `mcp.reconnect`, keyed `mcp:<name>` beside the stop actions. `ChatView` adds the
 connected/starting servers to the trigger's count without making it breathe, mounts `ResourcesAttention`
@@ -1587,7 +1582,7 @@ single-flight replacement snapshots, stopping on terminal/permanently unavailabl
 transient backoff with visibly retryable failures. Resource controls keep pending/error state scoped
 to their action and current connection; acknowledgement and detail-close focus semantics belong to
 [[submodule-web-chat-resources]]. Older history is one more such control, `loadOlder(kind)` (keyed
-`history:<kind>`, offered only by a host at `RESOURCE_HISTORY_PROTOCOL_VERSION` whose snapshot carries
+`history:<kind>`, offered only when the snapshot carries
 `history`): it asks `session.resourceHistory` for the page before the oldest finished record the store
 holds and hands it to the store, which keeps it only if it still continues that chain. `ChatView` owns the
 inspector's per-kind expansion beside its selection and resets both on every open; it passes the current

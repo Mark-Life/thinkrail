@@ -6,16 +6,11 @@ import { tupleKey } from "../lib";
 import {
 	isConnectedGeneration,
 	selectChatName,
-	selectHasNormalizedSessionState,
+	selectHostWelcomed,
 	toast,
 	useAppStore,
 } from "../store";
-import {
-	errorText,
-	getSessionMessagesWithSkillBaseline,
-	getTransport,
-	supportsPlanSummaryGeneration,
-} from "../transport";
+import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
 
@@ -71,8 +66,7 @@ export function useAutoPlanSummary(workspaceId: WorkspaceId, sessionId: SessionI
 		// best-effort cheap-model one-shot). Re-armed if the plan re-opens or its summary clears.
 		const check = async (): Promise<void> => {
 			if (cancelled || triedRef.current) return;
-			// Only ask hosts that advertise the capability (v69+); an older host has no such method.
-			if (!supportsPlanSummaryGeneration(useAppStore.getState().protocolVersion)) return;
+			if (useAppStore.getState().protocolVersion === null) return;
 			const plan = await getTransport()
 				.request("todo.list", { workspaceId, sessionId })
 				.catch(() => null);
@@ -396,7 +390,7 @@ async function nudgeAgent(
 		return;
 	}
 	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
-	if (selectHasNormalizedSessionState(state)) {
+	if (selectHostWelcomed(state)) {
 		try {
 			await getTransport().request("session.nudge", { workspaceId, sessionId, text });
 		} catch (err) {

@@ -41,7 +41,7 @@ treatment.
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
+  **Pencil Rename**, **X Close
   project**. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
   commits a changed trimmed name via `project.rename`, Escape cancels) and waits for the `project.updated`
   push — no optimistic label; rejection raises an error toast. Create is exactly the direct `+` flow. Open existing worktree opens the
@@ -60,8 +60,7 @@ treatment.
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
   (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
-  ThinkRail-managed worktree additionally gets **Rename** when the connected host's protocol is at least
-  `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only **Remove from
+  ThinkRail-managed worktree additionally gets **Rename**, plus **Remove workspace**; an external row gets only **Remove from
   ThinkRail**, whose confirm promises the checkout and its branch stay untouched.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
@@ -72,18 +71,14 @@ treatment.
   the same actions — including the capability-aware pending rename — without a second implementation. The
   controller dispatches to the workspace captured when the edit started and resets when the hook's
   workspace identity changes, so a consumer that is not keyed per workspace cannot misdirect a pending
-  name. **Settle** / **Keep active** (`workspace.settle` / `workspace.unsettle`, gated on
-  `WORKSPACE_SETTLE_PROTOCOL_VERSION`) ride the same file.
-  **The Settled shelf.** It renders only when the host advertises
-  `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no
-  shelf or settle controls even if rollback persistence carries stale newer fields. On a
-  capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` newest
+  name. **Settle** / **Keep active** (`workspace.settle` / `workspace.unsettle`) ride the same file.
+  **The Settled shelf.** It renders once a host is welcomed. An expanded project renders its **live** rows from `selectWorkspacePartition` newest
   created first (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
   (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
-  On a v86+ host the same menu section carries one read toggle from `selectWorkspaceReadAction`: **Mark as
+  The same menu section carries one read toggle from `selectWorkspaceReadAction`: **Mark as
   read** while any chat in the workspace has an unread result, else **Mark as unread** when a finished,
   non-cancelled result can be relit, else nothing (`markWorkspaceRead` / `markWorkspaceUnread` in
   `workspaceActions.ts`, shared with the topbar). Unread relights only the most recently active chat, so
@@ -109,9 +104,8 @@ treatment.
   Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
   typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
   cancels, and blank or text unchanged from the edit-start label exits without a request, so an incoming
-  peer snapshot cannot be reverted by closing an untouched editor. A changed commit made while the current
-  socket's capability is unknown stays pending and dispatches only after a v55-or-newer welcome restores
-  `canRename`; an older host never receives the method. A commit leaves optimistic domain state out of the
+  peer snapshot cannot be reverted by closing an untouched editor. A changed commit made before a host is
+  welcomed stays pending and dispatches after the welcome. A commit leaves optimistic domain state out of the
   client: the row returns to the prior host-owned label until every surface adopts the full-snapshot
   `workspace.updated` push; rejection keeps that snapshot and raises an error toast. The Git branch and
   worktree folder never change. Remove is styled destructive
@@ -341,22 +335,21 @@ label + explainer bottom-left; the primary is a filled-primary card carrying the
 hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
-**"Start a new project"** (primary, `welcome-cta`) + **"Open project"** — or "Open project" alone as the
-primary against a host below `ONBOARDING_PROTOCOL_VERSION`; **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+**"Start a new project"** (primary, `welcome-cta`) + **"Open project"**; **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
 project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where, with
 "Start a new project", it's the only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Start a new project… (when the
-caller passes `onStartNew`, i.e. the host supports `project.create`) / Open project / Enter host
-path… / Clone repository… (from `PROJECT_CLONE_PROTOCOL_VERSION`) / Recents). Recents is the store's `recentProjects`: one last-opened path list
+caller passes `onStartNew`) / Open project / Enter host
+path… / Clone repository… / Recents). Recents is the store's `recentProjects`: one last-opened path list
 containing open + closed records with no status badge (the server omits closed records
 whose folders are gone); selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
 trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
 shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
-`kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
+`kind === "default"` row. **"Start building"** is the
 intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` preselected to the
 **Isolated workspace** target; *workspace* is the mechanism, not the label. **"Set up
 project"** opens the same dialog with an `initialPrompt` seed **and a `promptNote`** — the note is the
@@ -410,7 +403,7 @@ whenever `central` is installed (Connect, sign-in, start-proxy or update, by sta
 **JetBrains AI** row at the end of the list whose **Set up** expands the card's install guidance. The unfiltered list skips detected providers; a search covers every provider,
 them included. One list rather than separate subscription / API-key buckets, because users look for a provider
 by name, not by auth method. **Detected is earned, never hardcoded.** The surface first asks the host `provider.detect`
-(`detectAccounts`; an older host or a failure counts as nothing found) — the wizard on **Get started**, the
+(`detectAccounts`; a failure counts as nothing found) — the wizard on **Get started**, the
 overlay on open — and keeps its skeleton until it answers, so nothing jumps. Every detected account whose pi
 provider is unconfigured and OAuth-capable becomes a Detected sign-in (e.g. "Sign in with Claude" when
 Claude Code is signed in, with the tool's plan as a badge) that starts that provider's ordinary OAuth flow,
@@ -466,7 +459,7 @@ same last-intent fence as opening a local project, without starting a chat. A la
 newer open-project selection.
 
 **Cold-start onboarding wizard.** `OnboardingWizard` replaces the Welcome cards only on a true cold start:
-the host supports `ONBOARDING_PROTOCOL_VERSION`, `AppConfig.onboardingDismissed` is false, there are no
+`AppConfig.onboardingDismissed` is false, there are no
 open or recent projects, and the provider status snapshot reports none. The decision is **latched in the store gate** (it survives remounts) so
 connecting a provider mid-wizard does not tear it down. It opens on an **intro**
 (the brand title, the landing page's tagline and its three "why" beats — worktrees, specs, pi as the
@@ -498,11 +491,9 @@ every project and provider — gets the regular Welcome; a failed write still cl
 
 Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
-grant would load. Presence comes from `chat/useProjectTrustSummary` (`project.trustSummary` on hosts at
-`PROJECT_TRUST_PROTOCOL_VERSION`, gated by the store's `selectSupportsProjectTrust`: alias skill names and
+grant would load. Presence comes from `chat/useProjectTrustSummary` (`project.trustSummary`: alias skill names and
 the kinds of pi's own trust-requiring resources and project subagent definitions, and the count of
-`.pi/mcp.json` entries; older hosts answer
-`project.aliasSkills` only, read as "aliases only"), and the
+`.pi/mcp.json` entries), and the
 pure `chat/projectTrust` derivation — shared with `chat/SkillsDialog`'s trust banner and New Workspace, so
 the three surfaces cannot disagree about what a grant loads — `deriveProjectTrustNotice` evaluates the alias grant (`Project.trusted`) and pi-level trust
 (`Project.piResourceTrust`) **separately**, so the notice names only what is still off: "ships N skills and
@@ -519,7 +510,7 @@ where either grant is held (`canStopTrusting`), not only the fully trusted one �
 trusted when it was added, or one trusted only partly, keeps a revoke path — and sends
 `project.setTrust({ trusted: false })`, revoking both grants; its confirmation (`stopTrustingText`) says pi
 resources stop loading, running subagents stop and open chats reload only when `piResourceTrust` is
-`granted` and the host supports project trust, otherwise that project skills stop loading in new chats. It never renders the skills'
+`granted`, otherwise that project skills stop loading in new chats. It never renders the skills'
 (attacker-controlled) names before trust. The full manager (`chat/SkillsDialog` in **project mode**
 — trust + group/skill toggles, no session yet) is reached from **New Workspace**, whose opener is the shared
 `chat/SkillsButton` primitive (so it cannot drift from the chat header's Skills trigger). This is the
@@ -536,7 +527,7 @@ terminals stay scoped to it.”**; **Project folder** → title **“Work in pro
 mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
 project's Default workspace via the shared **`enterDefaultWorkspace`** helper (`defaultWorkspace.ts`:
 `workspace.list` → fold into the store → activate the `kind === "default"` row, one atomic entry — the
-rail's auto-expand follows activation; error toast + `null` if an older host has none — the same helper
+rail's auto-expand follows activation; error toast + `null` if the project has none — the same helper
 behind the Welcome fork card, so the enter + degrade path lives once; **`onCreated` does not fire** —
 nothing was created and the helper's list is already fresh))
 and the submit button reads **Start** instead of **Create**; the branch-list fetch + background base
@@ -601,18 +592,14 @@ a project picker, the prompt hero, and the reused
   so `resources: true` travels only when the notice named pi-level resources; it folds the updated project
   back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. **Worktree-mode submit on a v103+ host** = `workspace.startCreate({
+  **Shift+Enter** inserts a newline. **Worktree-mode submit** = `workspace.startCreate({
   projectId, baseRef, kickoff })`, where the kickoff always travels — text, any attached images, and the held
   model + effort only when picked explicitly — so the host can start the chat even if this window closes. The
   dialog folds the returned creation (keeping the full prompt locally, see [[submodule-web-store]]), expands
   the project and refreshes its `workspace.list` (fire-and-forget), **selects the creation and closes at
   once**: the checkout runs in the background ([[submodule-server-workspaces]]) and the user may keep working
   anywhere. A rejected `startCreate` (an invalid ref, an unknown project) keeps the dialog open with a
-  `store.toast.error`. Against an **older host** the dialog falls back to `workspace.create` → set active →
-  `session.create({ workspaceId, model?, thinkingLevel? })` → fire-and-forget `prompt` with an optimistic user
-  turn, as before. That legacy path shows only the dialog's own *Creating…* button state — the old sidebar
-  pending-row counter was removed with the host-owned creations, a deliberate gap for the transition window
-  in which a newer web meets an older host. The prompt hero accepts **image paste/drop** through the shared `usePromptImages`
+  `store.toast.error`. The prompt hero accepts **image paste/drop** through the shared `usePromptImages`
   controller (same `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is
   **held while any image is still decoding**, and a start with **only images and no text** is a valid
   kick-off. An **empty prompt with no images still lands the user in a chat** — the host starts it without a
@@ -664,8 +651,7 @@ a project picker, the prompt hero, and the reused
   (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
   `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
   `data-settings-draft-input`; a host echo never overwrites an edit in progress or rolls back to a value a
-  newer in-flight save replaces; a rejected save toasts and the field returns to the authoritative value. **`McpSettings`** is the **MCP servers** section
-  (hidden below `MCP_PROTOCOL_VERSION`). It describes the active workspace's project
+  newer in-flight save replaces; a rejected save toasts and the field returns to the authoritative value. **`McpSettings`** is the **MCP servers** section. It describes the active workspace's project
   (no active workspace → "Open a workspace to manage its MCP servers") and reads `mcp.list` through
   `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
   backoff while a live chat still reports a server `starting`, because the host pushes no connected edge.
@@ -800,12 +786,11 @@ a project picker, the prompt hero, and the reused
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
   field); a "configured outside the app" note for rows with neither flag; **`CustomEndpointsSettings`**
-  (v101, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
+  (re-read on `providerVersion`) — the **Custom
   servers** group listing every `customEndpoints.list` endpoint (name, address, model count; **Edit** and a
   **Remove** icon behind a `ConfirmDialog`) plus **Add server**. The page's **Refresh** reloads the list together with
   `provider.status`. Providers the group lists are filtered out of the
-  generic provider rows so each appears once (only listed ids: an unlisted `custom-*` provider, or any on
-  a host without the group, stays a generic row); hand-written `models.json` providers stay in Connected as
+  generic provider rows so each appears once (only listed ids: an unlisted `custom-*` provider stays a generic row); hand-written `models.json` providers stay in Connected as
   "Managed", not repeated here. The dialog is one form for a company gateway and a local server: name,
   address with local preset chips (Ollama, LM Studio, vLLM, llama.cpp — they only fill the address and an
   empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
@@ -853,7 +838,7 @@ a project picker, the prompt hero, and the reused
   re-read plus model-list invalidation. Status reads are request-sequenced so an older response cannot replace
   a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
-  closed reason codes to ThinkRail-authored text. On protocol v59+, the same card always shows the
+  closed reason codes to ThinkRail-authored text. The same card always shows the
   synchronized **Show quota in top bar** switch and **Refresh every _ seconds** field, in every Central
   lifecycle state. The flag defaults on; the interval defaults to 30 and accepts whole `1–3600` values.
   Off disables (but retains) the interval. The field edits locally, commits on blur/Enter, reports invalid
@@ -861,7 +846,7 @@ a project picker, the prompt hero, and the reused
   neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
   `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
   notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states);
-  **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
+  **`LanguageSettings`** (a store-integrating container over the
   props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): one radio list — **System**
   (default; names the language System resolves to) then every available language by its own-language name
   with a source badge (*Built-in*, *Local file*, *Built-in, customized by local file*), then unselectable rows
@@ -872,8 +857,7 @@ a project picker, the prompt hero, and the reused
   with **Copy path** and **Open folder** (`locales.reveal`, offered in every client like workspace reveal —
   a remote browser uses the path), and a **How to contribute** link to CONTRIBUTING's Translations section);
   **`AppearanceSettings`** (the catalog-driven theme settings: a **Theme mode** segmented control,
-  **System / Light / Dark** with System offered only from `THEME_SYSTEM_PROTOCOL_VERSION` (older hosts keep
-  fixed-only behavior), and a **Contrast level** control, **Default / High**. Light/Dark write a fixed
+  **System / Light / Dark**, and a **Contrast level** control, **Default / High**. Light/Dark write a fixed
   theme: from System they adopt the pair's half for that appearance — what the control showed — never a
   stale retained fixed theme; in fixed mode they move to the current theme family's counterpart. Contrast swaps to the
   same family's other-contrast theme (in System mode both pair halves at once), so the family survives
@@ -896,12 +880,10 @@ a project picker, the prompt hero, and the reused
   naming the effective same-appearance fallback, and is never silently written back. The panel never owns
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
   the family/contrast counterpart the two controls move to. A **Custom themes** group
-  (`CustomThemesSettings.tsx`, props-driven like `LanguagePage`, hidden below
-  `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps with a version-pinned link to
+  (`CustomThemesSettings.tsx`, props-driven like `LanguagePage`) gives the copy-a-bundled-file steps with a version-pinned link to
   `dark.theme.json`, the `<dataDir>/themes` folder with **Copy path** / **Open folder** (`themes.reveal`),
   and one warning notice per unusable file (`themes`' issue list). The page reads the catalog and issues
-  through `onThemesChange`, so a dropped file appears in the lists without reopening. From
-  `FONTS_PROTOCOL_VERSION` two groups sit between the theme group and Custom themes ([[submodule-web-fonts]]
+  through `onThemesChange`, so a dropped file appears in the lists without reopening. Two groups sit between the theme group and Custom themes ([[submodule-web-fonts]]
   applies what they save). **Fonts** (`FontsSettings.tsx`) opens with an inert preview on the chat canvas —
   a chat message in the chat prose system, buttons, an editor sample in `.tr-code-editor` and a terminal
   sample in `.tr-code-block` — then an **Interface** sub-heading (Font picker; **Text weight** slider, which
@@ -949,10 +931,8 @@ a project picker, the prompt hero, and the reused
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Explanatory copy says “message box” rather than the internal “composer” name for where the user types.
   The final **Subagents** group (`SubagentSettings.tsx`) is rows, not a table: global **Allow subagents**
-  and, from `SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`, **Per chat at once**; then, with an active workspace, a
-  **This workspace** sub-heading naming it over the same two rows. The whole group requires
-  `SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an
-  independently shipped client never offers unsupported mutations against an older host. Workspace rows
+  and **Per chat at once**; then, with an active workspace, a
+  **This workspace** sub-heading naming it over the same two rows. Workspace rows
   show the *effective* value with a Global/Custom tag: toggling writes `on`/`off`, a typed limit writes an
   override, an empty limit field (placeholder = global) or the Custom tag (a reset button) sends `null`, so later global
   changes keep flowing through. Limit fields follow the auto-save input pattern, validated by
@@ -977,8 +957,7 @@ a project picker, the prompt hero, and the reused
   (the Settings shell includes its row only when content is provided; `panels` neither discovers native nor
   host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
-  **`WorkspacesSettings`** (the **Workspaces** section, listed only at
-  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
+  **`WorkspacesSettings`** (the **Workspaces** section) — one `SettingsRadioCards` group, **Settle idle
   workspaces after**: 1 / 3 / 7 (default) / 14 days / Never, written as `settings.update { settleIdleDays }`
   (`null` for Never) and converging through `settings.changed`; a valid host-configured non-preset value
   leaves the preset cards unselected rather than falsely displaying the default. The default is a week, not
@@ -987,7 +966,7 @@ a project picker, the prompt hero, and the reused
   tidying). The copy names the three things
   that count as activity and the three things that never settle, because the setting is only legible
   together with those rules;
-  **`VoiceSettings`** (from `SPEECH_PROTOCOL_VERSION`, in the Interface group after Keyboard) shows the
+  **`VoiceSettings`** (in the Interface group after Keyboard) shows the
   store's `speech` status ([[submodule-web-speech]]). An unsupported platform gets a warning notice and
   nothing else. Otherwise its rows say what the user can do, never how voice is built: no engine,
   version, backend or PATH text, which an earlier version showed and users found unreadable (the
@@ -1008,11 +987,10 @@ a project picker, the prompt hero, and the reused
   **`TerminalSettings`** — a **Scrollback** segmented control (`store.terminalReplayKb`, five presets from
   Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
-  Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
+  Windows hosts, a **Windows shell** picker
   (Auto / PowerShell 7 (pwsh) / Windows PowerShell / Command Prompt,
   `settings.update { terminalWindowsShell }` — see `submodule-server-terminal`'s shell-selection decision
-  for what each choice spawns). The protocol gate keeps a newer independently shipped client from presenting
-  a setting an older host preserves but does not act on. The Windows-shell
+  for what each choice spawns). The Windows-shell
   half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
   inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
   `getInitialState()` snapshot (`useSyncExternalStore`'s `getServerSnapshot` argument), never a test's
@@ -1063,7 +1041,7 @@ a project picker, the prompt hero, and the reused
   [[submodule-web-notifications]].
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
-  **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,
+  **`AnalyticsConsentDialog`** mounts once through shell after a host's unconfirmed config hydrates,
   held back (with the survey invitation) while the cold-start onboarding wizard may still show or is
   showing (`selectOnboardingActive`): a new user meets the product before a privacy question, and sharing
   stays off until the dialog mounts, so holding it never collects without asking. The wizard itself asks at
@@ -1084,7 +1062,7 @@ a project picker, the prompt hero, and the reused
   advances without a write — only a choice made here is persisted. Saved
   decisions survive restarts and change later through Settings. The dialog keeps only the short
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
-  excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
+  excluded content.
   **`FeedbackSettings`** is the always-present Feedback pane: **Take the survey** (only while a survey is
   launched and unfinished) opens the survey window, beside the Discord link and `info@thinkrail.ai`. Settings
   never draws the questions itself and never calls `feedback.respond`.
@@ -1099,10 +1077,9 @@ a project picker, the prompt hero, and the reused
   host, and the analytics setting plays no part. `SURVEY_CHANGED` reloads the survey and restarts it with a
   short notice; other refusals stay inline; success shows PostHog's thank-you header or the app's. The form
   is keyed by survey id, iteration and `language`, so a reload in another language restarts it rather than
-  mixing languages, and Send echoes `survey.language`. A pre-v98 host gets the older submission shape (Other text
-  inline, no `language`) through `surveyDraft`'s `inlineOthers`; while no host is welcomed (disconnected) Send is
-  disabled, so no request is queued and replayed in a shape chosen without knowing the host.
-  **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
+  mixing languages, and Send echoes `survey.language`. While no host is welcomed (disconnected) Send is
+  disabled, so no request is queued and replayed.
+  **`ModelsSettings`** is the **Models** section. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
   model never offers stale levels; only the latest read applies, and a failed read replaces the controls
@@ -1110,7 +1087,7 @@ a project picker, the prompt hero, and the reused
   if persistence fails. The host's `model.default` result is the displayed effective choice, including the
   first-available fallback when a saved model is missing; supported effort levels and the displayed effort
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
-  picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
+  picker are ignored, while a save or re-read is in flight. **`ModelContextSettings`** adds
   one Default / 1M / Custom selector over every eligible GPT model the host returns as
   `ModelContextSetting[]`; a collapsed **By each model** disclosure reveals one selector per provider/model
   pair, so the same model on
@@ -1126,7 +1103,7 @@ a project picker, the prompt hero, and the reused
   returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
-  `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
+  `ModelContextControls` owns presentation.
   `ModelsSettings` organizes its controls into three visual groups:
 
   **DEFAULT MODEL** — a **Chat model** row (`defaultModel`, `defaultEffort`) and the **Visible models**
@@ -1153,8 +1130,7 @@ a project picker, the prompt hero, and the reused
   (`agent-review-toggle`, `agent-review-row`, a switch over `store.agentReviewEnabled` →
   `settings.update { agentReviewEnabled }`) — off withholds the worker's in-session `request_review` tool
   so review happens only via the Review button (the host live-toggles the tool's active set on it, see
-  `submodule-server-host-plan-review`); the row is hidden below `AGENT_REVIEW_SETTING_PROTOCOL_VERSION`
-  (v68), where a host could store the field while still registering the tool. And an **auto-fix toggle** (`review-autofix-toggle`,
+  `submodule-server-host-plan-review`). And an **auto-fix toggle** (`review-autofix-toggle`,
   `review-autofix-row`, a switch over `store.reviewAutoFix` → `settings.update { reviewAutoFix }`) — off
   means a `request_changes` verdict records findings and waits (the host gates its auto-fix cycle on it,
   see `submodule-server-todos`).
@@ -1162,8 +1138,7 @@ a project picker, the prompt hero, and the reused
   **GPT CONTEXT WINDOW** — the `ModelContextSettings` block described above.
 
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
-  **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
-  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in three groups. Its description
+  **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`) is one page in three groups. Its description
   carries the page's only statement about chats — "Changes apply to open chats when their current turn
   ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
   pending. **Built into ThinkRail** is the host-registry catalog as before: `extension.list` each time the
@@ -1175,12 +1150,9 @@ a project picker, the prompt hero, and the reused
   render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
   `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
   declared default, disabled while the extension is off, and written one key at a time through
-  `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
-  while `supportsExtensionSettings(protocolVersion)` holds. **Installed** and **pi built-in**
+  `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear whenever the extension declares them. **Installed** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
-  **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
-  `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
-  alone with its former description, no Install button and no package request — and list
+  **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) list
   `packages.list` for the active workspace (user scope alone without one) through **one** request path
   (`listPackages`, generation-guarded so a slow older response never overwrites a newer one), re-run on
   mount, on a workspace change and on the store's `packagesVersion` (the `packages.changed` push, which
@@ -1243,8 +1215,7 @@ a project picker, the prompt hero, and the reused
   offered only with an active workspace whose project is pi-trusted,
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
-  **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
-  `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
+  **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`) edits the stored host environment
   ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and
   ordered name/value rows whose values are masked until revealed per row. It fetches `environment.get` on
   mount into section-local state — never a store slice, because values may be secrets — and keeps an
@@ -1424,13 +1395,8 @@ a project picker, the prompt hero, and the reused
   session — the subagent's events are hidden; a post-ack failure lands via the `review.failed` broadcast
   (`useChatTodos` raises it as an error toast, filtered to the owning `sessionId` and deduped across split
   views by the toast body).
-  **Plan-review STATE is always derived from the plan; only the ACTIONS are host-version-gated on
-  `transport.supportsPlanReview` (v67).** `reviewables`/`unsettledReviewables`/`planReady` come from
-  `TodoItem.review` regardless of host version — gating them to empty would let `planReady` read ship-ready
-  over an unreviewed step. Against an older host that serves no `todo.startReview`/`reviewAll`, `PlanPane`
-  only disables the mutating affordances (per-row `Check it`, both `Check All` triggers), so an
-  independently-shipped newer client never *calls* a capability the host cannot honour while still reflecting
-  the review state the host does report.
+  **Plan-review STATE is derived from the plan.** `reviewables`/`unsettledReviewables`/`planReady` come from
+  `TodoItem.review`, so `planReady` cannot read ship-ready over an unreviewed step.
   Row controls (`plan-item-toggle`, the change-set toggle, the sha chip, the review slot, `FileRow`)
   wear `min-h-8` — the dense metadata rows stay tappable on touch. `planView.changeSetCounts` is the
   one count/stat derivation (paths → count only; commit → `changeSetStat`), shared by the row's meta
@@ -1511,9 +1477,9 @@ own section. The kebab menu (`plan-menu`, a
   on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
   `PUSH_AUTH_FAILED` — whose Try again re-submits the LAST edited title/body (kept in a ref), never
   a re-rendered draft. The header button is primary-filled when the plan is
-  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (on v78 the
-  host-kept snapshot owns identity/state and a matching `workspace.openReview` answer overlays live details;
-  older hosts use the lookup alone, all through panels-owned `resolveBranchReview` so shell and Plan cannot
+  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (the
+  host-kept snapshot owns identity/state and a matching `workspace.openReview` answer overlays live details,
+  all through panels-owned `resolveBranchReview` so shell and Plan cannot
   disagree) the label flips to
   **Push updates**
   and the button **bypasses the compose dialog entirely** — pressing it (or the next-action `push`
@@ -1539,8 +1505,7 @@ own section. The kebab menu (`plan-menu`, a
   `--force-with-lease` baseline — so inferring a force-push from divergence could silently delete another
   checkout's work. A genuine rewrite stays an explicit terminal action the app never initiates nor hands a
   loaded command for. `behind` is trusted only on a fresh lookup (the host fetches origin then; see
-  [[submodule-server-git]]); the field is additive and backward-compatible (an older host omits it → prior
-  behavior). Divergence logic is unit-covered at `countPushDivergence`; the diverged UI state isn't exercised
+  [[submodule-server-git]]); the field is additive. Divergence logic is unit-covered at `countPushDivergence`; the diverged UI state isn't exercised
   by the browser E2E harness, which can't fabricate a detected open PR (real `gh` lookup). Also a **`PR #N` chip**
   (`plan-pr-chip`) links out when the URL is known — which is now every read, since `workspace.openReview`
   carries the review's own `url` ([[submodule-server-branch-review]]); the keyed state prefers it and falls
@@ -1682,14 +1647,13 @@ own section. The kebab menu (`plan-menu`, a
 - **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**
   `useBranchStatus(workspace, status)` (the keyed `branchStatusState`, request
   generation, `noteOpenReview`, focus/fs/reconnect freshness rules above carry over unchanged) reads
-  `workspace.branchStatus` on a v87 host and falls back to `workspace.openReview` below it. It counts as
-  connected only once the welcome has named the protocol, so a reconnect never asks the old method of a
-  new host. It exposes the lookup's review — callers resolve it against the snapshot with
-  `resolveBranchReview` — with v87's ahead/behind folded onto it, plus the review-free `BranchFacts`.
+  `workspace.branchStatus`. It counts as
+  connected only once a host is welcomed. It exposes the lookup's review — callers resolve it against the snapshot with
+  `resolveBranchReview` — with its ahead/behind folded onto it, plus the review-free `BranchFacts`.
   `shipActions(t, context)` is the pure derivation of each segment's `{ primary, secondary }` (labels
   rendered with the caller's `useT()` translator) —
   remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
-  disabled Merge-locally stub / Settle; on a v88 host Fix with agent / Ready / Merge PR for an open GitHub
+  disabled Merge-locally stub / Settle; Fix with agent / Ready / Merge PR for an open GitHub
   PR and Reopen / Delete remote branch after it) — unit-tested over the full scenario table, as are the
   agent prompt texts it builds (`fixChecksPrompt`, `integratePrompt`). `useShipRunner`
   executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
@@ -2137,8 +2101,7 @@ own section. The kebab menu (`plan-menu`, a
   branch's list — and the shared **`BranchPicker`** pill for the **target branch** (`workspace.setDiffBase`;
   the panel converges on the broadcast `workspace.updated`, never optimistically). Below the two fixed rows
   the menu offers **Last turn · N files** — the newest host-recorded agent run (`store.turnsByWorkspace`
-  read through `useWorkspaceTurns`; the shell loads it per connection on hosts at
-  `TURN_CHANGES_PROTOCOL_VERSION`; disabled with "No agent turn changed files yet" until a run changed
+  read through `useWorkspaceTurns`; the shell loads it per connection; disabled with "No agent turn changed files yet" until a run changed
   something) and, when more than one run exists, an **Agent turns** list (newest first, time · files ·
   relative settle time). Choosing one sets the `turn` scope `{ id, baseTree, headTree, startedAt }`; the
   review tab and per-file tabs read both sides from the snapshots (`/blob` serves tree-qualified paths),
@@ -2311,8 +2274,7 @@ own section. The kebab menu (`plan-menu`, a
   PDF, HTML, Pierre virtualization) are owned by [[module-resource-renderers]]; the panes only dispatch,
   persist view state, own the unplaced strip, and supply `hunkActions`.
 
-  Mutable scopes (`branch`, `uncommitted`, `pinned`) receive `hunkActions` only after the current welcome
-  advertises `CHANGE_MUTATIONS_PROTOCOL_VERSION` and the diff metadata carrying both hashes has landed.
+  Mutable scopes (`branch`, `uncommitted`, `pinned`) receive `hunkActions` only after the diff metadata carrying both hashes has landed.
   Change blocks are independent of
   Pierre's hunk model: `diff@8` `structuredPatch` with zero context and the same whitespace policy produces
   the original/modified `LineSpan` pair sent to `change.revert`. Each block gets a slim annotation toolbar
@@ -2418,9 +2380,7 @@ own section. The kebab menu (`plan-menu`, a
   `uncommitted` scope and left each reader to remember a `before` check. Its review flag and the Review
   panel's active path cover both files (`tabReviewPaths`).
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
-  metadata (provisionally text before it lands — and permanently text against a host that predates
-  `RESOURCE_META_PROTOCOL_VERSION` and never sends `meta`, which is that host's own legacy surface, so no
-  protocol gate is needed for byte-only rendering), resolves `view`, and mounts the selected lazy candidate. Its Suspense fallback is `file-pane-loading`; a
+  metadata (provisionally text before it lands), resolves `view`, and mounts the selected lazy candidate. Its Suspense fallback is `file-pane-loading`; a
   preloaded implementation never shows it.
   `thinkrail/markdown` remains the higher-ranked match for `.md`/`.mdx`, so documents open in
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`

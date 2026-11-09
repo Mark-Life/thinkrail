@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { ASK_DISCUSS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { ToolInteraction } from "@thinkrail/extension-api/web";
 import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -39,7 +38,6 @@ const interaction: ToolInteraction = {
 	revealElement: noop,
 	cancelAutomaticReveal: noop,
 	focusComposer: noop,
-	hostProtocol: ASK_DISCUSS_PROTOCOL_VERSION,
 };
 
 const state = (over: Partial<QState>): QState => ({ ...emptyQState(), ...over });
@@ -50,7 +48,6 @@ const body = (question: AskUserQuestionItem, qState: QState) =>
 			question={question}
 			state={qState}
 			pageKeys
-			discussAvailable
 			primaryEnabled
 			onFocusPrimary={() => false}
 			onSelect={noop}

@@ -1,5 +1,5 @@
 import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
-import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { toast, useAppStore } from "@/store";
@@ -64,13 +64,7 @@ export function WindowsShellSettings({
 	onSelect: (shell: TerminalWindowsShell) => void;
 }) {
 	const t = useT();
-	if (
-		platform !== "win32" ||
-		protocolVersion === null ||
-		protocolVersion < WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION
-	) {
-		return null;
-	}
+	if (platform !== "win32" || protocolVersion === null) return null;
 	return (
 		<div className="pt-24">
 			<div className="flex flex-col">

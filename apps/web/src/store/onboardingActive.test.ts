@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { ONBOARDING_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { OnboardingWizardGate } from "./appStore";
 import { selectOnboardingActive } from "./selectors";
 
 const coldStart = {
-	protocolVersion: ONBOARDING_PROTOCOL_VERSION,
+	protocolVersion: PROTOCOL_VERSION,
 	onboardingWizard: "pending" as OnboardingWizardGate,
 	onboardingDismissed: false,
 	projects: [],
@@ -27,8 +27,5 @@ test("first-run prompts are free once the wizard is decided against, done, or im
 	expect(selectOnboardingActive({ ...coldStart, onboardingDismissed: true })).toBe(false);
 	expect(selectOnboardingActive({ ...coldStart, recentProjects: [{}] })).toBe(false);
 	expect(selectOnboardingActive({ ...coldStart, projects: [{}] })).toBe(false);
-	expect(
-		selectOnboardingActive({ ...coldStart, protocolVersion: ONBOARDING_PROTOCOL_VERSION - 1 }),
-	).toBe(false);
 	expect(selectOnboardingActive({ ...coldStart, protocolVersion: null })).toBe(false);
 });

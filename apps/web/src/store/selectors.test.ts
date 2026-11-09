@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { ProjectId, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
-	MODEL_PICKER_PROTOCOL_VERSION,
+	PROTOCOL_VERSION,
 	type Project,
-	SEARCH_PROTOCOL_VERSION,
 	type SessionState,
 	type SessionStateRecord,
 	type WireModel,
@@ -27,7 +26,6 @@ import {
 	selectAttentionCenterResourceCacheKey,
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
-	selectCanRenameChat,
 	selectCatalogModel,
 	selectChatAttended,
 	selectChatFirstPrompt,
@@ -38,7 +36,7 @@ import {
 	selectHistoryTarget,
 	selectHostReachable,
 	selectHostSearchAvailable,
-	selectHostSearchReady,
+	selectHostWelcomed,
 	selectKnownChatLocation,
 	selectKnownChatTitle,
 	selectLayoutResourcePlacement,
@@ -48,7 +46,6 @@ import {
 	selectProjectNeedsAttention,
 	selectReadyCompletionAck,
 	selectSkillsStale,
-	selectSupportsModelPicker,
 	selectUnnamedChatFirstPrompts,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
@@ -99,19 +96,16 @@ test("host search stays available across a reconnect, but asks only a reachable 
 		welcomeProtocolVersion,
 		welcomeGeneration: welcomeProtocolVersion === null ? 0 : 1,
 	});
-	const current = state("connected", SEARCH_PROTOCOL_VERSION, SEARCH_PROTOCOL_VERSION);
-	const blip = state("connecting", null, SEARCH_PROTOCOL_VERSION);
-	const older = state("connected", SEARCH_PROTOCOL_VERSION - 1, SEARCH_PROTOCOL_VERSION - 1);
-	expect([current, blip, older].map(selectHostSearchAvailable)).toEqual([true, true, false]);
-	expect([current, blip, older].map(selectHostReachable)).toEqual([true, false, true]);
-	expect([current, blip, older].map(selectHostSearchReady)).toEqual([true, false, false]);
+	const current = state("connected", PROTOCOL_VERSION, PROTOCOL_VERSION);
+	const blip = state("connecting", null, PROTOCOL_VERSION);
+	expect([current, blip].map(selectHostSearchAvailable)).toEqual([true, true]);
+	expect([current, blip].map(selectHostReachable)).toEqual([true, false]);
 	expect(selectHostReachable(state("connected", null, null))).toBe(false);
 });
 
-test("chat rename capability follows the host protocol snapshot", () => {
-	expect(selectCanRenameChat({ protocolVersion: 66 })).toBe(true);
-	expect(selectCanRenameChat({ protocolVersion: 65 })).toBe(false);
-	expect(selectCanRenameChat({ protocolVersion: null })).toBe(false);
+test("a host is welcomed once its welcome at this protocol version installed", () => {
+	expect(selectHostWelcomed({ protocolVersion: PROTOCOL_VERSION })).toBe(true);
+	expect(selectHostWelcomed({ protocolVersion: null })).toBe(false);
 });
 
 test("normalized rail flags keep attention binary and working orthogonal", () => {
@@ -871,18 +865,6 @@ test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", (
 	expect(selectAgentReviewCommentCount(state, testWorkspaceId("w1"))).toBe(2);
 	expect(selectAgentReviewCommentCount(state, testWorkspaceId("missing"))).toBe(0);
 	expect(selectAgentReviewCommentCount(state, null)).toBe(0);
-});
-
-describe("selectSupportsModelPicker", () => {
-	test("requires a connected host at or above the picker protocol", () => {
-		expect(selectSupportsModelPicker({ protocolVersion: null })).toBe(false);
-		expect(selectSupportsModelPicker({ protocolVersion: MODEL_PICKER_PROTOCOL_VERSION - 1 })).toBe(
-			false,
-		);
-		expect(selectSupportsModelPicker({ protocolVersion: MODEL_PICKER_PROTOCOL_VERSION })).toBe(
-			true,
-		);
-	});
 });
 
 describe("file change signal", () => {

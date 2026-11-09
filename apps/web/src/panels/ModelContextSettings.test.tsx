@@ -1,8 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
-	type ModelContextSetting,
-} from "@thinkrail/contracts";
+import { type ModelContextSetting, PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ModelContextControls } from "./ModelContextSettings";
 
@@ -15,7 +12,7 @@ const setting: ModelContextSetting = {
 };
 
 function render({
-	protocolVersion = CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	protocolVersion = PROTOCOL_VERSION,
 	settings = [setting],
 	pending = false,
 	failed = false,
@@ -38,7 +35,6 @@ function render({
 }
 
 test("old and unknown hosts do not offer context controls", () => {
-	expect(render({ protocolVersion: CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION - 1 })).toBe("");
 	expect(render({ protocolVersion: null })).toBe("");
 });
 

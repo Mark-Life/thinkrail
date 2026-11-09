@@ -1,5 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
-import { selectAnalyticsConsentSupported, toast, useAppStore } from "@/store";
+import { selectHostWelcomed, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { AnalyticsDescription, AnalyticsPreferences } from "./AnalyticsPreferences";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
@@ -8,7 +8,7 @@ import { useAnalyticsConsent } from "./useAnalyticsConsent";
 
 export function PrivacySettings() {
 	const t = useT();
-	const supported = useAppStore(selectAnalyticsConsentSupported);
+	const supported = useAppStore(selectHostWelcomed);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	if (protocolVersion === null) {
 		return (

@@ -15,7 +15,7 @@ segments — **Project · Workspace · Branch · from base · Remote · Pull req
 controls for switching project or workspace, acting on the workspace, reading or retargeting the
 branch, and taking the branch's **next delivery step** (publish, push, open a PR, sync, fix checks, mark
 ready, merge, settle). It renders
-what the store and `workspace.branchStatus` (older hosts: `workspace.openReview`) already report and runs
+what the store and `workspace.branchStatus` already report and runs
 actions through the panels-owned ship runner; it owns no host state.
 
 ## Boundary
@@ -89,15 +89,14 @@ actions through the panels-owned ship runner; it owns no host state.
   serves "go back to what I was just in" — with `RunningIcon` while an agent works, then a
   **`Settled · N ›`** submenu listing the shelf rows with their reason chips — the same
   `selectWorkspacePartition` and shared `useNow` clock the rail renders, so the menu, active `· settled`
-  caption, and rail never disagree as the idle boundary passes; below the settled protocol it instead
-  preserves the host's raw legacy order and omits every shelf affordance. The list loads
+  caption, and rail never disagree as the idle boundary passes. The list loads
   on first open when the tree has not) and *New workspace* with the `Mod+N` label, which opens the shell-owned
   dialog. While the active workspace is settled the caption reads **`Workspace · settled`** (the caption-
   fragment grammar `Branch · from base` already uses, in the warning tone), so a parked workspace you opened
   announces itself without a banner. Rename replaces the pill with the
   chrome-less inline input used elsewhere and runs on the tree's shared `useInlineRename` controller:
-  Enter/blur commit, Escape cancels, unchanged or blank never requests, and a commit made while the socket's
-  rename capability is unknown stays pending in the editor until a capable welcome restores it. The dispatch
+  Enter/blur commit, Escape cancels, unchanged or blank never requests, and a commit made before a host is
+  welcomed stays pending in the editor until the welcome. The dispatch
   is bound to the workspace the edit started on, and because this segment is one persistent instance (the
   tree's rows are keyed per workspace), activating another workspace while the editor is open abandons the
   edit — pending offline commit included — rather than letting a later welcome rename the newly active
@@ -109,9 +108,8 @@ actions through the panels-owned ship runner; it owns no host state.
   would pop the copy tooltip) so one Tab reaches the actions: branch (copy → success toast), *Based on* (hidden for
   user-owned workspaces, whose caption is plain "Branch"), *Compare to* (the Changes panel's `BranchPicker`
   bound to `workspace.setDiffBase`, so the two controls can never disagree), *Remote* (`n commits to push ·
-  n commits behind origin`, "In sync with origin", "Not published", or "No origin remote" — on a pre-v87
-  host only alongside a review), and — with a review — the PR/MR row with its link.
-- **Remote** (v87 `workspace.branchStatus`) renders for every workspace, including Default on its base.
+  n commits behind origin`, "In sync with origin", "Not published", or "No origin remote"), and — with a review — the PR/MR row with its link.
+- **Remote** (`workspace.branchStatus`) renders for every workspace, including Default on its base.
   Its value reads *No remote* (no `origin`), *Unreachable* (a split origin's push repository couldn't be
   read — no action offered), *Not published* (origin lacks the branch), *In sync*, or the
   ↑N warning / ↓N info chips. Its next action is the `shipActions` remote arm: **Publish** (unpublished
@@ -124,7 +122,7 @@ actions through the panels-owned ship runner; it owns no host state.
   confirms, naming the shared branch, and only then sends `confirmBase`. A topbar push never rewrites the PR
   description — the Plan pane's *Push updates* still refreshes it from the plan. A Publish/Push action
   replaces the value; Sync sits beside the chips.
-- **Pull request** (v87) renders for every workspace. Without a review its value is — on a branch that is
+- **Pull request** renders for every workspace. Without a review its value is — on a branch that is
   its base and *No PR* / *No MR* otherwise, giving way to the primary action when there is one; its split
   button carries the `shipActions` review arm: **Open
   PR** (commits ahead of the base, GitHub origin — the shared compose dialog; without a usable `gh` the
@@ -151,18 +149,12 @@ actions through the panels-owned ship runner; it owns no host state.
   refresh (push, Open PR, Ready, …) also owes the key three **discovery** polls in the shared
   `branchStatusState`, whichever surface ran it: GitHub creates a new head's check suites after the push
   returns, so the first read after an action usually shows no pending checks yet.
-- On a pre-v87 host the review-only rule holds: **Remote** renders only while `unpushedCommits` (warning
-  chip) or `behindCommits` (info chip) is non-zero and opens the same card. Both counts arrive on
-  `OpenBranchReview`, so Remote (and the card's *Remote* row) can appear only alongside a review — a branch
-  without one shows no remote state, not "in sync".
-  **Pull request** is the `openReviewLabel` chip — success while the review is open, **info** reading
-  *Merged #N* and **neutral** reading *Closed #N* once `OpenBranchReview.state` says so (a pre-v78 host
-  omits `state` and the chip stays the open form) — a link when the provider reported a URL. Remote chips
-  render only for an open review; divergence against a merged branch is noise. On v78 the host-kept
+- **Pull request** is the `openReviewLabel` chip — success while the review is open, **info** reading
+  *Merged #N* and **neutral** reading *Closed #N* once `OpenBranchReview.state` says so — a link when the provider reported a URL. Remote chips
+  render only for an open review; divergence against a merged branch is noise. The host-kept
   `workspace.review` snapshot is authoritative for review presence/identity/state; a matching fresh
   `workspace.openReview` answer overlays only URL and divergence details. Thus a merged/cleared push cannot
   be masked by a stale hook cache, while a `gh` hiccup never blanks a chip the shelf still acts on. Without
   matching live details the PR row remains but the Remote summary hides — absent lookup-only counts mean
-  unknown, never "In sync with origin." Pre-v78 hosts use the lookup alone and ignore rollback-stale snapshot
-  fields. On v87 the same resolution runs over `workspace.branchStatus.review`, and the remote counts come
-  from `BranchStatus` itself, so they no longer depend on a review.
+  unknown, never "In sync with origin." The same resolution runs over `workspace.branchStatus.review`, and the remote counts come
+  from `BranchStatus` itself, so they do not depend on a review.
