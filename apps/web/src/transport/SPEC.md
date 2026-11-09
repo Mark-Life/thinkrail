@@ -137,7 +137,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   it is also where a read takes a **`sessionWatch` lease** before the request is sent, see below).
 - **`sessionWatch.ts`** keeps the host's per-client `pi.event` set in step with the store, from a
   `SESSION_TOPICS_PROTOCOL_VERSION` (v108) host. The desired set is the keys of `s.sessions` (every chat
-  runtime) plus open read leases. One store subscription, wired once at init, sends the difference against
+  runtime) plus open leases: a transcript read, or `leaseSessionWatch(sessionId)` held by a
+  runtime-free listener such as the plan auto-summary. One store subscription, wired once at init, sends the difference against
   what it already sent: new ids go out as `session.watch`, dropped ids as `session.unwatch`. A read
   takes its lease before `session.getMessages` is queued, so the watch frame precedes the read on the same
   socket and the host subscribes before it takes the snapshot. Until this connection's `server.welcome`
@@ -191,7 +192,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
-  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`, `leaseSessionWatch`,
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below

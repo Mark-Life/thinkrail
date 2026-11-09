@@ -19,6 +19,7 @@ export {
 	forgetInAppSurvey,
 	getTransport,
 	initTransport,
+	leaseSessionWatch,
 	loadInAppSurvey,
 	respondToTool,
 	runHostUpdate,
