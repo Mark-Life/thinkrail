@@ -24,7 +24,7 @@ never grants control: nothing here is live authority.
 - **Public surface (barrel):** `recordResource`, `finishedResources`, `pageResources`,
   `archivedCommandOutput`, `removeWorkspaceResourceHistory`, `resourceHistoryRoot`, and the
   `ResourceHistoryScope` / `ArchivedOutput` types.
-- **Allowed deps:** `pi-schema`, `contracts` (the resource record vocabulary and ordering), `persistence` (`dataDir`),
+- **Allowed deps:** `pi-schema`, `@thinkrail/shared/errnoCode`, `contracts` (the resource record vocabulary and ordering), `persistence` (`dataDir`),
   `log`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `agent` or any live owner, pi, sessions or transcripts; deciding liveness itself (the caller
   passes the ids its owners still report); stopping or reading live work.

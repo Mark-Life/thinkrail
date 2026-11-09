@@ -13,6 +13,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { isOverrideEntry } from "./config";
 import { isJsonObject, isMcpFile, type McpFile } from "./schemas";
 
@@ -24,7 +25,7 @@ function lstatOrNull(path: string): Stats | null {
 	try {
 		return lstatSync(path);
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+		if (hasErrno(error, "ENOENT")) return null;
 		throw error;
 	}
 }

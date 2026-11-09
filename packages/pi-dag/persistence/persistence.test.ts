@@ -22,7 +22,7 @@ import { join, parse } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { canonicalJson, DagError, type DagFailureCode, LIMITS } from "../domain/index.ts";
-import { canonicalRoot, directory, syncDirectory } from "./files.ts";
+import { canonicalRoot, directory, hasCode, syncDirectory } from "./files.ts";
 import { snapshot } from "./fixtures.ts";
 import { createDagStore } from "./index.ts";
 
@@ -624,4 +624,12 @@ describe("containment and failure handling", () => {
 			await lease.release();
 		},
 	);
+});
+
+test("hasCode matches listed codes and refuses a misspelled one at compile time", () => {
+	const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
+	expect(hasCode(missing, "EEXIST", "ENOENT")).toBe(true);
+	expect(hasCode(missing, "EEXIST")).toBe(false);
+	// @ts-expect-error "ENOENTT" is not an errno code pi-dag checks
+	expect(hasCode(missing, "ENOENTT")).toBe(false);
 });

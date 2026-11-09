@@ -517,7 +517,7 @@ tolerates an error reply still cannot hide a mismatch. Artifact hosts do not set
   resize and hide the auxiliary stacks.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
   exports, CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
-  retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
+  retrying teardown and `errnoCode` helpers, git, Chromium, and Playwright. Standalone native/installer smoke and shared
   artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond

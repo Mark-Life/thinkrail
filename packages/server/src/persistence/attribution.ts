@@ -9,8 +9,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { compile, lit, obj } from "@earendil-works/pi-schema";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { type AcquisitionRecord, parseAcquisitionRecord } from "./attributionProtocol";
-import { hasErrorCode } from "./stateFile";
 
 const FILE_NAME = "attribution.json";
 
@@ -71,7 +71,7 @@ export function claimBrowserAttributionAttemptIn(directory: string): boolean {
 		});
 		return true;
 	} catch (error) {
-		if (hasErrorCode(error, "EEXIST")) return false;
+		if (hasErrno(error, "EEXIST")) return false;
 		throw error;
 	}
 }
