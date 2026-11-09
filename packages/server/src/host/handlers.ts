@@ -513,6 +513,7 @@ async function sendToFileChat(
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
 	capture: AdditionalAnalyticsCapture | null,
+	sender: string,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
@@ -522,6 +523,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		await markCommentsSent(workspaceId, ids, existing);
+		watchSessions(sender, [existing]);
 		fireReviewPrompt(workspaceId, comments, existing, pkg, capture, followUpSession);
 		return {
 			sessionId: existing,
@@ -548,6 +550,7 @@ async function sendToFileChat(
 		model: defaults.model ? created.model : null,
 	});
 	await markCommentsSent(workspaceId, ids, created.sessionId);
+	watchSessions(sender, [created.sessionId]);
 	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg, capture);
 	return { ...created, reused: false };
 }
@@ -1549,19 +1552,25 @@ const handlers: WsHandlers = {
 			return { ok: true } as const;
 		});
 	},
-	"review.sendComment": (p) => {
+	"review.sendComment": (p, ctx) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p, capture),
+			sendToFileChat(
+				p.workspaceId,
+				await sendableComments(p.workspaceId, [p.id]),
+				p,
+				capture,
+				ctx.clientKey,
+			),
 		);
 	},
-	"review.sendBatch": (p) => {
+	"review.sendBatch": (p, ctx) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const sessions: ReviewSendResult[] = [];
 			for (const group of reviewSendGroups(comments, p.sessionId)) {
-				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture));
+				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture, ctx.clientKey));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
 			return { sessions };

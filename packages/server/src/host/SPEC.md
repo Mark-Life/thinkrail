@@ -658,7 +658,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   v108 client streams, kept beside the socket registry on the terminal pattern, because a handler has a
   `clientKey` but no socket. `session.watch` adds ids and `session.unwatch` removes them (validated pi
   ids, at most `SESSION_WATCH_MAX_IDS`). Both change the map synchronously, before any `await`, and then
-  subscribe or unsubscribe the client's current socket through the lookup `server.ts` injects. The host
+  subscribe or unsubscribe the client's current socket through the lookup `server.ts` injects. That
+  lookup hides a socket below v108, which already holds the global topic and would otherwise get each frame
+  twice. The host
   starts frame N's handler before it reads frame N+1, so a `session.watch` followed by
   `session.getMessages` is subscribed before the snapshot is taken. Bun topics belong to one socket and a
   replayed request does not re-run its handler, so `open` re-applies the client's whole set; the map is

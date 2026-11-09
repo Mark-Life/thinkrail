@@ -12,7 +12,7 @@ async function sourceFiles(): Promise<string[]> {
 	return files;
 }
 
-test("every channel the host broadcasts is one every socket subscribes to at open", async () => {
+test("every channel the host broadcasts is one a socket subscribes to at open", async () => {
 	const published = new Set<string>();
 	for (const file of await sourceFiles()) {
 		for (const match of readFileSync(file, "utf8").matchAll(/\.publish\(\s*WS_CHANNELS\.(\w+)/g)) {
@@ -28,4 +28,13 @@ test("every channel the host broadcasts is one every socket subscribes to at ope
 	);
 	expect(published.size).toBeGreaterThan(10);
 	expect([...published].filter((channel) => !subscribed.has(channel))).toEqual([]);
+});
+
+test("pi.event is the one channel gated by protocol, with per-session topics beside it", () => {
+	const server = readFileSync(join(root, "host/server.ts"), "utf8");
+	expect(server).toMatch(
+		/protocolVersion < SESSION_TOPICS_PROTOCOL_VERSION\)\s*ws\.subscribe\(WS_CHANNELS\.piEvent\)/,
+	);
+	expect(server).toContain("server.publish(sessionTopic(payload.sessionId), frame)");
+	expect(server).toContain("applySessionWatches(ws.data.clientKey, ws)");
 });

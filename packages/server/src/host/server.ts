@@ -19,6 +19,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	SESSION_TOPICS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
 	USER_FONTS_ROUTE,
@@ -197,6 +198,13 @@ import {
 import { runObservation } from "./runAnalytics";
 import { hostSearch } from "./search";
 import {
+	applySessionWatches,
+	dropSessionWatches,
+	forgetWatchedSession,
+	sessionTopic,
+	setSessionWatchSockets,
+} from "./sessionWatch";
+import {
 	REVIEW_REFRESH_INTERVAL_MS,
 	refreshOpenProjectReviews,
 	stampSessionActivity,
@@ -371,6 +379,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					return;
 				}
 				clearTerminalClient(clientKey);
+				dropSessionWatches(clientKey);
 				releaseInvitation(clientKey);
 				cancelMcpProbesOwnedBy(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
@@ -432,7 +441,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					clearTimeout(pendingReap);
 					reapTimers.delete(ws.data.clientKey);
 				}
-				ws.subscribe(WS_CHANNELS.piEvent);
+				if (ws.data.protocolVersion < SESSION_TOPICS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.piEvent);
+				else applySessionWatches(ws.data.clientKey, ws);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
@@ -683,6 +694,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdateActive = false;
 		clearHostUpdateTimer();
 	};
+
+	setSessionWatchSockets((clientKey) => {
+		const ws = sockets.get(clientKey);
+		return ws && ws.data.protocolVersion >= SESSION_TOPICS_PROTOCOL_VERSION ? ws : undefined;
+	});
 
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
@@ -959,6 +975,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
+		forgetWatchedSession(payload.sessionId);
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
 		server.publish(
@@ -1011,10 +1028,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
-		server.publish(
-			WS_CHANNELS.piEvent,
-			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
-		);
+		const frame = JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload });
+		server.publish(WS_CHANNELS.piEvent, frame);
+		server.publish(sessionTopic(payload.sessionId), frame);
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			const observeCompletion = taskObservation.toolFinished(payload.sessionId, payload.event);
@@ -1193,6 +1209,7 @@ function restoreSeamDefaults(): void {
 	setSessionCreatedPublisher(() => {});
 	setSessionStatePublisher(() => {});
 	setSessionDeletedPublisher(() => {});
+	setSessionWatchSockets(null);
 	setMcpLoginPublisher(() => {});
 	setMcpStatusPublisher(() => {});
 	setSessionResourcesPublisher(() => {});

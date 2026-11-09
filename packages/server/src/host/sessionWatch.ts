@@ -6,15 +6,18 @@ interface TopicSocket {
 	unsubscribe(topic: string): void;
 }
 
+type SocketLookup = (clientKey: string) => TopicSocket | undefined;
+
 const watches = new Map<string, Set<string>>();
-let socketFor: (clientKey: string) => TopicSocket | undefined = () => undefined;
+let socketFor: SocketLookup = () => undefined;
 
 export function sessionTopic(sessionId: string): string {
 	return `pi.event:${sessionId}`;
 }
 
-export function setSessionWatchSockets(lookup: (clientKey: string) => TopicSocket | undefined) {
-	socketFor = lookup;
+export function setSessionWatchSockets(lookup: SocketLookup | null) {
+	watches.clear();
+	socketFor = lookup ?? (() => undefined);
 }
 
 export function sessionWatchParams(params: unknown): WsParams<"session.watch"> {
