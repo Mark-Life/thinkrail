@@ -1,7 +1,16 @@
 import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import {
+	type CSSProperties,
+	type ReactNode,
+	type Ref,
+	Suspense,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useState,
+} from "react";
 import {
 	ResourceEnvironmentProvider,
 	useResourceEnvironment,
@@ -17,6 +26,12 @@ import {
 } from "../registry";
 import { GuardedRendererDiff } from "./GuardedRendererDiff";
 import { surfaceLineCount } from "./largeDiff";
+import {
+	forgetNaturalHeight,
+	naturalHeightKey,
+	rememberedNaturalHeight,
+	rememberNaturalHeight,
+} from "./naturalHeights";
 import { type RendererLayout, RendererToggles } from "./RendererToggles";
 import { RendererView, useRendererSelection } from "./rendererMount";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
@@ -44,6 +59,7 @@ export interface ResourcePreviewProps {
 	actions?: ReactNode;
 	className?: string | undefined;
 	compact?: boolean | undefined;
+	fitContent?: boolean | undefined;
 }
 
 interface ResolvedProps extends ResourcePreviewProps {
@@ -73,6 +89,79 @@ function implementationViewState(
 }
 
 const loading = <LoadingRegion rows={8} className="h-full p-12" />;
+
+const HELD_HEIGHT = "h-[var(--resource-preview-height)]";
+
+function heldHeightStyle(height: number | undefined): CSSProperties | undefined {
+	return height === undefined
+		? undefined
+		: ({ "--resource-preview-height": `${height}px` } as CSSProperties);
+}
+
+function LoadingFrame({
+	className,
+	heightKey,
+}: {
+	className: string | undefined;
+	heightKey: string | null;
+}) {
+	const [height] = useState(() =>
+		heightKey === null ? undefined : rememberedNaturalHeight(heightKey),
+	);
+	return (
+		<div
+			className={cn(className, height !== undefined && HELD_HEIGHT)}
+			style={heldHeightStyle(height)}
+		>
+			{loading}
+		</div>
+	);
+}
+
+function useNaturalFrame({
+	fit,
+	heightKey,
+	implementationKey,
+	hashes,
+}: {
+	fit: boolean;
+	heightKey: string;
+	implementationKey: string;
+	hashes: readonly (string | null)[];
+}) {
+	const stamp =
+		fit && !hashes.includes(null) ? [implementationKey, ...hashes].join("\u0000") : null;
+	const [naturalKey, setNaturalKey] = useState<string | null>(null);
+	const [held, setHeld] = useState(() => {
+		const height = stamp === null ? undefined : rememberedNaturalHeight(heightKey, stamp);
+		return height === undefined ? null : { stamp, height };
+	});
+	const [frame, setFrame] = useState<HTMLDivElement | null>(null);
+	const natural = fit && naturalKey === implementationKey;
+
+	useLayoutEffect(() => {
+		if (!frame || !natural || stamp === null) return;
+		const remember = () => {
+			const { height } = frame.getBoundingClientRect();
+			if (height > 0) rememberNaturalHeight(heightKey, stamp, height);
+		};
+		remember();
+		const observer = new ResizeObserver(remember);
+		observer.observe(frame);
+		return () => observer.disconnect();
+	}, [frame, natural, heightKey, stamp]);
+
+	return {
+		natural,
+		heldHeight: !natural && held?.stamp === stamp ? held.height : undefined,
+		frameRef: setFrame,
+		onNaturalHeight: (next: boolean) => {
+			if (next) setHeld(null);
+			else if (natural) forgetNaturalHeight(heightKey);
+			setNaturalKey(next ? implementationKey : null);
+		},
+	};
+}
 
 function useWorkspaceFile(workspaceId: string, path: string | undefined): LoadedFile {
 	const { readFile, subscribeFileChanges, bytesUrl } = useResourceHost();
@@ -150,7 +239,12 @@ function ScopedResourcePreview(
 		);
 	}
 	if (modified.status !== "ready" || (before !== undefined && original.status !== "ready")) {
-		return <div className={props.className}>{loading}</div>;
+		return (
+			<LoadingFrame
+				className={props.className}
+				heightKey={props.fitContent === true ? naturalHeightKey(workspaceId, path, before) : null}
+			/>
+		);
 	}
 	return before !== undefined && original.status === "ready" ? (
 		<PreviewDiff {...resolved} before={before} original={original} modified={modified} />
@@ -179,6 +273,9 @@ function StaleNotice({ files }: { files: readonly { path: string; file: ReadyFil
 function PreviewFrame({
 	testid,
 	className,
+	natural = false,
+	heldHeight,
+	frameRef,
 	toolbar,
 	notice,
 	strip,
@@ -186,6 +283,9 @@ function PreviewFrame({
 }: {
 	testid: string;
 	className: string | undefined;
+	natural?: boolean;
+	heldHeight?: number | undefined;
+	frameRef?: Ref<HTMLDivElement>;
 	toolbar: ReactNode;
 	notice: ReactNode;
 	strip: ReactNode;
@@ -193,13 +293,21 @@ function PreviewFrame({
 }) {
 	return (
 		<div
+			ref={frameRef}
 			data-testid={testid}
-			className={cn("flex min-h-0 flex-col overflow-hidden bg-container-workspace-bg", className)}
+			data-natural-height={natural || undefined}
+			className={cn(
+				"flex min-h-0 flex-col overflow-hidden bg-container-workspace-bg",
+				className,
+				heldHeight !== undefined && HELD_HEIGHT,
+				natural && "h-auto",
+			)}
+			style={heldHeightStyle(heldHeight)}
 		>
 			{toolbar}
 			{notice}
 			{strip}
-			<div className="min-h-0 flex-1">
+			<div className={natural ? "flex-none" : "min-h-0 flex-1"}>
 				<Suspense fallback={loading}>{children}</Suspense>
 			</div>
 		</div>
@@ -270,11 +378,21 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 		useRendererSelection(resource, "view", rendererId);
 	const paths = useMemo(() => [path], [path]);
 	const reviews = useMemo(() => [review], [review]);
+	const fit = props.fitContent === true;
+	const { natural, heldHeight, frameRef, onNaturalHeight } = useNaturalFrame({
+		fit,
+		heightKey: naturalHeightKey(workspaceId, path),
+		implementationKey,
+		hashes: [file.meta.hash],
+	});
 
 	return (
 		<PreviewFrame
 			testid="resource-preview"
 			className={props.className}
+			natural={natural}
+			heldHeight={heldHeight}
+			frameRef={frameRef}
 			notice={<StaleNotice files={[{ path, file }]} />}
 			toolbar={
 				<PreviewToolbar props={props} paths={paths} candidates={candidates} renderer={renderer} />
@@ -298,6 +416,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 				content={file.content}
 				review={review}
 				onPlacedThreadIds={onPlacedThreadIds}
+				{...(fit ? { onNaturalHeight } : {})}
 				{...implementationViewState(props, implementationKey)}
 			/>
 		</PreviewFrame>
@@ -348,11 +467,21 @@ function ReviewedPreviewDiff(
 		() => surfaceLineCount(original.content, modified.content),
 		[original.content, modified.content],
 	);
+	const fit = props.fitContent === true;
+	const { natural, heldHeight, frameRef, onNaturalHeight } = useNaturalFrame({
+		fit,
+		heightKey: naturalHeightKey(workspaceId, path, before),
+		implementationKey,
+		hashes: [original.meta.hash, modified.meta.hash],
+	});
 
 	return (
 		<PreviewFrame
 			testid="resource-preview-diff"
 			className={props.className}
+			natural={natural}
+			heldHeight={heldHeight}
+			frameRef={frameRef}
 			notice={
 				<StaleNotice
 					files={[
@@ -397,6 +526,7 @@ function ReviewedPreviewDiff(
 				review={review}
 				onPlacedThreadIds={onPlacedThreadIds}
 				lineCount={lineCount}
+				{...(fit ? { onNaturalHeight } : {})}
 				{...implementationViewState(props, implementationKey)}
 			/>
 		</PreviewFrame>

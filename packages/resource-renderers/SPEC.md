@@ -51,10 +51,24 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
   Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
-  afford; the views themselves are unchanged;
+  afford; the views themselves are unchanged. Its `fitContent` flag offers the view (or diff)
+  `onNaturalHeight(natural)`; a renderer that lays out at its own height calls it with `true`, and from
+  then on (for that renderer implementation) the frame drops the caller's height and grows with the view,
+  until the renderer calls it with `false`. Views that never call it keep the caller's bounded box. A
+  natural frame's height is kept in page memory (`naturalHeights.ts`, 500 entries, oldest dropped) per
+  workspace, path and comparison base, stamped with the renderer implementation and the content hashes. A
+  later mount of the same preview holds that height while the file loads, and after that while the stamp
+  matches, until the renderer answers `true`; an answer of `false` after `true` forgets it. A virtualized
+  chat unmounts a card that scrolls away, and without the memory the card came back as the caller's 480 px
+  loading box before it was measured again: the row changed height twice (1711, 529, 1711 px with a
+  1600 px mockup), the list corrected the scroll offset for the first change only, and the transcript ended
+  1182 px away from what the reader was looking at (Chromium and WebKit). Remembering only the measured
+  content height inside the HTML view was not enough, because the file read is asynchronous and the
+  loading box comes first. The first mount of a preview still grows from the caller's box;
 - **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
   the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
-  state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
+  state), every action an explicit tab stop; nothing without a host and a workspace scope. `fitContent`
+  applies to the inline frame only; the full-screen dialog always fills its box. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
@@ -109,6 +123,10 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
+- `html?: { mode(workspaceId, path) }` — how an HTML file is previewed: `"static"` or `"themed"`
+  (`ResourceHtmlMode`, see `thinkrail/html`). The host answers because only it knows which paths are its
+  own; the package never names a host path. Without a host or without the seam every file is static.
+  `themed` runs no script from the file, so it is safe for any HTML.
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference
@@ -458,15 +476,15 @@ output uses this same sanitizer.
 The frame parses the serialized output again, and a second parse can read it differently. Under a
 foster-parented `mglyph` a `style` is an HTML raw-text element in the first parse, so the sanitizer sees
 only text, and a MathML element in the second, where that text becomes live elements (`link`, `img
-srcset`, `meta` refresh, `iframe`, handlers). So `buildHtmlPreviewDocument`
-checks the exact string the frame gets: it parses it, detaches the CSP `meta` it wrote (it must be the
-head's second child) and runs the sanitizer over it. If that pass removes anything, the output is the
+srcset`, `meta` refresh, `iframe`, handlers). So `buildHtmlPreviewDocument` and `buildThemedHtmlDocument`
+check the exact string the frame gets: they parse it, detach the CSP `meta` they wrote (it must be the
+head's second child) and run the sanitizer over it. If that pass removes anything, the output is the
 policy-only document. It is one check, not a loop of sanitize and serialize: a nested vector is clean after
 one pass and live again after two, and the frame parses once. This matters most in Firefox, which does not
 apply the `meta` CSP `img-src` to `srcset` and `imagesrcset` loads (a `link rel=preload imagesrcset` loads
 in a plain page with the same policy), so there the sanitizer is the only barrier against those requests:
-before the check a crafted mockup made real requests in Firefox 151.
-e2e runs no Firefox, so `e2e/visualize-mockups.spec.ts` pins the `mglyph`
+before the check a crafted mockup made real requests in Firefox 151, same-origin ones with the origin's
+cookies in the themed frame. e2e runs no Firefox, so `e2e/visualize-mockups.spec.ts` pins the `mglyph`
 vector by the loaded frame's DOM in Chromium and WebKit.
 
 Author markup can shadow DOM properties by name: `<img name="head">` replaces `document.head` in WebKit, and
@@ -481,15 +499,139 @@ style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; 
 'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
 It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
 only authoring candidate. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
-Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view state and adopted whenever the
+Tablet 768 / Phone 390 / Fill, default Desktop (Fill for a fitted chat card, below), persisted as `{ viewport }` view state and adopted whenever the
 caller's view state changes (`useHtmlViewport`, so a chat card follows a width chosen in its full screen): the frame renders at
 the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
 pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
-is the old reflow. Scaling is pure geometry on the wrapper — the iframe keeps `sandbox=""` and nothing
-measures the document (no `allow-same-origin`); the wrapper's box is measured in a layout effect (the package's
+is the old reflow. Scaling is pure geometry on the wrapper — a static iframe keeps `sandbox=""` and nothing
+measures its document; the wrapper's box is measured in a layout effect (the package's
 one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
 instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
 buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
+
+**Themed frame.** When the host's `html.mode(workspaceId, path)` answers `themed`, the view and each diff
+side render the same sanitized document, with the same CSP, in `sandbox="allow-same-origin"`, in every
+surface: a chat card, its full screen, a file tab, a comparison. ThinkRail answers `themed` for a path under
+the agent's mockup scratch dir (`isMockupPath`: canonical only, so `mockups/../index.html` stays static) and
+`static` everywhere else ([[module-web]] owns the rule).
+
+No script from the file and none from ThinkRail runs in a preview frame. That is what makes
+`allow-same-origin` safe: the token only lets the app page reach the frame's `contentDocument`; without
+`allow-scripts` the document cannot run code to use the shared origin, whatever markup survives the
+sanitizer. A script that a native webview injects into every frame is outside this guarantee, in the
+static frame as well: WKWebView runs a user script added with `forMainFrameOnly: false` inside a frame
+that has no `allow-scripts`, and Electrobun 2.0.5 adds its preload that way on macOS. Removing
+`electrobun-*` elements in the sanitizer and a desktop probe that fails when a preview frame sends a bridge
+message are open work. The macOS desktop app (WKWebView,
+Electrobun 2.0.5) was run for the themed frame: theme, theme switches without a reload, `@layer`, card
+heights and page zoom from 100 % to 150 % match the browser, and Electrobun's preload globals are present
+inside the frame, where no script can read them. WebView2 and WebKitGTK were not run: their space-taking
+scrollbars and `@layer` in the oldest WebKitGTK the app supports are open. The barrier is the
+`sandbox` attribute on the app's own `iframe` element, which author HTML cannot touch, where a script
+policy written inside the document could be removed by the document. **Invariant: a preview frame never
+gets `allow-scripts` together with `allow-same-origin`,** and the themed frame never gets `allow-scripts`
+at all; `HtmlFrame`'s `sandbox` prop admits only `""` and `"allow-same-origin"`, and a unit test pins the
+rendered attribute of both modes. The app page's `frame-src 'none'` ([[module-web]]) stops the frame from
+loading any network or same-origin URL, so it cannot reach a page that lacks this document's CSP.
+`about:blank` still loads; the parent leaves that blank document alone (below).
+
+`ThemedHtmlFrame` does two things through `contentDocument`, both from the app page:
+
+- **Theme.** `hostTheme.ts` collects the custom-property names declared on `:root` rules of the page's
+  stylesheets (recursing into `@layer`/`@media` groups, skipping cross-origin sheets) and on the root's
+  inline style, then resolves each through `getComputedStyle`. It does not enumerate computed styles:
+  WebKit does not list custom properties there. The result is one cascade layer,
+  `@layer thinkrail-theme { :root { color-scheme; --…: value } html { … } }`: the token rule, then a base
+  (workspace background, default text colour, interface family and size). `buildThemedHtmlDocument` puts it
+  in a `<style data-thinkrail-theme>` right after the CSP `meta`, before all author content, so the layer
+  is the first one declared and any author declaration wins, layered or not: a variable set on `html` or
+  `:root` (`--accent`, `--border`…) and every element style. Unlayered zero-specificity `:where()` rules
+  were rejected: they beat every author rule written inside an `@layer`. Every themed document gets the base,
+  also one written without the tokens, so a mockup that sets a background and no text colour, or text
+  colours and no background, can be unreadable when the app theme does not match its own colours, and its
+  `rem` sizes follow the 13 px base instead of the browser's 16 px. A declaration that contains `<` is dropped, because a style
+  element's text is serialized unescaped and `</style>` would end it. A relative
+  `<link href="thinkrail-theme.css">` is removed like every `link`, so in the app the live tokens replace
+  that file. The snapshot is an external store (`useSyncExternalStore`) refreshed on `onThemeSwap` and
+  `onFontsChange`. The `srcdoc` is rebuilt only when the source changes; on a theme or font change the
+  parent rewrites that style element's text, so the frame does not reload and keeps its state (an opened
+  `details`, a scroll position). Colours and font sizes follow live. The bundled font faces do not load in
+  the frame (`font-src data:`), so text uses the next family of the stack that the OS has.
+- **Height.** A view offered `onNaturalHeight` (the chat card's `fitContent`) observes the frame's root
+  element with a `ResizeObserver` created in the app page. A document's height can depend on the frame's
+  height (`100vh`, `height: 100%` on `html`/`body`, a `@media (height)` query), and the frame's height
+  comes from the reading, so a reading taken at the applied height can feed itself: the card grows to the
+  limit or flips between two heights on every frame. `ThemedHtmlFrame` therefore never reads at the applied
+  height. On each notification it sets the `iframe` element's inline height, reads the root at two fixed
+  heights (`HEIGHT_PROBE`: 8192 px and 100 px more, above the 1600 px limit, so a document shorter than
+  the probe has no vertical scrollbar that narrows its layout there) and once more at the height it just
+  read, then removes the inline height and restores the root's scroll offset (a tall probe resets it), all
+  in one task, so nothing is painted in between. The restore is an instant `scrollTo`: the `scrollTop`
+  setter follows the document's `scroll-behavior`, and a `smooth` document would animate back from the top
+  on every reading. `frameIndependentHeight` (`heightFollow.ts`) is the pure rule over the three readings:
+  - A reading is the root's `getBoundingClientRect().height` plus `frame.clientHeight -
+    root.clientHeight`, the height of a space-taking horizontal scrollbar, so a mockup wider than the card
+    keeps its last rows (pinned in WebKit with styled scrollbars; Windows and Linux were not run).
+  - Readings within 1 px of each other are the same height and the largest is kept. The two terms are
+    rounded in different documents, so at a fractional layout scale (browser zoom on a 1x screen, a 125 %
+    display) the third reading is often 1 px more with no scrollbar present; exact equality lost fitting
+    for about half of plain mockups at 90 % zoom. Anything further apart means the document is sized from
+    the frame (at 67 % zoom about one in ten wide mockups with a styled scrollbar still reads that way). Reading at the applied height and stopping on a repeated value was rejected: a `details`
+    that opens and closes repeats a value too.
+  - The root's vertical overflow is `hidden` (inline, `!important`) during the readings, and stays hidden
+    while the card holds the whole document (a content height up to the 1600 px limit). WebKit styles a
+    frame's scrollbars from the app page, whose `::-webkit-scrollbar` is 6 px wide and takes space; when
+    the frame shrinks to a text mockup's height, WebKit adds that scrollbar if the narrower layout would
+    overflow too, and keeps it, so the text wraps, the third reading is taller and the card fell back to
+    480 px at about half of all widths (Safari and the macOS desktop app; Chromium draws no scrollbar
+    there). A capped or frame-sized document keeps its own scrolling. Extra height was rejected: WebKit
+    keeps the scrollbar until the frame is as tall as the wrapped layout.
+  - The third reading also takes the root's `scrollHeight`, so absolutely positioned content that reaches
+    below the in-flow content counts. Only that reading can: at a probe height `scrollHeight` is the frame
+    height. A `position: fixed` layer adds to neither number, so a mockup that is only a fixed dialog still
+    gets the 120 px minimum; the agent guideline asks for normal flow or a pixel `min-height` on `body`.
+    The readings are taken only when the root's box changes, so absolutely positioned content that appears
+    after load (a panel that a `details` or `:hover` opens) changes no box and is not measured: it is cut
+    at the card's edge and scrolls inside the frame (a 380 px panel in a 120 px card, Chromium, WebKit and
+    Firefox). The guideline names this case too. A capture `toggle` listener that the parent adds on the
+    frame document was rejected: it fires in Chromium and Firefox and not in WebKit, and a `:hover` panel
+    sends no event.
+    Treating a height under the minimum as no height was rejected: a `null` reading ends following, so a
+    short mockup with a `details` would stop growing.
+  - A height at or above the probe height is accepted from the two probe readings alone. Such a document
+    has a vertical scrollbar at both probe heights and none at its own height, so with space-taking
+    scrollbars its text wraps wider in a third reading and never matches; the box clamps at 1600 px anyway.
+
+  `followHeight` (`heightFollow.ts`) is the pure rule over the
+  heights: a frame-sized reading gives the height up and ends following until the next `load`; a height
+  that changes for more than 2 s with no 250 ms pause and no width change (an endless CSS animation) ends
+  following at the tallest value of that run; a new `load` keeps the last height until the new document
+  is measured. WebKit notifies the old root's observer after the new `load`, with the probe heights as its
+  size, which reads as a frame-sized document; a notification for a root that is no longer the frame's
+  root is ignored. A height that changes with longer pauses is followed for as long as it changes. The view
+  fits only while it holds a height: it sizes the frame to it, clamps the *rendered* box (after
+  design-width scaling) to `HTML_CONTENT_HEIGHT` (120–1600 px on screen), drops its padding and calls
+  `onNaturalHeight(true)`. Without one (not measured yet, or sized from the frame) it keeps the caller's
+  bounded box and calls `onNaturalHeight(false)`; the agent guideline asks for content-sized documents. A
+  card offered fitting with no stored width defaults to Fill, so the mockup draws at the card's own width
+  and text size instead of a 1280 px layout shrunk to about half; a width the user picks still applies. A
+  document whose scaled height passes 1600 px scrolls inside the frame. Tabs, full screen, palette and
+  question previews keep filling their container and measure nothing.
+
+The parent attaches on each frame `load` and only to a document that carries the theme style. That check
+decides one case: a frame that left for `about:blank`, which `frame-src 'none'` does not block and author
+HTML reaches only through a sanitizer hole. The parent stays off the blank document, so the card keeps
+its height (WebKit still notifies the old root's observer; that root is no longer the frame's root, so the
+notification is ignored). The initial blank document (no `load` yet) and a frame Chromium
+replaced with its error page (`contentDocument` is `null`) are stopped before that check. It reads the frame's root with the `Document.prototype` getter, because `<img
+name="documentElement">` shadows the property there too, and then uses `Element` members only. It reads
+numbers, writes one style text and restores one scroll offset; it never moves a frame node into the app
+document.
+
+A diff side is themed when its own path is. A diff offered `onNaturalHeight` fits when every present side
+is themed: both frames take the taller measured height, `VisualDiff`'s `fitContent` drops its
+viewport-bounded side boxes, and it calls `onNaturalHeight(true)` while each present side holds a height.
+A diff with a static side or a frame-sized side keeps the bounded box.
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
 uses the host's `pierreTheme` (registered as `thinkrail`, CSS variables only, highlighted by `@pierre/highlights`), word-level inline changes, collapsed unchanged regions with

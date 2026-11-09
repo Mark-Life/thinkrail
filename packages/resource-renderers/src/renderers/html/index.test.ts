@@ -12,6 +12,7 @@ import { htmlRenderer } from ".";
 import { HtmlFrame } from "./HtmlFrame";
 import {
 	buildHtmlPreviewDocument,
+	buildThemedHtmlDocument,
 	HTML_PREVIEW_CSP,
 	prepareHtmlPreviewDocument,
 } from "./htmlDocument";
@@ -180,6 +181,9 @@ test("a built document is the sanitized document when it parses back with nothin
 	const sanitized = prepareHtmlPreviewDocument(hostileDocument() as unknown as Document);
 	expect(sanitized).toContain("styled");
 	expect(buildHtmlPreviewDocument(hostileSource())).toBe(sanitized);
+	expect(buildThemedHtmlDocument(hostileSource(), ":root{--accent:#123456}")).toBe(
+		prepareHtmlPreviewDocument(hostileDocument() as unknown as Document, ":root{--accent:#123456}"),
+	);
 });
 
 test("a built document that parses back with something to remove is only the policy", () => {
@@ -213,6 +217,7 @@ test("a built document that parses back with something to remove is only the pol
 		);
 		try {
 			expect(buildHtmlPreviewDocument(hostileSource()), name).toBe(policyOnly);
+			expect(buildThemedHtmlDocument(hostileSource(), ":root{}"), name).toBe(policyOnly);
 		} finally {
 			restore();
 		}
@@ -225,7 +230,7 @@ test("HTML preview CSP is exact", () => {
 	);
 });
 
-test("HTML frames carry exactly an empty sandbox capability set", () => {
+test("a static HTML frame carries exactly an empty sandbox capability set", () => {
 	const markup = renderToStaticMarkup(
 		createElement(HtmlFrame, {
 			title: "HTML preview",

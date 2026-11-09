@@ -72,7 +72,10 @@ export interface ResourceHost {
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
+	html?: { mode(workspaceId: string, path: string): ResourceHtmlMode };
 }
+
+export type ResourceHtmlMode = "static" | "themed";
 
 export interface ResourcePreferences {
 	fileLineWidth: number;

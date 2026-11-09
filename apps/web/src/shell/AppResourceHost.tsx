@@ -1,4 +1,4 @@
-import { MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
+import { isMockupPath, MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type ResourceEnvironment,
@@ -57,6 +57,7 @@ const HOST: ResourceHost = {
 		}),
 	FileReview,
 	ReviewSend,
+	html: { mode: (_workspaceId, path) => (isMockupPath(path) ? "themed" : "static") },
 };
 
 function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null): string {

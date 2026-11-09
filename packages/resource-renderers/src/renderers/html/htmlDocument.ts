@@ -26,6 +26,8 @@ const REMOVED_ATTRIBUTES = new Set([
 	"imagesrcset",
 ]);
 
+export const THEME_STYLE_ATTRIBUTE = "data-thinkrail-theme";
+
 const EMPTY_PREVIEW_DOCUMENT = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}"></head><body></body></html>`;
 
 function isDataUrl(value: string): boolean {
@@ -104,7 +106,7 @@ function previewDocument(document: Document): PreviewDocument {
 	};
 }
 
-export function prepareHtmlPreviewDocument(document: Document): string {
+export function prepareHtmlPreviewDocument(document: Document, themeCss?: string): string {
 	const { root, head, create } = previewDocument(document);
 	if (!root || !head) return EMPTY_PREVIEW_DOCUMENT;
 	sanitizeElement(root, elementName(root));
@@ -113,8 +115,19 @@ export function prepareHtmlPreviewDocument(document: Document): string {
 	const csp = create("meta");
 	csp.setAttribute("http-equiv", "Content-Security-Policy");
 	csp.setAttribute("content", HTML_PREVIEW_CSP);
-	head.prepend(charset, csp);
-	if (elementName(root) !== "html" || head.parentNode !== root || csp.parentNode !== head) {
+	const policy = [charset, csp];
+	if (themeCss !== undefined) {
+		const theme = create("style");
+		theme.setAttribute(THEME_STYLE_ATTRIBUTE, "");
+		theme.textContent = themeCss;
+		policy.push(theme);
+	}
+	head.prepend(...policy);
+	if (
+		elementName(root) !== "html" ||
+		head.parentNode !== root ||
+		policy.some((element) => element.parentNode !== head)
+	) {
 		return EMPTY_PREVIEW_DOCUMENT;
 	}
 	return `<!doctype html>${root.outerHTML}`;
@@ -132,7 +145,15 @@ function parsesBackClean(html: string): boolean {
 	return sanitizeElement(root, elementName(root)) === 0;
 }
 
-export function buildHtmlPreviewDocument(source: string): string {
-	const html = prepareHtmlPreviewDocument(parseHtml(source));
+function buildPreviewDocument(source: string, themeCss?: string): string {
+	const html = prepareHtmlPreviewDocument(parseHtml(source), themeCss);
 	return html === EMPTY_PREVIEW_DOCUMENT || parsesBackClean(html) ? html : EMPTY_PREVIEW_DOCUMENT;
+}
+
+export function buildHtmlPreviewDocument(source: string): string {
+	return buildPreviewDocument(source);
+}
+
+export function buildThemedHtmlDocument(source: string, themeCss: string): string {
+	return buildPreviewDocument(source, themeCss);
 }
