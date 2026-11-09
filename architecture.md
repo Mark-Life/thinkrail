@@ -89,10 +89,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
 3. **The wire is versioned.** `contracts` is types plus a small runtime whose one dependency is
    `@earendil-works/pi-schema`: wire schemas, wire constants, versions, the config default, and guards. A converted
    wire type derives from its schema, and the host checks its params at dispatch. Any other runtime
-   is a named exception in its spec, today the quit-confirmation rule and the search matcher (the palette's
-   ranking, kept in `contracts` so host-side search can rank with the same copy); adding one updates this
-   decision. `server.welcome` carries a
-   protocol version so an independently-shipped UI can detect host-version drift.
+   is a named exception in its spec, today the quit-confirmation rule, the search matcher (the palette's
+   ranking, kept in `contracts` so host-side search can rank with the same copy), and the client wire checks
+   (`parseEnvelope`, `pushFailure`, `resultFailure`, `protocolMismatch`, so every client reads the wire one way); adding one
+   updates this decision. `server.welcome` carries the host's protocol version: one integer, raised only for a breaking wire change. An
+   independently-shipped UI compares it with its own. Equal works. Otherwise the UI shows a blocking prompt with Reload,
+   which gets the host's own interface. If the prompt returns, the UI is served apart from the host, and the text names the side to update and restart.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
    is keyed by backend profile so ids from one host are never interpreted against another.

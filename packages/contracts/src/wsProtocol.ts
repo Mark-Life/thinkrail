@@ -22,7 +22,6 @@ import type {
 
 export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
-export const PROTOCOL_VERSION = 108;
 export const SPEECH_PROTOCOL_VERSION = 107;
 export const SEARCH_PROTOCOL_VERSION = 106;
 export const WORKSPACE_CREATION_PROTOCOL_VERSION = 104;

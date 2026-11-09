@@ -16,6 +16,7 @@ import type {
 	PiEvent,
 	Project,
 	ProjectId,
+	ProtocolMismatch,
 	ProviderStatusReport,
 	ProviderWarning,
 	RefreshedModels,
@@ -995,6 +996,7 @@ interface AppState {
 	welcomeGeneration: number;
 	protocolVersion: number | null;
 	welcomeProtocolVersion: number | null;
+	protocolMismatch: ProtocolMismatch | null;
 	hostPlatform: HostPlatform | null;
 	hostAppVersion: string | null;
 	hostUpdate: HostUpdateNotice | null;
@@ -1152,6 +1154,7 @@ interface AppState {
 		hostAppVersion?: string,
 		speech?: SpeechStatus,
 	) => void;
+	setProtocolMismatch: (mismatch: ProtocolMismatch | null) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
@@ -2338,6 +2341,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	welcomeGeneration: 0,
 	protocolVersion: null,
 	welcomeProtocolVersion: null,
+	protocolMismatch: null,
 	hostPlatform: null,
 	hostAppVersion: null,
 	hostUpdate: null,
@@ -2674,6 +2678,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				providerStatusVersion: state.providerStatusVersion + 1,
 			};
 		}),
+	setProtocolMismatch: (protocolMismatch) => set({ protocolMismatch }),
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {

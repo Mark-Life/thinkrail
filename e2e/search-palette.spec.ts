@@ -5,8 +5,6 @@ import {
 	MATCH_TIER,
 	MAX_SEARCH_PREVIEW_BYTES,
 	MAX_SEARCH_QUERY_LENGTH,
-	SEARCH_PROTOCOL_VERSION,
-	WS_CHANNELS,
 	type WsClientMessage,
 	type WsParams,
 } from "@thinkrail/contracts";
@@ -704,43 +702,6 @@ test("the preview pane reads a file only under its cap, and a refresh after it g
 	} finally {
 		writeFileSync(notes, original);
 	}
-});
-
-test("an older host gets the local scopes only, with a notice, and never a search.query", async ({
-	page,
-}) => {
-	const hostRequests: string[] = [];
-	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
-		const server = socket.connectToServer();
-		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as { method?: string };
-			if (frame.method?.startsWith("search.")) hostRequests.push(frame.method);
-			server.send(message);
-		});
-		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				channel?: string;
-				data: { protocolVersion: number };
-			};
-			if (frame.channel === WS_CHANNELS.serverWelcome) {
-				frame.data.protocolVersion = SEARCH_PROTOCOL_VERSION - 1;
-				socket.send(JSON.stringify(frame));
-			} else socket.send(message);
-		});
-	});
-	await openFixtureProject(page);
-	await enterDefaultWorkspace(page);
-	await openPalette(page);
-	const notice = page.getByTestId("search-notice");
-	await expect(notice).toContainText("doesn't search files");
-	await expect(notice).toHaveAttribute("data-kind", "info");
-	await expect(page.locator('[data-testid="search-chip"][data-scope="files"]')).toHaveCount(0);
-	await page.clock.install();
-	await page.getByTestId("search-input").fill("/notes");
-	await expect(page.getByTestId("search-input")).toHaveValue("/notes");
-	await page.clock.runFor(1_000);
-	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toHaveCount(0);
-	expect(hostRequests).toEqual([]);
 });
 
 test("an incomplete search shows a yellow mark whose tip names each reason, on hover or tap, and Escape closes only the tip", async ({

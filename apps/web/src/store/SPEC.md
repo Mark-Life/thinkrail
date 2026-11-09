@@ -79,7 +79,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two
   monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
-  for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
+  for reconnect hydration, **`protocolMismatch`** holds the protocol version check until the next welcome replaces it
+  ([[submodule-web-transport]]), while **`welcomeGeneration`** advances only when one complete
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
   capabilities remain unavailable between sockets and until the current socket's welcome is installed;
   **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory

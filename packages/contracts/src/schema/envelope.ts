@@ -59,7 +59,7 @@ export type WsErrorCode =
 	| "NATIVE_RPC_INVALID"
 	| SpeechErrorCode;
 
-/** Any string passes: a newer host may send a code this client does not know. */
+/** Any string passes: a later build may send a code this client does not know. */
 const WireErrorCode: Schema<WsErrorCode> = { type: "string" };
 
 export const WsResponse = wireObj({

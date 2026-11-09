@@ -495,7 +495,7 @@ and goes when the file is fixed: on the open page through `settings.changed`, an
 
 ## Reply and push checks
 
-The host of `playwright.config.ts` runs with `THINKRAIL_CHECK_WS_RESULTS=1`: a reply that breaks its result schema
+The host of `playwright.config.ts` runs with `THINKRAIL_CHECK_WS_RESULTS=1` and preloads `closedWireSchemasPreload.ts`, so an unknown field counts as a mismatch: a reply that breaks its result schema
 fails that request, a push that breaks its channel schema throws at its publisher, and both land in `E2E_WS_RESULT_LOG`. `globalTeardown` fails the run on any line there, so a spec that
 tolerates an error reply still cannot hide a mismatch. Artifact hosts do not set it: they test the shipped build.
 

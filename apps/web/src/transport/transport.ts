@@ -7,11 +7,16 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	PROTOCOL_VERSION,
+	parseEnvelope,
+	pushFailure,
+	resultFailure,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
 import { RequestError, RequestTimeoutError } from "./requestError";
-import { parseEnvelope, pushFailure, resultFailure } from "./wireChecks";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 type PushHandler = (data: unknown) => void;

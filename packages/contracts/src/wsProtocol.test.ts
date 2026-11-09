@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	DEFAULT_CONFIG,
@@ -47,7 +48,6 @@ import {
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
-	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
@@ -254,10 +254,6 @@ test("voice input is pinned to v107", () => {
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
 	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
-});
-
-test("the welcome's config read notice advances the protocol to v108", () => {
-	expect(PROTOCOL_VERSION).toBe(108);
 });
 
 test("user-selectable fonts are pinned to v102", () => {
