@@ -24,6 +24,7 @@ test("session-message loads reject a response for a different workspace or sessi
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
+		leaseSessionWatch: () => () => {},
 	});
 	const params = { workspaceId: "requested-workspace", sessionId: "requested-session" };
 	await expect(requests.getSessionMessages(params)).rejects.toThrow(
@@ -84,6 +85,7 @@ test("resource loads share startup, fold the replay fallback before the baseline
 			order.push("reload");
 			return { ok: true };
 		},
+		leaseSessionWatch: () => () => {},
 	});
 
 	const creating = requests.createSession({ workspaceId: "ws1" });
@@ -140,6 +142,7 @@ test("a prewarm-started preparation never becomes a real load's baseline: the fi
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
+		leaseSessionWatch: () => () => {},
 	});
 
 	const prewarming = requests.prewarmWorkspaceSkillLoad("ws1");
@@ -192,6 +195,7 @@ test("a failed prewarm leaves the eventual session load able to retry preparatio
 			messages: [],
 		}),
 		reloadSessionResources: async () => ({ ok: true }),
+		leaseSessionWatch: () => () => {},
 	});
 
 	await expect(requests.prewarmWorkspaceSkillLoad("ws1")).rejects.toThrow("watch failed");
@@ -239,6 +243,7 @@ test("a transcript read starts the shared preparation but never waits for watche
 			};
 		},
 		reloadSessionResources: async () => ({ ok: true }),
+		leaseSessionWatch: () => () => {},
 	});
 
 	const read = await requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
@@ -250,4 +255,46 @@ test("a transcript read starts the shared preparation but never waits for watche
 	resolveReady({ startupNudge: true });
 	expect((await creating).syncedTick).toBe(6);
 	expect(order).toEqual(["watchReady", "messages", "fallback", "create"]);
+});
+
+test("a transcript read watches its session before the read and releases it once settled", async () => {
+	const order: string[] = [];
+	let finishRead: () => void = () => {};
+	const requests = createSkillLoadRequests({
+		watchReady: async () => ({ startupNudge: false }),
+		noteFsChanged: () => {},
+		workspaceTick: () => 0,
+		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
+		getSessionMessages: async ({ sessionId, workspaceId }) => {
+			order.push("read");
+			await new Promise<void>((resolve) => {
+				finishRead = resolve;
+			});
+			return {
+				summary: {
+					sessionId,
+					workspaceId,
+					title: "Chat",
+					model: null,
+					thinkingLevel: "medium",
+					isStreaming: false,
+					messageCount: 0,
+					updatedAt: 1,
+					live: true,
+				},
+				messages: [],
+			};
+		},
+		reloadSessionResources: async () => ({ ok: true }),
+		leaseSessionWatch: (sessionId) => {
+			order.push(`lease ${sessionId}`);
+			return () => order.push(`release ${sessionId}`);
+		},
+	});
+
+	const reading = requests.getSessionMessages({ workspaceId: "ws1", sessionId: "s1" });
+	expect(order).toEqual(["lease s1", "read"]);
+	finishRead();
+	await reading;
+	expect(order).toEqual(["lease s1", "read", "release s1"]);
 });

@@ -30,6 +30,7 @@ export {
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
+	supportsSessionTopics,
 	supportsSpeech,
 	supportsToolResponses,
 	supportsTurnChanges,

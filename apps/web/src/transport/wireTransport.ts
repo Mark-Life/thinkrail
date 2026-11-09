@@ -34,6 +34,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	SESSION_TOPICS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
@@ -45,6 +46,7 @@ import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
+import { createSessionWatch } from "./sessionWatch";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
@@ -71,6 +73,20 @@ export function supportsFonts(protocolVersion: number | null): boolean {
 
 export function supportsSpeech(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= SPEECH_PROTOCOL_VERSION;
+}
+
+export function supportsSessionTopics(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= SESSION_TOPICS_PROTOCOL_VERSION;
+}
+
+const sessionWatch = createSessionWatch({
+	supported: () => supportsSessionTopics(useAppStore.getState().protocolVersion),
+	runtimeIds: () => Object.keys(useAppStore.getState().sessions),
+	send: (method, sessionIds) => getTransport().request(method, { sessionIds }),
+});
+
+export function leaseSessionWatch(sessionId: string): () => void {
+	return sessionWatch.lease(sessionId);
 }
 
 export function supportsToolResponses(protocolVersion: number | null): boolean {
@@ -329,6 +345,10 @@ export function initTransport(): WsTransport {
 		},
 	);
 
+	useAppStore.subscribe((state, prev) => {
+		if (state.sessions !== prev.sessions) sessionWatch.sync();
+	});
+
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
@@ -349,6 +369,7 @@ export function initTransport(): WsTransport {
 				typeof welcome.appVersion === "string" ? welcome.appVersion : undefined,
 				welcome.speech,
 			);
+		sessionWatch.restate();
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);

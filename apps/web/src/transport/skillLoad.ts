@@ -5,7 +5,7 @@ import type {
 	WsResult,
 } from "@thinkrail/contracts";
 import { selectWorkspaceTick, useAppStore } from "../store";
-import { getTransport } from "./wireTransport";
+import { getTransport, leaseSessionWatch } from "./wireTransport";
 
 export interface SkillLoadDependencies {
 	watchReady: (workspaceId: string, prewarm: boolean) => Promise<WorkspaceWatchReadyResult>;
@@ -18,6 +18,7 @@ export interface SkillLoadDependencies {
 	reloadSessionResources: (
 		params: WsParams<"session.reloadResources">,
 	) => Promise<WsResult<"session.reloadResources">>;
+	leaseSessionWatch: (sessionId: string) => () => void;
 }
 
 export function createSkillLoadRequests(deps: SkillLoadDependencies) {
@@ -57,7 +58,8 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 		async getSessionMessages(params: WsParams<"session.getMessages">) {
 			const syncedTick = deps.workspaceTick(params.workspaceId);
 			prepare(params.workspaceId, false).catch(() => {});
-			const result = await deps.getSessionMessages(params);
+			const release = deps.leaseSessionWatch(params.sessionId);
+			const result = await deps.getSessionMessages(params).finally(release);
 			if (
 				result.summary.workspaceId !== params.workspaceId ||
 				result.summary.sessionId !== params.sessionId
@@ -85,6 +87,7 @@ const skillLoadRequests = createSkillLoadRequests({
 	createSession: (params) => getTransport().request("session.create", params),
 	getSessionMessages: (params) => getTransport().request("session.getMessages", params),
 	reloadSessionResources: (params) => getTransport().request("session.reloadResources", params),
+	leaseSessionWatch,
 });
 
 export const prewarmWorkspaceSkillLoad = skillLoadRequests.prewarmWorkspaceSkillLoad;
