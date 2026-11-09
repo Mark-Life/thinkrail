@@ -20,6 +20,7 @@ import {
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	protocolMismatch,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
@@ -28,6 +29,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
+	welcomeFailure,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
@@ -322,6 +324,12 @@ export function initTransport(onInvalidReply?: (method: WsMethodName) => void): 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome: AnyHostWelcome = data;
 		useAppStore.getState().hideSurveyInvitation();
+		const mismatch = protocolMismatch(welcome);
+		useAppStore.getState().setProtocolMismatch(mismatch);
+		if (mismatch) {
+			console.warn(`refused the host's welcome as ${mismatch}:`, welcomeFailure(welcome));
+			return;
+		}
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(

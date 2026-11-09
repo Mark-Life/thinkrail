@@ -13,6 +13,9 @@ import { AppConfig } from "./settings";
 import { SpeechStatus } from "./speech";
 import { Ack, NoParams, wireObj } from "./wire";
 
+/** Raised only for a breaking wire change. A UI and a host must hold the same value. */
+export const PROTOCOL_VERSION = 108;
+
 export const HostPlatform = oneOf(["darwin", "linux", "win32"]);
 export type HostPlatform = Static<typeof HostPlatform>;
 
@@ -44,7 +47,11 @@ function bareObject<T>(): Schema<T> {
 	return { type: "object" };
 }
 
-/** What a client needs from a welcome of any host version. Older hosts omit later fields and send older shapes. */
+/** All a client reads from a welcome before it knows the host speaks its version. */
+export const HostWelcomeVersions = wireObj({ protocolVersion: num() });
+export type HostWelcomeVersions = Static<typeof HostWelcomeVersions>;
+
+/** What a client needs from the welcome of a host at its own version. */
 export const AnyHostWelcome = wireObj({
 	protocolVersion: num(),
 	appVersion: opt(str()),
