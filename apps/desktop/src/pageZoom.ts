@@ -1,9 +1,4 @@
-export type PageZoomAction = "in" | "out" | "reset";
-
-export type PageZoomGesture =
-	| { phase: "start" }
-	| { phase: "change"; scale: number }
-	| { phase: "end" };
+import type { PageZoomAction, PageZoomGesture } from "./rpcSchemas";
 
 type PageZoomShortcutEvent = Readonly<
 	Pick<KeyboardEvent, "altKey" | "ctrlKey" | "defaultPrevented" | "key" | "metaKey">
@@ -111,7 +106,6 @@ export function createPageZoomGestureHandler(port: {
 }
 
 export function pageZoomForGesture(start: number, scale: number): number {
-	if (!Number.isFinite(scale) || scale <= 0) return start;
 	return Math.min(PAGE_ZOOM_MAX, Math.max(PAGE_ZOOM_MIN, start * scale));
 }
 

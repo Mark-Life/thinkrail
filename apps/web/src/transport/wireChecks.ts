@@ -1,6 +1,7 @@
-import { compile, type Schema, type Validator } from "@earendil-works/pi-schema";
+import { compile, type Schema } from "@earendil-works/pi-schema";
 import {
 	AnyHostWelcome,
+	validatorOf,
 	WS_CHANNEL_SCHEMAS,
 	WS_CHANNELS,
 	WS_METHOD_SCHEMAS,
@@ -16,16 +17,6 @@ const CHANNEL_SCHEMAS = new Map<string, Schema<unknown>>([
 	...Object.entries(WS_CHANNEL_SCHEMAS),
 	[WS_CHANNELS.serverWelcome, AnyHostWelcome],
 ]);
-
-const validators = new Map<Schema<unknown>, Validator>();
-
-function validatorOf(schema: Schema<unknown>): Validator {
-	const known = validators.get(schema);
-	if (known) return known;
-	const validator = compile(schema);
-	validators.set(schema, validator);
-	return validator;
-}
 
 function failureOf(schema: Schema<unknown>, value: unknown): string | null {
 	const validator = validatorOf(schema);

@@ -133,7 +133,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   waits for the child's exit.
 - **Fixture.** `fakeNemoSpeech.ts` stands in for the CLI in unit and e2e tests. It answers `--version`,
   `doctor` and `serve`, the realtime protocol emits one scripted word per 160 ms of audio, and an
-  optional log file records each `session.update`. `FAKE_SPEECH_STREAM_ERROR` makes it answer audio with
+  optional log file records each `session.update`. A control event that fails its private schema is
+  ignored. `FAKE_SPEECH_STREAM_ERROR` makes it answer audio with
   an in-band `error` event while it keeps running.
 
 ## Relay

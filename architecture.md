@@ -62,7 +62,7 @@ packages/resource-renderers  file/diff renderers, registry + review surfaces beh
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
-CLI build metadata, server test fixtures, and shared teardown; root tools and browser E2E consume it.
+CLI build metadata, contracts' wire schemas, server test fixtures, and shared teardown; root tools and browser E2E consume it.
 No product package imports the test workspace, and it has no application build step or Electrobun SDK
 dependency. This keeps test process drivers outside both launchers and the server library.
 
