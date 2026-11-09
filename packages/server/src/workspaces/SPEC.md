@@ -359,5 +359,5 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
   `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
-  `@thinkrail/shared/paths` (the scratch-dir path convention), `@thinkrail/shared/codedError`; Node.
+  `@thinkrail/shared/paths` (the scratch-dir path convention), `@thinkrail/shared/codedError`, `@thinkrail/shared/errnoCode`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

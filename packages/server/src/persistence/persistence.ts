@@ -39,6 +39,7 @@ import {
 	WorkspaceCreationFields,
 	WorkspaceKickoff,
 } from "@thinkrail/contracts";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
@@ -49,7 +50,6 @@ import type { AcquisitionRecord } from "./attributionProtocol";
 import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
 import {
 	assertOverwriteAllowed,
-	hasErrorCode,
 	isOverwriteRefused,
 	parseEntries,
 	readStateFile,
@@ -125,7 +125,7 @@ function loadSessionMetadata<T>(file: string, validator: Validator<T>): SessionM
 		if (validator.check(value)) return { kind: "loaded", value };
 		error = new Error(`Invalid ${file}`);
 	} catch (caught) {
-		if (hasErrorCode(caught, "ENOENT")) return { kind: "missing" };
+		if (errnoCode(caught) === "ENOENT") return { kind: "missing" };
 		error = caught;
 	}
 	const setAsidePath = `${path}.corrupt-${Date.now()}`;

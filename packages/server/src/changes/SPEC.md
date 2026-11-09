@@ -26,7 +26,7 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 - **Allowed deps:** `contracts` (`ChangeReceipt`/`RevertTarget`/`LineSpan`/`GitDiffScope`), `git`
   (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
   `hashBytes`/`decodeText` for identity and textness), `persistence` (workspace lookup), `trash`,
-  `@thinkrail/shared/codedError`, Node `fs`/`crypto`/`path`.
+  `@thinkrail/shared/codedError`, `@thinkrail/shared/errnoCode`, Node `fs`/`crypto`/`path`.
 - **Forbidden:** `host`, `agent`, `reviews`; any write outside `fs`'s contained path; `unlink`.
 
 ## What a revert means

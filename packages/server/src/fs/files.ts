@@ -11,6 +11,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode } from "@thinkrail/shared/errnoCode";
 import { loadWorkspaces } from "../persistence";
 import { decodeText, resourceMeta } from "./content";
 
@@ -41,8 +42,7 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 		try {
 			real = realpathSync(cursor);
 		} catch (error) {
-			const code =
-				typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+			const code = errnoCode(error);
 			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
 			const parent = dirname(cursor);
 			if (parent === cursor) throw error;
@@ -78,8 +78,7 @@ export function readableFileSize(root: string, path: string): number | "missing"
 		const stats = statSync(resolveUnderRoot(root, path, true));
 		return stats.isFile() ? stats.size : "missing";
 	} catch (error) {
-		const code =
-			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+		const code = errnoCode(error);
 		return code === undefined || code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP"
 			? "missing"
 			: null;
