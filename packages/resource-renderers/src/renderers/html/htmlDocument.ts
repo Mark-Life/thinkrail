@@ -24,7 +24,9 @@ const REMOVED_ATTRIBUTES = new Set([
 	"xlink:href",
 	"srcset",
 	"imagesrcset",
+	"autofocus",
 ]);
+const THEMED_CONTROLS = new Set(["input", "button", "select", "textarea"]);
 
 export const THEME_STYLE_ATTRIBUTE = "data-thinkrail-theme";
 
@@ -47,23 +49,23 @@ function animatesHref(element: Element): boolean {
 	);
 }
 
-function removeElement(element: Element, name: string): boolean {
+function removeElement(element: Element, name: string, keepControls: boolean): boolean {
 	return (
-		REMOVED_ELEMENTS.has(name) ||
+		(REMOVED_ELEMENTS.has(name) && !(keepControls && THEMED_CONTROLS.has(name))) ||
 		(name === "meta" && element.getAttribute("http-equiv") !== null) ||
 		((name === "set" || name === "animate") && animatesHref(element))
 	);
 }
 
-function sanitizeElement(element: Element, name: string): number {
+function sanitizeElement(element: Element, name: string, keepControls: boolean): number {
 	let removed = 0;
 	for (const child of Array.from(element.children)) {
 		const childName = elementName(child);
-		if (removeElement(child, childName)) {
+		if (removeElement(child, childName, keepControls)) {
 			element.removeChild(child);
 			removed += 1;
 		} else {
-			removed += sanitizeElement(child, childName);
+			removed += sanitizeElement(child, childName, keepControls);
 		}
 	}
 
@@ -109,7 +111,7 @@ function previewDocument(document: Document): PreviewDocument {
 export function prepareHtmlPreviewDocument(document: Document, themeCss?: string): string {
 	const { root, head, create } = previewDocument(document);
 	if (!root || !head) return EMPTY_PREVIEW_DOCUMENT;
-	sanitizeElement(root, elementName(root));
+	sanitizeElement(root, elementName(root), themeCss !== undefined);
 	const charset = create("meta");
 	charset.setAttribute("charset", "utf-8");
 	const csp = create("meta");
@@ -137,17 +139,19 @@ function parseHtml(source: string): Document {
 	return new DOMParser().parseFromString(source, "text/html");
 }
 
-function parsesBackClean(html: string): boolean {
+function parsesBackClean(html: string, keepControls: boolean): boolean {
 	const { root, head } = previewDocument(parseHtml(html));
 	const csp = head?.children[1];
 	if (!root || !head || !csp || csp.getAttribute("content") !== HTML_PREVIEW_CSP) return false;
 	head.removeChild(csp);
-	return sanitizeElement(root, elementName(root)) === 0;
+	return sanitizeElement(root, elementName(root), keepControls) === 0;
 }
 
 function buildPreviewDocument(source: string, themeCss?: string): string {
 	const html = prepareHtmlPreviewDocument(parseHtml(source), themeCss);
-	return html === EMPTY_PREVIEW_DOCUMENT || parsesBackClean(html) ? html : EMPTY_PREVIEW_DOCUMENT;
+	return html === EMPTY_PREVIEW_DOCUMENT || parsesBackClean(html, themeCss !== undefined)
+		? html
+		: EMPTY_PREVIEW_DOCUMENT;
 }
 
 export function buildHtmlPreviewDocument(source: string): string {

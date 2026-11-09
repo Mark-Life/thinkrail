@@ -466,7 +466,8 @@ represented by an explicit empty page frame.
 
 `thinkrail/html` parses source into a document before previewing it in an empty-capability `sandbox=""`
 iframe. The sanitizer removes active, navigational, embedding, and form elements; strips event handlers,
-`srcset`/`imagesrcset` and non-`data:` resource URLs; and turns anchors into inert text-bearing elements.
+`srcset`/`imagesrcset`, `autofocus` and non-`data:` resource URLs; and turns anchors into inert text-bearing
+elements.
 `template` is removed whole: its content is not in `children`, so the walk never reaches it, and the frame
 would attach a `shadowrootmode` template as live DOM. SVG `set` and `animate` are removed only when their
 `attributeName` contains `href` (they can give an inert link a target); other animations stay. `noscript`
@@ -506,12 +507,17 @@ pane, a 2-up half or a chat card shows the true layout shrunk rather than an acc
 is the old reflow. Scaling is pure geometry on the wrapper — a static iframe keeps `sandbox=""` and nothing
 measures its document; the wrapper's box is measured in a layout effect (the package's
 one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
-instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
-buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
+instead of reflowing the document at the pane width for a frame. A static document has no form controls
+(`button`, `input`, `select`, `textarea` are removed); spot (region) comments on HTML are not offered yet.
 
 **Themed frame.** When the host's `html.mode(workspaceId, path)` answers `themed`, the view and each diff
-side render the same sanitized document, with the same CSP, in `sandbox="allow-same-origin"`, in every
-surface: a chat card, its full screen, a file tab, a comparison. ThinkRail answers `themed` for a path under
+side render the sanitized document, with the same CSP, in `sandbox="allow-same-origin"`, in every
+surface: a chat card, its full screen, a file tab, a comparison. The themed sanitizer differs from the
+static one in one rule: it keeps `button`, `input`, `select` and `textarea`, so a mockup shows its real
+controls. They do nothing: no script runs, handlers and `formaction` are stripped, and `form` is still
+removed with everything in it (the shadowing defence above treats any element it cannot name as a form, and
+without `allow-forms` nothing could submit anyway). The check of the string the frame gets runs the themed
+rule too, so a kept control is not a difference. ThinkRail answers `themed` for a path under
 the agent's mockup scratch dir (`isMockupPath`: canonical only, so `mockups/../index.html` stays static) and
 `static` everywhere else ([[module-web]] owns the rule).
 

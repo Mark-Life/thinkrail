@@ -41,11 +41,49 @@ test("a themed document is the static document plus the theme style before autho
 	expect(themed).toStartWith(
 		`<!doctype html><html><head><meta charset="utf-8"></meta><meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}"></meta>${theme}<style>:root{--accent:#bada55}</style></head>`,
 	);
-	expect(themed.replace(theme, "")).toBe(
+	expect(themed.replace(theme, "").replace("<button>Toggle</button>", "")).toBe(
 		prepareHtmlPreviewDocument(mockupDocument() as unknown as Document),
 	);
-	for (const removed of ["thinkrail-theme.css", "<script", "<button", "onclick="]) {
+	for (const removed of ["thinkrail-theme.css", "<script", "onclick="]) {
 		expect(themed).not.toContain(removed);
+	}
+});
+
+function controlsDocument(): FakeDocument {
+	const body = new FakeElement("body", {}, "", [
+		new FakeElement(
+			"button",
+			{ onclick: "toggle()", formaction: "https://attacker.invalid" },
+			"Go",
+		),
+		new FakeElement("input", { type: "range", autofocus: "", value: "3" }),
+		new FakeElement("select", {}, "", [new FakeElement("option", {}, "One")]),
+		new FakeElement("textarea", {}, "note"),
+		new FakeElement("form", { name: "documentElement" }, "", [
+			new FakeElement("input", { name: "localName", value: "in-form" }),
+		]),
+	]);
+	return new FakeDocument(new FakeElement("head"), body);
+}
+
+test("a themed document keeps inert controls outside a form; a static one removes them", () => {
+	const themed = prepareHtmlPreviewDocument(controlsDocument() as unknown as Document, "");
+	for (const kept of [
+		"<button>Go</button>",
+		'<input type="range" value="3"></input>',
+		"<select><option>One</option></select>",
+		"<textarea>note</textarea>",
+	]) {
+		expect(themed).toContain(kept);
+	}
+	const document = prepareHtmlPreviewDocument(controlsDocument() as unknown as Document);
+	for (const control of ["<button", "<input", "<select", "<textarea"]) {
+		expect(document).not.toContain(control);
+	}
+	for (const markup of [themed, document]) {
+		for (const removed of ["<form", "in-form", "autofocus", "onclick=", "formaction="]) {
+			expect(markup).not.toContain(removed);
+		}
 	}
 });
 
