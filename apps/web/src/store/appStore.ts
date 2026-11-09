@@ -129,6 +129,8 @@ import {
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
+	layoutCenterTabs,
+	layoutTodoPlanSessionId,
 	type ModelRef,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
@@ -1713,11 +1715,28 @@ function withoutRuntime(
 function runtimeOutlivesClose(
 	rt: SessionRuntime,
 	sessionId: string,
-	tabsByWorkspace: AppState["tabsByWorkspace"],
+	s: Pick<AppState, "tabsByWorkspace" | "layoutDocumentsByWorkspace">,
 ): boolean {
-	if (rt.draft !== "" || rt.pendingExtUi !== null || rt.extUiQueue.length > 0) return true;
-	return Object.values(tabsByWorkspace).some((tabs) =>
-		tabs.some((tab) => (tab.kind === "chat" || tab.kind === "plan") && tab.sessionId === sessionId),
+	if (
+		rt.draft !== "" ||
+		rt.pendingExtUi !== null ||
+		rt.extUiQueue.length > 0 ||
+		Object.keys(rt.extUiStatus).length > 0 ||
+		Object.keys(rt.extUiWidget).length > 0
+	)
+		return true;
+	const cached = Object.values(s.tabsByWorkspace).some((tabs) =>
+		tabs.some((tab) =>
+			tab.kind === "chat" || tab.kind === "plan"
+				? tab.sessionId === sessionId
+				: tab.kind === "doc" && tab.sourceId === sessionId,
+		),
+	);
+	return (
+		cached ||
+		Object.values(s.layoutDocumentsByWorkspace).some((document) =>
+			layoutCenterTabs(document.center).some((tab) => layoutTodoPlanSessionId(tab) === sessionId),
+		)
 	);
 }
 
@@ -3864,7 +3883,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
 			const tabsByWorkspace = { ...s.tabsByWorkspace, [wsId]: remaining };
 			const rt = s.sessions[sessionId];
-			const evict = rt !== undefined && !runtimeOutlivesClose(rt, sessionId, tabsByWorkspace);
+			const evict =
+				rt !== undefined &&
+				!runtimeOutlivesClose(rt, sessionId, {
+					tabsByWorkspace,
+					layoutDocumentsByWorkspace: s.layoutDocumentsByWorkspace,
+				});
 			return {
 				...(evict ? withoutRuntime(s, sessionId) : {}),
 				...(syncLayout

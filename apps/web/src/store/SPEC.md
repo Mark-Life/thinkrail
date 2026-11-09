@@ -295,8 +295,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   promise) + `extUiStatus` / `extUiWidget`), and **`notice`**: the host's closed `ProviderWarning` code
   (ExtUi `notice`, replayed like `notify`). `dismissSessionNotice(sessionId)` clears one chat;
   `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
-  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatToHistory`, `deleteChat` and
-  `clearWorkspaceState` drop it. **A runtime is a watch:** the keys of `sessions` are the ids
+  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `deleteChat`,
+  `reconcileWorkspaceSessions` (for a session gone from the host) and `clearWorkspaceState` drop it, and
+  `closeChatToHistory` drops it unless something the chat still shows keeps it (below). **A runtime is a watch:** the keys of `sessions` are the ids
   `transport`'s `sessionWatch` asks the host to stream, so installing or dropping a runtime anywhere is
   enough to start or stop that session's `pi.event` frames; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
@@ -391,11 +392,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   supersession and reconciliation. File, diff, and registered-document render caches follow the same local
   transition; after queued opens settle, shell reclaims only caches absent from local placement and queued
   intent. No peer can restore placement remotely. The runtime stays when dropping it would lose something
-  the chat still shows or owes: another chat or plan tab in any workspace still names the session (a plan
-  pane reads the runtime and would rehydrate it at once), the composer `draft` is not empty, or an
-  extension dialog is pending or queued. A reopen without a runtime refetches the transcript like a first
-  open; runtime-only extension state (`extUiStatus` / `extUiWidget`, a cleared `notice`) is not kept, and
-  fire-and-forget frames that arrive while closed wait in `extUiOrphans`. **`reopenChat(workspaceId, …)`** restores runtime/history
+  the chat still shows or owes: another chat, plan or doc tab in any workspace still names the session, or
+  a layout-restored todo-plan document does (a plan pane reads the runtime and would rehydrate it at once),
+  the composer `draft` is not empty, an extension dialog is pending or queued, or an extension status or
+  widget line is set (the host sends those once and never replays them). A reopen without a runtime
+  refetches the transcript like a first open; a cleared `notice` is not kept, and fire-and-forget frames
+  that arrive while closed wait in `extUiOrphans`. **`reopenChat(workspaceId, …)`** restores runtime/history
   membership in its captured workspace even after another workspace becomes active; shell adds placement to
   that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
   disk-only sessions (from the active workspace's `session.list` reconciliation) and peer-created sessions

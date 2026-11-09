@@ -2061,6 +2061,57 @@ test("a plan tab, a pending dialog, or a draft keeps a closed chat's runtime", (
 	expect(useAppStore.getState().sessions.drafted?.draft).toBe("half a thought");
 });
 
+test("extension status or widget lines keep a closed chat's runtime, since the host never resends them", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "status", null, "medium");
+	store.applyExtUi({ id: "s1", sessionId: "status", kind: "setStatus", key: "ext", text: "busy" });
+	store.closeChatToHistory("status", true, "ws1");
+	expect(useAppStore.getState().sessions.status?.extUiStatus).toEqual({ ext: "busy" });
+
+	store.openChatSession("ws1", "widget", null, "medium");
+	store.applyExtUi({
+		id: "w1",
+		sessionId: "widget",
+		kind: "setWidget",
+		key: "ext",
+		content: ["a"],
+	});
+	store.closeChatToHistory("widget", true, "ws1");
+	expect(useAppStore.getState().sessions.widget?.extUiWidget).toEqual({ ext: ["a"] });
+});
+
+test("a todo-plan document restored into the layout keeps a closed chat's runtime", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "restored", null, "medium");
+	useAppStore.setState({
+		layoutDocumentsByWorkspace: {
+			ws2: {
+				version: 2,
+				center: {
+					kind: "group",
+					id: "center",
+					tabs: [
+						{
+							kind: "document",
+							id: "plan-placement",
+							name: "",
+							documentKind: "todo-plan",
+							sourceId: "restored",
+							docPath: "TODO.md",
+						},
+					],
+				},
+				left: { visible: false, width: 0.2, groups: [] },
+				right: { visible: false, width: 0.2, groups: [] },
+				bottom: emptyBottomRegion(),
+				toolRestoreTargets: {},
+			},
+		},
+	});
+	store.closeChatToHistory("restored", true, "ws1");
+	expect(useAppStore.getState().sessions.restored).toBeDefined();
+});
+
 test("reopening a chat targets its captured workspace after the user switches away", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
