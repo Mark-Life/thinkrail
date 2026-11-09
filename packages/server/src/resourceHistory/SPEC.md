@@ -46,8 +46,9 @@ never grants control: nothing here is live authority.
   `interruptedResource` defines (terminal status plus `interrupted: true`; no finish time, ordered by its
   start). A crash-interrupted command therefore has no log; one cut off by a graceful teardown was already
   recorded, with its log, by `agent`, which alone decides when a teardown cut a run off.
-- Storage ids are validated before any path is built; an unsafe workspace, session or command id is
-  ignored, never escaped.
+- A path takes a `WorkspaceId` and a `SessionId`, which are path-safe by type ([[submodule-contracts-schema]]).
+  A record or command id is a plain string, so it is checked before it joins a path; an unsafe one is ignored,
+  never escaped.
 - History is unbounded per chat by decision (user-settled, 2026-10): every record and every log tail lives as
   long as the workspace. Chat deletion leaves it in place — a chat restored from the OS trash gets its history
   back, as its subagent transcripts do — and workspace archive removes the workspace's directory.
@@ -60,4 +61,4 @@ never grants control: nothing here is live authority.
 
 Upsert/dedupe, survival across a dropped in-memory cache (the restart), derived interruption against a live
 set, log round-trip and its absence for a crash, torn/foreign line tolerance and recovery after a failed append, newest-first paging from a
-cursor, unsafe-id refusal, and workspace removal on disk and in cache.
+cursor, unsafe record-id refusal, and workspace removal on disk and in cache.

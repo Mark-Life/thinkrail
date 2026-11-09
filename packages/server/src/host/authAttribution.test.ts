@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createProvider, envApiKeyAuth, InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { type SessionId, TODO_NUDGE_PREFIX, type WsResult } from "@thinkrail/contracts";
+import { TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { fakeFetch } from "../../test/fakeFetch";
 import {
@@ -25,14 +25,14 @@ import {
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { saveWorkspaces } from "../persistence";
 import { resetConfigCache } from "../settings";
-import { handleRequest } from "./handlers";
+import { handleTypedRequest } from "./handlers";
 import { runObservation } from "./runAnalytics";
 
 const TEST_KEY = "phc_test";
 
 const PRIVATE = "private-auth-attribution";
 const context = { clientKey: `${PRIVATE}-client` };
-const workspaceId = testWorkspaceId(`${PRIVATE}-workspace`);
+const workspaceId = testWorkspaceId("00000000-0000-4000-8000-0000000000e1");
 const saved = {
 	THINKRAIL_DATA_DIR: process.env.THINKRAIL_DATA_DIR,
 	PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR,
@@ -44,7 +44,7 @@ let runtime: ModelRuntime;
 let faux: ReturnType<typeof createFauxCore>;
 let events: { event: string; properties: Record<string, unknown> }[];
 let outgoing: string[];
-let sessionIds: SessionId[];
+let sessionIds: string[];
 let unexpectedAuthCalls: string[];
 
 async function addFauxProvider(
@@ -163,20 +163,21 @@ afterEach(async () => {
 	}
 	expect(unexpectedAuthCalls).toEqual([]);
 	const payload = outgoing.join("\n");
-	for (const value of [PRIVATE, directory, ...sessionIds]) expect(payload).not.toContain(value);
+	for (const value of [PRIVATE, directory, workspaceId, ...sessionIds])
+		expect(payload).not.toContain(value);
 	expect(
 		events.some(({ event }) => event === "provider_login" || event.startsWith("agent_run_")),
 	).toBe(false);
 });
 
-async function createChat(provider = faux): Promise<string> {
-	const created = (await handleRequest(
+async function createChat(provider = faux) {
+	const created = await handleTypedRequest(
 		"session.create",
 		{ workspaceId, model: toWireModel(provider.getModel()) },
 		context,
-	)) as WsResult<"session.create">;
+	);
 	sessionIds.push(created.sessionId);
-	return created.sessionId;
+	return testSessionId(created.sessionId);
 }
 
 function properties(name: string) {
@@ -185,7 +186,7 @@ function properties(name: string) {
 
 test("preconfigured API-key chats and accepted prompt, steer and follow-up sends report auth without optional consent", async () => {
 	const sessionId = await createChat();
-	await handleRequest(
+	await handleTypedRequest(
 		"session.rename",
 		{ workspaceId, sessionId, title: "Auth attribution" },
 		context,
@@ -201,13 +202,17 @@ test("preconfigured API-key chats and accepted prompt, steer and follow-up sends
 		fauxAssistantMessage("Steered"),
 		fauxAssistantMessage("Followed up"),
 	]);
-	const prompt = handleRequest("session.prompt", { sessionId, text: `${PRIVATE}-prompt` }, context);
+	const prompt = handleTypedRequest(
+		"session.prompt",
+		{ sessionId, text: `${PRIVATE}-prompt` },
+		context,
+	);
 	try {
 		await started.promise;
-		expect(isSessionStreaming(testSessionId(sessionId))).toBe(true);
-		for (const method of ["session.steer", "session.followUp"]) {
+		expect(isSessionStreaming(sessionId)).toBe(true);
+		for (const method of ["session.steer", "session.followUp"] as const) {
 			expect(
-				await handleRequest(method, { sessionId, text: `${PRIVATE}-${method}` }, context),
+				await handleTypedRequest(method, { sessionId, text: `${PRIVATE}-${method}` }, context),
 			).toEqual({ ok: true });
 		}
 	} finally {
@@ -247,11 +252,11 @@ test("unmodified builtin providers report preconfigured stored keys without an i
 	configurePiRuntime(builtinRuntime);
 	const model = builtinRuntime.getModels("anthropic")[0];
 	if (!model) throw new Error("builtin fixture model missing");
-	const created = (await handleRequest(
+	const created = await handleTypedRequest(
 		"session.create",
 		{ workspaceId, model: toWireModel(model) },
 		context,
-	)) as WsResult<"session.create">;
+	);
 	sessionIds.push(created.sessionId);
 	await shutdownAnalytics();
 	expect(properties("chat_started")).toMatchObject([
@@ -268,11 +273,7 @@ test("a chat created without any usable model still counts, bucketed as none", a
 		refreshOnCreate: false,
 	});
 	configurePiRuntime(bare);
-	const created = (await handleRequest(
-		"session.create",
-		{ workspaceId },
-		context,
-	)) as WsResult<"session.create">;
+	const created = await handleTypedRequest("session.create", { workspaceId }, context);
 	sessionIds.push(created.sessionId);
 	await shutdownAnalytics();
 	expect(properties("chat_started")).toMatchObject([
@@ -297,11 +298,11 @@ test("a startup extension that switches the model is reported as the model the c
 			"",
 		].join("\n"),
 	);
-	const created = (await handleRequest(
+	const created = await handleTypedRequest(
 		"session.create",
 		{ workspaceId, model: toWireModel(faux.getModel()) },
 		context,
-	)) as WsResult<"session.create">;
+	);
 	sessionIds.push(created.sessionId);
 	expect(created.model?.provider).toBe(alternate.getModel().provider);
 	await shutdownAnalytics();
@@ -323,7 +324,7 @@ test("model changes affect later sends but not provider/auth captured before a d
 		},
 	]);
 	let acknowledged = false;
-	const prompt = handleRequest(
+	const prompt = handleTypedRequest(
 		"session.prompt",
 		{ sessionId, text: `${PRIVATE}-before` },
 		context,
@@ -334,7 +335,7 @@ test("model changes affect later sends but not provider/auth captured before a d
 	try {
 		await started.promise;
 		expect(
-			await handleRequest(
+			await handleTypedRequest(
 				"session.setModel",
 				{ sessionId, model: toWireModel(alternate.getModel()) },
 				context,
@@ -345,7 +346,7 @@ test("model changes affect later sends but not provider/auth captured before a d
 		release.resolve();
 		await prompt;
 	}
-	await handleRequest("session.followUp", { sessionId, text: `${PRIVATE}-after` }, context);
+	await handleTypedRequest("session.followUp", { sessionId, text: `${PRIVATE}-after` }, context);
 	await shutdownAnalytics();
 	expect(properties("chat_started")).toMatchObject([
 		{ provider: "anthropic", model: "custom", auth_method: "api_key" },
@@ -358,7 +359,7 @@ test("model changes affect later sends but not provider/auth captured before a d
 });
 
 test("retained sessions keep their generation's API-key auth when new same-provider chats use a subscription", async () => {
-	const retainedId = testSessionId(await createChat());
+	const retainedId = await createChat();
 	const retainedGeneration = getSessionRuntimeGeneration(retainedId);
 	const nextCredentials = new InMemoryCredentialStore();
 	const nextRuntime = await ModelRuntime.create({
@@ -373,21 +374,25 @@ test("retained sessions keep their generation's API-key auth when new same-provi
 	if (candidate.outcome !== "prepared") throw new Error("Candidate was not prepared");
 	activatePiRuntimeGeneration(candidate.generation);
 	const newId = await createChat(nextFaux);
-	await handleRequest(
+	await handleTypedRequest(
 		"session.rename",
 		{ workspaceId, sessionId: retainedId, title: "Retained auth" },
 		context,
 	);
-	await handleRequest(
+	await handleTypedRequest(
 		"session.rename",
 		{ workspaceId, sessionId: newId, title: "New auth" },
 		context,
 	);
 	expect(await usePiRuntime((current) => current === nextRuntime)).toBe(true);
 	expect(getSessionRuntimeGeneration(retainedId)).toBe(retainedGeneration);
-	expect(getSessionRuntimeGeneration(testSessionId(newId))).toBe(candidate.generation);
-	await handleRequest("session.prompt", { sessionId: retainedId, text: `${PRIVATE}-old` }, context);
-	await handleRequest("session.prompt", { sessionId: newId, text: `${PRIVATE}-new` }, context);
+	expect(getSessionRuntimeGeneration(newId)).toBe(candidate.generation);
+	await handleTypedRequest(
+		"session.prompt",
+		{ sessionId: retainedId, text: `${PRIVATE}-old` },
+		context,
+	);
+	await handleTypedRequest("session.prompt", { sessionId: newId, text: `${PRIVATE}-new` }, context);
 	await shutdownAnalytics();
 	expect(properties("chat_started")).toMatchObject([
 		{ provider: "anthropic", model: "custom", auth_method: "api_key" },
@@ -408,20 +413,20 @@ test("accepted TODO nudges and rejected sends do not emit message events", async
 		fauxAssistantMessage("Complete"),
 		fauxAssistantMessage("Complete"),
 	]);
-	const methods = ["session.prompt", "session.steer", "session.followUp"];
+	const methods = ["session.prompt", "session.steer", "session.followUp"] as const;
 	for (const method of methods) {
 		expect(
-			await handleRequest(
+			await handleTypedRequest(
 				method,
 				{ sessionId, text: `${TODO_NUDGE_PREFIX}${PRIVATE}-control` },
 				context,
 			),
 		).toEqual({ ok: true });
 	}
-	await handleRequest("session.dispose", { sessionId }, context);
+	await handleTypedRequest("session.dispose", { sessionId }, context);
 	for (const method of methods) {
 		await expect(
-			handleRequest(method, { sessionId, text: `${PRIVATE}-rejected` }, context),
+			handleTypedRequest(method, { sessionId, text: `${PRIVATE}-rejected` }, context),
 		).rejects.toThrow("Unknown session");
 	}
 	await shutdownAnalytics();

@@ -1015,7 +1015,12 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 		if (!child) throw new Error("missing child");
 		expect(child).not.toHaveProperty("durationMs");
 		expect(child).toMatchObject({ model: "resources/resources", thinkingLevel: "off" });
-		const stopping = stopSubagent(p.workspaceId, p.sessionId, child.childSessionId, p.cwd);
+		const stopping = stopSubagent(
+			p.workspaceId,
+			p.sessionId,
+			testSessionId(child.childSessionId),
+			p.cwd,
+		);
 		let acknowledged = false;
 		void stopping.then(() => {
 			acknowledged = true;
@@ -1128,7 +1133,7 @@ test("a running detached Agent child holds the idle parent's completion unread u
 			completionUnread: false,
 			backgroundWork: true,
 		});
-		await stopSubagent(p.workspaceId, p.sessionId, child.childSessionId, p.cwd);
+		await stopSubagent(p.workspaceId, p.sessionId, testSessionId(child.childSessionId), p.cwd);
 		gate.resolve();
 		await waitFor(async () => recorder.states.at(-1)?.completionUnread === true);
 		expect(getSessionState(p.sessionId)).toMatchObject({

@@ -40,7 +40,7 @@ export interface LayoutDocumentTab {
 	id: string;
 	name: string;
 	documentKind: "todo-plan";
-	sourceId: string;
+	sourceId: SessionId;
 	docPath: string;
 }
 

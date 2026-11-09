@@ -1,23 +1,38 @@
 import { compile, type Schema, str } from "@earendil-works/pi-schema";
 
 declare const ID_KIND: unique symbol;
+declare const PATH_SAFE_ID: unique symbol;
 interface Id<Kind extends string> {
 	readonly [ID_KIND]: Kind;
+}
+interface PathSafe {
+	readonly [PATH_SAFE_ID]: true;
 }
 
 export type ProjectId = string & Id<"project">;
 export type WorkspaceId = string & Id<"workspace">;
-export type SessionId = string & Id<"session">;
+export type StoredSessionId = string & Id<"session">;
+export type SessionId = StoredSessionId & PathSafe;
 
-function brandedString<T extends ProjectId | WorkspaceId | SessionId>(
+const UUID = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+const PATH_SAFE = {
+	pattern: "^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$",
+	maxLength: 200,
+};
+
+function brandedString<T extends ProjectId | WorkspaceId | StoredSessionId>(
 	options: Parameters<typeof str>[0],
 ) {
 	return str(options) as Schema<T>;
 }
 
-export const ProjectId = brandedString<ProjectId>({});
-export const WorkspaceId = brandedString<WorkspaceId>({});
-export const SessionId = brandedString<SessionId>({});
+export const ProjectId = brandedString<ProjectId>({ pattern: UUID });
+export const WorkspaceId = brandedString<WorkspaceId>({ pattern: UUID });
+export const SessionId = brandedString<SessionId>(PATH_SAFE);
+
+export const StoredProjectId = brandedString<ProjectId>({ minLength: 1 });
+export const StoredWorkspaceId = brandedString<WorkspaceId>(PATH_SAFE);
+export const StoredSessionId = brandedString<StoredSessionId>({});
 
 export function randomUuid(): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -35,6 +50,9 @@ function parserOf<T>(schema: Schema<T>) {
 export const parseProjectId = parserOf(ProjectId);
 export const parseWorkspaceId = parserOf(WorkspaceId);
 export const parseSessionId = parserOf(SessionId);
+export const parseStoredProjectId = parserOf(StoredProjectId);
+export const parseStoredWorkspaceId = parserOf(StoredWorkspaceId);
+export const parseStoredSessionId = parserOf(StoredSessionId);
 
 function requireId<T>(parse: (value: unknown) => T | null, kind: string, value: string) {
 	const id = parse(value);
@@ -51,13 +69,17 @@ export function newWorkspaceId() {
 }
 
 export function testProjectId(id: string) {
-	return requireId(parseProjectId, "project", id);
+	return requireId(parseStoredProjectId, "project", id);
 }
 
 export function testWorkspaceId(id: string) {
-	return requireId(parseWorkspaceId, "workspace", id);
+	return requireId(parseStoredWorkspaceId, "workspace", id);
 }
 
 export function testSessionId(id: string) {
 	return requireId(parseSessionId, "session", id);
+}
+
+export function testStoredSessionId(id: string) {
+	return requireId(parseStoredSessionId, "stored session", id);
 }

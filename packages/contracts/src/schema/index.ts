@@ -24,9 +24,13 @@ export {
 	ProjectId,
 	parseProjectId,
 	parseSessionId,
+	parseStoredProjectId,
+	parseStoredSessionId,
+	parseStoredWorkspaceId,
 	parseWorkspaceId,
 	randomUuid,
 	SessionId,
+	type StoredSessionId,
 	WorkspaceId,
 } from "./ids";
 export * from "./locales";

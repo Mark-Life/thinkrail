@@ -169,8 +169,7 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 				name: tab.name,
 				sessionId: tab.sessionId,
 			};
-		case "doc": {
-			if (!tab.sourceId) return null;
+		case "doc":
 			return {
 				kind: "document",
 				id: tab.id,
@@ -179,7 +178,6 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 				sourceId: tab.sourceId,
 				docPath: tab.docPath,
 			};
-		}
 		case "plan":
 			return {
 				kind: "document",

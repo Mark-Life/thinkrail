@@ -11,7 +11,14 @@ import {
 	tuple,
 	union,
 } from "@earendil-works/pi-schema";
-import { ProjectId, SessionId, WorkspaceId } from "./ids";
+import {
+	ProjectId,
+	SessionId,
+	StoredProjectId,
+	StoredSessionId,
+	StoredWorkspaceId,
+	WorkspaceId,
+} from "./ids";
 import { wireObj } from "./wire";
 
 export const SEARCH_KINDS = ["transcript", "file", "spec", "plan"] as const;
@@ -35,8 +42,8 @@ const SEARCH_HIT_BASE = {
 	tier: MatchTier,
 	score: num(),
 	ranges: opt(map(arr(tuple([num(), num()])))),
-	projectId: ProjectId,
-	workspaceId: WorkspaceId,
+	projectId: StoredProjectId,
+	workspaceId: StoredWorkspaceId,
 };
 
 export const SearchHit = union([
@@ -51,12 +58,12 @@ export const SearchHit = union([
 		size: num(),
 		snippet: opt(str()),
 	}),
-	wireObj({ ...SEARCH_HIT_BASE, kind: lit("plan"), sessionId: SessionId }),
+	wireObj({ ...SEARCH_HIT_BASE, kind: lit("plan"), sessionId: StoredSessionId }),
 	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
 	wireObj({
 		...SEARCH_HIT_BASE,
 		kind: lit("transcript"),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		messageIndex: num(),
 		anchorText: str(),
 	}),

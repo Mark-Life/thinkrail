@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
-import type { SessionSummary } from "@thinkrail/contracts";
 import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
-import { EMPTY_RUNTIME, type SessionRuntime } from "../store/appStore";
+import { EMPTY_RUNTIME, type OpenedSessionSummary, type SessionRuntime } from "../store/appStore";
 import {
 	synchronizeTranscript,
 	transcriptSyncNeed,
@@ -12,7 +11,7 @@ function runtime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
 	return { ...EMPTY_RUNTIME, syncedConnectionGeneration: 4, ...overrides };
 }
 
-function summary(overrides: Partial<SessionSummary> = {}): SessionSummary {
+function summary(overrides: Partial<OpenedSessionSummary> = {}): OpenedSessionSummary {
 	return {
 		sessionId: testSessionId("session-1"),
 		workspaceId: testWorkspaceId("workspace-1"),

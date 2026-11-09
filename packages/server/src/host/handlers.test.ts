@@ -1372,8 +1372,8 @@ test("resource handlers scope every read/control to a registered workspace and a
 			});
 		}
 		await expect(
-			handleRequest("session.resources", { ...scope, sessionId: testSessionId("../secret") }, CTX),
-		).rejects.toThrow("Invalid resource ids");
+			handleRequest("session.resources", { ...scope, sessionId: "../secret" }, CTX),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 		expect(
 			await handleRequest("session.resources", { ...scope, path: "/tmp/secret" }, CTX),
 		).toEqual(await handleTypedRequest("session.resources", scope, CTX));
@@ -1393,15 +1393,18 @@ test("resource handlers scope every read/control to a registered workspace and a
 		]) {
 			await expect(
 				handleRequest("session.resourceHistory", { ...scope, kind: "command", before }, CTX),
-			).rejects.toThrow("Invalid resource history cursor");
+			).rejects.toMatchObject({
+				code: "INVALID_PARAMS",
+				message: "Invalid resource history cursor",
+			});
 		}
 		for (const commandId of ["/tmp/output", "..", "C:\\output", "bad\u0000id"]) {
 			await expect(
 				handleRequest("backgroundCommand.output", { ...scope, commandId }, CTX),
-			).rejects.toThrow("Invalid resource ids");
+			).rejects.toMatchObject({ code: "INVALID_PARAMS", message: "Invalid resource ids" });
 			await expect(
 				handleRequest("backgroundCommand.stop", { ...scope, commandId }, CTX),
-			).rejects.toThrow("Invalid resource ids");
+			).rejects.toMatchObject({ code: "INVALID_PARAMS", message: "Invalid resource ids" });
 		}
 	} finally {
 		disposeAllSessions();

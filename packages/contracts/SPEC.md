@@ -133,8 +133,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions);
   from `wireChecks`, `describeFailure`, `wsResultValidator`, `wsPushValidator`, `parseWsResult`, `parseWsPush`,
   `wsChannelOf`, `Parsed`, `WsClientChannelMap` and `WsClientPayload`.
-- **`@thinkrail/contracts/test-ids`:** the one other entry: `testProjectId`, `testWorkspaceId` and `testSessionId` make an
-  id from any string, for test sources only ([[submodule-contracts-schema]]).
+- **`@thinkrail/contracts/test-ids`:** the one other entry: `testProjectId`, `testWorkspaceId`, `testSessionId` and
+  `testStoredSessionId` parse a string into an id and throw on a refusal, for test sources only ([[submodule-contracts-schema]]).
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).

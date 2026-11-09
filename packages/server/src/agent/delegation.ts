@@ -34,7 +34,6 @@ import { archiveSubagentRun, publishSessionResourcesChanged } from "./chatResour
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { requireSessionId } from "./requireSessionId";
-import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 import {
 	createRunUsageRecorder,
 	reconcileSubagentUsage,
@@ -204,22 +203,11 @@ export function removeWorkspaceDelegation(workspaceId: WorkspaceId): void {
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
 }
 
-function assertWorkspaceStorageId(value: string): void {
-	if (!isHostResourceId(value)) throw new Error("Invalid workspaceId: not a plain id");
-}
-
-function assertSessionId(value: string, label: string): void {
-	if (!isPiSessionId(value)) throw new Error(`Invalid ${label}: not a Pi session id`);
-}
-
 export function readChildTranscript(
 	workspaceId: WorkspaceId,
 	parentSessionId: SessionId,
 	childSessionId: SessionId,
 ): { messages: TranscriptMessage[]; status?: DelegationRunStatus } {
-	assertWorkspaceStorageId(workspaceId);
-	assertSessionId(parentSessionId, "parentSessionId");
-	assertSessionId(childSessionId, "childSessionId");
 	const path = deriveChildSessionFile(
 		delegationRootDir(),
 		workspaceId,

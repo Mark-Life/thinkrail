@@ -58,10 +58,8 @@ export function resourceHistoryRoot(): string {
 	return join(dataDir(), "resource-history");
 }
 
-function chatDir(scope: ResourceHistoryScope): string | null {
-	return STORAGE_ID.test(scope.workspaceId) && STORAGE_ID.test(scope.sessionId)
-		? join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId)
-		: null;
+function chatDir(scope: ResourceHistoryScope): string {
+	return join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId);
 }
 
 function keyOf(record: ResourceRecord): string {
@@ -130,8 +128,8 @@ export function recordResource(
 	record: ResourceRecord,
 	output?: ArchivedOutput,
 ): void {
+	if (!STORAGE_ID.test(resourceRecordId(record))) return;
 	const dir = chatDir(scope);
-	if (!dir || !STORAGE_ID.test(resourceRecordId(record))) return;
 	try {
 		const history = load(dir);
 		const key = keyOf(record);
@@ -164,7 +162,6 @@ export function finishedResources(
 	live: ReadonlySet<string>,
 ): ResourceRecord[] {
 	const dir = chatDir(scope);
-	if (!dir) return [];
 	const finished: ResourceRecord[] = [];
 	for (const record of load(dir).records.values()) {
 		if (record.kind !== kind || live.has(resourceRecordId(record))) continue;
@@ -192,8 +189,8 @@ export function archivedCommandOutput(
 	scope: ResourceHistoryScope,
 	commandId: string,
 ): ArchivedOutput | undefined {
+	if (!STORAGE_ID.test(commandId)) return undefined;
 	const dir = chatDir(scope);
-	if (!dir || !STORAGE_ID.test(commandId)) return undefined;
 	try {
 		const parsed: unknown = JSON.parse(
 			readFileSync(join(dir, "logs", `${commandId}.json`), "utf8"),
@@ -208,7 +205,6 @@ export function archivedCommandOutput(
 }
 
 export function removeWorkspaceResourceHistory(workspaceId: WorkspaceId): void {
-	if (!STORAGE_ID.test(workspaceId)) return;
 	const dir = join(resourceHistoryRoot(), workspaceId);
 	for (const key of [...cache.keys()]) if (key.startsWith(`${dir}${sep}`)) cache.delete(key);
 	rmSync(dir, { recursive: true, force: true });

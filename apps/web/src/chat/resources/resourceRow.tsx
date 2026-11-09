@@ -10,7 +10,7 @@ import {
 	RiTerminalBoxLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import type { SessionId } from "@thinkrail/contracts";
+import type { StoredSessionId } from "@thinkrail/contracts";
 import {
 	type BackgroundCommandStatus,
 	type BackgroundCommandSummary,
@@ -43,7 +43,7 @@ export type ResourceState =
 
 export type ResourceTarget =
 	| { kind: "command"; id: string }
-	| { kind: "subagent"; childSessionId: SessionId };
+	| { kind: "subagent"; childSessionId: StoredSessionId };
 
 export function resourceTarget(resource: Resource): ResourceTarget {
 	return resource.kind === "command"

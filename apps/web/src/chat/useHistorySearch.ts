@@ -1,11 +1,12 @@
-import type {
-	HistoryScope,
-	HistorySearchResult,
-	MessageHit,
-	ProjectId,
-	PromptHit,
-	SessionId,
-	WorkspaceId,
+import {
+	type HistoryScope,
+	type HistorySearchResult,
+	type MessageHit,
+	type ProjectId,
+	type PromptHit,
+	parseSessionId,
+	type SessionId,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatLocationRequest, useAppStore } from "@/store";
@@ -87,13 +88,20 @@ export function resolveHistorySelection(
 }
 
 export function jumpTarget(hit: PromptHit | MessageHit): ChatLocationRequest | null {
-	if (!hit.workspaceId || !hit.projectId || hit.messageIndex == null || hit.anchorText == null) {
+	const sessionId = parseSessionId(hit.sessionId);
+	if (
+		!hit.workspaceId ||
+		!hit.projectId ||
+		sessionId === null ||
+		hit.messageIndex == null ||
+		hit.anchorText == null
+	) {
 		return null;
 	}
 	return {
 		workspaceId: hit.workspaceId,
 		projectId: hit.projectId,
-		sessionId: hit.sessionId,
+		sessionId,
 		messageIndex: hit.messageIndex,
 		anchorText: hit.anchorText,
 	};

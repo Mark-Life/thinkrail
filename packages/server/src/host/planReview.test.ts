@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ReviewFailedPayload, SessionId, Workspace } from "@thinkrail/contracts";
+import type { ReviewFailedPayload, SessionId } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { fakeFetch } from "../../test/fakeFetch";
@@ -27,7 +27,7 @@ import { resetConfigCache, updateConfig } from "../settings";
 import * as todos from "../todos";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { getWorkspace } from "../workspaces";
-import { handleRequest } from "./handlers";
+import { handleTypedRequest } from "./handlers";
 import { itemReviewActive } from "./planReviewQueue";
 import {
 	installRequestReviewSeam,
@@ -42,11 +42,14 @@ import { withReviewLock } from "./reviewLock";
 import { parseVerdict } from "./reviewVerdict";
 import { claimItemFix, isItemUnderActiveReview, releaseItemFix } from "./todoReview";
 
+const PROJECT_ID = testProjectId("00000000-0000-4000-8000-0000000000a1");
+const WORKSPACE_ID = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
+
 const TEST_KEY = "phc_test";
 
 let dataDir: string;
 let worktree: string;
-const WS = testWorkspaceId("ws-planreview");
+const WS = WORKSPACE_ID;
 
 function modelDef(id: string) {
 	return {
@@ -116,13 +119,12 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: testProjectId("p1"),
+			projectId: PROJECT_ID,
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
 			worktreePath: worktree,
-			createdAt: 0,
-		} as Workspace,
+		},
 	]);
 });
 
@@ -978,7 +980,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	// A commit no plan item owns is surfaced only as a wire-only adoptedCommits entry; the review result
 	// card / detached-failure toast must name its subject, so itemTitleOf has to look there too.
 	const wt = mkdtempSync(join(tmpdir(), "planreview-adopt-"));
-	const ws = testWorkspaceId("ws-adopt");
+	const ws = testWorkspaceId("00000000-0000-4000-8000-4a37f1967e1b");
 	sh(wt, "init", "-b", "main");
 	sh(wt, "config", "user.email", "t@thinkrail.test");
 	sh(wt, "config", "user.name", "test");
@@ -994,13 +996,12 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	saveWorkspaces([
 		{
 			id: ws,
-			projectId: testProjectId("p1"),
+			projectId: PROJECT_ID,
 			name: "w",
 			branch: "feature",
 			baseBranch: "main",
 			worktreePath: wt,
-			createdAt: 0,
-		} as Workspace,
+		},
 	]);
 	try {
 		expect(
@@ -1092,7 +1093,7 @@ test("agent-delivered findings emit review_comment_sent on the button, tool and 
 				return new Response("{}", { status: 200 });
 			}),
 		});
-		await handleRequest(
+		await handleTypedRequest(
 			"todo.requestFix",
 			{ workspaceId: WS, sessionId, id: manual, feedback: "please fix" },
 			{ clientKey: "test" },

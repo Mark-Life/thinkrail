@@ -1,6 +1,6 @@
 import { lit, nullable, num, oneOf, opt, type Static, str, union } from "@earendil-works/pi-schema";
 import { GitDiffScope } from "./diffScope";
-import { WorkspaceId } from "./ids";
+import { StoredWorkspaceId, WorkspaceId } from "./ids";
 import { wireObj } from "./wire";
 
 export const LineSpan = wireObj({ start: num(), count: num() });
@@ -20,7 +20,7 @@ const ChangeReceiptSide = wireObj({
 
 export const ChangeReceipt = wireObj({
 	id: str(),
-	workspaceId: WorkspaceId,
+	workspaceId: StoredWorkspaceId,
 	path: str(),
 	kind: oneOf(["revert", "undo"]),
 	at: num(),

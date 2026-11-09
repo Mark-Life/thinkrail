@@ -193,7 +193,7 @@ describe("workspace layout model", () => {
 				id: "d",
 				name: "",
 				documentKind: "todo-plan",
-				sourceId: "s",
+				sourceId: testSessionId("s"),
 				docPath: "TODO.md",
 			} as const;
 			expect(layoutTabName(t, plan)).toBe("Plan: Unterhaltung");
@@ -221,7 +221,7 @@ describe("workspace layout model", () => {
 					id: "p",
 					name: "",
 					documentKind: "todo-plan",
-					sourceId: "s",
+					sourceId: testSessionId("s"),
 					docPath: "TODO.md",
 				}),
 			).toBe("Plan: Unterhaltung");
@@ -947,7 +947,7 @@ describe("workspace layout model", () => {
 				id: "todo",
 				name: "TODO",
 				documentKind: "todo-plan",
-				sourceId: "session",
+				sourceId: testSessionId("session"),
 				docPath: "TODO.md",
 			},
 		]);

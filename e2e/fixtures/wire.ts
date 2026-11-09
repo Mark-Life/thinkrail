@@ -6,7 +6,6 @@ import {
 	WsEnvelope,
 	type WsMethodName,
 	type WsParams,
-	type WsRequest,
 	WsRequestFrame,
 	WsResponse,
 	type WsResult,
@@ -106,13 +105,21 @@ export class E2eWire {
 		return new E2eWire(socket);
 	}
 
-	request<M extends WsMethodName>(
+	request<M extends WsMethodName>(method: M, params: WsParams<M>, timeoutMs = 10_000) {
+		return this.send(method, params, timeoutMs);
+	}
+
+	requestUntyped<M extends WsMethodName>(method: M, params: unknown, timeoutMs = 10_000) {
+		return this.send(method, params, timeoutMs);
+	}
+
+	private send<M extends WsMethodName>(
 		method: M,
-		params: WsParams<M>,
-		timeoutMs = 10_000,
+		params: unknown,
+		timeoutMs: number,
 	): Promise<WsResult<M>> {
 		const id = `e2e_setup_${++this.sequence}`;
-		const request: WsRequest<M> = { id, method, params };
+		const request = { id, method, params };
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				cleanup();

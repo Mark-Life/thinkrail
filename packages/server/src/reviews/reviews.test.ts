@@ -253,7 +253,7 @@ test("send lifecycle: sendable drafts → sent with session link; the file's cha
 	const snapshot = await getReviewSnapshot(WS_ID);
 	expect(snapshot.review.fileSessions).toEqual({ "a.ts": testSessionId("sess-file") });
 	expect(await fileReviewSession(WS_ID, "a.ts")).toBe(testSessionId("sess-file"));
-	expect(await fileReviewSession(WS_ID, "other.ts")).toBeUndefined();
+	expect(await fileReviewSession(WS_ID, "other.ts")).toBeNull();
 	expect(snapshot.comments.every((c) => c.status === "sent" && c.sessionId === "sess-file")).toBe(
 		true,
 	);
@@ -488,8 +488,8 @@ test("purge removes the workspace's active review and archives", async () => {
 	expect((await getReviewSnapshot(WS_ID)).comments).toHaveLength(0);
 });
 
-test("a path-segment workspace id is refused by every file touch — no traversal out of the reviews dir", async () => {
-	for (const evil of ["../config", "a/b", "a\\b", "..", ".", "x.y"]) {
+test("a dotted workspace id is refused by every file touch", async () => {
+	for (const evil of ["x.y", "a..b"]) {
 		expect(() => removeWorkspaceReviews(testWorkspaceId(evil))).toThrow(/Invalid workspace id/);
 		await expect(getReviewSnapshot(testWorkspaceId(evil))).rejects.toThrow(/Invalid workspace id/);
 	}

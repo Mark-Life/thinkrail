@@ -12,7 +12,7 @@ import {
 	union,
 } from "@earendil-works/pi-schema";
 import { GitDiffScope } from "./diffScope";
-import { SessionId, WorkspaceId } from "./ids";
+import { SessionId, StoredSessionId, StoredWorkspaceId, WorkspaceId } from "./ids";
 import { ThinkingLevel, WireModel } from "./model";
 import { Ack, wireObj } from "./wire";
 
@@ -60,11 +60,11 @@ export const ReviewComment = wireObj({
 	body: str(),
 	status: ReviewCommentStatus,
 	anchorState: ReviewAnchorState,
-	sessionId: opt(SessionId),
+	sessionId: opt(StoredSessionId),
 	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
 	author: opt(oneOf(["user", "agent"])),
 	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */
-	origin: opt(wireObj({ todoId: str(), reviewedSha: str(), sessionId: SessionId })),
+	origin: opt(wireObj({ todoId: str(), reviewedSha: str(), sessionId: StoredSessionId })),
 	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */
 	stale: opt(bool()),
 	resolvedBy: opt(oneOf(["agent", "user"])),
@@ -129,7 +129,7 @@ export const ReviewGuide = wireObj({
 	readingOrder: arr(ReviewReadingStep),
 	verdict: PlanReviewVerdict,
 	todoId: str(),
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	reviewedSha: str(),
 	at: num(),
 });
@@ -137,10 +137,10 @@ export type ReviewGuide = Static<typeof ReviewGuide>;
 
 export const Review = wireObj({
 	id: str(),
-	workspaceId: WorkspaceId,
+	workspaceId: StoredWorkspaceId,
 	status: oneOf(["open", "closed"]),
 	baseSha: str(),
-	fileSessions: opt(map(SessionId)),
+	fileSessions: opt(map(StoredSessionId)),
 	doneFiles: opt(arr(str())),
 	guide: opt(ReviewGuide),
 	createdAt: num(),
@@ -153,15 +153,18 @@ const ReviewSnapshotFields = { review: Review, comments: arr(ReviewComment) };
 export const ReviewSnapshot = wireObj(ReviewSnapshotFields);
 export type ReviewSnapshot = Static<typeof ReviewSnapshot>;
 
-export const ReviewChangedPayload = wireObj({ ...ReviewSnapshotFields, workspaceId: WorkspaceId });
+export const ReviewChangedPayload = wireObj({
+	...ReviewSnapshotFields,
+	workspaceId: StoredWorkspaceId,
+});
 export type ReviewChangedPayload = Static<typeof ReviewChangedPayload>;
 
 /** A plan review that failed after `todo.startReview` acknowledged — the detached button/auto path has no
  * chat of its own, so the owning plan session raises the failure as a toast. `sessionId` routes it to that
  * plan only; duplicate views of one session dedupe on the toast body. See apps/web/src/panels/SPEC.md. */
 export const ReviewFailedPayload = wireObj({
-	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	workspaceId: StoredWorkspaceId,
+	sessionId: StoredSessionId,
 	itemId: str(),
 	itemTitle: str(),
 	message: str(),
@@ -169,7 +172,7 @@ export const ReviewFailedPayload = wireObj({
 export type ReviewFailedPayload = Static<typeof ReviewFailedPayload>;
 
 export const ReviewSendResult = wireObj({
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	model: nullable(WireModel),
 	thinkingLevel: ThinkingLevel,
 	reused: bool(),

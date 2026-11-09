@@ -14,7 +14,7 @@ import {
 	unknown,
 } from "@earendil-works/pi-schema";
 import { ExtUiDialogRequest, ExtUiResponse } from "./extUi";
-import { ProjectId, SessionId, WorkspaceId } from "./ids";
+import { SessionId, StoredProjectId, StoredSessionId, StoredWorkspaceId, WorkspaceId } from "./ids";
 import { ThinkingLevel, WireModel } from "./model";
 import {
 	ResourceHistoryCursor,
@@ -53,9 +53,9 @@ export const SessionState = wireObj({
 export type SessionState = Static<typeof SessionState>;
 
 export const SessionStateRecord = wireObj({
-	sessionId: SessionId,
-	workspaceId: WorkspaceId,
-	projectId: ProjectId,
+	sessionId: StoredSessionId,
+	workspaceId: StoredWorkspaceId,
+	projectId: StoredProjectId,
 	state: SessionState,
 	title: opt(str()),
 	firstPrompt: opt(str()),
@@ -70,7 +70,7 @@ export const ContextUsage = wireObj({
 export type ContextUsage = Static<typeof ContextUsage>;
 
 export const SessionStats = wireObj({
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	totalMessages: num(),
 	tokens: wireObj({
 		input: num(),
@@ -113,8 +113,8 @@ export const RemovedQueuedMessage = wireObj({
 export type RemovedQueuedMessage = Static<typeof RemovedQueuedMessage>;
 
 export const SessionSummary = wireObj({
-	sessionId: SessionId,
-	workspaceId: WorkspaceId,
+	sessionId: StoredSessionId,
+	workspaceId: StoredWorkspaceId,
 	title: str(),
 	firstPrompt: opt(str()),
 	model: nullable(WireModel),
@@ -133,8 +133,11 @@ export type SessionSummary = Static<typeof SessionSummary>;
 const SessionTarget = wireObj({ sessionId: SessionId });
 const ScopedSession = wireObj({ workspaceId: WorkspaceId, sessionId: SessionId });
 
-export const SessionDeletedPayload = ScopedSession;
-export type SessionDeletedPayload = Static<typeof ScopedSession>;
+export const SessionDeletedPayload = wireObj({
+	workspaceId: StoredWorkspaceId,
+	sessionId: StoredSessionId,
+});
+export type SessionDeletedPayload = Static<typeof SessionDeletedPayload>;
 const UserMessageParams = wireObj({
 	sessionId: SessionId,
 	text: str(),
@@ -149,7 +152,7 @@ export const SESSION_METHODS = {
 			thinkingLevel: opt(ThinkingLevel),
 		}),
 		result: wireObj({
-			sessionId: SessionId,
+			sessionId: StoredSessionId,
 			model: nullable(WireModel),
 			thinkingLevel: ThinkingLevel,
 		}),
@@ -230,9 +233,9 @@ export const SESSION_METHODS = {
 };
 
 export const SESSION_CHANNELS = {
-	"pi.event": wireObj({ sessionId: SessionId, event: wireObj({ type: str() }) }),
+	"pi.event": wireObj({ sessionId: StoredSessionId, event: wireObj({ type: str() }) }),
 	"session.created": SessionSummary,
 	"session.deleted": SessionDeletedPayload,
-	"session.resourcesChanged": ScopedSession,
+	"session.resourcesChanged": SessionDeletedPayload,
 	"session.state": SessionStateRecord,
 };

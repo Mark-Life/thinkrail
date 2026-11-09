@@ -12,7 +12,7 @@ import {
 	union,
 } from "@earendil-works/pi-schema";
 import { GitFileChange } from "./git";
-import { ProjectId, SessionId, WorkspaceId } from "./ids";
+import { ProjectId, StoredProjectId, StoredSessionId, StoredWorkspaceId, WorkspaceId } from "./ids";
 import { ThinkingLevel, WireModel } from "./model";
 import { OpenBranchReview, ReviewProvider } from "./pr";
 import { SessionStateRecord } from "./session";
@@ -30,8 +30,8 @@ export const SettledOverride = oneOf(["settled", "active"]);
 export type SettledOverride = Static<typeof SettledOverride>;
 
 export const Workspace = wireObj({
-	id: WorkspaceId,
-	projectId: ProjectId,
+	id: StoredWorkspaceId,
+	projectId: StoredProjectId,
 	kind: opt(oneOf(["default", "external"])),
 	name: str(),
 	branch: str(),
@@ -40,7 +40,7 @@ export const Workspace = wireObj({
 	diffBase: opt(str()),
 	renamed: opt(bool()),
 	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
-	branchNamePending: opt(SessionId),
+	branchNamePending: opt(StoredSessionId),
 	initialTerminalPending: opt(lit(true)),
 	diffStats: opt(DiffStats),
 	skillOverrides: opt(map(oneOf(["on", "off"]))),
@@ -85,8 +85,8 @@ export type ExistingWorktreeCandidate = Static<typeof ExistingWorktreeCandidate>
 
 export const TurnChangeSet = wireObj({
 	id: str(),
-	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	workspaceId: StoredWorkspaceId,
+	sessionId: StoredSessionId,
 	startedAt: num(),
 	settledAt: num(),
 	baseTree: str(),
@@ -114,8 +114,8 @@ export type WorkspaceKickoff = Static<typeof WorkspaceKickoff>;
 
 /** The `WorkspaceCreation` properties, so a stored creation record can extend the wire shape. */
 export const WorkspaceCreationFields = {
-	id: WorkspaceId,
-	projectId: ProjectId,
+	id: StoredWorkspaceId,
+	projectId: StoredProjectId,
 	name: str(),
 	branch: str(),
 	baseBranch: str(),
@@ -131,14 +131,14 @@ export type WorkspaceCreation = Static<typeof WorkspaceCreation>;
 
 const WorkspaceTarget = wireObj({ id: WorkspaceId });
 
-export const WorkspaceRemoved = wireObj({ projectId: ProjectId, id: WorkspaceId });
+export const WorkspaceRemoved = wireObj({ projectId: StoredProjectId, id: StoredWorkspaceId });
 export type WorkspaceRemoved = Static<typeof WorkspaceRemoved>;
 
 export const WorkspaceCreationRemoved = wireObj({
-	id: WorkspaceId,
-	projectId: ProjectId,
+	id: StoredWorkspaceId,
+	projectId: StoredProjectId,
 	workspace: opt(Workspace),
-	sessionId: opt(SessionId),
+	sessionId: opt(StoredSessionId),
 	kickoffError: opt(str()),
 });
 export type WorkspaceCreationRemoved = Static<typeof WorkspaceCreationRemoved>;
@@ -147,7 +147,7 @@ export const WorkspaceSkillChange = oneOf(["none", "detected", "unknown"]);
 export type WorkspaceSkillChange = Static<typeof WorkspaceSkillChange>;
 
 export const WorkspaceFsChangedPayload = wireObj({
-	workspaceId: WorkspaceId,
+	workspaceId: StoredWorkspaceId,
 	paths: arr(str()),
 	truncated: bool(),
 	skillChange: WorkspaceSkillChange,

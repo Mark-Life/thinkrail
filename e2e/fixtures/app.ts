@@ -1,8 +1,8 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import type { SessionSummary, Workspace } from "@thinkrail/contracts";
+import { parseSessionId, type SessionSummary, type Workspace } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import {
 	isRealCentralE2e,
@@ -25,6 +25,7 @@ import {
 	E2E_PLAIN_DIR,
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
+import { readPersistedWorkspaces } from "./storedState";
 import { E2eWire } from "./wire";
 
 export const PHONE_VIEWPORT = { width: 390, height: 780 } as const;
@@ -122,16 +123,8 @@ export async function stagePlainFolder(page: Page): Promise<string> {
 	return E2E_PLAIN_DIR;
 }
 
-export function loadPersistedWorkspaces(): Workspace[] {
-	try {
-		return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
-	} catch {
-		return [];
-	}
-}
-
 async function disposeLiveSessions(page: Page): Promise<void> {
-	const workspaces = loadPersistedWorkspaces();
+	const workspaces = readPersistedWorkspaces();
 	if (workspaces.length === 0) return;
 	const health = await page.request.get("/health");
 	const hostUrl = new URL(health.url());
@@ -146,9 +139,10 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 				30_000,
 			);
 			for (const session of sessions) {
-				if (session.live) {
-					await wire.request("session.dispose", { sessionId: session.sessionId }, 30_000);
-				}
+				if (!session.live) continue;
+				const sessionId = parseSessionId(session.sessionId);
+				if (sessionId === null) throw new Error("A live session has an id that is not path-safe");
+				await wire.request("session.dispose", { sessionId }, 30_000);
 			}
 		}
 	} finally {
@@ -157,7 +151,7 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 }
 
 export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
-	const before = new Set(loadPersistedWorkspaces().map((w) => w.id));
+	const before = new Set(readPersistedWorkspaces().map((w) => w.id));
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(async () => {
 		if (!(await dialog.isVisible())) await page.getByTestId("add-workspace").first().click();
@@ -166,7 +160,7 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
-	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
+	const created = readPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
 	if (!created) throw new Error("Workspace was not persisted after creation");
 	return created;
 }
@@ -302,7 +296,7 @@ export async function openWorkspaceChat(page: Page): Promise<Workspace> {
 	}).toPass({ timeout: 30_000 });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
-	workspace ??= loadPersistedWorkspaces().find((candidate) => candidate.kind !== "default");
+	workspace ??= readPersistedWorkspaces().find((candidate) => candidate.kind !== "default");
 	if (!workspace) throw new Error("Workspace chat opened without a persisted worktree");
 	return workspace;
 }

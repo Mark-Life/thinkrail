@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import {
+	testProjectId,
+	testSessionId,
+	testStoredSessionId,
+	testWorkspaceId,
+} from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
 import {
@@ -20,7 +25,7 @@ import {
 	todoReviewAutoCycles,
 	todoReviewRecord,
 } from "../todos";
-import { clearChangesRequestedIfResolved } from "./todoReview";
+import { clearChangesRequestedIfResolved, findingItem } from "./todoReview";
 
 // A changes_requested verdict must not outlive its findings: deleting the item's last open finding
 // drops its review record back to unreviewed. A verdict that never had a finding is untouched.
@@ -96,6 +101,16 @@ test("a changes_requested item with no open findings is dropped to unreviewed", 
 
 	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
 	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
+});
+
+test("a finding whose stored session id is not path-safe names no item", () => {
+	const origin = { todoId: "t1", reviewedSha: "abc", sessionId: testStoredSessionId("../outside") };
+	expect(findingItem(WS, origin)).toBeNull();
+	expect(findingItem(WS, { ...origin, sessionId: SESSION })).toEqual({
+		workspaceId: WS,
+		sessionId: SESSION,
+		id: "t1",
+	});
 });
 
 test("dropping the verdict keeps an in-flight review's watermark and the auto-cycle cap", async () => {

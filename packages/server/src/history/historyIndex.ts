@@ -6,14 +6,18 @@ import type {
 	MessageHit,
 	ProjectId,
 	PromptHit,
-	SessionId,
+	StoredSessionId,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { MAX_HISTORY_LIMIT, MAX_HISTORY_QUERY_LENGTH, parseSessionId } from "@thinkrail/contracts";
+import {
+	MAX_HISTORY_LIMIT,
+	MAX_HISTORY_QUERY_LENGTH,
+	parseStoredSessionId,
+} from "@thinkrail/contracts";
 import { extractSession, type HistoryEntry } from "./extract";
 
 interface SessionRecord {
-	sessionId: SessionId;
+	sessionId: StoredSessionId;
 	cwd: string;
 	title?: string;
 	path: string;
@@ -25,7 +29,7 @@ interface SessionRecord {
 export type HistoryState = "cold" | "refreshing" | "ready";
 
 export interface HistorySession {
-	readonly sessionId: SessionId;
+	readonly sessionId: StoredSessionId;
 	readonly cwd: string;
 	readonly title?: string;
 	readonly entries: readonly HistoryEntry[];
@@ -93,7 +97,7 @@ export class HistoryIndex {
 	private async loadRecord(path: string, mtimeMs: number, size: number): Promise<void> {
 		try {
 			const session = extractSession(await readFile(path, "utf8"));
-			const sessionId = session ? parseSessionId(session.id) : null;
+			const sessionId = session ? parseStoredSessionId(session.id) : null;
 			if (!session || sessionId === null) {
 				this.records.delete(path);
 				return;
@@ -162,7 +166,7 @@ export class HistoryIndex {
 	async search(input: {
 		query: string;
 		limit?: number;
-		filter: (cwd: string, sessionId: SessionId) => boolean;
+		filter: (cwd: string, sessionId: StoredSessionId) => boolean;
 		labels: (cwd: string) => { workspaceId?: WorkspaceId; projectId?: ProjectId };
 	}): Promise<HistorySearchResult> {
 		const indexing = await this.freshen();

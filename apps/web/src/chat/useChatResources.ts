@@ -1,6 +1,7 @@
-import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
+import type { SessionId, StoredSessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	type BackgroundCommandOutputResult,
+	parseSessionId,
 	type ResourceHistoryCursor,
 	type ResourceHistoryPage,
 	type ResourceKind,
@@ -17,6 +18,7 @@ import {
 	isActiveSubagent,
 	isChatResourceConnectionCurrent,
 	isChatResourceScopeAlive,
+	type ReportedChatScope,
 	selectChatResourceAuthority,
 	selectChatResourceGroups,
 	selectChatResourceOldest,
@@ -46,7 +48,7 @@ export function startChatResourceSync(
 	deps: {
 		state: () => ResourceStore;
 		read: () => Promise<SessionResources>;
-		subscribe: (invalidate: (scope: ChatResourceScope) => void) => () => void;
+		subscribe: (invalidate: (changed: ReportedChatScope) => void) => () => void;
 		scheduler?: DetailPollScheduler;
 	},
 ) {
@@ -174,12 +176,13 @@ export function createChatResourceControls(
 			if (command && isActiveBackgroundCommand(command))
 				void run(`command:${id}`, () => deps.stopCommand(id));
 		},
-		stopSubagent: (id: SessionId) => {
+		stopSubagent: (id: StoredSessionId) => {
+			const childSessionId = parseSessionId(id);
 			const child = selectChatResourceProjection(deps.state(), scope)?.snapshot?.subagents.find(
 				(item) => item.childSessionId === id,
 			);
-			if (child && isActiveSubagent(child) && !actions.all?.pending)
-				void run(`subagent:${id}`, () => deps.stopSubagent(id));
+			if (childSessionId && child && isActiveSubagent(child) && !actions.all?.pending)
+				void run(`subagent:${id}`, () => deps.stopSubagent(childSessionId));
 		},
 		stopAll: () => {
 			if (
@@ -309,7 +312,7 @@ export function useChatResources(workspaceId: WorkspaceId, sessionId: SessionId)
 		actions,
 		retry: useCallback(() => sync.current?.refresh(), []),
 		stopCommand: useCallback((id: string) => controls.current?.stopCommand(id), []),
-		stopSubagent: useCallback((id: SessionId) => controls.current?.stopSubagent(id), []),
+		stopSubagent: useCallback((id: StoredSessionId) => controls.current?.stopSubagent(id), []),
 		stopAll: useCallback(() => controls.current?.stopAll(), []),
 		setMcpEnabled: useCallback(
 			(name: string, enabled: boolean) => controls.current?.setMcpEnabled(name, enabled),

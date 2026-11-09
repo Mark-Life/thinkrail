@@ -228,24 +228,10 @@ test("pages walk newest first from a cursor and tallies count every outcome", ()
 	expect(tallyResources(finished)).toEqual({ done: 5, failed: 1, stopped: 1, interrupted: 1 });
 });
 
-test("unsafe ids never touch the filesystem", () => {
-	recordResource(
-		{ workspaceId: testWorkspaceId(".."), sessionId: testSessionId("chat-1") },
-		command("c1"),
-	);
-	recordResource(
-		{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("../escape") },
-		command("c1"),
-	);
+test("an unsafe record id never touches the filesystem", () => {
 	recordResource(scope, command("../../escape"));
 	expect(existsSync(resourceHistoryRoot())).toBe(false);
-	expect(
-		finishedResources(
-			{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("a/b") },
-			"command",
-			none,
-		),
-	).toEqual([]);
+	expect(archivedCommandOutput(scope, "../../escape")).toBeUndefined();
 });
 
 test("removing a workspace drops its history on disk and in memory", () => {

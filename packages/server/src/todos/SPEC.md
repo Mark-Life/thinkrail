@@ -342,6 +342,11 @@ before the already-enqueued replacement pass has reconciled the current plan.
 sidecar suffix, so the owner scans skip it. The plan file itself stays with `pi-todos`, whose `sanitize` repairs
 field by field.
 
+Review, baseline and plan (`TodoStore`) paths are built only from a `SessionId`, which is path-safe by type
+([[submodule-contracts-schema]]). A
+stored session id, such as a review finding's `origin.sessionId` or a plan or review file name, goes through
+`parseSessionId` before it names a file; a refusal skips that file.
+
 ## Boundary
 
 - **Owns / public surface (barrel):** `listTodos({workspaceId, sessionId}) → Promise<TodoPlan>` (async

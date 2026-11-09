@@ -139,12 +139,22 @@ test("missing chat, workspace, and project fall back to the nearest valid locati
 		.poll(() => currentHash(page))
 		.toContain(`#/v1/projects/${projectId}/workspaces/${workspace.id}`);
 
-	await coldOpen(page, `#/v1/projects/${projectId}/workspaces/gone`);
+	await coldOpen(
+		page,
+		`#/v1/projects/${projectId}/workspaces/00000000-0000-4000-8000-0000000000bf`,
+	);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(activeWorktreeRow(page)).toHaveCount(0);
 	await expect.poll(() => currentHash(page)).toBe(`#/v1/projects/${projectId}`);
 
-	await coldOpen(page, "#/v1/projects/gone/workspaces/w/chats/s");
+	await coldOpen(
+		page,
+		"#/v1/projects/00000000-0000-4000-8000-0000000000af/workspaces/00000000-0000-4000-8000-0000000000bf/chats/s",
+	);
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await expect.poll(() => currentHash(page)).toBe("#/v1");
+
+	await coldOpen(page, `#/v1/projects/${projectId}/workspaces/..%2F..%2Fescape`);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect.poll(() => currentHash(page)).toBe("#/v1");
 });

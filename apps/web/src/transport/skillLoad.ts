@@ -1,9 +1,10 @@
-import type {
-	WorkspaceFsChangedPayload,
-	WorkspaceId,
-	WorkspaceWatchReadyResult,
-	WsParams,
-	WsResult,
+import {
+	parseSessionId,
+	type WorkspaceFsChangedPayload,
+	type WorkspaceId,
+	type WorkspaceWatchReadyResult,
+	type WsParams,
+	type WsResult,
 } from "@thinkrail/contracts";
 import { selectWorkspaceTick, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
@@ -52,8 +53,10 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 		},
 		async createSession(params: WsParams<"session.create">) {
 			const syncedTick = await prepare(params.workspaceId, false);
-			const result = await deps.createSession(params);
-			return { result, syncedTick };
+			const created = await deps.createSession(params);
+			const sessionId = parseSessionId(created.sessionId);
+			if (sessionId === null) throw new Error("The host named the new session with an unusable id");
+			return { result: { ...created, sessionId }, syncedTick };
 		},
 		async getSessionMessages(params: WsParams<"session.getMessages">) {
 			const syncedTick = deps.workspaceTick(params.workspaceId);
@@ -65,7 +68,10 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			) {
 				throw new Error("Session response did not match the requested workspace and session");
 			}
-			return { result, syncedTick };
+			return {
+				result: { ...result, summary: { ...result.summary, sessionId: params.sessionId } },
+				syncedTick,
+			};
 		},
 		async reloadSessionResources(
 			workspaceId: WorkspaceId,

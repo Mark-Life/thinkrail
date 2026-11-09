@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import {
+	testProjectId,
+	testSessionId,
+	testStoredSessionId,
+	testWorkspaceId,
+} from "@thinkrail/contracts/test-ids";
 import { buildHistoryScope } from "./historyScope";
 import { parseWsParams } from "./wsParams";
 
@@ -9,7 +14,7 @@ test("all scope: filter matches any cwd + sessionId", () => {
 
 	expect(filter("/some/cwd", testSessionId("session1"))).toBe(true);
 	expect(filter("/another/cwd", testSessionId("session2"))).toBe(true);
-	expect(filter("", testSessionId(""))).toBe(true);
+	expect(filter("", testStoredSessionId(""))).toBe(true);
 });
 
 test("chat scope: filter matches only the exact sessionId", () => {
@@ -94,7 +99,7 @@ test("workspace scope with unknown workspaceId: filter always returns false, eve
 	expect(filter("/proj/worktrees/ws1", testSessionId("any-session"))).toBe(false);
 	expect(filter("/proj/worktrees/ws2", testSessionId("any-session"))).toBe(false);
 	expect(filter("/", testSessionId("session1"))).toBe(false);
-	expect(filter("", testSessionId(""))).toBe(false);
+	expect(filter("", testStoredSessionId(""))).toBe(false);
 });
 
 test("project scope: filter matches cwds of any workspace in the project", () => {

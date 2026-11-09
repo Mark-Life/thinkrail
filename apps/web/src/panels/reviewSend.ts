@@ -1,4 +1,9 @@
-import type { ReviewSendResult, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import {
+	parseSessionId,
+	type ReviewSendResult,
+	type SessionId,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type CenterNavigationStamp,
@@ -15,15 +20,17 @@ async function showReviewChat(
 	navigation: CenterNavigationStamp | null,
 	background = false,
 ): Promise<void> {
+	const sessionId = parseSessionId(sent.sessionId);
+	if (sessionId === null) throw new Error("The host named the review chat with an unusable id");
 	if (sent.reused) {
-		await openChatInTab(workspaceId, sent.sessionId, navigation, background);
+		await openChatInTab(workspaceId, sessionId, navigation, background);
 		return;
 	}
 	const store = useAppStore.getState();
 	const routed = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
 	store.openChatSession(
 		workspaceId,
-		sent.sessionId,
+		sessionId,
 		sent.model,
 		sent.thinkingLevel,
 		undefined,

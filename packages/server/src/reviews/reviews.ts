@@ -13,7 +13,8 @@ import { compile } from "@earendil-works/pi-schema";
 import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	type GitDiffScope,
-	parseWorkspaceId,
+	parseSessionId,
+	parseStoredWorkspaceId,
 	type ReviewAnchor,
 	type ReviewChangedPayload,
 	type ReviewComment,
@@ -575,8 +576,9 @@ export function rollbackSend(
 export async function fileReviewSession(
 	workspaceId: WorkspaceId,
 	key: string,
-): Promise<SessionId | undefined> {
-	return (await ensureSnapshot(workspaceId)).review.fileSessions?.[key];
+): Promise<SessionId | null> {
+	const linked = (await ensureSnapshot(workspaceId)).review.fileSessions?.[key];
+	return linked === undefined ? null : parseSessionId(linked);
 }
 
 function applyAgentResolution(
@@ -609,7 +611,7 @@ export function resolveCommentFromAgent(
 		files = readdirSync(reviewsDir()).filter((file) => file.endsWith(".json"));
 	} catch {}
 	for (const file of files) {
-		const workspaceId = parseWorkspaceId(file.slice(0, -".json".length));
+		const workspaceId = parseStoredWorkspaceId(file.slice(0, -".json".length));
 		if (workspaceId === null) continue;
 		let snapshot: ReviewSnapshot | null = null;
 		try {

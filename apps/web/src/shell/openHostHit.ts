@@ -1,4 +1,11 @@
-import type { ProjectId, SearchHit, SessionId, Workspace, WorkspaceId } from "@thinkrail/contracts";
+import {
+	type ProjectId,
+	parseSessionId,
+	type SearchHit,
+	type SessionId,
+	type Workspace,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
 
@@ -33,18 +40,22 @@ export async function openHostHit(hit: SearchHit, targets: HostHitTargets): Prom
 		case "spec":
 			if (await targets.navigateToWorkspace(workspace)) targets.openSpec(workspace.id, hit.path);
 			return;
-		case "transcript":
-			if (!(await targets.loadWorkspaceRow(workspace))) return;
+		case "transcript": {
+			const sessionId = parseSessionId(hit.sessionId);
+			if (sessionId === null || !(await targets.loadWorkspaceRow(workspace))) return;
 			targets.openChatLocation({
 				workspaceId: workspace.id,
 				projectId: workspace.projectId,
-				sessionId: hit.sessionId,
+				sessionId,
 				messageIndex: hit.messageIndex,
 				anchorText: hit.anchorText,
 			});
 			return;
+		}
 		case "plan":
-			if (await targets.navigateToWorkspace(workspace, hit.sessionId)) {
+			if (
+				await targets.navigateToWorkspace(workspace, parseSessionId(hit.sessionId) ?? undefined)
+			) {
 				targets.openPlan(workspace.id);
 			}
 			return;
