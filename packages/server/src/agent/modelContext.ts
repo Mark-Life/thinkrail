@@ -5,6 +5,7 @@ import {
 	type ModelContextSetting,
 	type ModelContextTarget,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { applyEdits, findNodeAtLocation, modify, type Node, parseTree } from "jsonc-parser";
 import { usePiRuntime } from "./agentSessionManager";
 import {
@@ -75,7 +76,8 @@ export function setModelContextWindow(
 ): Promise<ModelContextSetting[]> {
 	if (contextWindow !== null && !isModelContextWindow(contextWindow)) {
 		return Promise.reject(
-			new Error(
+			new CodedError(
+				"INVALID_PARAMS",
 				`Context window must be a whole number between ${MODEL_CONTEXT_WINDOW_LIMITS.min.toLocaleString("en-US")} and ${MODEL_CONTEXT_WINDOW_LIMITS.max.toLocaleString("en-US")} tokens`,
 			),
 		);
@@ -96,7 +98,8 @@ function save(
 			target === "available"
 				? settings.filter(isSharedModelContextTarget)
 				: settings.filter((model) => model.provider === target.provider && model.id === target.id);
-		if (targets.length === 0) throw new Error("Unknown, unavailable or ineligible context target");
+		if (targets.length === 0)
+			throw new CodedError("INVALID_PARAMS", "Unknown, unavailable or ineligible context target");
 		const { bom, body } = splitModelsSource(source);
 		let next = body;
 		for (const model of targets) next = patch(next, overridePath(model), contextWindow);

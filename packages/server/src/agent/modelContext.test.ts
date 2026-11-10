@@ -281,10 +281,16 @@ test("budgets outside 272K–1M and unknown targets are refused before touching 
 	}
 	await expect(
 		setModelContextWindow({ provider: "openai", id: "gpt-5" }, 1_000_000),
-	).rejects.toThrow("ineligible");
+	).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+		message: expect.stringContaining("ineligible"),
+	});
 	await expect(
 		setModelContextWindow({ provider: "other", id: "claude" }, 1_000_000),
-	).rejects.toThrow("ineligible");
+	).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+		message: expect.stringContaining("ineligible"),
+	});
 	expect(readdirSync(directory)).not.toContain("models.json");
 	await setModelContextWindow(ref, 272_000);
 	expect(config()).toEqual({
@@ -295,8 +301,12 @@ test("budgets outside 272K–1M and unknown targets are refused before touching 
 test("an invalid models.json is refused rather than patched", async () => {
 	writeFileSync(path, '{"providers": {');
 	await runtime();
-	await expect(setModelContextWindow(ref, 1_000_000)).rejects.toThrow("isn't valid JSON");
-	await expect(listModelContextSettings()).rejects.toThrow("isn't valid JSON");
+	const damaged = {
+		code: "PI_MODELS_FILE_DAMAGED",
+		message: expect.stringContaining("valid JSON"),
+	};
+	await expect(setModelContextWindow(ref, 1_000_000)).rejects.toMatchObject(damaged);
+	await expect(listModelContextSettings()).rejects.toMatchObject(damaged);
 	expect(readFileSync(path, "utf8")).toBe('{"providers": {');
 	expect(temporaryFiles()).toEqual([]);
 });
@@ -305,9 +315,22 @@ test("a read-only models.json is refused and left byte-for-byte intact", async (
 	writeFileSync(path, '{"providers": {}}');
 	chmodSync(path, 0o400);
 	await runtime();
-	await expect(setModelContextWindow(ref, 1_000_000)).rejects.toThrow("Couldn't save");
+	await expect(setModelContextWindow(ref, 1_000_000)).rejects.toMatchObject({
+		code: "STATE_FILE_WRITE_FAILED",
+		message: expect.stringContaining("Couldn't save"),
+	});
 	expect(readFileSync(path, "utf8")).toBe('{"providers": {}}');
 	expect(temporaryFiles()).toEqual([]);
+});
+
+test("a models.json symlink loop is refused as unreadable", async () => {
+	const other = join(directory, "loop-models.json");
+	symlinkSync(other, path);
+	symlinkSync(path, other);
+	await runtime();
+	await expect(setModelContextWindow(ref, 1_000_000)).rejects.toMatchObject({
+		code: "STATE_FILE_UNREADABLE",
+	});
 });
 
 test("writes follow a symlinked models.json and leave no temporary files", async () => {

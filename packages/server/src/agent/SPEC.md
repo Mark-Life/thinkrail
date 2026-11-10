@@ -139,7 +139,8 @@ re-opened transcripts provider-valid.
     symlinked `models.json` to its target, and creating a dangling link's target rather than replacing the
     link — one in-process write chain both adapters queue on (so their read-modify-writes never
     interleave), and the `provider.changed` publisher seam (`setModelsFilePublisher`). Error messages are
-    generic and never carry file contents.
+    generic and never carry file contents. Failures are `CodedError`s: a read failure is
+    `STATE_FILE_UNREADABLE`, invalid JSON is `PI_MODELS_FILE_DAMAGED`, a failed save is `STATE_FILE_WRITE_FAILED`.
   - `modelContext` — a narrow settings adapter for the `contextWindow` override in pi's shared
     `models.json`, not a second model registry. It lists the OpenAI Responses / Codex
     Responses models from `settledAvailableModels` whose effective budget still equals the contracts'
