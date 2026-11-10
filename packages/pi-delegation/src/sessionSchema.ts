@@ -307,21 +307,15 @@ export type MessageTie = Same<Statics<typeof MESSAGES>, ByRole<AgentMessage>>;
 export type EntryTie = Same<Statics<typeof ENTRIES>, ByType<SessionEntry>>;
 export type HeaderTie = Same<Static<typeof header>, Checked<SessionHeader>>;
 
-const checks = {
-	header: compile(header).check,
-	entry: compile(union(Object.values(ENTRIES))).check,
-	user: compile(UserContent).check,
-	assistant: compile(AssistantContent).check,
-	toolResult: compile(ToolResultContent).check,
-	thinkingLevel: compile(ModelThinkingLevelSchema).check,
-};
+/** A yes/no check: the code keeps reading pi's own types, never a schema's static type. */
+type Valid = (value: unknown) => boolean;
 
-/** Whether a parsed line has the shape of pi's `SessionHeader`; pi's type stays the one the code reads. */
-export const validHeader = (value: unknown): boolean => checks.header(value);
+/** Whether a parsed line has the shape of pi's `SessionHeader`. */
+export const validHeader: Valid = compile(header).check;
 /** Whether a parsed line has the shape of one of pi's `SessionEntry` members. */
-export const validEntry = (value: unknown): boolean => checks.entry(value);
+export const validEntry: Valid = compile(union(Object.values(ENTRIES))).check;
 /** pi types a recorded thinking level as `string`; delegation replays only levels pi-ai defines. */
-export const validThinkingLevel = (value: unknown): boolean => checks.thinkingLevel(value);
-export const validUserContent = (value: unknown): boolean => checks.user(value);
-export const validAssistantContent = (value: unknown): boolean => checks.assistant(value);
-export const validToolResultContent = (value: unknown): boolean => checks.toolResult(value);
+export const validThinkingLevel: Valid = compile(ModelThinkingLevelSchema).check;
+export const validUserContent: Valid = compile(UserContent).check;
+export const validAssistantContent: Valid = compile(AssistantContent).check;
+export const validToolResultContent: Valid = compile(ToolResultContent).check;
