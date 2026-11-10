@@ -75,7 +75,7 @@ test("an unknown method keeps its plain reply and never reaches the params check
 test.each([
 	["a non-object config", "theme"],
 	["a non-string theme", { theme: 7 }],
-	["a preset leaf inside a split", { customLayoutPresets: [preset(split("a", [{ id: "b" }, 1]))] }],
+	["a preset center that is not an object", { customLayoutPresets: [preset(7)] }],
 ])("settings.update refuses %s at dispatch, before disk or broadcast", async (_label, config) => {
 	const published: unknown[] = [];
 	setSettingsPublisher((next) => published.push(next));
@@ -220,4 +220,84 @@ test("a refused client report raises no error report; another refused method doe
 			expect(batches.filter((body) => body.includes("client.reportError"))).toEqual([]);
 		},
 	);
+});
+
+test("params too deep to fingerprint get a coded reply, and the host keeps serving", async () => {
+	const depth = 200_000;
+	const deepFrame = `{"id":"deep","method":"session.respondToTool","params":${"[".repeat(depth)}${"]".repeat(depth)}}`;
+	await withHostSocket(undefined, async (socket, reply) => {
+		const refused = reply("deep");
+		socket.send(deepFrame);
+		expect(await refused).toMatchObject({ id: "deep", ok: false, errorCode: "INVALID_PARAMS" });
+
+		const refusedAgain = reply("deep");
+		socket.send(deepFrame);
+		expect(await refusedAgain).toMatchObject({ id: "deep", errorCode: "INVALID_PARAMS" });
+
+		const reused = reply("deep");
+		socket.send(JSON.stringify({ id: "deep", method: "project.open", params: { path: 7 } }));
+		expect(await reused).toMatchObject({
+			id: "deep",
+			errorCode: "INVALID_PARAMS",
+			error: expect.stringContaining("Invalid project.open"),
+		});
+
+		const served = reply("after");
+		socket.send(JSON.stringify({ id: "after", method: "settings.update", params: { config: {} } }));
+		expect(await served).toMatchObject({ id: "after", ok: true });
+	});
+});
+
+function nestedCenter(depth: number): unknown {
+	let node: unknown = { kind: "group", id: 7 };
+	for (let level = depth; level > 0; level -= 1) {
+		node = split(`s${level}`, [{ kind: "group", id: `g${level}` }, node]);
+	}
+	return node;
+}
+
+test("a malformed preset center is refused by its own guard, before disk", async () => {
+	const config = { customLayoutPresets: [preset(split("a", [{ id: "b" }, 1]))] };
+	await expect(handleRequest("settings.update", { config }, CTX)).rejects.toThrow(
+		"Malformed layout preset center",
+	);
+	expect(existsSync(configPath())).toBe(false);
+});
+
+test("a preset center too deep and malformed at the bottom stops at the depth guard", async () => {
+	const config = { customLayoutPresets: [preset(nestedCenter(4000))] };
+	expect(JSON.stringify(config).length).toBeGreaterThan(400 * 1024);
+	expect(JSON.stringify(config).length).toBeLessThan(512 * 1024);
+	await expect(handleRequest("settings.update", { config }, CTX)).rejects.toThrow(
+		"Layout preset center is too deep",
+	);
+	expect(existsSync(configPath())).toBe(false);
+});
+
+test("oversized refused params never build a per-element report", async () => {
+	const commentIds = Array.from({ length: 20_000 }, (_, index) => index);
+	const params = { workspaceId: "w", commentIds };
+	expect(JSON.stringify(params).length).toBeGreaterThan(64 * 1024);
+	const refusal = handleRequest("review.sendBatch", params, CTX);
+	await expect(refusal).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+		message: "Invalid review.sendBatch",
+	});
+});
+
+test("params too deep to measure are refused with the same coded error", async () => {
+	const depth = 200_000;
+	const workspaceId = JSON.parse(`${"[".repeat(depth)}${"]".repeat(depth)}`);
+	const refusal = handleRequest("review.sendBatch", { workspaceId, commentIds: [] }, CTX);
+	await expect(refusal).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+		message: "Invalid review.sendBatch",
+	});
+});
+
+test("small refused params keep their reasons, and a missing params object is one of them", async () => {
+	const refusal = handleRequest("review.sendBatch", { workspaceId: "w", commentIds: [1] }, CTX);
+	await expect(refusal).rejects.toThrow(/^Invalid review\.sendBatch: /);
+	const missing = handleRequest("review.sendBatch", undefined, CTX);
+	await expect(missing).rejects.toThrow(/^Invalid review\.sendBatch: /);
 });

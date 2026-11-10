@@ -231,7 +231,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   registry, typed `WsHandlers = { [M in WsMethodName]: WsHandler<M> }`, so a missing, extra, or mistyped
   handler fails typecheck; `handleRequest` checks the wire's `unknown` params once, at dispatch, through `wsParams.ts`, which
   compiles each method's schema from `WS_METHOD_SCHEMAS` at startup and refuses a mismatch with
-  `INVALID_PARAMS`, naming the failing fields but never their values. Every method has a schema, and a handler
+  `INVALID_PARAMS`, naming the failing fields but never their values. Params whose JSON is over 64 KB, or that cannot be
+  serialized, get the method name alone: building a report for them costs more than the request should. The replay
+  fingerprint of a frame too deep to serialize gets the same code, as a reply and with nothing retained. Every method has a schema, and a handler
   does not check the shape of its params again. A method name off the wire can still be unknown: `handleRequest` refuses it first, with the plain `Unknown method` error. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client

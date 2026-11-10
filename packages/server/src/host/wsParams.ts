@@ -1,8 +1,13 @@
 import { compile, type Validator } from "@earendil-works/pi-schema";
-import { WS_METHOD_SCHEMAS, type WsMethodName, type WsParams } from "@thinkrail/contracts";
+import {
+	describeFailure,
+	WS_METHOD_SCHEMAS,
+	type WsMethodName,
+	type WsParams,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 
-const MAX_REPORTED_ERRORS = 5;
+const MAX_EXPLAINED_PARAMS_LENGTH = 64 * 1024;
 
 const S = WS_METHOD_SCHEMAS;
 
@@ -204,13 +209,21 @@ const VALIDATORS: ParamsValidators = {
 	"client.reportError": compile(S["client.reportError"].params),
 };
 
+function tooLargeToExplain(raw: unknown) {
+	try {
+		return JSON.stringify(raw ?? null).length > MAX_EXPLAINED_PARAMS_LENGTH;
+	} catch {
+		return true;
+	}
+}
+
 /** Checks a request's params before its handler runs. @throws `CodedError` `INVALID_PARAMS`. */
 export function parseWsParams<M extends WsMethodName>(method: M, raw: unknown): WsParams<M> {
 	const validator: ParamsValidators[M] = VALIDATORS[method];
 	if (validator.check(raw)) return raw;
-	const reasons = validator
-		.errors(raw)
-		.slice(0, MAX_REPORTED_ERRORS)
-		.map((e) => `${e.path || "params"} ${e.message}`);
-	throw new CodedError("INVALID_PARAMS", `Invalid ${method}: ${reasons.join("; ")}`);
+	if (tooLargeToExplain(raw)) throw new CodedError("INVALID_PARAMS", `Invalid ${method}`);
+	throw new CodedError(
+		"INVALID_PARAMS",
+		`Invalid ${method}: ${describeFailure(validator, raw, "params")}`,
+	);
 }

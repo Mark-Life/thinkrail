@@ -50,6 +50,9 @@ and the runtime check cannot differ. `WS_METHOD_SCHEMAS` maps every method to it
   `LayoutPresetCenterNode` stay hand types. Their schemas are builder results that `tsc` checks against the hand type;
   only the `{ $ref: "#" }` each one nests is a raw JSON Schema annotated `Schema<...>`. `$id` makes that `$ref` point at
   the node, not at the schema that embeds it.
+- **A preset center in params is only an object.** A recursive `$ref` walks the input with no depth limit, so
+  `settings.update` types `center` as `Record<string, unknown>`. `validateLayoutPreset` checks shape and depth by hand first,
+  then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
 - **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
   `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
 - **An exclusive union keeps its hand type.** Builders cannot express the `?: never` branches of
