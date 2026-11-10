@@ -23,7 +23,9 @@ import {
 	isLocalePreference,
 	isPlanReviewResult,
 	isRetriedAttempt,
+	isSystemThemePair,
 	normalizeFontSettings,
+	normalizeThemePreference,
 	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	resourceHistoryCursor,
@@ -568,5 +570,34 @@ describe("font settings", () => {
 		expect(isFontWeightOffset(130)).toBe(true);
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
+	});
+});
+
+describe("normalizeThemePreference", () => {
+	const pair = { light: "acme.light", dark: "acme.dark" };
+
+	test("keeps a valid preference and copies only the pair's two names", () => {
+		expect(
+			normalizeThemePreference({
+				theme: "acme.dark",
+				themeMode: "system",
+				systemThemePair: { ...pair, extra: 1 },
+			}),
+		).toEqual({ theme: "acme.dark", themeMode: "system", systemThemePair: pair });
+	});
+
+	test("each malformed field falls back on its own, and system mode needs a pair", () => {
+		expect(isSystemThemePair({ light: "a", dark: 1 })).toBe(false);
+		expect(
+			normalizeThemePreference({
+				theme: 7,
+				themeMode: "system",
+				systemThemePair: { light: "a", dark: 1 },
+			}),
+		).toEqual({ theme: DEFAULT_CONFIG.theme, themeMode: "fixed" });
+		expect(normalizeThemePreference([pair])).toEqual({
+			theme: DEFAULT_CONFIG.theme,
+			themeMode: DEFAULT_CONFIG.themeMode,
+		});
 	});
 });

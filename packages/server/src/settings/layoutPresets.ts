@@ -7,6 +7,7 @@ import {
 	type LayoutPresetSideRegion,
 	type LayoutToolId,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 
 const MAX_PRESETS = 32;
 const MAX_LAYOUT_BYTES = 512 * 1024;
@@ -17,11 +18,11 @@ const MAX_NAME_LENGTH = 200;
 const MAX_BOTTOM_HEIGHT = 0.7;
 const LayoutPresetShape = compile(LayoutPreset);
 
-class LayoutPresetRuleError extends Error {
+class LayoutPresetRuleError extends CodedError {
 	readonly rule: string;
 
 	constructor(rule: string, detail?: string) {
-		super(detail === undefined ? rule : `${rule}: ${detail}`);
+		super("INVALID_PARAMS", detail === undefined ? rule : `${rule}: ${detail}`);
 		this.rule = rule;
 	}
 }

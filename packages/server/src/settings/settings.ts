@@ -8,6 +8,7 @@ import {
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
 import {
 	didLastConfigReadFail,
@@ -109,7 +110,10 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...rest
 	} = runtimeUpdate;
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
-		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
+		throw new CodedError(
+			"INVALID_PARAMS",
+			'locale must be "system" or a canonical BCP-47 language tag',
+		);
 	}
 	const current = configToOverwrite();
 	if (
@@ -118,7 +122,10 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		current.analyticsConsentConfirmed &&
 		runtimeUpdate.analyticsConsentConfirmed === undefined
 	) {
-		throw new Error("enabling additional analytics requires an explicit confirmation");
+		throw new CodedError(
+			"ANALYTICS_CONSENT_REQUIRED",
+			"enabling additional analytics requires an explicit confirmation",
+		);
 	}
 	const nextThemeMode = themeMode ?? (theme !== undefined ? "fixed" : current.themeMode);
 	const nextSystemThemePair =
@@ -126,7 +133,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			? current.systemThemePair
 			: { light: systemThemePair.light, dark: systemThemePair.dark };
 	if (nextThemeMode === "system" && !nextSystemThemePair) {
-		throw new Error("system theme mode requires a complete pair");
+		throw new CodedError("THEME_PAIR_REQUIRED", "system theme mode requires a complete pair");
 	}
 	const next: AppConfig = {
 		...current,

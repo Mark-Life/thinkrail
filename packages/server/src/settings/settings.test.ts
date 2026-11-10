@@ -140,7 +140,9 @@ test("preference-only updates cannot infer expanded consent", () => {
 
 test("a legacy preference-only write cannot re-enable additional data after a declined decision", () => {
 	updateConfig({ analyticsEnabled: false, analyticsConsentConfirmed: true });
-	expect(() => updateConfig({ analyticsEnabled: true })).toThrow("explicit confirmation");
+	expect(() => updateConfig({ analyticsEnabled: true })).toThrow(
+		expect.objectContaining({ code: "ANALYTICS_CONSENT_REQUIRED" }),
+	);
 	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: true });
 	updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
 	updateConfig({ analyticsEnabled: false });
@@ -236,7 +238,10 @@ test("system mode requires a complete pair and replaces it atomically", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
 	expect(() => updateConfig({ themeMode: "system" })).toThrow(
-		"system theme mode requires a complete pair",
+		expect.objectContaining({
+			code: "THEME_PAIR_REQUIRED",
+			message: "system theme mode requires a complete pair",
+		}),
 	);
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
@@ -768,7 +773,10 @@ test("custom preset updates validate the complete catalog and permit empty struc
 		}),
 	).toThrow("cannot be visible while empty");
 	expect(() => validateCustomLayoutPresets([preset("same"), preset("same")])).toThrow(
-		"ids must be unique",
+		expect.objectContaining({
+			code: "INVALID_PARAMS",
+			message: "Custom layout preset ids must be unique",
+		}),
 	);
 });
 
@@ -919,8 +927,11 @@ test("locale defaults to system, keeps an unavailable tag, and rejects non-canon
 	expect(getConfig().locale).toBe("system");
 
 	const before = getConfig();
-	expect(() => updateConfig({ locale: "pt-br" })).toThrow("locale must be");
-	expect(() => updateConfig({ locale: "not a tag" })).toThrow("locale must be");
+	for (const locale of ["pt-br", "not a tag"]) {
+		expect(() => updateConfig({ locale })).toThrow(
+			expect.objectContaining({ code: "INVALID_PARAMS" }),
+		);
+	}
 	expect(getConfig()).toEqual(before);
 
 	expect(updateConfig({ locale: "pt-BR" }).locale).toBe("pt-BR");

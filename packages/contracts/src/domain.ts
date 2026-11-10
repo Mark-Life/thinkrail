@@ -28,7 +28,7 @@ import {
 	SUBAGENT_MAX_CONCURRENT,
 	SubagentMaxConcurrent,
 	type SurveyRatingScale,
-	type SystemThemePair,
+	SystemThemePair,
 	TERMINAL_REPLAY_KB,
 	THEME_MODES,
 	type ThemeMode,
@@ -314,15 +314,7 @@ export function isThemeMode(value: unknown): value is ThemeMode {
 	return THEME_MODES.some((mode) => mode === value);
 }
 
-export function isSystemThemePair(value: unknown): value is SystemThemePair {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		!Array.isArray(value) &&
-		typeof Reflect.get(value, "light") === "string" &&
-		typeof Reflect.get(value, "dark") === "string"
-	);
-}
+export const isSystemThemePair = compile(SystemThemePair).check;
 
 export function hasControlCharacter(text: string): boolean {
 	return [...text].some((char) => {
@@ -470,20 +462,16 @@ export function normalizeFontSettings(value: unknown): FontSettings {
 	};
 }
 
+/** Each theme field independently; system mode without a pair falls back to the default mode. */
 export function normalizeThemePreference(value: unknown): ThemePreference {
-	const record = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
-	const rawTheme: unknown = Reflect.get(record, "theme");
-	const rawMode: unknown = Reflect.get(record, "themeMode");
-	const rawPair: unknown = Reflect.get(record, "systemThemePair");
-	const systemThemePair = isSystemThemePair(rawPair)
-		? { light: rawPair.light, dark: rawPair.dark }
+	const { theme, themeMode: mode, systemThemePair: pair } = JsonObject.check(value) ? value : {};
+	const systemThemePair = isSystemThemePair(pair)
+		? { light: pair.light, dark: pair.dark }
 		: undefined;
 	const themeMode =
-		isThemeMode(rawMode) && (rawMode === "fixed" || systemThemePair)
-			? rawMode
-			: DEFAULT_CONFIG.themeMode;
+		isThemeMode(mode) && (mode === "fixed" || systemThemePair) ? mode : DEFAULT_CONFIG.themeMode;
 	return {
-		theme: typeof rawTheme === "string" ? rawTheme : DEFAULT_CONFIG.theme,
+		theme: typeof theme === "string" ? theme : DEFAULT_CONFIG.theme,
 		themeMode,
 		...(systemThemePair ? { systemThemePair } : {}),
 	};
