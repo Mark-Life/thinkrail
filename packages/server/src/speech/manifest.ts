@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { compile, int, obj, opt, type Schema, type Static, str } from "@earendil-works/pi-schema";
 import { describeFailure, type SpeechModel } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 
 const SafeName = str({ pattern: "^[A-Za-z0-9_-][A-Za-z0-9._-]*$" });
 
@@ -123,9 +124,14 @@ export function hostTarget(
 	return null;
 }
 
+/** A manifest override names where to download from, so a bad one fails the download. */
+function manifestFailed(message: string, cause?: unknown) {
+	return new CodedError("SPEECH_DOWNLOAD_FAILED", `speech manifest: ${message}`, { cause });
+}
+
 export function parseManifest(value: unknown): SpeechManifest {
 	if (ManifestFile.check(value)) return value;
-	throw new Error(`speech manifest: ${describeFailure(ManifestFile, value, "manifest")}`);
+	throw manifestFailed(describeFailure(ManifestFile, value, "manifest"));
 }
 
 export function loadManifest(
@@ -133,5 +139,11 @@ export function loadManifest(
 ): SpeechManifest {
 	const override = env[SPEECH_MANIFEST_ENV];
 	if (!override) return PINNED;
-	return parseManifest(JSON.parse(readFileSync(override, "utf8")));
+	let value: unknown;
+	try {
+		value = JSON.parse(readFileSync(override, "utf8"));
+	} catch (error) {
+		throw manifestFailed(`cannot read ${SPEECH_MANIFEST_ENV}`, error);
+	}
+	return parseManifest(value);
 }
