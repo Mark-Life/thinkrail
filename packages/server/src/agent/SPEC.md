@@ -463,7 +463,8 @@ re-opened transcripts provider-valid.
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
     attach cannot register afterward; that tombstone also makes a retained live entry non-addressable to
-    **every session command, including `session.dispose`, for the full delete transaction**, so another
+    **every session command, including `session.dispose`, for the full delete transaction** (each
+    refuses with `SESSION_UNKNOWN`, the code every session lookup miss carries), so another
     client cannot append a turn behind the pending trash move or destroy the rollback target. **The
     transaction is single-flighted per session id**: a concurrent second trash click (another tab/client)
     for the same chat joins the running transaction (or is rejected as unknown when a foreign workspace

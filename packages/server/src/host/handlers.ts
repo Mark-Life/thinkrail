@@ -583,7 +583,8 @@ async function deliverToolResponse(
 	toolCallId: string,
 	response: unknown,
 ): Promise<Ack> {
-	if (!hasSession(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	if (!hasSession(sessionId))
+		throw new CodedError("SESSION_UNKNOWN", `Unknown session: ${sessionId}`);
 	await ackSend(respondToTool(sessionId, toolCallId, response));
 	return { ok: true };
 }
@@ -1215,7 +1216,7 @@ const handlers: WsHandlers = {
 			(attachedWorkspaceId === undefined &&
 				!(await ensureSessionAttached(p.sessionId, p.workspaceId, workspace.worktreePath)))
 		) {
-			throw new Error(`Unknown session: ${p.sessionId}`);
+			throw new CodedError("SESSION_UNKNOWN", `Unknown session: ${p.sessionId}`);
 		}
 		if (!isControlMessage(p.text)) throw new Error("Session nudge must be a control message");
 		const nudge = nudgeSession(p.sessionId, p.text, p.images);

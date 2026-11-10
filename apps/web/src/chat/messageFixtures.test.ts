@@ -1,9 +1,9 @@
 import type {
 	AssistantMessage,
+	ToolResultMessage,
 	Usage,
 	UserMessage,
 	WireCustomMessage,
-	WireToolResultMessage,
 } from "@thinkrail/contracts";
 
 export const ZERO_USAGE: Usage = {
@@ -34,8 +34,8 @@ export function userMessage(content: UserMessage["content"], timestamp = 0): Use
 }
 
 export function toolResultMessage(
-	fields: Pick<WireToolResultMessage, "toolCallId"> & Partial<WireToolResultMessage>,
-): WireToolResultMessage {
+	fields: Pick<ToolResultMessage, "toolCallId"> & Partial<ToolResultMessage>,
+): ToolResultMessage {
 	return {
 		role: "toolResult",
 		toolName: "bash",

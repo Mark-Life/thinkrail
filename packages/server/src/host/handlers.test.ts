@@ -528,7 +528,7 @@ test("the retired ask answer method and respondToTool both refuse an unknown ses
 			{ sessionId: testSessionId("nope"), toolCallId: "tc", response: {} },
 			CTX,
 		),
-	).rejects.toThrow("Unknown session: nope");
+	).rejects.toMatchObject({ code: "SESSION_UNKNOWN", message: "Unknown session: nope" });
 });
 
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {

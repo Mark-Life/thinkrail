@@ -1,10 +1,22 @@
-import { arr, compile, lit, map, obj, str, unknown } from "@earendil-works/pi-schema";
+import {
+	arr,
+	compile,
+	lit,
+	map,
+	obj,
+	type Static,
+	str,
+	unknown,
+	type Validator,
+} from "@earendil-works/pi-schema";
 import {
 	isMcpContentBlockSummary,
 	JsonObject,
 	keepValidFields,
 	McpResultSummary,
 	McpToolDetails,
+	type Same,
+	type TextContent,
 } from "@thinkrail/contracts";
 import { resultText } from "@thinkrail/extension-api/web";
 
@@ -12,7 +24,9 @@ export const MCP_TOOL_PREFIX = "mcp__";
 
 const ResultDetails = compile(obj({ details: map(unknown()) }, { open: true }));
 const ResultContent = compile(obj({ content: arr(unknown()) }, { open: true }));
-const TextBlock = compile(obj({ type: lit("text"), text: str() }, { open: true }));
+const TextShape = obj({ type: lit("text"), text: str() }, { open: true });
+const TextBlock: Validator<Same<Static<typeof TextShape>, Pick<TextContent, "type" | "text">>> =
+	compile(TextShape);
 const SummaryBlocks = compile(obj({ blocks: arr(unknown()) }, { open: true }));
 const FullOutputPath = compile(obj({ fullOutputPath: str({ minLength: 1 }) }, { open: true }));
 const ToolDetails = compile(McpToolDetails);

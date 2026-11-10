@@ -2,7 +2,12 @@ import { createReadStream, existsSync, rmSync, statSync, truncateSync } from "no
 import { readdir } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { clampThinkingLevel, getSupportedThinkingLevels, type Usage } from "@earendil-works/pi-ai";
+import {
+	clampThinkingLevel,
+	getSupportedThinkingLevels,
+	type Usage,
+	type UserMessage,
+} from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	type CreateAgentSessionOptions,
@@ -950,14 +955,18 @@ export async function refreshSkillAdmission(): Promise<void> {
 	);
 }
 
+function unknownSession(sessionId: SessionId) {
+	return new CodedError("SESSION_UNKNOWN", `Unknown session: ${sessionId}`);
+}
+
 function hasDeletionTombstone(sessionId: SessionId): boolean {
 	return deletedSessions.has(sessionId);
 }
 
 function mustGetEntry(sessionId: SessionId): Entry {
-	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	if (hasDeletionTombstone(sessionId)) throw unknownSession(sessionId);
 	const entry = sessions.get(sessionId);
-	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
+	if (!entry) throw unknownSession(sessionId);
 	return entry;
 }
 
@@ -1389,7 +1398,7 @@ async function prepareSessionEntry(
 			uiContext: createWebUiContext(sessionId, () => soleRunningToolCall(session)),
 			onError: reportExtensionError,
 		});
-		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+		if (!sessionCanAttach(sessionId, workspaceId)) throw unknownSession(sessionId);
 	} catch (error) {
 		abandonPreparedEntry(entry);
 		throw error;
@@ -2091,10 +2100,10 @@ export function renameSession(
 	const normalized = normalizeSessionTitle(title);
 	if (!normalized) return Promise.reject(new Error("Invalid session title"));
 	return serializeSessionFileOperation(sessionId, async () => {
-		if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+		if (hasDeletionTombstone(sessionId)) throw unknownSession(sessionId);
 		const live = sessions.get(sessionId);
 		if (live) {
-			if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+			if (live.workspaceId !== workspaceId) throw unknownSession(sessionId);
 			const current = live.session.sessionName;
 			if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
 			live.session.setSessionName(normalized);
@@ -2105,7 +2114,7 @@ export function renameSession(
 			(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 		);
 		if (!info || hasDeletionTombstone(sessionId)) {
-			throw new Error(`Unknown session: ${sessionId}`);
+			throw unknownSession(sessionId);
 		}
 		const manager = SessionManager.open(info.path);
 		const current = manager.getSessionName();
@@ -2131,7 +2140,7 @@ function attachDiskSession(
 		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
 		!sessionCanAttach(sessionId, workspaceId)
 	)
-		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+		return Promise.reject(unknownSession(sessionId));
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
@@ -2160,11 +2169,11 @@ async function openDiskSession(
 		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
 		!sessionCanAttach(sessionId, workspaceId)
 	)
-		throw new Error(`Unknown session: ${sessionId}`);
+		throw unknownSession(sessionId);
 	const info = (await listSessionInfosStrict(cwd)).find(
 		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 	);
-	if (!info) throw new Error(`Unknown session: ${sessionId}`);
+	if (!info) throw unknownSession(sessionId);
 	if (sessions.has(sessionId)) return;
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(
@@ -2210,7 +2219,7 @@ async function ensureSessionAttachedInternal(
 		return false;
 	const live = sessions.get(sessionId);
 	if (live) {
-		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+		if (live.workspaceId !== workspaceId) throw unknownSession(sessionId);
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
@@ -2241,14 +2250,14 @@ async function getSessionMessagesInternal(
 		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
 		!sessionCanAttach(sessionId, workspaceId)
 	)
-		throw new Error(`Unknown session: ${sessionId}`);
+		throw unknownSession(sessionId);
 	let entry = sessions.get(sessionId);
-	if (entry && entry.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+	if (entry && entry.workspaceId !== workspaceId) throw unknownSession(sessionId);
 	if (!entry) {
 		await attachDiskSession(sessionId, workspaceId, cwd, lifecycleToken);
-		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+		if (!sessionCanAttach(sessionId, workspaceId)) throw unknownSession(sessionId);
 		entry = sessions.get(sessionId);
-		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
+		if (!entry) throw unknownSession(sessionId);
 	}
 	return {
 		summary: summaryOf(sessionId, entry),
@@ -2349,7 +2358,7 @@ function queueUpdateEventOf(entry: Entry): PiEvent {
 	};
 }
 
-function deliveredStuckEmptyLane(entry: Entry, content: unknown): QueueLane | null {
+function deliveredStuckEmptyLane(entry: Entry, content: UserMessage["content"]): QueueLane | null {
 	if (userContentText(content).trim() !== "") return null;
 	if (!userContentHasImage(content)) return null;
 	for (const kind of ["steering", "followUp"] as const) {
@@ -2359,22 +2368,13 @@ function deliveredStuckEmptyLane(entry: Entry, content: unknown): QueueLane | nu
 	return null;
 }
 
-const UserContentBlock = compile(obj({ type: str(), text: opt(str()) }, { open: true }));
-
-function userContentBlocks(content: unknown) {
-	return Array.isArray(content) ? content.filter(UserContentBlock.check) : [];
-}
-
-function userContentText(content: unknown): string {
+function userContentText(content: UserMessage["content"]): string {
 	if (typeof content === "string") return content;
-	return userContentBlocks(content)
-		.filter((block) => block.type === "text")
-		.map((block) => block.text ?? "")
-		.join("");
+	return content.map((block) => (block.type === "text" ? block.text : "")).join("");
 }
 
-function userContentHasImage(content: unknown): boolean {
-	return userContentBlocks(content).some((block) => block.type === "image");
+function userContentHasImage(content: UserMessage["content"]): boolean {
+	return typeof content !== "string" && content.some((block) => block.type === "image");
 }
 
 function hasQueuedImages(entry: Entry): boolean {
@@ -3085,7 +3085,7 @@ function disposeSession(sessionId: SessionId): Promise<void> {
 }
 
 export function removeSession(sessionId: SessionId): Promise<void> {
-	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	if (hasDeletionTombstone(sessionId)) throw unknownSession(sessionId);
 	const pending = sessionTeardowns.get(sessionId);
 	if (pending) return pending;
 	const entry = sessions.get(sessionId);
@@ -3223,8 +3223,7 @@ export function deleteSession(
 ): Promise<void> {
 	const inFlight = deletingSessions.get(sessionId);
 	if (inFlight) {
-		if (inFlight.workspaceId !== workspaceId)
-			return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+		if (inFlight.workspaceId !== workspaceId) return Promise.reject(unknownSession(sessionId));
 		return inFlight.done;
 	}
 
@@ -3254,7 +3253,7 @@ async function runDeleteTransaction(
 		await attaching.get(sessionId)?.catch(() => {});
 		const entry = sessions.get(sessionId);
 		if (entry && entry.workspaceId !== workspaceId) {
-			throw new Error(`Unknown session: ${sessionId}`);
+			throw unknownSession(sessionId);
 		}
 		let path: string | undefined;
 		if (entry) {

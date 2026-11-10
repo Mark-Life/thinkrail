@@ -3954,7 +3954,12 @@ test("a pending delete blocks live commands, then trash failure restores the sam
 		await expect(promptSession(session.sessionId, "must not be accepted")).rejects.toThrow(
 			`Unknown session: ${session.sessionId}`,
 		);
-		expect(() => removeSession(session.sessionId)).toThrow(`Unknown session: ${session.sessionId}`);
+		expect(() => removeSession(session.sessionId)).toThrow(
+			expect.objectContaining({
+				code: "SESSION_UNKNOWN",
+				message: `Unknown session: ${session.sessionId}`,
+			}),
+		);
 		expect(readFileSync(info.path, "utf8")).not.toContain("must not be accepted");
 
 		failTrash();
