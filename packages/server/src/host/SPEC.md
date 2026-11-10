@@ -234,7 +234,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `INVALID_PARAMS`, naming the failing fields but never their values. Params whose JSON is over 64 KB, or that cannot be
   serialized, get the method name alone: building a report for them costs more than the request should. The replay
   fingerprint of a frame too deep to serialize gets the same code, as a reply and with nothing retained. Every method has a schema, and a handler
-  does not check the shape of its params again. A method name off the wire can still be unknown: `handleRequest` refuses it first, with the plain `Unknown method` error. The registry includes `workspace.rename` as the direct manual door into
+  does not check the shape of its params again. A method name off the wire can still be unknown: `handleRequest` refuses it first, with the plain `Unknown method` error. In every `bun test` run (`NODE_ENV=test`) and in a host started with `THINKRAIL_CHECK_WS_RESULTS=1`, as e2e does, `wsResults.ts` also checks each reply's JSON form against the method's result schema, compiled once by contracts' `wsResultValidator`, and turns a mismatch into a failed request naming the method and field. A test file run alone checks too, so no runner skips it. e2e also writes each mismatch to `THINKRAIL_E2E_WS_RESULT_LOG`. Without either, nothing compiles and nothing is checked, so result schemas stay types only in production. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
@@ -665,6 +665,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   writes converge every client through the existing `pi.event`/`session_info_changed` channel and the
   titled `session.state` record (see Session-state composition), with `session.list` repair; no new push
   channel exists.
+
+- **Typed in-process requests:** `handleTypedRequest` runs the same params parse and reply check as
+  `handleRequest`, typed `WsParams<M>` in and `WsResult<M>` out, so a test reads a reply without a cast.
+  `handleRequest` stays the door for a raw frame or a deliberately malformed one.
 
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the

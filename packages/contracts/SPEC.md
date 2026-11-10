@@ -125,7 +125,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions);
-  from `wireChecks`, `describeFailure`.
+  from `wireChecks`, `describeFailure` and `wsResultValidator`.
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).
@@ -684,6 +684,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the wire.
 - **wireChecks.ts** — the checks every side runs on wire values. `describeFailure(validator, value, root)` is the one
   wording of a schema refusal: up to five `path message` pairs, with `root` naming the value itself.
+  `wsResultValidator(method)` is the result schema of a method, compiled on first use and typed `Validator<WsResult<M>>`
+  through a table with one row per method, so no caller casts what it checked.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;

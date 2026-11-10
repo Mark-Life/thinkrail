@@ -316,6 +316,7 @@ import {
 	releaseItemFix,
 } from "./todoReview";
 import { parseWsParams } from "./wsParams";
+import { checkWsResult } from "./wsResults";
 
 const log = logger("host");
 
@@ -1604,5 +1605,24 @@ export async function handleRequest(
 	ctx: RequestContext,
 ): Promise<unknown> {
 	if (!isWsMethod(method)) throw new Error(`Unknown method: ${method}`);
-	return dispatch(method, parseWsParams(method, params), ctx);
+	return runRequest(method, params, ctx);
+}
+
+/** In-process callers: the same params parse and reply check as `handleRequest`, typed by method. */
+export function handleTypedRequest<M extends WsMethodName>(
+	method: M,
+	params: WsParams<M>,
+	ctx: RequestContext,
+) {
+	return runRequest(method, params, ctx);
+}
+
+async function runRequest<M extends WsMethodName>(
+	method: M,
+	params: unknown,
+	ctx: RequestContext,
+): Promise<WsResult<M>> {
+	const result = await dispatch(method, parseWsParams(method, params), ctx);
+	checkWsResult(method, result);
+	return result;
 }
