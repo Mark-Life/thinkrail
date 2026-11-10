@@ -19,13 +19,13 @@ declare global {
 	var piDagStandaloneOwners: unknown;
 }
 
+/** Every `DagService` method by name; the literal fails tsc when a method is added or removed. */
+const serviceMethods: Record<keyof DagService, true> = { bind: true, close: true };
+
 const isService = (value: unknown) =>
 	typeof value === "object" &&
 	value !== null &&
-	"bind" in value &&
-	typeof value.bind === "function" &&
-	"close" in value &&
-	typeof value.close === "function";
+	Object.keys(serviceMethods).every((method) => typeof Reflect.get(value, method) === "function");
 
 function isRegistry(value: unknown): value is Registry {
 	if (
