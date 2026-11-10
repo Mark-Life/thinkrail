@@ -15,6 +15,14 @@ export function wireObj<const P extends Properties>(properties: P): Schema<Stati
 	return obj(properties, { open: true });
 }
 
+/** A wire object whose fields are all optional, as `Partial` of the `wireObj` type. */
+export function partialWireObj<const P extends Properties>(
+	properties: P,
+): Schema<Partial<StaticObject<P>>> {
+	const { required: _required, ...schema } = wireObj(properties);
+	return schema;
+}
+
 /** The params of a method that takes none: any object passes, and the handler reads none of it. */
 export const NoParams = map(unknown());
 

@@ -3,7 +3,14 @@ import { ThinkingLevel } from "./model";
 import { TranscriptMessage } from "./transcript";
 import { Ack, wireObj } from "./wire";
 
-export const DelegationRunStatus = oneOf(["queued", "running", "completed", "error", "aborted"]);
+export const DELEGATION_RUN_STATUSES = [
+	"queued",
+	"running",
+	"completed",
+	"error",
+	"aborted",
+] as const;
+export const DelegationRunStatus = oneOf(DELEGATION_RUN_STATUSES);
 export type DelegationRunStatus = Static<typeof DelegationRunStatus>;
 
 export const SubagentResourceSummary = wireObj({

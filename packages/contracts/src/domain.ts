@@ -1,7 +1,11 @@
-import type { MatchTier } from "./match";
 import type {
+	AppConfig,
 	BackgroundCommandSummary,
+	ComposerGrowthLimit,
 	DelegationRunStatus,
+	FontChoice,
+	FontFamilyRef,
+	FontRole,
 	JbcentralStatus,
 	PlanReviewVerdict,
 	ResourceHistoryCursor,
@@ -10,8 +14,25 @@ import type {
 	ReviewCommentKind,
 	ReviewReadingStep,
 	ReviewSnapshot,
+	SurveyRatingScale,
+	SystemThemePair,
+	TerminalWindowsShell,
+	ThemeMode,
+	ThemePreference,
 	ThinkingLevel,
-	WireModel,
+	UserFontFace,
+	UserFontFile,
+	UserFontFileErrorCode,
+} from "./schema";
+import {
+	COMPOSER_GROWTH_LIMITS,
+	DELEGATION_RUN_STATUSES,
+	FONT_ROLES,
+	PLAN_REVIEW_VERDICTS,
+	REVIEW_COMMENT_KINDS,
+	TERMINAL_WINDOWS_SHELLS,
+	THEME_MODES,
+	USER_FONT_FILE_ERROR_CODES,
 } from "./schema";
 
 export const FIRST_PROMPT_MAX_LENGTH = 200;
@@ -86,14 +107,6 @@ const THINKING_LEVEL_SET = {
 function isThinkingLevel(value: unknown): value is ThinkingLevel {
 	return typeof value === "string" && Object.hasOwn(THINKING_LEVEL_SET, value);
 }
-
-const DELEGATION_RUN_STATUSES: readonly string[] = [
-	"queued",
-	"running",
-	"completed",
-	"error",
-	"aborted",
-];
 
 export function isDelegationRunDetails(value: unknown): value is DelegationRunDetails {
 	if (!value || typeof value !== "object") return false;
@@ -276,10 +289,6 @@ export interface McpResultSummary {
 	isError?: boolean;
 }
 
-export type PiPackageScope = "user" | "project";
-
-export type PiPackageSourceKind = "npm" | "git" | "local";
-
 const NPM_NAME = String.raw`(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*`;
 const BARE_NPM_SPEC = new RegExp(`^(${NPM_NAME})(?:@([^/\\s@]+))?$`, "i");
 const EXTENSION_FILE = /\.(m|c)?(j|t)sx?$/i;
@@ -400,79 +409,6 @@ function packageUrlSource(source: string): string | null {
 	return source;
 }
 
-/** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
-export type PiPackageResourceType = "extensions" | "skills" | "prompts";
-
-/** One file a pi package contributes, in pi's resolved `enabled` state; `path` is the toggle target. */
-export interface PiPackageResource {
-	type: PiPackageResourceType;
-	path: string;
-	/** pi's `pi config` display rule: `parent/file.ts` for a nested extension, the folder for a skill, else the file name. */
-	displayName: string;
-	enabled: boolean;
-	/** Extensions only, when the host could load the file: the tool and command names it registered. */
-	tools?: string[];
-	commands?: string[];
-	/** Extensions only: pi's load error. */
-	error?: string;
-}
-
-/** One installed pi package as declared in a settings file; every summary is on disk. */
-export interface PiPackageSummary {
-	/** Host-wide identity the package switch keys on: npm by name, git by repo without ref, local by resolved path. */
-	identity: string;
-	/** The source string exactly as declared (`npm:@scope/pkg@1.2.0`, `git:host/owner/repo@ref`, a path). */
-	source: string;
-	kind: PiPackageSourceKind;
-	scope: PiPackageScope;
-	name: string;
-	version?: string;
-	description?: string;
-	/** Absent when the declaration has no install on disk: pi retries at a chat's next start; the row offers Remove only. */
-	installedPath?: string;
-	/** Every `disabledPackages` key that switches this package off: its own `identity` and those of pi-equivalent declarations. */
-	switchKeys: string[];
-	/** The host-wide switch, closed over pi's equivalence: `false` when any of `switchKeys` is in `disabledPackages`. */
-	enabled: boolean;
-	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */
-	shadowed?: boolean;
-	resources: PiPackageResource[];
-}
-
-/** An extension pi discovers outside any package: a file under `<agentDir>/extensions`, `.pi/extensions`, or an explicit `extensions[]` settings path. */
-export interface PiLooseExtension {
-	path: string;
-	displayName: string;
-	scope: PiPackageScope;
-	/** `true` for an `extensions[]` settings entry, `false` for an auto-discovered directory file. */
-	explicit: boolean;
-	enabled: boolean;
-	tools?: string[];
-	commands?: string[];
-	error?: string;
-}
-
-/** One of pi's built-in extensions the host runs (`mcp`, `tool-search`), toggled through `±builtin:<name>` in pi settings. */
-export interface PiBuiltinExtension {
-	name: string;
-	enabled: boolean;
-	/** `project` when a `.pi/settings.json` entry decides it, else `user`. */
-	scope: PiPackageScope;
-}
-
-export interface PiPackagesCatalog {
-	/** The effective pi folder; every path shown derives from it, never from a hardcoded `~/.pi/agent`. */
-	agentDir: string;
-	settingsPath: string;
-	/** Present when the catalog was read for a workspace. */
-	projectSettingsPath?: string;
-	/** pi-level trust of that workspace's project; repository packages are read only when `true`. */
-	projectTrusted: boolean;
-	packages: PiPackageSummary[];
-	loose: PiLooseExtension[];
-	builtins: PiBuiltinExtension[];
-}
-
 export function isJbcentralConnected(status: JbcentralStatus): boolean {
 	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
 }
@@ -500,46 +436,7 @@ export interface LoginPush {
 	target?: { kind: "mcp"; workspaceId: string; serverName: string };
 }
 
-export interface HostEnvironmentVar {
-	name: string;
-	value: string;
-}
-
-export interface HostEnvironment {
-	agentDir?: string;
-	vars: HostEnvironmentVar[];
-}
-
-export type HostEnvironmentIssue =
-	| { field: "agentDir"; code: "notAbsolute" | "notFound" | "notDirectory" }
-	| { field: "var"; index: number; code: "invalidName" | "reserved" | "duplicate" };
-
-export interface HostEnvironmentStatus {
-	stored: HostEnvironment;
-	restartRequired: boolean;
-	launchOverridden: string[];
-	effectiveAgentDir: string;
-}
-
-export type HostEnvironmentUpdateResult =
-	| { ok: true; status: HostEnvironmentStatus }
-	| { ok: false; issues: HostEnvironmentIssue[] };
-
 export type ThemeId = string;
-
-export const THEME_MODES = ["fixed", "system"] as const;
-export type ThemeMode = (typeof THEME_MODES)[number];
-
-export interface SystemThemePair {
-	light: ThemeId;
-	dark: ThemeId;
-}
-
-export interface ThemePreference {
-	theme: ThemeId;
-	themeMode: ThemeMode;
-	systemThemePair?: SystemThemePair;
-}
 
 export function isThemeMode(value: unknown): value is ThemeMode {
 	return THEME_MODES.some((mode) => mode === value);
@@ -553,18 +450,6 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 		typeof Reflect.get(value, "light") === "string" &&
 		typeof Reflect.get(value, "dark") === "string"
 	);
-}
-
-export const FONT_ROLES = ["interface", "code"] as const;
-export type FontRole = (typeof FONT_ROLES)[number];
-
-/** A bundled face named by the role it ships for, or a family name the client resolves. */
-export type FontFamilyRef = { builtin: FontRole } | { name: string };
-
-/** One role's font: `family: null` is the role's bundled default; fallbacks draw what it lacks. */
-export interface FontChoice {
-	family: FontFamilyRef | null;
-	fallbacks: FontFamilyRef[];
 }
 
 export const FONT_FAMILY_NAME_MAX_LENGTH = 128;
@@ -641,61 +526,6 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
-
-export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
-
-export interface LayoutPresetCenterGroup {
-	kind: "group";
-	id: string;
-}
-export interface LayoutPresetCenterSplit {
-	kind: "split";
-	id: string;
-	direction: "horizontal" | "vertical";
-	weights: [number, number];
-	children: [LayoutPresetCenterNode, LayoutPresetCenterNode];
-}
-export type LayoutPresetCenterNode = LayoutPresetCenterGroup | LayoutPresetCenterSplit;
-
-export interface LayoutPresetSideGroup {
-	id: string;
-	weight: number;
-	folded: boolean;
-	tools: LayoutToolId[];
-}
-export interface LayoutPresetSideRegion {
-	visible: boolean;
-	width: number;
-	groups: LayoutPresetSideGroup[];
-}
-
-export interface LayoutPresetBottomGroup {
-	id: string;
-	weight: number;
-	folded: boolean;
-	tools: LayoutToolId[];
-}
-
-export interface LayoutPresetBottomRegion {
-	visible: boolean;
-	height: number;
-	alignment: LayoutBottomAlignment;
-	groups: LayoutPresetBottomGroup[];
-}
-
-export interface LayoutPreset {
-	id: string;
-	name: string;
-	center: LayoutPresetCenterNode;
-	left: LayoutPresetSideRegion;
-	right: LayoutPresetSideRegion;
-	bottom: LayoutPresetBottomRegion;
-}
-
-export const COMPOSER_GROWTH_LIMITS = ["compact", "roomy", "half-chat"] as const;
-export type ComposerGrowthLimit = (typeof COMPOSER_GROWTH_LIMITS)[number];
-
 export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLimit {
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
@@ -709,86 +539,6 @@ export function isLineWidth(value: unknown): value is number {
 		value >= LINE_WIDTH_COLUMNS.min &&
 		value <= LINE_WIDTH_COLUMNS.max
 	);
-}
-
-export interface AppConfig extends ThemePreference {
-	analyticsEnabled: boolean;
-	analyticsConsentConfirmed: boolean;
-	/** When true, the client may raise out-of-app attention notifications (still gated by browser permission). */
-	notificationsEnabled: boolean;
-	terminalReplayKb: number;
-	composerGrowthLimit: ComposerGrowthLimit;
-	chatLineWidth: number;
-	fileLineWidth: number;
-	chatLineWidthBounded: boolean;
-	fileLineWidthBounded: boolean;
-	/** When false, no text field shows the dictation mic and the chord does nothing. */
-	voiceInputEnabled: boolean;
-	customLayoutPresets: LayoutPreset[];
-	/** The model new chats start with; unset uses the first available model. */
-	defaultModel?: WireModel;
-	/** New-chat effort; unset defaults to medium. */
-	defaultEffort?: ThinkingLevel;
-	/** The model the plan reviewer runs on; unset uses the host's new-chat model default. */
-	reviewModel?: WireModel;
-	/** Reviewer thinking level; unset uses the host's new-chat effort default, never the worker's inherited effort. */
-	reviewEffort?: ThinkingLevel;
-	/** Models the user starred in the picker, in display order; identity is `{provider, id}`. */
-	favoriteModels: WireModel[];
-	/** Models most recently chosen for a chat, newest first; host-maintained, never client-written. */
-	recentModels: WireModel[];
-	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
-	reviewAutoFix: boolean;
-	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
-	agentReviewEnabled: boolean;
-	subagentsEnabled: boolean;
-	/** How many subagents one chat may run at once; more spawns queue FIFO. */
-	subagentMaxConcurrent: number;
-	jbcentralQuotaEnabled: boolean;
-	jbcentralQuotaRefreshSeconds: number;
-	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
-	terminalWindowsShell: TerminalWindowsShell;
-	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
-	settleIdleDays: number | null;
-	disabledExtensions: string[];
-	/** Values of settings bundled extensions declare, by extension name then setting key. */
-	extensionSettings: ExtensionSettingValues;
-	/** Load skills from other agents' user directories and Claude plugins in projects that do not decide for themselves. */
-	otherAgentSkills: boolean;
-	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
-	disabledPackages: string[];
-	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
-	locale: string;
-	/** The user finished or skipped the cold-start onboarding wizard. */
-	onboardingDismissed: boolean;
-	/** All UI, chat and documents; the brand face is not user-changeable. */
-	interfaceFont: FontChoice;
-	/** The editor, diffs, code blocks and the terminal. */
-	codeFont: FontChoice;
-	/** Terminal and code blocks, in px; the editor and diffs render 2 px smaller. */
-	codeFontSize: number;
-	/** Ligatures in the editor, diffs and code in chat and documents; the terminal never draws them. */
-	codeLigatures: boolean;
-	/** Shifts every text weight but the brand face's together. */
-	fontWeightOffset: number;
-}
-
-export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
-
-export interface ExtensionSettingDescriptor {
-	key: string;
-	default: boolean;
-}
-
-export interface ExtensionCatalogEntry {
-	name: string;
-	title: string;
-	description?: string;
-	enabled: boolean;
-	tools: string[];
-	hasChildExtensions: boolean;
-	/** Absent before `EXTENSION_SETTINGS_PROTOCOL_VERSION`. */
-	settings?: ExtensionSettingDescriptor[];
 }
 
 /** How many recently chosen models the host remembers. */
@@ -810,87 +560,18 @@ export function isSkillGroupEnabled(
 	return otherAgentSkills || !OTHER_AGENT_SKILL_GROUPS.includes(group);
 }
 
-/** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
-export type AppConfigUpdate = Partial<
-	Omit<
-		AppConfig,
-		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
-	>
-> & {
-	defaultModel?: WireModel | null;
-	defaultEffort?: ThinkingLevel | null;
-	reviewModel?: WireModel | null;
-	reviewEffort?: ThinkingLevel | null;
-};
-
-export type SurveyInvitationResponse = "postpone" | "never";
-
 export interface GithubStarAsk {
 	stars: number | null;
 }
 
 export const SURVEY_OPEN_TEXT_LIMIT = 2000;
 
-export type SurveyRatingScale = 3 | 5 | 7 | 10;
-
 export function surveyRatingValues(scale: SurveyRatingScale): number[] {
 	if (scale === 10) return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 	return Array.from({ length: scale }, (_, index) => index + 1);
 }
 
-interface SurveyQuestionBase {
-	id: string;
-	question: string;
-	description?: string;
-	optional?: true;
-}
-
-export interface SurveyOpenQuestion extends SurveyQuestionBase {
-	type: "open";
-}
-
-export interface SurveyChoiceQuestion extends SurveyQuestionBase {
-	type: "single_choice" | "multiple_choice";
-	choices: string[];
-	hasOpenChoice?: true;
-	shuffleOptions?: true;
-}
-
-export interface SurveyRatingQuestion extends SurveyQuestionBase {
-	type: "rating";
-	display: "number" | "emoji";
-	scale: SurveyRatingScale;
-	lowerBoundLabel: string;
-	upperBoundLabel: string;
-}
-
-export type SurveyQuestion = SurveyOpenQuestion | SurveyChoiceQuestion | SurveyRatingQuestion;
-
-export interface AppSurvey {
-	id: string;
-	iteration: number;
-	questions: SurveyQuestion[];
-	placeholder?: string;
-	thankYou?: string;
-	shuffleQuestions?: true;
-	language?: string;
-}
-
-export type SurveyAnswerValue = string | string[];
-
-export interface SurveySubmitParams {
-	submissionId: string;
-	surveyId: string;
-	iteration: number;
-	language?: string;
-	answers: Record<string, SurveyAnswerValue>;
-	others?: Record<string, string>;
-}
-
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
-
-export const TERMINAL_WINDOWS_SHELLS = ["auto", "pwsh", "powershell", "cmd"] as const;
-export type TerminalWindowsShell = (typeof TERMINAL_WINDOWS_SHELLS)[number];
 
 export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
 	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
@@ -920,104 +601,8 @@ export function isLocalePreference(value: unknown): value is string {
 	}
 }
 
-export interface LocalLocaleFileOk {
-	fileName: string;
-	tag: string;
-	ok: true;
-	strings: Record<string, string>;
-}
-
-export type LocalLocaleFileErrorCode =
-	| "invalid-name"
-	| "duplicate"
-	| "too-large"
-	| "too-many"
-	| "unreadable"
-	| "invalid-json"
-	| "not-object";
-
-export interface LocalLocaleFileError {
-	fileName: string;
-	tag: string | null;
-	ok: false;
-	error: LocalLocaleFileErrorCode;
-	/** Parser or OS detail for `invalid-json` / `unreadable`, untranslated. */
-	detail?: string;
-}
-
-export type LocalLocaleFile = LocalLocaleFileOk | LocalLocaleFileError;
-
-/** The host's local language files (`<dataDir>/locales/`), as `locales.list` reports them. */
-export interface LocalLocalesSnapshot {
-	dir: string;
-	files: LocalLocaleFile[];
-}
-
-export interface UserThemeFileOk {
-	fileName: string;
-	ok: true;
-	/** The parsed JSON, unvalidated: the theme schema is owned by the web client. */
-	manifest: unknown;
-}
-
-export type UserThemeFileErrorCode = "too-large" | "too-many" | "unreadable" | "invalid-json";
-
-export interface UserThemeFileError {
-	fileName: string;
-	ok: false;
-	error: UserThemeFileErrorCode;
-	/** Parser or OS detail for `invalid-json` / `unreadable`, untranslated. */
-	detail?: string;
-}
-
-export type UserThemeFile = UserThemeFileOk | UserThemeFileError;
-
-/** The host's user theme files (`<dataDir>/themes/`), as `themes.list` reports them. */
-export interface UserThemesSnapshot {
-	dir: string;
-	files: UserThemeFile[];
-}
-
-const USER_FONT_FILE_ERROR_CODES = [
-	"too-large",
-	"too-many",
-	"unsupported-collection",
-	"invalid-font",
-	"unreadable",
-] as const;
-export type UserFontFileErrorCode = (typeof USER_FONT_FILE_ERROR_CODES)[number];
-
-/** What a user font file declares in its own tables. */
-export interface UserFontFace {
-	family: string;
-	style: "normal" | "italic";
-	/** One value for a static face; the `wght` axis range for a variable one. */
-	weight: { min: number; max: number };
-	monospace: boolean;
-}
-
-export interface UserFontFileOk {
-	fileName: string;
-	ok: true;
-	/** Same-origin path serving the file, versioned by its content signature. */
-	url: string;
-	face: UserFontFace;
-}
-
-export interface UserFontFileError {
-	fileName: string;
-	ok: false;
-	error: UserFontFileErrorCode;
-	/** Parser or OS detail for `invalid-font` / `unreadable`, untranslated. */
-	detail?: string;
-}
-
-export type UserFontFile = UserFontFileOk | UserFontFileError;
-
-/** The host's user font files (`<dataDir>/fonts/`), as `fonts.list` reports them. */
-export interface UserFontsSnapshot {
-	dir: string;
-	files: UserFontFile[];
+function isUserFontFileErrorCode(value: unknown): value is UserFontFileErrorCode {
+	return USER_FONT_FILE_ERROR_CODES.some((code) => code === value);
 }
 
 function isUserFontFace(value: unknown): value is UserFontFace {
@@ -1048,18 +633,7 @@ export function isUserFontFile(value: unknown): value is UserFontFile {
 		);
 	}
 	const error = Reflect.get(value, "error");
-	return ok === false && USER_FONT_FILE_ERROR_CODES.some((code) => code === error);
-}
-
-/** A family the host operating system's font service reports. */
-export interface InstalledFontFamily {
-	name: string;
-	/** Advisory: clients confirm by measuring the face they actually render. */
-	monospaceHint: boolean;
-}
-
-export interface InstalledFontsResult {
-	families: InstalledFontFamily[];
+	return ok === false && isUserFontFileErrorCode(error);
 }
 
 /** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
@@ -1204,126 +778,15 @@ export function isRetriedAttempt(
 	return messages[index + 1]?.role === "assistant";
 }
 
-export type HistoryScope =
-	| { kind: "chat"; sessionId: string }
-	| { kind: "workspace"; workspaceId: string }
-	| { kind: "project"; projectId: string }
-	| { kind: "all" };
-
-export interface PromptHit {
-	text: string;
-	timestamp: number;
-	sessionId: string;
-	sessionTitle?: string;
-	workspaceId?: string;
-	projectId?: string;
-	cwd: string;
-	messageIndex?: number;
-	anchorText?: string;
-}
-
-export interface MessageHit extends PromptHit {
-	role: "user" | "assistant";
-	snippet: string;
-	messageIndex: number;
-	anchorText: string;
-}
-
 export const MAX_HISTORY_LIMIT = 200;
 
 export const MAX_HISTORY_QUERY_LENGTH = 200;
-
-export interface HistorySearchResult {
-	prompts: PromptHit[];
-	messages: MessageHit[];
-	promptTotal: number;
-	messageTotal: number;
-	indexing: boolean;
-}
-
-export const SEARCH_KINDS = ["transcript", "file", "spec", "plan"] as const;
-
-export type SearchKind = (typeof SEARCH_KINDS)[number];
 
 export const MAX_SEARCH_QUERY_LENGTH = 200;
 
 export const MAX_SEARCH_GROUP_LIMIT = 50;
 
 export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
-
-/** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
-export interface SearchContext {
-	projectId?: string;
-	workspaceId?: string;
-}
-
-export interface SearchHitBase {
-	/** `kind:id[:locator]` — stable across replies so the client can keep a selection. */
-	id: string;
-	title: string;
-	subtitle?: string;
-	/** The shared matcher's tier and score; the client merges host hits with its own by these. */
-	tier: MatchTier;
-	score: number;
-	ranges?: Record<string, [number, number][]>;
-	projectId: string;
-	workspaceId: string;
-}
-
-export type SearchHit =
-	/** A root-relative POSIX `path`; `size` is the bytes on disk when the host could read them. */
-	| (SearchHitBase & { kind: "file"; path: string; size?: number })
-	/** `snippet` is the body line a `content`-tier hit matched. */
-	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number; snippet?: string })
-	| (SearchHitBase & { kind: "plan"; sessionId: string })
-	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
-	| (SearchHitBase & {
-			kind: "transcript";
-			sessionId: string;
-			messageIndex: number;
-			anchorText: string;
-	  });
-
-/** `indexing`: never loaded yet; `refreshing`: a reload runs behind these hits; `failed`: the last load failed (its last good hits stay). */
-export type SearchGroupState = "ready" | "indexing" | "refreshing" | "failed";
-
-/** Why a group may miss hits: the scan ran out of time, or only `fileList` files of the root are listed. */
-export interface SearchGroupCut {
-	time?: true;
-	fileList?: number;
-}
-
-export interface SearchGroup {
-	kind: SearchKind;
-	hits: SearchHit[];
-	total: number;
-	state: SearchGroupState;
-	cut?: SearchGroupCut;
-}
-
-export interface SearchQueryResult {
-	groups: SearchGroup[];
-}
-
-/** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
-export interface SearchPreviewTarget {
-	kind: "chat";
-	sessionId: string;
-	messageIndex?: number;
-	/** The hit's `anchorText`: the focus moves to the message it starts when compaction shifted the index. */
-	anchorText?: string;
-}
-
-export interface SearchPreviewMessage {
-	role: "user" | "assistant";
-	messageIndex: number;
-	text: string;
-	focus: boolean;
-}
-
-export type SearchPreviewResult =
-	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[] }
-	| { kind: "unavailable" };
 
 export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
@@ -1378,7 +841,6 @@ export interface PlanReviewResult {
 	blockedByOpenFindings?: number;
 }
 
-export const PLAN_REVIEW_VERDICTS: readonly PlanReviewVerdict[] = ["approve", "request_changes"];
 export const REVIEW_READING_ORDER_LIMIT = 12;
 
 function isReadingStep(value: unknown): value is ReviewReadingStep {
@@ -1391,8 +853,6 @@ function isReadingStep(value: unknown): value is ReviewReadingStep {
 		step.why.length > 0
 	);
 }
-
-const REVIEW_COMMENT_KINDS: readonly ReviewCommentKind[] = ["inline", "diff", "file", "review"];
 
 function isPositiveInt(n: unknown): n is number {
 	return typeof n === "number" && Number.isInteger(n) && n > 0;

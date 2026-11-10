@@ -133,7 +133,7 @@ and never campaign-enriched. Closed `source`: `host_crash` (crashLog's uncaught/
 of that, and every extra second keeps a faulted host running), `host_logged` (a host
 `log.warn/error` carrying an error, with its `scope`), `request` (every failed WS request, CodedErrors
 included — revisitable; PostHog itself excludes expected 4xx outcomes — with `request_method` only for a
-registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
+registered method; a refused `client.reportError` is the exception, so a bad report never raises another), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
 (handled desktop main-process errors, with their scope). An error `code` passes only as `^[A-Z][A-Z0-9_]+$`.
 
 The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-node 5.57.2's

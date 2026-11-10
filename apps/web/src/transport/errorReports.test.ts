@@ -73,6 +73,11 @@ test("the message is cut out of the stack, even when its lines look like frames"
 	);
 });
 
+test("an error with a non-string name still reports a string type", () => {
+	const error = Object.assign(new Error("odd"), { name: 42 });
+	expect(clientErrorReport("window", error).type).toBe("Error");
+});
+
 test("reports before the welcome wait for the protocol and are dropped by older hosts", () => {
 	reportClientError(clientErrorReport("window", new Error("early")));
 	expect(requests).toEqual([]);
