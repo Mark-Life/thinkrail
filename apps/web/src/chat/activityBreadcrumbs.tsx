@@ -7,7 +7,12 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useState } from "react";
 
-export type ActivityBreadcrumbKind = "activity" | "thinking" | "tool";
+const ACTIVITY_BREADCRUMB_KINDS = ["activity", "thinking", "tool"] as const;
+export type ActivityBreadcrumbKind = (typeof ACTIVITY_BREADCRUMB_KINDS)[number];
+
+function breadcrumbKind(value: string | undefined): ActivityBreadcrumbKind {
+	return ACTIVITY_BREADCRUMB_KINDS.find((kind) => kind === value) ?? "tool";
+}
 
 export interface ActivityBreadcrumbDescriptor {
 	id: string;
@@ -160,7 +165,7 @@ function readBreadcrumbGeometry(scroller: HTMLElement): ActivityBreadcrumbGeomet
 			return {
 				id: element.dataset.activityNodeId ?? "",
 				...(element.dataset.activityParentId ? { parentId: element.dataset.activityParentId } : {}),
-				kind: (element.dataset.activityNodeKind ?? "tool") as ActivityBreadcrumbKind,
+				kind: breadcrumbKind(element.dataset.activityNodeKind),
 				label: element.dataset.activityNodeLabel ?? "",
 				meta: element.dataset.activityNodeMeta ?? "",
 				expanded: element.dataset.expanded === "true",

@@ -48,7 +48,7 @@ const IDLE_CHOICES: readonly IdleChoiceSpec[] = [
 ];
 
 export function toChoice(days: number | null): IdleChoice {
-	return days === null ? "never" : (String(days) as IdleChoice);
+	return days === null ? "never" : `${days}`;
 }
 
 export function WorkspacesSettings() {

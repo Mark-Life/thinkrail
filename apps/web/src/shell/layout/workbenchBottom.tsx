@@ -1,9 +1,11 @@
 import { useDroppable } from "@dnd-kit/core";
+import { compile } from "@earendil-works/pi-schema";
 import {
 	RiCheckFill as Check,
 	RiMoreLine as MoreHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { LayoutBottomAlignment as LayoutBottomAlignmentSchema } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -46,12 +48,16 @@ import {
 } from "./workbenchShared";
 import { AuxiliaryGroupHeader } from "./workbenchSide";
 
+const bottomAlignment = compile(LayoutBottomAlignmentSchema);
+
 export const BOTTOM_ALIGNMENT_LABELS = {
 	center: "workbench.bottom.alignCenter",
 	"center-left": "workbench.bottom.alignCenterLeft",
 	"center-right": "workbench.bottom.alignCenterRight",
 	full: "workbench.bottom.alignFull",
 } as const satisfies Record<LayoutBottomAlignment, MessageKey>;
+
+const BOTTOM_ALIGNMENTS = Object.keys(BOTTOM_ALIGNMENT_LABELS).filter(bottomAlignment.check);
 
 export function BottomAlignmentMenu({
 	alignment,
@@ -81,9 +87,11 @@ export function BottomAlignmentMenu({
 			<DropdownMenuContent align="end" className="w-224">
 				<DropdownMenuRadioGroup
 					value={alignment}
-					onValueChange={(value) => onChange(value as LayoutBottomAlignment)}
+					onValueChange={(value) => {
+						if (bottomAlignment.check(value)) onChange(value);
+					}}
 				>
-					{(Object.keys(BOTTOM_ALIGNMENT_LABELS) as LayoutBottomAlignment[]).map((value) => (
+					{BOTTOM_ALIGNMENTS.map((value) => (
 						<DropdownMenuRadioItem
 							key={value}
 							value={value}

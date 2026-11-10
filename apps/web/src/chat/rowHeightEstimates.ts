@@ -1,3 +1,4 @@
+import { JsonObject } from "@thinkrail/contracts";
 import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
 import { isInteractiveTool, resolveProminence } from "./toolRegistry";
 
@@ -102,9 +103,8 @@ function collectStrings(value: unknown, result: string[], seen: Set<unknown>): v
 		for (const item of value) collectStrings(item, result, seen);
 		return;
 	}
-	for (const key of Object.keys(value).sort()) {
-		collectStrings((value as Record<string, unknown>)[key], result, seen);
-	}
+	if (!JsonObject.check(value)) return;
+	for (const key of Object.keys(value).sort()) collectStrings(value[key], result, seen);
 }
 
 function estimateToolPayload(row: Extract<ChatRow, { kind: "tool" }>, baseHeight: number): number {

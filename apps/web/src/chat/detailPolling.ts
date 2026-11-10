@@ -16,9 +16,15 @@ interface StartDetailPollingOptions<T> {
 	scheduler?: DetailPollScheduler;
 }
 
+/** Its timer handle is the function that cancels the timer. */
 export const defaultDetailScheduler: DetailPollScheduler = {
-	set: (callback, delayMs) => setTimeout(callback, delayMs),
-	clear: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+	set: (callback, delayMs) => {
+		const timer = setTimeout(callback, delayMs);
+		return () => clearTimeout(timer);
+	},
+	clear: (cancel) => {
+		if (typeof cancel === "function") cancel();
+	},
 };
 
 export function detailRetryDelay(failureCount: number): number {

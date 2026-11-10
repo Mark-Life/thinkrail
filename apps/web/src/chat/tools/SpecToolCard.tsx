@@ -1,3 +1,4 @@
+import { JsonObject } from "@thinkrail/contracts";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
@@ -32,7 +33,7 @@ function boundedPathIndex(text: string, path: string, cursor: number): number {
 }
 
 function objectValue(value: unknown): Record<string, unknown> | null {
-	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+	return JsonObject.check(value) ? value : null;
 }
 
 function stringField(value: unknown, key: string): string | null {

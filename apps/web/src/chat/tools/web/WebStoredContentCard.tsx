@@ -1,24 +1,21 @@
+import { compile, obj, str } from "@earendil-works/pi-schema";
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
 import { numArg, resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { WebResultBody } from "./WebResultBody";
 
-function detailString(result: unknown, key: string): string {
-	if (typeof result !== "object" || result === null || !("details" in result)) return "";
-	const details = result.details;
-	if (typeof details !== "object" || details === null) return "";
-	const value = (details as Record<string, unknown>)[key];
-	return typeof value === "string" ? value : "";
-}
+const OPEN = { open: true };
+const detailsQuery = compile(obj({ details: obj({ query: str() }, OPEN) }, OPEN));
+const detailsUrl = compile(obj({ details: obj({ url: str() }, OPEN) }, OPEN));
 
 export function storedContentTarget(
 	t: Translator,
 	args: Record<string, unknown>,
 	result: unknown,
 ): string {
-	const query = strArg(args, "query") || detailString(result, "query");
+	const query = strArg(args, "query") || (detailsQuery.check(result) ? result.details.query : "");
 	if (query) return query;
-	const url = strArg(args, "url") || detailString(result, "url");
+	const url = strArg(args, "url") || (detailsUrl.check(result) ? result.details.url : "");
 	if (url) return url;
 	const queryIndex = numArg(args, "queryIndex");
 	if (queryIndex !== null) return t("tools.webStored.queryIndex", { index: queryIndex });

@@ -35,11 +35,10 @@ export interface ParsedQuery {
 	readonly terms: readonly MatchTerm[];
 }
 
-const PREFIX_SCOPE = new Map<string, Exclude<SearchScope, "all">>(
-	Object.entries(SCOPE_PREFIX).map(([scope, prefix]) => [
-		prefix,
-		scope as Exclude<SearchScope, "all">,
-	]),
+const PREFIX_SCOPE = new Map(
+	SEARCH_SCOPES.flatMap((scope) =>
+		scope === "all" ? [] : [[SCOPE_PREFIX[scope], scope] as const],
+	),
 );
 
 const PULL_REQUEST_NUMBER = /^#\d+$/;

@@ -175,8 +175,8 @@ export function fileSummaries(
 	const overall = byPath.get(null);
 	if (overall && keep(null, overall)) rows.push({ path: null, ...overall });
 	for (const path of [...byPath.keys()].filter((p): p is string => p !== null).sort()) {
-		const entry = byPath.get(path) as Omit<ReviewFileSummary, "path">;
-		if (keep(path, entry)) rows.push({ path, ...entry });
+		const entry = byPath.get(path);
+		if (entry && keep(path, entry)) rows.push({ path, ...entry });
 	}
 	return rows;
 }
