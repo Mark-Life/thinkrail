@@ -135,7 +135,11 @@ Two shapes pi-coding-agent declares only behind its exports map: `McpToolDetails
 `details`, `dist/extensions/mcp/tools.d.ts`), which contracts' `McpToolDetails` copies for the browser, and
 `PiManifest` (the `pi` field of a package manifest, `dist/core/pi-manifest.d.ts`), whose `skills` the host
 reads from a skill package. The server type-imports each by a relative path into its own `node_modules` and
-ties the copy with `Same`. A moved file fails `tsc` on the import; a changed shape fails the tie.
+ties the copy with `Same`. A moved file fails `tsc` on the import; a changed shape fails the tie. The path
+works because bun's isolated linker (`configVersion: 1` in `bun.lock`) links every declared dependency into
+the package's own `node_modules`; a hoisted install also fails `tsc` loudly. It stays a relative path, not a
+`tsconfig` `paths` alias, because `apps/desktop`, `apps/cli` and `artifact-tests` compile the server sources
+under their own `tsconfig`, where the alias would not apply.
 **Removal gate:** pi exports the type (or a schema for it) from its root. Then import it from there and delete
 the path import.
 
