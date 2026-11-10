@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Wire contracts
 parent: architecture
-depends-on: [module-pi-todos, module-pi-background-commands, module-pi-delegation, module-pi-subagents, module-type-tie]
+depends-on: [module-pi-todos, module-pi-background-commands, module-pi-delegation, module-pi-subagents, module-pi-ask-user-question, module-type-tie]
 references: [central-integration, module-pi-background-commands]
 tags: [wire]
 ---
@@ -145,8 +145,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **Allowed deps** (runtime, all browser-safe): `@earendil-works/pi-schema`; pi-ai's
   `@earendil-works/pi-ai/providers/model-schema` entry, which loads only `pi-schema` (`ThinkingLevel` and
   `ModelInputModality` are its `ModelThinkingLevelSchema` and `ModelInputModalitySchema`); and the `wire` leaf
-  entries of the shape owners `pi-todos`, `pi-background-commands`, `pi-delegation` and `pi-subagents`, each of
-  which loads only `pi-schema`, `model-schema` and other leaves. `check:boundaries` refuses any other entry of
+  entries of the shape owners `pi-todos`, `pi-background-commands`, `pi-delegation` and `pi-subagents`, plus the
+  `core` leaf of the published `@thinkrail/pi-ask-user-question` (the owner of `NON_EXECUTABLE_STOP_REASONS`, which
+  imports nothing from the repository), each of which loads only `pi-schema`, `model-schema` and other leaves. `check:boundaries` refuses any other entry of
   those packages. **Type-only:** `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core` from their
   **package roots** (erased at build), and `type-tie` for `Same`, which `schema/` re-exports.
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
@@ -168,7 +169,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `@earendil-works/pi-coding-agent` (pulls `node:fs`, and in the web program its type load turns on its
   `AgentMessage` augmentation); every other pi-ai **provider / API subpath** (`/providers/*` except
   `model-schema`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); a pi
-  package entry other than its `wire` leaf; and importing `server` / `shared` / `web`.
+  package entry other than its `wire` leaf (the ask extension: its `core` leaf); and importing `server` / `shared` / `web`.
 - **One source per shape** ([[submodule-contracts-schema]] holds the full rule). An in-repo pi package owns its
   shapes and exports them from its `wire` leaf; `contracts` value-imports the leaf and only extends it. A pi-ai
   shape uses pi-ai's schema where one exists and is otherwise `Same`-tied. A pi-coding-agent shape is declared
@@ -210,7 +211,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
     The server keeps one `AgentMessage` alias (`SessionMessageEntry["message"]`). `ThinkingLevel` (the
     `off`-inclusive one) is pi-ai's `ModelThinkingLevelSchema` in `schema/model.ts`;
   - `isTranscriptMessageRole` is the role guard the transcript and history share; `SessionInputKind` is gone.
-    `NON_EXECUTABLE_STOP_REASONS` and `TextContent` live in `schema/transcript.ts`, and `SessionEntryType` in
+    `TextContent` lives in `schema/transcript.ts`, which also re-exports `NON_EXECUTABLE_STOP_REASONS` from the ask
+    extension's `core` leaf, and `SessionEntryType` in
     `schema/piEvent.ts`, tied to pi-coding-agent's `SessionEntry["type"]` by the host;
   - the render union **`PiEvent`** (in `schema/piEvent.ts`) — pi-agent-core's `AgentEvent` plus the session events of
     the Node-only `pi-coding-agent`, declared there and tied to its `AgentSessionEvent` by the host

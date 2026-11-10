@@ -34,7 +34,7 @@ apps/desktop    Electrobun local-host launcher                     ── depend
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
-packages/contracts  the wire (types plus tiny pure runtime) ── depends on ─▶ packages/pi-todos/wire, packages/pi-background-commands/wire, packages/pi-delegation/wire, packages/pi-subagents/wire, packages/type-tie (type-only)
+packages/contracts  the wire (types plus tiny pure runtime) ── depends on ─▶ packages/pi-todos/wire, packages/pi-background-commands/wire, packages/pi-delegation/wire, packages/pi-subagents/wire, @thinkrail/pi-ask-user-question/core, packages/type-tie (type-only)
 packages/type-tie   `Same`, the type-only exact-type tie ── depends on ─▶ nothing
 packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
@@ -90,7 +90,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
 3. **The wire is versioned.** `contracts` is types plus a small runtime: wire schemas, wire constants,
    versions, the config default, and guards. Its runtime loads only `@earendil-works/pi-schema`, pi-ai's
    `providers/model-schema` entry (which loads only `pi-schema`), and the `wire` leaf entries of
-   `pi-todos`, `pi-background-commands`, `pi-delegation` and `pi-subagents`. Each shape has one source: the
+   `pi-todos`, `pi-background-commands`, `pi-delegation` and `pi-subagents`, plus the ask extension's `core`
+   leaf. Each shape has one source: the
    package that owns it defines a `pi-schema` schema, its type is `Static` of that schema, and `contracts`
    imports it and only extends it (branded ids, host fields). A converted
    wire type derives from its schema, and the host checks its params at dispatch. Any other runtime

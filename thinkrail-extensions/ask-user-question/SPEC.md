@@ -56,8 +56,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   compiled `isAskUserQuestionResult` that `readAskUserQuestionResult` reads a result with, and
   `isAskUserQuestionItemView` that `parseQuestions` reads still-streaming args with, so the card types a question
   as `AskUserQuestionItemView` and guards every optional field (the answer model in `web/state.ts` stays the
-  card's own). `web/coreTies.ts` ties the leaf's `NON_EXECUTABLE_STOP_REASONS` to contracts' list of the same
-  name, so the extension and the host agree on which calls may still run, and ties the question and option
+  card's own). `web/coreTies.ts` ties the question and option
   views to the TypeBox schema's fields, so a field the tool adds or renames fails `tsc`;
   `@thinkrail/ui` (`attention-line`, `button`, `keyboard`, `textarea`, `utils`), `@thinkrail/resource-renderers`
   (`useOptionalResourceHost` for the host's Markdown — mermaid included — and `FramedResourcePreview` +

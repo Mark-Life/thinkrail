@@ -76,10 +76,9 @@ that map.
     them. A shape with a second representation, such as `theme.schema.json`, is generated from its schema or
     compared to it by a test.
 
-  - **`NON_EXECUTABLE_STOP_REASONS`** is the one list written twice: `transcript.ts` holds the host's rule for every
-    tool, and the published `pi-ask-user-question` holds the same list for its restart repair. That package imports
-    nothing from the repository, and contracts does not depend on an extension, so the ask extension's web half
-    ties the two with `Same` ([[module-ext-ask-user-question]]).
+  - **`NON_EXECUTABLE_STOP_REASONS`** is owned by the published `pi-ask-user-question`, which needs it for its
+    restart repair and imports nothing from the repository. `transcript.ts` re-exports it from that package's
+    `core` leaf as the host's rule for every tool.
 
   `Same` (from `type-tie`, re-exported here) fails `tsc` when either side adds, drops or changes a field or a union
   member. A `Schema<T>` annotation checks one way only and misses a field the dependency adds, so it is never a tie.

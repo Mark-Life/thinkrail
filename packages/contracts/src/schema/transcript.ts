@@ -2,7 +2,6 @@ import type {
 	AssistantMessage,
 	Message,
 	ImageContent as PiImageContent,
-	StopReason as PiStopReasonType,
 	TextContent as PiTextContent,
 	ToolResultMessage,
 	UserMessage,
@@ -21,14 +20,8 @@ import {
 import type { Same } from "./typeTie";
 import { wireObj } from "./wire";
 
+export { NON_EXECUTABLE_STOP_REASONS } from "@thinkrail/pi-ask-user-question/core";
 export { StopReason as PiStopReason } from "pi-delegation/wire";
-
-/** The stop reasons after which an assistant message's tool calls may be cut off, so they must not run. */
-export const NON_EXECUTABLE_STOP_REASONS = [
-	"error",
-	"aborted",
-	"length",
-] as const satisfies readonly PiStopReasonType[];
 
 export const ImageContent = wireObj({ type: lit("image"), data: str(), mimeType: str() });
 export type ImageContent = Same<Static<typeof ImageContent>, PiImageContent>;

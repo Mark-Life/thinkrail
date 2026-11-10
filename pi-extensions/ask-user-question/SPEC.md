@@ -56,10 +56,8 @@ answer mailbox.
 
   These are what an embedder needs to repair or continue a question outside `execute()`. `AskRequest` and
   `AskUserQuestionAsker` carry pi-coding-agent's `ExtensionContext`, so they live in `src/asker.ts` and only
-  the root exports them. ThinkRail's web half ties `NON_EXECUTABLE_STOP_REASONS` to contracts' list of the
-  same name ([[module-ext-ask-user-question]]). The list is written twice on purpose: this package is
-  published and imports nothing from the repository, and contracts holds the host's rule for every tool, so
-  neither can take it from the other. The tie fails `tsc` when they differ.
+  the root exports them. `NON_EXECUTABLE_STOP_REASONS` is the one source of that list: ThinkRail's contracts
+  re-export it from this leaf for the host's rule on every tool.
 - **The tool contract**, which renderers and embedders key on:
   - the name;
   - the argument shape: `questions[]` of `{ question, header, preview?, options[]{ label, description,

@@ -52,8 +52,8 @@ const PI_TYPE_IMPORT =
 interface LeafEntry {
 	specifier: string;
 	mode: "value" | "type";
-	/** The one module whose web half may import it; any browser-safe source when absent. */
-	webHalfOf?: string;
+	/** The only modules that may import it; any browser-safe source when absent. */
+	importers?: readonly string[];
 }
 
 const LEAF_ENTRIES: readonly LeafEntry[] = [
@@ -64,24 +64,25 @@ const LEAF_ENTRIES: readonly LeafEntry[] = [
 	{
 		specifier: "@thinkrail/pi-ask-user-question/core",
 		mode: "value",
-		webHalfOf: "thinkrail-extensions/ask-user-question",
+		importers: ["thinkrail-extensions/ask-user-question", "packages/contracts"],
 	},
 	{
 		specifier: "@thinkrail/pi-visualize/schema",
 		mode: "type",
-		webHalfOf: "thinkrail-extensions/visualize",
+		importers: ["thinkrail-extensions/visualize"],
 	},
 ];
 
-/** Packages a module may reach only through the owner's `wire` leaf. */
-const WIRE_ONLY_TARGETS: Readonly<Record<string, readonly string[]>> = {
-	"packages/contracts": [
-		"packages/pi-todos",
-		"packages/pi-background-commands",
-		"packages/pi-delegation",
-		"packages/pi-subagents",
-	],
-	"packages/pi-subagents": ["packages/pi-background-commands"],
+/** Packages a module may reach only through one leaf entry of the owner, by package root. */
+const LEAF_ONLY_TARGETS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+	"packages/contracts": {
+		"packages/pi-todos": "wire",
+		"packages/pi-background-commands": "wire",
+		"packages/pi-delegation": "wire",
+		"packages/pi-subagents": "wire",
+		"pi-extensions/ask-user-question": "core",
+	},
+	"packages/pi-subagents": { "packages/pi-background-commands": "wire" },
 };
 
 const TEST_IDS_ENTRY = /^(?:test-ids|src\/testIds(?:\.ts)?)$/;
@@ -101,6 +102,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/pi-background-commands",
 			"packages/pi-delegation",
 			"packages/pi-subagents",
+			"pi-extensions/ask-user-question",
 			"packages/type-tie",
 		],
 	},
@@ -418,7 +420,7 @@ function browserPiViolation(
 	const leaf = leafFor(specifier);
 	if (
 		leaf &&
-		(leaf.webHalfOf === undefined || leaf.webHalfOf === rule.root) &&
+		(leaf.importers === undefined || leaf.importers.includes(rule.root)) &&
 		(typeOnly || leaf.mode === "value")
 	)
 		return undefined;
@@ -475,8 +477,8 @@ function sourceViolation(
 			if (rule.root === "apps/web" || (extension && half === "web")) publicEntry = "web";
 			if (rule.root === "packages/server" || (extension && half === "server"))
 				publicEntry = "server";
-		} else if (WIRE_ONLY_TARGETS[rule.root]?.includes(target.root)) {
-			publicEntry = "wire";
+		} else {
+			publicEntry = LEAF_ONLY_TARGETS[rule.root]?.[target.root];
 		}
 		if (publicEntry && specifier !== `${target.name}/${publicEntry}`) {
 			return `may use only public ${target.name}/${publicEntry}`;

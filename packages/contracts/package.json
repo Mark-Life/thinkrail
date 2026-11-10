@@ -15,6 +15,7 @@
 	"dependencies": {
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-schema": "catalog:",
+		"@thinkrail/pi-ask-user-question": "workspace:*",
 		"pi-background-commands": "workspace:*",
 		"pi-delegation": "workspace:*",
 		"pi-subagents": "workspace:*",
