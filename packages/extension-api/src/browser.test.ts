@@ -4,7 +4,15 @@ import * as root from "@thinkrail/extension-api";
 import * as web from "@thinkrail/extension-api/web";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
-const ALLOWED_RUNTIME_IMPORTS = ["@earendil-works/pi-schema", "@thinkrail/contracts"];
+const ALLOWED_RUNTIME_IMPORTS = [
+	"@earendil-works/pi-ai/providers/model-schema",
+	"@earendil-works/pi-schema",
+	"@thinkrail/contracts",
+	"pi-background-commands/wire",
+	"pi-delegation/wire",
+	"pi-subagents/wire",
+	"pi-todos/wire",
+];
 
 function assertBrowserSource(path: string, repoRoot = REPO_ROOT): void {
 	const source = relative(repoRoot, path).split(sep).join("/");

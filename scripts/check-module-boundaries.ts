@@ -2,7 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { compile, map, obj, opt, str } from "@earendil-works/pi-schema";
+import { compile, map, obj, opt, str, unknown } from "@earendil-works/pi-schema";
 import { type Argument, parseSync, Visitor } from "oxc-parser";
 
 const DependencyMap = opt(map(str()));
@@ -10,6 +10,7 @@ const Manifest = compile(
 	obj(
 		{
 			name: opt(str()),
+			exports: opt(map(unknown())),
 			dependencies: DependencyMap,
 			devDependencies: DependencyMap,
 			optionalDependencies: DependencyMap,
@@ -33,7 +34,60 @@ interface ModuleRule {
 	allowed: readonly string[];
 }
 
-const BROWSER_SAFE_PI_PACKAGE = /^@earendil-works\/pi-schema(?:\/|$)/;
+const PI_PACKAGE = /^(?:@[^/]+\/)?pi-[^/]+(?:\/|$)/;
+const PI_SCHEMA = /^@earendil-works\/pi-schema(?:\/|$)/;
+const MODEL_SCHEMA = "@earendil-works/pi-ai/providers/model-schema";
+const PI_TYPE_ROOTS: ReadonlySet<string> = new Set([
+	"@earendil-works/pi-ai",
+	"@earendil-works/pi-agent-core",
+]);
+const PI_VALUE_IMPORT = "creates forbidden pi value import in browser-safe sources";
+const PI_TYPE_IMPORT =
+	"creates forbidden pi import in browser-safe sources: types come only from the pi-ai and pi-agent-core roots or a leaf entry";
+
+/**
+ * The entries of pi packages that browser code may load. A leaf is itself checked as a browser-safe
+ * source; a `type` leaf is only ever loaded for its types, so its own value imports never reach a bundle.
+ */
+interface LeafEntry {
+	specifier: string;
+	mode: "value" | "type";
+	/** The one module whose web half may import it; any browser-safe source when absent. */
+	webHalfOf?: string;
+}
+
+const LEAF_ENTRIES: readonly LeafEntry[] = [
+	{ specifier: "pi-todos/wire", mode: "value" },
+	{ specifier: "pi-background-commands/wire", mode: "value" },
+	{ specifier: "pi-delegation/wire", mode: "value" },
+	{ specifier: "pi-subagents/wire", mode: "value" },
+	{
+		specifier: "@thinkrail/pi-ask-user-question/core",
+		mode: "value",
+		webHalfOf: "thinkrail-extensions/ask-user-question",
+	},
+	{
+		specifier: "@thinkrail/pi-visualize/schema",
+		mode: "type",
+		webHalfOf: "thinkrail-extensions/visualize",
+	},
+];
+
+/** Packages a module may reach only through the owner's `wire` leaf. */
+const WIRE_ONLY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+	"packages/contracts": [
+		"packages/pi-todos",
+		"packages/pi-background-commands",
+		"packages/pi-delegation",
+		"packages/pi-subagents",
+	],
+	"packages/pi-subagents": ["packages/pi-background-commands"],
+};
+
+/** Leaf violations whose owner is removing them; an entry that no longer matches fails the check. */
+const PENDING_LEAF_FIXES: ReadonlySet<string> = new Set([
+	'pi-extensions/ask-user-question/src/core.ts: import "@earendil-works/pi-coding-agent"',
+]);
 const TEST_IDS_ENTRY = /^(?:test-ids|src\/testIds(?:\.ts)?)$/;
 const ID_SOURCE = /^src\/schema\/ids(?:\.ts)?$/;
 const TEST_SOURCE =
@@ -44,11 +98,25 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		root: "packages/artifact-tests",
 		allowed: ["apps/cli", "packages/contracts", "packages/server", "packages/shared"],
 	},
-	{ root: "packages/contracts", allowed: [] },
+	{
+		root: "packages/contracts",
+		allowed: [
+			"packages/pi-todos",
+			"packages/pi-background-commands",
+			"packages/pi-delegation",
+			"packages/pi-subagents",
+			"packages/type-tie",
+		],
+	},
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
-	{ root: "packages/pi-delegation", allowed: [] },
+	{ root: "packages/type-tie", allowed: [] },
+	{ root: "packages/pi-todos", allowed: [] },
+	{ root: "packages/pi-delegation", allowed: ["packages/type-tie"] },
 	{ root: "packages/pi-background-commands", allowed: [] },
-	{ root: "packages/pi-subagents", allowed: ["packages/pi-delegation"] },
+	{
+		root: "packages/pi-subagents",
+		allowed: ["packages/pi-delegation", "packages/pi-background-commands"],
+	},
 	{ root: "packages/pi-dag", allowed: ["packages/pi-delegation"] },
 	{
 		root: "packages/server",
@@ -331,12 +399,56 @@ function idMakerViolation(rule: ModuleRule, subpath: string, target: WorkspaceTa
 	return undefined;
 }
 
+function isPiImport(specifier: string, target: WorkspaceTarget | undefined): boolean {
+	return (
+		target?.root.startsWith("pi-extensions/") === true || PI_PACKAGE.test(target?.name ?? specifier)
+	);
+}
+
+function leafFor(specifier: string): LeafEntry | undefined {
+	return LEAF_ENTRIES.find((leaf) => leaf.specifier === specifier);
+}
+
+function browserPiViolation(
+	rule: ModuleRule,
+	{ specifier, typeOnly }: SourceImport,
+	target: WorkspaceTarget | undefined,
+	typesUnchecked: boolean,
+): string | undefined {
+	if (target?.root === rule.root && specifier.startsWith(".")) return undefined;
+	if (!isPiImport(specifier, target) || PI_SCHEMA.test(specifier) || specifier === MODEL_SCHEMA)
+		return undefined;
+	if (typeOnly && (typesUnchecked || PI_TYPE_ROOTS.has(specifier))) return undefined;
+	const leaf = leafFor(specifier);
+	if (
+		leaf &&
+		(leaf.webHalfOf === undefined || leaf.webHalfOf === rule.root) &&
+		(typeOnly || leaf.mode === "value")
+	)
+		return undefined;
+	return typeOnly ? PI_TYPE_IMPORT : PI_VALUE_IMPORT;
+}
+
+function leafViolation(leaf: LeafEntry, { specifier, typeOnly }: SourceImport): string | undefined {
+	if (leaf.mode === "type" || typeOnly) return undefined;
+	if (specifier.startsWith(".")) return `value-imports a relative file from leaf ${leaf.specifier}`;
+	if (
+		PI_SCHEMA.test(specifier) ||
+		specifier === MODEL_SCHEMA ||
+		leafFor(specifier)?.mode === "value"
+	)
+		return undefined;
+	return `is loaded by leaf ${leaf.specifier}, which may value-import only pi-schema, pi-ai's model-schema and value leaves`;
+}
+
 function sourceViolation(
 	rule: ModuleRule,
 	subpath: string,
-	{ specifier, typeOnly }: SourceImport,
+	sourceImport: SourceImport,
 	target: WorkspaceTarget | undefined,
+	leaf: LeafEntry | undefined,
 ): string | undefined {
+	const { specifier } = sourceImport;
 	if (target && !allowedEdge(sourceRule(rule, subpath), target.root)) {
 		return `creates forbidden ${rule.root} -> ${target.root} edge`;
 	}
@@ -359,7 +471,7 @@ function sourceViolation(
 		) {
 			return "leaks extension-api's server half into browser sources";
 		}
-		let publicEntry: "web" | "server" | undefined;
+		let publicEntry: string | undefined;
 		if (target.root.startsWith("thinkrail-extensions/")) {
 			if (rule.root === "apps/web") publicEntry = "web";
 			if (rule.root === "packages/server") publicEntry = "server";
@@ -367,6 +479,8 @@ function sourceViolation(
 			if (rule.root === "apps/web" || (extension && half === "web")) publicEntry = "web";
 			if (rule.root === "packages/server" || (extension && half === "server"))
 				publicEntry = "server";
+		} else if (WIRE_ONLY_TARGETS[rule.root]?.includes(target.root)) {
+			publicEntry = "wire";
 		}
 		if (publicEntry && specifier !== `${target.name}/${publicEntry}`) {
 			return `may use only public ${target.name}/${publicEntry}`;
@@ -379,20 +493,41 @@ function sourceViolation(
 		rule.root === "packages/contracts" ||
 		rule.root === "packages/locales" ||
 		sdk ||
-		(extension && half === "web");
-	const piPackage =
-		target?.root.startsWith("pi-extensions/") ||
-		(/^(?:@[^/]+\/)?pi-[^/]+(?:\/|$)/.test(target?.name ?? specifier) &&
-			!BROWSER_SAFE_PI_PACKAGE.test(specifier));
-	if (browserSafe && !typeOnly && piPackage)
-		return "creates forbidden pi value import in browser-safe sources";
-	return undefined;
+		(extension && half === "web") ||
+		leaf !== undefined;
+	if (browserSafe) {
+		const piViolation = browserPiViolation(rule, sourceImport, target, sdk && sdkHalf === "server");
+		if (piViolation) return piViolation;
+	}
+	return leaf ? leafViolation(leaf, sourceImport) : undefined;
+}
+
+/** The source file of each leaf entry whose package is in the workspace, by absolute path. */
+function leafFiles(
+	root: string,
+	packages: ReadonlyMap<string, string>,
+	violations: string[],
+): Map<string, LeafEntry> {
+	const files = new Map<string, LeafEntry>();
+	for (const leaf of LEAF_ENTRIES) {
+		for (const [name, moduleRoot] of packages) {
+			if (!leaf.specifier.startsWith(`${name}/`)) continue;
+			const entry = `./${leaf.specifier.slice(name.length + 1)}`;
+			const file = readManifest(join(root, moduleRoot, "package.json")).exports?.[entry];
+			if (typeof file === "string") files.set(resolve(root, moduleRoot, file), leaf);
+			else
+				violations.push(`${moduleRoot}/package.json: leaf entry ${leaf.specifier} is not exported`);
+		}
+	}
+	return files;
 }
 
 export function moduleBoundaryViolations(root: string): string[] {
 	const absoluteRoot = resolve(root);
 	const packages = workspacePackages(absoluteRoot);
 	const violations: string[] = [];
+	const leaves = leafFiles(absoluteRoot, packages, violations);
+	const pendingFixes = new Set<string>();
 	for (const rule of moduleRules(packages)) {
 		const modulePath = join(absoluteRoot, rule.root);
 		const manifestPath = join(modulePath, "package.json");
@@ -420,14 +555,38 @@ export function moduleBoundaryViolations(root: string): string[] {
 					normalized(relative(modulePath, path)),
 					sourceImport,
 					target,
+					leaves.get(path),
 				);
-				if (violation) {
-					violations.push(`${file}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`);
-				}
+				if (!violation) continue;
+				const located = `${file}: import ${JSON.stringify(sourceImport.specifier)}`;
+				if (PENDING_LEAF_FIXES.has(located)) pendingFixes.add(located);
+				else violations.push(`${located} ${violation}`);
 			}
 		}
 	}
+	for (const located of PENDING_LEAF_FIXES) {
+		const file = located.slice(0, located.indexOf(":"));
+		if (existsSync(join(absoluteRoot, file)) && !pendingFixes.has(located)) {
+			violations.push(`${located} is fixed: remove it from PENDING_LEAF_FIXES`);
+		}
+	}
 	return violations.sort();
+}
+
+/** Every bare specifier `entry` loads, following its relative imports. */
+export function bareImportClosure(entry: string): string[] {
+	const bare = new Set<string>();
+	const seen = new Set<string>();
+	const visit = (path: string): void => {
+		if (seen.has(path)) return;
+		seen.add(path);
+		for (const { specifier } of importSpecifiers(path, path)) {
+			if (specifier.startsWith(".")) visit(resolve(dirname(path), specifier));
+			else bare.add(specifier);
+		}
+	};
+	visit(entry);
+	return [...bare].sort();
 }
 
 if (import.meta.main) {
