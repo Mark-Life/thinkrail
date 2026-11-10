@@ -21,9 +21,9 @@ that map.
 
 - **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
   types, the `*_METHODS` and `*_CHANNELS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`, `WS_CHANNEL_SCHEMAS`,
-  `WsSchemaChannelMap`. From `wire.ts` only `Ack`: `wireObj`, `partialWireObj`, `readonlyArr`, `NoParams` and
-  `NoPayload` stay inside this directory. Schema values stay public because
-  [[submodule-server-host]] compiles them; web JS stays free of them by tree shaking.
+  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `AnyHostWelcome`. From `wire.ts` only `Ack`: `wireObj`,
+  `partialWireObj`, `readonlyArr`, `NoParams` and `NoPayload` stay inside this directory. Schema values stay
+  public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they ship in web JS.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
 - **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
   a schema here, because each side owns the check at its own edge ([[submodule-server-host]] for requests).
@@ -59,6 +59,11 @@ that map.
 - **A preset center in params is only an object.** A recursive `$ref` walks the input with no depth limit, so
   `settings.update` types `center` as `Record<string, unknown>`. `validateLayoutPreset` checks shape and depth by hand first,
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
+- **No schema claims more than it checks.** A `Schema<T>` annotation sits on a builder result that `tsc` checks against `T`,
+  or on a raw JSON Schema for what builders cannot express (a recursive `$ref`, `TemplateReadLocation`), which states
+  every field of `T`. `NoParams` and `NoPayload` are any object, because the handler reads nothing from them. The one
+  exception is the `pi.event` push check in contracts' `wireChecks.ts`, typed `SessionEventPayload` over a tag-only
+  schema, as the `pi.event` rule above states.
 - **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
   `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
 - **An exclusive union keeps its hand type.** Builders cannot express the `?: never` branches of
@@ -66,7 +71,15 @@ that map.
   `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
-- **Result and channel schemas are proven by tests.** Production never checks what the host sends. The host's test
-  harnesses check real replies and pushes against them ([[submodule-server-host]]), so a mismatch is a schema bug or a host
-  bug, not a tolerated drift.
+- **Result and channel schemas are proven by tests.** The host's test harnesses check real replies and pushes against
+  them ([[submodule-server-host]]), so a mismatch is a schema bug or a host bug, not a tolerated drift. A wrong schema
+  reaches users: [[submodule-web-transport]] refuses what fails it.
+- **`server.welcome` has a floor.** The client checks `AnyHostWelcome`, not `ServerWelcome`: it is the only frame that names
+  the host's version, and refusing it would leave the app with no projects. Older hosts omit later fields and send older
+  shapes, so each entry is typed `Record<string, unknown>`. The client parses each project, `hostPlatform`, `hostUpdate` and
+  `speech` against its schema, and the config field by field against `PartialAppConfig`, and drops and reports what fails. `ServerWelcome`
+  must stay assignable to it. The test harness still checks `ServerWelcome`.
+- **A reply is a union on `ok`.** A failure always carries `error`. Its `errorCode` is any string: a newer host may send a
+  code this client has no name for. `WS_ERROR_CODES` lists the names, and the client reads a code outside it as no code.
+  `INVALID_REPLY` is never sent: the client mints it.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

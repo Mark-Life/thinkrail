@@ -6,6 +6,8 @@ import {
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,
+	reportDroppedFrame,
+	reportInvalidReply,
 	resetClientErrorReportsForTests,
 	supportsClientErrorReports,
 } from "./errorReports";
@@ -31,6 +33,33 @@ afterEach(() => {
 	spy?.mockRestore();
 	resetClientErrorReportsForTests();
 	useAppStore.setState({ protocolVersion: null });
+});
+
+test("an invalid reply reports its method and code only, and a report's own reply never reports", () => {
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	reportInvalidReply("client.reportError");
+	expect(requests).toEqual([]);
+	reportInvalidReply("project.list");
+	expect(requests).toEqual([
+		{
+			method: "client.reportError",
+			params: {
+				kind: "rejection",
+				type: "RequestError",
+				boundary: "INVALID_REPLY:project.list",
+			},
+		},
+	]);
+});
+
+test("a dropped frame reports its code and channel only", () => {
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	reportDroppedFrame({ code: "INVALID_PUSH", channel: "pi.event" });
+	reportDroppedFrame({ code: "UNKNOWN_PUSH" });
+	expect(requests.map((request) => request.params)).toEqual([
+		{ kind: "window", type: "WireError", boundary: "INVALID_PUSH:pi.event" },
+		{ kind: "window", type: "WireError", boundary: "UNKNOWN_PUSH" },
+	]);
 });
 
 test("reports are offered only to a host at or beyond the v90 capability", () => {

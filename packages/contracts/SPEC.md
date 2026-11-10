@@ -21,7 +21,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
-  names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
+  names*, listed once in `WS_ERROR_CODES` (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
   `NOT_GIT` and `ALREADY_OPEN` (the two `project.open` refusals: a folder that is not a repository, and a
   folder already owned by a workspace),
   `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
@@ -49,7 +49,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
   code, so it needs no protocol bump — and **`INVALID_PARAMS`** — dispatch refused params that do not match
-  the method's schema, which only a client bug or a version mismatch produces.
+  the method's schema, which only a client bug or a version mismatch produces. **`INVALID_REPLY`** is the reverse, and
+  only the client mints it: a successful reply failed its result schema ([[submodule-web-transport]]).
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -125,7 +126,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions);
-  from `wireChecks`, `describeFailure`, `wsResultValidator` and `wsPushValidator`.
+  from `wireChecks`, `describeFailure`, `wsResultValidator`, `wsPushValidator`, `parseWsResult`, `parseWsPush`,
+  `wsChannelOf`, `Parsed`, `WsClientChannelMap` and `WsClientPayload`.
 - **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
   **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
   package roots** (type-only → erased at build).
@@ -689,6 +691,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `wsPushValidator(channel)` does the same per push channel. `pi.event` is the one row that types more than it checks:
   pi owns its event shapes, so the wire checks `sessionId` and `event.type` and `PiEventPush` carries
   `SessionEventPayload`, as `WsChannelMap` does.
+  `parseWsResult(method, value)` and `parseWsPush(channel, data)` return `Parsed<T>`: the typed value, or the problem
+  naming the method or channel and the failing fields. A client reads `server.welcome` through `WsClientChannelMap`, where
+  it is the `AnyHostWelcome` floor, so it can start against a host of any version. `wsChannelOf(name)` names a channel
+  this client knows, never an inherited object key.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
@@ -1290,7 +1296,7 @@ and what it loaded, never pi's own types.
   Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
   (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
   `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
-  `AppConfig` key. `SpeechModel`, `SpeechStatus`, `SpeechErrorCode`, the method schemas and the channel schema live in
+  `AppConfig` key. `SpeechModel`, `SpeechStatus`, `SpeechErrorCode`, the socket frame schemas, the method schemas and the channel schema live in
   `schema/speech.ts`, with the `SPEECH_MODELS` and `SPEECH_ERROR_CODES` tuples their schemas are built from.
 - **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
   dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
@@ -1300,8 +1306,9 @@ and what it loaded, never pi's own types.
     **`SPEECH_SAMPLE_RATE`** (16 kHz) in between.
   - Host to client: `SpeechServerMessage` JSON (`ready`, `partial` replacing the previous partial,
     `final` committing it, `error {code}`, `ended`).
-  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Both reject anything
-    outside these closed shapes.
+  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Each checks a frame
+    against its `schema/speech.ts` schema, as the `/ws` transport checks its frames: an unknown `type`,
+    a missing field, or an unknown error code is rejected; extra fields pass.
 - Transcripts never enter the main wire, persistence, or error reports.
 
 ## Normalized session state

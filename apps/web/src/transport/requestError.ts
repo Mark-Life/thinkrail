@@ -1,4 +1,4 @@
-import type { WsErrorCode } from "@thinkrail/contracts";
+import { WS_ERROR_CODES, type WsErrorCode } from "@thinkrail/contracts";
 
 export class RequestError extends Error {
 	readonly code: WsErrorCode;
@@ -8,6 +8,10 @@ export class RequestError extends Error {
 		this.name = "RequestError";
 		this.code = code;
 	}
+}
+
+export function knownErrorCode(code: string | undefined): WsErrorCode | undefined {
+	return WS_ERROR_CODES.find((known) => known === code);
 }
 
 export function wsErrorCode(err: unknown): WsErrorCode | undefined {

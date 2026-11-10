@@ -1,4 +1,4 @@
-import { arr, num, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
+import { arr, map, num, oneOf, opt, type Static, str, unknown } from "@earendil-works/pi-schema";
 import { Project } from "./project";
 import { AppConfig } from "./settings";
 import { SpeechStatus } from "./speech";
@@ -29,6 +29,21 @@ export const ServerWelcome = wireObj({
 	speech: opt(SpeechStatus),
 });
 export type ServerWelcome = Static<typeof ServerWelcome>;
+
+const AnyObject = map(unknown());
+
+/** What a client needs from a welcome of any host version; the client parses each entry against its own schema. */
+export const AnyHostWelcome = wireObj({
+	protocolVersion: num(),
+	appVersion: opt(str()),
+	hostPlatform: opt(str()),
+	hostUpdate: opt(AnyObject),
+	projects: arr(AnyObject),
+	recentProjects: opt(arr(AnyObject)),
+	config: opt(AnyObject),
+	speech: opt(AnyObject),
+});
+export type AnyHostWelcome = Static<typeof AnyHostWelcome>;
 
 export const HOST_METHODS = {
 	"host.update": { params: NoParams, result: Ack },

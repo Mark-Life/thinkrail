@@ -22,12 +22,14 @@ import {
 	initTransport,
 	installClientErrorReporting,
 	reportClientError,
+	reportDroppedFrame,
+	reportInvalidReply,
 } from "./transport";
 
 initializeThemes();
 applyThemePreference(readThemeHint());
 initializeFonts();
-initTransport();
+initTransport({ onInvalidReply: reportInvalidReply, onDroppedFrame: reportDroppedFrame });
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>
 	reportClientError(clientErrorReport("render", error, reportId)),

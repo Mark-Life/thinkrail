@@ -1,11 +1,4 @@
-import type {
-	Ack,
-	ServerWelcome,
-	SessionStateRecord,
-	Workspace,
-	WsParams,
-	WsResult,
-} from "@thinkrail/contracts";
+import type { Ack, SessionStateRecord, Workspace, WsParams, WsResult } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
@@ -29,7 +22,8 @@ import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
-import { WsTransport } from "./transport";
+import { type TransportDispatchHooks, WsTransport } from "./transport";
+import { parseWelcome } from "./welcome";
 
 let transport: WsTransport | null = null;
 
@@ -293,7 +287,9 @@ function refreshWorkspaceCreations(connectionGeneration: number): void {
 	void loadWorkspaceCreations(connectionGeneration).catch(() => {});
 }
 
-export function initTransport(): WsTransport {
+export function initTransport(
+	reports: Pick<TransportDispatchHooks, "onInvalidReply" | "onDroppedFrame"> = {},
+): WsTransport {
 	if (transport) return transport;
 	const piEvents = createPiEventBatcher((payloads) =>
 		useAppStore.getState().handlePiEvents(payloads),
@@ -310,27 +306,27 @@ export function initTransport(): WsTransport {
 			beforeDispatch: (message) => {
 				if (shouldFlushPiEventsBefore(message)) piEvents.flush();
 			},
+			...reports,
 		},
 	);
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
-		const welcome: Partial<ServerWelcome> = data;
-		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
+		const welcome = parseWelcome(data);
+		if (welcome.dropped.length > 0) {
+			console.warn("dropped welcome entries this client cannot read:", welcome.dropped.join(", "));
+			reports.onDroppedFrame?.({ code: "INVALID_PUSH", channel: WS_CHANNELS.serverWelcome });
+		}
 		useAppStore.getState().hideSurveyInvitation();
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(
 				welcome.protocolVersion,
 				welcome.projects,
-				Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
+				welcome.recentProjects,
 				welcome.config,
-				welcome.hostPlatform === "darwin" ||
-					welcome.hostPlatform === "linux" ||
-					welcome.hostPlatform === "win32"
-					? welcome.hostPlatform
-					: undefined,
+				welcome.hostPlatform,
 				welcome.hostUpdate,
-				typeof welcome.appVersion === "string" ? welcome.appVersion : undefined,
+				welcome.appVersion,
 				welcome.speech,
 			);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;

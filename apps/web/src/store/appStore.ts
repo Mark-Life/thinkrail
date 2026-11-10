@@ -13,6 +13,7 @@ import type {
 	LoginPush,
 	McpListResult,
 	McpStatusSnapshot,
+	PartialAppConfig,
 	PiEvent,
 	Project,
 	ProviderStatusReport,
@@ -61,7 +62,6 @@ import {
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
-	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
 	normalizeFontSettings,
 	normalizeThemePreference,
@@ -1148,7 +1148,7 @@ interface AppState {
 		protocolVersion: number,
 		projects: Project[],
 		recentProjects: Project[],
-		config?: AppConfig,
+		config?: PartialAppConfig,
 		hostPlatform?: HostPlatform,
 		hostUpdate?: HostUpdateNotice,
 		hostAppVersion?: string,
@@ -1482,23 +1482,15 @@ function normalizeWorkspaceTurns(turns: readonly TurnChangeSet[]): TurnChangeSet
 		.slice(-TURNS_PER_WORKSPACE);
 }
 
-function configPatch(config: AppConfig) {
+function configPatch(config: PartialAppConfig) {
 	const themePreference = normalizeThemePreference(config);
 	return {
 		...themePreference,
 		systemThemePair: themePreference.systemThemePair,
-		analyticsEnabled:
-			typeof config.analyticsEnabled === "boolean"
-				? config.analyticsEnabled
-				: DEFAULT_CONFIG.analyticsEnabled,
+		analyticsEnabled: config.analyticsEnabled ?? DEFAULT_CONFIG.analyticsEnabled,
 		analyticsConsentConfirmed:
-			typeof config.analyticsConsentConfirmed === "boolean"
-				? config.analyticsConsentConfirmed
-				: DEFAULT_CONFIG.analyticsConsentConfirmed,
-		notificationsEnabled:
-			typeof config.notificationsEnabled === "boolean"
-				? config.notificationsEnabled
-				: DEFAULT_CONFIG.notificationsEnabled,
+			config.analyticsConsentConfirmed ?? DEFAULT_CONFIG.analyticsConsentConfirmed,
+		notificationsEnabled: config.notificationsEnabled ?? DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		subagentMaxConcurrent: isSubagentMaxConcurrent(config.subagentMaxConcurrent)
 			? config.subagentMaxConcurrent
@@ -1509,10 +1501,8 @@ function configPatch(config: AppConfig) {
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
-		terminalReplayKb: config.terminalReplayKb,
-		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
-			? config.terminalWindowsShell
-			: DEFAULT_CONFIG.terminalWindowsShell,
+		terminalReplayKb: config.terminalReplayKb ?? DEFAULT_CONFIG.terminalReplayKb,
+		terminalWindowsShell: config.terminalWindowsShell ?? DEFAULT_CONFIG.terminalWindowsShell,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		chatLineWidth: isLineWidth(config.chatLineWidth)
 			? config.chatLineWidth
@@ -1520,18 +1510,9 @@ function configPatch(config: AppConfig) {
 		fileLineWidth: isLineWidth(config.fileLineWidth)
 			? config.fileLineWidth
 			: DEFAULT_CONFIG.fileLineWidth,
-		chatLineWidthBounded:
-			typeof config.chatLineWidthBounded === "boolean"
-				? config.chatLineWidthBounded
-				: DEFAULT_CONFIG.chatLineWidthBounded,
-		fileLineWidthBounded:
-			typeof config.fileLineWidthBounded === "boolean"
-				? config.fileLineWidthBounded
-				: DEFAULT_CONFIG.fileLineWidthBounded,
-		voiceInputEnabled:
-			typeof config.voiceInputEnabled === "boolean"
-				? config.voiceInputEnabled
-				: DEFAULT_CONFIG.voiceInputEnabled,
+		chatLineWidthBounded: config.chatLineWidthBounded ?? DEFAULT_CONFIG.chatLineWidthBounded,
+		fileLineWidthBounded: config.fileLineWidthBounded ?? DEFAULT_CONFIG.fileLineWidthBounded,
+		voiceInputEnabled: config.voiceInputEnabled ?? DEFAULT_CONFIG.voiceInputEnabled,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
@@ -1541,19 +1522,12 @@ function configPatch(config: AppConfig) {
 		recentModels: config.recentModels ?? DEFAULT_CONFIG.recentModels,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
 		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
-		disabledExtensions: Array.isArray(config.disabledExtensions)
-			? config.disabledExtensions
-			: DEFAULT_CONFIG.disabledExtensions,
-		extensionSettings:
-			config.extensionSettings && typeof config.extensionSettings === "object"
-				? config.extensionSettings
-				: DEFAULT_CONFIG.extensionSettings,
-		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
-		disabledPackages: Array.isArray(config.disabledPackages)
-			? config.disabledPackages
-			: DEFAULT_CONFIG.disabledPackages,
+		disabledExtensions: config.disabledExtensions ?? DEFAULT_CONFIG.disabledExtensions,
+		extensionSettings: config.extensionSettings ?? DEFAULT_CONFIG.extensionSettings,
+		otherAgentSkills: config.otherAgentSkills ?? true,
+		disabledPackages: config.disabledPackages ?? DEFAULT_CONFIG.disabledPackages,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
-		onboardingDismissed: config.onboardingDismissed === true,
+		onboardingDismissed: config.onboardingDismissed ?? false,
 		...normalizeFontSettings(config),
 	};
 }

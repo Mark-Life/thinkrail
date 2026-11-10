@@ -1,9 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import {
-	ANALYTICS_CONSENT_PROTOCOL_VERSION,
-	type AppConfig,
-	DEFAULT_CONFIG,
-} from "@thinkrail/contracts";
+import { ANALYTICS_CONSENT_PROTOCOL_VERSION, DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
 import { selectAnalyticsConsentPromptOpen, selectAnalyticsConsentSupported } from "./selectors";
 
@@ -19,17 +15,17 @@ test("analytics preference and explicit consent start independently off", () => 
 	expect(selectAnalyticsConsentPromptOpen(useAppStore.getState())).toBe(false);
 });
 
-for (const preference of [true, false, undefined, "true", null, 1]) {
-	for (const confirmation of [true, false, undefined, "true", null, 1]) {
-		test(`analytics config normalizes preference ${JSON.stringify(preference)} and confirmation ${JSON.stringify(confirmation)} independently`, () => {
+for (const preference of [true, false]) {
+	for (const confirmation of [true, false]) {
+		test(`analytics config projects preference ${preference} and confirmation ${confirmation} independently`, () => {
 			const config = {
 				...DEFAULT_CONFIG,
 				analyticsEnabled: preference,
 				analyticsConsentConfirmed: confirmation,
-			} as AppConfig;
+			};
 			const expected = {
-				analyticsEnabled: preference === true,
-				analyticsConsentConfirmed: confirmation === true,
+				analyticsEnabled: preference,
+				analyticsConsentConfirmed: confirmation,
 			};
 			useAppStore.getState().applyConfig(config);
 			expect(useAppStore.getState()).toMatchObject(expected);
@@ -50,7 +46,7 @@ test("an unconfirmed saved true preference remains unconfirmed and opens the pro
 	useAppStore.getState().installWelcomeSnapshot(ANALYTICS_CONSENT_PROTOCOL_VERSION, [], [], {
 		...legacy,
 		analyticsEnabled: true,
-	} as AppConfig);
+	});
 	expect(useAppStore.getState()).toMatchObject({
 		analyticsEnabled: true,
 		analyticsConsentConfirmed: false,

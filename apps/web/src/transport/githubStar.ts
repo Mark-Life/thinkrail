@@ -9,13 +9,12 @@ export function formatStarCount(count: number): string {
 	return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
 }
 
-function starsOf(data: unknown): number | null {
-	const stars = typeof data === "object" && data !== null ? Reflect.get(data, "stars") : null;
-	return Number.isSafeInteger(stars) && (stars as number) >= 0 ? (stars as number) : null;
+function starsOf({ stars }: GithubStarAsk): number | null {
+	return stars !== null && Number.isSafeInteger(stars) && stars >= 0 ? stars : null;
 }
 
-export function githubStarToast(data: unknown): Omit<Toast, "id"> {
-	const stars: GithubStarAsk["stars"] = starsOf(data);
+export function githubStarToast(ask: GithubStarAsk): Omit<Toast, "id"> {
+	const stars = starsOf(ask);
 	return {
 		variant: "info",
 		title: t("app.githubStar.title"),
