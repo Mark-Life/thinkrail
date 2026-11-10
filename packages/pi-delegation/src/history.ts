@@ -6,6 +6,7 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
 	type ContextEditEntry,
+	CURRENT_SESSION_VERSION,
 	parseSessionEntries,
 	type SessionEntry,
 	type SessionHeader,
@@ -61,11 +62,11 @@ export function parseTranscript(jsonl: string, sessionId: string): Transcript {
 	if (
 		!validHeader(header) ||
 		header?.type !== "session" ||
-		header.version !== 3 ||
+		header.version !== CURRENT_SESSION_VERSION ||
 		header.id !== sessionId ||
 		!validTimestamp(header.timestamp)
 	)
-		invalid("Invalid pi v3 session header or identity");
+		invalid("Invalid pi session header, version or identity");
 	const byId = new Map<string, SessionEntry>();
 	const entries: SessionEntry[] = [];
 	for (const entry of rest) {
