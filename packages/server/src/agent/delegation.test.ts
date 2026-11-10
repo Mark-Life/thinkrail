@@ -21,14 +21,10 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { WorkspaceId } from "@thinkrail/contracts";
-import {
-	type SessionId,
-	SUBAGENT_COMPLETION_CUSTOM_TYPE,
-	type DelegationRunDetails as WireRunDetails,
-} from "@thinkrail/contracts";
+import { type SessionId, SUBAGENT_COMPLETION_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
-import { type DelegationRunDetails as CoreRunDetails, delegationSessionDir } from "pi-delegation";
+import { delegationSessionDir } from "pi-delegation";
 import { SUBAGENT_COMPLETION_MESSAGE } from "pi-subagents";
 import { setTrashImplementationForTests } from "../trash";
 import {
@@ -1430,10 +1426,6 @@ test("a transcript read accepts canonical dotted session ids", () => {
 	).toThrow("No transcript found");
 });
 
-test("the wire mirrors never drift: completion tag and DelegationRunDetails shape", () => {
+test("the completion tag mirrors pi-subagents'", () => {
 	expect(SUBAGENT_COMPLETION_CUSTOM_TYPE).toBe(SUBAGENT_COMPLETION_MESSAGE);
-	function pinMirror(core: CoreRunDetails, wire: WireRunDetails): [WireRunDetails, CoreRunDetails] {
-		return [core, wire];
-	}
-	expect(typeof pinMirror).toBe("function");
 });

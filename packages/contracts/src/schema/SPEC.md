@@ -49,7 +49,10 @@ that map.
 - **A dependency's shape is derived, never copied.** A type a dependency owns is imported, not declared again. A schema
   that checks a shape the dependency types but ships no schema for is tied to that type with `Same` (`typeTie.ts`), so a
   field or value either side adds, drops or changes fails `tsc`. `ThinkingLevel`, `PiStopReason`, `ImageContent`,
-  `CustomMessageContent`, `ModelInputModality` and `ModelListPrice` are tied to pi-ai here. pi-coding-agent is Node-only,
+  `CustomMessageContent`, `ModelInputModality`, `ModelListPrice` and `WireModel`'s pi fields are tied to pi-ai here.
+  pi-ai ships schemas for the model ones (`ModelThinkingLevelSchema`, `ModelInputModalitySchema`, `ModelCostSchema`),
+  but only on a `providers/*` subpath, and browser code may import pi only as types from a package root; so they are
+  declared and tied instead. pi-coding-agent is Node-only,
   so the shapes it owns (`WireCustomMessage`, `WireCompactionSummary`, `WireBranchSummary`, `WireBashExecution`, pi's session
   events in `PiEvent`, `CompactionEndResult`, `SessionStats`, `ContextUsage`, `SlashCommandInfo`) are declared here and
   tied in the host's `piWireTies.ts` ([[submodule-server-agent]]). Packages outside contracts tie the shapes they parse

@@ -502,7 +502,8 @@ re-opened transcripts provider-valid.
   - `piWireTies` — types only: ties each pi-coding-agent shape contracts declares (custom, compaction, branch and bash
     messages, `WireAgentMessage`, the forwarded and projected `PiEvent` members, `CompactionEndResult`, `SessionStats`,
     `ContextUsage`, `SlashCommandInfo`) to pi's own type with contracts' `Same`, so a pi upgrade that changes one fails
-    `tsc` here ([[submodule-contracts-schema]]).
+    `tsc` here ([[submodule-contracts-schema]]). It ties contracts' `DelegationRunDetails` and `DelegationRunStatus` to
+    `pi-delegation`'s the same way.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no

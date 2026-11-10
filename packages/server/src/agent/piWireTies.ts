@@ -10,6 +10,8 @@ import type {
 	AgentMessage,
 	CompactionEndResult,
 	ContextUsage,
+	DelegationRunDetails,
+	DelegationRunStatus,
 	PiEvent,
 	PiForwardedEvent,
 	PiProjectedEventType,
@@ -24,6 +26,7 @@ import type {
 	WireCustomMessage,
 	WithWireMessages,
 } from "@thinkrail/contracts";
+import type { DelegationRunDetails as CoreRunDetails, RunLifecycleStatus } from "pi-delegation";
 
 type PiMessage<R extends AgentMessage["role"]> = Extract<AgentMessage, { role: R }>;
 type PiSessionEvent<T extends AgentSessionEvent["type"]> = Extract<AgentSessionEvent, { type: T }>;
@@ -66,3 +69,6 @@ export type SlashCommandSourceInfoTie = Same<
 	SlashCommandSourceInfo,
 	Pick<SourceInfo, "path" | "source" | "scope" | "origin" | "baseDir">
 >;
+
+export type DelegationRunDetailsTie = Same<DelegationRunDetails, CoreRunDetails>;
+export type DelegationRunStatusTie = Same<DelegationRunStatus, RunLifecycleStatus>;
