@@ -336,18 +336,10 @@ function normalizeThemeHint(value: unknown): ThemePreference {
 }
 
 function colorSchemeMediaQuery(): ColorSchemeMediaQuery | null {
-	const matchMedia = Reflect.get(globalThis, "matchMedia");
-	if (typeof matchMedia !== "function") return null;
+	if (typeof globalThis.matchMedia !== "function") return null;
 	try {
-		const query = Reflect.apply(matchMedia, globalThis, [SYSTEM_QUERY]);
-		if (
-			typeof query !== "object" ||
-			query === null ||
-			typeof Reflect.get(query, "matches") !== "boolean"
-		) {
-			return null;
-		}
-		return query as ColorSchemeMediaQuery;
+		const query: ColorSchemeMediaQuery = globalThis.matchMedia(SYSTEM_QUERY);
+		return typeof query.matches === "boolean" ? query : null;
 	} catch {
 		return null;
 	}
@@ -455,7 +447,7 @@ export function readThemeHint(): ThemePreference {
 		const value = firstPaintPreferenceStorage()?.getItem(HINT_KEY);
 		if (typeof value !== "string") return defaultThemePreference();
 		if (isThemeIdSlug(value)) return { theme: value, themeMode: "fixed" };
-		const parsed = JSON.parse(value) as unknown;
+		const parsed: unknown = JSON.parse(value);
 		if (
 			typeof parsed !== "object" ||
 			parsed === null ||

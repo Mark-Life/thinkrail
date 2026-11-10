@@ -133,7 +133,17 @@ a property the suite enforces rather than a label in the manifest.
 Bundled files are discovered by a build-time glob rather than named in a code catalog, and validated
 all-or-nothing at bootstrap. The files are our own, so any invalid or duplicate manifest, missing
 configured default, or catalog without at least one light and one dark manifest **fails loudly** (unit
-tests catch it before merge). Runtime and JSON-schema validation agree.
+tests catch it before merge).
+
+**One schema checks every manifest.** `ThemeManifestFile` in `schema.ts` is a `pi-schema` schema; the
+parser compiles it, and `ThemeManifest` is its static type with the two derived colors filled in. The
+palette properties are written out once, each object tied to its `*_COLOR_KEYS` list by `satisfies Record`.
+`theme.schema.json`, the file manifests name as `$schema`, is that schema serialized with `$schema`/`$id`
+on top, and `schema.test.ts` fails when the two differ. After a schema change, regenerate it from
+`apps/web`: `bun -e 'import { ThemeManifestFile as s } from "./src/themes/schema"; await
+Bun.write("src/themes/theme.schema.json", JSON.stringify({ $schema:
+"https://json-schema.org/draft/2020-12/schema", $id: "https://thinkrail.dev/schemas/theme-manifest-v1.json",
+...s }, null, "\t") + "\n")'`, then run `biome format --write` on the file.
 
 **User theme files are held to the same schema but fail soft.** Each file is validated on its own; an
 unusable one becomes a `UserThemeIssue` (the host's read codes, `invalid-theme`, `id-too-long`, or `duplicate-id`

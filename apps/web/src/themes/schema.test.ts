@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "@thinkrail/contracts";
+import { DEFAULT_CONFIG, JsonObject } from "@thinkrail/contracts";
 import {
 	ANSI_COLOR_KEYS,
 	DERIVED_THEME_COLOR_KEYS,
@@ -9,6 +9,7 @@ import {
 	SYNTAX_COLOR_KEYS,
 	THEME_COLOR_KEYS,
 	type ThemeManifest,
+	ThemeManifestFile,
 } from "./schema";
 
 function bundledCandidates(): { file: string; value: unknown }[] {
@@ -48,17 +49,32 @@ test("every bundled theme is complete, unique, and includes the configured defau
 	expect(ids).toContain(DEFAULT_CONFIG.theme);
 });
 
-test("runtime palette keys stay aligned with the authoring JSON schema", () => {
-	const schema = JSON.parse(readFileSync(join(import.meta.dir, "theme.schema.json"), "utf8")) as {
-		$defs: Record<string, { required: string[]; properties: Record<string, unknown> }>;
-	};
+test("theme.schema.json is the manifest schema serialized, so editors and the parser agree", () => {
+	const file: unknown = JSON.parse(
+		readFileSync(join(import.meta.dir, "theme.schema.json"), "utf8"),
+	);
+	expect(file).toEqual({
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		$id: "https://thinkrail.dev/schemas/theme-manifest-v1.json",
+		...JSON.parse(JSON.stringify(ThemeManifestFile)),
+	});
+});
+
+test("the manifest schema lists the palette keys in their runtime order", () => {
+	const property = (name: string): unknown =>
+		JsonObject.check(ThemeManifestFile.properties) ? ThemeManifestFile.properties[name] : null;
+	const [colors, ansi, syntax] = ["colors", "ansi", "syntax"].map(property);
+	const keys = (schema: unknown) =>
+		JsonObject.check(schema) && JsonObject.check(schema.properties)
+			? Object.keys(schema.properties)
+			: [];
+	expect(keys(colors)).toEqual([...THEME_COLOR_KEYS]);
+	expect(keys(ansi)).toEqual([...ANSI_COLOR_KEYS]);
+	expect(keys(syntax)).toEqual([...SYNTAX_COLOR_KEYS]);
 	const derived: readonly string[] = DERIVED_THEME_COLOR_KEYS;
-	expect(schema.$defs.colors?.required).toEqual(
+	expect(JsonObject.check(colors) ? colors.required : null).toEqual(
 		THEME_COLOR_KEYS.filter((key) => !derived.includes(key)),
 	);
-	expect(Object.keys(schema.$defs.colors?.properties ?? {})).toEqual([...THEME_COLOR_KEYS]);
-	expect(schema.$defs.ansi?.required).toEqual([...ANSI_COLOR_KEYS]);
-	expect(schema.$defs.syntax?.required).toEqual([...SYNTAX_COLOR_KEYS]);
 });
 
 test("the parser rejects partial, unknown, and non-canonical manifest data all-or-nothing", () => {

@@ -1,4 +1,14 @@
-import type { ThemeId } from "@thinkrail/contracts";
+import {
+	compile,
+	int,
+	lit,
+	nullable,
+	obj,
+	oneOf,
+	opt,
+	type Static,
+	str,
+} from "@earendil-works/pi-schema";
 
 export const THEME_COLOR_KEYS = [
 	"accent",
@@ -73,46 +83,145 @@ export const SYNTAX_COLOR_KEYS = [
 	"changed",
 ] as const;
 
-export const NULLABLE_THEME_COLOR_KEYS = [
-	"selectionForeground",
-	"editorSelectionForeground",
-] as const;
-
 export const DERIVED_THEME_COLOR_KEYS = ["dangerHover", "onDanger"] as const;
 
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
-export type NullableThemeColorKey = (typeof NULLABLE_THEME_COLOR_KEYS)[number];
 export type AnsiColorKey = (typeof ANSI_COLOR_KEYS)[number];
 export type SyntaxColorKey = (typeof SYNTAX_COLOR_KEYS)[number];
-export type ThemeAppearance = "light" | "dark";
-export type ThemeContrast = "normal" | "high";
-export type HexColor = `#${string}`;
-export type ThemeColors = Readonly<
-	Record<Exclude<ThemeColorKey, NullableThemeColorKey>, HexColor> &
-		Record<NullableThemeColorKey, HexColor | null>
->;
+type DerivedThemeColorKey = (typeof DERIVED_THEME_COLOR_KEYS)[number];
 
-export interface ThemeManifest {
-	readonly $schema?: string;
-	readonly schemaVersion: 2;
-	readonly id: ThemeId;
-	readonly label: string;
-	readonly order: number;
-	readonly appearance: ThemeAppearance;
-	readonly contrast: ThemeContrast;
-	readonly colors: ThemeColors;
-	readonly ansi: Readonly<Record<AnsiColorKey, HexColor>>;
-	readonly syntax: Readonly<Record<SyntaxColorKey, HexColor>>;
-}
+const THEME_ID = "^[a-z0-9](?:[a-z0-9._-]{0,63})$";
+const HEX_COLOR = "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$";
+const HexColor = str({ pattern: HEX_COLOR });
+export type HexColor = Static<typeof HexColor>;
+const NativeOrHexColor = nullable(HexColor);
+
+const ThemeColorsFile = obj({
+	accent: HexColor,
+	accentHover: HexColor,
+	accentSolid: HexColor,
+	onAccent: HexColor,
+	bubbleAccent: HexColor,
+	background: HexColor,
+	header: HexColor,
+	content: HexColor,
+	sidebar: HexColor,
+	input: HexColor,
+	elevated: HexColor,
+	hover: HexColor,
+	border: HexColor,
+	borderStrong: HexColor,
+	text: HexColor,
+	muted: HexColor,
+	hint: HexColor,
+	selection: HexColor,
+	selectionForeground: NativeOrHexColor,
+	editorSelection: HexColor,
+	editorSelectionForeground: NativeOrHexColor,
+	info: HexColor,
+	success: HexColor,
+	danger: HexColor,
+	dangerHover: opt(
+		str({
+			pattern: HEX_COLOR,
+			description:
+				"Destructive button hover fill. Optional: defaults to danger darkened 12% toward black.",
+		}),
+	),
+	onDanger: opt(
+		str({
+			pattern: HEX_COLOR,
+			description:
+				"Label on the destructive fills. Optional: defaults to the palette's text or background colour, whichever reads better on danger and dangerHover.",
+		}),
+	),
+	warning: HexColor,
+} satisfies Record<ThemeColorKey, unknown>);
+
+const AnsiColors = obj({
+	black: HexColor,
+	red: HexColor,
+	green: HexColor,
+	yellow: HexColor,
+	blue: HexColor,
+	magenta: HexColor,
+	cyan: HexColor,
+	white: HexColor,
+	brightBlack: HexColor,
+	brightRed: HexColor,
+	brightGreen: HexColor,
+	brightYellow: HexColor,
+	brightBlue: HexColor,
+	brightMagenta: HexColor,
+	brightCyan: HexColor,
+	brightWhite: HexColor,
+} satisfies Record<AnsiColorKey, unknown>);
+
+const SyntaxColors = obj({
+	foreground: HexColor,
+	comment: HexColor,
+	commentDoc: HexColor,
+	keyword: HexColor,
+	string: HexColor,
+	number: HexColor,
+	regexp: HexColor,
+	annotation: HexColor,
+	tag: HexColor,
+	attributeName: HexColor,
+	attributeValue: HexColor,
+	property: HexColor,
+	function: HexColor,
+	type: HexColor,
+	variable: HexColor,
+	constant: HexColor,
+	operator: HexColor,
+	punctuation: HexColor,
+	inserted: HexColor,
+	deleted: HexColor,
+	changed: HexColor,
+} satisfies Record<SyntaxColorKey, unknown>);
+
+/** A theme file as authors write it; `theme.schema.json` is this schema serialized. */
+export const ThemeManifestFile = obj(
+	{
+		$schema: opt(str()),
+		schemaVersion: lit(2),
+		id: str({ pattern: THEME_ID }),
+		label: str({ pattern: "\\S" }),
+		order: int(),
+		appearance: oneOf(["light", "dark"]),
+		contrast: oneOf(["normal", "high"]),
+		colors: ThemeColorsFile,
+		ansi: AnsiColors,
+		syntax: SyntaxColors,
+	},
+	{
+		title: "ThinkRail theme manifest",
+		description:
+			"A complete, declarative ThinkRail UI, terminal, and syntax palette. Selected-text foreground overrides may be null to retain native behavior.",
+	},
+);
+type ThemeManifestFile = Static<typeof ThemeManifestFile>;
+const themeManifestFile = compile(ThemeManifestFile);
+
+export type ThemeAppearance = ThemeManifestFile["appearance"];
+export type ThemeContrast = ThemeManifestFile["contrast"];
+/** The palette with both derived colors filled in. */
+export type ThemeColors = Readonly<
+	Omit<ThemeManifestFile["colors"], DerivedThemeColorKey> & Record<DerivedThemeColorKey, HexColor>
+>;
+export type ThemeManifest = Readonly<
+	Omit<ThemeManifestFile, "colors" | "ansi" | "syntax"> & {
+		colors: ThemeColors;
+		ansi: Readonly<ThemeManifestFile["ansi"]>;
+		syntax: Readonly<ThemeManifestFile["syntax"]>;
+	}
+>;
 
 export type ThemeManifestParseResult =
 	| { readonly ok: true; readonly value: ThemeManifest }
 	| { readonly ok: false; readonly issues: readonly string[] };
 
-const HEX_COLOR = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/;
-const THEME_ID = /^[a-z0-9](?:[a-z0-9._-]{0,63})$/;
-const NULLABLE_KEYS: ReadonlySet<string> = new Set(NULLABLE_THEME_COLOR_KEYS);
-const DERIVED_KEYS: ReadonlySet<string> = new Set(DERIVED_THEME_COLOR_KEYS);
 const DANGER_HOVER_SCALE = 0.88;
 
 function scaleRgb(color: HexColor, factor: number): HexColor {
@@ -132,153 +241,48 @@ function luminance(color: HexColor): number {
 }
 
 function contrast(a: HexColor, b: HexColor): number {
-	const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-	return (lighter + 0.05) / (darker + 0.05);
+	const [first, second] = [luminance(a), luminance(b)];
+	return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
 function mostReadable(
-	labels: readonly HexColor[],
+	labels: readonly [HexColor, ...HexColor[]],
 	fills: readonly HexColor[],
-): HexColor | undefined {
+): HexColor {
 	const worst = (label: HexColor) => Math.min(...fills.map((fill) => contrast(label, fill)));
-	return labels.reduce<HexColor | undefined>(
-		(best, label) => (best === undefined || worst(label) > worst(best) ? label : best),
-		undefined,
-	);
+	return labels.reduce((best, label) => (worst(label) > worst(best) ? label : best));
 }
+
+const THEME_ID_SLUG = new RegExp(THEME_ID);
 
 export function isThemeIdSlug(value: string): boolean {
-	return THEME_ID.test(value);
-}
-const ROOT_KEYS = new Set([
-	"$schema",
-	"schemaVersion",
-	"id",
-	"label",
-	"order",
-	"appearance",
-	"contrast",
-	"colors",
-	"ansi",
-	"syntax",
-]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+	return THEME_ID_SLUG.test(value);
 }
 
-function noteUnexpectedKeys(
-	value: Record<string, unknown>,
-	allowed: ReadonlySet<string>,
-	path: string,
-	issues: string[],
-): void {
-	for (const key of Object.keys(value)) {
-		if (!allowed.has(key)) issues.push(`${path}.${key} is not allowed`);
-	}
-}
-
-function parseThemeColors(value: unknown, issues: string[]): ThemeColors | null {
-	if (!isRecord(value)) {
-		issues.push("theme.colors must be an object");
-		return null;
-	}
-	const allowed = new Set<string>(THEME_COLOR_KEYS);
-	noteUnexpectedKeys(value, allowed, "theme.colors", issues);
-	const palette = {} as Record<ThemeColorKey, HexColor | null>;
-	for (const key of THEME_COLOR_KEYS) {
-		const color = value[key];
-		const nullable = NULLABLE_KEYS.has(key);
-		if (nullable && color === null) {
-			palette[key] = null;
-			continue;
-		}
-		if (color === undefined && DERIVED_KEYS.has(key)) continue;
-		if (typeof color !== "string" || !HEX_COLOR.test(color)) {
-			issues.push(
-				`theme.colors.${key} must be a canonical lowercase #rrggbb or #rrggbbaa color${nullable ? " or null" : ""}`,
-			);
-			continue;
-		}
-		palette[key] = color as HexColor;
-	}
-	const { danger, text, background } = palette;
-	if (danger) {
-		const dangerHover = palette.dangerHover ?? scaleRgb(danger, DANGER_HOVER_SCALE);
-		palette.dangerHover = dangerHover;
-		const label = mostReadable(
-			[text, background].filter((color): color is HexColor => !!color),
-			[danger, dangerHover],
-		);
-		if (label) palette.onDanger ??= label;
-	}
-	return Object.freeze(palette) as ThemeColors;
-}
-
-function parsePalette<K extends string>(
-	value: unknown,
-	keys: readonly K[],
-	path: string,
-	issues: string[],
-): Readonly<Record<K, HexColor>> | null {
-	if (!isRecord(value)) {
-		issues.push(`${path} must be an object`);
-		return null;
-	}
-	const allowed = new Set<string>(keys);
-	noteUnexpectedKeys(value, allowed, path, issues);
-	const palette = {} as Record<K, HexColor>;
-	for (const key of keys) {
-		const color = value[key];
-		if (typeof color !== "string" || !HEX_COLOR.test(color)) {
-			issues.push(`${path}.${key} must be a canonical lowercase #rrggbb or #rrggbbaa color`);
-			continue;
-		}
-		palette[key] = color as HexColor;
-	}
-	return Object.freeze(palette);
+function withDerivedColors(colors: ThemeManifestFile["colors"]): ThemeColors {
+	const dangerHover = colors.dangerHover ?? scaleRgb(colors.danger, DANGER_HOVER_SCALE);
+	const onDanger =
+		colors.onDanger ?? mostReadable([colors.text, colors.background], [colors.danger, dangerHover]);
+	return Object.freeze({ ...colors, dangerHover, onDanger });
 }
 
 export function parseThemeManifest(value: unknown): ThemeManifestParseResult {
-	const issues: string[] = [];
-	if (!isRecord(value)) return { ok: false, issues: ["theme manifest must be an object"] };
-
-	noteUnexpectedKeys(value, ROOT_KEYS, "theme", issues);
-	if (value.schemaVersion !== 2) issues.push("theme.schemaVersion must be 2");
-	if (typeof value.id !== "string" || !isThemeIdSlug(value.id)) {
-		issues.push("theme.id must be a lowercase slug (1-64 characters; letters, numbers, ., _, -)");
+	if (!themeManifestFile.check(value)) {
+		const issues = themeManifestFile
+			.errors(value)
+			.map(({ path, message }) => `theme${path.replaceAll("/", ".")}: ${message}`);
+		return { ok: false, issues };
 	}
-	if (typeof value.label !== "string" || value.label.trim().length === 0) {
-		issues.push("theme.label must be a non-empty string");
-	}
-	if (!Number.isInteger(value.order)) {
-		issues.push("theme.order must be an integer");
-	}
-	if (value.appearance !== "light" && value.appearance !== "dark") {
-		issues.push('theme.appearance must be "light" or "dark"');
-	}
-	if (value.contrast !== "normal" && value.contrast !== "high") {
-		issues.push('theme.contrast must be "normal" or "high"');
-	}
-
-	const colors = parseThemeColors(value.colors, issues);
-	const ansi = parsePalette(value.ansi, ANSI_COLOR_KEYS, "theme.ansi", issues);
-	const syntax = parsePalette(value.syntax, SYNTAX_COLOR_KEYS, "theme.syntax", issues);
-	if (issues.length > 0 || !colors || !ansi || !syntax) return { ok: false, issues };
-
-	const manifest: ThemeManifest = Object.freeze({
-		...(typeof value.$schema === "string" ? { $schema: value.$schema } : {}),
-		schemaVersion: 2,
-		id: value.id as ThemeId,
-		label: value.label as string,
-		order: value.order as number,
-		appearance: value.appearance as ThemeAppearance,
-		contrast: value.contrast as ThemeContrast,
-		colors,
-		ansi,
-		syntax,
-	});
-	return { ok: true, value: manifest };
+	const { colors, ansi, syntax, ...fields } = value;
+	return {
+		ok: true,
+		value: Object.freeze({
+			...fields,
+			colors: withDerivedColors(colors),
+			ansi: Object.freeze({ ...ansi }),
+			syntax: Object.freeze({ ...syntax }),
+		}),
+	};
 }
 
 export function assertThemeManifest(value: unknown): ThemeManifest {
