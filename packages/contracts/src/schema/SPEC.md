@@ -59,7 +59,9 @@ that map.
   - **pi-ai** ships schemas on its `providers/model-schema` subpath, which loads only `pi-schema`:
     `ThinkingLevel` is `ModelThinkingLevelSchema` and `ModelInputModality` is `ModelInputModalitySchema`. Where
     `pi-schema` cannot pick fields at run time, a hand projection is `Same`-tied to a `Pick` of pi's type
-    (`ModelListPrice`, `WireModelPiFields`). A shape pi-ai ships only as a type (`ImageContent`, `TextContent`,
+    (`ModelListPrice`, `WireModelPiFields`). `ModelListPrice` stays the `{input, output}` projection rather than
+    pi-ai's full `ModelCostSchema`: hosts since the picker-metadata protocol send only those two prices, and the
+    web checks every reply, so requiring `cacheRead` / `cacheWrite` would refuse `model.list` from those hosts. A shape pi-ai ships only as a type (`ImageContent`, `TextContent`,
     `CustomMessageContent`) is declared here and `Same`-tied. `PiStopReason` is `pi-delegation/wire`'s
     `StopReason`, the one list of pi-ai's stop reasons, tied there.
   - **pi-coding-agent** is server-only, so browser code never sees its types, not even type-only (`AGENTS.md`).
