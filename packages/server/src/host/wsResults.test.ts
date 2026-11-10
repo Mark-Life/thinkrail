@@ -36,12 +36,13 @@ test("a push that breaks its schema fails with the channel and the field", () =>
 	);
 });
 
-test("pi.event checks only the type tag", () => {
-	const push = { sessionId: testSessionId("s"), event: { type: "from_a_newer_pi", anything: 1 } };
+test("pi.event checks the type tag against pi's event types, not the body", () => {
+	const push = { sessionId: testSessionId("s"), event: { type: "message_end", anything: 1 } };
 	expect(() => checkWsPush("pi.event", push)).not.toThrow();
-	expect(() => checkWsPush("pi.event", { sessionId: testSessionId("s"), event: {} })).toThrow(
-		/\/event\/type /,
-	);
+	for (const event of [{ type: "from_a_newer_pi" }, {}])
+		expect(() => checkWsPush("pi.event", { sessionId: testSessionId("s"), event })).toThrow(
+			/\/event\/type /,
+		);
 });
 
 test("pushFrame sends the channel and payload the client reads", () => {

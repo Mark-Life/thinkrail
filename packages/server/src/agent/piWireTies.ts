@@ -1,4 +1,6 @@
 import type {
+	AgentSessionEvent,
+	CompactionResult,
 	ContextUsage as PiContextUsage,
 	SessionStats as PiSessionStats,
 	SlashCommandInfo as PiSlashCommandInfo,
@@ -6,7 +8,11 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentMessage,
+	CompactionEndResult,
 	ContextUsage,
+	PiEvent,
+	PiForwardedEvent,
+	PiProjectedEventType,
 	Same,
 	SessionStats,
 	SlashCommandInfo,
@@ -16,15 +22,36 @@ import type {
 	WireBranchSummary,
 	WireCompactionSummary,
 	WireCustomMessage,
+	WithWireMessages,
 } from "@thinkrail/contracts";
 
 type PiMessage<R extends AgentMessage["role"]> = Extract<AgentMessage, { role: R }>;
+type PiSessionEvent<T extends AgentSessionEvent["type"]> = Extract<AgentSessionEvent, { type: T }>;
+type WireEvent<T extends PiEvent["type"]> = Extract<PiEvent, { type: T }>;
 
 export type CustomMessageTie = Same<WireCustomMessage, PiMessage<"custom">>;
 export type CompactionSummaryTie = Same<WireCompactionSummary, PiMessage<"compactionSummary">>;
 export type BranchSummaryTie = Same<WireBranchSummary, PiMessage<"branchSummary">>;
 export type BashExecutionTie = Same<WireBashExecution, PiMessage<"bashExecution">>;
 export type AgentMessageTie = Same<WireAgentMessage, AgentMessage>;
+
+export type PiEventTypeTie = Same<PiEvent["type"], AgentSessionEvent["type"]>;
+export type ForwardedEventTie = Same<
+	PiForwardedEvent,
+	WithWireMessages<Exclude<AgentSessionEvent, { type: PiProjectedEventType }>>
+>;
+export type QueueUpdateTie = Same<
+	Omit<WireEvent<"queue_update">, "hasImages">,
+	Omit<PiSessionEvent<"queue_update">, never>
+>;
+export type CompactionEndTie = Same<
+	Omit<WireEvent<"compaction_end">, "result">,
+	Omit<PiSessionEvent<"compaction_end">, "result">
+>;
+export type CompactionEndResultTie = Same<
+	CompactionEndResult,
+	Pick<CompactionResult, "tokensBefore" | "estimatedTokensAfter">
+>;
 
 export type ContextUsageTie = Same<ContextUsage, PiContextUsage>;
 export type SessionStatsTie = Same<

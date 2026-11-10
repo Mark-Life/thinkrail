@@ -1,11 +1,4 @@
-import {
-	compile,
-	type JsonSchema,
-	type Schema,
-	type Static,
-	type Validator,
-} from "@earendil-works/pi-schema";
-import type { SessionEventPayload } from "./piProtocol";
+import { compile, type JsonSchema, type Static, type Validator } from "@earendil-works/pi-schema";
 import { AnyHostWelcome, WS_CHANNEL_SCHEMAS as C, WS_METHOD_SCHEMAS as M } from "./schema";
 import {
 	WS_CHANNELS,
@@ -251,15 +244,12 @@ export function wsResultValidator<K extends WsMethodName>(method: K) {
 	return RESULTS[method]();
 }
 
-/** pi owns its events: the wire checks `sessionId` and `event.type`, and the reducer reads the rest as pi typed it. */
-const PiEventPush: Schema<SessionEventPayload> = { allOf: [C["pi.event"]] };
-
 type PushValidators = { readonly [K in WsChannel]: () => Validator<WsChannelPayload<K>> };
 
 const PUSHES: PushValidators = {
 	"server.welcome": lazyValidator(C["server.welcome"]),
 	"project.updated": lazyValidator(C["project.updated"]),
-	"pi.event": lazyValidator(PiEventPush),
+	"pi.event": lazyValidator(C["pi.event"]),
 	"pi.extensionUi": lazyValidator(C["pi.extensionUi"]),
 	"session.created": lazyValidator(C["session.created"]),
 	"session.deleted": lazyValidator(C["session.deleted"]),

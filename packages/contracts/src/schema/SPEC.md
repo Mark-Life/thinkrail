@@ -23,7 +23,8 @@ that map.
   and `NoPayload` stay inside this directory, and only `@thinkrail/contracts/test-ids` exports the `test*` id makers.
   Schema values stay public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they
   ship in web JS.
-- **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
+- **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` and
+  `@earendil-works/pi-agent-core` for pi-owned types.
 - **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
   a schema here, except `JsonObject` in `checks.ts` and the id parsers: an id reaches code from a URL, a file name or
   a pi event, with no method schema to check it. Each side owns the check at its own edge ([[submodule-server-host]] for requests).
@@ -49,14 +50,17 @@ that map.
   that checks a shape the dependency types but ships no schema for is tied to that type with `Same` (`typeTie.ts`), so a
   field or value either side adds, drops or changes fails `tsc`. `ThinkingLevel`, `PiStopReason`, `ImageContent`,
   `CustomMessageContent`, `ModelInputModality` and `ModelListPrice` are tied to pi-ai here. pi-coding-agent is Node-only,
-  so the shapes it owns (`WireCustomMessage`, `WireCompactionSummary`, `WireBranchSummary`, `WireBashExecution`, `SessionStats`, `ContextUsage`, `SlashCommandInfo`) are declared here and
-  tied in the host's `piWireTies.ts` ([[submodule-server-agent]]).
-- **pi's messages are a trust point.** pi ships their types and no schemas. `TranscriptMessage` checks `role` against
-  `TRANSCRIPT_MESSAGE_ROLES`, a list tied to its union with `Same`. The rest of the body is pi's type, as the host got it
-  from pi: pi-ai's `UserMessage`, `AssistantMessage` and `ToolResultMessage` plus the two pi-coding-agent mirrors.
-- **`pi.event` checks only its tag.** `pi` exports no event schemas, so its schema has `sessionId` and `event.type`, and
-  `WsChannelMap` in `wsProtocol.ts` overrides the entry with `SessionEventPayload`. The interface `extends` the derived
-  map, so the override must stay assignable to the schema's type.
+  so the shapes it owns (`WireCustomMessage`, `WireCompactionSummary`, `WireBranchSummary`, `WireBashExecution`, pi's session
+  events in `PiEvent`, `CompactionEndResult`, `SessionStats`, `ContextUsage`, `SlashCommandInfo`) are declared here and
+  tied in the host's `piWireTies.ts` ([[submodule-server-agent]]). Packages outside contracts tie the shapes they parse
+  the same way. A `Schema<T>` annotation checks one way only and misses a field the dependency adds.
+- **pi's messages and events are the two trust points.** pi ships their types and no schemas. `TranscriptMessage` checks
+  `role` against `TRANSCRIPT_MESSAGE_ROLES`. `SessionEventPayload`, the `pi.event` payload, checks `sessionId` and
+  `event.type` against `PI_EVENT_TYPES`. Each list is tied to its union with `Same`. The rest of the body is pi's type, as
+  the host got it from pi: `TranscriptMessage` is pi-ai's `UserMessage`, `AssistantMessage` and `ToolResultMessage` plus
+  the two pi-coding-agent mirrors, and `PiEvent` is pi-agent-core's `AgentEvent` plus pi-coding-agent's session events,
+  with each message typed `WireAgentMessage` by `WithWireMessages`. The host rebuilds four events (`PiProjectedEventType`);
+  the rest pass as pi typed them (`PiForwardedEvent`).
 - **A recursive shape keeps its hand type.** A derived type cannot refer to itself, so `FileNode` and
   `LayoutPresetCenterNode` stay hand types. Their schemas are builder results that `tsc` checks against the hand type;
   only the `{ $ref: "#" }` each one nests is a raw JSON Schema annotated `Schema<...>`. `$id` makes that `$ref` point at

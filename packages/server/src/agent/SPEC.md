@@ -497,8 +497,9 @@ re-opened transcripts provider-valid.
   - `transcriptMessages` — keeps the pi messages contracts' `isTranscriptMessageRole` admits and narrows each
     to `TranscriptMessage` by its role, with no cast. `getSessionMessages` and the subagent transcript read share it.
   - `piWireTies` — types only: ties each pi-coding-agent shape contracts declares (custom, compaction, branch and bash
-    messages, `WireAgentMessage`, `SessionStats`, `ContextUsage`, `SlashCommandInfo`) to pi's own type with contracts'
-    `Same`, so a pi upgrade that changes one fails `tsc` here ([[submodule-contracts-schema]]).
+    messages, `WireAgentMessage`, the forwarded and projected `PiEvent` members, `CompactionEndResult`, `SessionStats`,
+    `ContextUsage`, `SlashCommandInfo`) to pi's own type with contracts' `Same`, so a pi upgrade that changes one fails
+    `tsc` here ([[submodule-contracts-schema]]).
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no
@@ -1181,7 +1182,8 @@ re-opened transcripts provider-valid.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `respondToTool` +
-  `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
+  `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload` (contracts' payload with a path-safe `SessionId`, since
+  the host publishes only for live sessions);
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /

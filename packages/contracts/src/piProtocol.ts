@@ -13,16 +13,7 @@ export type {
 	UserMessage,
 } from "@earendil-works/pi-ai";
 
-import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
-import {
-	type AgentSettlement,
-	type SessionId,
-	type SessionState,
-	type ThinkingLevel,
-	TRANSCRIPT_MESSAGE_ROLES,
-	type WireAgentMessage,
-	type WireModel,
-} from "./schema";
+import { type SessionState, TRANSCRIPT_MESSAGE_ROLES, type WireModel } from "./schema";
 
 const TRANSCRIPT_ROLES: ReadonlySet<string> = new Set(TRANSCRIPT_MESSAGE_ROLES);
 
@@ -58,66 +49,6 @@ export function canMarkCompletionUnread(state: SessionState): boolean {
 		state.completion.outcome !== "cancelled" &&
 		!state.completionUnread
 	);
-}
-
-type WithWireMessage<E> = E extends { message: AgentMessage }
-	? Omit<E, "message"> & { message: WireAgentMessage }
-	: E;
-
-export type PiEvent =
-	| WithWireMessage<Exclude<AgentEvent, { type: "agent_end" }>>
-	| { type: "agent_end"; messages: WireAgentMessage[]; willRetry: boolean }
-	| { type: "agent_settled"; terminal: AgentSettlement | null }
-	| {
-			type: "queue_update";
-			steering: readonly string[];
-			followUp: readonly string[];
-			hasImages?: true;
-	  }
-	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
-	| { type: "session_info_changed"; name: string | undefined }
-	| { type: "entry_appended"; entryType: string }
-	| { type: "thinking_level_changed"; level: ThinkingLevel }
-	| {
-			type: "compaction_end";
-			reason: "manual" | "threshold" | "overflow";
-			result: CompactionEndResult | undefined;
-			aborted: boolean;
-			willRetry: boolean;
-			errorMessage?: string;
-	  }
-	| {
-			type: "auto_retry_start";
-			attempt: number;
-			maxAttempts: number;
-			delayMs: number;
-			errorMessage: string;
-	  }
-	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
-	| {
-			type: "summarization_retry_scheduled";
-			attempt: number;
-			maxAttempts: number;
-			delayMs: number;
-			errorMessage: string;
-	  }
-	| { type: "summarization_retry_attempt_start"; source: "branchSummary" }
-	| {
-			type: "summarization_retry_attempt_start";
-			source: "compaction";
-			reason: "manual" | "threshold" | "overflow";
-	  }
-	| { type: "summarization_retry_finished" }
-	| { type: "bash_execution_update"; id?: string; delta: string };
-
-export interface CompactionEndResult {
-	tokensBefore: number;
-	estimatedTokensAfter?: number;
-}
-
-export interface SessionEventPayload {
-	sessionId: SessionId;
-	event: PiEvent;
 }
 
 export interface ToolResponsePendingDetails {

@@ -9,12 +9,13 @@ import {
 	str,
 	unknown,
 } from "@earendil-works/pi-schema";
-import type { SessionEventPayload, ToolResponseDetails } from "./piProtocol";
+import type { ToolResponseDetails } from "./piProtocol";
 import {
 	BackgroundCommandCompletionDetails,
 	CustomMessageContent,
 	type ModelContextSetting,
 	ReviewFixDetails,
+	type Same,
 	SubagentCompletionDetails,
 	type WireCustomMessage,
 	type WsAck,
@@ -321,15 +322,9 @@ export const WS_CHANNELS = {
 	speechChanged: "speech.changed",
 } as const;
 
-type SameUnion<A extends B, B extends C, C = A> = A;
-export interface WsChannelMap extends WsSchemaChannelMap {
-	"pi.event": SessionEventPayload;
-}
+export interface WsChannelMap extends WsSchemaChannelMap {}
 
-export type WsChannel = SameUnion<
-	keyof WsChannelMap,
-	(typeof WS_CHANNELS)[keyof typeof WS_CHANNELS]
->;
+export type WsChannel = Same<keyof WsChannelMap, (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS]>;
 export type WsChannelPayload<C extends WsChannel> = WsChannelMap[C];
 
 export const TOOL_RESPONSE_CUSTOM_TYPE = "tool-response";
@@ -449,10 +444,7 @@ export function isSharedModelContextTarget(
 
 export interface WsMethodMap extends WsSchemaMethodMap {}
 
-export type WsMethodName = SameUnion<
-	keyof WsMethodMap,
-	(typeof WS_METHODS)[keyof typeof WS_METHODS]
->;
+export type WsMethodName = Same<keyof WsMethodMap, (typeof WS_METHODS)[keyof typeof WS_METHODS]>;
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
 export type WsResult<M extends WsMethodName> = WsMethodMap[M]["result"];
 

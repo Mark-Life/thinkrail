@@ -190,16 +190,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
     **`sameModel(a, b)`** is the one identity test — `{provider, id}` — every ring uses; no other field is
     identity, since name, context, prices and levels are catalog snapshots that may lag a refresh;
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`; `ThinkingLevel` (the
-    `off`-inclusive one) is listed in `schema/`;
-  - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
-    `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `agent_settled` /
-    `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
-    `session_info_changed` / `thinking_level_changed` / host-projected `entry_appended { entryType }`
-    members, plus `bash_execution_update` — mirrored
-    for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
+    `off`-inclusive one) is listed in `schema/`, tied to pi-ai's `ModelThinkingLevel`;
+  - the render union **`PiEvent`** (in `schema/piEvent.ts`) — pi-agent-core's `AgentEvent` plus the session events of
+    the Node-only `pi-coding-agent`, declared there and tied to its `AgentSessionEvent` by the host
+    ([[submodule-contracts-schema]]). `bash_execution_update` is in the union for fidelity only; the host never calls
+    `executeBash`, so the UI never receives it.
     Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
-    **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
-    mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
+    **`WireAgentMessage`** — pi-ai's `Message` plus the `WireCustomMessage` / `WireCompactionSummary` /
+    `WireBranchSummary` / `WireBashExecution` mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
     `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
     custom roles only in Node builds, and pi-agent-core itself no longer adds them, so the same
     `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
@@ -212,7 +210,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     (`tokensBefore` + optional `estimatedTokensAfter`); the host constructs this projection rather than
     casting pi's richer object wholesale, and wire data remains untrusted, so the reducer guards the field
     shapes rather than assuming them;
-  - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
+  - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame, in `schema/piEvent.ts`.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
@@ -691,9 +689,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   wording of a schema refusal: up to five `path message` pairs, with `root` naming the value itself.
   `wsResultValidator(method)` is the result schema of a method, compiled on first use and typed `Validator<WsResult<M>>`
   through a table with one row per method, so no caller casts what it checked.
-  `wsPushValidator(channel)` does the same per push channel. `pi.event` is the one row that types more than it checks:
-  pi owns its event shapes, so the wire checks `sessionId` and `event.type` and `PiEventPush` carries
-  `SessionEventPayload`, as `WsChannelMap` does.
+  `wsPushValidator(channel)` does the same per push channel. `pi.event` types more than it checks through its schema's
+  trust point ([[submodule-contracts-schema]]).
   `parseWsResult(method, value)` and `parseWsPush(channel, data)` return `Parsed<T>`: the typed value, or the problem
   naming the method or channel and the failing fields. A client reads `server.welcome` through `WsClientChannelMap`, where
   it is the `AnyHostWelcome` floor, so it can start against a host of any version. `wsChannelOf(name)` names a channel

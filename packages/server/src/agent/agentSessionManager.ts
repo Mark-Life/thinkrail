@@ -33,7 +33,7 @@ import type {
 	RemovedQueuedMessage,
 	ReviewFixDetails,
 	SessionDeletedPayload,
-	SessionEventPayload,
+	SessionEventPayload as SessionEventPush,
 	SessionId,
 	SessionQueueContent,
 	SessionQueueState,
@@ -369,7 +369,9 @@ function sessionCanAttach(sessionId: SessionId, workspaceId: WorkspaceId): boole
 	);
 }
 
-export type { SessionEventPayload };
+export interface SessionEventPayload extends SessionEventPush {
+	sessionId: SessionId;
+}
 
 let publish: (payload: SessionEventPayload) => void = () => {};
 export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {

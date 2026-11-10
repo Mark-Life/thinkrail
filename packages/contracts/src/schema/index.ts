@@ -38,6 +38,7 @@ export * from "./mcp";
 export * from "./methods";
 export * from "./model";
 export * from "./packages";
+export * from "./piEvent";
 export * from "./pr";
 export * from "./project";
 export * from "./provider";

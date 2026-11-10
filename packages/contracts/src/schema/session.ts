@@ -16,6 +16,7 @@ import {
 import { ExtUiDialogRequest, ExtUiResponse } from "./extUi";
 import { SessionId, StoredProjectId, StoredSessionId, StoredWorkspaceId, WorkspaceId } from "./ids";
 import { ThinkingLevel, WireModel } from "./model";
+import { SessionEventPayload } from "./piEvent";
 import {
 	ResourceHistoryCursor,
 	ResourceHistoryPage,
@@ -233,7 +234,7 @@ export const SESSION_METHODS = {
 };
 
 export const SESSION_CHANNELS = {
-	"pi.event": wireObj({ sessionId: StoredSessionId, event: wireObj({ type: str() }) }),
+	"pi.event": SessionEventPayload,
 	"session.created": SessionSummary,
 	"session.deleted": SessionDeletedPayload,
 	"session.resourcesChanged": SessionDeletedPayload,
