@@ -398,6 +398,9 @@ test("writers keep unknown keys and indentation, drop global defaults, and repla
 	expect(JSON.parse(text)).toEqual({ extra: true, mcpServers: { a: { url: "https://a2/mcp" } } });
 	expect(statSync(path).mode & 0o777).toBe(0o600);
 	expect(removeMcpServerConfig(path, "missing")).toBe(false);
+	expect(() => updateMcpServerConfig(path, "missing", { enabled: false })).toThrow(
+		expect.objectContaining({ code: "MCP_CONFIG_INVALID" }),
+	);
 	expect(removeMcpServerConfig(path, "a")).toBe(true);
 	expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ extra: true, mcpServers: {} });
 

@@ -13,6 +13,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { isOverrideEntry } from "./config";
 import { isJsonObject, isMcpFile, type McpFile } from "./schemas";
@@ -113,7 +114,9 @@ export function updateMcpServerConfig(
 			setOwnEntry(target, name, server);
 			parsed.mcpServers = target;
 		}
-		if (!isJsonObject(server)) throw new Error(`${path} does not define MCP server "${name}"`);
+		if (!isJsonObject(server)) {
+			throw new CodedError("MCP_CONFIG_INVALID", `${path} does not define MCP server "${name}"`);
+		}
 		const keepDefaults = isOverrideEntry(server);
 		if (patch.enabled !== undefined) {
 			if (patch.enabled && !keepDefaults) delete server.enabled;
