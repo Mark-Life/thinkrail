@@ -54,6 +54,11 @@ product contract (it then guards upstream's behavior instead).
 - **Preload passed as source text.** Owner [[module-desktop]], `index.ts`. **Removal gate:** a
   `views://` preload URL loads as a script on Linux (Electrobun 1.18.1 injected it as code). Verify the
   Linux packaged preload smoke.
+- **No scripted mockup frames in the desktop window.** Owner [[module-desktop]], `shellMarker.ts`;
+  [[module-web]] reads the marker. **Removal gate:** on macOS, Linux and Windows the native bridge drops
+  messages that do not come from the main frame, and no preload runs inside a child frame. Verify on a
+  packaged build of each platform with a `sandbox="allow-scripts"` srcdoc frame, not from release notes.
+  The marker itself stays (it is how the web client knows the shell); only the web gate goes.
 - **Edge-triggered menu commands and Command-Q key state.** Owner [[module-desktop]], `repeatGate.ts`,
   `quitShortcut.ts`, `keyState.ts`. **Removal gate:** menu actions carry a key-repeat flag and their
   trigger (key or pointer). Verify `repeatGate.test.ts`, `quitShortcut.test.ts`, `keyState.test.ts`.

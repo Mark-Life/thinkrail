@@ -1,5 +1,7 @@
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 
+export { MOCKUP_CDN_SOURCES, MOCKUP_THEME_CHANGE_EVENT } from "@thinkrail/contracts";
+
 export type ToolResponse =
 	| { kind: "response"; value: unknown }
 	| { kind: "deferred" }

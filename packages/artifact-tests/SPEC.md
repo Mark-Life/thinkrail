@@ -80,6 +80,10 @@ reaching the probe server is not that evidence: WebView2 documents that a cancel
 its GET, and Windows CI saw exactly that beside a native `allowed:false` verdict. A commit to the URL fails
 the smoke with the recorded `will-navigate` verdicts quoted. A sandboxed `srcdoc` iframe that
 updates in place must fetch both of its images, so previews still render under the navigation rules. The
+same server receives the shell-marker report: a script in the live window reads the property descriptor of
+the desktop shell global and requests `/shell-marker-<locked|loose|missing>`; anything but one `locked`
+fails the smoke, so a renamed or missing marker cannot silently let the web client run mockup scripts in
+the desktop window ([[module-desktop]]). The
 server is `unref`ed: a failed launch cannot keep the smoke alive. On macOS it also drives the title-bar double-click path end to end: a no-drag
 double-click must not act, and the header double-click's recorded action and resulting window state must
 match the machine's `AppleActionOnDoubleClick` setting mapped as [[module-desktop]] documents (unset,

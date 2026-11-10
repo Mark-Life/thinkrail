@@ -25,7 +25,9 @@ import {
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	MOCKUP_CDN_SOURCES,
 	MOCKUP_DIR,
+	MOCKUP_THEME_CHANGE_EVENT,
 	normalizeFontSettings,
 	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -601,6 +603,18 @@ describe("font settings", () => {
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
 	});
+});
+
+test("a mockup hears theme changes on one event name", () => {
+	expect(MOCKUP_THEME_CHANGE_EVENT).toBe("thinkrail:themechange");
+});
+
+test("mockup sub-resources load from three path-limited CDN prefixes", () => {
+	expect(MOCKUP_CDN_SOURCES).toEqual([
+		"https://cdn.jsdelivr.net/npm/",
+		"https://unpkg.com",
+		"https://cdnjs.cloudflare.com/ajax/libs/",
+	]);
 });
 
 describe("isMockupPath", () => {

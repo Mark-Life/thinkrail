@@ -228,8 +228,8 @@ test("a file visualization renders the workspace file with the diff-review rende
 		const preview = file.getByTestId("resource-preview");
 		await expect(preview).toBeVisible();
 		await expect(preview.getByTestId("view-toggle-html")).toHaveAttribute("data-active", "true");
-		await expect(preview.getByTestId("html-disabled-notice")).toContainText(
-			"Scripts and external resources are disabled",
+		await expect(preview.getByTestId("html-scripted-notice")).toContainText(
+			"Mockup scripts run in a sandboxed frame",
 		);
 		await expect(preview.frameLocator("iframe").getByText("Save settings")).toBeVisible();
 

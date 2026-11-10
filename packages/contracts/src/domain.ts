@@ -134,6 +134,14 @@ export function isMockupPath(path: string): boolean {
 	return rest.every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 
+export const MOCKUP_CDN_SOURCES: readonly string[] = [
+	"https://cdn.jsdelivr.net/npm/",
+	"https://unpkg.com",
+	"https://cdnjs.cloudflare.com/ajax/libs/",
+];
+
+export const MOCKUP_THEME_CHANGE_EVENT = "thinkrail:themechange";
+
 export interface Workspace {
 	id: string;
 	projectId: string;

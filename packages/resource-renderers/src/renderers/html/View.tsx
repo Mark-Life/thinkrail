@@ -17,7 +17,7 @@ export default function HtmlView({
 	const t = useT();
 	const text = content.kind === "text" ? content.text : "";
 	const mode = useHtmlMode(resource);
-	const offered = mode === "themed" && onNaturalHeight !== undefined;
+	const offered = mode !== "static" && onNaturalHeight !== undefined;
 	const [viewport, selectViewport] = useHtmlViewport(
 		viewState,
 		onViewState,
@@ -34,7 +34,11 @@ export default function HtmlView({
 			data-html-mode={mode}
 			className={cn("flex min-h-0 flex-col bg-container-workspace-bg", fit ? null : "h-full")}
 		>
-			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />
+			<HtmlPreviewNotice
+				scripted={mode === "scripted"}
+				viewport={viewport}
+				onViewport={selectViewport}
+			/>
 			<div className={fit ? "flex-none" : "min-h-0 flex-1 p-12"}>
 				<HtmlSourceFrame
 					mode={mode}

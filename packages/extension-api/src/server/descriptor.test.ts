@@ -72,7 +72,7 @@ describe("defineServerExtension", () => {
 		expect(extension.description).toBe("Shows up in Settings.");
 	});
 
-	it("erases the pi type dependency from its runtime entry", async () => {
+	it("erases the pi type dependency from its runtime entry and imports only contracts", async () => {
 		const imports: string[] = [];
 		const build = await Bun.build({
 			entrypoints: [Bun.resolveSync("@thinkrail/extension-api/server", import.meta.dir)],
@@ -92,7 +92,7 @@ describe("defineServerExtension", () => {
 		});
 
 		expect(build.success).toBe(true);
-		expect(imports).toEqual([]);
+		expect(imports).toEqual(["@thinkrail/contracts"]);
 		expect(await build.outputs[0]?.text()).toContain("defineServerExtension");
 	});
 });

@@ -42,6 +42,7 @@ import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
+import { markDesktopShell, shellMarkerProbeScript } from "./shellMarker";
 import {
 	handOffStartupSplash,
 	openStartupSplash,
@@ -124,6 +125,7 @@ function linkProbeScript(url: string, target: string): string {
 })();`;
 }
 const NAVIGATION_PROBE_SCRIPTS: Record<string, (url: string) => string> = {
+	"shell-marker": shellMarkerProbeScript,
 	navigate: (url) => `window.location.assign(${JSON.stringify(url)});`,
 	"navigate-link": (url) => linkProbeScript(url, ""),
 	"navigate-blank-link": (url) => linkProbeScript(url, "_blank"),
@@ -447,9 +449,11 @@ async function start(): Promise<void> {
 	const preload =
 		preloadSource === null
 			? null
-			: injectInitialWindowChrome(
-					injectInitialDesktopPreferences(preloadSource, initialPreferences),
-					windowChromePreloadSeed(windowChrome),
+			: markDesktopShell(
+					injectInitialWindowChrome(
+						injectInitialDesktopPreferences(preloadSource, initialPreferences),
+						windowChromePreloadSeed(windowChrome),
+					),
 				);
 	mainWindow = new BrowserWindow({
 		title: "ThinkRail",

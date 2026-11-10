@@ -50,7 +50,9 @@ export {
 	MAX_SEARCH_GROUP_LIMIT,
 	MAX_SEARCH_PREVIEW_BYTES,
 	MAX_SEARCH_QUERY_LENGTH,
+	MOCKUP_CDN_SOURCES,
 	MOCKUP_DIR,
+	MOCKUP_THEME_CHANGE_EVENT,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	OTHER_AGENT_SKILL_GROUPS,
@@ -102,6 +104,7 @@ export {
 	prepareContent,
 } from "./match";
 export type * from "./nativeClient";
+export { DESKTOP_SHELL_GLOBAL } from "./nativeClient";
 export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,

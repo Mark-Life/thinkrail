@@ -1,4 +1,4 @@
-import { isMockupPath, MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
+import { MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type ResourceEnvironment,
@@ -22,6 +22,7 @@ import { useFileReview } from "../panels/useReviewCommenting";
 import { selectFileChangeSince, selectHostSearchReady, useAppStore } from "../store";
 import { resolveThinkrailEditorTheme, THINKRAIL_PIERRE_THEME } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
+import { mockupHtmlMode, scriptlessHtmlMode } from "./mockupScripts";
 
 registerBundledResourceRenderers();
 
@@ -57,7 +58,10 @@ const HOST: ResourceHost = {
 		}),
 	FileReview,
 	ReviewSend,
-	html: { mode: (_workspaceId, path) => (isMockupPath(path) ? "themed" : "static") },
+	html: {
+		mode: (workspaceId, path) => mockupHtmlMode(useAppStore.getState(), workspaceId, path),
+		subscribe: (onChange) => useAppStore.subscribe(onChange),
+	},
 };
 
 function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null): string {
@@ -67,6 +71,7 @@ function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null):
 
 export const PALETTE_PREVIEW_HOST: ResourceHost = {
 	...HOST,
+	html: { mode: (_workspaceId, path) => scriptlessHtmlMode(path) },
 	bytesUrl: cappedBytesUrl,
 	readFile: (workspaceId, path) => {
 		if (!selectHostSearchReady(useAppStore.getState())) {

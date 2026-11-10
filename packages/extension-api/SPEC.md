@@ -59,7 +59,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   optional `ToolRegistrationOptions` under `options`. `defineWebExtension` is a typed identity helper:
   it preserves the descriptor and its inferred tool keys without registration or default injection.
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
-  only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
+  only. It re-exports [[module-contracts]]' `MOCKUP_CDN_SOURCES` and `MOCKUP_THEME_CHANGE_EVENT`: a tool
+  guideline states these host facts, and an extension's server half may import nothing else from the
+  host. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
   `sessionExtensions`, optional `interactiveTools`, optional `settings` (declared per-extension settings —
   today only `{ type: "boolean", default }`; the values live in the host's config keyed by extension name
@@ -97,5 +99,6 @@ the host, never acquire it from a store or transport. Extension composition rule
 
 Package tests exercise descriptors through their public entries, pure argument/result helpers and
 browser bundling of both the root and `./web`. Browser bundles permit only contracts at runtime and
-reject React, pi, host and server imports; `./server` separately verifies its pi dependency is erased.
+reject React, pi, host and server imports; `./server` separately verifies its pi dependency is erased and
+that contracts is its only runtime import.
 The app's registry and common-image-layer tests retain coverage of the host-owned rendering behavior.

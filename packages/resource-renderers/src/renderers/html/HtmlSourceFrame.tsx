@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { ResourceHtmlMode } from "../../host";
 import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { ScriptedHtmlFrame } from "./ScriptedHtmlFrame";
 import { ThemedHtmlFrame } from "./ThemedHtmlFrame";
 import type { HtmlViewport } from "./viewport";
 
@@ -24,6 +25,7 @@ export function HtmlSourceFrame({
 	contentHeight?: number;
 	onContentHeight?: (height: number | null) => void;
 }) {
+	if (mode === "scripted") return <ScriptedHtmlFrame {...props} />;
 	if (mode === "themed") return <ThemedHtmlFrame {...props} />;
 	return <StaticHtmlFrame title={props.title} source={props.source} viewport={props.viewport} />;
 }

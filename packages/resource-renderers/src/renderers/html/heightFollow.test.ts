@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	advanceHeightProbe,
 	type FrameReading,
 	followHeight,
 	frameIndependentHeight,
@@ -7,6 +8,7 @@ import {
 	HEIGHT_RUN,
 	type HeightFollow,
 	restartHeightFollow,
+	startHeightProbe,
 	UNMEASURED_HEIGHT,
 } from "./heightFollow";
 
@@ -130,4 +132,57 @@ test("a document taller than the probe is accepted from the two probe readings",
 		frames: [HEIGHT_PROBE.height, HEIGHT_PROBE.height + HEIGHT_PROBE.step],
 	});
 	expect(readings((frame) => frame * 2).height).toBeNull();
+});
+
+function probeOverTime(document: (frameHeight: number, at: number) => number, stepMs = 16) {
+	const frames: number[] = [];
+	let at = 0;
+	let progress: ReturnType<typeof advanceHeightProbe> = startHeightProbe(at);
+	while ("readAt" in progress) {
+		frames.push(progress.readAt);
+		at += stepMs;
+		const flow = document(progress.readAt, at);
+		progress = advanceHeightProbe(
+			progress.probe,
+			{ flow, extent: Math.max(flow, progress.readAt) },
+			at,
+		);
+	}
+	return { height: progress.height, frames };
+}
+
+const [PROBE, STEPPED] = [HEIGHT_PROBE.height, HEIGHT_PROBE.height + HEIGHT_PROBE.step];
+
+test("readings taken one at a time follow the same three frame heights", () => {
+	expect(probeOverTime(() => 300)).toEqual({ height: 300, frames: [PROBE, STEPPED, 300] });
+	expect(probeOverTime(() => 17_113)).toEqual({ height: 17_113, frames: [PROBE, STEPPED] });
+});
+
+test("a frame-sized verdict counts only when the first frame height reads the same again", () => {
+	expect(probeOverTime((frame) => frame + 16)).toEqual({
+		height: null,
+		frames: [PROBE, STEPPED, PROBE],
+	});
+	expect(probeOverTime((frame) => (frame < 400 ? 800 : 150))).toEqual({
+		height: null,
+		frames: [PROBE, STEPPED, 150, PROBE],
+	});
+});
+
+test("content that changed between two readings starts the readings over", () => {
+	expect(probeOverTime((_frame, at) => (at < 32 ? 300 : 340))).toEqual({
+		height: 340,
+		frames: [PROBE, STEPPED, PROBE, STEPPED, 340],
+	});
+	expect(probeOverTime((_frame, at) => (at < 48 ? 300 : 340))).toEqual({
+		height: 340,
+		frames: [PROBE, STEPPED, 300, PROBE, STEPPED, 340],
+	});
+});
+
+test("content that never holds still for a whole run has no content height", () => {
+	const moving = probeOverTime((_frame, at) => at);
+	expect(moving.height).toBeNull();
+	expect(moving.frames.length * 16).toBeGreaterThan(HEIGHT_RUN.maxMs);
+	expect(moving.frames.length * 16).toBeLessThan(HEIGHT_RUN.maxMs + 100);
 });

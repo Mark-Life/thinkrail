@@ -385,6 +385,25 @@ The host reads the staged preload bundle and passes its JavaScript **source text
 `BrowserWindow.preload`. A `views://` preload URL is forbidden: Electrobun 1.18.1 resolves it on macOS but
 injects the literal URL as code on Linux.
 
+**Shell marker.** The main process prepends one statement to that source, before the injected preferences
+and window chrome and before any bundled code (`markDesktopShell`): it defines the global named by
+[[module-contracts]]' `DESKTOP_SHELL_GLOBAL` as `true`, non-writable and non-configurable. It is the first
+statement, so it exists even when the rest of the preload throws. The web client reads it to know it runs
+inside this shell; it is ThinkRail's own name, not an Electrobun internal that an upgrade could rename.
+The desktop smoke asks the packaged window for the property descriptor and fails unless it is present and
+locked ([[module-artifact-tests]]).
+
+**The desktop shell runs no author script in a preview frame.** In a browser, a mockup the agent showed
+runs its scripts in a `sandbox="allow-scripts"` frame ([[module-resource-renderers]]). The web client
+answers `themed` (no script) whenever the shell marker is present ([[module-web]]); on the macOS desktop
+build the marker is present and a mockup the agent showed renders in the themed frame with no request to
+another host. Reason, read from the Electrobun 2.0.5 source (Linux and Windows not run): on macOS its
+preload runs in every child frame, also one without `allow-scripts`; its native bridge takes messages from any
+frame on Linux and Windows, and on Windows its preloads are injected into child frames as soon as a frame
+may run scripts. A frame script could then reach the launcher's RPC. Removal gate in
+[[electrobun-compatibility]]. Limit: the marker arrives through the preload, so the gate fails open if
+Electrobun injects no preload at all into the window; the smoke check above is what catches that.
+
 ## Microphone
 
 Voice input ([[submodule-web-speech]]) records in the page through `getUserMedia`. The page is the

@@ -56,15 +56,55 @@ export interface FrameReading {
 
 export const HEIGHT_PROBE = { height: 8192, step: 100, rounding: 1 } as const;
 
+type HeightProbeStep = { readAt: number } | { height: number | null };
+
+function heightProbeStep(readings: readonly FrameReading[]): HeightProbeStep {
+	const [first, second, applied] = readings;
+	if (!first) return { readAt: HEIGHT_PROBE.height };
+	if (!second) return { readAt: HEIGHT_PROBE.height + HEIGHT_PROBE.step };
+	if (Math.abs(second.flow - first.flow) > HEIGHT_PROBE.rounding) return { height: null };
+	const probed = Math.max(first.flow, second.flow);
+	if (probed >= HEIGHT_PROBE.height) return { height: probed };
+	if (!applied) return { readAt: probed };
+	if (Math.abs(applied.flow - probed) > HEIGHT_PROBE.rounding) return { height: null };
+	return { height: Math.max(probed, applied.flow, applied.extent) };
+}
+
 export function frameIndependentHeight(
 	readAt: (frameHeight: number) => FrameReading,
 ): number | null {
-	const first = readAt(HEIGHT_PROBE.height).flow;
-	const second = readAt(HEIGHT_PROBE.height + HEIGHT_PROBE.step).flow;
-	if (Math.abs(second - first) > HEIGHT_PROBE.rounding) return null;
-	const probed = Math.max(first, second);
-	if (probed >= HEIGHT_PROBE.height) return probed;
-	const applied = readAt(probed);
-	if (Math.abs(applied.flow - probed) > HEIGHT_PROBE.rounding) return null;
-	return Math.max(probed, applied.flow, applied.extent);
+	const readings: FrameReading[] = [];
+	for (;;) {
+		const step = heightProbeStep(readings);
+		if ("height" in step) return step.height;
+		readings.push(readAt(step.readAt));
+	}
+}
+
+export interface HeightProbe {
+	readings: readonly FrameReading[];
+	doubted: FrameReading | null;
+	since: number;
+}
+
+export function startHeightProbe(at: number): { probe: HeightProbe; readAt: number } {
+	return { probe: { readings: [], doubted: null, since: at }, readAt: HEIGHT_PROBE.height };
+}
+
+export function advanceHeightProbe(
+	probe: HeightProbe,
+	reading: FrameReading,
+	at: number,
+): { probe: HeightProbe; readAt: number } | { height: number | null } {
+	if (probe.doubted) {
+		const moved = Math.abs(reading.flow - probe.doubted.flow) > HEIGHT_PROBE.rounding;
+		if (!moved || at - probe.since > HEIGHT_RUN.maxMs) return { height: null };
+		return advanceHeightProbe({ ...probe, readings: [], doubted: null }, reading, at);
+	}
+	const readings = [...probe.readings, reading];
+	const step = heightProbeStep(readings);
+	if ("readAt" in step) return { probe: { ...probe, readings }, readAt: step.readAt };
+	const [first] = readings;
+	if (step.height !== null || !first) return step;
+	return { probe: { ...probe, readings, doubted: first }, readAt: HEIGHT_PROBE.height };
 }
