@@ -93,6 +93,7 @@
 		"check:compiler": "bun --filter @thinkrail/web compiler:census:check",
 		"check:pi-packages": "bun scripts/check-pi-packages.ts",
 		"ci:flakes": "bun scripts/ci-flakes.ts",
+		"bench:stack": "bun scripts/bench-stack.ts",
 		"changeset": "changeset",
 		"release:version": "changeset version && bun install --no-frozen-lockfile",
 		"release:pack": "bun scripts/pack-pi-package.ts",
