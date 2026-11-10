@@ -1,4 +1,6 @@
 import type {
+	Api,
+	Model,
 	ModelCost,
 	ModelThinkingLevel,
 	ModelInputModality as PiModelInputModality,
@@ -53,6 +55,8 @@ export const WireModel = wireObj({
 	auth: opt(WireModelAuth),
 });
 export type WireModel = Static<typeof WireModel>;
+type PiModelField = "id" | "name" | "provider" | "contextWindow" | "reasoning";
+export type WireModelPiFields = Same<Pick<WireModel, PiModelField>, Pick<Model<Api>, PiModelField>>;
 
 export const RefreshedModels = wireObj({ models: arr(WireModel), complete: bool() });
 export type RefreshedModels = Static<typeof RefreshedModels>;
