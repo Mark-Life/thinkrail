@@ -40,7 +40,10 @@ is a **subcommand** (`thinkrail update [--channel stable|nightly]
 *Self-update* / *Uninstall* below. The set lives in `args.ts` (`parseSubcommand`) because the compiled
 entry needs it too: a subcommand never boots the host, so it must not pay for (or, in `uninstall`'s case,
 re-create) the staged asset cache. Otherwise the launch args: `--port` (stable default 24242,
-scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
+scans upward to the next free port on collision), `--host` (default `localhost`), `--allowed-host <name>`
+(repeatable; a `Host` name the host admits besides its built-in set, with a leading dot for every
+subdomain — threaded to `bootHost` as `allowedHosts`; the rule and its validation belong to
+[[submodule-server-host]]), `--no-open`,
 `--no-analytics` (**per-run suppression of additional analytics only** — basic events remain on;
 the durable additional-data choice is Settings → Privacy, see [[submodule-server-analytics]]),
 `--verbose` (debug-level logging — threaded to `bootHost` as `verbose: true`; the log files under
@@ -50,7 +53,10 @@ it too),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
-deliberately **not** parsed here — the host's analytics module is its single reader (see below). Ports must be plain decimals 0-65535: an empty or non-decimal `--port`, or an empty `--host`, throws; an empty or invalid `THINKRAIL_PORT` / `THINKRAIL_HOST` is ignored and the default is used.
+deliberately **not** parsed here — the host's analytics module is its single reader (see below).
+`THINKRAIL_ALLOWED_HOSTS` (comma-separated, added to `--allowed-host`) follows the same pattern: the
+host's `createServer` is its single reader, so the dev launcher and the desktop app honor it too. An
+empty `--allowed-host` throws. Ports must be plain decimals 0-65535: an empty or non-decimal `--port`, or an empty `--host`, throws; an empty or invalid `THINKRAIL_PORT` / `THINKRAIL_HOST` is ignored and the default is used.
 
 ## Update advisory
 

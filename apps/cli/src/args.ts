@@ -4,6 +4,7 @@ export const DEFAULT_HOST = "localhost";
 export interface CliOptions {
 	port: number;
 	host: string;
+	allowedHosts: string[];
 	open: boolean;
 	noAnalytics: boolean;
 	verbose: boolean;
@@ -35,6 +36,10 @@ unless you ask for it to go). Both take \`--help\`.
 Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).
   --host <h>     Bind host (default ${DEFAULT_HOST}).
+  --allowed-host <name>
+                 Also accept requests addressed to this host name, e.g. a tunnel
+                 or reverse-proxy name. A leading dot admits every subdomain.
+                 Repeatable.
   --no-open      Don't open the browser (e.g. headless / remote host).
   --no-analytics Disable additional usage analytics this run.
                  The saved sharing preference lives in Settings → Privacy.
@@ -49,6 +54,7 @@ Arguments:
 Env:
   THINKRAIL_PORT / THINKRAIL_HOST   Defaults for --port / --host.
   THINKRAIL_STATIC_DIR                 Override the built web app served by the host.
+  THINKRAIL_ALLOWED_HOSTS              Comma-separated names added to --allowed-host (read by the host).
   THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value; read by the host).
   THINKRAIL_LOG_LEVEL                  Log level: debug|info|warn|error (default info; read by the host).`;
 
@@ -68,6 +74,7 @@ function parsePort(value: string): number | undefined {
 export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptions {
 	let port: number | undefined;
 	let host: string | undefined;
+	const allowedHosts: string[] = [];
 	let open = true;
 	let noAnalytics = false;
 	let verbose = false;
@@ -98,6 +105,11 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 			if (value.trim() === "") throw new Error("Invalid --host: value is empty");
 			host = value;
 			i += consumed - 1;
+		} else if (arg === "--allowed-host" || arg.startsWith("--allowed-host=")) {
+			const { value, consumed } = readFlagValue(arg, argv[i + 1]);
+			if (value.trim() === "") throw new Error("Invalid --allowed-host: value is empty");
+			allowedHosts.push(value);
+			i += consumed - 1;
 		} else if (arg.startsWith("-")) {
 			throw new Error(`Unknown option: ${arg}`);
 		} else if (projectDir === undefined) {
@@ -114,6 +126,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 	return {
 		port: resolvedPort,
 		host: host ?? envHost ?? DEFAULT_HOST,
+		allowedHosts,
 		open,
 		noAnalytics,
 		verbose,

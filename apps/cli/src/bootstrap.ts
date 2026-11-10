@@ -64,6 +64,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const { server, port, requested } = await bootHost({
 		port: options.port,
 		host: options.host,
+		allowedHosts: options.allowedHosts,
 		portMode: "free",
 		resolveShellEnv: true,
 		staticDir,
