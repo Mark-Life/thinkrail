@@ -53,6 +53,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the method's schema or a check the schema cannot express, which only a client bug or a version mismatch produces, and
   **`PI_SESSION_ID_INVALID`** — pi named a live session with an id that is not path-safe ([[submodule-contracts-schema]]). **`INVALID_REPLY`** is the reverse, and
   only the client mints it: a successful reply failed its result schema ([[submodule-web-transport]]).
+  **`WS_RESULT_INVALID`** is the host's side of it: in a host that checks its replies and pushes (tests, e2e), one
+  failed its schema ([[submodule-server-host]]).
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
