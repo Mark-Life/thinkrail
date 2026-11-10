@@ -21,7 +21,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `ToolRevealOptions`, `WebExtension`, `defineWebExtension`, and the pure argument/result readers from
   `toolHelpers` and `toolResultContent`. The argument readers (`strArg`, `numArg`, `boolArg`, `listArg`,
   `strListArg`) take the tool's input type as a type argument and accept only a key of that type holding the
-  read value type (`ArgKey`), so a renamed parameter fails `tsc`; without the type argument no key is accepted.
+  read value type, so a renamed parameter fails `tsc`; without the type argument no key is accepted.
   The value itself is still checked at run time, because a model may send anything or be mid-stream.
 - **Interactive tools.** A tool whose `execute` waits for the person's response is *interactive*. The
   contract is tool-agnostic on both sides and keyed by `toolCallId`; the host learns a tool's name only

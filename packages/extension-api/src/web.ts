@@ -2,7 +2,6 @@ import type { Translator } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 
 export {
-	type ArgKey,
 	boolArg,
 	languageFromPath,
 	listArg,

@@ -5,7 +5,7 @@ export function resultText(result: unknown): string {
 }
 
 /** The keys of a tool's input type `Args` whose value, when present, is a `V`. */
-export type ArgKey<Args, V> = {
+type ArgKey<Args, V> = {
 	[K in keyof Args]-?: Exclude<Args[K], undefined> extends V ? K : never;
 }[keyof Args] &
 	string;
