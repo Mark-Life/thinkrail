@@ -37,7 +37,8 @@ function readThemeFile(dir: string, fileName: string): UserThemeFile {
 		return failure(fileName, "invalid-json", `nested deeper than ${MAX_THEME_NESTING} levels`);
 	}
 	try {
-		return { fileName, ok: true, manifest: JSON.parse(text) as unknown };
+		const manifest: unknown = JSON.parse(text);
+		return { fileName, ok: true, manifest };
 	} catch (error) {
 		return failure(fileName, "invalid-json", error);
 	}

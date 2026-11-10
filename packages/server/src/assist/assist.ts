@@ -98,15 +98,22 @@ interface Sections {
 	testing?: string;
 }
 
+const SECTION_NAMES = ["Summary", "Changes", "Testing"] as const;
+type SectionName = (typeof SECTION_NAMES)[number];
+
+function sectionName(heading: string | undefined): SectionName | undefined {
+	const lower = heading?.toLowerCase();
+	return SECTION_NAMES.find((name) => name.toLowerCase() === lower);
+}
+
 function splitBySections(text: string): Sections {
 	const HEADING = /^## +(Summary|Changes|Testing)\b.*$/gim;
-	const matches = [...text.matchAll(HEADING)];
-	const spans = matches.map((m) => ({
-		name: m[1] as "Summary" | "Changes" | "Testing",
-		headingStart: m.index ?? 0,
-		bodyStart: (m.index ?? 0) + m[0].length,
-	}));
-	const body = (name: "Summary" | "Changes" | "Testing"): string | undefined => {
+	const spans = [...text.matchAll(HEADING)].flatMap((m) => {
+		const name = sectionName(m[1]);
+		if (!name) return [];
+		return [{ name, headingStart: m.index, bodyStart: m.index + m[0].length }];
+	});
+	const body = (name: SectionName): string | undefined => {
 		const idx = spans.findIndex((s) => s.name === name);
 		if (idx < 0) return undefined;
 		// Stop at the next heading so a later section cannot be absorbed when an earlier one is missing.
