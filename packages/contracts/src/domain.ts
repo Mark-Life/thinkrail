@@ -2,15 +2,17 @@ import type { MatchTier } from "./match";
 import type {
 	BackgroundCommandSummary,
 	DelegationRunStatus,
-	GitDiffScope,
-	GitFileChange,
 	JbcentralStatus,
 	McpProjectOverride,
 	McpServerState,
 	McpTransportKind,
+	PlanReviewVerdict,
 	ResourceHistoryCursor,
 	ResourceRecord,
 	ResourceTally,
+	ReviewCommentKind,
+	ReviewReadingStep,
+	ReviewSnapshot,
 	ThinkingLevel,
 	WireModel,
 } from "./schema";
@@ -72,82 +74,6 @@ export interface WorkspaceFsChangedPayload {
 	paths: string[];
 	truncated: boolean;
 	skillChange: WorkspaceSkillChange;
-}
-
-export type TodoStatus = "pending" | "in_progress" | "done";
-export type TodoOrigin = "agent" | "user" | "adopted";
-
-export type TodoArtifactKind = "file" | "change" | "spec" | "commit";
-
-export interface TodoArtifact {
-	kind: TodoArtifactKind;
-	path?: string;
-	label?: string;
-	specId?: string;
-	sha?: string;
-	files?: GitFileChange[];
-}
-
-export interface TodoItem {
-	id: string;
-	title: string;
-	status: TodoStatus;
-	origin: TodoOrigin;
-	note?: string;
-	summary?: string;
-	verification?: string;
-	commitSubject?: string;
-	artifacts?: TodoArtifact[];
-	/**
-	 * The item's review decoration — **host-derived on `todo.list`, present only on reviewable items**
-	 * (those carrying a host change set). Review state is user-owned and host-stored (a sidecar, never the
-	 * agent-writable plan file), so an agent re-plan can't flip a review decision.
-	 */
-	review?: TodoReviewInfo;
-	createdAt: string;
-	updatedAt: string;
-}
-
-export type TodoReviewState = "unreviewed" | "reviewed" | "changes_requested";
-
-export interface TodoReviewInfo {
-	state: TodoReviewState;
-	reviewing?: boolean;
-	reviewedBy?: "user" | "agent";
-	revision: number;
-	unreviewedShas?: string[];
-	feedback?: string;
-	at?: string;
-}
-
-export type TodoGroupStatus = "pending" | "active" | "done";
-
-export interface TodoGroupItem {
-	id: string;
-	title: string;
-	todos: TodoItem[];
-	status: TodoGroupStatus;
-}
-
-export interface TodoPlan {
-	todos: TodoItem[];
-	groups: TodoGroupItem[];
-	/**
-	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
-	 * The plan page keeps it visible while an item re-opens, marked stale ("updating") until the agent
-	 * rewrites it at the next completion; ungated external outputs (markdown export, PR body) still show it
-	 * only while every item stays `done`, so a stale all-done story never leaves the app.
-	 */
-	summary?: string;
-	/**
-	 * Worktree changes attributed to NO item of this plan — **host-derived on `todo.list`, present only
-	 * when non-empty**. The honesty section of the review map: work no item claims (edits before the
-	 * first work window, after the last `done`, or in a chat that never planned) stays visible instead
-	 * of silently absent.
-	 */
-	unattributed?: GitFileChange[];
-	/** Committed counterpart of `unattributed`: `base..HEAD` commits no item owns, as wire-only `done` items (`origin: "adopted"`) — host-derived, never stored. See submodule-server-todos. */
-	adoptedCommits?: TodoItem[];
 }
 
 const THINKING_LEVEL_SET = {
@@ -1488,99 +1414,6 @@ export type SearchPreviewResult =
 	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[] }
 	| { kind: "unavailable" };
 
-export type TemplateScope = "global" | "project";
-
-export interface TemplateInfo {
-	name: string;
-	description?: string;
-	argumentHint?: string;
-	scope: TemplateScope;
-	filePath: string;
-}
-
-export interface Template extends TemplateInfo {
-	content: string;
-}
-
-export type ReviewCommentKind = "inline" | "diff" | "file" | "review";
-
-export type ReviewCommentStatus = "draft" | "sent" | "resolved" | "dismissed";
-
-export type ReviewAnchorState = "anchored" | "moved" | "outdated";
-
-export type ReviewSelector =
-	| { kind: "lineRange"; startLine: number; endLine: number }
-	| { kind: "textQuote"; exact: string; prefix: string; suffix: string }
-	| { kind: "diffHunk"; hunkHeader: string }
-	| { kind: "structural"; scheme: string; ref: string }
-	| { kind: "region"; x: number; y: number; width: number; height: number; page?: number };
-
-export interface ReviewAnchor {
-	path: string;
-	side: "base" | "worktree";
-	baseRef?: string;
-	scope?: GitDiffScope;
-	contentHash?: string;
-	selectors: ReviewSelector[];
-}
-
-export interface ReviewComment {
-	id: string;
-	reviewId: string;
-	kind: ReviewCommentKind;
-	anchor: ReviewAnchor | null;
-	body: string;
-	status: ReviewCommentStatus;
-	anchorState: ReviewAnchorState;
-	sessionId?: string;
-	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
-	author?: "user" | "agent";
-	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */
-	origin?: { todoId: string; reviewedSha: string; sessionId: string };
-	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */
-	stale?: boolean;
-	resolvedBy?: "agent" | "user";
-	resolveNote?: string;
-	createdAt: number;
-	sentAt?: number;
-	resolvedAt?: number;
-}
-
-export interface ReviewReadingStep {
-	path: string;
-	why: string;
-}
-
-/** The newest reviewer verdict's narrative for the workspace: its one-paragraph summary and the order it
- * suggests reading the change set in. Written by the host when a plan-step verdict lands; the Changes
- * review tab walks it. */
-export interface ReviewGuide {
-	summary: string;
-	readingOrder: ReviewReadingStep[];
-	verdict: PlanReviewVerdict;
-	todoId: string;
-	sessionId: string;
-	reviewedSha: string;
-	at: number;
-}
-
-export interface Review {
-	id: string;
-	workspaceId: string;
-	status: "open" | "closed";
-	baseSha: string;
-	fileSessions?: Record<string, string>;
-	doneFiles?: string[];
-	guide?: ReviewGuide;
-	createdAt: number;
-	closedAt?: number;
-}
-
-export interface ReviewSnapshot {
-	review: Review;
-	comments: ReviewComment[];
-}
-
 export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
 }
@@ -1615,8 +1448,6 @@ export interface ReviewFixDetails {
 	note?: string;
 	comments: ReviewFixComment[];
 }
-
-export type PlanReviewVerdict = "approve" | "request_changes";
 
 /** Result of the worker-invoked request_review tool (Option A): a review subagent's structured verdict on
  * a plan step. Carried as the tool result's `details`, rendered by the request_review card, and written to

@@ -45,6 +45,9 @@ runtime form yet.
 - **A recursive shape keeps its hand type.** A derived type cannot refer to itself, so `FileNode` stays a hand type.
   Its schema is a builder result that `tsc` checks against the hand type; only the `{ $ref: "#" }` it nests is a raw
   JSON Schema annotated `Schema<FileNode>`. `$id` makes that `$ref` point at the node, not at the schema that embeds it.
+- **An exclusive union keeps its hand type.** Builders cannot express the `?: never` branches of
+  `TemplateReadLocation`, so it stays a type beside a raw JSON Schema annotated `Schema<TemplateReadLocation>`:
+  `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

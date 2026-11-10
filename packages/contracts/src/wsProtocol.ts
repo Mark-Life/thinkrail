@@ -23,12 +23,7 @@ import type {
 	PiPackageScope,
 	PiPackageSummary,
 	PiPackagesCatalog,
-	ReviewAnchor,
-	ReviewComment,
-	ReviewCommentKind,
-	ReviewCommentStatus,
 	ReviewFixDetails,
-	ReviewSnapshot,
 	SearchContext,
 	SearchKind,
 	SearchPreviewResult,
@@ -37,12 +32,6 @@ import type {
 	SubagentCompletionDetails,
 	SurveyInvitationResponse,
 	SurveySubmitParams,
-	Template,
-	TemplateInfo,
-	TemplateScope,
-	TodoItem,
-	TodoPlan,
-	TodoStatus,
 	UserFontsSnapshot,
 	UserThemesSnapshot,
 } from "./domain";
@@ -50,16 +39,13 @@ import { isDelegationRunDetails } from "./domain";
 import type { ToolResponseDetails, ToolResponsePendingDetails } from "./piProtocol";
 import type {
 	Ack,
-	GitDiffScope,
 	ModelContextSetting,
 	Project,
 	SessionSummary,
 	SkillCatalogEntry,
 	SlashCommandInfo,
 	TerminalTabInfo,
-	ThinkingLevel,
 	WireCustomMessage,
-	WireModel,
 	Workspace,
 	WsSchemaMethodMap,
 } from "./schema";
@@ -87,11 +73,6 @@ export interface TerminalTabsPush {
 	workspaceId: string;
 	tabs: TerminalTabInfo[];
 }
-
-export type TemplateReadLocation =
-	| { workspaceId: string; projectId?: never }
-	| { projectId: string; workspaceId?: never }
-	| { workspaceId?: never; projectId?: never };
 
 export const PROTOCOL_VERSION = 108;
 export const OTHER_AGENT_SKILLS_PROTOCOL_VERSION = 108;
@@ -571,13 +552,6 @@ export interface ClientErrorReport {
 	chunkIds?: Record<string, string>;
 }
 
-export interface ReviewSendResult {
-	sessionId: string;
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
-	reused: boolean;
-}
-
 export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
 
 export function isModelContextWindow(value: unknown): value is number {
@@ -612,49 +586,6 @@ export interface McpRenderedTarget {
 }
 
 export interface WsMethodMap extends WsSchemaMethodMap {
-	"todo.list": {
-		params: { workspaceId: string; sessionId: string; opened?: "page" | "rail" };
-		result: TodoPlan;
-	};
-	"todo.add": {
-		params: {
-			workspaceId: string;
-			sessionId: string;
-			title: string;
-			note?: string;
-			surface?: "chat" | "page" | "rail";
-		};
-		result: TodoItem;
-	};
-	"todo.update": {
-		params: {
-			workspaceId: string;
-			sessionId: string;
-			id: string;
-			status?: TodoStatus;
-			title?: string;
-			note?: string;
-		};
-		result: TodoItem;
-	};
-	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
-	"todo.review": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
-	"todo.requestFix": {
-		params: { workspaceId: string; sessionId: string; id: string; feedback: string };
-		result: Ack;
-	};
-	"todo.startReview": {
-		params: { workspaceId: string; sessionId: string; id: string };
-		result: { ok: true };
-	};
-	"todo.reviewAll": {
-		params: { workspaceId: string; sessionId: string };
-		result: { ok: true; total: number; alreadyRunning?: true };
-	};
-	"todo.generateSummary": {
-		params: { workspaceId: string; sessionId: string };
-		result: { summary: string | null };
-	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
@@ -725,65 +656,6 @@ export interface WsMethodMap extends WsSchemaMethodMap {
 		result: SearchQueryResult;
 	};
 	"search.preview": { params: SearchPreviewTarget; result: SearchPreviewResult };
-	"review.get": { params: { workspaceId: string }; result: ReviewSnapshot };
-	"review.commentAdd": {
-		params: {
-			workspaceId: string;
-			kind: ReviewCommentKind;
-			anchor: ReviewAnchor | null;
-			body: string;
-			scope?: GitDiffScope;
-		};
-		result: ReviewComment;
-	};
-	"review.commentUpdate": {
-		params: { workspaceId: string; id: string; body?: string; status?: ReviewCommentStatus };
-		result: ReviewComment;
-	};
-	"review.sendComment": {
-		params: {
-			workspaceId: string;
-			id: string;
-			sessionId?: string;
-			model?: WireModel;
-			thinkingLevel?: ThinkingLevel;
-		};
-		result: ReviewSendResult;
-	};
-	"review.sendBatch": {
-		params: {
-			workspaceId: string;
-			commentIds?: string[];
-			sessionId?: string;
-			model?: WireModel;
-			thinkingLevel?: ThinkingLevel;
-		};
-		result: { sessions: ReviewSendResult[] };
-	};
-	"review.commentDelete": { params: { workspaceId: string; id: string }; result: Ack };
-	"review.fileDone": { params: { workspaceId: string; path: string }; result: Ack };
-	"review.close": { params: { workspaceId: string }; result: Ack };
-	"template.list": {
-		params: TemplateReadLocation;
-		result: { templates: TemplateInfo[] };
-	};
-	"template.get": {
-		params: TemplateReadLocation & { name: string; scope?: TemplateScope };
-		result: Template;
-	};
-	"template.save": {
-		params: {
-			workspaceId?: string;
-			scope: TemplateScope;
-			name: string;
-			content: string;
-		};
-		result: Template;
-	};
-	"template.delete": {
-		params: { workspaceId?: string; scope: TemplateScope; name: string };
-		result: Ack;
-	};
 	"mcp.list": { params: { workspaceId: string }; result: McpListResult };
 	"mcp.add": {
 		params: {
