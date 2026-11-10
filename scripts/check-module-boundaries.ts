@@ -2,20 +2,38 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { compile, map, obj, opt, str } from "@earendil-works/pi-schema";
 import { type Argument, parseSync, Visitor } from "oxc-parser";
 
-interface Manifest {
-	name?: string;
-	dependencies?: Record<string, string>;
-	devDependencies?: Record<string, string>;
-	optionalDependencies?: Record<string, string>;
-	peerDependencies?: Record<string, string>;
+const DependencyMap = opt(map(str()));
+const Manifest = compile(
+	obj(
+		{
+			name: opt(str()),
+			dependencies: DependencyMap,
+			devDependencies: DependencyMap,
+			optionalDependencies: DependencyMap,
+			peerDependencies: DependencyMap,
+		},
+		{ open: true },
+	),
+);
+
+function readManifest(path: string) {
+	const manifest: unknown = JSON.parse(readFileSync(path, "utf8"));
+	if (!Manifest.check(manifest)) {
+		const problems = Manifest.errors(manifest).map((error) => `${error.path} ${error.message}`);
+		throw new Error(`invalid ${path}: ${problems.join("; ")}`);
+	}
+	return manifest;
 }
 
 interface ModuleRule {
 	root: string;
 	allowed: readonly string[];
 }
+
+const BROWSER_SAFE_PI_PACKAGE = /^@earendil-works\/pi-schema(?:\/|$)/;
 
 const MODULE_RULES: readonly ModuleRule[] = [
 	{
@@ -92,7 +110,7 @@ function workspacePackages(root: string): Map<string, string> {
 			const moduleRoot = `${base}/${entry.name}`;
 			const manifestPath = join(root, moduleRoot, "package.json");
 			if (!existsSync(manifestPath)) continue;
-			const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
+			const manifest = readManifest(manifestPath);
 			if (manifest.name) packages.set(manifest.name, moduleRoot);
 		}
 	}
@@ -268,8 +286,8 @@ function allowedEdge(rule: ModuleRule, target: string): boolean {
 }
 
 function sourceHalf(subpath: string): "web" | "server" | undefined {
-	const match = /^(web|server)(?:\/|$|\.[cm]?[jt]sx?$)/.exec(subpath);
-	return match?.[1] as "web" | "server" | undefined;
+	const half = /^(web|server)(?:\/|$|\.[cm]?[jt]sx?$)/.exec(subpath)?.[1];
+	return half === "web" || half === "server" ? half : undefined;
 }
 
 function sourceRule(rule: ModuleRule, subpath: string): ModuleRule {
@@ -343,7 +361,8 @@ function sourceViolation(
 		(extension && half === "web");
 	const piPackage =
 		target?.root.startsWith("pi-extensions/") ||
-		/^(?:@[^/]+\/)?pi-[^/]+(?:\/|$)/.test(target?.name ?? specifier);
+		(/^(?:@[^/]+\/)?pi-[^/]+(?:\/|$)/.test(target?.name ?? specifier) &&
+			!BROWSER_SAFE_PI_PACKAGE.test(specifier));
 	if (browserSafe && !typeOnly && piPackage)
 		return "creates forbidden pi value import in browser-safe sources";
 	return undefined;
@@ -360,7 +379,7 @@ export function moduleBoundaryViolations(root: string): string[] {
 			violations.push(`${rule.root}/package.json is missing`);
 			continue;
 		}
-		const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
+		const manifest = readManifest(manifestPath);
 		for (const section of DEPENDENCY_SECTIONS) {
 			for (const dependency of Object.keys(manifest[section] ?? {})) {
 				const target = packages.get(dependency);

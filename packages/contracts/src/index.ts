@@ -110,6 +110,7 @@ export {
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
+export * from "./schema";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
 export type * from "./speech";
