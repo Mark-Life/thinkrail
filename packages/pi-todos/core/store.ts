@@ -1,36 +1,29 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import {
-	arr,
-	compile,
-	obj,
-	oneOf,
-	opt,
-	str,
-	unknown,
-	type Validator,
-} from "@earendil-works/pi-schema";
-import {
-	TODO_ARTIFACT_KINDS,
-	TODO_ORIGINS,
-	TODO_STATUSES,
-	type Todo,
-	type TodoArtifact,
-	type TodoFile,
-	type TodoGroup,
-	type TodoGroupStatus,
-	type TodoInput,
-	type TodoOrigin,
-	type TodoPatch,
-	type TodoPlan,
-	type TodoPromoteResult,
-	type TodoStatus,
-	type TodoStoreProblem,
-	type TodoUpdateResult,
-	type WriteItem,
-	type WritePlan,
+import { arr, compile, obj, opt, str, unknown, type Validator } from "@earendil-works/pi-schema";
+import type {
+	Todo,
+	TodoFile,
+	TodoGroup,
+	TodoGroupStatus,
+	TodoInput,
+	TodoPatch,
+	TodoPlan,
+	TodoPromoteResult,
+	TodoStoreProblem,
+	TodoUpdateResult,
+	WriteItem,
+	WritePlan,
 } from "./types.ts";
+import {
+	TODO_FIELDS,
+	TODO_GROUP_FIELDS,
+	TODO_PLAN_FIELDS,
+	TodoArtifact,
+	TodoOrigin,
+	TodoStatus,
+} from "./wire.ts";
 
 // Deliberate local mirror of @thinkrail/shared's WORKSPACE_CONTEXT_DIR — core/ takes no @thinkrail/* dep (see core/SPEC.md).
 const CONTEXT_DIR = ".thinkrail/context";
@@ -69,43 +62,27 @@ const CARRIED_LOOSE_GROUP = "Completed";
 
 const StoredFile = compile(
 	obj(
-		{ todos: opt(arr(unknown())), groups: opt(arr(unknown())), summary: opt(str()) },
+		{ ...TODO_PLAN_FIELDS, todos: opt(arr(unknown())), groups: opt(arr(unknown())) },
 		{ open: true },
 	),
 );
 const StoredItem = compile(
 	obj(
 		{
-			id: str(),
-			title: str(),
-			status: opt(oneOf(TODO_STATUSES)),
-			origin: opt(oneOf(TODO_ORIGINS)),
+			...TODO_FIELDS,
+			status: opt(TodoStatus),
+			origin: opt(TodoOrigin),
 			createdAt: opt(str()),
 			updatedAt: opt(str()),
-			note: opt(str()),
-			summary: opt(str()),
-			verification: opt(str()),
-			commitSubject: opt(str()),
 			artifacts: opt(arr(unknown())),
 		},
 		{ open: true },
 	),
 );
 const StoredGroup = compile(
-	obj({ id: opt(str()), title: str(), todos: opt(arr(unknown())) }, { open: true }),
+	obj({ ...TODO_GROUP_FIELDS, id: opt(str()), todos: opt(arr(unknown())) }, { open: true }),
 );
-const StoredArtifact = compile(
-	obj(
-		{
-			kind: oneOf(TODO_ARTIFACT_KINDS),
-			path: opt(str()),
-			sha: opt(str()),
-			label: opt(str()),
-			specId: opt(str()),
-		},
-		{ open: true },
-	),
-);
+const StoredArtifact = compile(TodoArtifact);
 const ArtifactWithLabel = compile(obj({ label: str() }, { open: true }));
 
 function parseFieldwise<T>(raw: unknown, validator: Validator<T>, onDrop: () => void): T | null {

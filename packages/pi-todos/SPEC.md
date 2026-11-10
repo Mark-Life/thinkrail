@@ -123,8 +123,10 @@ The on-disk file `version` is `6` (`3` added artifacts, `4` added the `commit` k
   Node built-ins. `core/` uses Node built-ins and `pi-schema` only. The tool layer's response-only temporary files do not change
   ownership of the canonical TODO store (see [[submodule-pi-todos-tools]]).
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
-  tool *name*, never by import. The host reaches this package one way only: `pi-todos/core`
+  tool *name*, never by import. The host reaches this package through `pi-todos/core`
   (value-import, pi-free) for the viewer, plus the extension entry via `additionalExtensionPaths`.
+  `@thinkrail/contracts` reaches it only through the `pi-todos/wire` leaf (`core/wire.ts`), see
+  [[submodule-pi-todos-core]].
 - **Portable.** Unlike `pi-thinkrail-workflow`, this package assumes no thinkrail-only host tool; it runs
   under vanilla pi (`pi install`) and in thinkrail alike.
 

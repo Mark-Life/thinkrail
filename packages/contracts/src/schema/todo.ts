@@ -9,27 +9,27 @@ import {
 	type Static,
 	str,
 } from "@earendil-works/pi-schema";
+import {
+	TODO_ARTIFACT_FIELDS,
+	TODO_FIELDS,
+	TODO_GROUP_FIELDS,
+	TODO_ORIGINS,
+	TODO_PLAN_FIELDS,
+	TodoArtifactKind,
+	TodoGroupStatus,
+	TodoStatus,
+} from "pi-todos/wire";
 import { GitFileChange } from "./git";
 import { SessionId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
-export const TodoStatus = oneOf(["pending", "in_progress", "done"]);
-export type TodoStatus = Static<typeof TodoStatus>;
+export { TodoArtifactKind, TodoGroupStatus, TodoStatus };
 
-export const TodoOrigin = oneOf(["agent", "user", "adopted"]);
+export const WIRE_TODO_ORIGINS = [...TODO_ORIGINS, "adopted"] as const;
+export const TodoOrigin = oneOf(WIRE_TODO_ORIGINS);
 export type TodoOrigin = Static<typeof TodoOrigin>;
 
-export const TodoArtifactKind = oneOf(["file", "change", "spec", "commit"]);
-export type TodoArtifactKind = Static<typeof TodoArtifactKind>;
-
-export const TodoArtifact = wireObj({
-	kind: TodoArtifactKind,
-	path: opt(str()),
-	label: opt(str()),
-	specId: opt(str()),
-	sha: opt(str()),
-	files: opt(arr(GitFileChange)),
-});
+export const TodoArtifact = wireObj({ ...TODO_ARTIFACT_FIELDS, files: opt(arr(GitFileChange)) });
 export type TodoArtifact = Static<typeof TodoArtifact>;
 
 export const TodoReviewState = oneOf(["unreviewed", "reviewed", "changes_requested"]);
@@ -47,14 +47,8 @@ export const TodoReviewInfo = wireObj({
 export type TodoReviewInfo = Static<typeof TodoReviewInfo>;
 
 export const TodoItem = wireObj({
-	id: str(),
-	title: str(),
-	status: TodoStatus,
+	...TODO_FIELDS,
 	origin: TodoOrigin,
-	note: opt(str()),
-	summary: opt(str()),
-	verification: opt(str()),
-	commitSubject: opt(str()),
 	artifacts: opt(arr(TodoArtifact)),
 	/**
 	 * The item's review decoration — **host-derived on `todo.list`, present only on reviewable items**
@@ -62,32 +56,20 @@ export const TodoItem = wireObj({
 	 * agent-writable plan file), so an agent re-plan can't flip a review decision.
 	 */
 	review: opt(TodoReviewInfo),
-	createdAt: str(),
-	updatedAt: str(),
 });
 export type TodoItem = Static<typeof TodoItem>;
 
-export const TodoGroupStatus = oneOf(["pending", "active", "done"]);
-export type TodoGroupStatus = Static<typeof TodoGroupStatus>;
-
 export const TodoGroupItem = wireObj({
-	id: str(),
-	title: str(),
+	...TODO_GROUP_FIELDS,
 	todos: arr(TodoItem),
 	status: TodoGroupStatus,
 });
 export type TodoGroupItem = Static<typeof TodoGroupItem>;
 
 export const TodoPlan = wireObj({
+	...TODO_PLAN_FIELDS,
 	todos: arr(TodoItem),
 	groups: arr(TodoGroupItem),
-	/**
-	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
-	 * The plan page keeps it visible while an item re-opens, marked stale ("updating") until the agent
-	 * rewrites it at the next completion; ungated external outputs (markdown export, PR body) still show it
-	 * only while every item stays `done`, so a stale all-done story never leaves the app.
-	 */
-	summary: opt(str()),
 	/**
 	 * Worktree changes attributed to NO item of this plan — **host-derived on `todo.list`, present only
 	 * when non-empty**. The honesty section of the review map: work no item claims (edits before the
@@ -100,6 +82,7 @@ export const TodoPlan = wireObj({
 });
 export type TodoPlan = Static<typeof TodoPlan>;
 
+const { title, note, status } = TODO_FIELDS;
 const TodoItemRef = wireObj({ workspaceId: WorkspaceId, sessionId: SessionId, id: str() });
 const TodoPlanRef = wireObj({ workspaceId: WorkspaceId, sessionId: SessionId });
 
@@ -116,8 +99,8 @@ export const TODO_METHODS = {
 		params: wireObj({
 			workspaceId: WorkspaceId,
 			sessionId: SessionId,
-			title: str(),
-			note: opt(str()),
+			title,
+			note,
 			surface: opt(oneOf(["chat", "page", "rail"])),
 		}),
 		result: TodoItem,
@@ -127,9 +110,9 @@ export const TODO_METHODS = {
 			workspaceId: WorkspaceId,
 			sessionId: SessionId,
 			id: str(),
-			status: opt(TodoStatus),
-			title: opt(str()),
-			note: opt(str()),
+			status: opt(status),
+			title: opt(title),
+			note,
 		}),
 		result: TodoItem,
 	},

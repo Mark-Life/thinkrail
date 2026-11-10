@@ -180,6 +180,16 @@ The `index.ts` barrel:
   `TODO_GROUP_STATUSES` (`pending | active | done`, derived-only) tuples — the single source for the
   tools' param enums. (There is **no** priority concept; priorities were dropped.)
 
+**The `pi-todos/wire` leaf (`wire.ts`) owns the shapes.** It holds the value lists, their `pi-schema`
+enum schemas and same-named types (`TodoStatus`, `TodoOrigin`, `TodoArtifactKind`, `TodoGroupStatus`),
+the open `TodoArtifact` schema and the field records `TODO_ARTIFACT_FIELDS`, `TODO_FIELDS`,
+`TODO_GROUP_FIELDS` and `TODO_PLAN_FIELDS`. `types.ts` derives `Todo`, `TodoGroup` and `TodoPlan` from the
+records; `TodoInput`, `TodoPatch` and `WriteItem` are `Pick`/`Partial` of `Todo` plus their own fields.
+`store.ts` builds its lenient read schemas by spreading the same records and overriding only what a read
+forgives (a missing status, origin or timestamp, unchecked artifact entries). `@thinkrail/contracts` builds
+the wire schemas from these records and only extends them (the `adopted` origin, review, files, group
+status, host-derived fields).
+
 Writes are atomic (temp file + `rename`); a session id is validated as a safe path segment before it
 becomes a filename.
 
@@ -206,6 +216,8 @@ reload.
 
 - **Allowed deps:** Node built-ins (`node:fs`, `node:path`, `node:crypto`) and `@earendil-works/pi-schema`, a real
   `dependency` of this package: `pi install` skips peers and pi's extension loader does not provide it.
+  `wire.ts` is a browser leaf: it imports `pi-schema` only, never a Node built-in or a relative file by
+  value (`check:boundaries`).
 - **Forbidden:** any other `@earendil-works/*` **and any `@thinkrail/*`** import — this is the pi-free,
   thinkrail-free layer the host can value-import without pulling pi into its bundle, and that stays
   installable under vanilla `pi`. Consequence: `STORE_DIR` (`.thinkrail/context/todos`) carries a **local
