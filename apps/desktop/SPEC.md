@@ -38,9 +38,14 @@ engine architecture.
 
 ## Outside data
 
-The main process parses at its edges with private `pi-schema` checks: every webview message and `showNotification`
+The main process parses at its edges with `pi-schema` checks: every webview message and `showNotification`
 through `checked` in `rpcSchemas.ts`, and the preference, route, label, update-journal and Electrobun uninstall-manifest
-files where they are read. `DesktopRpc` derives its webview-sent messages from those schemas. A refused message
+files where they are read. The shapes the web shares with the desktop (`NativeNotificationInput` and the update
+log and install result) are schemas in `@thinkrail/contracts` (`schema/native.ts`); the desktop compiles them and
+keeps no copy. `rpcSchemas.ts` ties `NativeNotificationInput` with `Same` to a `Pick` of Electrobun's
+`NotificationOptions`, and ties the options left out to an explicit list (empty today), so a new or renamed
+Electrobun option fails `tsc`. The tie needs Electrobun's types, which `typecheck` projects first with
+`electrobun prepare`. `DesktopRpc` derives its webview-sent messages from those schemas. A refused message
 never reaches its handler and reports `NATIVE_RPC_INVALID`. Native-to-webview messages are not parsed: the same binary
 writes them. Electrobun types an application-menu click as `unknown` at the listener, so `readMenuAction` checks it,
 and its schema is tied with `Same` to the data type of Electrobun's own `applicationMenuClicked` event.
@@ -48,6 +53,8 @@ and its schema is tied with `Same` to the data type of Electrobun's own `applica
 `preload.ts` and every module it value-imports never import `pi-schema`, so the bundle injected into each page has no
 schema compiler; `preloadBundle.test.ts` pins this. Those modules keep hand checks for the values they read
 (`preferenceAdapter`, `windowChrome`, `externalNavigation`, `pageZoom`), and may `import type` from `rpcSchemas`.
+A listener reads a mouse event's `button` and modifier keys by narrowing the `Event` it gets, not by
+`instanceof MouseEvent`, so the unit tests can drive it without a DOM.
 
 A file rule keeps one bad entry from losing the rest: `preferences.json` and `routes.json` check the document,
 then each entry alone. A bare `num()` passes `Infinity` and `NaN`; a number that must be finite carries bounds.
@@ -97,8 +104,9 @@ another.
      and host-bound RPC ahead of host boot.
 3. Start `resolveShellEnv()` right after the `chdir`, so the login shell it spawns also starts outside the
    bundle, then dynamically import the separately built, unpacked `server-runtime.ts` resource, and await the
-   shell env before `startDesktopHost()`. The import names a file path, so `tsc` cannot see the module: it is cast
-   to `DesktopServerRuntime`, the shape of the entry `preBuild.ts` generates. That is the one cast in startup. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
+   shell env before `startDesktopHost()`. The import names a file path, so `tsc` cannot see the module: the
+   result is `unknown` until `isDesktopServerRuntime` finds a `startDesktopHost` function, the entry `preBuild.ts`
+   generates; anything else fails startup. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
    typical profile, seconds on a slow one); overlapping it with the splash and the bundle import hides up to
    that time. The bundle's own `shellEnv` copy is a separate module instance, so the run is cached on a
    `Symbol.for` global key: its `bootHost()` call awaits the same run instead of probing again. That bundle is

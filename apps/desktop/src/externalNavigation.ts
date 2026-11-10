@@ -60,14 +60,20 @@ function activatedLinkHref(target: EventTarget | null): string | null {
 	return typeof anchor.href === "string" ? anchor.href : null;
 }
 
+function withModifier(event: Event): boolean {
+	return (
+		("ctrlKey" in event && event.ctrlKey === true) || ("metaKey" in event && event.metaKey === true)
+	);
+}
+
 export function installExternalLinkRouting(view: LinkRoutingWindow): void {
 	const route = (event: Event) => {
-		const click = event as MouseEvent;
-		if (click.defaultPrevented || click.button > 1 || click.ctrlKey || click.metaKey) return;
-		const href = activatedLinkHref(click.target);
+		const button = "button" in event && typeof event.button === "number" ? event.button : null;
+		if (event.defaultPrevented || button === null || button > 1 || withModifier(event)) return;
+		const href = activatedLinkHref(event.target);
 		const url = href === null ? null : externalNavigationUrl(href, view.location.origin);
 		if (!url) return;
-		click.preventDefault();
+		event.preventDefault();
 		view.location.assign(url);
 	};
 	view.addEventListener("click", route);

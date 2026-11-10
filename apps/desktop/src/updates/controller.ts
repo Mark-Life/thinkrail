@@ -1,12 +1,13 @@
-import type {
-	NativeUpdateBridge,
-	NativeUpdateFailedPhase,
-	NativeUpdateInstallResult,
-	NativeUpdateLogEntry,
-	NativeUpdateState,
+import {
+	NATIVE_UPDATE_LOG_MAX_ENTRIES,
+	type NativeUpdateBridge,
+	type NativeUpdateFailedPhase,
+	type NativeUpdateInstallResult,
+	type NativeUpdateLogEntry,
+	type NativeUpdateState,
 } from "@thinkrail/contracts";
 import { desktopError } from "../errorReporting";
-import { MAX_UPDATE_LOG_ENTRIES, type UpdateJournal, type UpdateJournalStore } from "./journal";
+import type { UpdateJournal, UpdateJournalStore } from "./journal";
 
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const AUTO_CHECK_JITTER_RATIO = 0.1;
@@ -115,7 +116,7 @@ function appendLog(
 	log: readonly NativeUpdateLogEntry[],
 	entry: NativeUpdateLogEntry,
 ): NativeUpdateLogEntry[] {
-	return [...log, entry].slice(-MAX_UPDATE_LOG_ENTRIES);
+	return [...log, entry].slice(-NATIVE_UPDATE_LOG_MAX_ENTRIES);
 }
 
 function progressFrom(entry: NativeUpdaterStatusEntry): number | null {

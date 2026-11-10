@@ -1,32 +1,12 @@
+import type {
+	NativeNotificationInput,
+	NativeUpdateInstallResult,
+	NativeUpdateLogEntry,
+} from "./schema";
+
 export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
 
 export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
-
-export type NativeUpdateLogEvent =
-	| { kind: "installStarted"; version: string }
-	| { kind: "hostStopping" }
-	| { kind: "hostStopped"; seconds: number }
-	| { kind: "handoffStarted" }
-	| { kind: "restarting" }
-	| { kind: "installed"; version: string }
-	| { kind: "installFailed"; version: string; step: string; detail: string }
-	| { kind: "diagnostic"; text: string };
-
-export interface NativeUpdateLogEntry {
-	at: number;
-	source: "update" | "host" | "installer";
-	level: "info" | "error";
-	event: NativeUpdateLogEvent;
-}
-
-export interface NativeUpdateInstallResult {
-	outcome: "installed" | "failed" | "unreported";
-	fromVersion: string | null;
-	toVersion: string;
-	failedStep: string | null;
-	detail: string | null;
-	log: readonly NativeUpdateLogEntry[];
-}
 
 export interface NativeUpdateState {
 	revision: number;
@@ -71,13 +51,6 @@ export interface NativeWindowControlsBridge {
 	toggleMaximize(): Promise<void>;
 	close(): Promise<void>;
 	subscribe(listener: (state: NativeWindowState) => void): () => void;
-}
-
-export interface NativeNotificationInput {
-	title: string;
-	subtitle?: string;
-	body: string;
-	silent?: boolean;
 }
 
 export interface NativeNotificationBridge {

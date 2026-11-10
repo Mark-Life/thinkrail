@@ -22,3 +22,13 @@ export interface DesktopHost {
 export interface DesktopServerRuntime {
 	startDesktopHost(options: DesktopHostOptions): Promise<DesktopHost>;
 }
+
+/** The runtime module loads from a computed path, so its exports reach the desktop untyped. */
+export function isDesktopServerRuntime(value: unknown): value is DesktopServerRuntime {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"startDesktopHost" in value &&
+		typeof value.startDesktopHost === "function"
+	);
+}

@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import {
+	type NativeCommand,
+	NativeNotificationInput,
+	type NativeQuitHint,
+	type NativeWindowState,
+} from "@thinkrail/contracts";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
@@ -39,7 +44,6 @@ import type { DesktopRpc } from "./rpc";
 import {
 	checked,
 	MenuLabelsChange,
-	NotificationRequest,
 	PageZoomGesture,
 	PageZoomRequest,
 	PreferenceRemove,
@@ -47,7 +51,7 @@ import {
 	RouteChange,
 } from "./rpcSchemas";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
-import type { DesktopServerRuntime } from "./serverRuntime";
+import { isDesktopServerRuntime } from "./serverRuntime";
 import {
 	handOffStartupSplash,
 	openStartupSplash,
@@ -301,9 +305,12 @@ async function start(): Promise<void> {
 			splashMessage(dialogLabels, pendingInstallVersion),
 		);
 	}
-	const serverRuntime = (await import(
+	const serverRuntime: unknown = await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
-	)) as DesktopServerRuntime;
+	);
+	if (!isDesktopServerRuntime(serverRuntime)) {
+		throw new Error("The server runtime does not export startDesktopHost");
+	}
 	await shellEnv;
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
@@ -394,10 +401,10 @@ async function start(): Promise<void> {
 					await updateController.dismissInstallResult();
 					return undefined;
 				},
-				showNotification: checked("showNotification", NotificationRequest, (input) => {
+				showNotification: checked("showNotification", NativeNotificationInput, (input) => {
 					Utils.showNotification({
 						title: input.title,
-						body: input.body,
+						...(input.body === undefined ? {} : { body: input.body }),
 						...(input.subtitle === undefined ? {} : { subtitle: input.subtitle }),
 						...(input.silent === undefined ? {} : { silent: input.silent }),
 					});

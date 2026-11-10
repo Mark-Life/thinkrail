@@ -37,6 +37,7 @@ export * from "./locales";
 export * from "./mcp";
 export * from "./methods";
 export * from "./model";
+export * from "./native";
 export * from "./packages";
 export * from "./piEvent";
 export * from "./pr";

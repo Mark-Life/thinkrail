@@ -1,12 +1,10 @@
 import {
-	bool,
 	compile,
 	lit,
 	map,
 	num,
 	obj,
 	oneOf,
-	opt,
 	type Schema,
 	type Static,
 	str,
@@ -15,6 +13,7 @@ import {
 } from "@earendil-works/pi-schema";
 import type { NativeNotificationInput, Same } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import type { NotificationOptions } from "electrobun/main";
 import { desktopError } from "./errorReporting";
 
 const OPEN = { open: true };
@@ -42,11 +41,17 @@ export type PageZoomGesture = Static<typeof PageZoomGesture>;
 export const MenuLabelsChange = obj({ labels: map(unknown()) }, OPEN);
 export type MenuLabelsChange = Static<typeof MenuLabelsChange>;
 
-export const NotificationRequest = obj(
-	{ title: str(), subtitle: opt(str()), body: str(), silent: opt(bool()) },
-	OPEN,
-);
-export type NotificationRequest = Same<Static<typeof NotificationRequest>, NativeNotificationInput>;
+/** Electrobun notification options the bridge leaves out; a new or renamed option fails `tsc` here. */
+type UnusedNotificationOption = never;
+type ForwardedNotificationOption = Exclude<keyof NotificationOptions, UnusedNotificationOption>;
+export type NotificationOptionsTie = Same<
+	NativeNotificationInput,
+	Pick<NotificationOptions, ForwardedNotificationOption>
+>;
+export type UnusedNotificationOptionsTie = Same<
+	Exclude<keyof NotificationOptions, keyof NativeNotificationInput>,
+	UnusedNotificationOption
+>;
 
 export function checked<T>(name: string, schema: Schema<T>, handle: (payload: T) => void) {
 	const validator = compile(schema);
