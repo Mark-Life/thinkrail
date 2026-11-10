@@ -90,9 +90,11 @@ mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--p
 - Mint a role only for a value with several consumers that must stay equal; a one-off length stays a
   numeric utility. Roles are not t-shirt aliases and never replace the scale.
 - A role name is kebab-case with **two or more words** (`panel-inset`). `cn` (`@thinkrail/ui/utils`)
-  teaches `cn` that shape as a spacing/sizing value, so a role overrides a step of the same
-  utility (`size-28` + `size-panel-row` → `size-panel-row`) instead of both classes surviving and the
-  stylesheet order silently picking one; the gate fails on a single-word role name.
+  merges with tables generated from the `--spacing-*` entries of `index.css`'s `@theme inline`, so a role
+  overrides a step of the same utility (`size-28` + `size-panel-row` → `size-panel-row`) instead of both
+  classes surviving and the stylesheet order silently picking one. Adding or renaming a role means
+  `bun run cn-tables:generate`; `cn-tables:check` fails on stale tables. The gate fails on a
+  single-word role name.
 
 ## The gate
 

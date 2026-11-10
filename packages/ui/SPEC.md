@@ -16,7 +16,7 @@ feature state, theme selection, and token generation stay with the app.
 ## Boundary
 
 Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root component barrel; this keeps
-lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./keyboard` exposes
+lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`, built from `generated/cn-tables.ts` (`cn build` output fitted to the app's classes and `@theme` scales; `bun run cn-tables:generate` rewrites it, `cn-tables:check` guards it); `./keyboard` exposes
 `isImeComposing`, `yieldEscapeToIme` and the platform modifier (`isApplePlatform`, `hasPlatformModifier`:
 Cmd on Apple, Ctrl elsewhere — shared so the app's shortcuts and an extension's card read one definition); `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with

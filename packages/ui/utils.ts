@@ -1,5 +1,4 @@
-import { createCn } from "cn/config";
+import { createCn } from "cn/engine";
+import tables from "./generated/cn-tables";
 
-const isLayoutRole = (value: string) => /^[a-z]+(?:-[a-z]+)+$/.test(value);
-
-export const cn = createCn({ extend: { theme: { spacing: [isLayoutRole] } } });
+export const cn = createCn(tables);

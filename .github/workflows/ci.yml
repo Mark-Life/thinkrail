@@ -65,6 +65,7 @@ jobs:
       - run: bun run check:spec-surface
       - run: bun run check:i18n
       - run: bun run check:compiler
+      - run: bun run cn-tables:check
       - run: bun run lint
       - name: Download the Electrobun toolchain
         run: .github/scripts/prepare-electrobun.sh

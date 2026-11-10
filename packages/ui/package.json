@@ -26,6 +26,8 @@
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
+		"cn-tables:generate": "bun scripts/generate-cn-tables.ts",
+		"cn-tables:check": "bun scripts/generate-cn-tables.ts --check",
 		"test": "bun test"
 	},
 	"dependencies": {

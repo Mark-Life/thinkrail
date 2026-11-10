@@ -105,6 +105,8 @@
 		"spacing:generate": "bun --filter @thinkrail/web spacing:generate",
 		"spacing:check": "bun --filter @thinkrail/web spacing:check",
 		"provider-glyphs:check": "bun --filter @thinkrail/web provider-glyphs:check",
+		"cn-tables:generate": "bun --filter @thinkrail/ui cn-tables:generate",
+		"cn-tables:check": "bun --filter @thinkrail/ui cn-tables:check",
 		"compiler:census:generate": "bun --filter @thinkrail/web compiler:census:generate"
 	},
 	"devDependencies": {
