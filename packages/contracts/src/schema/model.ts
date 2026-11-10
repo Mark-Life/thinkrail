@@ -1,17 +1,14 @@
-import type {
-	Api,
-	Model,
-	ModelCost,
-	ModelThinkingLevel,
-	ModelInputModality as PiModelInputModality,
-} from "@earendil-works/pi-ai";
+import type { Api, Model, ModelCost } from "@earendil-works/pi-ai";
+import {
+	ModelInputModalitySchema,
+	ModelThinkingLevelSchema,
+} from "@earendil-works/pi-ai/providers/model-schema";
 import {
 	arr,
 	bool,
 	lit,
 	nullable,
 	num,
-	oneOf,
 	opt,
 	type Static,
 	str,
@@ -21,11 +18,11 @@ import { ProviderAuthKind } from "./provider";
 import type { Same } from "./typeTie";
 import { NoParams, wireObj } from "./wire";
 
-export const ThinkingLevel = oneOf(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-export type ThinkingLevel = Same<Static<typeof ThinkingLevel>, ModelThinkingLevel>;
+export const ThinkingLevel = ModelThinkingLevelSchema;
+export type ThinkingLevel = Static<typeof ThinkingLevel>;
 
-const ModelInputModality = oneOf(["text", "image"]);
-export type ModelInputModality = Same<Static<typeof ModelInputModality>, PiModelInputModality>;
+const ModelInputModality = ModelInputModalitySchema;
+export type ModelInputModality = Static<typeof ModelInputModality>;
 
 const ModelListPrice = wireObj({ input: num(), output: num() });
 export type ModelListPrice = Same<
