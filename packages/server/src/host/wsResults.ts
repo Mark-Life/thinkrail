@@ -8,6 +8,7 @@ import {
 	wsPushValidator,
 	wsResultValidator,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
 
 const log = logger("wsResults");
@@ -25,18 +26,19 @@ function checkOnWire<T>(kind: string, name: string, validator: () => Validator<T
 	const check = validator();
 	if (check.check(onWire)) return;
 	const message = `ws ${kind} check failed: ${name}: ${describeFailure(check, onWire, kind)}`;
-	log.error(message);
+	const error = new CodedError("WS_RESULT_INVALID", message);
+	log.error(message, error);
 	const failureLog = process.env.THINKRAIL_E2E_WS_RESULT_LOG;
 	if (failureLog) appendFileSync(failureLog, `${message}\n`);
-	throw new Error(message);
+	throw error;
 }
 
-/** Test harnesses only: refuses a reply whose JSON form breaks its result schema. @throws `Error` naming the method and fields. */
+/** Test harnesses only: refuses a reply whose JSON form breaks its result schema. @throws `CodedError` `WS_RESULT_INVALID` naming the method and fields. */
 export function checkWsResult(method: WsMethodName, result: unknown) {
 	checkOnWire("result", method, () => wsResultValidator(method), result);
 }
 
-/** Test harnesses only: refuses a push whose JSON form breaks its channel schema. @throws `Error` naming the channel and fields. */
+/** Test harnesses only: refuses a push whose JSON form breaks its channel schema. @throws `CodedError` `WS_RESULT_INVALID` naming the channel and fields. */
 export function checkWsPush(channel: WsChannel, data: unknown) {
 	checkOnWire("push", channel, () => wsPushValidator(channel), data);
 }
