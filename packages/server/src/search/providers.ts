@@ -1,4 +1,11 @@
-import type { PreparedContent, SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
+import type {
+	PreparedContent,
+	ProjectId,
+	SearchGroup,
+	SearchHit,
+	Workspace,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import {
 	contentRanges,
 	foldMatchText,
@@ -27,8 +34,8 @@ import {
 
 export interface SearchRoot {
 	readonly root: string;
-	readonly projectId: string;
-	readonly workspaceId: string;
+	readonly projectId: ProjectId;
+	readonly workspaceId: WorkspaceId;
 }
 
 export interface ProviderInput {
@@ -213,8 +220,8 @@ export function searchSpecs(
 }
 
 export interface ChatLabel {
-	readonly projectId: string;
-	readonly workspaceId: string;
+	readonly projectId: ProjectId;
+	readonly workspaceId: WorkspaceId;
 }
 
 function lastActivity(session: HistorySession): number {

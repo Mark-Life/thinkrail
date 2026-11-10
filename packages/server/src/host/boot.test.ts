@@ -6,6 +6,7 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import {
 	configurePiRuntime,
@@ -497,7 +498,7 @@ test("stop() returns the resolvers createServer installed to their defaults", as
 	if (!dir) throw new Error("missing fixture data directory");
 	writeFileSync(join(dir, "config.json"), JSON.stringify({ subagentMaxConcurrent: 16 }));
 	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
-	const workspaceId = "boot-stopped-limit";
+	const workspaceId = testWorkspaceId("boot-stopped-limit");
 	try {
 		const service = delegationServiceFor(workspaceId);
 		const resized: number[] = [];
@@ -550,8 +551,11 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	);
 
 	const welcome = frame.data as ServerWelcome;
-	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
-	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
+	expect(welcome.projects.map((project) => project.id)).toEqual([testProjectId("open")]);
+	expect(welcome.recentProjects?.map((project) => project.id)).toEqual([
+		testProjectId("open"),
+		testProjectId("kept"),
+	]);
 });
 
 test("shutdown is idempotent and releases the port", async () => {

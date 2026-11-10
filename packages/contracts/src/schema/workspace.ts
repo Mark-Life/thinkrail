@@ -12,6 +12,7 @@ import {
 	union,
 } from "@earendil-works/pi-schema";
 import { GitFileChange } from "./git";
+import { ProjectId, SessionId, WorkspaceId } from "./ids";
 import { ThinkingLevel, WireModel } from "./model";
 import { OpenBranchReview, ReviewProvider } from "./pr";
 import { SessionStateRecord } from "./session";
@@ -29,8 +30,8 @@ export const SettledOverride = oneOf(["settled", "active"]);
 export type SettledOverride = Static<typeof SettledOverride>;
 
 export const Workspace = wireObj({
-	id: str(),
-	projectId: str(),
+	id: WorkspaceId,
+	projectId: ProjectId,
 	kind: opt(oneOf(["default", "external"])),
 	name: str(),
 	branch: str(),
@@ -39,7 +40,7 @@ export const Workspace = wireObj({
 	diffBase: opt(str()),
 	renamed: opt(bool()),
 	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
-	branchNamePending: opt(str()),
+	branchNamePending: opt(SessionId),
 	initialTerminalPending: opt(lit(true)),
 	diffStats: opt(DiffStats),
 	skillOverrides: opt(map(oneOf(["on", "off"]))),
@@ -84,8 +85,8 @@ export type ExistingWorktreeCandidate = Static<typeof ExistingWorktreeCandidate>
 
 export const TurnChangeSet = wireObj({
 	id: str(),
-	workspaceId: str(),
-	sessionId: str(),
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	startedAt: num(),
 	settledAt: num(),
 	baseTree: str(),
@@ -113,8 +114,8 @@ export type WorkspaceKickoff = Static<typeof WorkspaceKickoff>;
 
 /** The `WorkspaceCreation` properties, so a stored creation record can extend the wire shape. */
 export const WorkspaceCreationFields = {
-	id: str(),
-	projectId: str(),
+	id: WorkspaceId,
+	projectId: ProjectId,
 	name: str(),
 	branch: str(),
 	baseBranch: str(),
@@ -128,16 +129,16 @@ export const WorkspaceCreationFields = {
 export const WorkspaceCreation = wireObj(WorkspaceCreationFields);
 export type WorkspaceCreation = Static<typeof WorkspaceCreation>;
 
-const WorkspaceId = wireObj({ id: str() });
+const WorkspaceTarget = wireObj({ id: WorkspaceId });
 
-export const WorkspaceRemoved = wireObj({ projectId: str(), id: str() });
+export const WorkspaceRemoved = wireObj({ projectId: ProjectId, id: WorkspaceId });
 export type WorkspaceRemoved = Static<typeof WorkspaceRemoved>;
 
 export const WorkspaceCreationRemoved = wireObj({
-	id: str(),
-	projectId: str(),
+	id: WorkspaceId,
+	projectId: ProjectId,
 	workspace: opt(Workspace),
-	sessionId: opt(str()),
+	sessionId: opt(SessionId),
 	kickoffError: opt(str()),
 });
 export type WorkspaceCreationRemoved = Static<typeof WorkspaceCreationRemoved>;
@@ -146,7 +147,7 @@ export const WorkspaceSkillChange = oneOf(["none", "detected", "unknown"]);
 export type WorkspaceSkillChange = Static<typeof WorkspaceSkillChange>;
 
 export const WorkspaceFsChangedPayload = wireObj({
-	workspaceId: str(),
+	workspaceId: WorkspaceId,
 	paths: arr(str()),
 	truncated: bool(),
 	skillChange: WorkspaceSkillChange,
@@ -155,12 +156,12 @@ export type WorkspaceFsChangedPayload = Static<typeof WorkspaceFsChangedPayload>
 
 export const WORKSPACE_METHODS = {
 	"workspace.create": {
-		params: wireObj({ projectId: str(), name: opt(str()), baseRef: opt(str()) }),
+		params: wireObj({ projectId: ProjectId, name: opt(str()), baseRef: opt(str()) }),
 		result: Workspace,
 	},
 	"workspace.startCreate": {
 		params: wireObj({
-			projectId: str(),
+			projectId: ProjectId,
 			name: opt(str()),
 			baseRef: opt(str()),
 			kickoff: opt(WorkspaceKickoff),
@@ -168,76 +169,76 @@ export const WORKSPACE_METHODS = {
 		result: WorkspaceCreation,
 	},
 	"workspace.listCreations": { params: NoParams, result: arr(WorkspaceCreation) },
-	"workspace.retryCreation": { params: WorkspaceId, result: WorkspaceCreation },
+	"workspace.retryCreation": { params: WorkspaceTarget, result: WorkspaceCreation },
 	"workspace.dismissCreation": {
-		params: WorkspaceId,
+		params: WorkspaceTarget,
 		result: wireObj({ kickoff: opt(WorkspaceKickoff) }),
 	},
-	"workspace.rename": { params: wireObj({ id: str(), name: str() }), result: Workspace },
+	"workspace.rename": { params: wireObj({ id: WorkspaceId, name: str() }), result: Workspace },
 	"workspace.listExisting": {
-		params: wireObj({ projectId: str() }),
+		params: wireObj({ projectId: ProjectId }),
 		result: arr(ExistingWorktreeCandidate),
 	},
 	"workspace.openExisting": {
-		params: wireObj({ projectId: str(), path: str() }),
+		params: wireObj({ projectId: ProjectId, path: str() }),
 		result: Workspace,
 	},
 	"workspace.list": {
-		params: wireObj({ projectId: str(), includeDiffStats: opt(bool()) }),
+		params: wireObj({ projectId: ProjectId, includeDiffStats: opt(bool()) }),
 		result: arr(Workspace),
 	},
 	"workspace.openReview": {
-		params: wireObj({ workspaceId: str(), allowCached: opt(bool()) }),
+		params: wireObj({ workspaceId: WorkspaceId, allowCached: opt(bool()) }),
 		result: nullable(OpenBranchReview),
 	},
 	"workspace.branchStatus": {
-		params: wireObj({ workspaceId: str(), allowCached: opt(bool()), skipFetch: opt(bool()) }),
+		params: wireObj({ workspaceId: WorkspaceId, allowCached: opt(bool()), skipFetch: opt(bool()) }),
 		result: BranchStatus,
 	},
 	"workspace.push": {
-		params: wireObj({ workspaceId: str(), branch: str(), confirmBase: opt(bool()) }),
+		params: wireObj({ workspaceId: WorkspaceId, branch: str(), confirmBase: opt(bool()) }),
 		result: wireObj({ dirtyFiles: num() }),
 	},
 	"workspace.deleteRemoteBranch": {
-		params: wireObj({ workspaceId: str(), branch: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, branch: str() }),
 		result: Ack,
 	},
-	"workspace.remove": { params: WorkspaceId, result: Ack },
-	"workspace.diffStats": { params: WorkspaceId, result: DiffStats },
+	"workspace.remove": { params: WorkspaceTarget, result: Ack },
+	"workspace.diffStats": { params: WorkspaceTarget, result: DiffStats },
 	"workspace.setSkillOverride": {
-		params: wireObj({ id: str(), name: str(), override: nullable(oneOf(["on", "off"])) }),
+		params: wireObj({ id: WorkspaceId, name: str(), override: nullable(oneOf(["on", "off"])) }),
 		result: Workspace,
 	},
 	"workspace.setSubagentsOverride": {
-		params: wireObj({ id: str(), override: nullable(SubagentOverride) }),
+		params: wireObj({ id: WorkspaceId, override: nullable(SubagentOverride) }),
 		result: Workspace,
 	},
 	"workspace.setSubagentMaxConcurrent": {
-		params: wireObj({ id: str(), value: nullable(num()) }),
+		params: wireObj({ id: WorkspaceId, value: nullable(num()) }),
 		result: Workspace,
 	},
 	"workspace.setDiffBase": {
-		params: wireObj({ id: str(), ref: nullable(str()) }),
+		params: wireObj({ id: WorkspaceId, ref: nullable(str()) }),
 		result: Workspace,
 	},
-	"workspace.settle": { params: WorkspaceId, result: Workspace },
-	"workspace.unsettle": { params: WorkspaceId, result: Workspace },
+	"workspace.settle": { params: WorkspaceTarget, result: Workspace },
+	"workspace.unsettle": { params: WorkspaceTarget, result: Workspace },
 	"workspace.markUnread": {
-		params: WorkspaceId,
+		params: WorkspaceTarget,
 		result: wireObj({ record: nullable(SessionStateRecord) }),
 	},
 	"workspace.markRead": {
-		params: WorkspaceId,
+		params: WorkspaceTarget,
 		result: wireObj({ records: arr(SessionStateRecord) }),
 	},
 	"workspace.watchReady": {
-		params: wireObj({ workspaceId: str(), prewarm: opt(bool()) }),
+		params: wireObj({ workspaceId: WorkspaceId, prewarm: opt(bool()) }),
 		result: WorkspaceWatchReadyResult,
 	},
-	"workspace.openIn": { params: wireObj({ id: str(), editor: str() }), result: Ack },
-	"workspace.reveal": { params: WorkspaceId, result: Ack },
+	"workspace.openIn": { params: wireObj({ id: WorkspaceId, editor: str() }), result: Ack },
+	"workspace.reveal": { params: WorkspaceTarget, result: Ack },
 	"workspace.turns": {
-		params: wireObj({ workspaceId: str() }),
+		params: wireObj({ workspaceId: WorkspaceId }),
 		result: wireObj({ turns: arr(TurnChangeSet) }),
 	},
 };

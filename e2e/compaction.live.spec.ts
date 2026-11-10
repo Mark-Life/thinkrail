@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { JsonObject } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { createWorkspaceViaDialog, openFixtureProject, waitForAgentSettled } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -12,12 +14,14 @@ test("manual compaction preserves context through continuation and reload", {
 	await openFixtureProject(page);
 	const settingsPath = join(E2E_PI_AGENT_DIR, "settings.json");
 	const original = readFileSync(settingsPath, "utf8");
-	const settings = JSON.parse(original);
+	const settings: unknown = JSON.parse(original);
+	if (!JsonObject.check(settings)) throw new Error(`${settingsPath} is not a JSON object`);
+	const compaction = JsonObject.check(settings.compaction) ? settings.compaction : {};
 	writeFileSync(
 		settingsPath,
 		JSON.stringify({
 			...settings,
-			compaction: { ...settings.compaction, enabled: false, keepRecentTokens: 1 },
+			compaction: { ...compaction, enabled: false, keepRecentTokens: 1 },
 		}),
 	);
 	try {
@@ -51,7 +55,10 @@ test("manual compaction preserves context through continuation and reload", {
 		await expect(reply).toContainText("riverstone");
 		const wire = await E2eWire.connect();
 		const transcript = await wire
-			.request("session.getMessages", { sessionId, workspaceId: workspace.id })
+			.request("session.getMessages", {
+				sessionId: testSessionId(sessionId),
+				workspaceId: workspace.id,
+			})
 			.finally(() => wire.close());
 		const summary = transcript.messages.find((message) => message.role === "compactionSummary");
 		if (summary?.role !== "compactionSummary")

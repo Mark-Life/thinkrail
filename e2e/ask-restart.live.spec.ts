@@ -5,14 +5,13 @@ import {
 	existsSync,
 	mkdirSync,
 	openSync,
-	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import type { Workspace } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { jbcentralExtensionPath } from "@thinkrail/shared/jbcentral";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { stripAmbientPiCredentials } from "./ambientCredentials";
@@ -37,6 +36,7 @@ import {
 	E2E_RESTART_HOST_LOG,
 	E2E_RESTART_PORT,
 } from "./fixtures/paths";
+import { readPersistedWorkspaces } from "./fixtures/storedState";
 import { E2eWire, E2eWireTransientError } from "./fixtures/wire";
 
 const PORT = E2E_RESTART_PORT;
@@ -161,10 +161,9 @@ function activeCard(page: Page) {
 }
 
 function persistedWorkspaceId(): string {
-	const workspaces = JSON.parse(
-		readFileSync(join(DATA_DIR, "workspaces.json"), "utf8"),
-	) as Workspace[];
-	const nonDefault = workspaces.filter((workspace) => workspace.kind !== "default");
+	const nonDefault = readPersistedWorkspaces(DATA_DIR).filter(
+		(workspace) => workspace.kind !== "default",
+	);
 	const workspace = nonDefault[0];
 	if (nonDefault.length !== 1 || !workspace) {
 		throw new Error(`Expected one persisted non-default workspace, found ${nonDefault.length}`);
@@ -219,12 +218,16 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await expect(activeWorktreeRow(page)).toHaveCount(1, { timeout: 15_000 });
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTab).toHaveCount(1);
-	const sessionId = await chatTab.getAttribute("data-session-id");
-	if (!sessionId) throw new Error("Restarted chat tab is missing its session id");
-	const workspaceId = persistedWorkspaceId();
+	const rawSessionId = await chatTab.getAttribute("data-session-id");
+	if (!rawSessionId) throw new Error("Restarted chat tab is missing its session id");
+	const sessionId = testSessionId(rawSessionId);
+	const workspaceId = testWorkspaceId(persistedWorkspaceId());
 	const wire = await E2eWire.connect(PORT);
 	try {
-		const before = await wire.request("session.getMessages", { sessionId, workspaceId });
+		const before = await wire.request("session.getMessages", {
+			sessionId: sessionId,
+			workspaceId: workspaceId,
+		});
 		const assistantCount = before.messages.filter((message) => message.role === "assistant").length;
 		const card = activeCard(page);
 		await expect(card).toBeVisible({ timeout: 30_000 });
@@ -238,8 +241,8 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 			.poll(
 				async () => {
 					const transcript = await wire.request("session.getMessages", {
-						sessionId,
-						workspaceId,
+						sessionId: sessionId,
+						workspaceId: workspaceId,
 					});
 					return transcript.messages.filter((message) => message.role === "assistant").length;
 				},
@@ -251,8 +254,8 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 				async () =>
 					(
 						await wire.request("session.getMessages", {
-							sessionId,
-							workspaceId,
+							sessionId: sessionId,
+							workspaceId: workspaceId,
 						})
 					).summary.isStreaming,
 				{ timeout: 30_000 },

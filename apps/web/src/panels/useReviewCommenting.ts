@@ -1,4 +1,4 @@
-import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
+import type { GitDiffScope, ReviewAnchor, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import type {
 	AnchorDraft,
@@ -19,11 +19,11 @@ export interface FileReview {
 }
 
 export function useFileReview(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	kind: "inline" | "diff",
 	scope?: GitDiffScope,
-	chatSessionId?: string,
+	chatSessionId?: SessionId,
 ): FileReview {
 	const comments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const worktreeThreads = useStableThreads(
@@ -113,7 +113,7 @@ function useStableThreads(threads: ReviewThread[]): ReviewThread[] {
 
 export function reviewFocusId(
 	request: ReturnType<typeof useAppStore.getState>["reviewFocusRequest"],
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	kind: "inline" | "diff",
 	scope?: GitDiffScope,
 ): string | null {
@@ -152,12 +152,12 @@ export function draftNeedsRichAnchors(draft: AnchorDraft): boolean {
 }
 
 function sideCommenting(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	kind: "inline" | "diff",
 	side: ReviewAnchor["side"],
 	scope: GitDiffScope | undefined,
-	chatSessionId: string | undefined,
+	chatSessionId: SessionId | undefined,
 ): SurfaceReview["commenting"] {
 	const add = (draft: AnchorDraft, body: string) => {
 		if (

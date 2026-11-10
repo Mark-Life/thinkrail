@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "./appStore";
 import { selectLoginBusy } from "./selectors";
 
@@ -17,7 +18,11 @@ test("all login callers share a synchronous reservation before their requests st
 	expect(state().reserveLogin()).toBe(true);
 	expect(selectLoginBusy(state())).toBe(true);
 	expect(state().reserveLogin()).toBe(false);
-	state().beginLogin("mcp-1", "mcp:docs", { kind: "mcp", workspaceId: "w", serverName: "docs" });
+	state().beginLogin("mcp-1", "mcp:docs", {
+		kind: "mcp",
+		workspaceId: testWorkspaceId("w"),
+		serverName: "docs",
+	});
 	expect(state().loginStarting).toBe(true);
 	state().finishLoginStart();
 	expect(state().loginStarting).toBe(false);
@@ -36,7 +41,7 @@ test("a failed startup releases the reservation for a later provider or MCP atte
 });
 
 test("frames arriving before the start response keep their content and target", () => {
-	const target = { kind: "mcp" as const, workspaceId: "w", serverName: "docs" };
+	const target = { kind: "mcp" as const, workspaceId: testWorkspaceId("w"), serverName: "docs" };
 	state().reserveLogin();
 	state().applyLoginFrame({
 		loginId: "mcp-1",
@@ -57,11 +62,11 @@ test("frames arriving before the start response keep their content and target", 
 test("removed workspaces retire their login and cannot recreate it with late frames or responses", () => {
 	const target = {
 		kind: "mcp" as const,
-		workspaceId: "removed-login-workspace",
+		workspaceId: testWorkspaceId("removed-login-workspace"),
 		serverName: "docs",
 	};
 	state().beginLogin("mcp-1", "mcp:docs", target);
-	state().applyWorkspaceRemoved("p", target.workspaceId);
+	state().applyWorkspaceRemoved(testProjectId("p"), target.workspaceId);
 	expect(state().activeLogin).toBeNull();
 	state().applyLoginFrame({
 		loginId: "mcp-1",
@@ -82,11 +87,11 @@ test("removed workspaces retire their login and cannot recreate it with late fra
 test("a target removed during startup never opens a dialog or releases another startup", () => {
 	const target = {
 		kind: "mcp" as const,
-		workspaceId: "pending-login-workspace",
+		workspaceId: testWorkspaceId("pending-login-workspace"),
 		serverName: "docs",
 	};
 	state().reserveLogin();
-	state().applyWorkspaceRemoved("p", target.workspaceId);
+	state().applyWorkspaceRemoved(testProjectId("p"), target.workspaceId);
 	state().beginLogin("mcp-late", "mcp:docs", target);
 	expect(state().activeLogin).toBeNull();
 	expect(state().reserveLogin()).toBe(false);
@@ -116,7 +121,7 @@ test("another login's success invalidates provider status even while this client
 	state().applyLoginFrame({
 		loginId: "mcp-1",
 		providerId: "mcp:docs",
-		target: { kind: "mcp", workspaceId: "w", serverName: "docs" },
+		target: { kind: "mcp", workspaceId: testWorkspaceId("w"), serverName: "docs" },
 		frame: { kind: "success" },
 	});
 	state().applyLoginFrame({
@@ -129,7 +134,11 @@ test("another login's success invalidates provider status even while this client
 
 test("a late start response never replaces another active modal", () => {
 	state().beginLogin("provider-1", "anthropic");
-	state().beginLogin("mcp-2", "mcp:docs", { kind: "mcp", workspaceId: "w", serverName: "docs" });
+	state().beginLogin("mcp-2", "mcp:docs", {
+		kind: "mcp",
+		workspaceId: testWorkspaceId("w"),
+		serverName: "docs",
+	});
 	expect(state().activeLogin?.loginId).toBe("provider-1");
 });
 

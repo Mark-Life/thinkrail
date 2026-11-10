@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { MATCH_TIER, type SearchHit } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
 
 function targets(navigates: boolean) {
@@ -24,7 +25,13 @@ function targets(navigates: boolean) {
 	return { record, calls };
 }
 
-const base = { title: "x", tier: MATCH_TIER.prefix, score: 1, projectId: "p1", workspaceId: "w1" };
+const base = {
+	title: "x",
+	tier: MATCH_TIER.prefix,
+	score: 1,
+	projectId: testProjectId("p1"),
+	workspaceId: testWorkspaceId("w1"),
+};
 const file: SearchHit = { ...base, id: "file:x", kind: "file", path: "src/a.ts" };
 const spec: SearchHit = {
 	...base,
@@ -34,12 +41,12 @@ const spec: SearchHit = {
 	specId: "x",
 	size: 1,
 };
-const plan: SearchHit = { ...base, id: "plan:x", kind: "plan", sessionId: "s1" };
+const plan: SearchHit = { ...base, id: "plan:x", kind: "plan", sessionId: testSessionId("s1") };
 const transcript: SearchHit = {
 	...base,
 	id: "transcript:x",
 	kind: "transcript",
-	sessionId: "s1",
+	sessionId: testSessionId("s1"),
 	messageIndex: 3,
 	anchorText: "the refresh",
 };

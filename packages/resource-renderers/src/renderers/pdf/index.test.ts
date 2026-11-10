@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	anchorLabel,
@@ -63,9 +64,13 @@ test("a .pdf extension resolves through inferred MIME metadata", () => {
 	const disposers = [binary, pdfRenderer].map(registerResourceRenderer);
 	try {
 		expect(
-			resolveRenderers({ workspaceId: "ws", path: "report.pdf", text: false }, "view", {
-				mobile: false,
-			}).map((renderer) => renderer.id),
+			resolveRenderers(
+				{ workspaceId: testWorkspaceId("ws"), path: "report.pdf", text: false },
+				"view",
+				{
+					mobile: false,
+				},
+			).map((renderer) => renderer.id),
 		).toEqual(["thinkrail/pdf", "thinkrail/binary"]);
 	} finally {
 		for (const dispose of disposers.reverse()) dispose();
@@ -137,11 +142,11 @@ test("PDF render windows include visible pages plus two and prioritize a forced 
 
 test("PDF render queue removes work aborted before it starts", async () => {
 	const queue = new PdfRenderQueue(1);
-	let finishFirst = null as (() => void) | null;
+	const started: (() => void)[] = [];
 	const first = queue.run(
 		() =>
 			new Promise<void>((resolve) => {
-				finishFirst = resolve;
+				started.push(resolve);
 			}),
 	);
 	let secondRan = false;
@@ -151,6 +156,7 @@ test("PDF render queue removes work aborted before it starts", async () => {
 	}, controller.signal);
 	controller.abort();
 	await expect(second).rejects.toThrow("PDF render cancelled");
+	const finishFirst = started[0];
 	if (!finishFirst) throw new Error("Expected the first render to start");
 	finishFirst();
 	await first;

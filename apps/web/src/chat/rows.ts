@@ -1,9 +1,9 @@
 import {
 	assistantToolCallsAreExecutable,
 	type BackgroundCommandCompletionDetails,
-	completionDelivery,
 	type GitDiffScope,
 	type GitFileChange,
+	JsonObject,
 	type ReviewFixDetails,
 	type SubagentCompletionDetails,
 	type TurnChangeSet,
@@ -133,7 +133,7 @@ export function opensRound(turn: ChatTurn): boolean {
 			return true;
 		case "backgroundCommandCompletion":
 		case "subagentCompletion":
-			return completionDelivery(turn.details) !== "run";
+			return turn.details.delivery !== "run";
 		default:
 			return false;
 	}
@@ -426,13 +426,13 @@ function valueEqual(a: unknown, b: unknown): boolean {
 		for (let i = 0; i < a.length; i++) if (!valueEqual(a[i], b[i])) return false;
 		return true;
 	}
+	if (!JsonObject.check(a) || !JsonObject.check(b)) return false;
 	const aKeys = Object.keys(a);
 	const bKeys = Object.keys(b);
 	if (aKeys.length !== bKeys.length) return false;
 	for (const key of aKeys) {
 		if (!Object.hasOwn(b, key)) return false;
-		if (!valueEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
-			return false;
+		if (!valueEqual(a[key], b[key])) return false;
 	}
 	return true;
 }

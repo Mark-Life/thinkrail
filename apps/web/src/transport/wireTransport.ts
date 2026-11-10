@@ -1,5 +1,15 @@
-import type { Ack, SessionStateRecord, Workspace, WsParams, WsResult } from "@thinkrail/contracts";
+import type {
+	Ack,
+	ProjectId,
+	SessionId,
+	SessionStateRecord,
+	Workspace,
+	WorkspaceId,
+	WsParams,
+	WsResult,
+} from "@thinkrail/contracts";
 import {
+	asProjectId,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
@@ -56,7 +66,7 @@ export function supportsToolResponses(protocolVersion: number | null): boolean {
 }
 
 export function respondToTool(
-	sessionId: string,
+	sessionId: SessionId,
 	toolCallId: string,
 	response: unknown,
 ): Promise<void> {
@@ -221,7 +231,8 @@ function refreshUserFonts(connectionGeneration: number): void {
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
-	for (const [projectId, held] of Object.entries(snapshot.workspaces)) {
+	for (const [key, held] of Object.entries(snapshot.workspaces)) {
+		const projectId = asProjectId(key);
 		if (!openProjectIds.has(projectId)) continue;
 		const heldAtRequest = held.map((workspace) => workspace.id);
 		void getTransport()
@@ -236,8 +247,8 @@ function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 }
 
 export function applyWorkspaceListRefresh(
-	projectId: string,
-	heldAtRequest: readonly string[],
+	projectId: ProjectId,
+	heldAtRequest: readonly WorkspaceId[],
 	workspaces: readonly Workspace[],
 ): void {
 	const store = useAppStore.getState();
@@ -253,7 +264,7 @@ export function applyWorkspaceListRefresh(
 	}
 }
 
-export function retireWorkspace(projectId: string, workspaceId: string): void {
+export function retireWorkspace(projectId: ProjectId, workspaceId: WorkspaceId): void {
 	const state = useAppStore.getState();
 	const login = state.activeLogin;
 	state.applyWorkspaceRemoved(projectId, workspaceId);

@@ -1,9 +1,8 @@
 import { RiArrowRightSLine as ChevronRight } from "@remixicon/react";
-import type { McpResultSummary } from "@thinkrail/contracts";
+import { JsonObject, type McpResultSummary } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useFold } from "../../foldState";
-import { isRecord } from "./mcpResult";
 
 const CHILD_LIMIT = 100;
 const SMALL_TREE_NODES = 40;
@@ -11,7 +10,9 @@ const SMALL_TREE_NODES = 40;
 type JsonContainer = unknown[] | Record<string, unknown>;
 
 function isBranch(value: unknown): value is JsonContainer {
-	return Array.isArray(value) ? value.length > 0 : isRecord(value) && Object.keys(value).length > 0;
+	return Array.isArray(value)
+		? value.length > 0
+		: JsonObject.check(value) && Object.keys(value).length > 0;
 }
 
 function entriesOf(value: JsonContainer): [string, unknown][] {

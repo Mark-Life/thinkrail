@@ -1,15 +1,17 @@
 import { beforeEach, expect, test } from "bun:test";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	MCP_PROTOCOL_VERSION,
 	type McpListResult,
 	type McpServerStatus,
 	type McpStatusSnapshot,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "./index";
 import { foldMcpList, foldMcpSnapshot, isNewerMcpSnapshot, type McpHeldSnapshot } from "./mcp";
 import { selectMcpRead } from "./selectMcpServers";
 
-const workspaceId = "mcp-ws";
+const workspaceId = testWorkspaceId("mcp-ws");
 const status = (
 	name: string,
 	state: McpServerStatus["state"],
@@ -20,12 +22,19 @@ const status = (
 	updatedAt,
 });
 const snapshot = (
-	sessionId: string,
+	sessionId: SessionId,
 	generation: number,
 	servers: McpServerStatus[] = [status("docs", "connected")],
 ): McpStatusSnapshot => ({ workspaceId, sessionId, generation, servers });
-const held = (value: McpStatusSnapshot, connectionGeneration = 1, revision = 0): McpHeldSnapshot =>
-	foldMcpSnapshot(undefined, value, connectionGeneration, revision) as McpHeldSnapshot;
+const held = (
+	value: McpStatusSnapshot,
+	connectionGeneration = 1,
+	revision = 0,
+): McpHeldSnapshot => {
+	const folded = foldMcpSnapshot(undefined, value, connectionGeneration, revision);
+	if (!folded) throw new Error("expected a first snapshot to fold");
+	return folded;
+};
 const list = (statuses: McpStatusSnapshot[]): McpListResult => ({
 	servers: [],
 	statuses,
@@ -46,23 +55,28 @@ beforeEach(() => {
 });
 
 test("the generation guard drops a snapshot that is not newer, unless it comes from a newer connection", () => {
-	const current = held(snapshot("s", 5), 1);
-	expect(isNewerMcpSnapshot(undefined, snapshot("s", 1), 1)).toBe(true);
-	expect(isNewerMcpSnapshot(current, snapshot("s", 6), 1)).toBe(true);
-	expect(isNewerMcpSnapshot(current, snapshot("s", 5), 1)).toBe(false);
-	expect(isNewerMcpSnapshot(current, snapshot("s", 4), 1)).toBe(false);
-	expect(isNewerMcpSnapshot(current, snapshot("s", 1), 2)).toBe(true);
+	const current = held(snapshot(testSessionId("s"), 5), 1);
+	expect(isNewerMcpSnapshot(undefined, snapshot(testSessionId("s"), 1), 1)).toBe(true);
+	expect(isNewerMcpSnapshot(current, snapshot(testSessionId("s"), 6), 1)).toBe(true);
+	expect(isNewerMcpSnapshot(current, snapshot(testSessionId("s"), 5), 1)).toBe(false);
+	expect(isNewerMcpSnapshot(current, snapshot(testSessionId("s"), 4), 1)).toBe(false);
+	expect(isNewerMcpSnapshot(current, snapshot(testSessionId("s"), 1), 2)).toBe(true);
 });
 
 test("a server keeps the time it was first seen starting until it leaves that state", () => {
-	const first = held(snapshot("s", 1, [status("docs", "starting", 100)]));
-	const second = foldMcpSnapshot(first, snapshot("s", 2, [status("docs", "starting", 900)]), 1, 1);
+	const first = held(snapshot(testSessionId("s"), 1, [status("docs", "starting", 100)]));
+	const second = foldMcpSnapshot(
+		first,
+		snapshot(testSessionId("s"), 2, [status("docs", "starting", 900)]),
+		1,
+		1,
+	);
 	expect(second?.startingSince).toEqual({ docs: 100 });
-	const connected = foldMcpSnapshot(second ?? undefined, snapshot("s", 3), 1, 2);
+	const connected = foldMcpSnapshot(second ?? undefined, snapshot(testSessionId("s"), 3), 1, 2);
 	expect(connected?.startingSince).toEqual({});
 	const restarted = foldMcpSnapshot(
 		first,
-		snapshot("s", 1, [status("docs", "starting", 500)]),
+		snapshot(testSessionId("s"), 1, [status("docs", "starting", 500)]),
 		2,
 		3,
 	);
@@ -76,10 +90,10 @@ test("a list replaces the live-chat set but keeps newer pushes and pushes that l
 		configErrors: [],
 		handledElsewhere: null,
 		sessions: {
-			gone: held(snapshot("gone", 2), 1, 3),
-			ahead: held(snapshot("ahead", 9), 1, 3),
-			late: held(snapshot("late", 1), 1, 5),
-			stale: held(snapshot("stale", 1), 1, 2),
+			gone: held(snapshot(testSessionId("gone"), 2), 1, 3),
+			ahead: held(snapshot(testSessionId("ahead"), 9), 1, 3),
+			late: held(snapshot(testSessionId("late"), 1), 1, 5),
+			stale: held(snapshot(testSessionId("stale"), 1), 1, 2),
 		},
 	};
 	const next = foldMcpList(
@@ -87,10 +101,10 @@ test("a list replaces the live-chat set but keeps newer pushes and pushes that l
 		{
 			servers: [],
 			statuses: [
-				snapshot("ahead", 8),
-				snapshot("stale", 2),
-				snapshot("fresh", 1),
-				{ ...snapshot("other", 1), workspaceId: "elsewhere" },
+				snapshot(testSessionId("ahead"), 8),
+				snapshot(testSessionId("stale"), 2),
+				snapshot(testSessionId("fresh"), 1),
+				{ ...snapshot(testSessionId("other"), 1), workspaceId: testWorkspaceId("elsewhere") },
 			],
 			handledElsewhere: { by: "custom-mcp" },
 			configErrors: [{ source: "/agent/mcp.json", message: "bad JSON" }],
@@ -107,17 +121,17 @@ test("a list replaces the live-chat set but keeps newer pushes and pushes that l
 });
 
 test("status pushes install atomically behind the guard and only for live, supported scopes", () => {
-	state().applyMcpStatus(snapshot("s", 2));
+	state().applyMcpStatus(snapshot(testSessionId("s"), 2));
 	expect(state().mcpRevision).toBe(1);
-	state().applyMcpStatus(snapshot("s", 1));
+	state().applyMcpStatus(snapshot(testSessionId("s"), 1));
 	expect(state().mcpByWorkspace[workspaceId]?.sessions.s?.snapshot.generation).toBe(2);
 	expect(state().mcpRevision).toBe(1);
-	state().deleteChat(workspaceId, "s");
+	state().deleteChat(workspaceId, testSessionId("s"));
 	expect(state().mcpByWorkspace[workspaceId]?.sessions.s).toBeUndefined();
-	state().applyMcpStatus(snapshot("s", 3));
+	state().applyMcpStatus(snapshot(testSessionId("s"), 3));
 	expect(state().mcpByWorkspace[workspaceId]?.sessions.s).toBeUndefined();
 	useAppStore.setState({ status: "disconnected" });
-	state().applyMcpStatus(snapshot("t", 1));
+	state().applyMcpStatus(snapshot(testSessionId("t"), 1));
 	expect(state().mcpByWorkspace[workspaceId]?.sessions.t).toBeUndefined();
 });
 
@@ -125,25 +139,28 @@ test("a list installs only for the connection it was read on and never resurrect
 	const read = selectMcpRead(state(), workspaceId);
 	expect(read).toEqual({ workspaceId, connectionGeneration: 3, revision: 0 });
 	if (!read) throw new Error("expected a read token");
-	state().deleteChat(workspaceId, "deleted");
-	state().installMcpList(read, list([snapshot("deleted", 1), snapshot("live", 1)]));
+	state().deleteChat(workspaceId, testSessionId("deleted"));
+	state().installMcpList(
+		read,
+		list([snapshot(testSessionId("deleted"), 1), snapshot(testSessionId("live"), 1)]),
+	);
 	expect(Object.keys(state().mcpByWorkspace[workspaceId]?.sessions ?? {})).toEqual(["live"]);
 	state().setStatus("connected");
 	useAppStore.setState({ protocolVersion: MCP_PROTOCOL_VERSION });
-	state().installMcpList(read, list([snapshot("next", 1)]));
+	state().installMcpList(read, list([snapshot(testSessionId("next"), 1)]));
 	expect(state().mcpByWorkspace[workspaceId]?.sessions.next).toBeUndefined();
 });
 
 test("an older host has no MCP reads, its welcome clears the slice, and workspace removal drops it", () => {
-	state().applyMcpStatus(snapshot("s", 1));
+	state().applyMcpStatus(snapshot(testSessionId("s"), 1));
 	state().installWelcomeSnapshot(MCP_PROTOCOL_VERSION, [], []);
 	expect(state().mcpByWorkspace[workspaceId]).toBeDefined();
 	state().installWelcomeSnapshot(MCP_PROTOCOL_VERSION - 1, [], []);
 	expect(state().mcpByWorkspace).toEqual({});
 	expect(selectMcpRead(state(), workspaceId)).toBeNull();
 	useAppStore.setState({ protocolVersion: MCP_PROTOCOL_VERSION });
-	state().applyMcpStatus(snapshot("s", 1));
-	state().applyWorkspaceRemoved("project", workspaceId);
+	state().applyMcpStatus(snapshot(testSessionId("s"), 1));
+	state().applyWorkspaceRemoved(testProjectId("project"), workspaceId);
 	expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
 	expect(selectMcpRead(state(), workspaceId)).toBeNull();
 });

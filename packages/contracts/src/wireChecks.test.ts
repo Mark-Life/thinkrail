@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { testProjectId, testWorkspaceId } from "./testIds";
 import {
 	parseWsPush,
 	parseWsResult,
@@ -29,7 +30,7 @@ test("a client reads the welcome of any host version against its floor, the host
 });
 
 test("a push that drifts from its channel's schema names the channel and the path", () => {
-	const removed = { projectId: "p", id: "w" };
+	const removed = { projectId: testProjectId("p"), id: testWorkspaceId("w") };
 	expect(parseWsPush(WS_CHANNELS.workspaceRemoved, removed)).toEqual({ ok: true, value: removed });
 	expect(parseWsPush(WS_CHANNELS.workspaceRemoved, { ...removed, id: 7 })).toEqual({
 		ok: false,

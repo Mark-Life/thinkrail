@@ -1,9 +1,10 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
-export function useWorkspaceSpecs(workspaceId: string | null): {
+export function useWorkspaceSpecs(workspaceId: WorkspaceId | null): {
 	failed: boolean;
 	reload: () => void;
 } {

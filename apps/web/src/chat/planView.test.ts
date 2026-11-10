@@ -1,6 +1,8 @@
 import { beforeAll, expect, test } from "bun:test";
-import type { AssistantMessage, TodoGroupItem, TodoItem, UserMessage } from "@thinkrail/contracts";
+import type { SessionId, TodoGroupItem, TodoItem, ToolCall } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { InteractionState } from "./interactionState";
+import { assistantMessage, userMessage } from "./messageFixtures.test";
 import {
 	adoptedCommits,
 	flatItems,
@@ -135,7 +137,7 @@ test("hostSessionGlance uses host blockers and execution over stale transcript f
 					kind: "dialog",
 					request: {
 						id: "d1",
-						sessionId: "s1",
+						sessionId: testSessionId("s1"),
 						kind: "confirm",
 						title: "Continue?",
 						message: "Proceed?",
@@ -157,16 +159,15 @@ test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it other
 const askTurn = (
 	id: string,
 	toolCallId: string,
-	args: Record<string, unknown> = {},
+	args: ToolCall["arguments"] = {},
 	streaming = false,
 ): ChatTurn => ({
 	kind: "assistant",
 	id,
 	streaming,
-	message: {
-		role: "assistant",
+	message: assistantMessage({
 		content: [{ type: "toolCall", id: toolCallId, name: "ask_user_question", arguments: args }],
-	} as unknown as AssistantMessage,
+	}),
 });
 
 test("sessionGlance prefers host state and falls back to the runtime transcript (deriveInteractionStates + planGlance)", () => {
@@ -225,16 +226,15 @@ test("pendingInteraction reconstructs the latest awaiting interactive call as re
 	const userTurn: ChatTurn = {
 		kind: "user",
 		id: "u1",
-		message: { role: "user", content: "hi", timestamp: 0 } as UserMessage,
+		message: userMessage("hi"),
 	};
 	const bashTurn: ChatTurn = {
 		kind: "assistant",
 		id: "b",
 		streaming: false,
-		message: {
-			role: "assistant",
+		message: assistantMessage({
 			content: [{ type: "toolCall", id: "b1", name: "bash", arguments: { command: "ls" } }],
-		} as unknown as AssistantMessage,
+		}),
 	};
 	const first = askTurn("a1", "q1", { questions: [{ question: "First?" }] });
 	const second = askTurn("a2", "q2", { questions: [{ question: "Second?" }] }, true);
@@ -444,16 +444,22 @@ test("itemOpenFindings: counts open agent comments anchored in the item's change
 	expect(itemOpenFindings(flagged, undefined)).toBe(0);
 	expect(itemOpenFindings(item("no-set", "done"), [])).toBe(0);
 	// Origin provenance wins over path overlap: same file, another step's finding never counts here.
-	const stamped = (todoId: string, sessionId: string) => ({
+	const stamped = (todoId: string, sessionId: SessionId) => ({
 		author: "agent" as const,
 		status: "draft" as const,
 		anchor: { path: "src/a.ts", side: "worktree" as const, selectors: [] },
 		origin: { todoId, sessionId, reviewedSha: "abc" },
 	});
 	expect(
-		itemOpenFindings(flagged, [stamped("t_flagged", "s1"), stamped("t_other", "s1")], "s1"),
+		itemOpenFindings(
+			flagged,
+			[stamped("t_flagged", testSessionId("s1")), stamped("t_other", testSessionId("s1"))],
+			testSessionId("s1"),
+		),
 	).toBe(1);
-	expect(itemOpenFindings(flagged, [stamped("t_flagged", "s2")], "s1")).toBe(0);
+	expect(
+		itemOpenFindings(flagged, [stamped("t_flagged", testSessionId("s2"))], testSessionId("s1")),
+	).toBe(0);
 	expect(reviewChangesRequested(flagged)).toBe(true);
 	expect(reviewChangesRequested(item("plain", "done"))).toBe(false);
 });

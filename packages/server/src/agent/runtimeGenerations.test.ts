@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	createSession,
@@ -30,7 +32,7 @@ function modelDef(id: string) {
 		id,
 		name: id,
 		reasoning: false,
-		input: ["text"] as ("text" | "image")[],
+		input: ["text"] satisfies ("text" | "image")[],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: 100_000,
 		maxTokens: 4096,
@@ -125,7 +127,7 @@ async function liveSession() {
 	faux.setResponses([fauxAssistantMessage("BEFORE_GENERATION_SWAP")]);
 	const session = await createSession({
 		cwd,
-		workspaceId: "workspace-generation",
+		workspaceId: testWorkspaceId("workspace-generation"),
 		model: toWireModel(faux.getModel()),
 	});
 	await promptSession(session.sessionId, "persist this turn");
@@ -139,7 +141,11 @@ async function activateRuntime(runtime: ModelRuntime): Promise<void> {
 	activatePiRuntimeGeneration(prepared.generation);
 }
 
-async function reopenAfterTeardown(sessionId: string, workspaceId: string, sessionCwd: string) {
+async function reopenAfterTeardown(
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
+	sessionCwd: string,
+) {
 	for (let attempt = 0; ; attempt++) {
 		try {
 			return await getSessionMessages(sessionId, workspaceId, sessionCwd);
@@ -160,7 +166,11 @@ describe("PI runtime generations", () => {
 		expect(await listAvailableModels()).toEqual([]);
 		faux.appendResponses([fauxAssistantMessage("AFTER_GENERATION_SWAP")]);
 		await promptSession(session.sessionId, "old generation remains usable");
-		const hydrated = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		const hydrated = await getSessionMessages(
+			session.sessionId,
+			testWorkspaceId("workspace-generation"),
+			cwd,
+		);
 		expect(JSON.stringify(hydrated.messages)).toContain("AFTER_GENERATION_SWAP");
 		expect(hydrated.summary.model).toMatchObject({
 			provider: "generation-faux",
@@ -177,9 +187,9 @@ describe("PI runtime generations", () => {
 			provider: model.provider,
 			id: model.id,
 		});
-		await expect(createSession({ cwd, workspaceId: "workspace-new", model })).rejects.toThrow(
-			"Unknown or unavailable model",
-		);
+		await expect(
+			createSession({ cwd, workspaceId: testWorkspaceId("workspace-new"), model }),
+		).rejects.toThrow("Unknown or unavailable model");
 	});
 
 	test("does not wait for an accepted old-generation turn before activating a candidate", async () => {
@@ -212,7 +222,11 @@ describe("PI runtime generations", () => {
 			JSON.stringify({ defaultProvider: "replacement-faux", defaultModel: "replacement-model" }),
 		);
 
-		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		const reopened = await getSessionMessages(
+			session.sessionId,
+			testWorkspaceId("workspace-generation"),
+			cwd,
+		);
 		expect(JSON.stringify(reopened.messages)).toContain("BEFORE_GENERATION_SWAP");
 		expect(reopened.summary.model).toMatchObject({
 			provider: "replacement-faux",
@@ -222,12 +236,14 @@ describe("PI runtime generations", () => {
 		await promptSession(session.sessionId, "continue on the new provider");
 		expect(
 			JSON.stringify(
-				(await getSessionMessages(session.sessionId, "workspace-generation", cwd)).messages,
+				(await getSessionMessages(session.sessionId, testWorkspaceId("workspace-generation"), cwd))
+					.messages,
 			),
 		).toContain("AFTER_PROVIDER_SWAP");
 		disposeAllSessions();
 		expect(
-			(await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd)).summary.model,
+			(await reopenAfterTeardown(session.sessionId, testWorkspaceId("workspace-generation"), cwd))
+				.summary.model,
 		).toMatchObject({
 			provider: "replacement-faux",
 			id: "replacement-model",
@@ -239,12 +255,17 @@ describe("PI runtime generations", () => {
 		const session = await liveSession();
 		disposeAllSessions();
 		configurePiRuntime(await runtimeWithReplacement());
-		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		const reopened = await getSessionMessages(
+			session.sessionId,
+			testWorkspaceId("workspace-generation"),
+			cwd,
+		);
 		expect(reopened.summary.model?.provider).toBe("replacement-faux");
 		disposeAllSessions();
 		configurePiRuntime(await runtimeWithReplacement(true));
 		expect(
-			(await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd)).summary.model,
+			(await reopenAfterTeardown(session.sessionId, testWorkspaceId("workspace-generation"), cwd))
+				.summary.model,
 		).toMatchObject({
 			provider: "generation-faux",
 			id: "generation-model",
@@ -279,7 +300,7 @@ describe("PI runtime generations", () => {
 			listed.setResponses([fauxAssistantMessage("BEFORE_LISTING")]);
 			const session = await createSession({
 				cwd,
-				workspaceId: "workspace-generation",
+				workspaceId: testWorkspaceId("workspace-generation"),
 				model: toWireModel(listed.getModel()),
 			});
 			await promptSession(session.sessionId, "persist this turn");
@@ -287,7 +308,11 @@ describe("PI runtime generations", () => {
 
 			expect(await refreshModelListings(runtime, new Set(["listed-faux"]))).toBe(true);
 
-			const reopened = await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd);
+			const reopened = await reopenAfterTeardown(
+				session.sessionId,
+				testWorkspaceId("workspace-generation"),
+				cwd,
+			);
 			expect(reopened.summary.model).toMatchObject({ provider: "listed-faux", id: "kept-model" });
 		} finally {
 			proxy.stop(true);
@@ -300,7 +325,11 @@ describe("PI runtime generations", () => {
 		disposeAllSessions();
 		configurePiRuntime(await runtimeWithFaux(false));
 
-		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		const reopened = await getSessionMessages(
+			session.sessionId,
+			testWorkspaceId("workspace-generation"),
+			cwd,
+		);
 		expect(JSON.stringify(reopened.messages)).toContain("BEFORE_GENERATION_SWAP");
 		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
 		if (!info) throw new Error("session was not persisted");
@@ -324,7 +353,7 @@ describe("PI runtime generations", () => {
 			models: [{ ...modelDef("azure-deployment"), api: faux.api }],
 		});
 		configurePiRuntime(runtime);
-		const sessionId = `sess-${crypto.randomUUID()}`;
+		const sessionId = testSessionId(`sess-${crypto.randomUUID()}`);
 		const dir = defaultSessionDirFor(agentDir, cwd);
 		mkdirSync(dir, { recursive: true });
 		const at = new Date(1_700_000_000_000).toISOString();
@@ -352,7 +381,11 @@ describe("PI runtime generations", () => {
 				.join("\n")}\n`,
 		);
 
-		const hydrated = await getSessionMessages(sessionId, "workspace-generation", cwd);
+		const hydrated = await getSessionMessages(
+			sessionId,
+			testWorkspaceId("workspace-generation"),
+			cwd,
+		);
 		expect(JSON.stringify(hydrated.messages)).toContain("azure transcript");
 		expect(hydrated.summary.model).toMatchObject({ provider: "azure", id: "azure-deployment" });
 	});
@@ -363,7 +396,11 @@ describe("PI runtime generations", () => {
 			messages: [{ role: "user", text: "legacy transcript", timestamp: 1_700_000_000_000 }],
 		});
 
-		const hydrated = await getSessionMessages(fixture.id, "workspace-generation", cwd);
+		const hydrated = await getSessionMessages(
+			testSessionId(fixture.id),
+			testWorkspaceId("workspace-generation"),
+			cwd,
+		);
 		expect(hydrated.summary.live).toBe(true);
 		expect(JSON.stringify(hydrated.messages)).toContain("legacy transcript");
 		expect(hydrated.summary.model).toMatchObject({

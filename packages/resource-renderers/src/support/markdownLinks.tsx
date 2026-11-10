@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 import type { ResourceHost } from "../host";
@@ -118,10 +119,10 @@ export function srcsetCandidates(srcSet: string): { url: string; descriptor: str
 }
 
 export function documentComponents(
-	ctx: { workspaceId: string; path: string },
+	ctx: { workspaceId: WorkspaceId; path: string },
 	{ bytesUrl, openFile }: Pick<ResourceHost, "bytesUrl" | "openFile">,
 ): Components {
-	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {
+	function DocumentLink({ href, children }: { href?: string | undefined; children?: ReactNode }) {
 		const kind = classifyHref(href);
 		if (kind === "anchor" && href) {
 			return (
@@ -183,12 +184,12 @@ export function documentComponents(
 		height,
 		align,
 	}: {
-		src?: string;
-		alt?: string;
-		title?: string;
-		width?: string | number;
-		height?: string | number;
-		align?: string;
+		src?: string | undefined;
+		alt?: string | undefined;
+		title?: string | undefined;
+		width?: string | number | undefined;
+		height?: string | number | undefined;
+		align?: string | undefined;
 	}) {
 		const floated =
 			align === "right" ? "float-right ml-8" : align === "left" ? "float-left mr-8" : undefined;
@@ -210,13 +211,13 @@ export function documentComponents(
 		type,
 		sizes,
 	}: {
-		srcSet?: string;
-		media?: string;
-		type?: string;
-		sizes?: string;
+		srcSet?: string | undefined;
+		media?: string | undefined;
+		type?: string | undefined;
+		sizes?: string | undefined;
 	}) {
 		return <source srcSet={resolveSourceSet(srcSet)} media={media} type={type} sizes={sizes} />;
 	}
 
-	return { a: DocumentLink, img: DocumentImage, source: DocumentSource } as Components;
+	return { a: DocumentLink, img: DocumentImage, source: DocumentSource };
 }

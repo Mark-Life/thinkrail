@@ -77,6 +77,8 @@ import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import type { ChatAttachment } from "./types";
 import { useHistorySearch } from "./useHistorySearch";
 
@@ -92,8 +94,8 @@ export default function ChatView({
 	workspaceId,
 	onOpenFile,
 }: {
-	sessionId: string;
-	workspaceId: string;
+	sessionId: SessionId;
+	workspaceId: WorkspaceId;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const t = useT();
@@ -183,16 +185,16 @@ export default function ChatView({
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
 	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
 	const [transcriptSelection, setTranscriptSelection] = useState<{
-		workspaceId: string;
-		sessionId: string;
-		childSessionId: string;
+		workspaceId: WorkspaceId;
+		sessionId: SessionId;
+		childSessionId: SessionId;
 	} | null>(null);
 	const transcriptChildId =
 		transcriptSelection?.workspaceId === workspaceId && transcriptSelection.sessionId === sessionId
 			? transcriptSelection.childSessionId
 			: null;
 	const setTranscriptChildId = useCallback(
-		(childSessionId: string | null) =>
+		(childSessionId: SessionId | null) =>
 			setTranscriptSelection(childSessionId ? { workspaceId, sessionId, childSessionId } : null),
 		[workspaceId, sessionId],
 	);
@@ -212,8 +214,8 @@ export default function ChatView({
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
 	const [stopAllOpen, setStopAllOpen] = useState(false);
 	const [inspector, setInspector] = useState<{
-		workspaceId: string;
-		sessionId: string;
+		workspaceId: WorkspaceId;
+		sessionId: SessionId;
 		open: boolean;
 		selectedId: string | null;
 		expanded: Partial<Record<ResourceKind, boolean>>;
@@ -288,7 +290,7 @@ export default function ChatView({
 		[...resources.groups.subagents, ...resources.groups.finishedSubagents].some(
 			(child) => child.childSessionId === inspectorSelectedId,
 		)
-			? inspectorSelectedId
+			? asSessionId(inspectorSelectedId)
 			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
 	const markResultSeen = freshResults.markSeen;
@@ -698,7 +700,10 @@ export default function ChatView({
 		setSaveAsTemplateHit(hit);
 	};
 
-	const onDeleteHistoryChat = async (targetWorkspaceId: string, targetSessionId: string) => {
+	const onDeleteHistoryChat = async (
+		targetWorkspaceId: WorkspaceId,
+		targetSessionId: SessionId,
+	) => {
 		try {
 			await getTransport().request("session.delete", {
 				workspaceId: targetWorkspaceId,

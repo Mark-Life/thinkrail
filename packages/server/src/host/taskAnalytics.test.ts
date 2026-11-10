@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import type { AdditionalAnalyticsCapture, AdditionalAnalyticsEvent } from "../analytics";
 import { type TaskGroupObservation, TaskObservation } from "./taskAnalytics";
 
@@ -43,13 +44,13 @@ function fixture() {
 
 test("only a nonempty existing group's actual item completion counts, once after reconciliation", async () => {
 	const f = fixture();
-	f.observer.toolStarted("workspace", "session", {
+	f.observer.toolStarted(testWorkspaceId("workspace"), testSessionId("session"), {
 		type: "tool_execution_start",
 		toolCallId: "call",
 		toolName: "todo_update",
 		args: {},
 	});
-	const finish = f.observer.toolFinished("session", {
+	const finish = f.observer.toolFinished(testSessionId("session"), {
 		type: "tool_execution_end",
 		toolCallId: "call",
 		toolName: "todo_update",
@@ -62,7 +63,7 @@ test("only a nonempty existing group's actual item completion counts, once after
 	expect(f.events).toEqual([]);
 	await finish();
 	await finish();
-	await f.observer.begin("workspace", "session")();
+	await f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"))();
 	expect(f.events).toEqual([
 		{ name: "task_completed", params: { change_evidence: "both", verification_recorded: "yes" } },
 	]);
@@ -71,29 +72,29 @@ test("only a nonempty existing group's actual item completion counts, once after
 test("pre-existing completed groups, fresh completed groups, removals, and loose items never count", async () => {
 	const f = fixture();
 	f.setGroups([group(true)]);
-	await f.observer.begin("workspace", "session")();
+	await f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"))();
 	f.setGroups([]);
-	const created = f.observer.begin("workspace", "session");
+	const created = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	f.setGroups([group(true)]);
 	await created();
 	f.setGroups([group(false)]);
-	const removed = f.observer.begin("workspace", "session");
+	const removed = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	f.setGroups([{ ...group(true), completedItems: new Set(["already-done-item"]) }]);
 	await removed();
 	f.setGroups([]);
-	await f.observer.begin("workspace", "session")();
+	await f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"))();
 	expect(f.events).toEqual([]);
 });
 
 test("overlapping observations deduplicate completion; a real reopen allows the next completion", async () => {
 	const f = fixture();
-	const first = f.observer.begin("workspace", "session");
-	const second = f.observer.begin("workspace", "session");
+	const first = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
+	const second = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	f.setGroups([group(true)]);
 	await Promise.all([first(), second()]);
 	expect(f.events).toHaveLength(1);
 	f.setGroups([group(false)]);
-	const redone = f.observer.begin("workspace", "session");
+	const redone = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	f.setGroups([group(true)]);
 	await redone();
 	expect(f.events).toHaveLength(2);
@@ -102,13 +103,13 @@ test("overlapping observations deduplicate completion; a real reopen allows the 
 test("tool reads, failed writes, removals, and initial hydration do not emit completion", async () => {
 	const f = fixture();
 	for (const toolName of ["todo_list", "todo_remove", "read"]) {
-		f.observer.toolStarted("workspace", "session", {
+		f.observer.toolStarted(testWorkspaceId("workspace"), testSessionId("session"), {
 			type: "tool_execution_start",
 			toolCallId: "call",
 			toolName,
 			args: {},
 		});
-		await f.observer.toolFinished("session", {
+		await f.observer.toolFinished(testSessionId("session"), {
 			type: "tool_execution_end",
 			toolCallId: "call",
 			toolName,
@@ -117,14 +118,14 @@ test("tool reads, failed writes, removals, and initial hydration do not emit com
 		})();
 	}
 	expect(f.reads()).toBe(0);
-	f.observer.toolStarted("workspace", "session", {
+	f.observer.toolStarted(testWorkspaceId("workspace"), testSessionId("session"), {
 		type: "tool_execution_start",
 		toolCallId: "call",
 		toolName: "todo_update",
 		args: {},
 	});
 	f.setGroups([group(true)]);
-	await f.observer.toolFinished("session", {
+	await f.observer.toolFinished(testSessionId("session"), {
 		type: "tool_execution_end",
 		toolCallId: "call",
 		toolName: "todo_update",
@@ -136,9 +137,9 @@ test("tool reads, failed writes, removals, and initial hydration do not emit com
 
 test("off collects nothing and async completion from a revoked grant never reads or replays", async () => {
 	const f = fixture();
-	const old = f.observer.begin("workspace", "session");
+	const old = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	f.revoke();
-	const beforeConsent = f.observer.begin("workspace", "session");
+	const beforeConsent = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	expect(f.reads()).toBe(1);
 	f.grant();
 	f.setGroups([group(true)]);
@@ -150,15 +151,15 @@ test("off collects nothing and async completion from a revoked grant never reads
 
 test("session deletion while completion waits drops the snapshot without a late plan read", async () => {
 	const f = fixture();
-	const finish = f.observer.begin("workspace", "session");
+	const finish = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	f.setGroups([group(true)]);
 	const waiting = finish();
-	f.observer.forget("session");
+	f.observer.forget(testSessionId("session"));
 	await waiting;
 	expect(f.events).toEqual([]);
 	expect(f.reads()).toBe(1);
 	f.setGroups([group(false)]);
-	const next = f.observer.begin("workspace", "session");
+	const next = f.observer.begin(testWorkspaceId("workspace"), testSessionId("session"));
 	f.setGroups([group(true)]);
 	await next();
 	expect(f.events).toHaveLength(1);
@@ -171,5 +172,7 @@ test("failed plan reads are observational only", async () => {
 			throw new Error("read failed");
 		},
 	);
-	await expect(observer.begin("workspace", "session")()).resolves.toBeUndefined();
+	await expect(
+		observer.begin(testWorkspaceId("workspace"), testSessionId("session"))(),
+	).resolves.toBeUndefined();
 });

@@ -7,6 +7,8 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
+import type { SessionId } from "@thinkrail/contracts";
+import { asSessionId } from "@thinkrail/contracts";
 import { logger } from "../log";
 
 const log = logger("agent");
@@ -16,7 +18,7 @@ export const SUBAGENT_USAGE_KIND = "subagent";
 const COST_EPSILON = 1e-9;
 
 export interface SubagentUsage {
-	childSessionId: string;
+	childSessionId: SessionId;
 	provider: string;
 	model: string;
 	usage: Usage;
@@ -46,7 +48,7 @@ function tokensOf(totals: Totals): number {
 }
 
 function subagentUsage(
-	childSessionId: string,
+	childSessionId: SessionId,
 	modelRef: string | undefined,
 	totals: Totals,
 ): SubagentUsage {
@@ -90,10 +92,14 @@ export interface RunUsageDetails {
 }
 
 export function createRunUsageRecorder(
-	record: (parentSessionId: string, usage: SubagentUsage) => boolean,
+	record: (parentSessionId: SessionId, usage: SubagentUsage) => boolean,
 ) {
 	const watermarks = new Map<string, Totals>();
-	const progress = (parentSessionId: string, childSessionId: string, details: RunUsageDetails) => {
+	const progress = (
+		parentSessionId: SessionId,
+		childSessionId: SessionId,
+		details: RunUsageDetails,
+	) => {
 		const watermark = watermarks.get(childSessionId);
 		const increment = usageIncrement(details.usage, watermark);
 		if (!increment) return;
@@ -102,7 +108,7 @@ export function createRunUsageRecorder(
 	};
 	return {
 		progress,
-		terminal: (parentSessionId: string, childSessionId: string, details: RunUsageDetails) => {
+		terminal: (parentSessionId: SessionId, childSessionId: SessionId, details: RunUsageDetails) => {
 			progress(parentSessionId, childSessionId, details);
 			watermarks.delete(childSessionId);
 		},
@@ -130,7 +136,10 @@ function emptyTotals(): Totals {
 	return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 }
 
-export function childFileUsage(childSessionId: string, content: string): SubagentUsage | undefined {
+export function childFileUsage(
+	childSessionId: SessionId,
+	content: string,
+): SubagentUsage | undefined {
 	const entries: FileEntry[] = parseSessionEntries(content);
 	const header = entries[0];
 	if (header?.type !== "session" || header.parentSession !== undefined) return undefined;
@@ -189,7 +198,7 @@ const childTotals = new Map<
 
 async function readChildTotals(
 	dir: string,
-	isLive: (childSessionId: string) => boolean,
+	isLive: (childSessionId: SessionId) => boolean,
 ): Promise<SubagentUsage[]> {
 	let names: string[];
 	try {
@@ -201,7 +210,7 @@ async function readChildTotals(
 	for (const name of names) {
 		const separator = name.indexOf("_");
 		if (separator < 0 || !name.endsWith(".jsonl")) continue;
-		const childSessionId = name.slice(separator + 1, -".jsonl".length);
+		const childSessionId = asSessionId(name.slice(separator + 1, -".jsonl".length));
 		if (isLive(childSessionId)) continue;
 		const path = join(dir, name);
 		try {
@@ -223,7 +232,7 @@ async function readChildTotals(
 export async function reconcileSubagentUsage(deps: {
 	dir: string;
 	entries: () => readonly SessionEntry[] | undefined;
-	isLive: (childSessionId: string) => boolean;
+	isLive: (childSessionId: SessionId) => boolean;
 	record: (usage: SubagentUsage) => void;
 }): Promise<void> {
 	if (!deps.entries()) return;

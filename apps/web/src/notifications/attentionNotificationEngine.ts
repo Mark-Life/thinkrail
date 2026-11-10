@@ -1,3 +1,4 @@
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	type AttentionEvent,
 	formatNotification,
@@ -17,7 +18,7 @@ export interface AttentionNotificationEngineDeps {
 	/** Window focus — the sole suppression signal; focused ⇒ never notify. */
 	isWindowFocused: () => boolean;
 	/** Whether a session is still in needs-attention at flush time (dot still lit). */
-	isStillLit: (sessionId: string) => boolean;
+	isStillLit: (sessionId: SessionId) => boolean;
 	/** Show the composed notification. */
 	emit: (spec: NotificationSpec) => void;
 	/**
@@ -46,7 +47,7 @@ export function createAttentionNotificationEngine(
 	deps: AttentionNotificationEngineDeps,
 ): AttentionNotificationEngine {
 	const schedule = deps.schedule ?? ((callback, delay) => setTimeout(callback, delay));
-	const cancel = deps.cancel ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+	const cancel = deps.cancel ?? ((handle) => clearTimeout(handle));
 
 	const pending = new Map<string, AttentionEvent>();
 	let timer: TimerHandle | null = null;

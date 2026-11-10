@@ -9,7 +9,7 @@ import {
 	RiExternalLinkLine as OpenAsTab,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
-import type { GitDiffScope, GitFileChange } from "@thinkrail/contracts";
+import type { GitDiffScope, GitFileChange, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import type { HunkTriage, ReviewDraftPersistence } from "@thinkrail/resource-renderers";
 import {
@@ -74,7 +74,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 	onToggleCollapsed,
 	onSetViewed,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	tabId: string;
 	scope: GitDiffScope;
 	tabView: DiffTabView | undefined;

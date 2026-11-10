@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { InteractiveTools } from "../extensions";
 import { deriveSessionState } from "./sessionState";
 
@@ -26,26 +28,17 @@ function entry(id: string, message: Message, parentId: string | null): SessionEn
 		parentId,
 		timestamp: new Date(0).toISOString(),
 		message,
-	} as SessionEntry;
+	};
 }
 
 const user = (id = "u1", parentId: string | null = null): SessionEntry =>
-	entry(
-		id,
-		{ role: "user", content: [{ type: "text", text: "work" }], timestamp: 1 } as Message,
-		parentId,
-	);
+	entry(id, { role: "user", content: [{ type: "text", text: "work" }], timestamp: 1 }, parentId);
 
 const assistant = (
 	id: string,
 	stopReason: "stop" | "error" | "length" | "aborted" | "toolUse",
 	parentId = "u1",
-): SessionEntry =>
-	entry(
-		id,
-		{ role: "assistant", content: [], stopReason, timestamp: 2 } as unknown as Message,
-		parentId,
-	);
+): SessionEntry => entry(id, fauxAssistantMessage([], { stopReason, timestamp: 2 }), parentId);
 
 function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {}) {
 	return {
@@ -89,7 +82,7 @@ describe("deriveSessionState", () => {
 	test("a pending extension dialog carries the exact replayable request", () => {
 		const request = {
 			id: "dialog-1",
-			sessionId: "session-1",
+			sessionId: testSessionId("session-1"),
 			kind: "confirm" as const,
 			title: "Continue?",
 			message: "Confirm the operation.",
@@ -107,19 +100,10 @@ describe("deriveSessionState", () => {
 	test("an accepted live response suppresses transcript fallback", () => {
 		const ask = entry(
 			"a-ask",
-			{
-				role: "assistant",
+			fauxAssistantMessage(fauxToolCall("ask_user_question", QUESTION_ARGS, { id: "q1" }), {
 				stopReason: "toolUse",
 				timestamp: 2,
-				content: [
-					{
-						type: "toolCall",
-						id: "q1",
-						name: "ask_user_question",
-						arguments: QUESTION_ARGS,
-					},
-				],
-			} as unknown as Message,
+			}),
 			"u1",
 		);
 		const state = deriveSessionState(
@@ -136,19 +120,10 @@ describe("deriveSessionState", () => {
 	test("a restart transcript reconstructs an unanswered interactive call without a live registry", () => {
 		const ask = entry(
 			"a-ask",
-			{
-				role: "assistant",
+			fauxAssistantMessage(fauxToolCall("ask_user_question", QUESTION_ARGS, { id: "q1" }), {
 				stopReason: "toolUse",
 				timestamp: 2,
-				content: [
-					{
-						type: "toolCall",
-						id: "q1",
-						name: "ask_user_question",
-						arguments: QUESTION_ARGS,
-					},
-				],
-			} as unknown as Message,
+			}),
 			"u1",
 		);
 		expect(deriveSessionState(inputs({ entries: [user(), ask] })).needsInput).toEqual({
@@ -161,19 +136,10 @@ describe("deriveSessionState", () => {
 	test("an attached session's transcript awaits only a pending-acked interactive call", () => {
 		const ask = entry(
 			"a-ask",
-			{
-				role: "assistant",
+			fauxAssistantMessage(fauxToolCall("ask_user_question", QUESTION_ARGS, { id: "q1" }), {
 				stopReason: "toolUse",
 				timestamp: 2,
-				content: [
-					{
-						type: "toolCall",
-						id: "q1",
-						name: "ask_user_question",
-						arguments: QUESTION_ARGS,
-					},
-				],
-			} as unknown as Message,
+			}),
 			"u1",
 		);
 		const ack = entry(
@@ -186,7 +152,7 @@ describe("deriveSessionState", () => {
 				details: { kind: "ack" },
 				isError: false,
 				timestamp: 3,
-			} as unknown as Message,
+			},
 			"a-ask",
 		);
 		const attached = (entries: SessionEntry[]) =>

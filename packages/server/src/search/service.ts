@@ -1,5 +1,6 @@
 import type {
 	Project,
+	ProjectId,
 	SearchGroup,
 	SearchKind,
 	SearchPreviewMessage,
@@ -7,6 +8,7 @@ import type {
 	SearchPreviewTarget,
 	SearchQueryResult,
 	Workspace,
+	WorkspaceId,
 	WsParams,
 } from "@thinkrail/contracts";
 import {
@@ -46,8 +48,8 @@ export interface SearchReaders {
 	readonly specs: (root: string) => SpecSnapshot;
 	readonly plans: (root: string) => StoredPlanFile[];
 	readonly invalidateSpecs: (root: string) => void;
-	readonly ensureDefault: (projectId: string) => Promise<unknown>;
-	readonly watchRoot: (workspaceId: string) => void;
+	readonly ensureDefault: (projectId: ProjectId) => Promise<unknown>;
+	readonly watchRoot: (workspaceId: WorkspaceId) => void;
 	readonly files?: FileListCache;
 	readonly stat: FileStat;
 	readonly now?: () => number;
@@ -80,7 +82,7 @@ function clampLimit(limit: number | undefined): number {
 export function resolveSearchRoot(
 	projects: readonly Project[],
 	workspaces: readonly Workspace[],
-	context: { projectId?: string; workspaceId?: string },
+	context: { projectId?: ProjectId; workspaceId?: WorkspaceId },
 ): SearchRoot | null {
 	const openIds = new Set(projects.map((project) => project.id));
 	const current = context.workspaceId
@@ -128,7 +130,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 
 	const ensureFailedAt = new Map<string, number>();
 
-	const ensureDefault = (projectId: string): Promise<unknown> => {
+	const ensureDefault = (projectId: ProjectId): Promise<unknown> => {
 		const failedAt = ensureFailedAt.get(projectId);
 		if (failedAt !== undefined && wallClock() - failedAt < SEARCH_BUDGET.provisionRetryMs) {
 			return Promise.reject(new Error("the project's folder could not be provisioned"));

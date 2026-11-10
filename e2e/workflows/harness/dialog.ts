@@ -1,8 +1,11 @@
 import "./env";
-import type {
-	AskUserQuestionAnswer,
-	AskUserQuestionItem,
-	AskUserQuestionResult,
+import { arr, compile, obj, opt, unknown } from "@earendil-works/pi-schema";
+import type { SessionId } from "@thinkrail/contracts";
+import {
+	type AskUserQuestionAnswer,
+	type AskUserQuestionItem,
+	type AskUserQuestionResult,
+	isAskUserQuestionArgs,
 } from "@thinkrail/pi-ask-user-question/core";
 import { completeOnce, respondToTool } from "@thinkrail/server/agent";
 import type { EventLog } from "./events";
@@ -41,6 +44,15 @@ export function skipAll(): AskUserQuestionResult {
 	return { answers: [], cancelled: true };
 }
 
+const PersonaReply = compile(
+	obj(
+		{
+			answers: arr(obj({ questionIndex: opt(unknown()), answer: opt(unknown()) }, { open: true })),
+		},
+		{ open: true },
+	),
+);
+
 const PERSONA_SYSTEM = [
 	"You are role-playing a HUMAN USER answering a structured questionnaire inside a dev tool.",
 	"Stay in character per the persona brief. For each question pick exactly one existing option",
@@ -55,13 +67,13 @@ export function parsePersonaReply(
 ): AskUserQuestionResult | null {
 	const jsonMatch = reply.match(/\{[\s\S]*\}/);
 	if (!jsonMatch) return null;
-	let parsed: { answers?: Array<{ questionIndex?: number; answer?: string }> };
+	let parsed: unknown;
 	try {
 		parsed = JSON.parse(jsonMatch[0]);
 	} catch {
 		return null;
 	}
-	if (!Array.isArray(parsed.answers)) return null;
+	if (!PersonaReply.check(parsed)) return null;
 	const answers: AskUserQuestionAnswer[] = [];
 	for (const entry of parsed.answers) {
 		const index = entry.questionIndex;
@@ -98,7 +110,7 @@ async function personaAnswer(
 }
 
 export function attachDialog(
-	sessionId: string,
+	sessionId: SessionId,
 	log: EventLog,
 	config: DialogConfig = {},
 ): { answered: AnsweredRound[]; detach: () => void; settle: () => Promise<void> } {
@@ -111,7 +123,7 @@ export function attachDialog(
 		for (const call of log.toolCalls("ask_user_question")) {
 			if (handled.has(call.toolCallId)) continue;
 			handled.add(call.toolCallId);
-			const questions = (call.args.questions ?? []) as AskUserQuestionItem[];
+			const questions = isAskUserQuestionArgs(call.args) ? call.args.questions : [];
 			pending.push(answerRound(call.toolCallId, questions));
 		}
 	};

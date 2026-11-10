@@ -5,7 +5,9 @@ import {
 	type SessionEntry,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
+	asSessionId,
 	type DelegationRunStatus,
 	isTranscriptMessageRole,
 	type ThinkingLevel,
@@ -44,16 +46,16 @@ export function delegationRootDir(): string {
 	return join(dataDir(), "delegation");
 }
 
-const services = new Map<string, DelegationService>();
-let concurrencyResolver: ((workspaceId: string) => number) | null = null;
+const services = new Map<WorkspaceId, DelegationService>();
+let concurrencyResolver: ((workspaceId: WorkspaceId) => number) | null = null;
 
 export function setSubagentConcurrencyResolver(
-	resolver: ((workspaceId: string) => number) | null,
+	resolver: ((workspaceId: WorkspaceId) => number) | null,
 ): void {
 	concurrencyResolver = resolver;
 }
 
-export function refreshSubagentConcurrency(workspaceId?: string): void {
+export function refreshSubagentConcurrency(workspaceId?: WorkspaceId): void {
 	if (!concurrencyResolver) return;
 	for (const [id, service] of services) {
 		if (workspaceId === undefined || id === workspaceId) {
@@ -62,7 +64,7 @@ export function refreshSubagentConcurrency(workspaceId?: string): void {
 	}
 }
 
-function recordSubagentUsage(parentSessionId: string, usage: SubagentUsage): boolean {
+function recordSubagentUsage(parentSessionId: SessionId, usage: SubagentUsage): boolean {
 	return recordSessionUsage(parentSessionId, {
 		kind: SUBAGENT_USAGE_KIND,
 		provider: usage.provider,
@@ -75,8 +77,8 @@ function recordSubagentUsage(parentSessionId: string, usage: SubagentUsage): boo
 const runUsage = createRunUsageRecorder(recordSubagentUsage);
 
 export function reconcileSessionSubagentUsage(
-	workspaceId: string,
-	parentSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
 	entries: () => readonly SessionEntry[] | undefined,
 ): Promise<void> {
 	return reconcileSubagentUsage({
@@ -90,14 +92,18 @@ export function reconcileSessionSubagentUsage(
 	});
 }
 
-export function delegationServiceFor(workspaceId: string): DelegationService {
+export function delegationServiceFor(workspaceId: WorkspaceId): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
 		const maxConcurrentPerParent = concurrencyResolver?.(workspaceId);
 		const created = createDelegationService({
 			...(maxConcurrentPerParent === undefined ? {} : { maxConcurrentPerParent }),
-			resolveParent: (sessionId) =>
-				canUseSessionResources(sessionId, workspaceId) ? liveParentContext(sessionId) : undefined,
+			resolveParent: (rawSessionId) => {
+				const sessionId = asSessionId(rawSessionId);
+				return canUseSessionResources(sessionId, workspaceId)
+					? liveParentContext(sessionId)
+					: undefined;
+			},
 			delegationRoot: delegationRootDir(),
 			scope: workspaceId,
 			modelRuntime: getPiRuntime,
@@ -107,14 +113,23 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 		});
 		created.onLifecycle((event) => {
 			if (event.type === "run-progress") {
-				runUsage.progress(event.parentSessionId, event.sessionId, event.details);
+				runUsage.progress(
+					asSessionId(event.parentSessionId),
+					asSessionId(event.sessionId),
+					event.details,
+				);
 				return;
 			}
 			if (event.type === "run-terminal")
-				runUsage.terminal(event.parentSessionId, event.sessionId, event.outcome.details);
+				runUsage.terminal(
+					asSessionId(event.parentSessionId),
+					asSessionId(event.sessionId),
+					event.outcome.details,
+				);
 			if (services.get(workspaceId) === created) archiveSubagentRun(workspaceId, created, event);
-			const parentSessionId =
-				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
+			const parentSessionId = asSessionId(
+				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId,
+			);
 			if (canUseSessionResources(parentSessionId, workspaceId)) {
 				publishSessionResourcesChanged(workspaceId, parentSessionId);
 				scheduleSessionStatePublish(parentSessionId);
@@ -127,7 +142,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 }
 
 export function subagentsFor(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	isEnabled: () => boolean,
 	canDeliverCompletion: () => boolean,
 ): Subagents {
@@ -140,7 +155,7 @@ export function subagentsFor(
 	});
 }
 
-function liveSessionChildren(workspaceId: string, parentSessionId: string): ChildHandle[] {
+function liveSessionChildren(workspaceId: WorkspaceId, parentSessionId: SessionId): ChildHandle[] {
 	return (services.get(workspaceId)?.childrenOf(parentSessionId) ?? []).filter(
 		(child) =>
 			child.record.scope === workspaceId &&
@@ -149,14 +164,17 @@ function liveSessionChildren(workspaceId: string, parentSessionId: string): Chil
 	);
 }
 
-export function hasLiveSessionChildren(workspaceId: string, parentSessionId: string): boolean {
+export function hasLiveSessionChildren(
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
+): boolean {
 	return liveSessionChildren(workspaceId, parentSessionId).length > 0;
 }
 
 /** Cancellation lands synchronously; `settled` resolves once every child's run has actually ended. */
 export function stopSessionChildren(
-	workspaceId: string,
-	parentSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
 	reason: string,
 ): { stopped: number; settled: Promise<void> } {
 	const children = liveSessionChildren(workspaceId, parentSessionId);
@@ -169,8 +187,8 @@ export function stopSessionChildren(
 export const INTERRUPTED_ABORT_REASON = "interrupted";
 
 export async function disposeSessionChildren(
-	workspaceId: string,
-	parentSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
 ): Promise<void> {
 	const service = services.get(workspaceId);
 	if (!service) return;
@@ -179,7 +197,7 @@ export async function disposeSessionChildren(
 	await service.disposeChildrenOf(parentSessionId);
 }
 
-export function removeWorkspaceDelegation(workspaceId: string): void {
+export function removeWorkspaceDelegation(workspaceId: WorkspaceId): void {
 	services.delete(workspaceId);
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
 }
@@ -193,9 +211,9 @@ function assertSessionId(value: string, label: string): void {
 }
 
 export function readChildTranscript(
-	workspaceId: string,
-	parentSessionId: string,
-	childSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
+	childSessionId: SessionId,
 ): { messages: TranscriptMessage[]; status?: DelegationRunStatus } {
 	assertWorkspaceStorageId(workspaceId);
 	assertSessionId(parentSessionId, "parentSessionId");
@@ -224,7 +242,7 @@ export function readChildTranscript(
 }
 
 export interface ReviewSubagentRun {
-	childSessionId: string;
+	childSessionId: SessionId;
 	status: RunStatus;
 	finalText?: string;
 }
@@ -237,8 +255,8 @@ export interface ReviewSubagentRun {
  * See submodule-server-host-plan-review.
  */
 export async function runReviewSubagent(
-	workspaceId: string,
-	parentSessionId: string,
+	workspaceId: WorkspaceId,
+	parentSessionId: SessionId,
 	task: string,
 	role: {
 		systemPrompt: string;
@@ -264,7 +282,7 @@ export async function runReviewSubagent(
 	try {
 		const outcome = await child.runQueued(task, signal ? { signal } : {});
 		return {
-			childSessionId: child.sessionId,
+			childSessionId: asSessionId(child.sessionId),
 			status: outcome.status,
 			...(outcome.finalText !== undefined ? { finalText: outcome.finalText } : {}),
 		};

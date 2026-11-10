@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project, SearchHit, Workspace } from "@thinkrail/contracts";
 import { MATCH_TIER } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
@@ -123,7 +124,7 @@ describe("listRootFiles", () => {
 });
 
 describe("chat providers", () => {
-	const label = () => ({ projectId: "p1", workspaceId: "w1" });
+	const label = () => ({ projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") });
 	const budget = (checks: number) => {
 		let used = 0;
 		return {
@@ -134,7 +135,7 @@ describe("chat providers", () => {
 		};
 	};
 	const session = (id: string, title: string, at: number, texts: string[]): HistorySession => ({
-		sessionId: id,
+		sessionId: testSessionId(id),
 		cwd: "/repos/one",
 		title,
 		entries: texts.map((text, index) => ({
@@ -157,15 +158,15 @@ describe("chat providers", () => {
 		const group = searchTranscripts([old, recent], "ready", label, input("refresh", 3));
 		expect(group).toMatchObject({ state: "ready", cut: { time: true } });
 		expect(group.hits.map(messageOf)).toEqual([
-			["recent", 0],
-			["old", 499],
-			["old", 498],
+			[testSessionId("recent"), 0],
+			[testSessionId("old"), 499],
+			[testSessionId("old"), 498],
 		]);
 	});
 
 	test("a transcript hit keeps its id when compaction shifts its message's index", () => {
 		const at = (shift: number): HistorySession => ({
-			sessionId: "s",
+			sessionId: testSessionId("s"),
 			cwd: "/repos/one",
 			title: "Compacted",
 			entries: [
@@ -200,7 +201,7 @@ describe("chat providers", () => {
 
 	test("messages queued in the same millisecond keep distinct ids, their pi entries'", () => {
 		const queued: HistorySession = {
-			sessionId: "q",
+			sessionId: testSessionId("q"),
 			cwd: "/repos/one",
 			title: "Queued",
 			entries: ["first refresh", "second refresh", "third refresh"].map((text, index) => ({
@@ -279,7 +280,7 @@ describe("FileListCache", () => {
 		}));
 		await files.load("/r");
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") },
 			files,
 			{
 				terms: [{ text: "ts", literal: false }],
@@ -303,7 +304,7 @@ describe("FileListCache", () => {
 		await files.load("/r");
 		let checks = 0;
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") },
 			files,
 			{
 				terms: [{ text: "gone", literal: false }],
@@ -326,7 +327,7 @@ describe("FileListCache", () => {
 		}));
 		await files.load("/r");
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") },
 			files,
 			{ terms: [{ text: "keep", literal: false }], limit: 20, deadline: { expired: () => true } },
 			() => 1,
@@ -343,7 +344,7 @@ describe("FileListCache", () => {
 		await files.load("/r");
 		const asked: string[] = [];
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") },
 			files,
 			{ terms: [{ text: "log", literal: false }], limit: 20, deadline: { expired: () => false } },
 			(root, path) => {
@@ -368,7 +369,7 @@ describe("FileListCache", () => {
 			},
 			() => clock,
 		);
-		const root = { root: "/r", projectId: "p1", workspaceId: "w1" };
+		const root = { root: "/r", projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") };
 		const input = (query: string) => ({
 			terms: [{ text: query, literal: false }],
 			limit: 20,
@@ -437,11 +438,23 @@ describe("FileListCache", () => {
 	});
 });
 
-const project: Project = { id: "p1", name: "One", path: "/repos/one", slug: "one", lastOpened: 1 };
-const other: Project = { id: "p2", name: "Two", path: "/repos/two", slug: "two", lastOpened: 0 };
+const project: Project = {
+	id: testProjectId("p1"),
+	name: "One",
+	path: "/repos/one",
+	slug: "one",
+	lastOpened: 1,
+};
+const other: Project = {
+	id: testProjectId("p2"),
+	name: "Two",
+	path: "/repos/two",
+	slug: "two",
+	lastOpened: 0,
+};
 const defaultOne: Workspace = {
-	id: "w-default",
-	projectId: "p1",
+	id: testWorkspaceId("w-default"),
+	projectId: testProjectId("p1"),
 	kind: "default",
 	name: "Default",
 	branch: "main",
@@ -449,8 +462,8 @@ const defaultOne: Workspace = {
 	baseBranch: "main",
 };
 const feature: Workspace = {
-	id: "w-feature",
-	projectId: "p1",
+	id: testWorkspaceId("w-feature"),
+	projectId: testProjectId("p1"),
 	name: "Auth refresh",
 	branch: "auth-refresh",
 	worktreePath: "/repos/one-auth",
@@ -459,8 +472,8 @@ const feature: Workspace = {
 	lastActiveAt: 5,
 };
 const closedProjectWorkspace: Workspace = {
-	id: "w-closed",
-	projectId: "p-closed",
+	id: testWorkspaceId("w-closed"),
+	projectId: testProjectId("p-closed"),
 	name: "Old",
 	branch: "old",
 	worktreePath: "/repos/closed",
@@ -471,29 +484,37 @@ describe("resolveSearchRoot", () => {
 	test("the active worktree is the root; Project Home falls back to the context project's folder through its Default record", () => {
 		expect(
 			resolveSearchRoot([project, other], [defaultOne, feature], {
-				projectId: "p1",
-				workspaceId: "w-feature",
+				projectId: testProjectId("p1"),
+				workspaceId: testWorkspaceId("w-feature"),
 			}),
-		).toEqual({ root: "/repos/one-auth", projectId: "p1", workspaceId: "w-feature" });
-		expect(resolveSearchRoot([other, project], [defaultOne], { projectId: "p1" })).toEqual({
+		).toEqual({
+			root: "/repos/one-auth",
+			projectId: testProjectId("p1"),
+			workspaceId: testWorkspaceId("w-feature"),
+		});
+		expect(
+			resolveSearchRoot([other, project], [defaultOne], { projectId: testProjectId("p1") }),
+		).toEqual({
 			root: "/repos/one",
-			projectId: "p1",
-			workspaceId: "w-default",
+			projectId: testProjectId("p1"),
+			workspaceId: testWorkspaceId("w-default"),
 		});
 	});
 
 	test("no root without a context project, a closed project, or a project whose Default record is not known yet", () => {
 		expect(resolveSearchRoot([project], [defaultOne], {})).toBeNull();
 		expect(
-			resolveSearchRoot([project], [closedProjectWorkspace], { workspaceId: "w-closed" }),
+			resolveSearchRoot([project], [closedProjectWorkspace], {
+				workspaceId: testWorkspaceId("w-closed"),
+			}),
 		).toBeNull();
-		expect(resolveSearchRoot([other], [], { projectId: "p2" })).toBeNull();
+		expect(resolveSearchRoot([other], [], { projectId: testProjectId("p2") })).toBeNull();
 	});
 });
 
 const sessions: HistorySession[] = [
 	{
-		sessionId: "s1",
+		sessionId: testSessionId("s1"),
 		cwd: "/repos/one-auth",
 		title: "Fix auth token refresh",
 		entries: [
@@ -514,7 +535,7 @@ const sessions: HistorySession[] = [
 		],
 	},
 	{
-		sessionId: "s2",
+		sessionId: testSessionId("s2"),
 		cwd: "/repos/one",
 		title: "Billing redesign",
 		entries: [
@@ -522,7 +543,7 @@ const sessions: HistorySession[] = [
 		],
 	},
 	{
-		sessionId: "s-cli",
+		sessionId: testSessionId("s-cli"),
 		cwd: "/somewhere/else",
 		title: "Refresh notes",
 		entries: [{ role: "user", text: "refresh", timestamp: 30, messageIndex: 0, entryId: "c0" }],
@@ -545,7 +566,7 @@ const specs: Record<string, SpecSnapshotEntry[]> = {
 const plans: Record<string, StoredPlanFile[]> = {
 	"/repos/one-auth": [
 		{
-			sessionId: "s1",
+			sessionId: testSessionId("s1"),
 			path: "/repos/one-auth/.thinkrail/context/todos/s1.json",
 			read: () => ({
 				todos: [],
@@ -568,7 +589,7 @@ const plans: Record<string, StoredPlanFile[]> = {
 			}),
 		},
 		{
-			sessionId: "orphan",
+			sessionId: testSessionId("orphan"),
 			path: "/repos/one-auth/.thinkrail/context/todos/orphan.json",
 			read: () => ({
 				todos: [
@@ -602,16 +623,21 @@ function readers(overrides: Partial<SearchReaders> = {}): SearchReaders {
 	};
 }
 
+const oneFiles: FileList = {
+	paths: ["src/auth/refresh.ts", "docs/refresh-notes.md"],
+	truncated: false,
+};
+
 const lists: Record<string, FileList> = {
 	"/repos/one-auth": {
 		paths: ["src/auth/refresh.ts", "src/billing/index.ts", "README.md"],
 		truncated: false,
 	},
-	"/repos/one": { paths: ["src/auth/refresh.ts", "docs/refresh-notes.md"], truncated: false },
+	"/repos/one": oneFiles,
 	"/repos/two": { paths: ["other.txt"], truncated: false },
 };
 
-const context = { projectId: "p1", workspaceId: "w-feature" };
+const context = { projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w-feature") };
 
 describe("search.query", () => {
 	test("answers every kind for a typed query: files and specs from the one root, transcripts and plans from the open projects", async () => {
@@ -683,7 +709,7 @@ describe("search.query", () => {
 
 	test("message text and spec bodies fold accents like titles do, in either spelling", async () => {
 		const accented: HistorySession = {
-			sessionId: "s-acc",
+			sessionId: testSessionId("s-acc"),
 			cwd: "/repos/one-auth",
 			title: "Accents",
 			entries: [
@@ -745,7 +771,7 @@ describe("search.query", () => {
 
 	test("an empty query answers empty groups and `kinds` narrows the providers", async () => {
 		const service = createSearchService(
-			readers({ files: new FileListCache(async () => lists["/repos/one"] as FileList) }),
+			readers({ files: new FileListCache(async () => oneFiles) }),
 		);
 		const empty = await service.query({ query: "   ", context });
 		expect(empty.groups.every((group) => group.hits.length === 0)).toBe(true);
@@ -852,7 +878,7 @@ describe("search.query", () => {
 				},
 			}),
 		);
-		const home = { projectId: "p1" };
+		const home = { projectId: testProjectId("p1") };
 		const [first, second] = await Promise.all([
 			service.query({ query: "refresh", kinds: ["file"], context: home }),
 			service.query({ query: "refresh", kinds: ["file"], context: home }),
@@ -985,14 +1011,18 @@ describe("search.query", () => {
 describe("search.preview", () => {
 	test("a chat preview is a bounded transcript window around the focused message", async () => {
 		const service = createSearchService(readers());
-		const preview = await service.preview({ kind: "chat", sessionId: "s1", messageIndex: 1 });
+		const preview = await service.preview({
+			kind: "chat",
+			sessionId: testSessionId("s1"),
+			messageIndex: 1,
+		});
 		expect(preview).toMatchObject({ kind: "transcript", title: "Fix auth token refresh" });
 		if (preview.kind !== "transcript") throw new Error("expected a transcript");
 		expect(preview.messages.map((message) => [message.messageIndex, message.focus])).toEqual([
 			[0, false],
 			[1, true],
 		]);
-		expect(await service.preview({ kind: "chat", sessionId: "s-cli" })).toEqual({
+		expect(await service.preview({ kind: "chat", sessionId: testSessionId("s-cli") })).toEqual({
 			kind: "unavailable",
 		});
 	});
@@ -1002,7 +1032,7 @@ describe("search.preview", () => {
 		const focused = async (messageIndex: number, anchorText: string) => {
 			const preview = await service.preview({
 				kind: "chat",
-				sessionId: "s1",
+				sessionId: testSessionId("s1"),
 				messageIndex,
 				anchorText,
 			});
@@ -1019,8 +1049,10 @@ describe("search.preview", () => {
 
 	test("a preview of a chat the index is refreshing waits for the refreshed messages", async () => {
 		let reads = 0;
+		const [first] = sessions;
+		if (!first) throw new Error("missing session fixture");
 		const stale: HistorySession = {
-			...(sessions[0] as HistorySession),
+			...first,
 			entries: [{ role: "user", text: "old text", timestamp: 1, messageIndex: 0, entryId: "o" }],
 		};
 		const service = createSearchService(
@@ -1033,7 +1065,7 @@ describe("search.preview", () => {
 				},
 			}),
 		);
-		const preview = await service.preview({ kind: "chat", sessionId: "s1" });
+		const preview = await service.preview({ kind: "chat", sessionId: testSessionId("s1") });
 		if (preview.kind !== "transcript") throw new Error("expected a transcript");
 		expect(preview.messages.map((message) => message.text)).toContain(
 			"please refresh the token flow",
@@ -1053,7 +1085,7 @@ describe("search.preview", () => {
 				},
 			}),
 		);
-		expect(await service.preview({ kind: "chat", sessionId: "s1" })).toMatchObject({
+		expect(await service.preview({ kind: "chat", sessionId: testSessionId("s1") })).toMatchObject({
 			kind: "transcript",
 		});
 		expect(reads).toBe(3);
@@ -1061,7 +1093,7 @@ describe("search.preview", () => {
 
 	test("a chat whose folder is no open project's workspace has no preview", async () => {
 		const service = createSearchService(readers({ workspaces: () => [defaultOne] }));
-		expect(await service.preview({ kind: "chat", sessionId: "s1" })).toEqual({
+		expect(await service.preview({ kind: "chat", sessionId: testSessionId("s1") })).toEqual({
 			kind: "unavailable",
 		});
 	});

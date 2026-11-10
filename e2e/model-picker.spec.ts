@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { AppConfig, ThinkingLevel } from "@thinkrail/contracts";
+import type { AppConfig, ThinkingLevel, WorkspaceId } from "@thinkrail/contracts";
 import { expandModelGroup, openWorkspaceChat, revealModelGroups } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { shot } from "./fixtures/screenshots";
@@ -28,7 +28,7 @@ async function openFreshChat(page: Page): Promise<void> {
 }
 
 /** The Central chat's level as the host holds it — optimistic pill text may run ahead of pi's echo. */
-async function hostLevel(page: Page, workspaceId: string): Promise<ThinkingLevel | undefined> {
+async function hostLevel(page: Page, workspaceId: WorkspaceId): Promise<ThinkingLevel | undefined> {
 	const sessions = await withHostWire(page, (wire) =>
 		wire.request("session.list", { workspaceId }),
 	);

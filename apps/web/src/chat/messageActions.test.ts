@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { deriveMessageActions } from "./messageActions";
 import type { ChatRow } from "./rows";
 
@@ -65,7 +66,7 @@ describe("deriveMessageActions", () => {
 				id: "result-1",
 				details: {
 					id: "bg-1",
-					sessionId: "s",
+					sessionId: testSessionId("s"),
 					name: "e2e",
 					status: "completed",
 					startedAt: 0,
@@ -104,7 +105,7 @@ describe("deriveMessageActions", () => {
 	});
 	test("a result delivered mid-run does not make the narration before it a final answer", () => {
 		const details = {
-			childSessionId: "child-1",
+			childSessionId: testSessionId("child-1"),
 			task: "review",
 			status: "completed",
 			usage: {

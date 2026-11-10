@@ -7,6 +7,7 @@ import type {
 	ReviewDetails,
 	Workspace,
 } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -22,18 +23,24 @@ import {
 } from "./locationModel";
 import { chipClass, pillClass } from "./Segment";
 
-const project: Project = { id: "p1", name: "thinkrail-copy", path: "/repo" } as Project;
+const project: Project = {
+	id: testProjectId("p1"),
+	name: "thinkrail-copy",
+	path: "/repo",
+	slug: "thinkrail-copy",
+	lastOpened: 0,
+};
 const worktree: Workspace = {
-	id: "w1",
-	projectId: "p1",
+	id: testWorkspaceId("w1"),
+	projectId: testProjectId("p1"),
 	name: "Image selection coordinates bug",
 	branch: "fix-image-region-comment-coords",
 	worktreePath: "/repo/.worktrees/w1",
 	baseBranch: "origin/main",
 };
 const userOwned: Workspace = {
-	id: "w0",
-	projectId: "p1",
+	id: testWorkspaceId("w0"),
+	projectId: testProjectId("p1"),
 	kind: "default",
 	name: "Default",
 	branch: "main",

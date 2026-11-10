@@ -11,6 +11,7 @@ import {
 	tuple,
 	union,
 } from "@earendil-works/pi-schema";
+import { ProjectId, SessionId, WorkspaceId } from "./ids";
 import { wireObj } from "./wire";
 
 export const SEARCH_KINDS = ["transcript", "file", "spec", "plan"] as const;
@@ -22,7 +23,7 @@ export const MatchTier = oneOf([0, 1, 2, 3, 4, 5]);
 export type MatchTier = Static<typeof MatchTier>;
 
 /** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
-export const SearchContext = wireObj({ projectId: opt(str()), workspaceId: opt(str()) });
+export const SearchContext = wireObj({ projectId: opt(ProjectId), workspaceId: opt(WorkspaceId) });
 export type SearchContext = Static<typeof SearchContext>;
 
 const SEARCH_HIT_BASE = {
@@ -34,8 +35,8 @@ const SEARCH_HIT_BASE = {
 	tier: MatchTier,
 	score: num(),
 	ranges: opt(map(arr(tuple([num(), num()])))),
-	projectId: str(),
-	workspaceId: str(),
+	projectId: ProjectId,
+	workspaceId: WorkspaceId,
 };
 
 export const SearchHit = union([
@@ -50,12 +51,12 @@ export const SearchHit = union([
 		size: num(),
 		snippet: opt(str()),
 	}),
-	wireObj({ ...SEARCH_HIT_BASE, kind: lit("plan"), sessionId: str() }),
+	wireObj({ ...SEARCH_HIT_BASE, kind: lit("plan"), sessionId: SessionId }),
 	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
 	wireObj({
 		...SEARCH_HIT_BASE,
 		kind: lit("transcript"),
-		sessionId: str(),
+		sessionId: SessionId,
 		messageIndex: num(),
 		anchorText: str(),
 	}),
@@ -85,7 +86,7 @@ export type SearchQueryResult = Static<typeof SearchQueryResult>;
 /** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
 export const SearchPreviewTarget = wireObj({
 	kind: lit("chat"),
-	sessionId: str(),
+	sessionId: SessionId,
 	messageIndex: opt(num()),
 	/** The hit's `anchorText`: the focus moves to the message it starts when compaction shifted the index. */
 	anchorText: opt(str()),

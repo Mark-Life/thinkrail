@@ -2,7 +2,7 @@ import {
 	RiCheckboxCircleFill as ApproveIcon,
 	RiErrorWarningFill as ChangesIcon,
 } from "@remixicon/react";
-import { isPlanReviewResult, type PlanReviewResult } from "@thinkrail/contracts";
+import { isPlanReviewResult, JsonObject, type PlanReviewResult } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
@@ -10,13 +10,8 @@ import { ReviewPackageComments } from "../ReviewPackageComments";
 import { reviewFixCommentsToItems } from "../reviewPackage";
 
 export function readPlanReview(raw: unknown): PlanReviewResult | null {
-	if (
-		raw &&
-		typeof raw === "object" &&
-		isPlanReviewResult((raw as { details?: unknown }).details)
-	) {
-		return (raw as { details: PlanReviewResult }).details;
-	}
+	const details = JsonObject.check(raw) ? raw.details : undefined;
+	if (isPlanReviewResult(details)) return details;
 	return isPlanReviewResult(raw) ? raw : null;
 }
 

@@ -1,18 +1,26 @@
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { compile } from "@earendil-works/pi-schema";
 import { expect, type Page, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type ResourceRecord,
 	type SessionResources,
-	type WsClientMessage,
+	WS_METHOD_SCHEMAS,
 	type WsParams,
 	type WsResult,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { readPush, readRequest } from "./fixtures/wire";
+
+const SESSION_RESOURCEHISTORY_PARAMS = compile(WS_METHOD_SCHEMAS["session.resourceHistory"].params);
+const SESSION_RESOURCES_PARAMS = compile(WS_METHOD_SCHEMAS["session.resources"].params);
+const SUBAGENT_GETTRANSCRIPT_PARAMS = compile(WS_METHOD_SCHEMAS["subagent.getTranscript"].params);
 
 async function openResourceChat(page: Page) {
 	await openFixtureProject(page);
@@ -39,18 +47,22 @@ async function observeResourceWire(
 		const server = browser.connectToServer();
 		disconnect = () => browser.close({ code: 1012, reason: "Reconnect probe" });
 		browser.onMessage((message) => {
-			const frame = JSON.parse(message.toString()) as WsClientMessage;
-			if ("method" in frame && frame.method === "session.resources") {
+			const resources = readRequest(
+				message.toString(),
+				"session.resources",
+				SESSION_RESOURCES_PARAMS,
+			);
+			if (resources) {
 				reads++;
-				resourceScope = frame.params as WsParams<"session.resources">;
+				resourceScope = resources.params;
 				if (options.completedChildId) {
 					const result: SessionResources = {
 						...resourceScope,
 						commands: [],
 						subagents: [
 							{
-								childSessionId: options.completedChildId,
-								parentSessionId: resourceScope.sessionId,
+								childSessionId: testSessionId(options.completedChildId),
+								parentSessionId: resources.params.sessionId,
 								task: "Focus fixture",
 								status: "completed",
 								createdAt: "2026-01-01T00:00:00.000Z",
@@ -60,16 +72,17 @@ async function observeResourceWire(
 							},
 						],
 					};
-					browser.send(JSON.stringify({ id: frame.id, ok: true, result }));
+					browser.send(JSON.stringify({ id: resources.id, ok: true, result }));
 					return;
 				}
 			}
-			if (
-				"method" in frame &&
-				frame.method === "subagent.getTranscript" &&
-				options.completedChildId
-			) {
-				transcriptRequests.push(frame.params as WsParams<"subagent.getTranscript">);
+			const transcript = readRequest(
+				message.toString(),
+				"subagent.getTranscript",
+				SUBAGENT_GETTRANSCRIPT_PARAMS,
+			);
+			if (transcript && options.completedChildId) {
+				transcriptRequests.push(transcript.params);
 				const result: WsResult<"subagent.getTranscript"> = {
 					messages: [
 						{
@@ -80,19 +93,18 @@ async function observeResourceWire(
 					],
 					status: "completed",
 				};
-				browser.send(JSON.stringify({ id: frame.id, ok: true, result }));
+				browser.send(JSON.stringify({ id: transcript.id, ok: true, result }));
 				return;
 			}
 			server.send(message);
 		});
 		server.onMessage((message) => {
-			const frame = JSON.parse(message.toString()) as {
-				channel?: string;
-				data?: Record<string, unknown>;
-			};
-			if (frame.channel === "server.welcome") welcomes++;
-			if (protocolVersion !== undefined && frame.channel === "server.welcome") {
-				browser.send(JSON.stringify({ ...frame, data: { ...frame.data, protocolVersion } }));
+			const welcome = readPush(message.toString(), "server.welcome");
+			if (welcome) welcomes++;
+			if (protocolVersion !== undefined && welcome) {
+				browser.send(
+					JSON.stringify({ channel: "server.welcome", data: { ...welcome, protocolVersion } }),
+				);
 			} else {
 				browser.send(message);
 			}
@@ -192,7 +204,7 @@ test("an older host hides Resources without issuing unsupported resource reads",
 test("an older welcome retires the inspector with its transcript and returns focus to the composer", async ({
 	page,
 }) => {
-	const childSessionId = "resource-focus-child";
+	const childSessionId = testSessionId("resource-focus-child");
 	const wire = await observeResourceWire(page, { completedChildId: childSessionId });
 	await openResourceChat(page);
 	const trigger = page.getByTestId("resources-trigger");
@@ -231,7 +243,7 @@ test("an older welcome retires the inspector with its transcript and returns foc
 
 const MINUTE = 60_000;
 
-function archivedHistory(sessionId: string, base: number): ResourceRecord[] {
+function archivedHistory(sessionId: SessionId, base: number): ResourceRecord[] {
 	const suites = Array.from({ length: 26 }, (_, index): ResourceRecord => {
 		const n = String(index + 1).padStart(2, "0");
 		const failed = n === "03" || n === "11";
@@ -258,7 +270,7 @@ function archivedHistory(sessionId: string, base: number): ResourceRecord[] {
 	): ResourceRecord => ({
 		kind: "subagent",
 		summary: {
-			childSessionId: `019a0000-0000-7000-8000-00000000000${id}`,
+			childSessionId: testSessionId(`019a0000-0000-7000-8000-00000000000${id}`),
 			parentSessionId: sessionId,
 			roleName,
 			task: `${roleName} the archive`,
@@ -302,30 +314,40 @@ function writeArchive(scope: WsParams<"session.resources">, records: ResourceRec
 test("Resources keeps a chat's archived history: the dock sums it, the inspector folds and pages it, and an interrupted run says its log is gone", async ({
 	page,
 }) => {
-	let sessionId: string | undefined;
+	let sessionId: SessionId | undefined;
 	const historyReads: WsParams<"session.resourceHistory">[] = [];
 	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
 		const server = browser.connectToServer();
 		let seeded = false;
 		browser.onMessage((message) => {
-			const frame = JSON.parse(message.toString()) as WsClientMessage;
-			if ("method" in frame && frame.method === "session.resources") {
-				const scope = frame.params as WsParams<"session.resources">;
+			const resources = readRequest(
+				message.toString(),
+				"session.resources",
+				SESSION_RESOURCES_PARAMS,
+			);
+			if (resources) {
+				const scope = resources.params;
 				if (!seeded && sessionId && scope.sessionId === sessionId) {
 					writeArchive(scope, archivedHistory(sessionId, Date.now() - 40 * MINUTE));
 					seeded = true;
 				}
 			}
-			if ("method" in frame && frame.method === "session.resourceHistory")
-				historyReads.push(frame.params as WsParams<"session.resourceHistory">);
+			const history = readRequest(
+				message.toString(),
+				"session.resourceHistory",
+				SESSION_RESOURCEHISTORY_PARAMS,
+			);
+			if (history) historyReads.push(history.params);
 			server.send(message);
 		});
 	});
 	await openFixtureProject(page);
-	sessionId = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
-		name: "Resource history",
-		messages: [{ role: "user", text: "Show the archived resources.", timestamp: Date.now() }],
-	}).id;
+	sessionId = testSessionId(
+		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+			name: "Resource history",
+			messages: [{ role: "user", text: "Show the archived resources.", timestamp: Date.now() }],
+		}).id,
+	);
 	await enterDefaultWorkspace(page);
 	await openPersistedChat(page, "Resource history");
 

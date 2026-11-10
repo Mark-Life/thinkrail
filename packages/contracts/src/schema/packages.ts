@@ -1,4 +1,5 @@
 import { arr, bool, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
+import { WorkspaceId } from "./ids";
 import { Ack, NoPayload, wireObj } from "./wire";
 
 export const PiPackageScope = oneOf(["user", "project"]);
@@ -90,23 +91,23 @@ const PackageSource = wireObj({ source: str(), scope: PiPackageScope });
 
 export const PACKAGES_METHODS = {
 	"packages.list": {
-		params: wireObj({ workspaceId: opt(str()), force: opt(bool()) }),
+		params: wireObj({ workspaceId: opt(WorkspaceId), force: opt(bool()) }),
 		result: PiPackagesCatalog,
 	},
 	"packages.install": {
-		params: wireObj({ source: str(), scope: PiPackageScope, workspaceId: opt(str()) }),
+		params: wireObj({ source: str(), scope: PiPackageScope, workspaceId: opt(WorkspaceId) }),
 		result: PiPackageSummary,
 	},
 	"packages.remove": {
-		params: wireObj({ source: str(), scope: PiPackageScope, workspaceId: opt(str()) }),
+		params: wireObj({ source: str(), scope: PiPackageScope, workspaceId: opt(WorkspaceId) }),
 		result: Ack,
 	},
 	"packages.update": {
-		params: wireObj({ packages: arr(PackageSource), workspaceId: opt(str()) }),
+		params: wireObj({ packages: arr(PackageSource), workspaceId: opt(WorkspaceId) }),
 		result: Ack,
 	},
 	"packages.checkUpdates": {
-		params: wireObj({ workspaceId: opt(str()), force: opt(bool()) }),
+		params: wireObj({ workspaceId: opt(WorkspaceId), force: opt(bool()) }),
 		result: arr(PackageSource),
 	},
 	"packages.setResourceEnabled": {
@@ -115,11 +116,14 @@ export const PACKAGES_METHODS = {
 			type: PiPackageResourceType,
 			scope: PiPackageScope,
 			enabled: bool(),
-			workspaceId: opt(str()),
+			workspaceId: opt(WorkspaceId),
 		}),
 		result: Ack,
 	},
-	"packages.reveal": { params: wireObj({ path: str(), workspaceId: opt(str()) }), result: Ack },
+	"packages.reveal": {
+		params: wireObj({ path: str(), workspaceId: opt(WorkspaceId) }),
+		result: Ack,
+	},
 };
 
 export const PACKAGES_CHANNELS = {

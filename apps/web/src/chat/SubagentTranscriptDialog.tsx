@@ -1,4 +1,9 @@
-import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
+import type {
+	DelegationRunStatus,
+	SessionId,
+	TranscriptMessage,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState } from "react";
@@ -21,9 +26,9 @@ function isPermanentTranscriptError(error: unknown): boolean {
 }
 
 interface TranscriptScope {
-	workspaceId: string;
-	parentSessionId: string;
-	childSessionId: string;
+	workspaceId: WorkspaceId;
+	parentSessionId: SessionId;
+	childSessionId: SessionId;
 }
 
 function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }: TranscriptScope) {

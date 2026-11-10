@@ -3,6 +3,7 @@ import type {
 	McpRenderedTarget,
 	McpServerEntryInput,
 	McpServerSummary,
+	WorkspaceId,
 	WsParams,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
@@ -243,7 +244,7 @@ export function mcpRenderedTarget(summary: McpServerSummary): McpRenderedTarget 
 }
 
 export function mcpEntryUpdate(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	summary: McpServerSummary,
 	entry: McpServerEntryInput,
 ): WsParams<"mcp.update"> {
@@ -251,7 +252,7 @@ export function mcpEntryUpdate(
 }
 
 export function mcpSettingWrite(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	summary: McpServerSummary,
 	change: McpSettingChange,
 	projectEntry: McpServerEntryInput | null,

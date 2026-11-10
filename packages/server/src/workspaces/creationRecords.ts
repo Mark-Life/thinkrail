@@ -1,5 +1,10 @@
 import { isAbsolute, relative } from "node:path";
-import type { WorkspaceCreation, WorkspaceCreationRemoved } from "@thinkrail/contracts";
+import type {
+	ProjectId,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import { canonicalPath } from "../git";
 import {
 	loadWorkspaceCreations,
@@ -50,7 +55,7 @@ export function creationRecords(): WorkspaceCreationRecord[] {
 	return loadWorkspaceCreations();
 }
 
-export function findCreation(id: string): WorkspaceCreationRecord | undefined {
+export function findCreation(id: WorkspaceId): WorkspaceCreationRecord | undefined {
 	return loadWorkspaceCreations().find((record) => record.id === id);
 }
 
@@ -60,7 +65,7 @@ export function addCreation(record: WorkspaceCreationRecord): void {
 }
 
 export function updateCreation(
-	id: string,
+	id: WorkspaceId,
 	mutate: (record: WorkspaceCreationRecord) => void,
 	opts: { emit?: boolean } = {},
 ): WorkspaceCreationRecord {
@@ -73,7 +78,7 @@ export function updateCreation(
 	return record;
 }
 
-export function deleteCreation(id: string): WorkspaceCreationRecord | undefined {
+export function deleteCreation(id: WorkspaceId): WorkspaceCreationRecord | undefined {
 	const all = loadWorkspaceCreations();
 	const record = all.find((candidate) => candidate.id === id);
 	if (!record) return undefined;
@@ -89,13 +94,13 @@ export function creationOwnsPath(path: string): boolean {
 	});
 }
 
-export function creationBranchReserved(projectId: string, branch: string): boolean {
+export function creationBranchReserved(projectId: ProjectId, branch: string): boolean {
 	return loadWorkspaceCreations().some(
 		(record) => record.projectId === projectId && record.branch === branch,
 	);
 }
 
-export function repointCreationBases(projectId: string, from: string, to: string): void {
+export function repointCreationBases(projectId: ProjectId, from: string, to: string): void {
 	const all = loadWorkspaceCreations();
 	const changed = all.filter(
 		(record) => record.projectId === projectId && record.baseBranch === from,

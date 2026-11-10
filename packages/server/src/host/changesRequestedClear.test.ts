@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
 import {
@@ -27,8 +28,8 @@ import { clearChangesRequestedIfResolved } from "./todoReview";
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const WS = "w1";
-const SESSION = "sess-cr";
+const WS = testWorkspaceId("w1");
+const SESSION = testSessionId("sess-cr");
 
 function sh(cwd: string, ...args: string[]): void {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -56,7 +57,7 @@ beforeEach(() => {
 		JSON.stringify([
 			{
 				id: WS,
-				projectId: "p1",
+				projectId: testProjectId("p1"),
 				name: WS,
 				branch: "main",
 				worktreePath: repo,

@@ -1,10 +1,13 @@
-import { compile } from "@earendil-works/pi-schema";
+import { compile, type Validator } from "@earendil-works/pi-schema";
 import {
+	parseWsPush,
 	parseWsResult,
+	type WsChannel,
 	WsEnvelope,
 	type WsMethodName,
 	type WsParams,
 	type WsRequest,
+	WsRequestFrame,
 	WsResponse,
 	type WsResult,
 } from "@thinkrail/contracts";
@@ -14,6 +17,7 @@ export class E2eWireTransientError extends Error {}
 
 const envelope = compile(WsEnvelope);
 const response = compile(WsResponse);
+const requestFrame = compile(WsRequestFrame);
 
 function parseJson(message: unknown): unknown {
 	if (typeof message !== "string") return undefined;
@@ -32,6 +36,42 @@ export function parseFrame(message: unknown): WsEnvelope | null {
 export function readReply(message: unknown, id: string): WsResponse | null {
 	const frame = parseJson(message);
 	return response.check(frame) && frame.id === id ? frame : null;
+}
+
+export function parseReply(message: unknown): WsResponse | null {
+	const frame = parseJson(message);
+	return response.check(frame) ? frame : null;
+}
+
+/** A client request frame of any method, before its params are checked. */
+export function parseRequest(message: unknown): WsRequestFrame | null {
+	const frame = parseJson(message);
+	return requestFrame.check(frame) ? frame : null;
+}
+
+/**
+ * A client request for `method`, with params `validator` accepts. Compile it once per spec from
+ * `WS_METHOD_SCHEMAS[method].params`. @throws when the client sent params the schema refuses.
+ */
+export function readRequest<M extends WsMethodName>(
+	message: unknown,
+	method: M,
+	validator: Validator<WsParams<M>>,
+) {
+	const frame = parseRequest(message);
+	if (frame?.method !== method) return null;
+	if (!validator.check(frame.params)) {
+		throw new Error(`the client sent ${method} params its schema refuses`);
+	}
+	return { id: frame.id, params: frame.params };
+}
+
+/** A push on `channel` whose payload its schema accepts, else null. */
+export function readPush<C extends WsChannel>(message: unknown, channel: C) {
+	const frame = parseFrame(message);
+	if (!frame || !("channel" in frame) || frame.channel !== channel) return null;
+	const payload = parseWsPush(channel, frame.data);
+	return payload.ok ? payload.value : null;
 }
 
 export class E2eWire {

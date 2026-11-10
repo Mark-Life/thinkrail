@@ -1,4 +1,5 @@
 import type {
+	SessionId,
 	WsChannel,
 	WsClientPayload,
 	WsEnvelope,
@@ -95,7 +96,7 @@ function withClientId(url: string): string {
 }
 
 export interface RequestOptions {
-	sessionId?: string;
+	sessionId?: SessionId;
 	timeoutMs?: number;
 }
 

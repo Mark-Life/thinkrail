@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { moveMouseToChatViewport } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -26,14 +27,16 @@ interface PinSample {
 	following: boolean;
 }
 
-interface PinWindow {
-	__pinSamples: PinSample[];
+declare global {
+	interface Window {
+		__pinSamples?: PinSample[];
+	}
 }
 
 const installSampler = (page: Page) =>
 	page.evaluate(() => {
 		const samples: PinSample[] = [];
-		(window as unknown as PinWindow).__pinSamples = samples;
+		window.__pinSamples = samples;
 		const chat = [...document.querySelectorAll<HTMLElement>('[data-testid="chat-scroll"]')].find(
 			(element) => element.offsetParent !== null,
 		);
@@ -80,7 +83,7 @@ test("a following reader's streaming edge stays on the pin line after every layo
 	await installSampler(page);
 
 	const replay = textStreamReplay(
-		seeded.id,
+		testSessionId(seeded.id),
 		streamedMarkdown(title, STREAM_CHARS),
 		BASE_TS + 100_000,
 	);
@@ -88,7 +91,11 @@ test("a following reader's streaming edge stays on the pin line after every layo
 	await expect(chat).toContainText(replay.finalTail);
 	await expect(chat).toHaveAttribute("data-streaming", "false");
 
-	const samples = (await page.evaluate(() => (window as unknown as PinWindow).__pinSamples)).filter(
+	const recorded = await page.evaluate(() => {
+		if (!window.__pinSamples) throw new Error("The pin sampler is not installed");
+		return window.__pinSamples;
+	});
+	const samples = recorded.filter(
 		(sample) => sample.streaming && sample.following && sample.edge !== null,
 	);
 	const reached = samples.findIndex(
@@ -124,7 +131,7 @@ test("a reader who wheels up while the edge is pinned detaches and the text unde
 	await expect(chat).toBeVisible();
 
 	const replay = textStreamReplay(
-		seeded.id,
+		testSessionId(seeded.id),
 		streamedMarkdown(title, STREAM_CHARS),
 		BASE_TS + 100_000,
 	);

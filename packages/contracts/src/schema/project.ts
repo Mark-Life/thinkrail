@@ -10,12 +10,13 @@ import {
 	type Static,
 	str,
 } from "@earendil-works/pi-schema";
+import { ProjectId } from "./ids";
 import { McpProjectOverride, McpToolGrant } from "./mcp";
 import { SkillCatalogEntry } from "./skill";
 import { Ack, NoParams, wireObj } from "./wire";
 
 export const Project = wireObj({
-	id: str(),
+	id: ProjectId,
 	name: str(),
 	path: str(),
 	slug: str(),
@@ -73,8 +74,8 @@ export type ProjectTrustSummary = Static<typeof ProjectTrustSummary>;
 export const PROJECT_METHODS = {
 	"project.open": { params: wireObj({ path: str() }), result: Project },
 	"project.list": { params: NoParams, result: arr(Project) },
-	"project.close": { params: wireObj({ id: str() }), result: Ack },
-	"project.rename": { params: wireObj({ id: str(), name: str() }), result: Project },
+	"project.close": { params: wireObj({ id: ProjectId }), result: Ack },
+	"project.rename": { params: wireObj({ id: ProjectId, name: str() }), result: Project },
 	"project.inspect": { params: wireObj({ path: str() }), result: ProjectPathStatus },
 	"project.init": { params: wireObj({ path: str() }), result: Project },
 	"project.create": {
@@ -97,28 +98,31 @@ export const PROJECT_METHODS = {
 	},
 	"project.cancelClone": { params: wireObj({ operationId: str() }), result: Ack },
 	"project.hasSpecs": {
-		params: wireObj({ projectId: str() }),
+		params: wireObj({ projectId: ProjectId }),
 		result: wireObj({ hasSpecs: bool() }),
 	},
 	"project.setTrust": {
-		params: wireObj({ id: str(), trusted: bool(), resources: opt(bool()) }),
+		params: wireObj({ id: ProjectId, trusted: bool(), resources: opt(bool()) }),
 		result: Project,
 	},
 	"project.acknowledgeSkills": {
-		params: wireObj({ id: str(), names: arr(str()) }),
+		params: wireObj({ id: ProjectId, names: arr(str()) }),
 		result: Project,
 	},
 	"project.setSkillEnabled": {
-		params: wireObj({ id: str(), name: str(), enabled: bool() }),
+		params: wireObj({ id: ProjectId, name: str(), enabled: bool() }),
 		result: Project,
 	},
-	"project.aliasSkills": { params: wireObj({ projectId: str() }), result: arr(str()) },
-	"project.trustSummary": { params: wireObj({ projectId: str() }), result: ProjectTrustSummary },
+	"project.aliasSkills": { params: wireObj({ projectId: ProjectId }), result: arr(str()) },
+	"project.trustSummary": {
+		params: wireObj({ projectId: ProjectId }),
+		result: ProjectTrustSummary,
+	},
 	"project.setGroupEnabled": {
-		params: wireObj({ id: str(), group: str(), enabled: bool() }),
+		params: wireObj({ id: ProjectId, group: str(), enabled: bool() }),
 		result: Project,
 	},
-	"project.skills": { params: wireObj({ projectId: str() }), result: arr(SkillCatalogEntry) },
+	"project.skills": { params: wireObj({ projectId: ProjectId }), result: arr(SkillCatalogEntry) },
 };
 
 export const PROJECT_CHANNELS = {

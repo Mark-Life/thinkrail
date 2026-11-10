@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import type { NotificationSpec } from "./formatNotification";
 import {
 	createWebNotificationChannel,
@@ -32,9 +33,9 @@ class MockNotification {
 }
 
 const saved = {
-	window: (globalThis as Record<string, unknown>).window,
-	document: (globalThis as Record<string, unknown>).document,
-	Notification: (globalThis as Record<string, unknown>).Notification,
+	window: globalThis.window,
+	document: globalThis.document,
+	Notification: globalThis.Notification,
 };
 
 let focusCalls: number;
@@ -45,18 +46,18 @@ beforeEach(() => {
 	MockNotification.throwOnConstruct = false;
 	MockNotification.requestPermission = mock(async () => MockNotification.permission);
 	focusCalls = 0;
-	(globalThis as Record<string, unknown>).Notification = MockNotification;
-	(globalThis as Record<string, unknown>).window = globalThis;
-	(globalThis as { focus?: () => void }).focus = () => {
+	Reflect.set(globalThis, "Notification", MockNotification);
+	Reflect.set(globalThis, "window", globalThis);
+	Reflect.set(globalThis, "focus", () => {
 		focusCalls++;
-	};
-	(globalThis as Record<string, unknown>).document = { hasFocus: () => true };
+	});
+	Reflect.set(globalThis, "document", { hasFocus: () => true });
 });
 
 afterEach(() => {
-	(globalThis as Record<string, unknown>).window = saved.window;
-	(globalThis as Record<string, unknown>).document = saved.document;
-	(globalThis as Record<string, unknown>).Notification = saved.Notification;
+	Reflect.set(globalThis, "window", saved.window);
+	Reflect.set(globalThis, "document", saved.document);
+	Reflect.set(globalThis, "Notification", saved.Notification);
 });
 
 describe("support + permission reads", () => {
@@ -71,7 +72,7 @@ describe("support + permission reads", () => {
 	});
 
 	test("unsupported when Notification is absent", () => {
-		(globalThis as Record<string, unknown>).window = {};
+		Reflect.set(globalThis, "window", {});
 		expect(notificationsSupported()).toBe(false);
 		expect(notificationPermission()).toBe("unsupported");
 	});
@@ -85,7 +86,7 @@ describe("requestNotificationPermission", () => {
 	});
 
 	test("returns unsupported without the API, never calling it", async () => {
-		(globalThis as Record<string, unknown>).window = {};
+		Reflect.set(globalThis, "window", {});
 		await expect(requestNotificationPermission()).resolves.toBe("unsupported");
 	});
 
@@ -99,9 +100,9 @@ describe("requestNotificationPermission", () => {
 
 describe("isWindowFocused", () => {
 	test("reflects document.hasFocus", () => {
-		(globalThis as Record<string, unknown>).document = { hasFocus: () => false };
+		Reflect.set(globalThis, "document", { hasFocus: () => false });
 		expect(isWindowFocused()).toBe(false);
-		(globalThis as Record<string, unknown>).document = { hasFocus: () => true };
+		Reflect.set(globalThis, "document", { hasFocus: () => true });
 		expect(isWindowFocused()).toBe(true);
 	});
 });
@@ -156,7 +157,7 @@ describe("web notification channel", () => {
 			subtitle: "feature-branch",
 			body: "Waiting for your input",
 			tag: "attention:s1",
-			target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+			target: { kind: "chat", workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("s1") },
 			...overrides,
 		};
 	}
@@ -177,7 +178,11 @@ describe("web notification channel", () => {
 				title: "ThinkRail",
 				body: "2 worktrees need your attention",
 				tag: "attention:s1",
-				target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+				target: {
+					kind: "chat",
+					workspaceId: testWorkspaceId("w1"),
+					sessionId: testSessionId("s1"),
+				},
 			},
 			() => {},
 		);

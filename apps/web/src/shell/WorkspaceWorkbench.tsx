@@ -3,6 +3,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { asSessionId, type SessionId, type WorkspaceId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -74,6 +75,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	isToolShowing,
+	LAYOUT_TOOLS,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
@@ -99,8 +101,8 @@ function PlanSummaryAutoDraft({
 	workspaceId,
 	sessionId,
 }: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 }) {
 	useAutoPlanSummary(workspaceId, sessionId);
 	return null;
@@ -156,7 +158,13 @@ function findEditorResource(
 	);
 }
 
-function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: EditorResourceTab }) {
+function EditorResourceBody({
+	workspaceId,
+	tab,
+}: {
+	workspaceId: WorkspaceId;
+	tab: EditorResourceTab;
+}) {
 	const t = useT();
 	const identity = layoutResourceIdentity(tab);
 	const editor = useAppStore((state) =>
@@ -191,7 +199,7 @@ function ChatResourceBody({
 	tab,
 	onOpenFile,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
 	onOpenFile: (path: string) => void;
 }) {
@@ -255,7 +263,7 @@ function ChatResourceBody({
 	);
 }
 
-function useTerminalReservation(workspaceId: string): void {
+function useTerminalReservation(workspaceId: WorkspaceId): void {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const pendingIntent = useAppStore((state) =>
@@ -311,7 +319,7 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
-export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
+export function WorkspaceWorkbench({ workspaceId }: { workspaceId: WorkspaceId }) {
 	const t = useT();
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -325,7 +333,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const planSessionIds = useMemo(() => {
-		const seen = new Set<string>();
+		const seen = new Set<SessionId>();
 		for (const tab of editorTabs) {
 			const sid = editorSessionId(tab);
 			if (sid) seen.add(sid);
@@ -348,7 +356,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	}, []);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const requestRenameChat = useCallback(
-		(sessionId: string, titleInput: string, currentTitle: string) => {
+		(sessionId: SessionId, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
 			if ("reason" in prepared || prepared.title === currentTitle) return;
 			void getTransport()
@@ -595,7 +603,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						resetKeys={[workspaceId, tab.id]}
 					>
 						<Suspense fallback={<MissingResource kind="plan" />}>
-							<PlanPane workspaceId={workspaceId} sessionId={tab.sourceId} />
+							<PlanPane workspaceId={workspaceId} sessionId={asSessionId(tab.sourceId)} />
 						</Suspense>
 					</ErrorBoundary>
 				);
@@ -672,7 +680,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</div>
 			),
 		};
-		for (const tool of Object.keys(bodies) as LayoutToolId[]) {
+		for (const tool of LAYOUT_TOOLS) {
 			bodies[tool] = (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.tool", { tool })}

@@ -1,25 +1,26 @@
 import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { messagesToRuntime } from "./hydrate";
+import { assistantMessage, customMessage, toolResultMessage } from "./messageFixtures.test";
 import { deriveRows } from "./rows";
 import { readRunDetails } from "./tools/subagent/runDetails";
 
 type Message = TranscriptMessage;
 
-const messages = [
+const messages: Message[] = [
 	{ role: "user", content: "do it", timestamp: 1 },
-	{ role: "assistant", content: [{ type: "toolCall", id: "tc1", name: "bash", arguments: {} }] },
-	{
-		role: "toolResult",
+	assistantMessage({ content: [{ type: "toolCall", id: "tc1", name: "bash", arguments: {} }] }),
+	toolResultMessage({
 		toolCallId: "tc1",
 		toolName: "bash",
 		content: [{ type: "text", text: "ok" }],
 		isError: false,
 		timestamp: 3,
-	},
-	{ role: "assistant", content: [{ type: "text", text: "finished" }] },
-] as unknown as Message[];
+	}),
+	assistantMessage({ content: [{ type: "text", text: "finished" }] }),
+];
 
 test("messagesToRuntime folds a transcript into ordered turns + a toolResults map", () => {
 	const { turns, toolResults } = messagesToRuntime(messages);
@@ -40,12 +41,8 @@ test("a scoped append-only hydration preserves existing turn ids", () => {
 	const second = messagesToRuntime(
 		[
 			...messages,
-			{
-				role: "assistant",
-				content: [{ type: "text", text: "one more thing" }],
-				timestamp: 4,
-			},
-		] as unknown as Message[],
+			assistantMessage({ content: [{ type: "text", text: "one more thing" }], timestamp: 4 }),
+		],
 		undefined,
 		{ idScope: "subagent:child-1" },
 	);
@@ -59,13 +56,12 @@ test("a scoped append-only hydration preserves existing turn ids", () => {
 test("an assistant turn that ended in a provider error hydrates a following error turn", () => {
 	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
-		{
-			role: "assistant",
+		assistantMessage({
 			content: [],
 			stopReason: "error",
 			errorMessage: "model 'gpt-5.5' not found",
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error"]);
 	const err = turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
@@ -74,22 +70,20 @@ test("an assistant turn that ended in a provider error hydrates a following erro
 
 test("a failed round keeps its error before a later user-stopped result that woke nobody", () => {
 	const user = { role: "user", content: "start it", timestamp: 1 } as const;
-	const failed = {
-		role: "assistant",
+	const failed = assistantMessage({
 		content: [],
 		stopReason: "error",
 		errorMessage: "provider overloaded",
 		timestamp: 2,
-	};
-	const stopped = {
-		role: "custom",
+	});
+	const stopped = customMessage({
 		customType: "background-command-completion",
 		content: "Cancelled background command",
 		display: true,
 		timestamp: 3,
 		details: {
 			id: "bg-1",
-			sessionId: "s",
+			sessionId: testSessionId("s"),
 			name: "e2e",
 			status: "stopped",
 			startedAt: 1,
@@ -97,8 +91,8 @@ test("a failed round keeps its error before a later user-stopped result that wok
 			exitCode: null,
 			output: { text: "", truncated: false },
 		},
-	};
-	const hydrated = messagesToRuntime([user, failed, stopped] as unknown as Message[]);
+	});
+	const hydrated = messagesToRuntime([user, failed, stopped]);
 	expect(hydrated.turns.map((t) => t.kind)).toEqual([
 		"user",
 		"assistant",
@@ -113,16 +107,14 @@ test("a failed round keeps its error before a later user-stopped result that wok
 	]);
 
 	const woke = { ...stopped, details: { ...stopped.details, status: "completed", exitCode: 0 } };
-	expect(messagesToRuntime([user, failed, woke] as unknown as Message[]).turns.at(-1)?.kind).toBe(
-		"error",
-	);
+	expect(messagesToRuntime([user, failed, woke]).turns.at(-1)?.kind).toBe("error");
 });
 
 test("an assistant turn that ended at length hydrates a visible truncation failure", () => {
 	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
-		{ role: "assistant", content: [], stopReason: "length" },
-	] as unknown as Message[]);
+		assistantMessage({ content: [], stopReason: "length" }),
+	]);
 
 	expect(turns.map((turn) => turn.kind)).toEqual(["user", "assistant", "error"]);
 	const error = turns.find((turn) => turn.kind === "error");
@@ -132,20 +124,18 @@ test("an assistant turn that ended at length hydrates a visible truncation failu
 
 test("a recovered historical length stop does not become the current chat failure", () => {
 	const { turns } = messagesToRuntime([
-		{
-			role: "assistant",
+		assistantMessage({
 			content: [{ type: "text", text: "old truncated attempt" }],
 			stopReason: "length",
 			timestamp: 1000,
-		},
+		}),
 		{ role: "user", content: "continue", timestamp: 2000 },
-		{
-			role: "assistant",
+		assistantMessage({
 			content: [{ type: "text", text: "finished later" }],
 			stopReason: "stop",
 			timestamp: 3000,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 
 	expect(turns.filter((turn) => turn.kind === "error")).toHaveLength(0);
 	expect(turns.some((turn) => turn.kind === "error" && turn.recovery)).toBe(false);
@@ -159,14 +149,7 @@ test("settlement metadata restores a failure Pi removed from a live session's co
 
 test("settlement metadata does not duplicate a failure already represented by the transcript", () => {
 	const { turns } = messagesToRuntime(
-		[
-			{
-				role: "assistant",
-				content: [],
-				stopReason: "length",
-				timestamp: 2000,
-			},
-		] as unknown as Message[],
+		[assistantMessage({ content: [], stopReason: "length", timestamp: 2000 })],
 		{ stopReason: "length" },
 	);
 
@@ -175,7 +158,7 @@ test("settlement metadata does not duplicate a failure already represented by th
 
 test("an explicit live null suppresses a stale persisted failure while a resumed run is active", () => {
 	const { turns } = messagesToRuntime(
-		[{ role: "assistant", content: [], stopReason: "length" }] as unknown as Message[],
+		[assistantMessage({ content: [], stopReason: "length" })],
 		null,
 	);
 
@@ -185,14 +168,13 @@ test("an explicit live null suppresses a stale persisted failure while a resumed
 test("a persisted failed attempt superseded by a successful retry hydrates as one assistant turn", () => {
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
-		{
-			role: "assistant",
+		assistantMessage({
 			content: [{ type: "text", text: "partial…" }],
 			stopReason: "error",
 			errorMessage: "fetch failed",
-		},
-		{ role: "assistant", content: [{ type: "text", text: "the real reply" }], stopReason: "stop" },
-	] as unknown as Message[]);
+		}),
+		assistantMessage({ content: [{ type: "text", text: "the real reply" }], stopReason: "stop" }),
+	]);
 	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant"]);
 	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[1]?.id ?? null]);
 });
@@ -200,9 +182,9 @@ test("a persisted failed attempt superseded by a successful retry hydrates as on
 test("exhausted retries hydrate as the final attempt + its error turn; earlier attempts stay hidden", () => {
 	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
-		{ role: "assistant", content: [], stopReason: "error", errorMessage: "attempt 1" },
-		{ role: "assistant", content: [], stopReason: "error", errorMessage: "attempt 2" },
-	] as unknown as Message[]);
+		assistantMessage({ content: [], stopReason: "error", errorMessage: "attempt 1" }),
+		assistantMessage({ content: [], stopReason: "error", errorMessage: "attempt 2" }),
+	]);
 	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error"]);
 	const err = turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("attempt 2");
@@ -211,24 +193,22 @@ test("exhausted retries hydrate as the final attempt + its error turn; earlier a
 test("turnIdByMessageIndex maps each message's position to its own turn id, null for non-turn messages, and the assistant's id (not the injected error turn's) when the message ended in an error", () => {
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
-		{
-			role: "toolResult",
+		toolResultMessage({
 			toolCallId: "x",
 			toolName: "bash",
 			content: [],
 			isError: false,
 			timestamp: 2,
-		},
-		{
-			role: "custom",
+		}),
+		customMessage({
 			customType: "someone-elses-extension",
 			content: "hello",
 			display: true,
 			timestamp: 3,
-		},
+		}),
 		{ role: "user", content: "again", timestamp: 4 },
-		{ role: "assistant", content: [], stopReason: "error", errorMessage: "boom" },
-	] as unknown as Message[]);
+		assistantMessage({ content: [], stopReason: "error", errorMessage: "boom" }),
+	]);
 
 	expect(turns.map((t) => t.kind)).toEqual(["user", "user", "assistant", "error"]);
 	expect(turnIdByMessageIndex).toHaveLength(5);
@@ -242,7 +222,7 @@ test("turnIdByMessageIndex maps each message's position to its own turn id, null
 
 test("a subagent-completion custom message hydrates as its own subagentCompletion turn", () => {
 	const details = {
-		childSessionId: "child-1",
+		childSessionId: testSessionId("child-1"),
 		roleName: "scout",
 		task: "map the repo",
 		status: "completed",
@@ -259,15 +239,14 @@ test("a subagent-completion custom message hydrates as its own subagentCompletio
 	};
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "go", timestamp: 1 },
-		{
-			role: "custom",
+		customMessage({
 			customType: "subagent-completion",
 			content: [{ type: "text", text: 'Subagent "scout" (child-1) completed:\n\nthe report' }],
 			display: true,
 			details,
 			timestamp: 2,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(turns.map((t) => t.kind)).toEqual(["user", "subagentCompletion"]);
 	const turn = turns[1];
 	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
@@ -286,15 +265,14 @@ test("a todo-review-fix custom message hydrates as its own reviewFix turn", () =
 	};
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "go", timestamp: 1 },
-		{
-			role: "custom",
+		customMessage({
 			customType: "todo-review-fix",
 			content: [{ type: "text", text: "Address each review comment above." }],
 			display: true,
 			details,
 			timestamp: 2,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(turns.map((t) => t.kind)).toEqual(["user", "reviewFix"]);
 	const turn = turns[1];
 	expect(turn?.kind === "reviewFix" && turn.details.itemId).toBe("t_1");
@@ -305,21 +283,20 @@ test("a todo-review-fix custom message hydrates as its own reviewFix turn", () =
 
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
-		{
-			role: "toolResult",
+		toolResultMessage({
 			toolCallId: "x",
 			toolName: "bash",
 			content: [],
 			isError: true,
 			timestamp: 1,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(toolResults.x?.status).toBe("error");
 });
 
 test("a failed Agent result keeps its run details — the transcript stays openable after reload", () => {
 	const details = {
-		childSessionId: "child-err",
+		childSessionId: testSessionId("child-err"),
 		roleName: "scout",
 		task: "doomed task",
 		status: "error",
@@ -335,29 +312,27 @@ test("a failed Agent result keeps its run details — the transcript stays opena
 		durationMs: 10,
 	};
 	const { toolResults } = messagesToRuntime([
-		{
-			role: "toolResult",
+		toolResultMessage({
 			toolCallId: "ag1",
 			toolName: "Agent",
 			content: [{ type: "text", text: 'Subagent "scout" (child-err) failed: boom' }],
 			isError: true,
 			details,
 			timestamp: 1,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(toolResults.ag1?.status).toBe("error");
-	expect(readRunDetails(toolResults.ag1?.raw)?.childSessionId).toBe("child-err");
+	expect(readRunDetails(toolResults.ag1?.raw)?.childSessionId).toBe(testSessionId("child-err"));
 });
 
 test("a toolCall with no matching toolResult has no entry — the call renders as still running", () => {
 	const { turns, toolResults } = messagesToRuntime([
-		{
-			role: "assistant",
+		assistantMessage({
 			content: [
 				{ type: "toolCall", id: "ask1", name: "ask_user_question", arguments: { questions: [] } },
 			],
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(turns).toHaveLength(1);
 	expect(toolResults.ask1).toBeUndefined();
 });
@@ -368,36 +343,33 @@ test("a resolved toolResult keeps its structured `details` (a legacy blocking-er
 		cancelled: false,
 	};
 	const { toolResults } = messagesToRuntime([
-		{
-			role: "toolResult",
+		toolResultMessage({
 			toolCallId: "ask2",
 			toolName: "ask_user_question",
 			content: [{ type: "text", text: "User has answered…" }],
 			details,
 			isError: false,
 			timestamp: 1,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(toolResults.ask2?.status).toBe("done");
-	expect((toolResults.ask2?.raw as { details: unknown } | undefined)?.details).toEqual(details);
+	expect(toolResults.ask2?.raw).toMatchObject({ details });
 });
 
 test("a tool-response custom message indexes into toolResponses and never becomes a turn", () => {
 	const response = { answers: [{ questionIndex: 0, question: "Q?", kind: "text", answer: "A" }] };
 	const { turns, toolResponses } = messagesToRuntime([
-		{
-			role: "assistant",
+		assistantMessage({
 			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
-		},
-		{
-			role: "custom",
+		}),
+		customMessage({
 			customType: TOOL_RESPONSE_CUSTOM_TYPE,
 			content: "User has answered your questions: …",
 			display: true,
 			details: { toolCallId: "ask3", response },
 			timestamp: 2,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(turns).toHaveLength(1);
 	expect(toolResponses.ask3).toEqual(response);
 });
@@ -408,70 +380,63 @@ test("a legacy ask-user-answers custom message (details.result) indexes into too
 		cancelled: false,
 	};
 	const { turns, toolResponses } = messagesToRuntime([
-		{
-			role: "assistant",
+		assistantMessage({
 			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
-		},
-		{
-			role: "custom",
+		}),
+		customMessage({
 			customType: "ask-user-answers",
 			content: "User has answered your questions: …",
 			display: true,
 			details: { toolCallId: "ask3", result },
 			timestamp: 2,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(turns).toHaveLength(1);
 	expect(toolResponses.ask3).toEqual(result);
 });
 
 test("a response message with malformed details is ignored — the guard validates the envelope, not just the tag", () => {
 	const { toolResponses } = messagesToRuntime([
-		{
-			role: "custom",
+		customMessage({
 			customType: TOOL_RESPONSE_CUSTOM_TYPE,
 			content: "looks right, isn't",
 			display: true,
 			timestamp: 1,
-		},
-		{
-			role: "custom",
+		}),
+		customMessage({
 			customType: TOOL_RESPONSE_CUSTOM_TYPE,
 			content: "no tool call id",
 			display: true,
 			details: { toolCallId: 42, response: {} },
 			timestamp: 2,
-		},
-		{
-			role: "custom",
+		}),
+		customMessage({
 			customType: TOOL_RESPONSE_CUSTOM_TYPE,
 			content: "no response key",
 			display: true,
 			details: { toolCallId: "ask4" },
 			timestamp: 3,
-		},
-		{
-			role: "custom",
+		}),
+		customMessage({
 			customType: "ask-user-answers",
 			content: "legacy without a result",
 			display: true,
 			details: { toolCallId: "ask5" },
 			timestamp: 4,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(Object.keys(toolResponses)).toHaveLength(0);
 });
 
 test("unknown custom messages are ignored entirely", () => {
 	const { turns, toolResponses } = messagesToRuntime([
-		{
-			role: "custom",
+		customMessage({
 			customType: "someone-elses-extension",
 			content: "hello",
 			display: true,
 			timestamp: 1,
-		},
-	] as unknown as Message[]);
+		}),
+	]);
 	expect(turns).toHaveLength(0);
 	expect(Object.keys(toolResponses)).toHaveLength(0);
 });
@@ -480,8 +445,8 @@ test("a compaction summary becomes its own turn without claiming a jump anchor",
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "start", timestamp: 1 },
 		{ role: "compactionSummary", summary: "## Goal\nship it", tokensBefore: 148_000, timestamp: 2 },
-		{ role: "assistant", content: [{ type: "text", text: "carrying on" }] },
-	] as unknown as Message[]);
+		assistantMessage({ content: [{ type: "text", text: "carrying on" }] }),
+	]);
 
 	expect(turns.map((t) => t.kind)).toEqual(["user", "compaction", "assistant"]);
 	const compaction = turns[1];

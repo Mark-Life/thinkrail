@@ -1,4 +1,5 @@
-import { lit, opt, type Static, str, union, unknown } from "@earendil-works/pi-schema";
+import { arr, lit, opt, type Static, str, union, unknown } from "@earendil-works/pi-schema";
+import { SessionId } from "./ids";
 import { SPEECH_ERROR_CODES } from "./speech";
 import { wireObj } from "./wire";
 
@@ -62,3 +63,18 @@ export type WsResponse = Static<typeof WsResponse>;
 /** Any frame from the host. The payload of a push is checked by its channel, the result of a reply by its method. */
 export const WsEnvelope = union([wireObj({ channel: str(), data: opt(unknown()) }), WsResponse]);
 export type WsEnvelope = Static<typeof WsEnvelope>;
+
+/** Any request from a client. `method` may be one this host does not know, and `params` is checked by its method. */
+export const WsRequestFrame = wireObj({
+	id: str(),
+	method: str(),
+	params: opt(unknown()),
+	sessionId: opt(SessionId),
+});
+export type WsRequestFrame = Static<typeof WsRequestFrame>;
+
+export const WsAck = wireObj({ ack: arr(str()) });
+export type WsAck = Static<typeof WsAck>;
+
+export const WsResume = wireObj({ resume: arr(str()) });
+export type WsResume = Static<typeof WsResume>;

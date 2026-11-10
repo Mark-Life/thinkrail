@@ -1,5 +1,6 @@
 import type {
 	WorkspaceFsChangedPayload,
+	WorkspaceId,
 	WorkspaceWatchReadyResult,
 	WsParams,
 	WsResult,
@@ -8,9 +9,9 @@ import { selectWorkspaceTick, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
 
 export interface SkillLoadDependencies {
-	watchReady: (workspaceId: string, prewarm: boolean) => Promise<WorkspaceWatchReadyResult>;
+	watchReady: (workspaceId: WorkspaceId, prewarm: boolean) => Promise<WorkspaceWatchReadyResult>;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
-	workspaceTick: (workspaceId: string) => number;
+	workspaceTick: (workspaceId: WorkspaceId) => number;
 	createSession: (params: WsParams<"session.create">) => Promise<WsResult<"session.create">>;
 	getSessionMessages: (
 		params: WsParams<"session.getMessages">,
@@ -23,7 +24,7 @@ export interface SkillLoadDependencies {
 export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 	const pending = new Map<string, { preparation: Promise<number>; prewarm: boolean }>();
 
-	const prepare = (workspaceId: string, prewarm: boolean): Promise<number> => {
+	const prepare = (workspaceId: WorkspaceId, prewarm: boolean): Promise<number> => {
 		const existing = pending.get(workspaceId);
 		if (existing && (prewarm || !existing.prewarm)) return existing.preparation;
 
@@ -46,7 +47,7 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 	};
 
 	return {
-		async prewarmWorkspaceSkillLoad(workspaceId: string): Promise<void> {
+		async prewarmWorkspaceSkillLoad(workspaceId: WorkspaceId): Promise<void> {
 			await prepare(workspaceId, true);
 		},
 		async createSession(params: WsParams<"session.create">) {
@@ -66,7 +67,10 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			}
 			return { result, syncedTick };
 		},
-		async reloadSessionResources(workspaceId: string, params: WsParams<"session.reloadResources">) {
+		async reloadSessionResources(
+			workspaceId: WorkspaceId,
+			params: WsParams<"session.reloadResources">,
+		) {
 			const syncedTick = await prepare(workspaceId, false);
 			const result = await deps.reloadSessionResources(params);
 			return { result, syncedTick };

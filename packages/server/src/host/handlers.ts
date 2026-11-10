@@ -7,10 +7,12 @@ import type {
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
+	SessionId,
 	TemplateReadLocation,
 	ThinkingLevel,
 	WireModel,
 	Workspace,
+	WorkspaceId,
 	WsMethodName,
 	WsParams,
 	WsResult,
@@ -346,7 +348,7 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 
 async function sendUserMessage(
 	mode: SendMode,
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	clientKey: string,
 	operation: () => Promise<void>,
@@ -365,7 +367,7 @@ async function sendUserMessage(
 }
 
 async function startChat(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	choice: { model?: WireModel; thinkingLevel?: ThinkingLevel },
 ): Promise<WsResult<"session.create">> {
 	const ws = getWorkspace(workspaceId);
@@ -430,12 +432,12 @@ function resolveTemplateReadDirs(params: TemplateReadLocation) {
 }
 
 function fireReviewPrompt(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	comments: readonly ReviewComment[],
-	sessionId: string,
+	sessionId: SessionId,
 	pkg: string,
 	capture: AdditionalAnalyticsCapture | null,
-	send: (sessionId: string, text: string) => Promise<void> = promptSession,
+	send: (sessionId: SessionId, text: string) => Promise<void> = promptSession,
 ): void {
 	const ids = comments.map((c) => c.id);
 	void ackSend(runObservation.send(sessionId, "internal", () => send(sessionId, pkg)))
@@ -456,7 +458,7 @@ function fireReviewPrompt(
 }
 
 function fireTodoFixPrompt(
-	p: { workspaceId: string; sessionId: string; id: string },
+	p: { workspaceId: WorkspaceId; sessionId: SessionId; id: string },
 	pkg: string,
 	details: ReviewFixDetails,
 	previous: TodoReviewRecord | undefined,
@@ -496,7 +498,7 @@ function fireTodoFixPrompt(
 
 function reviewSendGroups(
 	comments: ReviewComment[],
-	sessionId: string | undefined,
+	sessionId: SessionId | undefined,
 ): ReviewComment[][] {
 	if (comments.length === 0) return [];
 	if (sessionId) return [comments];
@@ -509,9 +511,9 @@ function reviewSendGroups(
 }
 
 async function sendToFileChat(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	comments: ReviewComment[],
-	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
+	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: SessionId },
 	capture: AdditionalAnalyticsCapture | null,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
@@ -556,7 +558,7 @@ function sessionStateWorkspace(workspace: Workspace) {
 	return { id: workspace.id, projectId: workspace.projectId, cwd: workspace.worktreePath };
 }
 
-function resourceCwd(workspaceId: string): string {
+function resourceCwd(workspaceId: WorkspaceId): string {
 	try {
 		return getWorkspace(workspaceId).worktreePath;
 	} catch {
@@ -564,7 +566,7 @@ function resourceCwd(workspaceId: string): string {
 	}
 }
 
-function checkResourceIds(hostIds: string[], sessionIds: string[]) {
+function checkResourceIds(hostIds: string[], sessionIds: SessionId[]) {
 	if (!hostIds.every(isHostResourceId) || !sessionIds.every(isPiSessionId))
 		throw new Error("Invalid resource ids");
 }
@@ -575,7 +577,7 @@ function checkResourceHistoryCursor(kind: ResourceKind, before: ResourceHistoryC
 }
 
 async function deliverToolResponse(
-	sessionId: string,
+	sessionId: SessionId,
 	toolCallId: string,
 	response: unknown,
 ): Promise<Ack> {

@@ -3,6 +3,8 @@ import type {
 	McpServerState,
 	McpServerStatus,
 	McpServerSummary,
+	SessionId,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import { isMcpAttentionState } from "../lib";
 import type { McpHeldSnapshot, McpRead, McpWorkspaceProjection } from "./mcp";
@@ -19,7 +21,7 @@ export interface McpServerRow {
 	effective: boolean;
 	toolCount?: number;
 	detail?: string;
-	sessions: { total: number; reporting: string[]; connected: number };
+	sessions: { total: number; reporting: SessionId[]; connected: number };
 	startingSince?: number;
 	startingStalled: boolean;
 	approvalPending: boolean;
@@ -188,7 +190,7 @@ export function selectMcpRead(
 		mcpRevision: number;
 		removedWorkspaceIds: Record<string, true>;
 	},
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): McpRead | null {
 	if (
 		state.status !== "connected" ||
@@ -206,7 +208,7 @@ export function selectMcpRead(
 
 export function selectMcpWorkspaceStarting(
 	state: { mcpByWorkspace: Record<string, McpWorkspaceProjection> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): boolean {
 	return Object.values(state.mcpByWorkspace[workspaceId]?.sessions ?? {}).some((held) =>
 		held.snapshot.servers.some((server) => server.state === "starting"),

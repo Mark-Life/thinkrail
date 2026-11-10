@@ -5,7 +5,7 @@ import {
 	RiAddLine as Plus,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import type { TemplateInfo, TemplateScope, WorkspaceId } from "@thinkrail/contracts";
 import { T, t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
@@ -71,7 +71,7 @@ const STARTER_TEMPLATES: readonly StarterTemplate[] = [
 ];
 
 function useTemplateList(
-	workspaceId: string | undefined,
+	workspaceId: WorkspaceId | undefined,
 	scope: TemplateScope,
 	enabled: boolean,
 ): { templates: TemplateInfo[] | null; failed: boolean } {
@@ -196,7 +196,7 @@ function ProjectTemplatesSection({
 	onNew,
 	onEdit,
 }: {
-	workspaceId: string | undefined;
+	workspaceId: WorkspaceId | undefined;
 	templates: TemplateInfo[] | null;
 	onNew: () => void;
 	onEdit: (template: TemplateInfo) => void;
@@ -358,7 +358,7 @@ function TemplateRow({
 	onEdit,
 }: {
 	template: TemplateInfo;
-	workspaceId: string | undefined;
+	workspaceId: WorkspaceId | undefined;
 	showOpenAsFile: boolean;
 	onEdit: () => void;
 }) {

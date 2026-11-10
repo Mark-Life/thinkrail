@@ -1,4 +1,5 @@
 import { RiSendPlaneLine as Send } from "@remixicon/react";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useMemo, useState } from "react";
@@ -12,9 +13,9 @@ export function SendReviewButton({
 	chatSessionId,
 	testid = "send-review-button",
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string | readonly string[] | null;
-	chatSessionId?: string | undefined;
+	chatSessionId?: SessionId | undefined;
 	testid?: string;
 }) {
 	const t = useT();
@@ -41,7 +42,7 @@ export function SendAllReviewsButton({
 	testid = "review-send-all",
 	verb,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	testid?: string;
 	verb?: string;
 }) {

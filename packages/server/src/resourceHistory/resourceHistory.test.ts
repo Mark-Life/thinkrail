@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	type BackgroundCommandSummary,
 	type ResourceRecord,
@@ -17,6 +18,7 @@ import {
 	type SubagentResourceSummary,
 	tallyResources,
 } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	archivedCommandOutput,
 	finishedResources,
@@ -31,7 +33,7 @@ type Archive = typeof import("./resourceHistory");
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const scope = { workspaceId: "w1", sessionId: "chat-1" };
+const scope = { workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("chat-1") };
 const none = new Set<string>();
 
 beforeEach(() => {
@@ -83,7 +85,7 @@ function inFlight(id: string, patch: Partial<BackgroundCommandSummary> = {}) {
 }
 
 function subagent(
-	childSessionId: string,
+	childSessionId: SessionId,
 	patch: Partial<SubagentResourceSummary> = {},
 ): Extract<ResourceRecord, { kind: "subagent" }> {
 	return {
@@ -112,12 +114,14 @@ test("records upsert by id and survive a host restart", async () => {
 	recordResource(scope, inFlight("c1"));
 	recordResource(scope, command("c1"));
 	recordResource(scope, command("c1"));
-	recordResource(scope, subagent("child-1"));
+	recordResource(scope, subagent(testSessionId("child-1")));
 	expect(indexLines()).toHaveLength(3);
 
 	const restarted = await restartedArchive();
 	expect(restarted.finishedResources(scope, "command", none)).toEqual([command("c1")]);
-	expect(restarted.finishedResources(scope, "subagent", none)).toEqual([subagent("child-1")]);
+	expect(restarted.finishedResources(scope, "subagent", none)).toEqual([
+		subagent(testSessionId("child-1")),
+	]);
 });
 
 test("a run still in flight that no live owner reports reads as interrupted with a terminal status; a live one is left to its owner", async () => {
@@ -127,7 +131,7 @@ test("a run still in flight that no live owner reports reads as interrupted with
 		finishedAt: _finishedAt,
 		durationMs: _durationMs,
 		...child
-	} = subagent("child-1", {
+	} = subagent(testSessionId("child-1"), {
 		status: "running",
 	}).summary;
 	recordResource(scope, { kind: "subagent", summary: child });
@@ -225,23 +229,42 @@ test("pages walk newest first from a cursor and tallies count every outcome", ()
 });
 
 test("unsafe ids never touch the filesystem", () => {
-	recordResource({ workspaceId: "..", sessionId: "chat-1" }, command("c1"));
-	recordResource({ workspaceId: "w1", sessionId: "../escape" }, command("c1"));
+	recordResource(
+		{ workspaceId: testWorkspaceId(".."), sessionId: testSessionId("chat-1") },
+		command("c1"),
+	);
+	recordResource(
+		{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("../escape") },
+		command("c1"),
+	);
 	recordResource(scope, command("../../escape"));
 	expect(existsSync(resourceHistoryRoot())).toBe(false);
-	expect(finishedResources({ workspaceId: "w1", sessionId: "a/b" }, "command", none)).toEqual([]);
+	expect(
+		finishedResources(
+			{ workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("a/b") },
+			"command",
+			none,
+		),
+	).toEqual([]);
 });
 
 test("removing a workspace drops its history on disk and in memory", () => {
 	recordResource(scope, command("c1"), { text: "log", truncated: false });
-	recordResource({ workspaceId: "w2", sessionId: "chat-2" }, command("c2"));
-	removeWorkspaceResourceHistory("w1");
+	recordResource(
+		{ workspaceId: testWorkspaceId("w2"), sessionId: testSessionId("chat-2") },
+		command("c2"),
+	);
+	removeWorkspaceResourceHistory(testWorkspaceId("w1"));
 
 	expect(existsSync(join(resourceHistoryRoot(), "w1"))).toBe(false);
 	expect(finishedResources(scope, "command", none)).toEqual([]);
 	expect(archivedCommandOutput(scope, "c1")).toBeUndefined();
 	expect(
-		finishedResources({ workspaceId: "w2", sessionId: "chat-2" }, "command", none),
+		finishedResources(
+			{ workspaceId: testWorkspaceId("w2"), sessionId: testSessionId("chat-2") },
+			"command",
+			none,
+		),
 	).toHaveLength(1);
 });
 

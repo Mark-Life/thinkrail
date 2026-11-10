@@ -2,7 +2,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiGitCommitLine as GitCommitHorizontal,
 } from "@remixicon/react";
-import type { GitCommit } from "@thinkrail/contracts";
+import type { GitCommit, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -22,7 +22,7 @@ export function PlanCommitsMenu({
 	reloadSignal,
 	onOpenCommit,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	reloadSignal: number;
 	onOpenCommit: (sha: string) => void;
 }) {

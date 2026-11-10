@@ -5,6 +5,7 @@ import type {
 	McpServerResourceSummary,
 	SubagentResourceSummary,
 } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ComponentProps, ReactNode } from "react";
@@ -18,15 +19,15 @@ const renderInspector = (node: ReactNode) =>
 	renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
 const command: BackgroundCommandSummary = {
 	id: "build",
-	sessionId: "chat",
+	sessionId: testSessionId("chat"),
 	name: "Build <script>",
 	command: "echo '<img src=x onerror=bad()>'",
 	status: "running",
 	startedAt: NOW - 4 * 60_000,
 };
 const child: SubagentResourceSummary = {
-	childSessionId: "child",
-	parentSessionId: "chat",
+	childSessionId: testSessionId("child"),
+	parentSessionId: testSessionId("chat"),
 	roleName: "scout",
 	task: "<b>Inspect</b> the registry",
 	status: "queued",
@@ -248,7 +249,7 @@ test("the inspector renders a listbox of options whose accessible names carry th
 			finishedSubagents={[
 				{
 					...child,
-					childSessionId: "child-done",
+					childSessionId: testSessionId("child-done"),
 					status: "aborted",
 					abortReason: "Stopped by user",
 				},
@@ -384,7 +385,7 @@ test("the inspector groups work by kind and folds finished rows past the newest 
 test("expanded, the fold reveals the rest in order, offers the next page with what is left, and collapses back", () => {
 	const finished = Array.from({ length: 8 }, (_, index) => ({
 		...child,
-		childSessionId: `child-${index}`,
+		childSessionId: testSessionId(`child-${index}`),
 		status: "completed" as const,
 		finishedAt: NOW - index * 60_000,
 	}));
@@ -553,7 +554,7 @@ test("command logs distinguish loading, empty, retry, permanent unavailability, 
 test("the result row maps a completion to the shared states, teases the last output line and stays collapsed unless told", () => {
 	const finished = {
 		id: "bg-1",
-		sessionId: "chat",
+		sessionId: testSessionId("chat"),
 		name: "full e2e <b>",
 		status: "completed" as const,
 		startedAt: 0,
@@ -602,7 +603,7 @@ test("the result row maps a completion to the shared states, teases the last out
 			source={{
 				kind: "subagent",
 				details: {
-					childSessionId: "child",
+					childSessionId: testSessionId("child"),
 					roleName: "reviewer",
 					task: "review",
 					status: "aborted",
@@ -770,7 +771,7 @@ test("a jump to what finished lands on the newest finish across kinds", () => {
 	});
 	const reviewed: SubagentResourceSummary = {
 		...child,
-		childSessionId: "reviewed",
+		childSessionId: testSessionId("reviewed"),
 		status: "completed",
 		finishedAt: NOW - 30_000,
 	};

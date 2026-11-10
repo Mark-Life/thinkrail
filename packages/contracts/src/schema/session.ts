@@ -14,6 +14,7 @@ import {
 	unknown,
 } from "@earendil-works/pi-schema";
 import { ExtUiDialogRequest, ExtUiResponse } from "./extUi";
+import { ProjectId, SessionId, WorkspaceId } from "./ids";
 import { ThinkingLevel, WireModel } from "./model";
 import {
 	ResourceHistoryCursor,
@@ -52,9 +53,9 @@ export const SessionState = wireObj({
 export type SessionState = Static<typeof SessionState>;
 
 export const SessionStateRecord = wireObj({
-	sessionId: str(),
-	workspaceId: str(),
-	projectId: str(),
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
+	projectId: ProjectId,
 	state: SessionState,
 	title: opt(str()),
 	firstPrompt: opt(str()),
@@ -69,7 +70,7 @@ export const ContextUsage = wireObj({
 export type ContextUsage = Static<typeof ContextUsage>;
 
 export const SessionStats = wireObj({
-	sessionId: str(),
+	sessionId: SessionId,
 	totalMessages: num(),
 	tokens: wireObj({
 		input: num(),
@@ -112,8 +113,8 @@ export const RemovedQueuedMessage = wireObj({
 export type RemovedQueuedMessage = Static<typeof RemovedQueuedMessage>;
 
 export const SessionSummary = wireObj({
-	sessionId: str(),
-	workspaceId: str(),
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	title: str(),
 	firstPrompt: opt(str()),
 	model: nullable(WireModel),
@@ -129,13 +130,13 @@ export const SessionSummary = wireObj({
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
-const SessionTarget = wireObj({ sessionId: str() });
-const ScopedSession = wireObj({ workspaceId: str(), sessionId: str() });
+const SessionTarget = wireObj({ sessionId: SessionId });
+const ScopedSession = wireObj({ workspaceId: WorkspaceId, sessionId: SessionId });
 
 export const SessionDeletedPayload = ScopedSession;
 export type SessionDeletedPayload = Static<typeof ScopedSession>;
 const UserMessageParams = wireObj({
-	sessionId: str(),
+	sessionId: SessionId,
 	text: str(),
 	images: opt(arr(ImageContent)),
 });
@@ -143,12 +144,12 @@ const UserMessageParams = wireObj({
 export const SESSION_METHODS = {
 	"session.create": {
 		params: wireObj({
-			workspaceId: str(),
+			workspaceId: WorkspaceId,
 			model: opt(WireModel),
 			thinkingLevel: opt(ThinkingLevel),
 		}),
 		result: wireObj({
-			sessionId: str(),
+			sessionId: SessionId,
 			model: nullable(WireModel),
 			thinkingLevel: ThinkingLevel,
 		}),
@@ -157,30 +158,30 @@ export const SESSION_METHODS = {
 	"session.steer": { params: UserMessageParams, result: Ack },
 	"session.followUp": { params: UserMessageParams, result: Ack },
 	"session.clearQueue": {
-		params: wireObj({ sessionId: str(), requireTextOnly: opt(bool()) }),
+		params: wireObj({ sessionId: SessionId, requireTextOnly: opt(bool()) }),
 		result: SessionQueueContent,
 	},
 	"session.removeQueued": {
-		params: wireObj({ sessionId: str(), kind: QueueLane, index: num() }),
+		params: wireObj({ sessionId: SessionId, kind: QueueLane, index: num() }),
 		result: RemovedQueuedMessage,
 	},
 	"session.abort": {
-		params: wireObj({ sessionId: str(), restoreQueue: opt(bool()) }),
+		params: wireObj({ sessionId: SessionId, restoreQueue: opt(bool()) }),
 		result: wireObj({ ok: lit(true), restoredQueue: opt(SessionQueueContent) }),
 	},
 	"session.dispose": { params: SessionTarget, result: Ack },
 	"session.delete": { params: ScopedSession, result: Ack },
 	"session.rename": {
-		params: wireObj({ workspaceId: str(), sessionId: str(), title: str() }),
+		params: wireObj({ workspaceId: WorkspaceId, sessionId: SessionId, title: str() }),
 		result: Ack,
 	},
-	"session.setModel": { params: wireObj({ sessionId: str(), model: WireModel }), result: Ack },
+	"session.setModel": { params: wireObj({ sessionId: SessionId, model: WireModel }), result: Ack },
 	"session.setThinkingLevel": {
-		params: wireObj({ sessionId: str(), level: ThinkingLevel }),
+		params: wireObj({ sessionId: SessionId, level: ThinkingLevel }),
 		result: Ack,
 	},
 	"session.compact": {
-		params: wireObj({ sessionId: str(), instructions: opt(str()) }),
+		params: wireObj({ sessionId: SessionId, instructions: opt(str()) }),
 		result: Ack,
 	},
 	"session.getStats": { params: SessionTarget, result: SessionStats },
@@ -188,23 +189,23 @@ export const SESSION_METHODS = {
 	"session.reloadResources": { params: SessionTarget, result: Ack },
 	"session.extUiReply": { params: wireObj({ response: ExtUiResponse }), result: Ack },
 	"session.respondToTool": {
-		params: wireObj({ sessionId: str(), toolCallId: str(), response: unknown() }),
+		params: wireObj({ sessionId: SessionId, toolCallId: str(), response: unknown() }),
 		result: Ack,
 	},
 	"session.answerQuestion": {
-		params: wireObj({ sessionId: str(), toolCallId: str(), result: unknown() }),
+		params: wireObj({ sessionId: SessionId, toolCallId: str(), result: unknown() }),
 		result: Ack,
 	},
-	"session.list": { params: wireObj({ workspaceId: str() }), result: arr(SessionSummary) },
+	"session.list": { params: wireObj({ workspaceId: WorkspaceId }), result: arr(SessionSummary) },
 	"session.stateList": { params: NoParams, result: arr(SessionStateRecord) },
 	"session.acknowledgeCompletion": {
-		params: wireObj({ sessionId: str(), completionId: str() }),
+		params: wireObj({ sessionId: SessionId, completionId: str() }),
 		result: wireObj({ acknowledged: bool(), record: SessionStateRecord }),
 	},
 	"session.nudge": {
 		params: wireObj({
-			workspaceId: str(),
-			sessionId: str(),
+			workspaceId: WorkspaceId,
+			sessionId: SessionId,
 			text: str(),
 			images: opt(arr(ImageContent)),
 		}),
@@ -218,8 +219,8 @@ export const SESSION_METHODS = {
 	"session.resources": { params: ScopedSession, result: SessionResources },
 	"session.resourceHistory": {
 		params: wireObj({
-			workspaceId: str(),
-			sessionId: str(),
+			workspaceId: WorkspaceId,
+			sessionId: SessionId,
 			kind: ResourceKind,
 			before: opt(ResourceHistoryCursor),
 			limit: opt(int({ minimum: 1 })),
@@ -229,7 +230,7 @@ export const SESSION_METHODS = {
 };
 
 export const SESSION_CHANNELS = {
-	"pi.event": wireObj({ sessionId: str(), event: wireObj({ type: str() }) }),
+	"pi.event": wireObj({ sessionId: SessionId, event: wireObj({ type: str() }) }),
 	"session.created": SessionSummary,
 	"session.deleted": SessionDeletedPayload,
 	"session.resourcesChanged": ScopedSession,

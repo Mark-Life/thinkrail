@@ -4,7 +4,13 @@ import {
 	RiSaveLine as Save,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
+import type {
+	HistoryScope,
+	MessageHit,
+	PromptHit,
+	SessionId,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
@@ -91,10 +97,10 @@ function DeleteChatButton({
 	isSelected,
 	onDeleteChat,
 }: {
-	workspaceId: string | undefined;
-	sessionId: string;
+	workspaceId: WorkspaceId | undefined;
+	sessionId: SessionId;
 	isSelected: boolean;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 }) {
 	const t = useT();
 	if (!workspaceId) return null;
@@ -137,7 +143,7 @@ function PromptRow({
 	onPick: () => void;
 	onSaveAsTemplate: () => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -238,7 +244,7 @@ function MessageRow({
 	highlight: HighlightTerms;
 	isSelected: boolean;
 	onPick: () => void;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -356,7 +362,7 @@ export interface HistoryOverlayProps {
 	onInsertAndSend: (hit: PromptHit) => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
 	onSaveAsTemplate: (hit: PromptHit) => void;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 	onSetScope: (kind: HistoryScope["kind"]) => void;
 }
 
@@ -409,8 +415,8 @@ function HistoryPicker({
 	useEffect(() => {
 		if (scopeMenuOpen) return;
 		const onWindowPointerDown = (e: PointerEvent) => {
-			const target = e.target as Element | null;
-			if (!target) return;
+			const target = e.target;
+			if (!(target instanceof Element)) return;
 			if (rootRef.current?.contains(target)) return;
 			if (target.closest("[data-history-trigger]")) return;
 			onOutsidePress();

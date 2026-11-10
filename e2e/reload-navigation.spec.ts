@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { compile } from "@earendil-works/pi-schema";
 import { expect, type Page, test } from "@playwright/test";
+import { WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
 	createWorkspaceViaDialog,
@@ -9,7 +9,11 @@ import {
 	revealWorkbenchTool,
 	worktreeRows,
 } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import { readPersistedProjects } from "./fixtures/storedState";
+import { readRequest } from "./fixtures/wire";
+
+const SESSION_GETMESSAGES_PARAMS = compile(WS_METHOD_SCHEMAS["session.getMessages"].params);
+const WORKSPACE_LIST_PARAMS = compile(WS_METHOD_SCHEMAS["workspace.list"].params);
 
 const chatTabs = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 const activeTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-active="true"]');
@@ -21,11 +25,8 @@ function chatIdFromHash(hash: string): string {
 	return decodeURIComponent(encoded);
 }
 
-function fixtureProjectId(): string {
-	const projects = JSON.parse(readFileSync(join(E2E_DATA_DIR, "projects.json"), "utf8")) as {
-		id: string;
-	}[];
-	const id = projects[0]?.id;
+function fixtureProjectId() {
+	const id = readPersistedProjects()[0]?.id;
 	if (!id) throw new Error("no fixture project persisted");
 	return id;
 }
@@ -161,20 +162,8 @@ test("a transient workspace read failure preserves the URL and restores after re
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { id?: string; method?: string; params?: { includeDiffStats?: boolean } };
-			try {
-				frame = JSON.parse(raw) as typeof frame;
-			} catch {
-				server.send(message);
-				return;
-			}
-			if (
-				!injected &&
-				frame.id &&
-				frame.method === "workspace.list" &&
-				frame.params?.includeDiffStats === false
-			) {
+			const frame = readRequest(message.toString(), "workspace.list", WORKSPACE_LIST_PARAMS);
+			if (!injected && frame?.params.includeDiffStats === false) {
 				injected = true;
 				ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected transient failure" }));
 				void ws.close();
@@ -211,20 +200,12 @@ test("a failed exact-chat transcript waits for reconnect instead of duplicating 
 		const thisSocket = socketNumber;
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { id?: string; method?: string; params?: { sessionId?: string } };
-			try {
-				frame = JSON.parse(raw) as typeof frame;
-			} catch {
-				server.send(message);
-				return;
-			}
-			if (
-				thisSocket === 1 &&
-				frame.id &&
-				frame.method === "session.getMessages" &&
-				frame.params?.sessionId === sessionId
-			) {
+			const frame = readRequest(
+				message.toString(),
+				"session.getMessages",
+				SESSION_GETMESSAGES_PARAMS,
+			);
+			if (thisSocket === 1 && frame?.params.sessionId === sessionId) {
 				firstSocketTargetReads += 1;
 				ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected transcript failure" }));
 				if (!closeScheduled) {
@@ -266,20 +247,9 @@ test("user navigation while the restore read is delayed wins over the late respo
 			heldFrame = null;
 		};
 		ws.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { method?: string; params?: { includeDiffStats?: boolean } };
-			try {
-				frame = JSON.parse(raw) as typeof frame;
-			} catch {
-				server.send(message);
-				return;
-			}
-			if (
-				heldFrame === null &&
-				releaseHeld !== null &&
-				frame.method === "workspace.list" &&
-				frame.params?.includeDiffStats === false
-			) {
+			const raw = message.toString();
+			const frame = readRequest(raw, "workspace.list", WORKSPACE_LIST_PARAMS);
+			if (heldFrame === null && releaseHeld !== null && frame?.params.includeDiffStats === false) {
 				heldFrame = raw;
 				return;
 			}

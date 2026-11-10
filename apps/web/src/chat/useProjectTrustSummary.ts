@@ -1,4 +1,4 @@
-import type { ProjectTrustSummary } from "@thinkrail/contracts";
+import type { ProjectId, ProjectTrustSummary } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { selectSupportsProjectTrust, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -10,7 +10,7 @@ const NOTHING_GATED: ProjectTrustSummary = {
 };
 
 export function useProjectTrustSummary(
-	projectId: string,
+	projectId: ProjectId,
 	enabled = true,
 ): ProjectTrustSummary | null {
 	const supportsProjectTrust = useAppStore(selectSupportsProjectTrust);

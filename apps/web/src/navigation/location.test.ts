@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	MAIN_LOCATION,
 	type NavigationLocation,
@@ -9,9 +10,14 @@ import {
 test("the codec round-trips all four location kinds", () => {
 	const locations: NavigationLocation[] = [
 		{ kind: "main" },
-		{ kind: "project", projectId: "p1" },
-		{ kind: "workspace", projectId: "p1", workspaceId: "w1" },
-		{ kind: "chat", projectId: "p1", workspaceId: "w1", sessionId: "s1" },
+		{ kind: "project", projectId: testProjectId("p1") },
+		{ kind: "workspace", projectId: testProjectId("p1"), workspaceId: testWorkspaceId("w1") },
+		{
+			kind: "chat",
+			projectId: testProjectId("p1"),
+			workspaceId: testWorkspaceId("w1"),
+			sessionId: testSessionId("s1"),
+		},
 	];
 	for (const location of locations) {
 		expect(parseFragment(serializeLocation(location))).toEqual(location);
@@ -21,9 +27,9 @@ test("the codec round-trips all four location kinds", () => {
 test("ids that need encoding survive the round trip as single path segments", () => {
 	const location: NavigationLocation = {
 		kind: "chat",
-		projectId: "p/with slash",
-		workspaceId: "w#hash?q",
-		sessionId: "s%25already",
+		projectId: testProjectId("p/with slash"),
+		workspaceId: testWorkspaceId("w#hash?q"),
+		sessionId: testSessionId("s%25already"),
 	};
 	const fragment = serializeLocation(location);
 	expect(fragment.split("/")).toHaveLength(8);
@@ -31,8 +37,14 @@ test("ids that need encoding survive the round trip as single path segments", ()
 });
 
 test("parse accepts the fragment with or without its leading '#'", () => {
-	expect(parseFragment("/v1/projects/p1")).toEqual({ kind: "project", projectId: "p1" });
-	expect(parseFragment("#/v1/projects/p1")).toEqual({ kind: "project", projectId: "p1" });
+	expect(parseFragment("/v1/projects/p1")).toEqual({
+		kind: "project",
+		projectId: testProjectId("p1"),
+	});
+	expect(parseFragment("#/v1/projects/p1")).toEqual({
+		kind: "project",
+		projectId: testProjectId("p1"),
+	});
 });
 
 test("malformed and unknown fragments canonicalize safely to main", () => {

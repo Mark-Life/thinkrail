@@ -1,4 +1,4 @@
-import type { GitDiffScope } from "@thinkrail/contracts";
+import type { GitDiffScope, WorkspaceId } from "@thinkrail/contracts";
 import { PENDING_TEXT_META } from "./content";
 import { describeResource, inferredMime } from "./describe";
 import { selectResourceRenderer } from "./selection";
@@ -103,7 +103,7 @@ function inferredBinary(path: string): boolean {
 }
 
 export function diffRendererCapabilities(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	path: string,
 	scope: GitDiffScope,
 	selectedId: string | undefined,

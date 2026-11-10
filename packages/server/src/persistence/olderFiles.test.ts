@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
 import { AppConfig, Project, Workspace } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	claimAppInstalled,
 	ensureInstallation,
@@ -71,8 +72,8 @@ const PROJECTS = {
 
 const WORKSPACES = {
 	"v0.0.1": {
-		id: "w",
-		projectId: "p",
+		id: testWorkspaceId("w"),
+		projectId: testProjectId("p"),
 		name: "w",
 		branch: "b",
 		worktreePath: "/repo/w",
@@ -81,8 +82,8 @@ const WORKSPACES = {
 		diffStats: { added: 1, removed: 2, changed: 3 },
 	},
 	"v0.1.6": {
-		id: "w",
-		projectId: "p",
+		id: testWorkspaceId("w"),
+		projectId: testProjectId("p"),
 		kind: "external",
 		name: "w",
 		branch: "b",
@@ -94,8 +95,8 @@ const WORKSPACES = {
 		subagentsOverride: "on",
 	},
 	"v0.3.1": {
-		id: "w",
-		projectId: "p",
+		id: testWorkspaceId("w"),
+		projectId: testProjectId("p"),
 		kind: "default",
 		name: "w",
 		branch: "b",
@@ -187,7 +188,7 @@ test.each(Object.entries(PROJECTS))(
 test("a project stored with no slug keeps loading, for the owner to heal", () => {
 	const { slug: _slug, ...withoutSlug } = PROJECTS["v0.0.1"];
 	write("projects.json", [withoutSlug]);
-	expect(loadProjects()).toEqual([{ ...withoutSlug, slug: "" }]);
+	expect<unknown>(loadProjects()).toEqual([{ ...withoutSlug, slug: "" }]);
 	noCopies();
 });
 
@@ -248,8 +249,8 @@ test("a stored model with its identity but a partial snapshot stays usable on th
 test("the other state files of v0.3.1 load unchanged", () => {
 	const turn = {
 		id: "t",
-		workspaceId: "w",
-		sessionId: "s",
+		workspaceId: testWorkspaceId("w"),
+		sessionId: testSessionId("s"),
 		startedAt: 1,
 		settledAt: 2,
 		baseTree: "a",
@@ -324,6 +325,6 @@ test("workspace creation records load whole, and a bad one drops with a copy", (
 	noCopies();
 
 	write("workspace-creations.json", [running, { ...failed, state: "done" }]);
-	expect(loadWorkspaceCreations().map((record) => record.id)).toEqual(["c1"]);
+	expect(loadWorkspaceCreations().map((record) => record.id)).toEqual([testWorkspaceId("c1")]);
 	expect(readdirSync(root).filter((name) => name.includes(".corrupt-"))).toHaveLength(1);
 });

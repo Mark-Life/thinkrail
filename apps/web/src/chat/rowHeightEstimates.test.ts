@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { registerWebExtensions } from "@/extensions";
 import "./tools/register";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	estimateChatRowHeight,
 	estimateChatRowHeights,
@@ -120,7 +121,7 @@ describe("chat row height estimates", () => {
 			id: "subagent-1",
 			text: Array.from({ length: 100 }, () => paragraph).join("\n\n"),
 			details: {
-				childSessionId: "child-1",
+				childSessionId: testSessionId("child-1"),
 				task: "Inspect the fixture",
 				status: "completed",
 				usage: {

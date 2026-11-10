@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { testProjectId } from "@thinkrail/contracts/test-ids";
 import { parseWelcome } from "./welcome";
 
-const project = { id: "p1", name: "one", path: "/one", slug: "one", lastOpened: 1 };
+const project = { id: testProjectId("p1"), name: "one", path: "/one", slug: "one", lastOpened: 1 };
 
 describe("parseWelcome", () => {
 	test("keeps what an older host sends that still reads, and names what it leaves out", () => {

@@ -17,7 +17,13 @@ import {
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 } from "@remixicon/react";
-import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
+import type {
+	ReviewComment,
+	SessionId,
+	TodoGroupItem,
+	TodoItem,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
@@ -95,7 +101,7 @@ function ChangeSetBlock({
 	onOpenCommit,
 }: {
 	item: TodoItem;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	onOpenCommit: (sha: string) => void;
 }) {
 	const t = useT();
@@ -269,8 +275,8 @@ function ItemBlock({
 	focusRequest,
 }: {
 	item: TodoItem;
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
@@ -522,8 +528,8 @@ function GroupSection({
 	focusRequest,
 }: {
 	group: TodoGroupItem;
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
@@ -670,8 +676,8 @@ function PlanInteractionCard({
 	sessionId,
 	pending,
 }: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	pending: PendingInteraction;
 }) {
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
@@ -694,7 +700,13 @@ function PlanInteractionCard({
 }
 
 // Keep the session's live slot isolated from the heavy PlanPane.
-function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
+function PlanSessionLive({
+	workspaceId,
+	sessionId,
+}: {
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
+}) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
@@ -892,8 +904,8 @@ export default function PlanPane({
 	workspaceId,
 	sessionId,
 }: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 }) {
 	const t = useT();
 	const plan = useChatTodos(workspaceId, sessionId);

@@ -4,8 +4,9 @@ import type {
 	TerminalDetachedPush,
 	TerminalExitPush,
 	TerminalTabInfo,
+	WorkspaceId,
 } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { asWorkspaceId, WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import {
 	loadConfig,
@@ -24,7 +25,7 @@ import { hasChildProcesses } from "./shellBusy";
 
 interface TerminalEntry {
 	pty: IPty;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	tabKey: string;
 	attachedClient: string | null;
 	output: OutputBatcher;
@@ -48,12 +49,12 @@ const MAX_TERMINAL_TITLE_LENGTH = 1000;
 
 const terminals = new Map<string, TerminalEntry>();
 const ptyByTab = new Map<string, string>();
-const tabsByWorkspace = new Map<string, TabRecord[]>();
+const tabsByWorkspace = new Map<WorkspaceId, TabRecord[]>();
 const pendingReplay = new Map<string, string>();
 
 const TAB_INDEX_SEP = "\u0000";
 
-function tabIndex(workspaceId: string, tabKey: string): string {
+function tabIndex(workspaceId: WorkspaceId, tabKey: string): string {
 	return `${workspaceId}${TAB_INDEX_SEP}${tabKey}`;
 }
 
@@ -62,14 +63,14 @@ export function setTerminalPublisher(fn: PushToClient): void {
 	pushToClient = fn;
 }
 
-let broadcastTabs: (workspaceId: string, tabs: TerminalTabInfo[]) => void = () => {};
+let broadcastTabs: (workspaceId: WorkspaceId, tabs: TerminalTabInfo[]) => void = () => {};
 export function setTerminalTabsPublisher(
-	fn: (workspaceId: string, tabs: TerminalTabInfo[]) => void,
+	fn: (workspaceId: WorkspaceId, tabs: TerminalTabInfo[]) => void,
 ): void {
 	broadcastTabs = fn;
 }
 
-function membershipChanged(workspaceId: string): void {
+function membershipChanged(workspaceId: WorkspaceId): void {
 	broadcastTabs(workspaceId, listTerminals(workspaceId));
 	persistTerminalSessions();
 }
@@ -84,7 +85,7 @@ function replayBudgetChars(): number {
 	return loadConfig().terminalReplayKb * 1024;
 }
 
-function tabsFor(workspaceId: string): TabRecord[] {
+function tabsFor(workspaceId: WorkspaceId): TabRecord[] {
 	let tabs = tabsByWorkspace.get(workspaceId);
 	if (!tabs) {
 		tabs = [];
@@ -132,7 +133,7 @@ function assertTerminalCatalogCapacity(tabs: readonly TabRecord[]): void {
 }
 
 function spawnForTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	clientKey: string,
 	size: { cols?: number; rows?: number },
@@ -210,7 +211,7 @@ function spawnForTab(
 }
 
 export function reserveTerminal(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	title: string,
 ): TerminalTabInfo {
@@ -240,7 +241,7 @@ export interface AttachResult {
 }
 
 export function attachTerminal(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	clientKey: string,
 	options: { title?: string; cols?: number; rows?: number } = {},
@@ -291,7 +292,7 @@ export function attachTerminal(
 	return { id, created: true, ...(replay ? { replay } : {}) };
 }
 
-export function listTerminals(workspaceId: string): TerminalTabInfo[] {
+export function listTerminals(workspaceId: WorkspaceId): TerminalTabInfo[] {
 	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
 }
 
@@ -342,7 +343,7 @@ export interface CloseTabResult {
 }
 
 export function closeTerminalTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	force = false,
 ): CloseTabResult {
@@ -369,7 +370,7 @@ export function resumeClientTerminals(clientKey: string): void {
 	completions.resume(clientKey);
 }
 
-export function closeWorkspaceTerminals(workspaceId: string): void {
+export function closeWorkspaceTerminals(workspaceId: WorkspaceId): void {
 	for (const [id, entry] of terminals) {
 		if (entry.workspaceId === workspaceId) disposeTerminalEntry(id, entry);
 	}
@@ -401,7 +402,8 @@ export function persistTerminalSessions(): void {
 }
 
 export function reviveTerminalSessions(): void {
-	for (const [workspaceId, tabs] of Object.entries(loadTerminalSessions())) {
+	for (const [rawWorkspaceId, tabs] of Object.entries(loadTerminalSessions())) {
+		const workspaceId = asWorkspaceId(rawWorkspaceId);
 		const restored: TabRecord[] = [];
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
 			if (!isValidTerminalTabKey(tab.tabKey)) continue;

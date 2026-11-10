@@ -1,20 +1,27 @@
-import type {
+import {
+	bool,
+	compile,
+	lit,
+	num,
+	obj,
+	opt,
+	type Static,
+	str,
+	unknown,
+} from "@earendil-works/pi-schema";
+import type { SessionEventPayload, ToolResponseDetails } from "./piProtocol";
+import {
 	BackgroundCommandCompletionDetails,
-	CompletionDelivery,
+	CustomMessageContent,
+	type ModelContextSetting,
 	ReviewFixDetails,
 	SubagentCompletionDetails,
-} from "./domain";
-import { isDelegationRunDetails } from "./domain";
-import type {
-	SessionEventPayload,
-	ToolResponseDetails,
-	ToolResponsePendingDetails,
-} from "./piProtocol";
-import type {
-	ModelContextSetting,
-	WireCustomMessage,
-	WsSchemaChannelMap,
-	WsSchemaMethodMap,
+	type WireCustomMessage,
+	type WsAck,
+	type WsRequestFrame,
+	type WsResume,
+	type WsSchemaChannelMap,
+	type WsSchemaMethodMap,
 } from "./schema";
 
 export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
@@ -333,116 +340,80 @@ export interface ToolResponseMessage extends WireCustomMessage<ToolResponseDetai
 	details: ToolResponseDetails;
 }
 
-export function isToolResponsePending(details: unknown): details is ToolResponsePendingDetails {
-	return (
-		!!details &&
-		typeof details === "object" &&
-		(details as ToolResponsePendingDetails).kind === "ack"
-	);
-}
+export const isToolResponsePending = compile(obj({ kind: lit("ack") }, { open: true })).check;
+
+const ToolResponseView = compile(
+	obj(
+		{
+			role: lit("custom"),
+			customType: str(),
+			details: obj(
+				{ toolCallId: str(), response: opt(unknown()), result: opt(unknown()) },
+				{ open: true },
+			),
+		},
+		{ open: true },
+	),
+);
 
 export function readToolResponseMessage(message: unknown): ToolResponseDetails | null {
-	if (!message || typeof message !== "object") return null;
-	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
-	if (m.role !== "custom" || !m.details || typeof m.details !== "object") return null;
-	const details = m.details as { toolCallId?: unknown; response?: unknown; result?: unknown };
-	if (typeof details.toolCallId !== "string") return null;
-	if (m.customType === TOOL_RESPONSE_CUSTOM_TYPE && "response" in details)
+	if (!ToolResponseView.check(message)) return null;
+	const { customType, details } = message;
+	if (customType === TOOL_RESPONSE_CUSTOM_TYPE && "response" in details)
 		return { toolCallId: details.toolCallId, response: details.response };
-	if (m.customType === LEGACY_ASK_ANSWERS_CUSTOM_TYPE && details.result !== undefined)
+	if (customType === LEGACY_ASK_ANSWERS_CUSTOM_TYPE && details.result !== undefined)
 		return { toolCallId: details.toolCallId, response: details.result };
 	return null;
 }
 
+const CUSTOM_MESSAGE_FIELDS = {
+	role: lit("custom"),
+	content: CustomMessageContent,
+	display: bool(),
+	timestamp: num(),
+};
+
 export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
 
-export interface SubagentCompletionMessage extends WireCustomMessage<SubagentCompletionDetails> {
-	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
-	details: SubagentCompletionDetails;
-}
-
-export function completionDelivery(details: {
-	delivery?: unknown;
-}): CompletionDelivery | undefined {
-	const { delivery } = details;
-	return delivery === "wake" || delivery === "run" || delivery === "appended"
-		? delivery
-		: undefined;
-}
-
-export function isSubagentCompletionMessage(
-	message: unknown,
-): message is SubagentCompletionMessage {
-	if (!message || typeof message !== "object") return false;
-	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
-	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
-	return isDelegationRunDetails(m.details);
-}
+const SubagentCompletionMessage = obj(
+	{
+		...CUSTOM_MESSAGE_FIELDS,
+		customType: lit(SUBAGENT_COMPLETION_CUSTOM_TYPE),
+		details: SubagentCompletionDetails,
+	},
+	{ open: true },
+);
+export type SubagentCompletionMessage = Static<typeof SubagentCompletionMessage>;
+export const isSubagentCompletionMessage = compile(SubagentCompletionMessage).check;
 
 export const TODO_REVIEW_FIX_CUSTOM_TYPE = "todo-review-fix";
 
-export interface TodoReviewFixMessage extends WireCustomMessage<ReviewFixDetails> {
-	customType: typeof TODO_REVIEW_FIX_CUSTOM_TYPE;
-	details: ReviewFixDetails;
-}
-
-export function isTodoReviewFixMessage(message: unknown): message is TodoReviewFixMessage {
-	if (!message || typeof message !== "object") return false;
-	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
-	if (m.role !== "custom" || m.customType !== TODO_REVIEW_FIX_CUSTOM_TYPE) return false;
-	const details = m.details as Partial<ReviewFixDetails> | undefined;
-	return (
-		typeof details?.itemId === "string" &&
-		typeof details.itemTitle === "string" &&
-		Array.isArray(details.comments)
-	);
-}
+const TodoReviewFixMessage = obj(
+	{
+		...CUSTOM_MESSAGE_FIELDS,
+		customType: lit(TODO_REVIEW_FIX_CUSTOM_TYPE),
+		details: ReviewFixDetails,
+	},
+	{ open: true },
+);
+export type TodoReviewFixMessage = Static<typeof TodoReviewFixMessage>;
+export const isTodoReviewFixMessage = compile(TodoReviewFixMessage).check;
 
 export const BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE = "background-command-completion";
 
-export interface BackgroundCommandCompletionMessage
-	extends WireCustomMessage<BackgroundCommandCompletionDetails> {
-	customType: typeof BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE;
-	display: true;
-	details: BackgroundCommandCompletionDetails;
-}
-
-export function isBackgroundCommandCompletionMessage(
-	message: unknown,
-): message is BackgroundCommandCompletionMessage {
-	if (!message || typeof message !== "object") return false;
-	const m = message as {
-		role?: unknown;
-		customType?: unknown;
-		display?: unknown;
-		details?: unknown;
-	};
-	if (
-		m.role !== "custom" ||
-		m.customType !== BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE ||
-		m.display !== true
-	)
-		return false;
-	if (!m.details || typeof m.details !== "object") return false;
-	const d = m.details as Partial<BackgroundCommandCompletionDetails>;
-	if ([d.id, d.sessionId, d.name].some((field) => typeof field !== "string")) return false;
-	if (d.status !== "completed" && d.status !== "error" && d.status !== "stopped") return false;
-	if (
-		typeof d.startedAt !== "number" ||
-		!Number.isFinite(d.startedAt) ||
-		typeof d.finishedAt !== "number" ||
-		!Number.isFinite(d.finishedAt)
-	)
-		return false;
-	if (
-		d.exitCode !== undefined &&
-		d.exitCode !== null &&
-		(typeof d.exitCode !== "number" || !Number.isFinite(d.exitCode))
-	)
-		return false;
-	if (d.errorMessage !== undefined && typeof d.errorMessage !== "string") return false;
-	return !!d.output && typeof d.output.text === "string" && typeof d.output.truncated === "boolean";
-}
+const BackgroundCommandCompletionMessage = obj(
+	{
+		...CUSTOM_MESSAGE_FIELDS,
+		customType: lit(BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE),
+		display: lit(true),
+		details: BackgroundCommandCompletionDetails,
+	},
+	{ open: true },
+);
+export type BackgroundCommandCompletionMessage = Static<typeof BackgroundCommandCompletionMessage>;
+export const isBackgroundCommandCompletionMessage = compile(
+	BackgroundCommandCompletionMessage,
+).check;
 
 export function customMessageText(content: WireCustomMessage["content"]): string {
 	if (typeof content === "string") return content;
@@ -485,19 +456,10 @@ export type WsMethodName = SameUnion<
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
 export type WsResult<M extends WsMethodName> = WsMethodMap[M]["result"];
 
-export interface WsRequest<M extends WsMethodName = WsMethodName> {
-	id: string;
+export interface WsRequest<M extends WsMethodName = WsMethodName>
+	extends Omit<WsRequestFrame, "method" | "params"> {
 	method: M;
 	params: WsParams<M>;
-	sessionId?: string;
-}
-
-export interface WsAck {
-	ack: string[];
-}
-
-export interface WsResume {
-	resume: string[];
 }
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;

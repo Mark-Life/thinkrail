@@ -1,3 +1,4 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect } from "react";
 import { hostSessionGlance, sessionGlance } from "../chat/planView";
@@ -10,8 +11,8 @@ export default function PlanRailPane({
 	workspaceId,
 	sessionId,
 }: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 }) {
 	const t = useT();
 	const plan = useChatTodos(workspaceId, sessionId);

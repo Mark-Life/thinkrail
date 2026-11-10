@@ -9,7 +9,8 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { PiEvent } from "@thinkrail/contracts";
+import type { PiEvent, SessionId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	configurePiRuntime,
 	configurePiRuntimeFactory,
@@ -60,8 +61,8 @@ beforeEach(async () => {
 	sh("commit", "-m", "init");
 	saveWorkspaces([
 		{
-			id: "w1",
-			projectId: "p1",
+			id: testWorkspaceId("w1"),
+			projectId: testProjectId("p1"),
 			kind: "default",
 			name: "repo",
 			branch: "main",
@@ -110,7 +111,7 @@ test.each(["removeSession", "shutdown"] as const)(
 		let recording: Promise<void> | undefined;
 		const observeSpy = spyOn(TurnTracker.prototype, "observe").mockImplementation(function (
 			this: TurnTracker,
-			sessionId: string,
+			sessionId: SessionId,
 			event: PiEvent,
 		) {
 			const job = realObserve.call(this, sessionId, event);
@@ -122,7 +123,7 @@ test.each(["removeSession", "shutdown"] as const)(
 				id: "turn-shutdown",
 				name: "Turn shutdown",
 				reasoning: false,
-				input: ["text"] as ("text" | "image")[],
+				input: ["text"] satisfies ("text" | "image")[],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 100_000,
 				maxTokens: 4096,
@@ -162,12 +163,12 @@ test.each(["removeSession", "shutdown"] as const)(
 			server = await createServer({ port: 0, analytics: { mute: true } });
 			const { sessionId } = await createSession({
 				cwd: repo,
-				workspaceId: "w1",
+				workspaceId: testWorkspaceId("w1"),
 				model: toWireModel(faux.getModel()),
 			});
 			await promptSession(sessionId, "Write feature.ts");
 			expect(recording).toBeDefined();
-			expect(listTurns("w1")).toEqual([]);
+			expect(listTurns(testWorkspaceId("w1"))).toEqual([]);
 			if (teardown === "removeSession") {
 				await removeSession(sessionId);
 				expect(getSessionWorkspaceId(sessionId)).toBeUndefined();
@@ -187,9 +188,9 @@ test.each(["removeSession", "shutdown"] as const)(
 			expect(trees[1]).not.toBeNull();
 			expect(trees[0]).not.toBe(trees[1]);
 			expect(getWorkspace("w1").worktreePath).toBe(repo);
-			const turns = listTurns("w1");
+			const turns = listTurns(testWorkspaceId("w1"));
 			expect(turns).toHaveLength(1);
-			expect(turns[0]).toMatchObject({ sessionId, workspaceId: "w1" });
+			expect(turns[0]).toMatchObject({ sessionId, workspaceId: testWorkspaceId("w1") });
 			expect(turns[0]?.changes.map((change) => change.path)).toEqual(["feature.ts"]);
 			expect(loadTurns().byWorkspace.w1).toEqual(turns);
 		} finally {
