@@ -1,3 +1,4 @@
+import type { ContentBlock as McpContentBlock, TextResourceContents } from "@earendil-works/pi-mcp";
 import {
 	arr,
 	compile,
@@ -8,8 +9,9 @@ import {
 	str,
 	union,
 	unknown,
+	type Validator,
 } from "@earendil-works/pi-schema";
-import type { McpContentBlockSummary, McpResultSummary } from "@thinkrail/contracts";
+import type { McpContentBlockSummary, McpResultSummary, Same } from "@thinkrail/contracts";
 import { isJsonObject } from "./schemas";
 
 export const MCP_SUMMARY_BYTES = 64 * 1024;
@@ -23,8 +25,18 @@ export function isMcpResultTool(toolName: string): boolean {
 	return toolName.startsWith("mcp__") || RESOURCE_TOOLS.has(toolName);
 }
 
+type BlockOf<T extends McpContentBlock["type"]> = Extract<McpContentBlock, { type: T }>;
+/** A block as a server may send it: MCP's tag, and any field the summary reads may be missing. */
+type SentBlock<T extends McpContentBlock["type"], K extends keyof BlockOf<T> = never> = Pick<
+	BlockOf<T>,
+	"type"
+> &
+	Partial<Pick<BlockOf<T>, K>>;
+type SentResource = Partial<Pick<TextResourceContents, "uri" | "mimeType" | "text">>;
+
 const Resource = obj({ uri: opt(str()), mimeType: opt(str()), text: opt(str()) }, { open: true });
-const isResource = compile(Resource).check;
+type Resource = Same<Static<typeof Resource>, SentResource>;
+const isResource: Validator<Resource>["check"] = compile(Resource).check;
 
 const ContentBlock = union([
 	obj({ type: lit("text"), text: opt(str()) }, { open: true }),
@@ -36,7 +48,15 @@ const ContentBlock = union([
 	),
 	obj({ type: lit("resource"), resource: Resource }, { open: true }),
 ]);
-const isContentBlock = compile(ContentBlock).check;
+type SummaryBlock = Same<
+	Static<typeof ContentBlock>,
+	| SentBlock<"text", "text">
+	| SentBlock<"image", "mimeType">
+	| SentBlock<"audio", "mimeType">
+	| SentBlock<"resource_link", "uri" | "name" | "mimeType">
+	| (SentBlock<"resource"> & Record<keyof Pick<BlockOf<"resource">, "resource">, SentResource>)
+>;
+const isContentBlock: Validator<SummaryBlock>["check"] = compile(ContentBlock).check;
 const isEntryList = compile(arr(unknown())).check;
 const hasFullOutputPath = compile(obj({ fullOutputPath: str() }, { open: true })).check;
 
@@ -44,7 +64,7 @@ export function mcpFullOutputPath(details: unknown): string | undefined {
 	return hasFullOutputPath(details) ? details.fullOutputPath : undefined;
 }
 
-function blockSummary(block: Static<typeof ContentBlock>): McpContentBlockSummary {
+function blockSummary(block: SummaryBlock): McpContentBlockSummary {
 	switch (block.type) {
 		case "text":
 			return { kind: "text", chars: block.text?.length ?? 0 };
@@ -64,7 +84,7 @@ function blockSummary(block: Static<typeof ContentBlock>): McpContentBlockSummar
 	}
 }
 
-function resourceSummary(resource: Static<typeof Resource>): McpContentBlockSummary {
+function resourceSummary(resource: Resource): McpContentBlockSummary {
 	return {
 		kind: "resource",
 		uri: resource.uri ?? "",

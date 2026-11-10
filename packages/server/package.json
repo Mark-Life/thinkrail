@@ -18,6 +18,7 @@
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-schema": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
+		"@earendil-works/pi-mcp": "catalog:",
 		"@posthog/core": "1.60.1",
 		"@stroncium/procfs": "1.2.1",
 		"@thinkrail/contracts": "workspace:*",

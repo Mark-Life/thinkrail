@@ -10,17 +10,20 @@ import {
 	obj,
 	oneOf,
 	opt,
-	type Schema,
 	type Static,
 	str,
 	unknown,
 	type Validator,
 } from "@earendil-works/pi-schema";
-import { JsonObject } from "@thinkrail/contracts";
+import { JsonObject, type Same } from "@thinkrail/contracts";
 
 export const MCP_EXPOSURES = ["codemode", "deferred", "direct", "hidden"] as const;
 
-const Exposure = oneOf(MCP_EXPOSURES) satisfies Schema<McpExposure>;
+type StdioConfig = Extract<McpServerConfig, { command: string }>;
+type HttpConfig = Extract<McpServerConfig, { url: string }>;
+
+const Exposure = oneOf(MCP_EXPOSURES);
+type Exposure = Same<Static<typeof Exposure>, McpExposure>;
 const StringMap = map(str());
 const StringList = arr(str());
 const Timeout = num({ exclusiveMinimum: 0 });
@@ -41,7 +44,7 @@ const OAuth = obj(
 	},
 	{ open: true },
 );
-export type McpOAuth = Static<typeof OAuth>;
+export type McpOAuth = Same<Static<typeof OAuth>, NonNullable<HttpConfig["oauth"]>>;
 
 const COMMON_FIELDS = {
 	exposure: opt(Exposure),
@@ -64,11 +67,14 @@ const HttpServer = obj(
 	},
 	{ open: true },
 );
+/** pi reads `streamable-http` as `http`, so the parse result types `type` as pi does. */
+type HttpServer = Same<Omit<Static<typeof HttpServer>, "type"> & { type?: "http" }, HttpConfig>;
 
 const StdioServer = obj(
 	{ ...COMMON_FIELDS, ...STDIO_FIELDS, type: opt(lit("stdio")), command: str() },
 	{ open: true },
 );
+type StdioServer = Same<Static<typeof StdioServer>, StdioConfig>;
 
 const McpFile = obj(
 	{ mcpServers: opt(map(unknown())), autoEnableCodemode: opt(unknown()) },
@@ -79,12 +85,12 @@ export type McpFile = Static<typeof McpFile>;
 
 export const isJsonObject = JsonObject.check;
 export const isMcpFile = compile(McpFile).check;
-export const isExposure = compile(Exposure).check;
+export const isExposure: Validator<Exposure>["check"] = compile(Exposure).check;
 export const CommonFields = compile(obj(COMMON_FIELDS, { open: true }));
 export const HttpFields = compile(obj(HTTP_FIELDS, { open: true }));
 export const StdioFields = compile(obj(STDIO_FIELDS, { open: true }));
 const isHttpServer = compile(HttpServer).check;
-const isStdioServer = compile(StdioServer).check;
+const isStdioServer: Validator<StdioServer>["check"] = compile(StdioServer).check;
 
 export function refusedPath<T>(validator: Validator<T>, value: unknown): string[] {
 	const path = validator.errors(value)[0]?.path ?? "";
@@ -94,13 +100,12 @@ export function refusedPath<T>(validator: Validator<T>, value: unknown): string[
 		.map((segment) => segment.replaceAll("~1", "/").replaceAll("~0", "~"));
 }
 
-/** pi reads `streamable-http` as `http`; the parse says so, so the type holds what pi gets. */
-export function parseHttpServer(value: unknown): McpServerConfig | undefined {
+export function parseHttpServer(value: unknown): HttpServer | undefined {
 	if (!isHttpServer(value)) return undefined;
 	const { type, ...server } = value;
 	return type === undefined ? server : { ...server, type: "http" };
 }
 
-export function parseStdioServer(value: unknown): McpServerConfig | undefined {
+export function parseStdioServer(value: unknown): StdioServer | undefined {
 	return isStdioServer(value) ? value : undefined;
 }

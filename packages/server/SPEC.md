@@ -49,7 +49,8 @@ e2e).
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`, `errnoCode` and the Central adapter), `bun-pty`,
-  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types)
+  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `@earendil-works/pi-mcp` (types, pinned with pi),
+  `extension-api` (`./server` types)
   + every `thinkrail-extensions/*` **server subpath only** (the registry's composition edge; the host no
   longer depends directly on a pi package an extension owns), `pino` + its pretty/rolling
   destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.

@@ -88,7 +88,9 @@ without bypassing approvals or treating an occupied name as absent.
   `oauth` object with private schemas, maps the first refused path to pi's message for that field, applies the rules a
   schema cannot hold (URL schemes, loopback callbacks, the port pair, `cimd`), then parses the whole entry to get
   `McpServerConfig`. The parse reads the `streamable-http` alias as `"http"`, the type pi declares and treats it as, so the
-  loaded config holds what its type says; this is the one place the load differs from pi's, which keeps the alias. `summarizeMcpServers` and `maskMcpEndpoint` read fields of an entry that may be invalid, so they keep their field reads.
+  loaded config holds what its type says; this is the one place the load differs from pi's, which keeps the alias. The
+  exposure, `oauth`, HTTP and stdio schemas are tied with `Same` to pi's `McpExposure` and the members of its
+  `McpServerConfig`, so a pi bump that changes a server field fails `tsc`. `summarizeMcpServers` and `maskMcpEndpoint` read fields of an entry that may be invalid, so they keep their field reads.
 - `results.ts` — `summarizeMcpResult()`: the `McpResultSummary` the session host's `tool_result` handler
   writes into `details.thinkrail` for `mcp__*` and the three resource tools, built from pi's
   machine-readable result (`structuredContent` = the server's raw `CallToolResult`, or the resource
@@ -100,6 +102,8 @@ without bypassing approvals or treating an occupied name as absent.
   `structuredContent` from finalized messages, so this is what lets a card render the same live, after
   reload and on another client. A content block with a wrong-type field is dropped, like one of an unknown type, and is not
   counted in `omittedBlocks`; an absent field keeps its default. A wrong-type `content` or `contents` reads as empty.
+  The block schemas are tied with `Same` to `pi-mcp`'s `ContentBlock` and `TextResourceContents`, with each
+  field the summary reads made optional, so a `pi-mcp` bump that renames or retypes one fails `tsc`.
 - `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
   used by sessions, so probes never infer it from a presentation row. The host composes
   `writeMcpServerEntry` (pi validation plus the project `auth` ban, add vs update, project containment;
@@ -236,5 +240,6 @@ without bypassing approvals or treating an occupied name as absent.
   `McpConfigFileEntry`, `McpConfigScope`, `McpServerConfigPatch`.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (types, `CONFIG_DIR_NAME`, `getAgentDir`, and the
   engine factories `createMcpExtension` / `createToolSearchExtension`); `@thinkrail/contracts` (types);
-  `@thinkrail/shared/codedError`, `errnoCode`; `@earendil-works/pi-schema`; Node `fs`/`path`/`crypto`.
+  `@thinkrail/shared/codedError`, `errnoCode`; `@earendil-works/pi-schema`; `@earendil-works/pi-mcp` (types
+  only, for `results.ts`); Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`, `projects`, the web; no connection, OAuth or transport code — those stay in pi.
