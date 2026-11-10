@@ -46,16 +46,13 @@ that map.
   bump in the same change.
 - **A dependency's shape is derived, never copied.** A type a dependency owns is imported, not declared again. A schema
   that checks a shape the dependency types but ships no schema for is tied to that type with `Same` (`typeTie.ts`), so a
-  field or value either side adds, drops or changes fails `tsc`. `ThinkingLevel`, `ModelInputModality` and
-  `ModelListPrice` are tied to pi-ai here. pi-coding-agent is Node-only, so the shapes it owns (`SlashCommandInfo`) are
-  declared here and tied in the host's `piWireTies.ts` ([[submodule-server-agent]]).
-- **A pi shape in params has real values.** `ImageContent` lists its fields, annotated `Schema<pi's type>`, so a
-  field pi adds or a field the schema drops fails `tsc` here. `StopReason` lists its values the same way.
-- **A pi message has a real schema.** `TranscriptMessage` lists every pi role with the fields pi types, so a reply never
-  carries a pi shape it did not check. `TextContent`, `ThinkingContent`, `Usage` and `UserMessage` check every field pi
-  declares and are annotated with pi's type. pi types tool-call `arguments` and tool-result `details` as JSON, which a
-  schema cannot state, so the assistant and tool-result messages keep their own derived types (`WireAssistantMessage`,
-  `WireToolResultMessage`). pi's messages are assignable to them; the reverse is not.
+  field or value either side adds, drops or changes fails `tsc`. `ThinkingLevel`, `PiStopReason`, `ImageContent`,
+  `CustomMessageContent`, `ModelInputModality` and `ModelListPrice` are tied to pi-ai here. pi-coding-agent is Node-only,
+  so the shapes it owns (`WireCustomMessage`, `WireCompactionSummary`, `WireBranchSummary`, `WireBashExecution`, `SessionStats`, `ContextUsage`, `SlashCommandInfo`) are declared here and
+  tied in the host's `piWireTies.ts` ([[submodule-server-agent]]).
+- **pi's messages are a trust point.** pi ships their types and no schemas. `TranscriptMessage` checks `role` against
+  `TRANSCRIPT_MESSAGE_ROLES`, a list tied to its union with `Same`. The rest of the body is pi's type, as the host got it
+  from pi: pi-ai's `UserMessage`, `AssistantMessage` and `ToolResultMessage` plus the two pi-coding-agent mirrors.
 - **`pi.event` checks only its tag.** `pi` exports no event schemas, so its schema has `sessionId` and `event.type`, and
   `WsChannelMap` in `wsProtocol.ts` overrides the entry with `SessionEventPayload`. The interface `extends` the derived
   map, so the override must stay assignable to the schema's type.

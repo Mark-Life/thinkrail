@@ -14,14 +14,17 @@ export type {
 } from "@earendil-works/pi-ai";
 
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type {
-	AgentSettlement,
-	SessionId,
-	SessionState,
-	ThinkingLevel,
-	TranscriptMessage,
-	WireModel,
+import {
+	type AgentSettlement,
+	type SessionId,
+	type SessionState,
+	type ThinkingLevel,
+	TRANSCRIPT_MESSAGE_ROLES,
+	type WireAgentMessage,
+	type WireModel,
 } from "./schema";
+
+const TRANSCRIPT_ROLES: ReadonlySet<string> = new Set(TRANSCRIPT_MESSAGE_ROLES);
 
 const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
 	"error",
@@ -126,35 +129,6 @@ export interface ToolResponseDetails {
 	response: unknown;
 }
 
-export interface WireBranchSummary {
-	role: "branchSummary";
-	summary: string;
-	fromId: string | null;
-	timestamp: number;
-}
-
-export interface WireBashExecution {
-	role: "bashExecution";
-	command: string;
-	output: string;
-	exitCode: number | undefined;
-	cancelled: boolean;
-	truncated: boolean;
-	fullOutputPath?: string;
-	timestamp: number;
-	excludeFromContext?: boolean;
-}
-
-export type WireAgentMessage = TranscriptMessage | WireBranchSummary | WireBashExecution;
-
-const TRANSCRIPT_MESSAGE_ROLES: ReadonlySet<string> = new Set([
-	"user",
-	"assistant",
-	"toolResult",
-	"custom",
-	"compactionSummary",
-]);
-
 export function isTranscriptMessageRole(role: string): boolean {
-	return TRANSCRIPT_MESSAGE_ROLES.has(role);
+	return TRANSCRIPT_ROLES.has(role);
 }

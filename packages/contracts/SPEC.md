@@ -246,14 +246,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
     **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
     once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
-    **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
-    type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
+    **`TranscriptMessage[]`** — pi-ai's `UserMessage`, `AssistantMessage` and `ToolResultMessage` widened with
+    **`WireCustomMessage`**, a type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
     compaction — pi places it before the kept tail and drops the summarized messages, so forwarding it is
     what makes the compaction boundary survive reload/reopen instead of rendering a transcript that begins
     mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
-    host may send is pinned by the runtime **`isTranscriptMessageRole(role)`** guard: the single source for
+    host may send is pinned by `TRANSCRIPT_MESSAGE_ROLES`, which the runtime **`isTranscriptMessageRole(role)`**
+    guard reads: the single source for
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
     silently shift every later jump anchor.

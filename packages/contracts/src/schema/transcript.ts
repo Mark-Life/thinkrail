@@ -1,28 +1,26 @@
 import type {
+	AssistantMessage,
+	Message,
 	ImageContent as PiImageContent,
 	StopReason as PiStopReasonType,
 	TextContent as PiTextContent,
-	ThinkingContent as PiThinkingContent,
-	Usage as PiUsage,
-	UserMessage as PiUserMessage,
+	ToolResultMessage,
+	UserMessage,
 } from "@earendil-works/pi-ai";
 import {
 	arr,
-	bool,
 	lit,
-	map,
-	num,
 	oneOf,
 	opt,
 	type Schema,
 	type Static,
 	str,
 	union,
-	unknown,
 } from "@earendil-works/pi-schema";
+import type { Same } from "./typeTie";
 import { wireObj } from "./wire";
 
-export const PiStopReason: Schema<PiStopReasonType> = oneOf([
+export const PiStopReason = oneOf([
 	"pending",
 	"stop",
 	"length",
@@ -31,129 +29,91 @@ export const PiStopReason: Schema<PiStopReasonType> = oneOf([
 	"aborted",
 	"deferred",
 ]);
+export type PiStopReason = Same<Static<typeof PiStopReason>, PiStopReasonType>;
 
-export const ImageContent: Schema<PiImageContent> = wireObj({
-	type: lit("image"),
-	data: str(),
-	mimeType: str(),
-});
-export type ImageContent = Static<typeof ImageContent>;
+export const ImageContent = wireObj({ type: lit("image"), data: str(), mimeType: str() });
+export type ImageContent = Same<Static<typeof ImageContent>, PiImageContent>;
 
-const TextContent: Schema<PiTextContent> = wireObj({
-	type: lit("text"),
-	text: str(),
-	textSignature: opt(str()),
-});
-
-const ThinkingContent: Schema<PiThinkingContent> = wireObj({
-	type: lit("thinking"),
-	thinking: str(),
-	thinkingSignature: opt(str()),
-	redacted: opt(bool()),
-});
-
-const ToolCall = wireObj({
-	type: lit("toolCall"),
-	id: str(),
-	name: str(),
-	arguments: map(unknown()),
-	thoughtSignature: opt(str()),
-	namespace: opt(str()),
-	argumentsError: opt(str()),
-});
-
-const Usage: Schema<PiUsage> = wireObj({
-	input: num(),
-	output: num(),
-	cacheRead: num(),
-	cacheWrite: num(),
-	cacheWrite1h: opt(num()),
-	reasoning: opt(num()),
-	totalTokens: num(),
-	cost: wireObj({
-		input: num(),
-		output: num(),
-		cacheRead: num(),
-		cacheWrite: num(),
-		total: num(),
-		totalFromProvider: opt(bool()),
-	}),
-});
-
-const UserContent = union([str(), arr(union([TextContent, ImageContent]))]);
-
-const WireUserMessage: Schema<PiUserMessage> = wireObj({
-	role: lit("user"),
-	content: UserContent,
-	timestamp: num(),
-});
-
-const WireSystemMessage = wireObj({
-	role: lit("system"),
-	content: union([str(), arr(TextContent)]),
-	timestamp: num(),
-});
-
-const WireAssistantMessage = wireObj({
-	role: lit("assistant"),
-	content: arr(union([TextContent, ThinkingContent, ToolCall])),
-	api: str(),
-	provider: str(),
-	model: str(),
-	responseModel: opt(str()),
-	responseId: opt(str()),
-	usage: Usage,
-	stopReason: PiStopReason,
-	errorMessage: opt(str()),
-	rawStopReason: opt(str()),
-	endTurn: opt(bool()),
-	timestamp: num(),
-	durationMs: opt(num()),
-});
-export type WireAssistantMessage = Static<typeof WireAssistantMessage>;
-
-const WireToolResultMessage = wireObj({
-	role: lit("toolResult"),
-	toolCallId: str(),
-	toolName: str(),
-	content: arr(union([TextContent, ImageContent])),
-	details: opt(unknown()),
-	usage: opt(Usage),
-	isError: bool(),
-	timestamp: num(),
-	durationMs: opt(num()),
-});
-export type WireToolResultMessage = Static<typeof WireToolResultMessage>;
+const TextContent = wireObj({ type: lit("text"), text: str(), textSignature: opt(str()) });
 
 /** A custom message's content: the text and image blocks a user message holds. */
-export const CustomMessageContent = UserContent;
+export const CustomMessageContent = union([str(), arr(union([TextContent, ImageContent]))]);
+export type CustomMessageContent = Same<
+	Static<typeof CustomMessageContent>,
+	UserMessage["content"]
+>;
 
-export const WireCustomMessage = wireObj({
-	role: lit("custom"),
-	customType: str(),
-	content: CustomMessageContent,
-	display: bool(),
-	details: opt(unknown()),
-	timestamp: num(),
-});
-export type WireCustomMessage<T = unknown> = Omit<Static<typeof WireCustomMessage>, "details"> & {
+/** pi-coding-agent's `CustomMessage`, which contracts may not import; the host ties the two. */
+export interface WireCustomMessage<T = unknown> {
+	role: "custom";
+	customType: string;
+	content: string | (PiTextContent | PiImageContent)[];
+	display: boolean;
 	details?: T;
+	timestamp: number;
+}
+
+/** pi-coding-agent's `CompactionSummaryMessage`; the host ties the two. */
+export interface WireCompactionSummary {
+	role: "compactionSummary";
+	summary: string;
+	tokensBefore: number;
+	timestamp: number;
+}
+
+/** pi-coding-agent's `BranchSummaryMessage`; the host ties the two. */
+export interface WireBranchSummary {
+	role: "branchSummary";
+	summary: string;
+	fromId: string | null;
+	timestamp: number;
+}
+
+/** pi-coding-agent's `BashExecutionMessage`; the host ties the two. */
+export interface WireBashExecution {
+	role: "bashExecution";
+	command: string;
+	output: string;
+	exitCode: number | undefined;
+	cancelled: boolean;
+	truncated: boolean;
+	fullOutputPath?: string;
+	timestamp: number;
+	excludeFromContext?: boolean;
+}
+
+/** Every message a pi event may carry: pi's `AgentMessage` as the host compiles it. */
+export type WireAgentMessage =
+	| Message
+	| WireCustomMessage
+	| WireCompactionSummary
+	| WireBranchSummary
+	| WireBashExecution;
+
+/** The messages `session.getMessages` returns, in pi's own types. */
+export type TranscriptMessage =
+	| UserMessage
+	| AssistantMessage
+	| ToolResultMessage
+	| WireCustomMessage
+	| WireCompactionSummary;
+
+export const TRANSCRIPT_MESSAGE_ROLES = [
+	"user",
+	"assistant",
+	"toolResult",
+	"custom",
+	"compactionSummary",
+] as const;
+export type TranscriptMessageRole = Same<
+	(typeof TRANSCRIPT_MESSAGE_ROLES)[number],
+	TranscriptMessage["role"]
+>;
+
+/**
+ * The trust point for pi's messages. pi ships their types and no schemas, so the wire checks `role` against
+ * `TRANSCRIPT_MESSAGE_ROLES`, and the body is pi's type as the host received it from pi.
+ */
+export const TranscriptMessage: Schema<TranscriptMessage> = {
+	allOf: [wireObj({ role: oneOf(TRANSCRIPT_MESSAGE_ROLES) })],
 };
-
-export const WireCompactionSummary = wireObj({
-	role: lit("compactionSummary"),
-	summary: str(),
-	tokensBefore: num(),
-	timestamp: num(),
-});
-export type WireCompactionSummary = Static<typeof WireCompactionSummary>;
-
-export const TranscriptMessage = union([
-	WireUserMessage,
-	WireAssistantMessage,
-	WireToolResultMessage,
-	WireSystemMessage,
-	WireCustomMessage,
-	WireCompactionSummary,
-]);
-export type TranscriptMessage = Static<typeof TranscriptMessage>;

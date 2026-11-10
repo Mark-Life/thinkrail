@@ -7,7 +7,7 @@ import {
 	parseSessionId,
 	parseWsResult,
 	type SessionId,
-	type WireToolResultMessage,
+	type ToolResultMessage,
 	type WorkspaceId,
 	WsEnvelope,
 	type WsMethodName,
@@ -125,11 +125,10 @@ function writeMcpFixtures(root: string, agentDir: string, httpUrl: string): void
 
 function findToolResult(
 	messages: WsResult<"session.getMessages">["messages"],
-	matches: (message: WireToolResultMessage) => boolean,
+	matches: (message: ToolResultMessage) => boolean,
 ) {
 	return messages.find(
-		(message): message is WireToolResultMessage =>
-			message.role === "toolResult" && matches(message),
+		(message): message is ToolResultMessage => message.role === "toolResult" && matches(message),
 	);
 }
 
