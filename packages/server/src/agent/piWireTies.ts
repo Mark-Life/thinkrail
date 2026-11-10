@@ -38,10 +38,27 @@ export type BranchSummaryTie = Same<WireBranchSummary, PiMessage<"branchSummary"
 export type BashExecutionTie = Same<WireBashExecution, PiMessage<"bashExecution">>;
 export type AgentMessageTie = Same<WireAgentMessage, AgentMessage>;
 
+type PiForwardedSource = Exclude<AgentSessionEvent, { type: PiProjectedEventType }>;
+/** The events whose `K` field is not exactly `V`: `WithWireMessages` rewrites that field on both sides. */
+type FieldMismatch<E, K extends PropertyKey, V> = E extends unknown
+	? K extends keyof E
+		? [E[K]] extends [V]
+			? [V] extends [E[K]]
+				? never
+				: E
+			: E
+		: never
+	: never;
+
 export type PiEventTypeTie = Same<PiEvent["type"], AgentSessionEvent["type"]>;
-export type ForwardedEventTie = Same<
-	PiForwardedEvent,
-	WithWireMessages<Exclude<AgentSessionEvent, { type: PiProjectedEventType }>>
+export type ForwardedEventTie = Same<PiForwardedEvent, WithWireMessages<PiForwardedSource>>;
+export type ForwardedMessageTie = Same<
+	FieldMismatch<PiForwardedSource, "message", AgentMessage>,
+	never
+>;
+export type ForwardedMessagesTie = Same<
+	FieldMismatch<PiForwardedSource, "messages", AgentMessage[]>,
+	never
 >;
 export type QueueUpdateTie = Same<
 	Omit<WireEvent<"queue_update">, "hasImages">,
