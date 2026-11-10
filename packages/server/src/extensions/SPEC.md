@@ -31,7 +31,8 @@ list for registry extensions.
   the declared default; an undeclared key throws — and is read **inside the factory body**, so every pi
   (re)load sees current values. Without services, and in the child set, session factories are absent),
   `workspaceFiles` (the host's file check shared by extension server halves through the session seam —
-  `checkWorkspaceFile` + `MOCKUP_DIR`: a path must be relative, stay inside the session cwd lexically and
+  `checkWorkspaceFile` + `MOCKUP_DIR`, re-exported from contracts so the web host's themed-mockup rule
+  names the same directory: a path must be relative, stay inside the session cwd lexically and
   after resolving links, name a regular file and stay out of `.git`, the paths the host's `fs.readFile`
   then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's

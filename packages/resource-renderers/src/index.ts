@@ -6,6 +6,7 @@ export {
 	type ResourceFileReviewProps,
 	type ResourceHost,
 	ResourceHostProvider,
+	type ResourceHtmlMode,
 	type ResourceMarkdown,
 	type ResourceMarkdownProps,
 	type ResourcePreferences,

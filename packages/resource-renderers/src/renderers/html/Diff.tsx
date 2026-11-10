@@ -1,29 +1,15 @@
 import { useT } from "@thinkrail/locales/react";
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
-import { HtmlFrame } from "./HtmlFrame";
-import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { HtmlSourceFrame } from "./HtmlSourceFrame";
+import { useHtmlMode } from "./useHtmlMode";
 import { useHtmlViewport } from "./useHtmlViewport";
 import { HtmlPreviewNotice } from "./ViewportSwitch";
-import type { HtmlViewport } from "./viewport";
 
 function textOf(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
-}
-
-function HtmlSide({
-	text,
-	title,
-	viewport,
-}: {
-	text: string;
-	title: string;
-	viewport: HtmlViewport;
-}) {
-	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
-	return <HtmlFrame title={title} document={document} viewport={viewport} />;
 }
 
 export default function HtmlDiff({
@@ -33,20 +19,45 @@ export default function HtmlDiff({
 	modified,
 	viewState,
 	onViewState,
+	onNaturalHeight,
 }: ResourceDiffProps) {
 	const t = useT();
 	const noDocument = t("viewer.html.noDocument");
-	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
+	const originalMode = useHtmlMode(originalResource);
+	const modifiedMode = useHtmlMode(resource);
 	const originalText = textOf(original);
 	const modifiedText = textOf(modified);
+	const offered =
+		onNaturalHeight !== undefined &&
+		(originalText === null || originalMode === "themed") &&
+		(modifiedText === null || modifiedMode === "themed") &&
+		(originalText !== null || modifiedText !== null);
+	const [viewport, selectViewport] = useHtmlViewport(
+		viewState,
+		onViewState,
+		offered ? "responsive" : "desktop",
+	);
+	const [originalHeight, setOriginalHeight] = useState<number | null>(null);
+	const [modifiedHeight, setModifiedHeight] = useState<number | null>(null);
+	const fit =
+		offered &&
+		(originalText === null || originalHeight !== null) &&
+		(modifiedText === null || modifiedHeight !== null);
+	const fitted = fit ? { contentHeight: Math.max(originalHeight ?? 0, modifiedHeight ?? 0) } : {};
+	useEffect(() => {
+		if (offered) onNaturalHeight?.(fit);
+	}, [offered, fit, onNaturalHeight]);
 	const originalSide: VisualDiffSide = {
 		present: originalText !== null,
 		content:
 			originalText === null ? null : (
-				<HtmlSide
-					text={originalText}
+				<HtmlSourceFrame
+					mode={originalMode}
+					source={originalText}
 					title={t("viewer.html.originalPreview", { path: originalResource.path })}
 					viewport={viewport}
+					{...(offered ? { onContentHeight: setOriginalHeight } : {})}
+					{...fitted}
 				/>
 			),
 		caption:
@@ -59,10 +70,13 @@ export default function HtmlDiff({
 		present: modifiedText !== null,
 		content:
 			modifiedText === null ? null : (
-				<HtmlSide
-					text={modifiedText}
+				<HtmlSourceFrame
+					mode={modifiedMode}
+					source={modifiedText}
 					title={t("viewer.html.modifiedPreview", { path: resource.path })}
 					viewport={viewport}
+					{...(offered ? { onContentHeight: setModifiedHeight } : {})}
+					{...fitted}
 				/>
 			),
 		caption:
@@ -72,9 +86,13 @@ export default function HtmlDiff({
 		intrinsicSize: null,
 	};
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div
+			data-testid="html-diff-view"
+			data-fit={fit}
+			className={fit ? "flex flex-col" : "flex h-full min-h-0 flex-col"}
+		>
 			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />
-			<div className="min-h-0 flex-1">
+			<div className={fit ? "flex-none" : "min-h-0 flex-1"}>
 				<VisualDiff
 					prefix="html"
 					noun="document"
@@ -86,6 +104,7 @@ export default function HtmlDiff({
 					initialMode="2-up"
 					modes={["2-up"]}
 					emptyLabel={noDocument}
+					fitContent={fit}
 				/>
 			</div>
 		</div>

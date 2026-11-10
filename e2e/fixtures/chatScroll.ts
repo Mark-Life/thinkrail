@@ -68,6 +68,11 @@ export async function clickTranscriptControl(control: Locator): Promise<void> {
 	await control.click();
 }
 
+export async function clickInTranscriptFrame(target: Locator): Promise<void> {
+	await waitForScrollStability(target.page().getByTestId("chat-scroll"));
+	await target.click();
+}
+
 export async function moveMouseToChatViewport(page: Page, chatScroll: Locator): Promise<void> {
 	const { center } = await readChatScrollGeometry(chatScroll);
 	await page.mouse.move(center.x, center.y);
