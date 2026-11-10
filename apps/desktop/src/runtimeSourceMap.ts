@@ -1,15 +1,21 @@
 import { createHash } from "node:crypto";
-import { compile, obj, opt, type Static, str } from "@earendil-works/pi-schema";
+import { compile, lit, obj, opt, type Static, str } from "@earendil-works/pi-schema";
 
-const SourceMapJson = obj({ mappings: str(), chunk_id: opt(str()) }, { open: true });
-/** A source map: the fields chunk-id injection reads, and every other field kept as is. */
-export type SourceMapJson = Static<typeof SourceMapJson> & Record<string, unknown>;
+const SourceMapJson = obj(
+	{ version: lit(3), mappings: str(), chunk_id: opt(str()) },
+	{ open: true },
+);
+/**
+ * A v3 source map, typed by the fields chunk-id injection reads. Other fields pass the open check
+ * unread and `injectChunkId` copies them into the new map.
+ */
+export type SourceMapJson = Static<typeof SourceMapJson>;
 const isSourceMapJson = compile(SourceMapJson).check;
 
 /** The source map in `text`; throws when it is not one. */
 export function parseSourceMap(text: string): SourceMapJson {
 	const map: unknown = JSON.parse(text);
-	if (!isSourceMapJson(map)) throw new Error("not a source map: it has no string `mappings`");
+	if (!isSourceMapJson(map)) throw new Error("not a v3 source map with string `mappings`");
 	return map;
 }
 

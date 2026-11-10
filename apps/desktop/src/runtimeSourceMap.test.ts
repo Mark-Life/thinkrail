@@ -3,13 +3,16 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { compile, map as mapOf, str } from "@earendil-works/pi-schema";
 import { chunkIdFor, injectChunkId, parseSourceMap, type SourceMapJson } from "./runtimeSourceMap";
 
 const dir = mkdtempSync(join(tmpdir(), "thinkrail-runtime-map-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
+const isChunkRegistry = compile(mapOf(str())).check;
+
 test("chunk ids are deterministic UUIDs of the code, its map and the release", () => {
-	const map: SourceMapJson = { version: 3, sources: ["../src/a.ts"], mappings: "AAAA" };
+	const map: SourceMapJson = { version: 3, mappings: "AAAA" };
 	const id = chunkIdFor("a", map, "1.2.3");
 	expect(chunkIdFor("a", { ...map }, "1.2.3")).toBe(id);
 	expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -81,20 +84,23 @@ test("injection keeps the @bun pragma first, registers the chunk, and keeps the 
 		const path = join(dir, "out", name);
 		writeFileSync(path, `${source}//# sourceMappingURL=${name}.map\n`);
 		writeFileSync(`${path}.map`, JSON.stringify(sourceMap));
-		const loaded: { explode(): never } = await import(pathToFileURL(path).href);
+		const loaded: object = await import(pathToFileURL(path).href);
+		const explode: unknown = Reflect.get(loaded, "explode");
+		if (typeof explode !== "function") throw new Error(`${name} exports no explode()`);
 		try {
-			loaded.explode();
+			explode();
 		} catch (error) {
 			return String(error instanceof Error ? error.stack : error).split("\n")[1];
 		}
 	};
 	const original = await frameOf("original.ts", code, map);
-	const registry = globalThis as { _posthogChunkIds?: Record<string, string> };
 	const shifted = await frameOf("server-runtime.ts", injected.code, injected.map);
 	expect(original).toContain("entry.ts:6:");
 	expect(shifted).toBe(original);
-	const [stack, id] = Object.entries(registry._posthogChunkIds ?? {}).at(-1) ?? [];
+	const registry: unknown = Reflect.get(globalThis, "_posthogChunkIds");
+	if (!isChunkRegistry(registry)) throw new Error("no chunk id registry on globalThis");
+	const [stack, id] = Object.entries(registry).at(-1) ?? [];
 	expect(id).toBe(injected.chunkId);
 	expect(stack).toContain("server-runtime.ts");
-	delete registry._posthogChunkIds;
+	Reflect.deleteProperty(globalThis, "_posthogChunkIds");
 });
