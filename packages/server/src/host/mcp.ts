@@ -9,6 +9,7 @@ import type {
 	McpServerScope,
 	Project,
 	Workspace,
+	WsParams,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -114,39 +115,12 @@ function mutateManaged(
 	});
 }
 
-function serverName(name: unknown): string {
-	if (typeof name !== "string" || !SERVER_NAME.test(name)) {
+function serverName(name: string): string {
+	if (!SERVER_NAME.test(name)) {
 		throw new CodedError("MCP_CONFIG_INVALID", "MCP server names use letters, digits, - and _");
 	}
 	return name;
 }
-
-function serverEnabled(enabled: unknown): boolean {
-	if (typeof enabled !== "boolean") {
-		throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
-	}
-	return enabled;
-}
-
-function serverScope(scope: unknown): McpServerScope {
-	if (scope !== "user" && scope !== "project") throw new Error("Invalid MCP server scope");
-	return scope;
-}
-
-function renderedTarget(params: unknown): McpRenderedTarget {
-	const scope = serverScope(isRecord(params) ? params.scope : undefined);
-	const expectedFingerprint = isRecord(params) ? params.expectedFingerprint : undefined;
-	if (typeof expectedFingerprint !== "string") {
-		throw new CodedError(
-			"MCP_CONFIG_INVALID",
-			"An entry is rewritten or removed only with the fingerprint it was rendered with.",
-		);
-	}
-	return { scope, expectedFingerprint };
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
 
 function ownedSession(workspaceId: string, sessionId: string): void {
 	if (getSessionWorkspaceId(sessionId) !== workspaceId) {
@@ -181,7 +155,7 @@ export function mcpAdd(params: {
 	name: string;
 	entry: McpServerEntryInput;
 }): Promise<McpListResult> {
-	const scope = serverScope(params.scope);
+	const { scope } = params;
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
 		if (scope === "project") assertRepositoryWritable(project);
@@ -199,29 +173,25 @@ export function mcpAdd(params: {
 
 /** A rewrite or removal runs only against the entry the client rendered, at either scope. */
 function renderedEntry(
-	params: { workspaceId: string; name: string },
+	params: { workspaceId: string; name: string } & McpRenderedTarget,
 	write: (
 		options: { scope: McpServerScope; worktree: string; name: string },
 		onDisk: string | undefined,
 		project: Project,
 	) => void,
 ): Promise<McpListResult> {
-	const target = renderedTarget(params);
+	const { scope, expectedFingerprint } = params;
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
-		if (target.scope === "project") assertRepositoryWritable(project);
-		const onDisk = mcpEntryFingerprint(target.scope, workspace.worktreePath, name);
-		assertRenderedEntry(name, onDisk, target.expectedFingerprint);
-		write({ scope: target.scope, worktree: workspace.worktreePath, name }, onDisk, project);
-		return target.scope === "user" ? allWorkspaces() : projectWorkspaces(project);
+		if (scope === "project") assertRepositoryWritable(project);
+		const onDisk = mcpEntryFingerprint(scope, workspace.worktreePath, name);
+		assertRenderedEntry(name, onDisk, expectedFingerprint);
+		write({ scope, worktree: workspace.worktreePath, name }, onDisk, project);
+		return scope === "user" ? allWorkspaces() : projectWorkspaces(project);
 	});
 }
 
-export function mcpUpdate(params: {
-	workspaceId: string;
-	name: string;
-	entry: McpServerEntryInput;
-}): Promise<McpListResult> {
+export function mcpUpdate(params: WsParams<"mcp.update">): Promise<McpListResult> {
 	return renderedEntry(params, (options, onDisk, project) => {
 		const fingerprint = writeMcpServerEntry({ ...options, entry: params.entry, mode: "update" });
 		if (
@@ -233,7 +203,7 @@ export function mcpUpdate(params: {
 	});
 }
 
-export function mcpRemove(params: { workspaceId: string; name: string }): Promise<McpListResult> {
+export function mcpRemove(params: WsParams<"mcp.remove">): Promise<McpListResult> {
 	return renderedEntry(params, (options) => removeMcpServerEntry(options));
 }
 
@@ -259,7 +229,7 @@ export function mcpRevokeToolGrant(params: {
 	tool: string;
 }): Promise<McpListResult> {
 	const name = serverName(params.name);
-	if (typeof params.tool !== "string" || params.tool.length === 0) {
+	if (params.tool.length === 0) {
 		throw new CodedError("MCP_CONFIG_INVALID", "Name the MCP tool to stop always allowing.");
 	}
 	const { tool } = params;
@@ -318,9 +288,8 @@ export async function mcpSetSessionOverride(params: {
 	name: string;
 	enabled: boolean;
 }): Promise<{ ok: true }> {
-	const enabled = serverEnabled(params.enabled);
 	ownedSession(params.workspaceId, params.sessionId);
-	await setSessionMcpServerEnabled(params.sessionId, serverName(params.name), enabled);
+	await setSessionMcpServerEnabled(params.sessionId, serverName(params.name), params.enabled);
 	return { ok: true };
 }
 
