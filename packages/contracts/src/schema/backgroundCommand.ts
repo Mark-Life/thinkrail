@@ -1,50 +1,28 @@
+import { lit, opt, type Static, str, union } from "@earendil-works/pi-schema";
 import {
-	bool,
-	lit,
-	nullable,
-	num,
-	oneOf,
-	opt,
-	type Static,
-	str,
-	union,
-} from "@earendil-works/pi-schema";
+	BACKGROUND_COMMAND_COMPLETION_FIELDS,
+	BACKGROUND_COMMAND_SNAPSHOT_FIELDS,
+	BackgroundCommandOutput,
+	BackgroundCommandStatus,
+} from "pi-background-commands/wire";
 import { SessionId, StoredSessionId, WorkspaceId } from "./ids";
-import { CompletionDelivery } from "./subagent";
 import { Ack, wireObj } from "./wire";
 
-export const BackgroundCommandStatus = oneOf([
-	"running",
-	"stopping",
-	"completed",
-	"error",
-	"stopped",
-]);
-export type BackgroundCommandStatus = Static<typeof BackgroundCommandStatus>;
+export { BACKGROUND_COMMAND_TERMINAL_STATUSES } from "pi-background-commands/wire";
+export { BackgroundCommandStatus };
 
-/** Epoch milliseconds; the bounds also refuse `NaN` and `Infinity`. */
-const EpochMs = num({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
-
-const RUN_FIELDS = {
-	id: str(),
+/** The host fields the wire adds to a run the package reports. */
+const HOST_RUN_FIELDS = {
 	sessionId: StoredSessionId,
-	name: str(),
-	startedAt: EpochMs,
-	exitCode: opt(nullable(num())),
-	errorMessage: opt(str()),
 	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
 	interrupted: opt(lit(true)),
 };
 
 export const BackgroundCommandSummary = wireObj({
-	...RUN_FIELDS,
-	command: str(),
-	status: BackgroundCommandStatus,
-	finishedAt: opt(EpochMs),
+	...BACKGROUND_COMMAND_SNAPSHOT_FIELDS,
+	...HOST_RUN_FIELDS,
 });
 export type BackgroundCommandSummary = Static<typeof BackgroundCommandSummary>;
-
-const BackgroundCommandOutput = wireObj({ text: str(), truncated: bool() });
 
 export const BackgroundCommandOutputResult = union([
 	wireObj({
@@ -64,11 +42,8 @@ export const BackgroundCommandOutputDetails = wireObj({
 
 /** A finished run as its completion message carries it; `output` is the tail the agent saw. */
 export const BackgroundCommandCompletionDetails = wireObj({
-	...RUN_FIELDS,
-	status: oneOf(["completed", "error", "stopped"]),
-	finishedAt: EpochMs,
-	output: BackgroundCommandOutput,
-	delivery: opt(CompletionDelivery),
+	...BACKGROUND_COMMAND_COMPLETION_FIELDS,
+	...HOST_RUN_FIELDS,
 });
 export type BackgroundCommandCompletionDetails = Static<typeof BackgroundCommandCompletionDetails>;
 

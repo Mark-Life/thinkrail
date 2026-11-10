@@ -1,66 +1,42 @@
-import { arr, bool, lit, num, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
+import { arr, bool, lit, num, opt, type Static, str } from "@earendil-works/pi-schema";
+import {
+	DELEGATION_RUN_FIELDS,
+	RUN_LIFECYCLE_STATUSES,
+	RunLifecycleStatus,
+} from "pi-delegation/wire";
+import { SUBAGENT_COMPLETION_FIELDS } from "pi-subagents/wire";
 import { SessionId, StoredSessionId, WorkspaceId } from "./ids";
-import { ThinkingLevel } from "./model";
 import { TranscriptMessage } from "./transcript";
 import { Ack, wireObj } from "./wire";
 
-export const DELEGATION_RUN_STATUSES = [
-	"queued",
-	"running",
-	"completed",
-	"error",
-	"aborted",
-] as const;
-export const DelegationRunStatus = oneOf(DELEGATION_RUN_STATUSES);
-export type DelegationRunStatus = Static<typeof DelegationRunStatus>;
+export { CompletionDelivery } from "pi-background-commands/wire";
 
-const DELEGATION_RUN_FIELDS = {
-	childSessionId: str(),
-	roleName: opt(str()),
-	roleSource: opt(str()),
-	task: str(),
-	status: DelegationRunStatus,
-	model: opt(str()),
-	thinkingLevel: opt(ThinkingLevel),
-	usage: wireObj({
-		input: num(),
-		output: num(),
-		cacheRead: num(),
-		cacheWrite: num(),
-		cost: num(),
-		turns: num(),
-		contextTokens: num(),
-	}),
-	durationMs: num(),
-	activity: opt(str()),
-	abortReason: opt(str()),
-};
+export const DELEGATION_RUN_STATUSES = RUN_LIFECYCLE_STATUSES;
+export const DelegationRunStatus = RunLifecycleStatus;
+export type DelegationRunStatus = Static<typeof DelegationRunStatus>;
 
 /** A delegated run as `pi-delegation` reports it in a tool result's `details`. */
 export const DelegationRunDetails = wireObj(DELEGATION_RUN_FIELDS);
 export type DelegationRunDetails = Static<typeof DelegationRunDetails>;
 
-export const CompletionDelivery = oneOf(["wake", "run", "appended"]);
-export type CompletionDelivery = Static<typeof CompletionDelivery>;
-
-export const SubagentCompletionDetails = wireObj({
-	...DELEGATION_RUN_FIELDS,
-	delivery: opt(CompletionDelivery),
-});
+export const SubagentCompletionDetails = wireObj(SUBAGENT_COMPLETION_FIELDS);
 export type SubagentCompletionDetails = Static<typeof SubagentCompletionDetails>;
+
+const { roleName, task, status, model, thinkingLevel, abortReason, durationMs } =
+	DELEGATION_RUN_FIELDS;
 
 export const SubagentResourceSummary = wireObj({
 	childSessionId: StoredSessionId,
 	parentSessionId: StoredSessionId,
-	roleName: opt(str()),
-	task: str(),
-	status: DelegationRunStatus,
+	roleName,
+	task,
+	status,
 	createdAt: str(),
 	detached: opt(bool()),
-	model: opt(str()),
-	thinkingLevel: opt(ThinkingLevel),
-	abortReason: opt(str()),
-	durationMs: opt(num()),
+	model,
+	thinkingLevel,
+	abortReason,
+	durationMs: opt(durationMs),
 	finishedAt: opt(num()),
 	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
 	interrupted: opt(lit(true)),

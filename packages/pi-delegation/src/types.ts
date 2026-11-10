@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type {
 	ExtensionContext,
 	InlineExtension,
@@ -7,27 +7,20 @@ import type {
 	ModelRuntime,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import type { StaticObject } from "@earendil-works/pi-schema";
+import type { Same } from "type-tie";
+import type { DELEGATION_RUN_FIELDS, RunLifecycleStatus, RunStatus, SessionOptions } from "./wire";
 
-export type RunStatus = "completed" | "error" | "aborted";
+export type { RunLifecycleStatus, RunStatus, SessionOptions };
 
-export type RunLifecycleStatus = "queued" | "running" | RunStatus;
+/** The wire uses pi-ai's thinking-level schema for fields pi-agent-core types with its own union. */
+export type ThinkingLevelTie = Same<ModelThinkingLevel, ThinkingLevel>;
 
 export interface ChildInfo {
 	createdBy: string;
 	roleName?: string;
 	roleSource?: string;
 	detached?: boolean;
-}
-
-export interface SessionOptions {
-	model?: { provider: string; id: string };
-	thinkingLevel?: ThinkingLevel;
-	tools?: string[];
-	excludeTools?: string[];
-	systemPrompt?: string;
-	contextFiles?: boolean;
-	skills?: string[];
-	extensions?: boolean;
 }
 
 export interface WorkspaceProvider {
@@ -93,27 +86,7 @@ export interface RunSnapshot {
 	collected: boolean;
 }
 
-export interface DelegationRunDetails {
-	childSessionId: string;
-	roleName?: string;
-	roleSource?: string;
-	task: string;
-	status: RunLifecycleStatus;
-	model?: string;
-	thinkingLevel?: ThinkingLevel;
-	usage: {
-		input: number;
-		output: number;
-		cacheRead: number;
-		cacheWrite: number;
-		cost: number;
-		turns: number;
-		contextTokens: number;
-	};
-	durationMs: number;
-	activity?: string;
-	abortReason?: string;
-}
+export type DelegationRunDetails = StaticObject<typeof DELEGATION_RUN_FIELDS>;
 
 export type LifecycleEvent =
 	| { type: "child-created"; record: SpawnRecord }

@@ -10,6 +10,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { compile } from "@earendil-works/pi-schema";
 import { captureBranch, captureSession, forkCaptured } from "./history";
 import { scanReplayTools } from "./replayTools";
 import { assertSlots, Semaphore } from "./semaphore";
@@ -44,6 +45,9 @@ import {
 	type SessionOptions,
 	type SpawnRecord,
 } from "./types";
+import { SessionOptions as SessionOptionsSchema } from "./wire";
+
+const SessionOptionsCheck = compile(SessionOptionsSchema);
 
 const DEFAULT_MAX_CONCURRENT_PER_PARENT = 4;
 
@@ -1075,29 +1079,8 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		return pending;
 	}
 
-	function validateSessionOptions(options: SessionOptions): void {
-		if (
-			!options ||
-			typeof options !== "object" ||
-			[options.tools, options.excludeTools, options.skills].some(
-				(value) =>
-					value !== undefined &&
-					(!Array.isArray(value) || value.some((item) => typeof item !== "string")),
-			) ||
-			(options.model !== undefined &&
-				(!options.model ||
-					typeof options.model.provider !== "string" ||
-					!options.model.provider ||
-					typeof options.model.id !== "string" ||
-					!options.model.id)) ||
-			(options.systemPrompt !== undefined && typeof options.systemPrompt !== "string") ||
-			(options.contextFiles !== undefined && typeof options.contextFiles !== "boolean") ||
-			(options.extensions !== undefined && typeof options.extensions !== "boolean") ||
-			(options.thinkingLevel !== undefined &&
-				!["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(
-					options.thinkingLevel,
-				))
-		) {
+	function validateSessionOptions(options: unknown): void {
+		if (!SessionOptionsCheck.check(options)) {
 			throw new DelegationError("invalid-child-record", "Invalid saved session configuration");
 		}
 	}

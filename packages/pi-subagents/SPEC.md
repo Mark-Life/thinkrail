@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: pi-subagents — the Agent tools over the delegation core
 parent: architecture
-depends-on: [module-pi-delegation]
+depends-on: [module-pi-delegation, module-pi-background-commands]
 tags: [pi-extension, subagents]
 ---
 
@@ -53,7 +53,10 @@ choice was settled: the decision log below.
   An embedder flushes after a provisional deletion rolls back or registration becomes addressable.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's background result row keys on;
   `SubagentCompletionDetails` (the run's `DelegationRunDetails` plus `delivery: CompletionDelivery` —
-  `wake` | `run` | `appended`, see Result delivery), mirrored into `@thinkrail/contracts`.
+  `wake` | `run` | `appended`, see Result delivery). Both live in the `./wire` leaf entry
+  (`src/wire.ts`) with `SUBAGENT_COMPLETION_FIELDS` = `DELEGATION_RUN_FIELDS` plus an optional
+  `delivery`; `@thinkrail/contracts` builds its wire schema from that record. `CompletionDelivery` is
+  re-exported from `pi-background-commands/wire`, its owner.
 - Definitions: `AgentDefinition`, `discoverAgentDefinitions`, `parseAgentDefinition`,
   `BUILTIN_AGENTS`.
 - Mapping: `toSpawnMapping`, `resolveModelRef`, `buildChildSystemPrompt`, `RECURSION_GUARD_TOOLS`.
@@ -165,8 +168,12 @@ extensions that set holds is the **embedder's** choice, never this package's.
 
 ## Boundary
 
-- **Allowed deps:** `pi-delegation` (through its barrel only); the pi SDK + `typebox` as
-  **peerDependencies**; `node:*`.
+- **Allowed deps:** `pi-delegation` (through its barrel, and its `./wire` leaf); `pi-background-commands`
+  through its `./wire` leaf only, for `CompletionDelivery` (`check:boundaries` refuses any other
+  entry); `@earendil-works/pi-schema` as a real dependency (`pi install` skips peers); the pi SDK +
+  `typebox` as **peerDependencies**; `node:*`. `src/wire.ts` is a leaf: it value-imports only
+  `pi-schema` and the two other `wire` leaves. Thinking levels are pi-ai's `MODEL_THINKING_LEVELS`,
+  tied to pi-agent-core's `ThinkingLevel` in `pi-delegation`.
 - **Forbidden:** any `@thinkrail/*` package (must work under vanilla pi); `@earendil-works/pi-tui`
   (the pure-pi bar is default rendering); `pi-delegation/src/*` internals.
 - The web card / transcript view are the *presentation* side, joined by tool name

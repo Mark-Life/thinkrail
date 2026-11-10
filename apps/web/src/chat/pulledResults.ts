@@ -1,4 +1,5 @@
 import {
+	BACKGROUND_COMMAND_TERMINAL_STATUSES,
 	type BackgroundCommandCompletionDetails,
 	isBackgroundCommandOutputDetails,
 	isDelegationRunDetails,
@@ -39,9 +40,9 @@ function toolDetails(raw: unknown): unknown {
 function pulledCommand(raw: unknown): BackgroundCommandCompletionDetails | undefined {
 	const details = toolDetails(raw);
 	if (!isBackgroundCommandOutputDetails(details)) return undefined;
-	const { command: _command, status, finishedAt, ...run } = details.snapshot;
-	if (status !== "completed" && status !== "error" && status !== "stopped") return undefined;
-	if (finishedAt === undefined) return undefined;
+	const { command: _command, status: current, finishedAt, ...run } = details.snapshot;
+	const status = BACKGROUND_COMMAND_TERMINAL_STATUSES.find((terminal) => terminal === current);
+	if (status === undefined || finishedAt === undefined) return undefined;
 	const shown = excerpt(details.output.text);
 	return {
 		...run,

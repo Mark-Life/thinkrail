@@ -1,4 +1,4 @@
-export { scanReplayTools } from "./src/replayTools";
+export { type ReplayToolCall, scanReplayTools } from "./src/replayTools";
 export { createDelegationService } from "./src/service";
 export {
 	DEFAULT_SCOPE,

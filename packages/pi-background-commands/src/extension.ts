@@ -9,14 +9,13 @@ import { createBackgroundCommands } from "./service";
 import { standaloneContext } from "./shell-context";
 import type {
 	BackgroundCommandCompletion,
+	BackgroundCommandCompletionDetails,
 	BackgroundCommandFlush,
+	BackgroundCommandOutputDetails,
 	BackgroundCommandSnapshot,
 	BackgroundCommands,
 } from "./types";
-
-export const BACKGROUND_COMMAND_COMPLETION_MESSAGE = "background-command-completion";
-
-export type CompletionDelivery = "wake" | "run" | "appended";
+import { BACKGROUND_COMMAND_COMPLETION_MESSAGE, type CompletionDelivery } from "./wire";
 
 type DeliveryMode = { idle: true } | { idle: false; runContinues: boolean; viaHost: boolean };
 
@@ -87,7 +86,7 @@ function assertInput(input: unknown): asserts input is BackgroundCommandInput {
 		throw new Error("Unsupported inputs for this background command action");
 }
 
-function summary(snapshot: BackgroundCommandSnapshot) {
+function summary<S extends BackgroundCommandSnapshot>(snapshot: S) {
 	const { command: _command, ...result } = snapshot;
 	return result;
 }
@@ -298,7 +297,7 @@ export function createBackgroundCommandsExtension(
 								text: `${finished ? terminalText(snapshot) : statusText(snapshot)}\n\n${output.truncated ? "[Output truncated; retained tail only.]\n" : ""}${output.text || "(no output)"}`,
 							},
 						],
-						details: { snapshot, output },
+						details: { snapshot, output } satisfies BackgroundCommandOutputDetails,
 					};
 				},
 			});
@@ -332,7 +331,7 @@ export function createBackgroundCommandsExtension(
 										...summary(snapshot),
 										output: { text: excerpt.text, truncated },
 										delivery: deliveryOf(mode, batchWakes, index),
-									},
+									} satisfies BackgroundCommandCompletionDetails,
 								},
 								{ triggerTurn: completion === carrier },
 							);

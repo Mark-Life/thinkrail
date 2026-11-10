@@ -46,10 +46,10 @@ history store. `fork-captured` adds immutable input while existing live-source f
 remain rejected. Empty cuts are explicit, tool-incomplete/corrupt captures fail, compaction and labels
 are preserved, and source history is never mutated. Resource transcript lookup is strict and shared
 by capture/reopen, not an arbitrary file importer. A transcript is read through pi's `parseSessionEntries`, so
-its types are pi's own; a line pi skips as malformed or blank fails the read, and every field the replay uses is
-then checked by hand. pi ships no schema for entries or messages, so those per-field checks stay hand-written. Their
-value lists are not: block kinds, stop reasons and usage fields are tables typed by pi-ai's types, so a pi bump that
-adds or changes one fails `tsc`, and thinking levels are pi-ai's `MODEL_THINKING_LEVELS`.
+its types are pi's own; a line pi skips as malformed or blank fails the read. Each entry and message is then checked by
+an open `pi-schema` schema, one per `SessionEntry` type and per `AgentMessage` role, each `Same`-tied (`type-tie`) to
+pi's type for that member, so a pi bump that adds, drops or changes a field or a member fails `tsc`. Open schemas pass
+fields pi adds later. The acceptance test is a real session written by the installed pi SDK: it must read cleanly.
 
 `reopenChild` consumes the saved immutable birth record excluding its path, plus saved declarative
 session configuration. It validates owner/scope/file identity and preserves birth metadata, resolving
@@ -135,6 +135,7 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
 
 ## Public surface (the barrel, `index.ts`)
 
+- `scanReplayTools` with its `ReplayToolCall` result type.
 - `createDelegationService(bindings)` — the service (`DelegationService`): `createChild` /
   `setMaxConcurrentPerParent` / `findChild` / `childrenOf` / `onLifecycle` / `disposeChildrenOf`, plus `registerResource` /
   `captureHistory`. Resource, birth and captured-history contract types are exported from the
@@ -177,12 +178,21 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
 ## Boundary
 
 - **Allowed deps:** the pi SDK (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`) as
-  **peerDependencies** — the loading runtime supplies them; `node:*`.
+  **peerDependencies** — the loading runtime supplies them; `@earendil-works/pi-schema` as a real
+  dependency (`pi install` skips peers); `type-tie` type-only, as a dev dependency; `node:*`.
 - **Forbidden:** any `@thinkrail/*` package (this package must work under vanilla pi);
   `@earendil-works/pi-tui` (headless by design — rendering is the embedder's);
   importing another workspace package's internals.
-- `DelegationRunDetails` is **authored here and mirrored into `@thinkrail/contracts`** (never
-  imported from it, never re-exported by it) — the `pi-todos` DTO posture. Its `model`
+- **`./wire` leaf entry** (`src/wire.ts`): `RUN_STATUSES`, `RUN_LIFECYCLE_STATUSES`, the
+  `RunStatus` / `RunLifecycleStatus` schemas, `DELEGATION_RUN_FIELDS` and the `SessionOptions`
+  schema. It value-imports only `pi-schema` and pi-ai's `providers/model-schema`, so browser code
+  may load it ([[module-contracts]] does). `src/types.ts` derives `DelegationRunDetails`,
+  `RunStatus`, `RunLifecycleStatus` and `SessionOptions` from it, and `reopenChild` checks saved
+  session configuration with the compiled `SessionOptions` schema. `thinkingLevel` uses pi-ai's
+  `ModelThinkingLevelSchema`; pi-agent-core types the same field with its own union, so
+  `types.ts` ties the two with `Same<ModelThinkingLevel, ThinkingLevel>`.
+- `DelegationRunDetails` is **owned here; `@thinkrail/contracts` builds its wire schema from
+  `DELEGATION_RUN_FIELDS`** (decision #20). Its `model`
   (`provider/id`) and `thinkingLevel` are read off the child session on every snapshot, so they report
   what the run actually uses (pi-clamped), never the requested value.
 - Consumers import **through the barrel only**; `src/` is internal.
@@ -328,8 +338,7 @@ The layer must **work under vanilla pi** — no ThinkRail. `pi-delegation` itsel
 extension vanilla pi actually loads is its first consumer, [[module-pi-subagents]]. The SDK is a
 `peerDependency` (field-verified as the community's in-process pattern — decision #17); peer deps are
 exempt from the repo's exact-pin rule, and value-importing the SDK is safe here because the package
-lives server-side by construction and never reaches `contracts`/`web` (the wire type is mirrored —
-decision #20).
+lives server-side by construction. Only the `./wire` leaf reaches `contracts`/`web` (decision #20).
 
 An embedder constructs the service via `createDelegationService(bindings)` and hands it to
 consumers — ThinkRail keeps the handle for the manager's dispose cascade and the future wire
@@ -451,10 +460,12 @@ run-scoped signal. Non-user paths retain their behavior.
     subsession/branch wire handlers) take delegation without subagents. (gotgenes keeps its core
     inside its subagents package; we split because our future consumers are host features — a
     host importing "subagents" to get delegation misnames the dependency.)
-20. **`DelegationRunDetails` mirrored into `contracts`, never imported** — the `pi-todos` DTO
-    posture keeps `web → contracts`-only intact and the package host-free. (Rejected: authoring
-    the type in the package and re-exporting through `contracts` — `contracts` imports no
-    extension packages.)
+20. **`DelegationRunDetails` is owned here and `contracts` imports it through the `./wire` leaf**
+    (reversed). It was mirrored into `contracts`, which kept two hand-written copies of one shape
+    in step only by a host-side tie. One source per shape wins: `contracts` value-imports
+    `pi-delegation/wire` and only extends it. The leaf loads no Node API and no pi runtime, so
+    `web → contracts`-only stays intact and the web bundle stays free of both. The package stays
+    host-free: it still imports no `@thinkrail/*`.
 21. **Pure-pi bar: loads + works under default rendering** (user-settled) — no pi-tui widget; the
     rich live card ships web-side.
 22. **`collectResult()` added to `ChildHandle`** (implementation round): the `collected` flag needs

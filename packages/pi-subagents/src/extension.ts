@@ -5,6 +5,7 @@ import type {
 	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { CompletionDelivery } from "pi-background-commands/wire";
 import {
 	type ChildHandle,
 	createDelegationService,
@@ -21,12 +22,7 @@ import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
 import { RECURSION_GUARD_TOOLS, toSpawnMapping } from "./mapping";
 import { THINKING_LEVELS } from "./thinking";
-
-export const SUBAGENT_COMPLETION_MESSAGE = "subagent-completion";
-
-export type CompletionDelivery = "wake" | "run" | "appended";
-
-export type SubagentCompletionDetails = DelegationRunDetails & { delivery?: CompletionDelivery };
+import { SUBAGENT_COMPLETION_MESSAGE, type SubagentCompletionDetails } from "./wire";
 
 const MAX_RESULT_CHARS = 50_000;
 

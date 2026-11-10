@@ -9,6 +9,8 @@ import {
 	str,
 	unknown,
 } from "@earendil-works/pi-schema";
+import { BACKGROUND_COMMAND_COMPLETION_MESSAGE as BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE } from "pi-background-commands/wire";
+import { SUBAGENT_COMPLETION_MESSAGE as SUBAGENT_COMPLETION_CUSTOM_TYPE } from "pi-subagents/wire";
 import type { ToolResponseDetails } from "./piProtocol";
 import {
 	BackgroundCommandCompletionDetails,
@@ -373,7 +375,7 @@ export type CustomMessageEnvelope = Same<
 	Omit<WireCustomMessage, "customType" | "details">
 >;
 
-export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
+export { SUBAGENT_COMPLETION_CUSTOM_TYPE };
 
 const SubagentCompletionMessage = obj(
 	{
@@ -399,7 +401,7 @@ const TodoReviewFixMessage = obj(
 export type TodoReviewFixMessage = Static<typeof TodoReviewFixMessage>;
 export const isTodoReviewFixMessage = compile(TodoReviewFixMessage).check;
 
-export const BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE = "background-command-completion";
+export { BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE };
 
 const BackgroundCommandCompletionMessage = obj(
 	{

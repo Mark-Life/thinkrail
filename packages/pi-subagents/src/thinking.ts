@@ -1,14 +1,7 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 
-export const THINKING_LEVELS = [
-	"off",
-	"minimal",
-	"low",
-	"medium",
-	"high",
-	"xhigh",
-	"max",
-] as const satisfies readonly ThinkingLevel[];
+export const THINKING_LEVELS = MODEL_THINKING_LEVELS satisfies readonly ThinkingLevel[];
 
 const levels = new Set<string>(THINKING_LEVELS);
 
