@@ -8,13 +8,15 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import type { AskUserQuestionDiscussReason } from "@thinkrail/pi-ask-user-question/core";
+import {
+	type AskUserQuestionDiscussReason,
+	DISCUSS_REASONS,
+} from "@thinkrail/pi-ask-user-question/core";
 import { Button, withIconClass } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { AutosizeField } from "./AutosizeField";
 import { useTestId } from "./ghost";
-import { DISCUSS_REASONS } from "./state";
 
 const REASON_COPY: Record<
 	AskUserQuestionDiscussReason,

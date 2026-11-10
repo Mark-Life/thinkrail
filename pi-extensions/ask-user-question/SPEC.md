@@ -34,12 +34,26 @@ answer mailbox.
 - **`./core`** (`src/core.ts`), a browser leaf: ThinkRail's `ask-user-question` web half value-imports it,
   so it never imports `@earendil-works/pi-coding-agent`, not even type-only (that type load would turn on
   pi-coding-agent's `AgentMessage` augmentation in the web program), and value-imports only `pi-schema`,
-  pi-ai's `providers/model-schema` and other leaves, never a relative file (`check:boundaries`). Exports the tool name, limits, reserved labels, discuss reasons, result
-  types and texts, plus `validateQuestionnaire`, `previewFileSources`, `buildQuestionnaireResponse`,
-  `outcomeResult`, `isAckDetails`,
-  `isAskUserQuestionArgs`, `isAskUserQuestionResult`, `isolateAskUserQuestionBatch` and
-  `executableAskCallIds`. These are what an embedder needs to repair or continue a question outside
-  `execute()`.
+  pi-ai's `providers/model-schema` and other leaves, never a relative file (`check:boundaries`). It
+  type-imports pi-ai's root and `src/questionSchema.ts`, which imports only `typebox`. Exports:
+  - the tool name, limits, reserved labels and texts;
+  - the argument types `AskUserQuestionArgs`, `AskUserQuestionItem`, `AskUserQuestionOption` and
+    `AskUserQuestionPreviewFields`, derived from the TypeBox schema's `AskUserQuestionParams`, never a second
+    field list;
+  - `DISCUSS_REASONS` and `ANSWER_KINDS` (`as const` lists, with their types), and the result as pi-schema
+    schemas with `Static` types: `AskUserQuestionAnswer`, `AskUserQuestionResult` and
+    `AskUserQuestionAckDetails`. `isAskUserQuestionResult` and `isAckDetails` are their compiled checks; the
+    objects are open, so a field a newer version adds passes;
+  - `isAskUserQuestionArgs` and `isAskUserQuestionItem`, lenient guards over the derived types for args a
+    model may still be streaming: a question needs its text and labelled options;
+  - `NON_EXECUTABLE_STOP_REASONS` (`error`, `aborted`, `length`), and `executableAskCallIds` and
+    `isolateAskUserQuestionBatch`, which take pi-ai's `AssistantMessage` and narrow its blocks by `type`;
+  - `validateQuestionnaire`, `previewFileSources`, `buildQuestionnaireResponse` and `outcomeResult`.
+
+  These are what an embedder needs to repair or continue a question outside `execute()`. `AskRequest` and
+  `AskUserQuestionAsker` carry pi-coding-agent's `ExtensionContext`, so they live in `src/asker.ts` and only
+  the root exports them. ThinkRail's web half ties `NON_EXECUTABLE_STOP_REASONS` to contracts' list of the
+  same name ([[module-ext-ask-user-question]]).
 - **The tool contract**, which renderers and embedders key on:
   - the name;
   - the argument shape: `questions[]` of `{ question, header, preview?, options[]{ label, description,
@@ -134,16 +148,19 @@ answer mailbox.
 ## Boundary
 
 - **Allowed deps:** peers `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui` and `typebox`;
-  `@earendil-works/pi-schema` as a real dependency (`pi install` skips peers); test-only
-  `@earendil-works/pi-ai` (faux provider).
+  `@earendil-works/pi-schema` as a real dependency (`pi install` skips peers); `@earendil-works/pi-ai`
+  type-only from its root in shipped code (erased; pi-coding-agent brings it), and its faux provider in tests.
 - **Forbidden:** anything from ThinkRail (`@thinkrail/*`, `apps/*`, `packages/server`) and Bun APIs in
   shipped code.
 
 ## Structure
 
 - `index.ts`: exports and the default export.
-- `src/core.ts`: the contract.
-- `src/schema.ts`.
+- `src/core.ts`: the contract, a browser leaf.
+- `src/asker.ts`: `AskRequest` and `AskUserQuestionAsker`, the types that need pi-coding-agent.
+- `src/questionSchema.ts`: the TypeBox builders over the limits passed in, and `AskUserQuestionParams`.
+  It has no relative imports, so a web program that loads `core.ts` loads it without `.ts` import support.
+- `src/schema.ts`: the tool schemas with `core.ts`'s limits.
 - `src/extension.ts`: the factory and default guidance.
 - `src/dialogs.ts`.
 - `src/questionnaire.ts`: the answer model.

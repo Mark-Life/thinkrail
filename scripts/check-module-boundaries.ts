@@ -84,10 +84,6 @@ const WIRE_ONLY_TARGETS: Readonly<Record<string, readonly string[]>> = {
 	"packages/pi-subagents": ["packages/pi-background-commands"],
 };
 
-/** Leaf violations whose owner is removing them; an entry that no longer matches fails the check. */
-const PENDING_LEAF_FIXES: ReadonlySet<string> = new Set([
-	'pi-extensions/ask-user-question/src/core.ts: import "@earendil-works/pi-coding-agent"',
-]);
 const TEST_IDS_ENTRY = /^(?:test-ids|src\/testIds(?:\.ts)?)$/;
 const ID_SOURCE = /^src\/schema\/ids(?:\.ts)?$/;
 const TEST_SOURCE =
@@ -527,7 +523,6 @@ export function moduleBoundaryViolations(root: string): string[] {
 	const packages = workspacePackages(absoluteRoot);
 	const violations: string[] = [];
 	const leaves = leafFiles(absoluteRoot, packages, violations);
-	const pendingFixes = new Set<string>();
 	for (const rule of moduleRules(packages)) {
 		const modulePath = join(absoluteRoot, rule.root);
 		const manifestPath = join(modulePath, "package.json");
@@ -557,17 +552,9 @@ export function moduleBoundaryViolations(root: string): string[] {
 					target,
 					leaves.get(path),
 				);
-				if (!violation) continue;
-				const located = `${file}: import ${JSON.stringify(sourceImport.specifier)}`;
-				if (PENDING_LEAF_FIXES.has(located)) pendingFixes.add(located);
-				else violations.push(`${located} ${violation}`);
+				if (violation)
+					violations.push(`${file}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`);
 			}
-		}
-	}
-	for (const located of PENDING_LEAF_FIXES) {
-		const file = located.slice(0, located.indexOf(":"));
-		if (existsSync(join(absoluteRoot, file)) && !pendingFixes.has(located)) {
-			violations.push(`${located} is fixed: remove it from PENDING_LEAF_FIXES`);
 		}
 	}
 	return violations.sort();

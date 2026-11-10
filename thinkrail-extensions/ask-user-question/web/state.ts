@@ -1,14 +1,16 @@
-import type {
-	AskUserQuestionAnswer,
-	AskUserQuestionArgs,
-	AskUserQuestionDiscussReason,
-	AskUserQuestionItem,
-	AskUserQuestionOption,
+import {
+	type AskUserQuestionAnswer,
+	type AskUserQuestionDiscussReason,
+	type AskUserQuestionItem,
+	type AskUserQuestionOption,
+	isAskUserQuestionItem,
 } from "@thinkrail/pi-ask-user-question/core";
 
 export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItem[] {
-	const qs = (args as Partial<AskUserQuestionArgs>).questions;
-	return Array.isArray(qs) ? qs.filter((q) => q && Array.isArray(q.options)) : [];
+	const { questions } = args;
+	if (!Array.isArray(questions)) return [];
+	const items: readonly unknown[] = questions;
+	return items.filter(isAskUserQuestionItem);
 }
 
 export function splitRecommended(label: string): { text: string; recommended: boolean } {
@@ -58,12 +60,6 @@ export const emptyQState = (): QState => ({
 	discussText: "",
 	previewExpanded: false,
 });
-
-export const DISCUSS_REASONS: readonly AskUserQuestionDiscussReason[] = [
-	"unclear",
-	"irrelevant",
-	"context",
-];
 
 export function previewEcho(
 	option: AskUserQuestionOption,

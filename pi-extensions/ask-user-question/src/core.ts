@@ -1,4 +1,18 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage, StopReason, TextContent } from "@earendil-works/pi-ai";
+import {
+	arr,
+	bool,
+	compile,
+	lit,
+	nullable,
+	num,
+	obj,
+	oneOf,
+	opt,
+	type Static,
+	str,
+} from "@earendil-works/pi-schema";
+import type { AskUserQuestionParams } from "./questionSchema.ts";
 
 export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
 
@@ -19,58 +33,48 @@ export const RESERVED_LABELS = [
 	"Next →",
 ] as const;
 
-export interface AskUserQuestionPreviewFields {
-	preview?: string;
-	previewFile?: string;
-	previewBefore?: string;
-}
+export type AskUserQuestionArgs = AskUserQuestionParams;
+export type AskUserQuestionItem = AskUserQuestionArgs["questions"][number];
+export type AskUserQuestionOption = AskUserQuestionItem["options"][number];
+export type AskUserQuestionPreviewFields = Pick<
+	AskUserQuestionItem,
+	"preview" | "previewFile" | "previewBefore"
+>;
 
-export interface AskUserQuestionOption extends AskUserQuestionPreviewFields {
-	label: string;
-	description: string;
-	recommendedReason?: string;
-}
+export const DISCUSS_REASONS = ["unclear", "irrelevant", "context"] as const;
+export type AskUserQuestionDiscussReason = (typeof DISCUSS_REASONS)[number];
 
-export interface AskUserQuestionItem extends AskUserQuestionPreviewFields {
-	question: string;
-	header: string;
-	options: AskUserQuestionOption[];
-	multiSelect?: boolean;
-}
+export const ANSWER_KINDS = ["option", "custom", "multi", "discuss"] as const;
+export type AskUserQuestionAnswerKind = (typeof ANSWER_KINDS)[number];
 
-export type AskUserQuestionDiscussReason = "unclear" | "irrelevant" | "context";
+export const AskUserQuestionAnswer = obj(
+	{
+		questionIndex: num(),
+		question: str(),
+		kind: oneOf(ANSWER_KINDS),
+		answer: nullable(str()),
+		selected: opt(arr(str())),
+		notes: opt(str()),
+		preview: opt(str()),
+		previewFile: opt(str()),
+		previewBefore: opt(str()),
+		reason: opt(oneOf(DISCUSS_REASONS)),
+	},
+	{ open: true },
+);
+export type AskUserQuestionAnswer = Static<typeof AskUserQuestionAnswer>;
 
-export const DISCUSS_REASONS: readonly AskUserQuestionDiscussReason[] = [
-	"unclear",
-	"irrelevant",
-	"context",
-];
+export const AskUserQuestionResult = obj(
+	{ answers: arr(AskUserQuestionAnswer), cancelled: bool() },
+	{ open: true },
+);
+export type AskUserQuestionResult = Static<typeof AskUserQuestionResult>;
 
-export interface AskUserQuestionArgs {
-	questions: AskUserQuestionItem[];
-}
+export const AskUserQuestionAckDetails = obj({ kind: lit("ack") }, { open: true });
+export type AskUserQuestionAckDetails = Static<typeof AskUserQuestionAckDetails>;
 
-export interface AskUserQuestionAnswer {
-	questionIndex: number;
-	question: string;
-	kind: "option" | "custom" | "multi" | "discuss";
-	answer: string | null;
-	selected?: string[];
-	notes?: string;
-	preview?: string;
-	previewFile?: string;
-	previewBefore?: string;
-	reason?: AskUserQuestionDiscussReason;
-}
-
-export interface AskUserQuestionResult {
-	answers: AskUserQuestionAnswer[];
-	cancelled: boolean;
-}
-
-export interface AskUserQuestionAckDetails {
-	kind: "ack";
-}
+export const isAskUserQuestionResult = compile(AskUserQuestionResult).check;
+export const isAckDetails = compile(AskUserQuestionAckDetails).check;
 
 export type AskUserQuestionDetails = AskUserQuestionResult | AskUserQuestionAckDetails;
 
@@ -79,17 +83,15 @@ export type AskOutcome =
 	| { kind: "deferred"; reason?: "chat" }
 	| { kind: "abandoned" };
 
-export interface AskRequest {
-	toolCallId: string;
-	args: AskUserQuestionArgs;
-	signal: AbortSignal | undefined;
-	ctx: ExtensionContext;
-}
-
-export type AskUserQuestionAsker = (request: AskRequest) => Promise<AskOutcome>;
+/** The stop reasons after which an assistant message's tool calls may be cut off, so they never run. */
+export const NON_EXECUTABLE_STOP_REASONS = [
+	"error",
+	"aborted",
+	"length",
+] as const satisfies readonly StopReason[];
 
 export interface AskToolResult<D> {
-	content: { type: "text"; text: string }[];
+	content: TextContent[];
 	details: D;
 	terminate?: boolean;
 }
@@ -287,63 +289,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object";
 }
 
+/** A lenient guard for a question, also while its args stream: the text and labelled options it renders. */
+export function isAskUserQuestionItem(value: unknown): value is AskUserQuestionItem {
+	return (
+		isRecord(value) &&
+		typeof value.question === "string" &&
+		Array.isArray(value.options) &&
+		value.options.every((option) => isRecord(option) && typeof option.label === "string")
+	);
+}
+
 export function isAskUserQuestionArgs(value: unknown): value is AskUserQuestionArgs {
 	const questions = isRecord(value) ? value.questions : undefined;
-	return (
-		Array.isArray(questions) &&
-		questions.length > 0 &&
-		questions.every(
-			(question) =>
-				isRecord(question) &&
-				typeof question.question === "string" &&
-				Array.isArray(question.options) &&
-				question.options.every((option) => isRecord(option) && typeof option.label === "string"),
-		)
+	return Array.isArray(questions) && questions.length > 0 && questions.every(isAskUserQuestionItem);
+}
+
+const NON_EXECUTABLE: ReadonlySet<StopReason> = new Set(NON_EXECUTABLE_STOP_REASONS);
+
+const isAskCall = (block: AssistantMessage["content"][number]) =>
+	block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME;
+
+export function executableAskCallIds(message: AssistantMessage): string[] {
+	if (NON_EXECUTABLE.has(message.stopReason)) return [];
+	return message.content.flatMap((block) =>
+		block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME ? [block.id] : [],
 	);
 }
 
-export function isAskUserQuestionResult(value: unknown): value is AskUserQuestionResult {
-	return (
-		!!value &&
-		typeof value === "object" &&
-		Array.isArray((value as AskUserQuestionResult).answers) &&
-		typeof (value as AskUserQuestionResult).cancelled === "boolean"
-	);
-}
-
-export function isAckDetails(details: unknown): details is AskUserQuestionAckDetails {
-	return !!details && (details as AskUserQuestionAckDetails).kind === "ack";
-}
-
-interface ContentBlockView {
-	type?: unknown;
-	name?: unknown;
-	id?: unknown;
-}
-
-const NON_EXECUTABLE_STOP_REASONS: ReadonlySet<unknown> = new Set(["error", "aborted", "length"]);
-
-export function executableAskCallIds(message: { role: string }): string[] {
-	const { content, stopReason } = message as { content?: unknown; stopReason?: unknown };
-	if (message.role !== "assistant" || !Array.isArray(content)) return [];
-	if (NON_EXECUTABLE_STOP_REASONS.has(stopReason)) return [];
-	return (content as ContentBlockView[]).flatMap((block) =>
-		block?.type === "toolCall" &&
-		block.name === ASK_USER_QUESTION_TOOL_NAME &&
-		typeof block.id === "string"
-			? [block.id]
-			: [],
-	);
-}
-
-export function isolateAskUserQuestionBatch<M extends { role: string }>(message: M): M | undefined {
-	const content = (message as { content?: unknown }).content;
-	if (message.role !== "assistant" || !Array.isArray(content)) return undefined;
-	const blocks = content as ContentBlockView[];
-	const askIndex = blocks.findIndex(
-		(block) => block?.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME,
-	);
+export function isolateAskUserQuestionBatch(
+	message: AssistantMessage,
+): AssistantMessage | undefined {
+	const askIndex = message.content.findIndex(isAskCall);
 	if (askIndex < 0) return undefined;
-	const kept = blocks.filter((block, index) => block?.type !== "toolCall" || index === askIndex);
-	return kept.length === blocks.length ? undefined : { ...message, content: kept };
+	const kept = message.content.filter(
+		(block, index) => block.type !== "toolCall" || index === askIndex,
+	);
+	return kept.length === message.content.length ? undefined : { ...message, content: kept };
 }
