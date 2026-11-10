@@ -111,10 +111,6 @@ test("a shown mockup runs its scripts and the card follows the content height", 
 	const { preview, view, iframe, frame, box } = mockupView;
 	await expect(view).toHaveAttribute("data-html-mode", "scripted");
 	await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
-	await expect(preview.getByTestId("html-scripted-notice")).toContainText(
-		"fetch, XHR and WebSocket are blocked",
-	);
-	await expect(preview.getByTestId("html-disabled-notice")).toHaveCount(0);
 	await expect(frame.locator("#out")).toHaveText("script ran");
 	expect(await iframe.getAttribute("srcdoc")).toContain(
 		'<link rel="stylesheet" href="thinkrail-theme.css">',
@@ -123,7 +119,6 @@ test("a shown mockup runs its scripts and the card follows the content height", 
 	await expect(box).toHaveAttribute("data-content-height", "340");
 	expect(await frameHeight(frame)).toBe(340);
 	await expect(preview).toHaveAttribute("data-natural-height", "true");
-	await expect(box).toHaveAttribute("data-viewport", "responsive");
 	await expect.poll(() => boxHeight(box)).toBe(340);
 
 	await clickInTranscriptFrame(frame.locator("#grow"));
@@ -844,7 +839,7 @@ test("the desktop shell shows a shown mockup themed, with its controls and noscr
 	page: app,
 }) => {
 	await installDesktopShellMarker(app);
-	const { view, iframe, frame, preview } = await showMockup(
+	const { view, iframe, frame } = await showMockup(
 		app,
 		"desktop mockup",
 		mockup(
@@ -853,7 +848,6 @@ test("the desktop shell shows a shown mockup themed, with its controls and noscr
 	);
 	await expect(view).toHaveAttribute("data-html-mode", "themed");
 	await expect(iframe).toHaveAttribute("sandbox", "allow-same-origin");
-	await expect(preview.getByTestId("html-disabled-notice")).toBeVisible();
 	await expect(frame.locator("#save")).toBeVisible();
 	await clickInTranscriptFrame(frame.locator("#save"));
 	await expect(frame.locator("#save")).toHaveText("Save");

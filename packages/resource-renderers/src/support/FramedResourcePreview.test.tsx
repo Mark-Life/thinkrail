@@ -1,7 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ResourceEnvironmentProvider } from "../host";
-import { HtmlPreviewNotice } from "../renderers/html/ViewportSwitch";
 import { FramedResourcePreview } from "./FramedResourcePreview";
 
 describe("FramedResourcePreview", () => {
@@ -16,19 +14,5 @@ describe("FramedResourcePreview", () => {
 				/>,
 			),
 		).toBe("");
-	});
-});
-
-describe("compact chrome", () => {
-	const notice = (compact: boolean) =>
-		renderToStaticMarkup(
-			<ResourceEnvironmentProvider value={{ mobile: false, compact }}>
-				<HtmlPreviewNotice scripted={false} viewport="responsive" onViewport={() => {}} />
-			</ResourceEnvironmentProvider>,
-		);
-
-	it("drops the HTML viewport presets and notice in a compact frame", () => {
-		expect(notice(false)).toContain('data-testid="html-viewport"');
-		expect(notice(true)).toBe("");
 	});
 });

@@ -134,9 +134,7 @@ test("opens an HTML preview with active content disabled", async ({ page }) => {
 	await page.getByTestId("file-node").filter({ hasText: "sample.html" }).dblclick();
 	await expect(page.getByTestId("view-toggle-html")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("view-toggle-code")).toBeVisible();
-	await expect(page.getByTestId("html-disabled-notice")).toContainText(
-		"Scripts and external resources are disabled",
-	);
+	await expect(page.getByTestId("html-frame-box")).toBeVisible();
 });
 
 test("opens an uncompressed PDF in the PDF renderer and its change in the PDF diff", async ({

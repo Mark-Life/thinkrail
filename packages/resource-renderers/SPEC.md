@@ -50,7 +50,7 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
   state and a caller needs no reset). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
-  Send review and the HTML notice with its viewport presets — the chrome a small embedded frame cannot
+  and Send review — the chrome a small embedded frame cannot
   afford; the views themselves are unchanged. Its `fitContent` flag offers the view (or diff)
   `onNaturalHeight(natural)`; a renderer that lays out at its own height calls it with `true`, and from
   then on (for that renderer implementation) the frame drops the caller's height and grows with the view,
@@ -503,15 +503,9 @@ a real browser by `e2e/visualize-mockups.spec.ts`. The injected CSP is exactly `
 style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src
 'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
 It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
-only authoring candidate. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
-Tablet 768 / Phone 390 / Fill, default Desktop (Fill for a fitted chat card, below), persisted as `{ viewport }` view state and adopted whenever the
-caller's view state changes (`useHtmlViewport`, so a chat card follows a width chosen in its full screen): the frame renders at
-the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
-pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
-is the old reflow. Scaling is pure geometry on the wrapper — a static iframe keeps `sandbox=""` and nothing
-measures its document; the wrapper's box is measured in a layout effect (the package's
-one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
-instead of reflowing the document at the pane width for a frame. A static document has no form controls
+only authoring candidate. The frame has no chrome above it: no notice and no preview-width presets. It
+always lays the document out at its box's own width, so a document adapts to the space it gets, and a
+static iframe keeps `sandbox=""` with nothing measuring its document. A static document has no form controls
 (`button`, `input`, `select`, `textarea` are removed); spot (region) comments on HTML are not offered yet.
 
 **Themed frame.** When the host's `html.mode(workspaceId, path)` answers `themed`, the view and each diff
@@ -619,13 +613,10 @@ loading any network or same-origin URL, so it cannot reach a page that lacks thi
   is measured. WebKit notifies the old root's observer after the new `load`, with the probe heights as its
   size, which reads as a frame-sized document; a notification for a root that is no longer the frame's
   root is ignored. A height that changes with longer pauses is followed for as long as it changes. The view
-  fits only while it holds a height: it sizes the frame to it, clamps the *rendered* box (after
-  design-width scaling) to `HTML_CONTENT_HEIGHT` (120–1600 px on screen), drops its padding and calls
+  fits only while it holds a height: it sizes the frame to it, clamps the box to `HTML_CONTENT_HEIGHT` (120–1600 px on screen), drops its padding and calls
   `onNaturalHeight(true)`. Without one (not measured yet, or sized from the frame) it keeps the caller's
   bounded box and calls `onNaturalHeight(false)`; the agent guideline asks for content-sized documents. A
-  card offered fitting with no stored width defaults to Fill, so the mockup draws at the card's own width
-  and text size instead of a 1280 px layout shrunk to about half; a width the user picks still applies. A
-  document whose scaled height passes 1600 px scrolls inside the frame. Tabs, full screen, palette and
+  document taller than 1600 px scrolls inside the frame. Tabs, full screen, palette and
   question previews keep filling their container and measure nothing.
 
 The parent attaches on each frame `load` and only to a document that carries the theme style. That check
@@ -644,12 +635,12 @@ its viewport-bounded side boxes, and it calls `onNaturalHeight(true)` while each
 height. A diff with a static side or a frame-sized side keeps the bounded box.
 
 **Scripted frame.** When the host answers `scripted`, the view and each diff side render
-`ScriptedHtmlFrame`: `<iframe sandbox="allow-scripts" srcdoc>` with no other token. Fit, preview width and
+`ScriptedHtmlFrame`: `<iframe sandbox="allow-scripts" srcdoc>` with no other token. Fit and
 the height clamp work as in the themed frame, and the theme is the same text: the one cascade layer
 `hostTheme.ts` builds, in the prefix and in every live update, so any author declaration wins here too.
 Each mode is its own component, so a mode change mounts a new
-`iframe` element; a `sandbox` change on a live element would not reach the loaded document. The notice bar
-says that scripts run (`viewer.html.scriptedNotice`).
+`iframe` element; a `sandbox` change on a live element would not reach the loaded document. A running
+mockup's limits are the agent's concern (`visualize` guideline), so the frame shows no notice about them.
 
 *Document* (`scriptedDocument.ts`). The `srcdoc` is a fixed host prefix followed by the author source, byte
 for byte. This mode neither parses nor sanitizes: a script re-creates anything a sanitizer removes, and the

@@ -8,7 +8,7 @@ import {
 } from "./heightFollow";
 import { hostThemeSnapshot, serverThemeSnapshot, subscribeHostTheme } from "./hostTheme";
 import { buildThemedHtmlDocument, THEME_STYLE_ATTRIBUTE } from "./htmlDocument";
-import { HTML_CONTENT_HEIGHT, type HtmlViewport } from "./viewport";
+import { HTML_CONTENT_HEIGHT } from "./viewport";
 
 const THEME_STYLE = `style[${THEME_STYLE_ATTRIBUTE}]`;
 
@@ -47,13 +47,11 @@ function measuredHeight(frame: HTMLIFrameElement, root: HTMLElement): number | n
 export function ThemedHtmlFrame({
 	title,
 	source,
-	viewport,
 	contentHeight,
 	onContentHeight,
 }: {
 	title: string;
 	source: string;
-	viewport: HtmlViewport;
 	contentHeight?: number;
 	onContentHeight?: (height: number | null) => void;
 }) {
@@ -108,7 +106,6 @@ export function ThemedHtmlFrame({
 		<HtmlFrame
 			title={title}
 			document={current.html}
-			viewport={viewport}
 			sandbox="allow-same-origin"
 			frameRef={frameRef}
 			onLoad={() => setLoads((count) => count + 1)}

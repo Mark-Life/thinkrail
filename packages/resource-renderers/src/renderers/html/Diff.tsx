@@ -5,8 +5,6 @@ import { diffContentStamp } from "../reviewComposerState";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
 import { HtmlSourceFrame } from "./HtmlSourceFrame";
 import { useHtmlMode } from "./useHtmlMode";
-import { useHtmlViewport } from "./useHtmlViewport";
-import { HtmlPreviewNotice } from "./ViewportSwitch";
 
 function textOf(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
@@ -17,8 +15,6 @@ export default function HtmlDiff({
 	originalResource = resource,
 	original,
 	modified,
-	viewState,
-	onViewState,
 	onNaturalHeight,
 }: ResourceDiffProps) {
 	const t = useT();
@@ -32,11 +28,6 @@ export default function HtmlDiff({
 		(originalText === null || originalMode !== "static") &&
 		(modifiedText === null || modifiedMode !== "static") &&
 		(originalText !== null || modifiedText !== null);
-	const [viewport, selectViewport] = useHtmlViewport(
-		viewState,
-		onViewState,
-		offered ? "responsive" : "desktop",
-	);
 	const [originalHeight, setOriginalHeight] = useState<number | null>(null);
 	const [modifiedHeight, setModifiedHeight] = useState<number | null>(null);
 	const fit =
@@ -55,7 +46,6 @@ export default function HtmlDiff({
 					mode={originalMode}
 					source={originalText}
 					title={t("viewer.html.originalPreview", { path: originalResource.path })}
-					viewport={viewport}
 					{...(offered ? { onContentHeight: setOriginalHeight } : {})}
 					{...fitted}
 				/>
@@ -74,7 +64,6 @@ export default function HtmlDiff({
 					mode={modifiedMode}
 					source={modifiedText}
 					title={t("viewer.html.modifiedPreview", { path: resource.path })}
-					viewport={viewport}
 					{...(offered ? { onContentHeight: setModifiedHeight } : {})}
 					{...fitted}
 				/>
@@ -91,14 +80,6 @@ export default function HtmlDiff({
 			data-fit={fit}
 			className={fit ? "flex flex-col" : "flex h-full min-h-0 flex-col"}
 		>
-			<HtmlPreviewNotice
-				scripted={
-					(originalText !== null && originalMode === "scripted") ||
-					(modifiedText !== null && modifiedMode === "scripted")
-				}
-				viewport={viewport}
-				onViewport={selectViewport}
-			/>
 			<div className={fit ? "flex-none" : "min-h-0 flex-1"}>
 				<VisualDiff
 					prefix="html"

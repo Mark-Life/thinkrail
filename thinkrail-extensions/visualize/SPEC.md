@@ -132,7 +132,7 @@ from the file and none from ThinkRail runs and the file gets the theme and nothi
 native webview injects into frames is not covered ([[module-resource-renderers]], *Themed frame* and
 *Scripted frame*; [[module-web]] owns the rule). Its toolbar adds **Open in tab** (`host.openFile` keep, or
 `host.openComparison` for a before/after) and **Full screen** (a dialog rendering the same preview with
-Split/Inline; renderer choice and view state, such as the HTML preview width, are shared with the card).
+Split/Inline; renderer choice and view state are shared with the card).
 The frame and its actions live in the SDK because the questionnaire's previews use the same one. A card always shows the file's
 **current** content, never a snapshot from the tool call: editing a mockup updates every card that shows it
 (review comments follow the file). A mockup deleted under a mounted card leaves it on its last loaded version

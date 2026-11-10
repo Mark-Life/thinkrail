@@ -4,17 +4,15 @@ import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
 import { ScriptedHtmlFrame } from "./ScriptedHtmlFrame";
 import { ThemedHtmlFrame } from "./ThemedHtmlFrame";
-import type { HtmlViewport } from "./viewport";
 
 interface SourceFrameProps {
 	title: string;
 	source: string;
-	viewport: HtmlViewport;
 }
 
-function StaticHtmlFrame({ title, source, viewport }: SourceFrameProps) {
+function StaticHtmlFrame({ title, source }: SourceFrameProps) {
 	const document = useMemo(() => buildHtmlPreviewDocument(source), [source]);
-	return <HtmlFrame title={title} document={document} viewport={viewport} />;
+	return <HtmlFrame title={title} document={document} />;
 }
 
 export function HtmlSourceFrame({
@@ -27,5 +25,5 @@ export function HtmlSourceFrame({
 }) {
 	if (mode === "scripted") return <ScriptedHtmlFrame {...props} />;
 	if (mode === "themed") return <ThemedHtmlFrame {...props} />;
-	return <StaticHtmlFrame title={props.title} source={props.source} viewport={props.viewport} />;
+	return <StaticHtmlFrame title={props.title} source={props.source} />;
 }

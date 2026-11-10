@@ -7,7 +7,6 @@ import { HtmlFrame } from "./HtmlFrame";
 import { hostThemeSnapshot, serverThemeSnapshot, subscribeHostTheme } from "./hostTheme";
 import { buildScriptedHtmlDocument } from "./scriptedDocument";
 import { createScriptedHeight } from "./scriptedHeight";
-import type { HtmlViewport } from "./viewport";
 
 interface Built {
 	source: string;
@@ -41,13 +40,11 @@ export function MockupStoppedNotice({ focus }: { focus: boolean }) {
 export function ScriptedHtmlFrame({
 	title,
 	source,
-	viewport,
 	contentHeight,
 	onContentHeight,
 }: {
 	title: string;
 	source: string;
-	viewport: HtmlViewport;
 	contentHeight?: number;
 	onContentHeight?: (height: number | null) => void;
 }) {
@@ -134,7 +131,6 @@ export function ScriptedHtmlFrame({
 		<HtmlFrame
 			title={title}
 			document={html}
-			viewport={viewport}
 			sandbox="allow-scripts"
 			frameRef={frameRef}
 			onLoad={onLoad}

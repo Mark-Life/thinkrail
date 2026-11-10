@@ -57,14 +57,11 @@ test("a mockup card sizes itself to the document and follows it as it grows", as
 		});
 		const preview = card.getByTestId("resource-preview");
 		await expect(preview.getByTestId("html-view")).toHaveAttribute("data-html-mode", "themed");
-		await expect(preview.getByTestId("html-disabled-notice")).toBeVisible();
 		await expect(preview.locator("iframe")).toHaveAttribute("sandbox", THEMED);
 
 		const box = preview.getByTestId("html-frame-box");
 		await expect(box).toHaveAttribute("data-content-height", "940");
 		await expect(preview).toHaveAttribute("data-natural-height", "true");
-		await expect(box).toHaveAttribute("data-viewport", "responsive");
-		await expect(box).toHaveAttribute("data-scale", "1.000");
 		await expect.poll(() => boxHeight(box)).toBe(940);
 		expect((await preview.boundingBox())?.height ?? 0).toBeGreaterThan(940);
 
@@ -76,13 +73,6 @@ test("a mockup card sizes itself to the document and follows it as it grows", as
 		await expect(box).toHaveAttribute("data-content-height", "940");
 		await clickInTranscriptFrame(summary);
 		await expect(box).toHaveAttribute("data-content-height", "1240");
-
-		await clickTranscriptControl(preview.getByTestId("html-viewport-desktop"));
-		await expect.poll(async () => Number(await box.getAttribute("data-scale"))).toBeLessThan(1);
-		const scale = Number(await box.getAttribute("data-scale"));
-		await expect
-			.poll(async () => Math.abs((await boxHeight(box)) - 1240 * scale))
-			.toBeLessThanOrEqual(1);
 
 		await clickTranscriptControl(preview.getByTestId("tool-visualize-fullscreen"));
 		const dialog = app.getByTestId("tool-visualize-fullscreen-dialog");
@@ -459,10 +449,6 @@ for (const [name, path] of [
 			await expect(iframe).toHaveAttribute("sandbox", "");
 			expect(await iframe.getAttribute("srcdoc")).not.toContain("data-thinkrail-theme");
 			await expect(preview.frameLocator("iframe").getByText("static text")).toBeVisible();
-			await expect(preview.getByTestId("html-frame-box")).toHaveAttribute(
-				"data-viewport",
-				"desktop",
-			);
 			await expect(preview).not.toHaveAttribute("data-natural-height", "true");
 		} finally {
 			rmSync(join(E2E_FIXTURE_REPO, "static-page.html"), { force: true });

@@ -228,9 +228,6 @@ test("a file visualization renders the workspace file with the diff-review rende
 		const preview = file.getByTestId("resource-preview");
 		await expect(preview).toBeVisible();
 		await expect(preview.getByTestId("view-toggle-html")).toHaveAttribute("data-active", "true");
-		await expect(preview.getByTestId("html-scripted-notice")).toContainText(
-			"Mockup scripts run in a sandboxed frame",
-		);
 		await expect(preview.frameLocator("iframe").getByText("Save settings")).toBeVisible();
 
 		await clickTranscriptControl(preview.getByTestId("view-toggle-code"));
@@ -325,9 +322,7 @@ test("review comments on a visualized file are sent into the chat that shows it"
 	}
 });
 
-test("a file preview fills the card width, fits a picked design width, and opens full screen and in a tab", async ({
-	page,
-}) => {
+test("a file preview opens full screen and in a tab", async ({ page }) => {
 	const cleanup = writeMockups({ "wide.html": mockupHtml("Save settings") });
 	try {
 		const card = await openVisualization(page, "file actions", {
@@ -335,15 +330,7 @@ test("a file preview fills the card width, fits a picked design width, and opens
 			path: `${MOCKUP_DIR}/wide.html`,
 		});
 		const preview = card.getByTestId("resource-preview");
-		const frame = preview.getByTestId("html-frame-box");
-		await expect(frame).toHaveAttribute("data-viewport", "responsive");
-		await expect(frame).toHaveAttribute("data-scale", "1.000");
-		await clickTranscriptControl(preview.getByTestId("html-viewport-desktop"));
-		await expect(frame).toHaveAttribute("data-viewport", "desktop");
-		expect(Number(await frame.getAttribute("data-scale"))).toBeLessThan(1);
-		await clickTranscriptControl(preview.getByTestId("html-viewport-phone"));
-		await expect(frame).toHaveAttribute("data-viewport", "phone");
-		await expect(frame).toHaveAttribute("data-scale", "1.000");
+		await expect(preview.getByTestId("html-frame-box")).toBeVisible();
 		await page.screenshot({ path: test.info().outputPath("card.png") });
 
 		await clickTranscriptControl(preview.getByTestId("tool-visualize-fullscreen"));
@@ -429,62 +416,6 @@ test("a before/after preview opens as a diff tab over the two files that survive
 		await expect(
 			page.locator('[data-testid="diff-pane"][data-compare]').locator("iframe"),
 		).toHaveCount(2);
-	} finally {
-		cleanup();
-	}
-});
-
-test("an HTML preview width is shared by the card and its full screen and survives a comparison tab switch", async ({
-	page,
-}) => {
-	const cleanup = writeMockups({
-		"before.html": mockupHtml("Save"),
-		"after.html": mockupHtml("Save settings"),
-	});
-	try {
-		const card = await openVisualization(page, "file widths", {
-			type: "file",
-			path: `${MOCKUP_DIR}/after.html`,
-			before: `${MOCKUP_DIR}/before.html`,
-		});
-		const diff = card.getByTestId("resource-preview-diff");
-		await expect(diff.locator("iframe")).toHaveCount(2);
-		await clickTranscriptControl(diff.getByTestId("html-viewport-phone"));
-		await expect(diff.getByTestId("html-frame-box").first()).toHaveAttribute(
-			"data-viewport",
-			"phone",
-		);
-		await clickTranscriptControl(diff.getByTestId("tool-visualize-fullscreen"));
-		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
-		await expect(dialog.getByTestId("html-frame-box").first()).toHaveAttribute(
-			"data-viewport",
-			"phone",
-		);
-		await dialog.getByTestId("html-viewport-tablet").click();
-		await page.keyboard.press("Escape");
-		await expect(dialog).toBeHidden();
-		await expect(diff.getByTestId("html-frame-box").first()).toHaveAttribute(
-			"data-viewport",
-			"tablet",
-		);
-
-		await clickTranscriptControl(diff.getByTestId("tool-visualize-open-tab"));
-		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
-		await pane.getByTestId("html-viewport-tablet").click();
-		await expect(pane.getByTestId("html-frame-box").first()).toHaveAttribute(
-			"data-viewport",
-			"tablet",
-		);
-		await page.locator('[data-testid="editor-tab"][data-kind="chat"]').first().click();
-		await expect(pane).toHaveCount(0);
-		await page
-			.locator('[data-testid="editor-tab"][data-kind="diff"]')
-			.filter({ hasText: "before.html → after.html" })
-			.click();
-		await expect(pane.getByTestId("html-frame-box").first()).toHaveAttribute(
-			"data-viewport",
-			"tablet",
-		);
 	} finally {
 		cleanup();
 	}

@@ -11,7 +11,7 @@ import { FakeDocument, FakeElement, installFakeDocument } from "../../testing/fa
 import { rootCustomPropertyNames, themeCss } from "./hostTheme";
 import { HTML_PREVIEW_CSP, prepareHtmlPreviewDocument } from "./htmlDocument";
 import HtmlView from "./View";
-import { clampContentHeight, HTML_CONTENT_HEIGHT, htmlFitGeometry } from "./viewport";
+import { clampContentHeight, HTML_CONTENT_HEIGHT } from "./viewport";
 
 let restoreDocument = () => {};
 beforeAll(() => {
@@ -132,19 +132,6 @@ test("content height is clamped to the documented bounds", () => {
 	expect(clampContentHeight(90_000)).toBe(HTML_CONTENT_HEIGHT.max);
 	expect(clampContentHeight(Number.NaN)).toBe(HTML_CONTENT_HEIGHT.min);
 	expect(HTML_CONTENT_HEIGHT).toEqual({ min: 120, max: 1600 });
-});
-
-test("a fitted frame keeps the design width and clamps the rendered box height", () => {
-	expect(htmlFitGeometry("desktop", 640, 900)).toEqual({ width: 1280, height: 900, scale: 0.5 });
-	expect(htmlFitGeometry("desktop", 640, 100)).toEqual({ width: 1280, height: 240, scale: 0.5 });
-	expect(htmlFitGeometry("desktop", 640, 5000)).toEqual({ width: 1280, height: 3200, scale: 0.5 });
-	expect(htmlFitGeometry("desktop", 640, 3200)).toEqual({ width: 1280, height: 3200, scale: 0.5 });
-	expect(htmlFitGeometry("responsive", 640, 300)).toEqual({ width: 640, height: 300, scale: 1 });
-	expect(htmlFitGeometry("phone", 800, 0)).toEqual({
-		width: 390,
-		height: HTML_CONTENT_HEIGHT.min,
-		scale: 1,
-	});
 });
 
 function declaration(entries: Record<string, string>): CSSStyleDeclaration {

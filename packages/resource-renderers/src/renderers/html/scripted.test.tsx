@@ -16,7 +16,7 @@ import { themeCss } from "./hostTheme";
 import { MockupStoppedNotice } from "./ScriptedHtmlFrame";
 import { buildScriptedHtmlDocument, SCRIPTED_HTML_CSP } from "./scriptedDocument";
 import HtmlView from "./View";
-import { HTML_CONTENT_HEIGHT, htmlFitGeometry } from "./viewport";
+import { clampContentHeight, HTML_CONTENT_HEIGHT } from "./viewport";
 
 const CDN =
 	"https://cdn.jsdelivr.net/npm/ https://unpkg.com https://cdnjs.cloudflare.com/ajax/libs/";
@@ -430,8 +430,8 @@ test("a flood from one mockup, nested frame or not, closes that mockup and not t
 });
 
 test("a height of any size still goes through the content-height clamp", () => {
-	expect(htmlFitGeometry("responsive", 640, 1e12).height).toBe(HTML_CONTENT_HEIGHT.max);
-	expect(htmlFitGeometry("responsive", 640, 0).height).toBe(HTML_CONTENT_HEIGHT.min);
+	expect(clampContentHeight(1e12)).toBe(HTML_CONTENT_HEIGHT.max);
+	expect(clampContentHeight(0)).toBe(HTML_CONTENT_HEIGHT.min);
 });
 
 test("the scripted document and the live theme message carry the same layered theme text", () => {
@@ -487,8 +487,6 @@ test("a scripted frame carries exactly allow-scripts, its own notice and the unp
 		"sandbox",
 		"class",
 	]);
-	expect(markup).toContain('data-testid="html-scripted-notice"');
-	expect(markup).not.toContain('data-testid="html-disabled-notice"');
 	expect(markup).toContain("draw()");
 	expect(parsed).toBe(0);
 });
@@ -497,7 +495,6 @@ test("a side that shows a git revision is themed at most", () => {
 	const { markup, parsed } = renderView("scripted", { kind: "uncommitted" });
 	expect(markup).toContain('data-html-mode="themed"');
 	expect(sandboxes(markup)).toEqual(["allow-same-origin"]);
-	expect(markup).toContain('data-testid="html-disabled-notice"');
 	expect(markup).toContain("chart");
 	expect(markup).not.toContain("draw()");
 	expect(parsed).toBe(2);
