@@ -1813,7 +1813,10 @@ test("stopped command completion cannot strand a live question across polite shu
 				interactiveTools(() => false),
 			).ok,
 		).toBe(true);
-		expect(SessionManager.open(path).buildSessionContext().messages.at(-1)).toEqual(ack[0]);
+		const persistedAck = SessionManager.open(path).buildSessionContext().messages.at(-1);
+		if (persistedAck?.role !== "toolResult")
+			throw new Error("the ack result was not persisted last");
+		expect(ack[0]).toEqual(persistedAck);
 		const reopenedResources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
 		expect(reopenedResources.commands).toMatchObject([{ id, status: "stopped" }]);
 		expect(reopenedResources.commands[0]?.interrupted).toBeUndefined();

@@ -1,7 +1,14 @@
+export * from "./backgroundCommand";
 export * from "./customEndpoint";
+export * from "./extUi";
+export * from "./mcp";
 export * from "./methods";
 export * from "./model";
 export * from "./project";
 export * from "./provider";
+export * from "./resource";
+export * from "./session";
 export * from "./skill";
+export * from "./subagent";
+export * from "./transcript";
 export { Ack } from "./wire";

@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import type { AgentMessage, ToolResponseMessage } from "@thinkrail/contracts";
+import { compile, lit, obj, opt, type Static, str, unknown } from "@earendil-works/pi-schema";
+import type { ToolResponseMessage } from "@thinkrail/contracts";
 import {
 	assistantToolCallsAreExecutable,
 	isToolResponsePending,
@@ -12,12 +13,13 @@ export const TOOL_RESPONSE_PENDING_TEXT =
 	"This call is now waiting for the user's response. This turn ends here; the response (or the user's own free-form reply) will arrive as the next user message. Do not assume one until it arrives.";
 export const TOOL_RESPONSE_STOPPED_ERROR = "Cancelled because the run was stopped";
 
-interface ToolCallView {
-	type: string;
-	id?: string;
-	name?: string;
-	arguments?: unknown;
-}
+const ToolCallView = obj(
+	{ type: lit("toolCall"), id: opt(str()), name: opt(str()), arguments: opt(unknown()) },
+	{ open: true },
+);
+type ToolCallView = Static<typeof ToolCallView>;
+const ToolCallBlock = compile(ToolCallView);
+
 interface MessageView {
 	role?: string;
 	content?: unknown;
@@ -28,7 +30,7 @@ interface MessageView {
 
 function toolCallsOf(message: MessageView): ToolCallView[] {
 	if (message.role !== "assistant" || !Array.isArray(message.content)) return [];
-	return (message.content as ToolCallView[]).filter((b) => b?.type === "toolCall");
+	return message.content.filter(ToolCallBlock.check);
 }
 
 export type Respondability =
@@ -36,11 +38,10 @@ export type Respondability =
 	| { ok: false; reason: "unknown_call" | "already_responded" | "not_awaiting" | "superseded" };
 
 export function assessRespondability(
-	messages: readonly AgentMessage[],
+	views: readonly MessageView[],
 	toolCallId: string,
 	interactive: InteractiveTools,
 ): Respondability {
-	const views = messages as readonly MessageView[];
 	let callIndex = -1;
 	let callDead = false;
 	let call: ToolCallView | null = null;
@@ -75,10 +76,10 @@ export function assessRespondability(
 }
 
 export function hasPendingToolResult(
-	messages: readonly AgentMessage[],
+	messages: readonly MessageView[],
 	toolCallId: string,
 ): boolean {
-	return (messages as readonly MessageView[]).some(
+	return messages.some(
 		(message) =>
 			message.role === "toolResult" &&
 			message.toolCallId === toolCallId &&
@@ -87,11 +88,11 @@ export function hasPendingToolResult(
 }
 
 export function awaitingToolCallId(
-	messages: readonly AgentMessage[],
+	messages: readonly MessageView[],
 	interactive: InteractiveTools,
 	pendingOnly = false,
 ): string | null {
-	const views = messages as readonly MessageView[];
+	const views = messages;
 	for (let i = views.length - 1; i >= 0; i--) {
 		const view = views[i];
 		if (!view) continue;

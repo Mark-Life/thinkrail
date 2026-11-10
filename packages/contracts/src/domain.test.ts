@@ -27,13 +27,13 @@ import {
 	normalizeFontSettings,
 	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
-	type ResourceRecord,
 	resourceHistoryCursor,
 	resourceOutcome,
 	resourceTallyTotal,
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 } from "./domain";
+import type { ResourceRecord } from "./schema";
 
 describe("isRetriedAttempt", () => {
 	const failed = { role: "assistant", stopReason: "error" };
