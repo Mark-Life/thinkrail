@@ -1,15 +1,16 @@
-import type {
-	McpExposure,
-	McpServerEntryInput,
-	McpServerScope,
-	McpServerSummary,
+import {
+	MCP_ACTIVE_EXPOSURES,
+	type McpExposure,
+	type McpServerEntryInput,
+	type McpServerScope,
+	type McpServerSummary,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, t } from "@thinkrail/locales/react";
 
 export type McpEditableExposure = Exclude<McpExposure, "codemode">;
 
-export const MCP_EXPOSURES: readonly McpEditableExposure[] = ["deferred", "direct", "hidden"];
+export const MCP_EXPOSURES: readonly McpEditableExposure[] = MCP_ACTIVE_EXPOSURES;
 
 export const MCP_EXPOSURE_HINT = {
 	deferred: "mcp.exposure.deferredHint",

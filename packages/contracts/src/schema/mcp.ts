@@ -14,7 +14,11 @@ import {
 import { SessionId, StoredSessionId, StoredWorkspaceId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
-export const McpActiveExposure = oneOf(["deferred", "direct", "hidden"]);
+/** pi's `McpExposure` values; `codemode` is accepted from files and treated as `deferred` while codemode is not shipped. */
+export const MCP_EXPOSURES = ["codemode", "deferred", "direct", "hidden"] as const;
+export const MCP_ACTIVE_EXPOSURES = ["deferred", "direct", "hidden"] as const;
+export const McpActiveExposure = oneOf(MCP_ACTIVE_EXPOSURES);
+export type McpActiveExposure = Static<typeof McpActiveExposure>;
 
 export const McpContentBlockSummary = union([
 	wireObj({ kind: lit("text"), chars: num() }),
@@ -53,7 +57,8 @@ export type McpProjectOverride = Static<typeof McpProjectOverride>;
 export const McpToolGrant = wireObj({ target: str(), tools: arr(str()) });
 export type McpToolGrant = Static<typeof McpToolGrant>;
 
-export const McpTransportKind = oneOf(["stdio", "http"]);
+export const MCP_TRANSPORT_KINDS = ["stdio", "http"] as const;
+export const McpTransportKind = oneOf(MCP_TRANSPORT_KINDS);
 export type McpTransportKind = Static<typeof McpTransportKind>;
 
 export const McpServerState = oneOf([
@@ -87,8 +92,7 @@ export type McpServerResourceSummary = Static<typeof McpServerResourceSummary>;
 export const McpServerScope = oneOf(["user", "project"]);
 export type McpServerScope = Static<typeof McpServerScope>;
 
-/** Configured exposure; `codemode` is accepted from files and treated as `deferred` while codemode is not shipped. */
-export const McpExposure = oneOf(["deferred", "direct", "hidden", "codemode"]);
+export const McpExposure = oneOf(MCP_EXPOSURES);
 export type McpExposure = Static<typeof McpExposure>;
 
 /** The session-independent view of one configured server; secret literal values are masked. */
