@@ -8,7 +8,9 @@ import type {
 	ReviewMergeState,
 	ReviewProvider,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { gitAsync, nonInteractiveGitEnv } from "../git";
+import { logger } from "../log";
 import { runBounded } from "../subprocess";
 import {
 	type CheckItem,
@@ -22,6 +24,7 @@ import {
 	parseProviderJson,
 } from "./providerReply";
 
+const log = logger("branch-review");
 const LOOKUP_TIMEOUT_MS = 8_000;
 export const OPEN_BRANCH_REVIEW_CACHE_TTL_MS = 60_000;
 const REPO_MERGE_SETTINGS_TTL_MS = 10 * 60_000;
@@ -455,7 +458,13 @@ async function repoMergeSettings(
 	]).catch(() => null);
 	if (!result?.ok) return null;
 	const repo = parseProviderJson(result.out, isRepoSettings);
-	if (!repo) return null;
+	if (!repo) {
+		log.warn(
+			"repository merge settings skipped",
+			new CodedError("GH_REPLY_INVALID", "gh repo view answered something unexpected"),
+		);
+		return null;
+	}
 	const allowed: [MergeMethod, boolean | null | undefined][] = [
 		["squash", repo.squashMergeAllowed],
 		["merge", repo.mergeCommitAllowed],

@@ -15,6 +15,7 @@ import {
 	str,
 	unknown,
 } from "@earendil-works/pi-schema";
+import type { LatestReview, ProviderRow, RepoSettings } from "@thinkrail/server/gh-test-fixtures";
 
 const FakePrState = oneOf(["OPEN", "CLOSED", "MERGED"]);
 export type FakePrState = Static<typeof FakePrState>;
@@ -101,21 +102,25 @@ function main(): void {
 	const origin = readOrigin();
 	const slug = /github\.com[:/](.+?)(?:\.git)?$/.exec(origin)?.[1] ?? "acme/sample";
 	const [owner = "", name = ""] = slug.split("/");
-	const shape = (pr: FakePr): Record<string, unknown> => ({
-		headRepositoryOwner: { id: "U_owner", login: pr.headOwner ?? owner },
-		headRepository: { id: "R_repo", name },
-		url: `https://github.com/${slug}/pull/${pr.number}`,
-		baseRefName: "main",
-		isDraft: false,
-		reviewDecision: "",
-		mergeStateStatus: "CLEAN",
-		statusCheckRollup: [],
-		latestReviews: [],
-		mergedAt: null,
-		closedAt: null,
-		createdAt: "2026-01-01T00:00:00Z",
-		...pr,
-	});
+	const headRepository = { id: "R_repo", name };
+	const shape = (pr: FakePr) => {
+		const headRepositoryOwner = { id: "U_owner", login: pr.headOwner ?? owner };
+		return {
+			headRepositoryOwner,
+			headRepository,
+			url: `https://github.com/${slug}/pull/${pr.number}`,
+			baseRefName: "main",
+			isDraft: false,
+			reviewDecision: "",
+			mergeStateStatus: "CLEAN",
+			statusCheckRollup: [],
+			mergedAt: null,
+			closedAt: null,
+			createdAt: "2026-01-01T00:00:00Z",
+			...pr,
+			latestReviews: (pr.latestReviews ?? []) satisfies LatestReview[],
+		} satisfies ProviderRow;
+	};
 	const find = (selector: string | undefined) =>
 		scenario.prs.find((pr) => String(pr.number) === selector) ??
 		fail(`no pull requests found for ${selector}`);
@@ -129,7 +134,7 @@ function main(): void {
 			rebaseMergeAllowed: true,
 			deleteBranchOnMerge: false,
 			...scenario.repo,
-		};
+		} satisfies RepoSettings;
 		process.stdout.write(`${JSON.stringify(project(repo))}\n`);
 		return;
 	}

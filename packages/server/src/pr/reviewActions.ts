@@ -11,6 +11,7 @@ import {
 	runProviderCommand,
 } from "../branch-review";
 import { git, gitAsync, originUrls, remoteRefOidAsync } from "../git";
+import { logger } from "../log";
 import {
 	MUTATION_TIMEOUT_MS,
 	onBaseBranch,
@@ -30,6 +31,7 @@ export interface MergePrParams extends ReviewActionParams {
 	deleteBranch: boolean;
 }
 
+const log = logger("pr");
 const PrState = union([lit("OPEN"), lit("CLOSED"), lit("MERGED")]);
 type PrState = Static<typeof PrState>;
 
@@ -121,7 +123,13 @@ async function headsOpenPr(
 	]);
 	if (!listed.ok) return null;
 	const rows = parseProviderJson(listed.out, isOpenPrRows);
-	if (!rows) return null;
+	if (!rows) {
+		log.warn(
+			"open PR lookup skipped",
+			new CodedError("GH_REPLY_INVALID", "gh pr list answered something unexpected"),
+		);
+		return null;
+	}
 	return rows.some((row) => headRepositorySlug(row) === slug.toLowerCase());
 }
 

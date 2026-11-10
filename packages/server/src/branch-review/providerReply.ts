@@ -75,17 +75,17 @@ const LatestReview = obj(
 export type LatestReview = Static<typeof LatestReview>;
 export const isLatestReview = compile(LatestReview).check;
 
-export const isRepoSettings = compile(
-	obj(
-		{
-			squashMergeAllowed: opt(nullable(bool())),
-			mergeCommitAllowed: opt(nullable(bool())),
-			rebaseMergeAllowed: opt(nullable(bool())),
-			deleteBranchOnMerge: opt(nullable(bool())),
-		},
-		{ open: true },
-	),
-).check;
+const RepoSettings = obj(
+	{
+		squashMergeAllowed: opt(nullable(bool())),
+		mergeCommitAllowed: opt(nullable(bool())),
+		rebaseMergeAllowed: opt(nullable(bool())),
+		deleteBranchOnMerge: opt(nullable(bool())),
+	},
+	{ open: true },
+);
+export type RepoSettings = Static<typeof RepoSettings>;
+export const isRepoSettings = compile(RepoSettings).check;
 
 /** `null` for output that is not JSON or fails the check. */
 export function parseProviderJson<T>(
