@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { compile, int, lit, obj, str } from "@earendil-works/pi-schema";
+import { logger } from "../log";
 import {
 	ATTRIBUTION_MAX_POLLS,
 	ATTRIBUTION_ORIGIN,
@@ -8,7 +9,10 @@ import {
 	claimIdPattern,
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
+	stateFileWriteFailure,
 } from "../persistence";
+
+const log = logger("analytics");
 
 export const ATTRIBUTION_REQUEST_TIMEOUT_MS = 5_000;
 export const ATTRIBUTION_DEADLINE_MS = 9 * 60 * 1_000;
@@ -228,12 +232,15 @@ export async function runAttributionClaim(
 			if (!redeemed) return;
 			try {
 				dependencies.persist(redeemed);
-			} catch {}
+			} catch (error) {
+				log.warn("acquisition not saved", stateFileWriteFailure("attribution.json", error));
+			}
 			if (!dependencies.active()) return;
 			dependencies.linked(redeemed);
 			return;
 		}
-	} catch {
+	} catch (error) {
+		if (!overall.signal.aborted) log.debug("attribution claim stopped", error);
 	} finally {
 		clearTimeout(deadline);
 		dependencies.signal?.removeEventListener("abort", abortOverall);

@@ -59,7 +59,7 @@ const FontNameList = compile(arr(str()));
 const FixtureDirective = compile(obj({ error: str() }, { open: true }));
 
 function familyList(value: unknown): InstalledFontFamily[] {
-	if (!FontFamilyList.check(value)) throw new Error("expected a list of font families");
+	if (!FontFamilyList.check(value)) throw unavailable("expected a list of font families");
 	return value.map(({ name, monospaceHint }) => ({ name, monospaceHint: monospaceHint === true }));
 }
 
@@ -81,7 +81,7 @@ export function parseMacFamilies(stdout: string): InstalledFontFamily[] {
 
 export function parseWindowsFamilies(stdout: string): InstalledFontFamily[] {
 	const names: unknown = JSON.parse(stdout);
-	if (!FontNameList.check(names)) throw new Error("expected a list of family names");
+	if (!FontNameList.check(names)) throw unavailable("expected a list of family names");
 	return names.map((name) => ({ name, monospaceHint: false }));
 }
 

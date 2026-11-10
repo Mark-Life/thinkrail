@@ -10,6 +10,7 @@ import type {
 	WorkspaceId,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode, hasErrno } from "@thinkrail/shared/errnoCode";
 import {
 	forgetOpenBranchReview,
 	githubSlug,
@@ -29,10 +30,12 @@ import {
 	remoteRefOid,
 } from "../git";
 import { ghSetupProblem } from "../github";
+import { logger } from "../log";
 import { generateTodoSummary, listTodos } from "../todos";
 import { getWorkspace, syncWorkspaceBranch } from "../workspaces";
 import { flatItems, renderPrBody } from "./prBody";
 
+const prLog = logger("pr");
 const COMPARE_BODY_LIMIT = 4_000;
 
 export type PrCommandRunner = (
@@ -83,7 +86,20 @@ async function containedFile(worktreePath: string, path: string): Promise<boolea
 }
 
 async function entries(dir: string): Promise<string[]> {
-	return (await readdir(dir).catch((): string[] => [])).sort();
+	try {
+		return (await readdir(dir)).sort();
+	} catch (error) {
+		if (!hasErrno(error, "ENOENT", "ENOTDIR")) {
+			prLog.warn(
+				"a PR template folder was skipped",
+				new CodedError(
+					"RESOURCE_UNAVAILABLE",
+					`a PR template folder could not be read (${errnoCode(error) ?? "no error code"})`,
+				),
+			);
+		}
+		return [];
+	}
 }
 
 export async function discoverTemplates(worktreePath: string): Promise<string[]> {

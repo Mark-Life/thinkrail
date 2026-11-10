@@ -2,14 +2,17 @@ import { arr, bool, oneOf, opt, type Static, str } from "@earendil-works/pi-sche
 import { WorkspaceId } from "./ids";
 import { Ack, NoPayload, wireObj } from "./wire";
 
-export const PiPackageScope = oneOf(["user", "project"]);
+export const PI_PACKAGE_SCOPES = ["user", "project"] as const;
+export const PiPackageScope = oneOf(PI_PACKAGE_SCOPES);
 export type PiPackageScope = Static<typeof PiPackageScope>;
 
-export const PiPackageSourceKind = oneOf(["npm", "git", "local"]);
+export const PI_PACKAGE_SOURCE_KINDS = ["npm", "git", "local"] as const;
+export const PiPackageSourceKind = oneOf(PI_PACKAGE_SOURCE_KINDS);
 export type PiPackageSourceKind = Static<typeof PiPackageSourceKind>;
 
 /** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
-export const PiPackageResourceType = oneOf(["extensions", "skills", "prompts"]);
+export const PI_PACKAGE_RESOURCE_TYPES = ["extensions", "skills", "prompts"] as const;
+export const PiPackageResourceType = oneOf(PI_PACKAGE_RESOURCE_TYPES);
 export type PiPackageResourceType = Static<typeof PiPackageResourceType>;
 
 /** One file a pi package contributes, in pi's resolved `enabled` state; `path` is the toggle target. */

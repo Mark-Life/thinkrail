@@ -203,7 +203,8 @@ an update, a create, or an ambiguous create result.
   the body), `branch-review` (provider detection, `githubSlug`, existing-PR lookup, the fresh open-review
   check before a remote deletion, the shared command runner, `forgetOpenBranchReview`),
   `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types; `pi-schema` for reply schemas;
-  `shared/codedError` (`PUSH_AUTH_FAILED`).
+  `shared/codedError` (`PUSH_AUTH_FAILED`), `shared/errnoCode`; `log` (coded warnings for a skipped template folder
+  and a refused `gh` reply).
 - **Forbidden:** `host`; provider HTTP APIs or stored tokens (auth stays external — the user's `gh`
   only); persisting PR state (that would duplicate `workspace.openReview`'s derivation).
 - All `gh` traffic flows through one injected `PrCommandRunner` so unit tests never spawn a real CLI.

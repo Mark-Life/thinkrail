@@ -1,4 +1,5 @@
 import type { ReviewAnchor, ReviewAnchorState, ReviewSelector } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { hashBytes } from "../fs";
 
 const UTF8_BYTES = new TextEncoder();
@@ -37,7 +38,8 @@ function shown(value: string | number): string {
 function fraction(selector: Region, name: "x" | "y" | "width" | "height"): number {
 	const value = selector[name];
 	if (!Number.isFinite(value) || value < 0 || value > 1)
-		throw new Error(
+		throw new CodedError(
+			"INVALID_PARAMS",
 			`A region selector's ${name} must be a fraction in [0, 1], got ${shown(value)}.`,
 		);
 	return value;
@@ -46,7 +48,10 @@ function fraction(selector: Region, name: "x" | "y" | "width" | "height"): numbe
 function page(value: number | undefined): number | undefined {
 	if (value === undefined) return undefined;
 	if (!Number.isInteger(value) || value < 1)
-		throw new Error(`A region selector's page must be a positive integer, got ${shown(value)}.`);
+		throw new CodedError(
+			"INVALID_PARAMS",
+			`A region selector's page must be a positive integer, got ${shown(value)}.`,
+		);
 	return value;
 }
 
@@ -64,11 +69,13 @@ function narrowRegion(selector: Region): Region {
 
 function narrowLineRange({ startLine, endLine }: LineRange): LineRange {
 	if (!Number.isInteger(startLine) || !Number.isInteger(endLine))
-		throw new Error(
+		throw new CodedError(
+			"INVALID_PARAMS",
 			`A lineRange selector's lines must be integers, got ${shown(startLine)}-${shown(endLine)}.`,
 		);
 	if (startLine < 1 || endLine < startLine)
-		throw new Error(
+		throw new CodedError(
+			"INVALID_PARAMS",
 			`A lineRange selector must run from line 1 onwards, got ${startLine}-${endLine}.`,
 		);
 	return { kind: "lineRange", startLine, endLine };
@@ -76,10 +83,12 @@ function narrowLineRange({ startLine, endLine }: LineRange): LineRange {
 
 function narrowStructural({ scheme, ref }: Structural): Structural {
 	if (!STRUCTURAL_SCHEME.test(scheme))
-		throw new Error(
+		throw new CodedError(
+			"INVALID_PARAMS",
 			`A structural selector's scheme must match ${STRUCTURAL_SCHEME.source}, got ${shown(scheme)}.`,
 		);
-	if (ref.length === 0) throw new Error(`A ${scheme} selector needs a non-empty ref.`);
+	if (ref.length === 0)
+		throw new CodedError("INVALID_PARAMS", `A ${scheme} selector needs a non-empty ref.`);
 	return { kind: "structural", scheme, ref };
 }
 

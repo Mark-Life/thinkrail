@@ -30,6 +30,7 @@ import {
 	mcpSessionView,
 	requestSessionReload,
 	type SessionReloadDisposition,
+	sessionReloadFailure,
 } from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
 import { isBuiltinExtensionEnabled } from "./extensions";
@@ -283,7 +284,11 @@ export async function reconcileMcpSessions(
 			const disposition = await requestSessionReload(sessionId);
 			dispositions[sessionId] = disposition;
 			if (disposition === "deferred") showPendingMcpReload(sessionId);
-		} catch {}
+		} catch (error) {
+			if (!hasFailedMcpReload(sessionId)) {
+				log.warn(`MCP reload not requested for ${sessionId}`, sessionReloadFailure(error));
+			}
+		}
 	}
 	return dispositions;
 }
@@ -382,10 +387,21 @@ function trackedOf(sessionId: SessionId): Tracked {
 async function capture(sessionId: SessionId, state: Tracked): Promise<void> {
 	const load = state.load;
 	const notices: string[] = [];
+	let failure: unknown;
 	try {
 		await dispatchSessionMcpCommand(sessionId, "", (message) => notices.push(message));
-	} catch {}
+	} catch (error) {
+		failure = error;
+	}
 	if (tracked.get(sessionId) !== state || state.load !== load) return;
+	if (failure !== undefined) {
+		log.warn(
+			`MCP status not read for ${sessionId}`,
+			failure instanceof CodedError
+				? failure
+				: new CodedError("RESOURCE_UNAVAILABLE", "the MCP status command failed"),
+		);
+	}
 	const parsed = notices.map(parseMcpStatusText).findLast((status) => status !== null);
 	if (parsed) apply(sessionId, parsed, false);
 }

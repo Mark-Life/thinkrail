@@ -82,7 +82,8 @@ this module never spawns npm or git itself.
   same identity), yields loose files (`origin: "top-level"`, `source: "auto"` for a discovered file,
   `"local"` for an explicit `extensions[]` entry) and the host-supplied built-ins, and excludes the Central
   artifact path like the session loader does. Human-readable metadata comes only from a package's
-  `package.json` (a loaded `Extension` has no name). The result cache is long-lived because every change
+  `package.json` (a loaded `Extension` has no name); a missing one falls back to the source's name, and an
+  unreadable or non-object one also falls back, with a `RESOURCE_UNAVAILABLE` warning. The result cache is long-lived because every change
   path calls `invalidatePiPackageCatalog()`; a file dropped into a scanned folder by hand is the one change
   no path sees, so the Extensions page's opening read (`packages.list` with `force`) drops the cache first. `listPiPackageRevealTargets` validates a reveal path from
   the same reads.

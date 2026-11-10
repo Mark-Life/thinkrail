@@ -5,7 +5,6 @@ import { createInterface } from "node:readline";
 import {
 	clampThinkingLevel,
 	getSupportedThinkingLevels,
-	type Usage,
 	type UserMessage,
 } from "@earendil-works/pi-ai";
 import {
@@ -105,6 +104,7 @@ import {
 	type SessionReceipts,
 	saveSessionLifecycle,
 	saveSessionReceipts,
+	stateFileWriteFailure,
 } from "../persistence";
 import { removeWorkspaceResourceHistory } from "../resourceHistory";
 import { trashFile } from "../trash";
@@ -705,7 +705,7 @@ function markCancelledRun(entry: Entry): void {
 	} catch (error) {
 		log.warn(
 			`session cancellation state was not persisted for ${sessionIdOf(entry.session)}`,
-			error,
+			stateFileWriteFailure("session-lifecycle.json", error),
 		);
 	}
 }
@@ -865,7 +865,10 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	) {
 		void requestSessionReload(sessionIdOf(session)).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(sessionIdOf(session))) {
-				log.warn(`extension reload failed for ${sessionIdOf(session)}`, error);
+				log.warn(
+					`extension reload failed for ${sessionIdOf(session)}`,
+					sessionReloadFailure(error),
+				);
 			}
 		});
 	}
@@ -948,7 +951,7 @@ export async function refreshSkillAdmission(): Promise<void> {
 				if (stale) await requestSessionReload(sessionId);
 			} catch (error) {
 				if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(sessionId)) {
-					log.warn(`skill admission reload failed for ${sessionId}`, error);
+					log.warn(`skill admission reload failed for ${sessionId}`, sessionReloadFailure(error));
 				}
 			}
 		}),
@@ -998,6 +1001,15 @@ export async function reloadSessionResources(sessionId: SessionId): Promise<void
 }
 
 export type SessionReloadDisposition = "reloaded" | "deferred";
+
+/** A failed reload for its caller to log; an error that already has a code keeps it. */
+export function sessionReloadFailure(error: unknown): CodedError {
+	if (error instanceof CodedError) return error;
+	return new CodedError(
+		"SESSION_RELOAD_FAILED",
+		`session reload failed: ${error instanceof Error ? error.message : String(error)}`,
+	);
+}
 
 export async function requestSessionReload(
 	sessionId: SessionId,
@@ -2783,7 +2795,10 @@ function cutTornUsageAppend(
 /** Returns whether pi took the usage into its session totals; persisting it is best-effort. */
 export function recordSessionUsage(
 	sessionId: SessionId,
-	record: { kind: string; provider: string; model: string; usage: Usage; note?: string },
+	record: Pick<
+		Extract<SessionEntry, { type: "usage" }>,
+		"kind" | "provider" | "model" | "usage" | "note"
+	>,
 ): boolean {
 	const entry = usageWritableEntry(sessionId);
 	if (!entry) return false;
@@ -2795,7 +2810,10 @@ export function recordSessionUsage(
 		sessionManager.appendUsage(kind, provider, model, usage, note);
 	} catch (error) {
 		cutTornUsageAppend(sessionId, file, size);
-		log.warn(`${kind} usage was not persisted for ${sessionId}`, error);
+		log.warn(
+			`${kind} usage was not persisted for ${sessionId}`,
+			stateFileWriteFailure(file ?? "session file", error),
+		);
 		return false;
 	}
 	try {

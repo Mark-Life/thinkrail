@@ -14,7 +14,8 @@ import type {
 	Workspace,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { hasErrno } from "@thinkrail/shared/errnoCode";
+import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode, hasErrno } from "@thinkrail/shared/errnoCode";
 import {
 	CONTENT_SNIFF_BYTES,
 	classifyBytes,
@@ -23,7 +24,7 @@ import {
 	resourceMeta,
 } from "../fs";
 import { logger } from "../log";
-import { loadProjects, loadWorkspaces } from "../persistence";
+import { loadProjects, loadWorkspaces, stateFileWriteFailure } from "../persistence";
 import {
 	changedFileArgs,
 	type DiffRange,
@@ -72,14 +73,25 @@ export function gitCommitPaths(
 	let saved: Buffer | null = null;
 	try {
 		saved = readFileSync(indexPath);
-	} catch {
-		saved = null;
+	} catch (error) {
+		if (!hasErrno(error, "ENOENT")) {
+			log.warn(
+				"paths not committed: the git index could not be saved first",
+				new CodedError(
+					"STATE_FILE_UNREADABLE",
+					`index could not be read (${errnoCode(error) ?? "no error code"})`,
+				),
+			);
+			return null;
+		}
 	}
 	const restoreIndex = (result: GitResult): null => {
 		try {
 			if (saved === null) rmSync(indexPath, { force: true });
 			else writeFileSync(indexPath, saved);
-		} catch {}
+		} catch (error) {
+			log.warn("git index not restored", stateFileWriteFailure(indexPath, error));
+		}
 		throwOnTimeout(result, COMMIT_PATHS);
 		return null;
 	};

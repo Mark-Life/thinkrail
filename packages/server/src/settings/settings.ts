@@ -16,10 +16,12 @@ import {
 	loadConfig,
 	saveConfig,
 	setConfigAside,
+	stateFileWriteFailure,
 } from "../persistence";
 import { keepValidStoredPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
 const log = logger("settings");
+const CONFIG_FILE = "config.json";
 
 export type SettingsPublisher = (config: AppConfig, appliedUpdate: AppConfigUpdate) => void;
 type RuntimeAppConfigUpdate = AppConfigUpdate &
@@ -81,7 +83,7 @@ export function configReadFailed(): boolean {
 	try {
 		publishSettings?.(config, {});
 	} catch (error) {
-		log.warn("recovered config not published", error);
+		log.warn("recovered config not published", stateFileWriteFailure(CONFIG_FILE, error));
 	}
 	return false;
 }
@@ -194,7 +196,7 @@ export function noteRecentModel(model: WireModel): void {
 		saveOverCache(next);
 		publishSettings?.(next, {});
 	} catch (error) {
-		log.warn("recent model not noted", error);
+		log.warn("recent model not noted", stateFileWriteFailure(CONFIG_FILE, error));
 	}
 }
 
