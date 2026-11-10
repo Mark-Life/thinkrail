@@ -28,6 +28,7 @@ export { maskMcpEndpoint, redactMcpText } from "./redact";
 export {
 	isMcpResultTool,
 	MCP_SUMMARY_BYTES,
+	mcpFullOutputPath,
 	summarizeMcpResult,
 } from "./results";
 export {

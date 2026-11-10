@@ -9,11 +9,22 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { McpProjectOverride, McpToolGrant, Project } from "@thinkrail/contracts";
+import {
+	CommonFields,
+	HttpFields,
+	isJsonObject,
+	isMcpFile,
+	MCP_EXPOSURES,
+	type McpOAuth,
+	parseHttpServer,
+	parseStdioServer,
+	refusedPath,
+	StdioFields,
+} from "./schemas";
 
 // Port of pi's `core/mcp-servers.ts` and `extensions/mcp/config.ts` (MIT, Earendil Works).
 
 const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
-const MCP_EXPOSURES: readonly McpExposure[] = ["codemode", "deferred", "direct", "hidden"];
 const MCP_EXPOSURE_ALIASES: Record<string, McpExposure> = { "codemode-deferred": "codemode" };
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"] as const;
@@ -32,14 +43,6 @@ export function mcpNamespace(server: string): string {
 	return `mcp__${server.replace(/-/g, "_")}`;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-	return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
-}
-
 export function isOverrideEntry(value: Record<string, unknown>): boolean {
 	return value.command === undefined && value.url === undefined && value.type === undefined;
 }
@@ -55,73 +58,48 @@ export function isLoopbackRedirectUri(value: string): boolean {
 	);
 }
 
-function validateOAuth(value: unknown): string | undefined {
-	if (value === undefined) return undefined;
-	if (!isRecord(value)) return "oauth must be an object";
-	if (value.clientId !== undefined && typeof value.clientId !== "string") {
-		return "oauth.clientId must be a string";
-	}
-	if (value.clientSecret !== undefined && typeof value.clientSecret !== "string") {
-		return "oauth.clientSecret must be a string";
-	}
-	const port = value.callbackPort;
-	if (
-		port !== undefined &&
-		(typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535)
-	) {
-		return "oauth.callbackPort must be a port number";
-	}
-	if (value.callbackUrl !== undefined) {
-		if (typeof value.callbackUrl !== "string" || !isLoopbackRedirectUri(value.callbackUrl)) {
-			return "oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment";
-		}
-		const urlPort = new URL(value.callbackUrl).port;
-		if (urlPort && port !== undefined && Number(urlPort) !== port) {
+const CALLBACK_URL_PROBLEM =
+	"oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment";
+const METADATA_URL_PROBLEM =
+	"oauth.authServerMetadataUrl must be an https URL, or http on localhost, 127.0.0.1, or [::1]";
+
+const OAUTH_FIELD_PROBLEMS: Readonly<Record<string, string>> = {
+	clientId: "oauth.clientId must be a string",
+	clientSecret: "oauth.clientSecret must be a string",
+	callbackPort: "oauth.callbackPort must be a port number",
+	callbackUrl: CALLBACK_URL_PROBLEM,
+	scope: "oauth.scope must be a string",
+	clientName: "oauth.clientName must be a non-empty string",
+	clientRegistration: 'oauth.clientRegistration must be "auto", "dcr", or "cimd"',
+	authServerMetadataUrl: METADATA_URL_PROBLEM,
+};
+
+function oauthProblem(oauth: McpOAuth): string | undefined {
+	const { callbackPort, callbackUrl, clientRegistration, authServerMetadataUrl } = oauth;
+	if (callbackUrl !== undefined) {
+		if (!isLoopbackRedirectUri(callbackUrl)) return CALLBACK_URL_PROBLEM;
+		const urlPort = new URL(callbackUrl).port;
+		if (urlPort && callbackPort !== undefined && Number(urlPort) !== callbackPort) {
 			return "oauth.callbackUrl and oauth.callbackPort name different ports";
 		}
 	}
-	if (value.scope !== undefined && typeof value.scope !== "string")
-		return "oauth.scope must be a string";
-	if (
-		value.clientName !== undefined &&
-		(typeof value.clientName !== "string" || !value.clientName.trim())
-	) {
-		return "oauth.clientName must be a non-empty string";
-	}
-	const registration = value.clientRegistration;
-	if (registration !== undefined && registration !== "auto" && registration !== "dcr") {
-		if (registration !== "cimd") {
-			return 'oauth.clientRegistration must be "auto", "dcr", or "cimd"';
-		}
-		if (value.clientId !== undefined || value.clientName !== undefined) {
+	if (clientRegistration === "cimd") {
+		if (oauth.clientId !== undefined || oauth.clientName !== undefined) {
 			return 'oauth.clientRegistration "cimd" cannot be combined with oauth.clientId or oauth.clientName';
 		}
-		const callback = typeof value.callbackUrl === "string" ? new URL(value.callbackUrl) : undefined;
+		const callback = callbackUrl === undefined ? undefined : new URL(callbackUrl);
 		if (callback && (callback.hostname === "[::1]" || callback.pathname !== "/callback")) {
 			return 'oauth.clientRegistration "cimd" requires oauth.callbackUrl on localhost or 127.0.0.1 with path /callback';
 		}
 	}
-	const metadataUrl = value.authServerMetadataUrl;
-	if (metadataUrl !== undefined) {
-		const url =
-			typeof metadataUrl === "string" && URL.canParse(metadataUrl)
-				? new URL(metadataUrl)
-				: undefined;
-		if (
-			!url ||
-			!(
-				url.protocol === "https:" ||
-				(url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname))
-			)
-		) {
-			return "oauth.authServerMetadataUrl must be an https URL, or http on localhost, 127.0.0.1, or [::1]";
-		}
+	if (authServerMetadataUrl !== undefined) {
+		const url = URL.canParse(authServerMetadataUrl) ? new URL(authServerMetadataUrl) : undefined;
+		const allowed =
+			url?.protocol === "https:" ||
+			(url?.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname));
+		if (!allowed) return METADATA_URL_PROBLEM;
 	}
 	return undefined;
-}
-
-function isExposure(value: unknown): value is McpExposure {
-	return typeof value === "string" && (MCP_EXPOSURES as readonly string[]).includes(value);
 }
 
 function resolveExposureAlias(value: unknown): unknown {
@@ -132,7 +110,7 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
 	const { exposure, toolExposure } = value;
 	const resolved = { ...value };
 	if (exposure !== undefined) resolved.exposure = resolveExposureAlias(exposure);
-	if (isRecord(toolExposure)) {
+	if (isJsonObject(toolExposure)) {
 		resolved.toolExposure = Object.fromEntries(
 			Object.entries(toolExposure).map(([tool, entry]) => [tool, resolveExposureAlias(entry)]),
 		);
@@ -140,77 +118,80 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
 	return resolved;
 }
 
+function commonFieldProblem([field, tool]: string[]): string {
+	const exposures = MCP_EXPOSURES.map((entry) => `"${entry}"`).join(", ");
+	switch (field) {
+		case "exposure":
+			return `exposure must be one of ${exposures}`;
+		case "toolExposure":
+			return tool === undefined
+				? "toolExposure must map tool names to exposures"
+				: `toolExposure "${tool}" must be one of ${exposures}`;
+		case "enabled":
+			return "enabled must be a boolean";
+		case "description":
+			return "description must be a string";
+		default:
+			return "timeout must be a positive number of seconds";
+	}
+}
+
+function httpFieldProblem([field, oauthField]: string[]): string {
+	if (field === "headers") return "headers must map names to strings";
+	if (field === "auth") return "auth.provider must be a provider name";
+	return (
+		(oauthField === undefined ? undefined : OAUTH_FIELD_PROBLEMS[oauthField]) ??
+		"oauth must be an object"
+	);
+}
+
+function stdioFieldProblem([field]: string[]): string {
+	if (field === "args") return "args must be an array of strings";
+	if (field === "env") return "env must map names to strings";
+	return "cwd must be a string";
+}
+
+function httpServerProblem(value: Record<string, unknown>, url: string): string | undefined {
+	if (!URL.canParse(url) || !/^https?:$/.test(new URL(url).protocol)) {
+		return "url must be an http or https URL";
+	}
+	if (!HttpFields.check(value)) return httpFieldProblem(refusedPath(HttpFields, value));
+	const oauthError = value.oauth === undefined ? undefined : oauthProblem(value.oauth);
+	if (oauthError) return oauthError;
+	const { protocol, hostname } = new URL(url);
+	if (value.auth !== undefined && protocol !== "https:" && !LOOPBACK_HOSTS.includes(hostname)) {
+		return "auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]";
+	}
+	return undefined;
+}
+
+const notAServer = (name: string) => `server "${name}" is not a valid MCP server`;
+
 export function validateMcpServerConfig(name: string, raw: unknown): McpServerConfig | string {
 	if (!SERVER_NAME.test(name))
 		return `invalid server name "${name}" (use letters, digits, "_" and "-")`;
-	if (!isRecord(raw)) return `server "${name}" must be an object`;
+	if (!isJsonObject(raw)) return `server "${name}" must be an object`;
 	const value = resolveExposureAliases(raw);
-	const { type, exposure, enabled, timeout, toolExposure, description } = value;
-	const exposures = MCP_EXPOSURES.map((entry) => `"${entry}"`).join(", ");
-	if (exposure !== undefined && !isExposure(exposure)) {
-		return `server "${name}": exposure must be one of ${exposures}`;
-	}
-	if (toolExposure !== undefined) {
-		if (!isRecord(toolExposure))
-			return `server "${name}": toolExposure must map tool names to exposures`;
-		for (const [tool, entry] of Object.entries(toolExposure)) {
-			if (!isExposure(entry))
-				return `server "${name}": toolExposure "${tool}" must be one of ${exposures}`;
-		}
-	}
-	if (enabled !== undefined && typeof enabled !== "boolean") {
-		return `server "${name}": enabled must be a boolean`;
-	}
-	if (description !== undefined && typeof description !== "string") {
-		return `server "${name}": description must be a string`;
-	}
-	if (timeout !== undefined && (typeof timeout !== "number" || !(timeout > 0))) {
-		return `server "${name}": timeout must be a positive number of seconds`;
+	const { type, url, command } = value;
+	if (!CommonFields.check(value)) {
+		return `server "${name}": ${commonFieldProblem(refusedPath(CommonFields, value))}`;
 	}
 	if (type === "sse") {
 		return `server "${name}": legacy SSE transport is not supported; use the streamable HTTP URL`;
 	}
 	if (
-		typeof value.url === "string" &&
+		typeof url === "string" &&
 		(type === undefined || type === "http" || type === "streamable-http")
 	) {
-		if (!URL.canParse(value.url) || !/^https?:$/.test(new URL(value.url).protocol)) {
-			return `server "${name}": url must be an http or https URL`;
-		}
-		if (value.headers !== undefined && !isStringRecord(value.headers)) {
-			return `server "${name}": headers must map names to strings`;
-		}
-		const oauthError = validateOAuth(value.oauth);
-		if (oauthError) return `server "${name}": ${oauthError}`;
-		if (value.auth !== undefined) {
-			if (
-				!isRecord(value.auth) ||
-				typeof value.auth.provider !== "string" ||
-				!value.auth.provider
-			) {
-				return `server "${name}": auth.provider must be a provider name`;
-			}
-			const url = new URL(value.url);
-			if (url.protocol !== "https:" && !LOOPBACK_HOSTS.includes(url.hostname)) {
-				return `server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`;
-			}
-		}
-		return value as unknown as McpServerConfig;
+		const problem = httpServerProblem(value, url);
+		if (problem) return `server "${name}": ${problem}`;
+		return parseHttpServer(value) ?? notAServer(name);
 	}
-	if (typeof value.command === "string" && (type === undefined || type === "stdio")) {
-		if (
-			value.args !== undefined &&
-			!(Array.isArray(value.args) && value.args.every((arg) => typeof arg === "string"))
-		) {
-			return `server "${name}": args must be an array of strings`;
+	if (typeof command === "string" && (type === undefined || type === "stdio")) {
+		if (!StdioFields.check(value)) {
+			return `server "${name}": ${stdioFieldProblem(refusedPath(StdioFields, value))}`;
 		}
-		if (value.env !== undefined && !isStringRecord(value.env)) {
-			return `server "${name}": env must map names to strings`;
-		}
-		if (value.cwd !== undefined && typeof value.cwd !== "string") {
-			return `server "${name}": cwd must be a string`;
-		}
-		return value as unknown as McpServerConfig;
+		return parseStdioServer(value) ?? notAServer(name);
 	}
 	return `server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`;
 }
@@ -251,7 +232,7 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 		fileError(error instanceof Error ? error.message : String(error));
 		return;
 	}
-	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
+	if (!isMcpFile(parsed)) {
 		fileError('expected an object with an "mcpServers" object');
 		return;
 	}
@@ -260,23 +241,22 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 	} else if (parsed.autoEnableCodemode !== undefined) {
 		fileError("autoEnableCodemode must be a boolean");
 	}
-	const mcpServers = isRecord(parsed.mcpServers) ? parsed.mcpServers : {};
-	for (const [name, value] of Object.entries(mcpServers)) {
+	for (const [name, value] of Object.entries(parsed.mcpServers ?? {})) {
 		const entry: McpConfigFileEntry = {
 			name,
 			raw: value,
 			path,
 			scope,
-			override: scope === "project" && isRecord(value) && isOverrideEntry(value),
+			override: scope === "project" && isJsonObject(value) && isOverrideEntry(value),
 		};
 		state.entries.push(entry);
-		if (scope === "project" && isRecord(value) && state.admitProjectEntry?.(entry) === false) {
+		if (scope === "project" && isJsonObject(value) && state.admitProjectEntry?.(entry) === false) {
 			continue;
 		}
-		if (scope === "project" && isRecord(value) && isOverrideEntry(value)) {
+		if (scope === "project" && isJsonObject(value) && isOverrideEntry(value)) {
 			const base = servers.get(name);
 			const extra = Object.keys(value).filter(
-				(key) => !(OVERRIDE_KEYS as readonly string[]).includes(key),
+				(key) => !OVERRIDE_KEYS.some((allowed) => allowed === key),
 			);
 			if (!base) {
 				errors.push(
@@ -343,7 +323,7 @@ export function loadMcpConfigFiles(options: {
 
 function canonicalJson(value: unknown, preserveOrder = false): string {
 	if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
-	if (isRecord(value)) {
+	if (isJsonObject(value)) {
 		const keys = Object.keys(value);
 		if (!preserveOrder) keys.sort();
 		return `{${keys
@@ -406,8 +386,11 @@ export interface McpProjectPolicy {
 }
 
 // Null-prototype copies, so a server named `__proto__` never reads Object.prototype as its policy.
-const ownEntries = <T>(record: Record<string, T> | undefined): Record<string, T> =>
-	Object.assign(Object.create(null) as Record<string, T>, record);
+const ownEntries = <T>(record: Record<string, T> | undefined): Record<string, T> => {
+	const copy: Record<string, T> = { ...record };
+	Object.setPrototypeOf(copy, null);
+	return copy;
+};
 
 export function mcpPolicyOf(
 	project: Pick<Project, "mcpApprovals" | "mcpOverrides" | "mcpToolGrants"> | undefined,
