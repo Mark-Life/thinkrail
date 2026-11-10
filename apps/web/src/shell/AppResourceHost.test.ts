@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { SEARCH_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import { PALETTE_PREVIEW_HOST } from "./AppResourceHost";
+import { mockupHtmlMode } from "./mockupScripts";
 
 const initial = useAppStore.getInitialState();
 
@@ -34,4 +35,27 @@ test("the palette's preview host reads and refreshes only once the current host 
 	} finally {
 		stop();
 	}
+});
+
+test("the palette's preview host never answers scripted, also for a mockup the agent showed", () => {
+	const mockup = ".thinkrail/context/mockups/chart.html";
+	const call = {
+		type: "toolCall",
+		id: "call-1",
+		name: "visualize",
+		arguments: { type: "file", path: mockup },
+	};
+	useAppStore.setState({
+		tabsByWorkspace: { w1: [{ kind: "chat", id: "tab-1", sessionId: "s1", name: "Chat" }] },
+		sessions: {
+			s1: {
+				turns: [{ kind: "assistant", id: "a1", message: { role: "assistant", content: [call] } }],
+				toolResults: { "call-1": { status: "done" } },
+			},
+		},
+	} as unknown as Partial<typeof initial>);
+	expect(mockupHtmlMode(useAppStore.getState(), "w1", mockup)).toBe("scripted");
+	expect(PALETTE_PREVIEW_HOST.html?.mode("w1", mockup)).toBe("themed");
+	expect(PALETTE_PREVIEW_HOST.html?.subscribe).toBeUndefined();
+	expect(PALETTE_PREVIEW_HOST.html?.mode("w1", "index.html")).toBe("static");
 });

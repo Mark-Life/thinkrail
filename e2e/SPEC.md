@@ -582,7 +582,9 @@ fixture repository (removed in `finally`) and pin the HTML renderer in the card,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
 width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
 reload. `visualize-mockups.spec.ts` (Chromium and WebKit; it shares `fixtures/visualize.ts` with
-`visualize.spec.ts`) pins themed mockups: the card of a mockup under the scratch dir takes the document's
+`visualize.spec.ts`) pins themed mockups. One `beforeEach` installs the desktop shell marker
+(`installDesktopShellMarker`), so its cards render what the desktop app renders, the scriptless themed
+frame; without the marker a shown mockup is scripted. The card of a mockup under the scratch dir takes the document's
 height (clamped at 1600 px, Fill width by default) and follows it when a `details` opens, closes and opens
 again; a re-measure leaves the scroll offset of a `scroll-behavior: smooth` document where it was in every
 frame; absolutely positioned boxes and a fixed dialog over a `body` with a pixel `min-height` are whole
@@ -617,7 +619,49 @@ default poll back-off of 1 s does not reach the edge in the test's time. `visual
 own file because a launch argument is a worker option: it starts the browser with
 `--force-device-scale-factor=0.9`, the layout scale of browser zoom, which the emulated `deviceScaleFactor`
 does not reproduce, and pins that a card fits and follows three heights, two of which read 1 px apart
-there. A huge comparison opts in through Show diff anyway while an
+there, once themed (with the desktop marker) and once scripted. `visualize-scripts.spec.ts` (Chromium and WebKit) pins the scripted frame of a mockup that a
+seeded `visualize` call showed: an inline script runs under `sandbox="allow-scripts"` and the card follows
+the content height (the fixture's 20 px text boxes clip their overflow: a label whose line is taller than
+its box adds to the root's `scrollHeight`, and with the fonts of the Playwright Linux image a WebKit
+button's 21 px line made a 340 px document read 341); the height cases of the themed frame hold for the scripted one, whose readings are one
+message apart (the three frame-sized documents keep the 480 px card over 120 frames after the frame was
+seen at a probe height; a mockup that grows every 150 ms is followed and then left alone; a height
+animated in every frame keeps the bounded card; a mockup edited 10 times on disk never loses
+`data-natural-height` or `data-content-height`; a 1600 px card scrolls out of a long chat and back with no
+row jump, through the same `expectRemountedCardKeepsRows` as the themed spec; a mockup taller than the
+limit has its scroll offset again after a run of readings); author rules, layered or not, win over the
+theme layer; a theme switch reaches the running document (`thinkrail:themechange` fires and its handler
+reads the new colour, script state and `srcdoc` stay; the event count is not pinned, because an app font
+setting that settles after the mount fires it too); `context.route` fulfils a script from each CDN prefix and a CDN stylesheet, which
+apply, while a jsDelivr `/gh/` URL, a path outside the prefixes, another host and the app origin (as script
+and as image) are never requested; fetch, XHR and WebSocket to the app's own `/health` and `/ws` fail from
+the frame while the same fetch from the app page succeeds, so the result proves the CSP and not a missing
+server; link clicks (fragment, empty, external, relative, and a script-created link whose handler still
+runs) cause no `frame-src` violation; `location.href`, `location.replace`, a meta refresh and a navigation
+before the load ends load no page (no response reaches a frame, no frame has an app-origin URL), after
+which Chromium shows the stopped notice and WebKit keeps the mockup running; `about:blank` shows the notice
+in both; a mockup that posts 500 messages at once keeps running, and one that posts 20000 per timer tick,
+from its own window or from a nested `srcdoc` frame, gets the notice after exactly one batch reached the
+app page (a second batch means the frame was not removed at message 1001), while a second mockup beside it
+(the `before` side of the same card) stays open and still answers a click; a mockup closed by a flood or
+as a dead document while its input holds the keyboard focus hands the focus to the notice, and one closed
+by a timer flood with the focus elsewhere gets a notice with no `tabindex` that is not focused; a mockup
+that sets `window.name`
+to the desktop marker's name still reads an empty name, stays scripted and defines no global on the app
+page (WebKit is the engine that would define one); with one 2.5 s task of the app page queued at the
+frame's `load` (a `MessageChannel` task, the kind the React scheduler uses) a 900 px mockup is not closed
+and still gets its height, which
+pins the second step of the ready timer in Chromium and the repeated height request in WebKit; a reload
+and a fragment change keep the mockup running and themed; a script that redeclares
+`parent` and overwrites every writable window property except `location` still gets height and theme; a
+restored file tab is themed until its chat's messages arrive and then scripted; HTML outside the scratch
+dir, also through a `mockups/../` path, and a mockup that only a Markdown link opened run no script; and
+with the desktop marker a shown mockup is themed and shows its button, slider and `<noscript>` content. A
+"keeps running" check waits 2.75 s, past the 2.25 s handshake, before it looks for the notice. Playwright's
+`request` event also fires for a request the CSP refused, so "not requested" is asserted on responses and
+on the route handler. Real CDN loads are not covered, and neither is what only full Chromium does (the
+`rel="prerender"` request and the big-message stall in [[module-resource-renderers]]' *Known limits*): the
+project runs the headless shell. A huge comparison opts in through Show diff anyway while an
 unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
@@ -647,7 +691,7 @@ submits or nudges) (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes 
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
-preview on the plan page. These three specs and `visualize-mockups.spec.ts` also run in a **`webkit`
+preview on the plan page. These three specs, `visualize-mockups.spec.ts` and `visualize-scripts.spec.ts` also run in a **`webkit`
 Playwright project**: the macOS desktop is the system WKWebView, whose Tab skips buttons without an explicit
 `tabindex` (the regression this lane exists for), whose computed styles do not list custom properties
 (which the mockup theme collection must not rely on) and whose parsed documents let named elements shadow
