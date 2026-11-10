@@ -17,7 +17,7 @@ export function HtmlFrame({
 	title: string;
 	document: string;
 	viewport?: HtmlViewport;
-	sandbox?: "" | "allow-same-origin";
+	sandbox?: "" | "allow-same-origin" | "allow-scripts";
 	frameRef?: Ref<HTMLIFrameElement>;
 	onLoad?: () => void;
 	contentHeight?: number;

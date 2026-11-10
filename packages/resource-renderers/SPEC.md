@@ -123,10 +123,14 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
-- `html?: { mode(workspaceId, path) }` — how an HTML file is previewed: `"static"` or `"themed"`
-  (`ResourceHtmlMode`, see `thinkrail/html`). The host answers because only it knows which paths are its
-  own; the package never names a host path. Without a host or without the seam every file is static.
-  `themed` runs no script from the file, so it is safe for any HTML.
+- `html?: { mode(workspaceId, path), subscribe?(onChange) }` — how an HTML file is previewed: `"static"`,
+  `"themed"` or `"scripted"` (`ResourceHtmlMode`, see `thinkrail/html`). The host answers because only it
+  knows which paths are its own and which files the agent showed; the package never names a host path.
+  `subscribe` is for an answer that can change while a view is mounted (`useHtmlMode` reads through
+  `useSyncExternalStore`). Without a host or without the seam every file is static. `themed` runs no
+  script from the file, so it is safe for any HTML. `scripted` runs the file's own scripts, so the host answers it only
+  for a path the agent showed. The package lowers `scripted` to `themed` for a descriptor with a
+  git `scope`: that side shows a revision, not the file on disk the host answered for.
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference
@@ -471,8 +475,8 @@ elements.
 `template` is removed whole: its content is not in `children`, so the walk never reaches it, and the frame
 would attach a `shadowrootmode` template as live DOM. SVG `set` and `animate` are removed only when their
 `attributeName` contains `href` (they can give an inert link a target); other animations stay. `noscript`
-stays: no frame runs scripts, so the parser and the frame read it the same way. Styles remain. Notebook HTML
-output uses this same sanitizer.
+stays: the static and themed frames run no script, so the parser and the frame read it the same way.
+Styles remain. Notebook HTML output uses this same sanitizer. The scripted frame (below) does not use it.
 
 The frame parses the serialized output again, and a second parse can read it differently. Under a
 foster-parented `mglyph` a `style` is an HTML raw-text element in the first parse, so the sanitizer sees
@@ -518,10 +522,11 @@ controls. They do nothing: no script runs, handlers and `formaction` are strippe
 removed with everything in it (the shadowing defence above treats any element it cannot name as a form, and
 without `allow-forms` nothing could submit anyway). The check of the string the frame gets runs the themed
 rule too, so a kept control is not a difference. ThinkRail answers `themed` for a path under
-the agent's mockup scratch dir (`isMockupPath`: canonical only, so `mockups/../index.html` stays static) and
-`static` everywhere else ([[module-web]] owns the rule).
+the agent's mockup scratch dir (`isMockupPath`: canonical only, so `mockups/../index.html` stays static),
+`scripted` instead when the agent showed that mockup and the app runs in a browser, and `static` everywhere
+else ([[module-web]] owns the rule).
 
-No script from the file and none from ThinkRail runs in a preview frame. That is what makes
+No script from the file and none from ThinkRail runs in a static or themed frame. That is what makes
 `allow-same-origin` safe: the token only lets the app page reach the frame's `contentDocument`; without
 `allow-scripts` the document cannot run code to use the shared origin, whatever markup survives the
 sanitizer. A script that a native webview injects into every frame is outside this guarantee, in the
@@ -536,8 +541,8 @@ scrollbars and `@layer` in the oldest WebKitGTK the app supports are open. The b
 `sandbox` attribute on the app's own `iframe` element, which author HTML cannot touch, where a script
 policy written inside the document could be removed by the document. **Invariant: a preview frame never
 gets `allow-scripts` together with `allow-same-origin`,** and the themed frame never gets `allow-scripts`
-at all; `HtmlFrame`'s `sandbox` prop admits only `""` and `"allow-same-origin"`, and a unit test pins the
-rendered attribute of both modes. The app page's `frame-src 'none'` ([[module-web]]) stops the frame from
+at all; `HtmlFrame`'s `sandbox` prop admits exactly `""`, `"allow-same-origin"` and `"allow-scripts"`, one
+token at most, and unit tests pin the rendered attribute of each mode. The app page's `frame-src 'none'` ([[module-web]]) stops the frame from
 loading any network or same-origin URL, so it cannot reach a page that lacks this document's CSP.
 `about:blank` still loads; the parent leaves that blank document alone (below).
 
@@ -574,7 +579,8 @@ loading any network or same-origin URL, so it cannot reach a page that lacks thi
   read, then removes the inline height and restores the root's scroll offset (a tall probe resets it), all
   in one task, so nothing is painted in between. The restore is an instant `scrollTo`: the `scrollTop`
   setter follows the document's `scroll-behavior`, and a `smooth` document would animate back from the top
-  on every reading. `frameIndependentHeight` (`heightFollow.ts`) is the pure rule over the three readings:
+  on every reading. `frameIndependentHeight` (`heightFollow.ts`) is the pure rule over the three readings
+  (a loop over `heightProbeStep`, which the scripted frame steps through one message at a time):
   - A reading is the root's `getBoundingClientRect().height` plus `frame.clientHeight -
     root.clientHeight`, the height of a space-taking horizontal scrollbar, so a mockup wider than the card
     keeps its last rows (pinned in WebKit with styled scrollbars; Windows and Linux were not run).
@@ -634,10 +640,306 @@ name="documentElement">` shadows the property there too, and then uses `Element`
 numbers, writes one style text and restores one scroll offset; it never moves a frame node into the app
 document.
 
-A diff side is themed when its own path is. A diff offered `onNaturalHeight` fits when every present side
-is themed: both frames take the taller measured height, `VisualDiff`'s `fitContent` drops its
-viewport-bounded side boxes, and it calls `onNaturalHeight(true)` while each present side holds a height.
-A diff with a static side or a frame-sized side keeps the bounded box.
+Each diff side takes the mode of its own path. A diff offered `onNaturalHeight` fits when every present
+side is themed or scripted: both frames take the taller measured height, `VisualDiff`'s `fitContent` drops
+its viewport-bounded side boxes, and it calls `onNaturalHeight(true)` while each present side holds a
+height. A diff with a static side or a frame-sized side keeps the bounded box.
+
+**Scripted frame.** When the host answers `scripted`, the view and each diff side render
+`ScriptedHtmlFrame`: `<iframe sandbox="allow-scripts" srcdoc>` with no other token. Fit, preview width and
+the height clamp work as in the themed frame, and the theme is the same text: the one cascade layer
+`hostTheme.ts` builds, in the prefix and in every live update, so any author declaration wins here too.
+Each mode is its own component, so a mode change mounts a new
+`iframe` element; a `sandbox` change on a live element would not reach the loaded document. The notice bar
+says that scripts run (`viewer.html.scriptedNotice`).
+
+*Document* (`scriptedDocument.ts`). The `srcdoc` is a fixed host prefix followed by the author source, byte
+for byte. This mode neither parses nor sanitizes: a script re-creates anything a sanitizer removes, and the
+sanitizer above would remove the CDN `src` and `href` values this mode exists for. The prefix is, in order:
+doctype, `<html><head>`, charset `meta`, `<meta name="referrer" content="no-referrer">`, the CSP `meta`,
+`<style data-thinkrail-theme>` with the current theme, the bootstrap `script`, `</head>`. A theme text that
+contains `<` becomes an empty theme. All author markup is parsed after the policy and the bootstrap.
+Measured in both engines: an author CSP `meta` only adds restrictions, `base` is refused by `base-uri
+'none'`, a second `<html>` tag merges its attributes into the first, and the document stays in standards
+mode. The policy also holds in every document a mockup can put in the frame without a URL: one it writes
+over itself with `document.open()` or, in WebKit, a `javascript:` URL, and a nested `srcdoc` frame (fetch,
+WebSocket, `eval` and an app-origin image stayed blocked in each). Nested `blob:` and `data:` frames do not
+load.
+
+The CSP is exactly `default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' <cdn>; style-src
+'unsafe-inline' <cdn>; img-src data: blob: <cdn>; font-src data: <cdn>; connect-src 'none'; worker-src
+'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'`. `<cdn>` is
+[[module-contracts]]' `MOCKUP_CDN_SOURCES`, today `https://cdn.jsdelivr.net/npm/ https://unpkg.com
+https://cdnjs.cloudflare.com/ajax/libs/`. The CSP, the agent guideline and the tests read that one constant;
+an empty list removes every external load.
+
+*Bootstrap* (`FRAME_BOOTSTRAP` in `frameMessages.ts`). A constant string with no per-frame data. It runs
+first, in strict mode. Its first statement redefines `name` on the window as a non-configurable accessor
+that reads empty and ignores writes, because WebKit makes a named child frame a global of the app page
+(*Known limits*). Then it copies every global it will ever use into locals before author code exists: the
+parent window and its bound `postMessage`, `addEventListener`, `dispatchEvent`, `Event`, `ResizeObserver`,
+`Math.ceil` and `Math.max`, the getter of the window's `innerHeight` (a plain assignment replaces that
+property), the root element with its bound `getBoundingClientRect` and `scrollTo`, and the theme style
+element. Then it removes its own `script` element. A mockup that declares `const parent = 1` or overwrites
+window properties does not break it. It reads the root's `clientHeight`, `scrollHeight` and `scrollTop`
+through the element, so a mockup that redefines those on `Element.prototype` breaks only its own card
+height. It does four things, and decides nothing:
+
+- **Theme.** On a parent message `{ type: "thinkrail:theme", css, seq? }` it sets the theme text. With a
+  `seq` it keeps the number, answers `{ type: "thinkrail:ready", seq }` and sends a reading. When the text
+  changed it dispatches `thinkrail:themechange` (`MOCKUP_THEME_CHANGE_EVENT`) on the window, so a canvas
+  chart can redraw. It takes a message only when `event.source` is the captured parent.
+- **Readings.** Once it has a number it posts `{ type: "thinkrail:height", seq, viewport, flow, extent,
+  scroll }` from a `ResizeObserver` on the root and from the window's `resize` and `scroll` events, once
+  per change of the last four values. `viewport` is the frame's `innerHeight`. `flow` and `extent` are the
+  two numbers of a themed reading: the root's rounded-up height and its `scrollHeight`, each plus
+  `innerHeight - clientHeight`, the height of a space-taking horizontal scrollbar. `scroll` is the root's
+  `scrollTop`.
+- **Scroll offset.** On `{ type: "thinkrail:scroll", top }` it scrolls the root there with
+  `behavior: "instant"`. When the frame is still too tall for that offset it does so again on the next
+  `resize`.
+- **Link clicks.** A capture-phase `click` listener on the window calls `preventDefault()` when the event
+  path holds an `a` or `area` with `href` or `xlink:href`; the author's own handler still runs. In a
+  `srcdoc` frame `href="#x"` and `href=""` resolve against the app URL, so an ordinary link click is a
+  navigation, and Chromium swaps the mockup for an error page. This is for accidents only: a link in a
+  closed shadow tree or a navigation from script passes it. The hard block is the app page's
+  `frame-src 'none'`.
+
+*Parent* (`ScriptedHtmlFrame`, `frameWatch.ts`). It builds the `srcdoc` once per source. On every `load` of
+the iframe it takes the next sequence number, posts the theme with it and starts the ready timer (*Dead
+document*). On a theme or font change it posts the theme with no number: the frame does not reload and
+script state survives. A message is read only when `event.source` is this frame's `contentWindow`, it
+carries the current number and its shape is known (`acceptFrameMessage`). `ready` clears the timer. A
+`height` report must hold four finite numbers that are not negative. Frame messages are untrusted input:
+author code runs in the same window as the bootstrap, sees the number and can send any of them, so there
+is no nonce (it would protect nothing) and nothing else is read from a message. A forged report can give
+its own card a wrong height inside the 120–1600 px clamp and make its own frame up to 8292 px tall under
+the card's clip. `followHeight` treats forged heights like any others: it stops following only a height
+that changes for more than 2 s with no 250 ms pause (*Known limits*).
+
+*Message limit* (`createFrameWatch`, `frameSender`). The parent counts the messages of each mockup, of any
+shape, in windows of 1 s. `frameSender` decides whose a message is: it follows `event.source` and its
+`parent` chain, which is readable across origins, for at most 8 windows. A sender that is the frame's
+window or sits in a frame below it (a nested `srcdoc` frame) counts for that mockup. A chain that reaches
+the top window without it belongs to another frame and is not counted. A message with origin `"null"`
+whose sender cannot be traced counts for every mounted scripted mockup: once the sender's frame is removed
+WebKit gives a null `source` and Chromium a window with a null `parent`, and no other frame in the app
+runs script. A `load` does not start a new window, so a reload does not reset the count; a mockup that
+only reloads in a loop closes too (about 500 loads in one second, Chromium).
+
+Message 1001 of a window (`FRAME_WATCH.messages`) closes the mockup with the *Dead document* notice, and
+the watch ignores every later message of that frame until the next `load`. The parent removes the frame
+inside that message's task (`flushSync`). A state update that waits for the next render waits behind the
+queued messages while the mockup posts more: at 300000 messages per timer tick Chromium then closed it
+after 2.1 s and 600000 messages, and WebKit's app page did not answer for 50 s. With the frame removed at
+once, one batch arrives and no more (20000 or 300000 per tick, both engines). The rest of that batch
+arrives with no sender, so for 2 s after a close (`FRAME_WATCH.tailMs`) untraced messages are not counted;
+they would close the mockups next to it. 299000 queued messages took 0.75 s.
+
+Without the limit a mockup that posted 20000 messages per timer tick, from its own window or from a nested
+frame, cut the app page from about 120 animation frames per 2 s to 21–28 in both engines. The limit sits
+between two measured points. The bootstrap sends one report per `scroll` or `resize` event at most, about
+240 per second on a 120 Hz display, so an honest mockup stays under it. 100 small messages per 16 ms, six
+times the limit, did not slow the app page yet, so a mockup that floods with small messages closes before
+the app slows. The limit counts messages, not bytes. *Known limits* says what the limit does not stop.
+
+*Height* (`scriptedHeight.ts`). The frame's origin is opaque, so the parent cannot read the root as
+`ThemedHtmlFrame` does, and a reading that the frame takes at the applied height feeds itself in the same
+way. So the parent applies the themed frame's rules to the frame's readings. `heightProbeStep` is the one
+rule over the three readings: `frameIndependentHeight` loops over it in one task (themed), and
+`advanceHeightProbe` takes one reading per message (scripted). A view offered `onNaturalHeight` starts a
+run of readings on a report that differs from the report that started the last run (`viewport`, `flow` or
+`extent`; the report that follows a run is the same one, so a run does not start itself again). The parent
+sets the `iframe` element's inline height to the first probe height and waits for a report whose
+`viewport` is that height within 1 px, then does the same for the second probe height and for the height
+it read. Then it sends back the scroll offset the frame reported before the run, removes the inline height
+and gives the verdict to `followHeight` with the element's `clientWidth`. The reducer is unchanged, so a
+frame-sized document keeps the caller's bounded box until the next `load`, a height that changes for more
+than 2 s without a pause stays at its tallest value, and a `load` keeps the last height until the new
+document is measured. A frame mounted while the view already holds a height (a themed frame that became
+scripted) starts from that height and reports only a different verdict.
+
+The readings are one message apart, not one task, and that is where this frame differs from the themed
+one:
+
+- Content can change between two readings, which reads like a frame-sized document. A frame-sized verdict
+  counts only when one more reading at the first probe height equals the first reading. Otherwise the
+  content moved, and the run starts over from that reading. Content that does not hold still for one run
+  in 2 s (`HEIGHT_RUN.maxMs`: a height animated in every frame) gets no height and keeps the bounded box,
+  where the themed frame keeps the tallest value. Content that changes in steps slower than a run is
+  followed. `followHeight` stops it only when the steps come less than 250 ms apart for 2 s; slower steps
+  are followed for as long as they come (*Known limits*).
+- A run is painted. Measured for a content-sized document: 2 rendering frames at the probe heights in
+  Chromium 149, at most 1 in WebKit 26.5; a frame-sized document takes one more, once per `load`. For those
+  frames the document is laid out about 8192 px tall under the card's clip. A content-sized document looks
+  the same there. A frame-sized layout and a `position: fixed` element anchored to the bottom are out of
+  place for those frames, and the mockup's window gets `resize` events.
+- The tall frame resets the scroll offset, and the frame gets it back after the run, so a scrolled mockup
+  taller than the card shows its top for those frames.
+- Readings start after the `load` handshake, because a report counts only with the current number. That is
+  also how a reading from a replaced document is ignored: after a reload the old document's number is
+  behind, and the new document sends nothing before it has its own. A mockup whose `load` waits for a slow
+  CDN file keeps the bounded box, or the height `ResourcePreview` holds, until then.
+- A report also follows a `scroll` or `resize` event in the frame, and it carries `extent`. So absolutely
+  positioned content that appeared after load is measured at the next such event, where the themed frame
+  waits for a change of the root's box.
+- A frame that sends no report at the asked height within 1000 ms (a busy script, a busy app thread, a
+  hidden tab, a document that dropped the bootstrap's listeners with `document.open()`) gets its own height
+  back and keeps the height it had. No report follows by itself: the bootstrap reports only a change, and
+  a frame that was never laid out at the probe height has the size it had before (WebKit: after one 2.5 s
+  task of the app page a 900 px mockup stayed in the bounded box). So the parent asks: it posts the theme
+  with the current number again, the bootstrap answers with a fresh report, and that report starts a new
+  run. It asks after at most 3 unanswered runs in a row (a finished run or a `load` resets the count), and
+  once more when the tab becomes visible again (`visibilitychange`) while the last run is still unanswered.
+
+*Dead document.* The ready timer has two steps: 2000 ms after the `load`, then 250 ms more
+(`FRAME_WATCH`), and `ready` clears either. When the second step fires, no live bootstrap answered the
+last `load`. One step is not enough, because it also counts time in which the parent had no turn to read
+the answer: after one 2.5 s task of the app page (Chromium), or the 2.3 s start of a neighbour mockup
+(WebKit), the late timer ran 0–3 ms before the queued `ready` and closed a healthy mockup. The frame is
+unmounted and a notice (`viewer.html.mockupStopped`) takes its place until the source changes or the view
+mounts again (a card that scrolls back into the chat, full screen, Open in tab): the closed state lives in
+the component, so each mount starts the mockup once more (*Known limits*). The same
+notice closes a mockup that floods the parent (*Message limit*). A removed frame that held the keyboard
+focus leaves it on `body`, and the next Tab then starts at the top of the page (full Chromium) or after the
+card (headless shell, WebKit). So a close reads `document.activeElement` first: when it is the frame, the
+notice mounts with `tabIndex={-1}` and takes the focus with `preventScroll`, and a notice for a frame that
+did not hold the focus takes none. The parent asks "does
+the document answer", not "did a navigation happen", because the navigation signals are wrong in both
+directions (measured): `location.reload()` and, in WebKit, a fragment change fire a second `load` on a
+live document; a navigation before the first `load` ends gives Chromium one `load`, on an error page;
+`about:blank` violates no `frame-src`; the parent's `securitypolicyviolation` names no frame; and in WebKit
+a blocked navigation leaves the mockup running, so closing it there would kill a working mockup. The
+handshake catches Chromium's error page (early and late), a blanked frame, and a document replaced with
+`document.open()` (that drops the bootstrap's listeners). Where the browser runs the frame in its own
+process (full Chromium), it also closes a mockup whose script blocks the frame from before the answer
+until the second step fires (a loop that a timer starts right after `load`: closed after 2.3 s). Where the
+frame shares the app page's thread (Chromium headless shell, WebKit) no timer fires while that script
+runs, so the mockup stays open and the app page waits as long (*Known limits*). It does not see a frame
+that hangs before its first `load` or after it answered.
+
+**What a scripted frame enforces, and by what.** Each line is one mechanism in the code; nothing else is
+claimed.
+
+- No access to the app's DOM, storage or cookies: the sandbox has no `allow-same-origin`, so the document
+  has an opaque origin.
+- No popup, no assignment to the top window's location, no modal dialog, no form submission: the sandbox
+  has none of those tokens (and the CSP says `form-action 'none'`).
+- The frame loads no network or app-origin URL: the app page's `frame-src 'none'` ([[module-web]]) for the
+  frame itself, the frame's own `frame-src 'none'` for frames inside it. `about:blank` still loads; it is
+  an empty document, and the handshake closes it (*Dead document*). This is about what a frame shows: full
+  Chromium still sends a GET for a `<link rel="prerender">` and shows nothing of it (*Known limits*).
+- No fetch, XHR, WebSocket, EventSource, beacon or worker, and no `eval` or `new Function`: the frame CSP
+  (`connect-src 'none'`, `worker-src 'none'`, no `'unsafe-eval'`). WebAssembly therefore runs only from
+  inline bytes.
+- Scripts and styles load only inline or from the CDN prefixes; images only from `data:`, `blob:` or the
+  CDN prefixes; fonts only from `data:` or the CDN prefixes: the frame CSP.
+- Microphone, camera, screen capture, geolocation and clipboard read are denied: browser rules for a
+  cross-origin frame (the iframe has no `allow` attribute).
+- Scripts run only for a mockup path the agent showed, never in the desktop shell, never in the search
+  palette and never for a git revision: the host's mode answer and the palette host's own `html.mode`
+  ([[module-web]]), and the `scope` rule in `useHtmlMode`.
+
+`eval` is off as the smaller default, not as a boundary: a script element built from a string runs under
+`'unsafe-inline'`. Libraries that need `eval` (Vue in-DOM templates, the default Alpine build, Vega) do not
+work.
+
+**Known limits of a scripted frame.** Measured in Chromium 149 and Playwright WebKit 26.5.
+
+- WebRTC is not blocked: a script opens a connection to any host through an `RTCPeerConnection`
+  (`webrtc 'block'` in the CSP had no effect), and WebKit opens a connection for
+  `<link rel="preconnect">`. A mockup can send and receive data. The CDN list limits where sub-resources
+  load from; it does not stop a hostile mockup from sending its own content out, for example in a CDN URL.
+- Full Chromium and Chrome send a GET for `<link rel="prerender">` (headless Chromium 149.0.7827.55 and
+  Chrome 155.0.8059.85; Chromium headless shell and Playwright WebKit sent nothing, so the e2e projects do
+  not see it). The link can be static markup, added by script, or in a nested `srcdoc` frame, and its URL
+  can be any origin: the app host, another localhost port, any other site. The request carries the target
+  site's cookies, and Chromium then loads that page's stylesheet, script and image files. The page's
+  script does not run and the mockup cannot read the response, but it can put data in the URL
+  (`document.baseURI` arrived in a query). The frame CSP has `default-src 'none'`, and adding
+  `prefetch-src 'none'`, `navigate-to 'none'` or `child-src 'none'` to it did not stop the request. A
+  guard in the bootstrap would not either: static markup starts the request when it is parsed, and a
+  nested frame has no bootstrap. The host is reached by GET only, and its GET routes only read; a host
+  GET route with a side effect would be open to any mockup. The host does not refuse a request with
+  `Sec-Purpose: prefetch`.
+- A mockup can read the app page URL (`document.baseURI`: origin, query, route ids). The referrer `meta`
+  keeps it out of CDN requests only while the mockup declares no referrer policy of its own: with an
+  author `<meta name="referrer" content="unsafe-url">` WebKit sent the full app URL, path and query, to
+  jsDelivr and unpkg (Chromium sent none). A credential in the page URL would be readable.
+- A mockup adds entries to the tab's session history with `history.pushState` and with a fragment change
+  (`location.hash`), in both engines, with no user action and also from a nested `srcdoc` frame (so a
+  guard in the bootstrap would not close it). Back then steps through the mockup's entries while the app
+  page does not move, and Chromium drops the app's older entries at its limit of 50. The agent guideline
+  forbids both calls. Not verified: whether the Back button of a real browser skips entries added with no
+  user action.
+- WebKit: `history.back()` and `history.go()` in the frame move the app page through its history. No
+  sandbox token or CSP stops that.
+- A mockup can take keyboard focus with no user action and then reads what the user types next (Chromium
+  149 and Playwright WebKit 26.5; real Safari not run). `inert` on the iframe did not stop it in Chromium.
+  It can also keep the focus: with a `keydown` handler that cancels Tab the app page's `activeElement`
+  stayed on the iframe for six presses in both engines (a plain mockup lets Tab leave), and the parent
+  sees no key pressed in the frame. The agent guideline allows `focus()` only in a handler of a user
+  action and forbids cancelling Tab.
+- Chromium: a mounted mockup that is scrolled out of view moves the chat transcript to itself with
+  `scrollIntoView()` or `focus()` from a timer, with no user action, and does so again after the user
+  scrolls away (in the app: scroll offset 993 → 226, and 226 again 1.5 s after a scroll back to the end;
+  with `blur(); focus()` 993 → 89). WebKit did not move. A card the list has unmounted moves nothing. No
+  block was found; the agent guideline forbids both calls.
+- A busy loop freezes the app tab for its whole length wherever the browser runs the frame on the app
+  page's thread. In the app under Playwright a 5 s loop gave the app page one 5.0 s gap between two timers
+  and between two animation frames (Chromium headless shell and WebKit). Full Chromium ran the frame in
+  its own process and showed no gap (big messages still stop the app page there: next line). The card
+  mounts again with the chat, so it repeats on reload.
+- A message flood still costs the app page work. The limit removes the mockup at message 1001 of a
+  second, but messages already queued still arrive, one task each, and a tight `postMessage` loop stalls
+  the app page until the parent gets a turn to count (a 4 s loop of 2 M messages gave the app page a 4 s
+  gap between two frames, and the queue took 5 s more in Chromium and 10 s or more in WebKit). A flood
+  slower than the limit is not stopped, and the limit counts messages, not bytes: in full Chromium 8
+  messages of 32 MB every 50 ms (160 per second) left the app page with no answer for more than 90 s
+  while the mockup stayed open (1 MB messages at that rate: the page answered in 1–7 ms). The parent
+  cannot prevent that, because the browser copies the payload before a handler runs. A closed mockup runs
+  again when its view mounts again (a card that scrolls back into the chat, full screen, Open in tab), so
+  each mount costs one more batch, or 2.25 s for a dead document. A flood whose sender cannot be traced
+  closes every mounted
+  scripted mockup, also the ones that sent nothing. A tight loop does that too when its queue outlasts the
+  2 s in which untraced messages are not counted: after a 1 s loop the queue arrived for 1.3 s in Chromium
+  (the mockup next to it stayed open) and 2.1 s in WebKit (it closed), after a 4 s loop it closed in both.
+  In full Chromium a mockup that posted in a tight loop was closed at once, but its messages kept arriving
+  with no sender while another scripted mockup was mounted (about 280000 in 2 s); after the 2 s they
+  closed that mockup as well, and then they stopped. For the 2 s after one mockup is closed, an untraced
+  flood from a second mockup is not counted.
+- WebKit makes a child frame's name a global of the app page. With the bootstrap's lock on `name` removed,
+  `window.name = "X"` in a mockup made `X` on the app page the frame's cross-origin window: `Reflect.has`
+  for the desktop marker turned true (`Object.hasOwn` stayed false), `typeof process` was `"object"`, and
+  app code that read a property of such a global threw `SecurityError`. With the lock, none of assignment,
+  `self.name`, the prototype setter, delete then assign, `window.open` and a nested frame's setter defined
+  a global (Playwright WebKit; real Safari not run). The lock does not close a document that replaces the
+  mockup through a `javascript:` URL (WebKit): that document has no bootstrap, answers `ready` itself and
+  named its frame. The desktop gate reads an own property ([[module-web]]), which a frame name is not, so
+  it stays off either way. Chromium defined no global.
+- After a click inside it, a mockup can write the clipboard. It can capture wheel scrolling over the card.
+- A mockup can send the bootstrap's messages itself: it can set its own card's height between 120 and
+  1600 px and keep its own frame up to 8292 px tall under the card's clip.
+- A mockup can change its card height without end, forged or not, and the chat rows below the card move
+  each time. `followHeight` stops only changes that come less than 250 ms apart for 2 s: fed a height
+  that alternates every 260 ms or 300 ms it followed for 10 min (2308 and 2000 changes), and in the app a
+  timer every 400 ms still moved the card after 21 s. A mockup that reloads itself is not held to that
+  pace, because every `load` starts following again: with `location.reload()` 150 ms after each `load`
+  the card changed about 6 times per second, and still did after 21 s (Chromium and WebKit). No count cap
+  was added: it would also stop a mockup that the user expands many times, and closing only the reload
+  route leaves the timer route.
+- The CDN operator sees each request. jsDelivr and unpkg serve any npm package, so the list names where
+  files load from, not which code is trusted. Whether third-party CDN loads are acceptable at all is an
+  open product decision.
+- Trust is per path: the content on disk at render time runs, also after a later edit or a branch switch.
+- The frame CSP is the only thing between a mockup script and the host WebSocket: the host does not
+  refuse a socket with `Origin: null`.
+- Not verified: Firefox, real Safari, headed Chrome with a user profile (whether a mockup can raise a
+  notification with the app's permission: Playwright Chromium allowed it), real CDN loads, the desktop
+  webviews, a hidden tab (Playwright keeps a page visible, so the `visibilitychange` request has a unit
+  test only). Full Chrome differs from the headless shell that the e2e projects run: the prerender
+  request, the big-message stall and the frame's own process above were seen only in full Chromium, run
+  headless by hand, and no e2e case covers them.
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
 uses the host's `pierreTheme` (registered as `thinkrail`, CSS variables only, highlighted by `@pierre/highlights`), word-level inline changes, collapsed unchanged regions with

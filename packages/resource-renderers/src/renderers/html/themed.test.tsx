@@ -110,7 +110,7 @@ function sandboxes(markup: string): (string | undefined)[] {
 	return [...markup.matchAll(/<iframe[^>]*?\ssandbox="([^"]*)"/g)].map((match) => match[1]);
 }
 
-test("an HTML file is static unless the host answers themed, and no mode allows scripts", () => {
+test("an HTML file is static unless the host answers themed, and neither mode allows scripts", () => {
 	const hostless = renderView(null);
 	expect(hostless).toContain('data-html-mode="static"');
 	expect(hostless).toContain("&lt;p&gt;chart&lt;/p&gt;");

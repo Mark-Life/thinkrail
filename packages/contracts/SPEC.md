@@ -87,7 +87,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   word it in their language until it is renamed), `MOCKUP_DIR` + **`isMockupPath(path)`** (the host's
   gitignored scratch dir for agent mockups, `.thinkrail/context/mockups/`: the server hands it to tools as
   `workspaceFiles.scratchDir`, and the web host gives HTML under it the app theme; the guard is false for
-  any non-canonical path, one with a `.`, `..` or empty segment or a backslash), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
+  any non-canonical path, one with a `.`, `..` or empty segment or a backslash), `MOCKUP_CDN_SOURCES` + `MOCKUP_THEME_CHANGE_EVENT`
+  (what a mockup that runs scripts gets from the host: the URL prefixes its libraries may load from, which the
+  preview's CSP and the agent guideline both read, and the name of the window event fired on a theme
+  change; [[module-resource-renderers]] owns the frame), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
   BCP-47 tag — the `AppConfig.locale` contract; local language file shapes are `LocalLocalesSnapshot` /
   `LocalLocaleFile` with closed error codes, served by `locales.list` from `LOCALES_PROTOCOL_VERSION`, v89;
   user theme files are `UserThemesSnapshot` / `UserThemeFile`, served by `themes.list` from

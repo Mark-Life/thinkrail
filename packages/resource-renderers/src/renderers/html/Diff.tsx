@@ -29,8 +29,8 @@ export default function HtmlDiff({
 	const modifiedText = textOf(modified);
 	const offered =
 		onNaturalHeight !== undefined &&
-		(originalText === null || originalMode === "themed") &&
-		(modifiedText === null || modifiedMode === "themed") &&
+		(originalText === null || originalMode !== "static") &&
+		(modifiedText === null || modifiedMode !== "static") &&
 		(originalText !== null || modifiedText !== null);
 	const [viewport, selectViewport] = useHtmlViewport(
 		viewState,
@@ -91,7 +91,14 @@ export default function HtmlDiff({
 			data-fit={fit}
 			className={fit ? "flex flex-col" : "flex h-full min-h-0 flex-col"}
 		>
-			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />
+			<HtmlPreviewNotice
+				scripted={
+					(originalText !== null && originalMode === "scripted") ||
+					(modifiedText !== null && modifiedMode === "scripted")
+				}
+				viewport={viewport}
+				onViewport={selectViewport}
+			/>
 			<div className={fit ? "flex-none" : "min-h-0 flex-1"}>
 				<VisualDiff
 					prefix="html"
