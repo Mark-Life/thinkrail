@@ -56,7 +56,8 @@ that map.
   so the shapes it owns (`WireCustomMessage`, `WireCompactionSummary`, `WireBranchSummary`, `WireBashExecution`, pi's session
   events in `PiEvent`, `CompactionEndResult`, `SessionStats`, `ContextUsage`, `SlashCommandInfo`) are declared here and
   tied in the host's `piWireTies.ts` ([[submodule-server-agent]]). Packages outside contracts tie the shapes they parse
-  the same way. A `Schema<T>` annotation checks one way only and misses a field the dependency adds.
+  the same way. A `Schema<T>` annotation checks one way only and misses a field the dependency adds. `McpToolDetails`
+  is the one copy with no tie: pi-coding-agent's type sits behind its exports map and no exported type names it.
 - **pi's messages and events are the two trust points.** pi ships their types and no schemas. `TranscriptMessage` checks
   `role` against `TRANSCRIPT_MESSAGE_ROLES`. `SessionEventPayload`, the `pi.event` payload, checks `sessionId` and
   `event.type` against `PI_EVENT_TYPES`. Each list is tied to its union with `Same`. The rest of the body is pi's type, as
@@ -98,7 +99,7 @@ that map.
   they have no generator. Tests make ids with the `test*` makers of `@thinkrail/contracts/test-ids`, and a refusal test
   sends the raw string. `check:boundaries` refuses that entry outside test sources, and a relative import of `ids.ts`
   from another module. `DelegationRunDetails.childSessionId` stays a `string`: it mirrors the `pi-delegation` type,
-  and a test pins the two.
+  and the host's `piWireTies.ts` ties the two with `Same`.
 - **An id has a strict check for a request and a lenient one for a read.** A request value may reach a file path, so
   it is strict. A stored value must never drop from a list, so it is lenient. `ids.test.ts` fails on a request field
   with a stored schema, or a reply or push with a strict one.

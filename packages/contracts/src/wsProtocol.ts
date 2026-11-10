@@ -367,6 +367,11 @@ const CUSTOM_MESSAGE_FIELDS = {
 	display: bool(),
 	timestamp: num(),
 };
+const CustomMessageEnvelope = obj(CUSTOM_MESSAGE_FIELDS, { open: true });
+export type CustomMessageEnvelope = Same<
+	Static<typeof CustomMessageEnvelope>,
+	Omit<WireCustomMessage, "customType" | "details">
+>;
 
 export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
 

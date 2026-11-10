@@ -35,7 +35,7 @@ export type McpContentBlockSummary = Static<typeof McpContentBlockSummary>;
  */
 export const McpResultSummary = wireObj({
 	blocks: arr(McpContentBlockSummary),
-	/** Blocks dropped from the end of `blocks` once the summary's byte budget was spent. */
+	/** Blocks left out of `blocks`: unreadable ones, and those past the summary's byte budget. */
 	omittedBlocks: opt(num()),
 	structuredContent: opt(unknown()),
 	structuredContentTruncated: opt(bool()),
