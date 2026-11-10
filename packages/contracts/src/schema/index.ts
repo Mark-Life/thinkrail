@@ -19,8 +19,6 @@ export * from "./github";
 export * from "./history";
 export * from "./host";
 export {
-	newProjectId,
-	newWorkspaceId,
 	ProjectId,
 	parseProjectId,
 	parseSessionId,

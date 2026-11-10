@@ -54,18 +54,11 @@ export const parseStoredProjectId = parserOf(StoredProjectId);
 export const parseStoredWorkspaceId = parserOf(StoredWorkspaceId);
 export const parseStoredSessionId = parserOf(StoredSessionId);
 
+/** A test's id; throws on a value the test wrote wrong. */
 function requireId<T>(parse: (value: unknown) => T | null, kind: string, value: string) {
 	const id = parse(value);
 	if (id === null) throw new Error(`Not a valid ${kind} id`);
 	return id;
-}
-
-export function newProjectId() {
-	return requireId(parseProjectId, "project", randomUuid());
-}
-
-export function newWorkspaceId() {
-	return requireId(parseWorkspaceId, "workspace", randomUuid());
 }
 
 export function testProjectId(id: string) {

@@ -120,9 +120,9 @@ that map.
   must stay assignable to it. The test harness still checks `ServerWelcome`.
 - **Ids are branded and checked.** `ProjectId`, `WorkspaceId`, `StoredSessionId` and `SessionId` in `ids.ts` are
   branded strings, so a call site cannot swap them. `brandedString` is the one place that claims a brand, and every id
-  value comes out of a parser that compiles beside its schema. `newProjectId` and `newWorkspaceId` parse `randomUuid`,
-  built on `getRandomValues` because `crypto.randomUUID` is missing on a plain-HTTP client; pi owns session ids, so
-  they have no generator. Tests make ids with the `test*` makers of `@thinkrail/contracts/test-ids`, and a refusal test
+  value comes out of a parser that compiles beside its schema. `randomUuid` is built on `getRandomValues` because
+  `crypto.randomUUID` is missing on a plain-HTTP client; the host's generators in `@thinkrail/shared/newIds` parse it
+  and throw a `CodedError` if the parse ever fails. pi owns session ids, so they have no generator. Tests make ids with the `test*` makers of `@thinkrail/contracts/test-ids`, and a refusal test
   sends the raw string. `check:boundaries` refuses that entry outside test sources, and a relative import of `ids.ts`
   from another module. `DelegationRunDetails.childSessionId` stays a `string`: the schema is `pi-delegation`'s own
   `DELEGATION_RUN_FIELDS`, which knows no brand.

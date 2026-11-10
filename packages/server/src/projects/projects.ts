@@ -8,9 +8,9 @@ import type {
 	Project,
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
-import { newProjectId } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
+import { newProjectId } from "@thinkrail/shared/newIds";
 import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 

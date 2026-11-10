@@ -11,8 +11,8 @@ import type {
 	WorkspaceKickoff,
 	WsErrorCode,
 } from "@thinkrail/contracts";
-import { newWorkspaceId } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
+import { newWorkspaceId } from "@thinkrail/shared/newIds";
 import {
 	git,
 	gitAsync,

@@ -7,7 +7,6 @@ import {
 	type DiffStats,
 	type ExistingWorktreeCandidate,
 	isSubagentMaxConcurrent,
-	newWorkspaceId,
 	type OpenBranchReview,
 	type Project,
 	type SubagentOverride,
@@ -15,6 +14,7 @@ import {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
+import { newWorkspaceId } from "@thinkrail/shared/newIds";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	assertSafeRef,
