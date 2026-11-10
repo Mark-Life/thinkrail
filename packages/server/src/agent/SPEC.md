@@ -512,7 +512,7 @@ re-opened transcripts provider-valid.
       under a key other than `message` / `messages`, at any depth to six levels through arrays and objects. The
       tool events' `args`, `partialResult` and `result` are excluded: pi types them `any`, and contracts sends them
       as `unknown`;
-    - `SESSION_ENTRY_TYPES` = `SessionEntry["type"]`; the ext-UI `notify` level = `notify`'s second parameter; the
+    - `SessionEntryType` = `SessionEntry["type"]`; the ext-UI `notify` level = `notify`'s second parameter; the
       `setWidget` content = the content parameter of the overload that takes lines of text, picked by that
       parameter, since `Parameters` would read the last (component) overload;
     - `PiPackageScope`, `PiPackageResourceType` and `PiPackageSourceKind` (minus `local`), and `ProviderWarning`.

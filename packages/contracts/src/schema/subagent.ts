@@ -1,9 +1,5 @@
 import { arr, bool, lit, num, opt, type Static, str } from "@earendil-works/pi-schema";
-import {
-	DELEGATION_RUN_FIELDS,
-	RUN_LIFECYCLE_STATUSES,
-	RunLifecycleStatus,
-} from "pi-delegation/wire";
+import { DELEGATION_RUN_FIELDS, RunLifecycleStatus } from "pi-delegation/wire";
 import { SUBAGENT_COMPLETION_FIELDS } from "pi-subagents/wire";
 import { SessionId, StoredSessionId, WorkspaceId } from "./ids";
 import { TranscriptMessage } from "./transcript";
@@ -11,7 +7,6 @@ import { Ack, wireObj } from "./wire";
 
 export { CompletionDelivery } from "pi-background-commands/wire";
 
-export const DELEGATION_RUN_STATUSES = RUN_LIFECYCLE_STATUSES;
 export const DelegationRunStatus = RunLifecycleStatus;
 export type DelegationRunStatus = Static<typeof DelegationRunStatus>;
 

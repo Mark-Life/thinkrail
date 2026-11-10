@@ -210,7 +210,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     The server keeps one `AgentMessage` alias (`SessionMessageEntry["message"]`). `ThinkingLevel` (the
     `off`-inclusive one) is pi-ai's `ModelThinkingLevelSchema` in `schema/model.ts`;
   - `isTranscriptMessageRole` is the role guard the transcript and history share; `SessionInputKind` is gone.
-    `NON_EXECUTABLE_STOP_REASONS` and `TextContent` live in `schema/transcript.ts`, and `SESSION_ENTRY_TYPES` in
+    `NON_EXECUTABLE_STOP_REASONS` and `TextContent` live in `schema/transcript.ts`, and `SessionEntryType` in
     `schema/piEvent.ts`, tied to pi-coding-agent's `SessionEntry["type"]` by the host;
   - the render union **`PiEvent`** (in `schema/piEvent.ts`) — pi-agent-core's `AgentEvent` plus the session events of
     the Node-only `pi-coding-agent`, declared there and tied to its `AgentSessionEvent` by the host
@@ -1217,8 +1217,8 @@ contracts only.
   `mcp.testConnection` judges the transport of the actual admitted configuration, not an approved but
   invalid project row that the loader skipped. Mutations and probes reject if workspace identity, cwd or
   project trust changed during async ownership resolution; no stale project grant admits a new operation.
-- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools. It is the one
-  untied copy, pending the user's approval: pi-coding-agent's type sits behind its exports map (`pi-compatibility.md`);
+- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools. pi-coding-agent's
+  type sits behind its exports map, so the server type-imports it by path and ties the copy (`pi-compatibility.md`);
   `McpResultSummary` (schema in `schema/mcp.ts`, each block checked by `isMcpContentBlockSummary`) is the
   host-written, bounded, base64-free presentation summary under
   `details.thinkrail` that lets cards render identically live, after reload and on another client.

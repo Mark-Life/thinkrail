@@ -68,20 +68,18 @@ export interface CompactionEndResult {
 }
 
 /** pi-coding-agent's `SessionEntry["type"]`; the host ties the two. */
-export const SESSION_ENTRY_TYPES = [
-	"message",
-	"thinking_level_change",
-	"model_change",
-	"usage",
-	"compaction",
-	"branch_summary",
-	"custom",
-	"custom_message",
-	"context_edit",
-	"label",
-	"session_info",
-] as const;
-export type SessionEntryType = (typeof SESSION_ENTRY_TYPES)[number];
+export type SessionEntryType =
+	| "message"
+	| "thinking_level_change"
+	| "model_change"
+	| "usage"
+	| "compaction"
+	| "branch_summary"
+	| "custom"
+	| "custom_message"
+	| "context_edit"
+	| "label"
+	| "session_info";
 
 /** The events the host rebuilds from pi's: a settlement, a queue with images, an entry type and a smaller result. */
 type PiProjectedEvent =

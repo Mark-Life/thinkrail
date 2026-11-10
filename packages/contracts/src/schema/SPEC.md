@@ -61,18 +61,24 @@ that map.
     `pi-schema` cannot pick fields at run time, a hand projection is `Same`-tied to a `Pick` of pi's type
     (`ModelListPrice`, `WireModelPiFields`). A shape pi-ai ships only as a type (`PiStopReason`, `ImageContent`,
     `TextContent`, `CustomMessageContent`) is declared here and `Same`-tied.
-  - **pi-coding-agent** is server-only, so browser code never sees its types. Each shape it owns is declared here
-    once and tied both ways in the server program (`piWireTies.ts`, `agent/mcp`, [[submodule-server-agent]]): the
+  - **pi-coding-agent** is server-only, so browser code never sees its types, not even type-only (`AGENTS.md`).
+    This is the one exception to "the type is pi's own": each shape it owns is declared here once and tied both
+    ways in the server program (`piWireTies.ts`, `agent/mcp`, [[submodule-server-agent]]): the
     `Wire*` messages, pi's session events in `PiEvent`, `CompactionEndResult`, `SessionStats`, `ContextUsage`,
-    `SlashCommand*`, `SESSION_ENTRY_TYPES`, the ext-UI params, `PiPackage*`, `ProviderWarning` and the MCP enums.
+    `SlashCommand*`, `SessionEntryType`, the ext-UI params, `PiPackage*`, `ProviderWarning`, the MCP enums and
+    `McpToolDetails`.
     A type pi does not export at its root is reached through an exported API, such as
     `ReturnType<PackageManager["listConfiguredPackages"]>[number]["scope"]`. The MCP server-config field schemas live
-    in `mcp.ts`.
-  - **`McpToolDetails`** is the one untied copy, pending the user's approval: pi-coding-agent's type sits behind its
-    exports map and no exported API names it (`pi-compatibility.md`).
+    in `mcp.ts`. A type no exported API names, such as `McpToolDetails`, is type-imported by a relative path into
+    the server's `node_modules` (`pi-compatibility.md`).
   - **A host-owned shape** is a schema here. The desktop's native shapes are in `native.ts`; the desktop compiles
     them. A shape with a second representation, such as `theme.schema.json`, is generated from its schema or
     compared to it by a test.
+
+  - **`NON_EXECUTABLE_STOP_REASONS`** is the one list written twice: `transcript.ts` holds the host's rule for every
+    tool, and the published `pi-ask-user-question` holds the same list for its restart repair. That package imports
+    nothing from the repository, and contracts does not depend on an extension, so the ask extension's web half
+    ties the two with `Same` ([[module-ext-ask-user-question]]).
 
   `Same` (from `type-tie`, re-exported here) fails `tsc` when either side adds, drops or changes a field or a union
   member. A `Schema<T>` annotation checks one way only and misses a field the dependency adds, so it is never a tie.
@@ -83,21 +89,25 @@ that map.
   type, as the host got it from pi, so the host never refuses a pi-shaped reply or event. A tool event's `any` fields
   cross as `unknown`. A deep tie in the server program fails when pi carries an `AgentMessage` under a new event key.
   The host rebuilds four events (`PiProjectedEventType`); the rest pass as pi typed them (`PiForwardedEvent`).
-- **A recursive shape uses one `selfRef`** (pending the user's approval). `FileNode` and `LayoutPresetCenterNode` are
-  builder results whose nested node is the one `selfRef` helper, so the type derives from the schema like any other.
-  `$id` makes the `$ref` point at the node, not at the schema that embeds it.
+- **A recursive shape uses `recursive`.** pi-schema has no recursive builder, so `recursive($id, build)` hands
+  `build` a `$ref` to the result and names the result by `$id`. The `$ref` states the node type, and the caller
+  ties `Static` of the result to that type with `Same`, so the claim is exact both ways; at run time the `$ref`
+  checks the nested node against the same schema. `LayoutPresetCenterNode` is the one recursive shape.
 - **A preset center in params is only an object.** A recursive `$ref` walks the input with no depth limit, so
   `settings.update` types `center` as `Record<string, unknown>`. `validateLayoutPreset` checks shape and depth by hand first,
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
-- **No schema claims more than it checks.** A schema is a builder result, or a builder result spread with more JSON
-  Schema rules (`{ ...obj, not }`, `{ ...schema, allOf }`), which accepts less and claims nothing more. `NoParams` and
+- **No schema claims more than it checks.** A schema is a builder result, or a builder result with more JSON
+  Schema rules added to its `allOf` (`narrowed`), which accepts less and claims nothing more. `NoParams` and
   `NoPayload` are any object, because the handler reads nothing from them. The only unchecked claims in the code base are
-  the brand in `ids.ts`, the two trust points above, and the server's `webUiContext` `custom` member, which pi's generic
-  signature forces ([[submodule-server-agent]]).
+  the brand in `ids.ts`, the two trust points above, the server's `webUiContext` `custom` member, which pi's generic
+  signature forces ([[submodule-server-agent]]), and two checks of objects of functions: the web's `readNativeBridge`
+  and the desktop's `isDesktopServerRuntime`. A run-time check sees that each member is a function, never its
+  parameters, so these trust the desktop build that installs the bridge or bundles the runtime ([[module-desktop]]).
 - **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
   `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
-- **An exclusive union is a spread.** `TemplateReadLocation` is `{ ...obj, not }`: the builder object types it, and
-  `not: { required: [...] }` refuses both ids. `template.get` adds its fields the same way.
+- **An exclusive union is a narrowed object.** `TemplateReadLocation` is `narrowed(obj, { not })`: the builder object
+  types it, and `not: { required: [...] }`, added to its `allOf`, refuses both ids. `template.get` narrows its
+  params the same way.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
 - **Result and channel schemas are proven by tests.** The host's test harnesses check real replies and pushes against

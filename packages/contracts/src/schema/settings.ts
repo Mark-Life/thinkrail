@@ -20,7 +20,7 @@ import {
 import { ExtensionSettingValues } from "./extension";
 import { ThinkingLevel, WireModel } from "./model";
 import type { Same } from "./typeTie";
-import { narrowed, partialWireObj, selfRef, wireObj, withId } from "./wire";
+import { narrowed, partialWireObj, recursive, wireObj } from "./wire";
 
 export const THEME_MODES = ["fixed", "system"] as const;
 export const ThemeMode = oneOf(THEME_MODES);
@@ -127,13 +127,11 @@ export interface LayoutPresetCenterSplit extends StaticObject<typeof LAYOUT_PRES
 }
 export type LayoutPresetCenterNode = LayoutPresetCenterGroup | LayoutPresetCenterSplit;
 
-const CenterChild = selfRef<LayoutPresetCenterNode>();
-const CenterNode = withId(
+const CenterNode = recursive("LayoutPresetCenterNode", (child: Schema<LayoutPresetCenterNode>) =>
 	union([
 		LayoutPresetCenterGroup,
-		wireObj({ ...LAYOUT_PRESET_SPLIT_FIELDS, children: tuple([CenterChild, CenterChild]) }),
+		wireObj({ ...LAYOUT_PRESET_SPLIT_FIELDS, children: tuple([child, child]) }),
 	]),
-	"LayoutPresetCenterNode",
 );
 export const LayoutPresetCenterNode: Schema<
 	Same<Static<typeof CenterNode>, LayoutPresetCenterNode>

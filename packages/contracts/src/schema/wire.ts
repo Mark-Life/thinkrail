@@ -38,19 +38,15 @@ export function readonlyArr<T>(items: Schema<T>): Schema<readonly T[]> {
 }
 
 /**
- * A `$ref` to the nearest `$id` (or the document root): the one place a recursive schema's type is claimed rather
- * than built, since pi-schema has no recursive builder.
+ * A recursive schema named by `$id`: `build` gets a `$ref` back to the result. pi-schema has no recursive builder,
+ * so the `$ref` states `T`; the caller ties `Static` of the result to `T` with `Same`, which makes the claim exact.
  */
-export function selfRef<T>(): Schema<T> {
-	return { $ref: "#" };
+export function recursive<T, S extends Schema>($id: string, build: (self: Schema<T>) => S): S {
+	return { ...build({ $ref: "#" }), $id };
 }
 
-/** `schema` named by `$id`, so a `selfRef` inside it points at it, not at a schema that embeds it. */
-export function withId<S extends Schema>(schema: S, $id: string): S {
-	return { ...schema, $id };
-}
-
-/** `schema` with more JSON Schema rules: it accepts less, so its values keep `schema`'s type. */
+/** `schema` with more JSON Schema rules, added to any `allOf` it has: it accepts less, so its values keep `schema`'s type. */
 export function narrowed<S extends Schema>(schema: S, rules: Schema): S {
-	return { ...schema, allOf: [rules] };
+	const { allOf } = schema;
+	return { ...schema, allOf: Array.isArray(allOf) ? [...allOf, rules] : [rules] };
 }

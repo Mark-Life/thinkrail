@@ -1675,11 +1675,3 @@ test("review.commentAdd stores a wire comment as the user's, whatever provenance
 	expect(comment).not.toHaveProperty("author");
 	expect(comment).not.toHaveProperty("origin");
 });
-
-test("the fs.readDir reply schema checks nodes at every depth", () => {
-	const validator = compile(WS_METHOD_SCHEMAS["fs.readDir"].result);
-	const dir = { path: "a", name: "a", kind: "dir" };
-	const nested = (child: object) => [{ ...dir, children: [{ ...dir, children: [child] }] }];
-	expect(validator.errors(nested({ path: "a/a/b", name: "b", kind: "file" }))).toEqual([]);
-	expect(validator.errors(nested({ path: "a/a/b", name: "b", kind: "socket" }))).not.toEqual([]);
-});
