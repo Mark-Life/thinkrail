@@ -45,9 +45,12 @@ Clear, fractal module boundaries are a top-priority requirement:
   `thinkrail-extensions/*/web` only, never `server` or `shared`.
 - User-facing UI text is a key in `packages/locales/en.json` rendered through `@thinkrail/locales/react`;
   the lint gate rejects hardcoded JSX text and text attributes.
-- Never value-import `pi` into browser-bundled code, except `@earendil-works/pi-schema`, which has no
-  dependencies. Import types only from the `pi-ai` / `pi-agent-core` package roots;
-  `@earendil-works/pi-coding-agent` is server-only.
+- Browser-bundled code imports a pi package only through: `@earendil-works/pi-schema`;
+  `@earendil-works/pi-ai/providers/model-schema`; the `pi-ai` / `pi-agent-core` roots, type-only; and the
+  leaf entries `pi-todos/wire`, `pi-background-commands/wire`, `pi-delegation/wire`, `pi-subagents/wire`,
+  `@thinkrail/pi-ask-user-question/core` (its web half only) and `@thinkrail/pi-visualize/schema` (its web
+  half only, type-only). `@earendil-works/pi-coding-agent` is server-only, even type-only. A leaf
+  value-imports only `pi-schema`, `model-schema` and other leaves. `bun run check:boundaries` enforces this.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
 - A request field, route or other outside id uses a strict id (`ProjectId`, `parseProjectId`). A reply, push or disk read uses
   the lenient one (`StoredProjectId`, `parseStoredProjectId`), so an old id never drops from a user's list. A file name

@@ -23,9 +23,11 @@ that map.
   and `NoPayload` stay inside this directory, and only `@thinkrail/contracts/test-ids` exports the `test*` id makers.
   Schema values stay public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they
   ship in web JS.
-- **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` and
-  `@earendil-works/pi-agent-core` for pi-owned types.
-- **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
+- **Allowed deps:** `@earendil-works/pi-schema`; `@earendil-works/pi-ai/providers/model-schema`; the leaf entries
+  `pi-todos/wire`, `pi-background-commands/wire`, `pi-delegation/wire` and `pi-subagents/wire`; `import type` from
+  the `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` roots; `import type` from `type-tie`.
+- **Forbidden:** any import of `@earendil-works/pi-coding-agent`, even type-only; any other entry of a pi package
+  (`check:boundaries` refuses both); importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
   a schema here, except `JsonObject` in `checks.ts` and the id parsers: an id reaches code from a URL, a file name or
   a pi event, with no method schema to check it. Each side owns the check at its own edge ([[submodule-server-host]] for requests).
 
@@ -46,42 +48,56 @@ that map.
   or a canonical locale tag, stays with its handler. A handler does not check the shape again.
 - **A wire change is a schema edit.** It shows in the diff under this directory: decide on a `PROTOCOL_VERSION`
   bump in the same change.
-- **A dependency's shape is derived, never copied.** A type a dependency owns is imported, not declared again. A schema
-  that checks a shape the dependency types but ships no schema for is tied to that type with `Same` (`typeTie.ts`), so a
-  field or value either side adds, drops or changes fails `tsc`. `ThinkingLevel`, `PiStopReason`, `ImageContent`,
-  `CustomMessageContent`, `ModelInputModality`, `ModelListPrice` and `WireModel`'s pi fields are tied to pi-ai here.
-  pi-ai ships schemas for the model ones (`ModelThinkingLevelSchema`, `ModelInputModalitySchema`, `ModelCostSchema`),
-  but only on a `providers/*` subpath, and browser code may import pi only as types from a package root; so they are
-  declared and tied instead. pi-coding-agent is Node-only,
-  so the shapes it owns (`WireCustomMessage`, `WireCompactionSummary`, `WireBranchSummary`, `WireBashExecution`, pi's session
-  events in `PiEvent`, `CompactionEndResult`, `SessionStats`, `ContextUsage`, `SlashCommandInfo`) are declared here and
-  tied in the host's `piWireTies.ts` ([[submodule-server-agent]]). Packages outside contracts tie the shapes they parse
-  the same way. A `Schema<T>` annotation checks one way only and misses a field the dependency adds. `McpToolDetails`
-  is the one copy with no tie: pi-coding-agent's type sits behind its exports map and no exported type names it.
+- **One source per shape.** A shape something else defines is never written again here. Who owns it decides how:
+  - **An in-repo pi package** (`pi-todos`, `pi-background-commands`, `pi-delegation`, `pi-subagents`) exports a
+    `pi-schema` `wire` leaf: `as const` lists, enum schemas and `*_FIELDS` records. Its own types are `Static` of
+    them. This directory value-imports the leaf and only extends it: a branded id, a host field, the `"adopted"`
+    origin (`oneOf([...TODO_ORIGINS, "adopted"])`), a projection or a method's params, by spreading or destructuring
+    the owner's record. `TodoStatus`, `TodoArtifactKind`, `TodoGroupStatus`, `BackgroundCommandStatus`,
+    `CompletionDelivery`, `BACKGROUND_COMMAND_TERMINAL_STATUSES` and the two completion custom types are the owner's,
+    re-exported. A pi package never imports `@thinkrail/*`, so the edge points one way.
+  - **pi-ai** ships schemas on its `providers/model-schema` subpath, which loads only `pi-schema`:
+    `ThinkingLevel` is `ModelThinkingLevelSchema` and `ModelInputModality` is `ModelInputModalitySchema`. Where
+    `pi-schema` cannot pick fields at run time, a hand projection is `Same`-tied to a `Pick` of pi's type
+    (`ModelListPrice`, `WireModelPiFields`). A shape pi-ai ships only as a type (`PiStopReason`, `ImageContent`,
+    `TextContent`, `CustomMessageContent`) is declared here and `Same`-tied.
+  - **pi-coding-agent** is server-only, so browser code never sees its types. Each shape it owns is declared here
+    once and tied both ways in the server program (`piWireTies.ts`, `agent/mcp`, [[submodule-server-agent]]): the
+    `Wire*` messages, pi's session events in `PiEvent`, `CompactionEndResult`, `SessionStats`, `ContextUsage`,
+    `SlashCommand*`, `SESSION_ENTRY_TYPES`, the ext-UI params, `PiPackage*`, `ProviderWarning` and the MCP enums.
+    A type pi does not export at its root is reached through an exported API, such as
+    `ReturnType<PackageManager["listConfiguredPackages"]>[number]["scope"]`. The MCP server-config field schemas live
+    in `mcp.ts`.
+  - **`McpToolDetails`** is the one untied copy, pending the user's approval: pi-coding-agent's type sits behind its
+    exports map and no exported API names it (`pi-compatibility.md`).
+  - **A host-owned shape** is a schema here. The desktop's native shapes are in `native.ts`; the desktop compiles
+    them. A shape with a second representation, such as `theme.schema.json`, is generated from its schema or
+    compared to it by a test.
+
+  `Same` (from `type-tie`, re-exported here) fails `tsc` when either side adds, drops or changes a field or a union
+  member. A `Schema<T>` annotation checks one way only and misses a field the dependency adds, so it is never a tie.
+  Every tie sits in a file a `bun run typecheck` program includes.
 - **pi's messages and events are the two trust points.** pi ships their types and no schemas. `TranscriptMessage` checks
-  `role` against `TRANSCRIPT_MESSAGE_ROLES`. `SessionEventPayload`, the `pi.event` payload, checks `sessionId` and
-  `event.type` against `PI_EVENT_TYPES`. Each list is tied to its union with `Same`. The rest of the body is pi's type, as
-  the host got it from pi: `TranscriptMessage` is pi-ai's `UserMessage`, `AssistantMessage` and `ToolResultMessage` plus
-  the two pi-coding-agent mirrors, and `PiEvent` is pi-agent-core's `AgentEvent` plus pi-coding-agent's session events,
-  with each message typed `WireAgentMessage` by `WithWireMessages`. The host rebuilds four events (`PiProjectedEventType`);
-  the rest pass as pi typed them (`PiForwardedEvent`).
-- **A recursive shape keeps its hand type.** A derived type cannot refer to itself, so `FileNode` and
-  `LayoutPresetCenterNode` stay hand types. Their schemas are builder results that `tsc` checks against the hand type;
-  only the `{ $ref: "#" }` each one nests is a raw JSON Schema annotated `Schema<...>`. `$id` makes that `$ref` point at
-  the node, not at the schema that embeds it.
+  its envelope and `role` against `TRANSCRIPT_MESSAGE_ROLES`. `SessionEventPayload`, the `pi.event` payload, checks
+  `sessionId` and `event.type` against `PI_EVENT_TYPES`. Each list is tied to its union with `Same`. The body is pi's own
+  type, as the host got it from pi, so the host never refuses a pi-shaped reply or event. A tool event's `any` fields
+  cross as `unknown`. A deep tie in the server program fails when pi carries an `AgentMessage` under a new event key.
+  The host rebuilds four events (`PiProjectedEventType`); the rest pass as pi typed them (`PiForwardedEvent`).
+- **A recursive shape uses one `selfRef`** (pending the user's approval). `FileNode` and `LayoutPresetCenterNode` are
+  builder results whose nested node is the one `selfRef` helper, so the type derives from the schema like any other.
+  `$id` makes the `$ref` point at the node, not at the schema that embeds it.
 - **A preset center in params is only an object.** A recursive `$ref` walks the input with no depth limit, so
   `settings.update` types `center` as `Record<string, unknown>`. `validateLayoutPreset` checks shape and depth by hand first,
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
-- **No schema claims more than it checks.** A `Schema<T>` annotation sits on a builder result that `tsc` checks against `T`,
-  or on a raw JSON Schema for what builders cannot express (a recursive `$ref`, `TemplateReadLocation`), which states
-  every field of `T`. `narrowed` in `settings.ts` is the third raw one: an `allOf` of a `Schema<T>` and more rules, so
-  it accepts less than `T`'s schema and claims nothing more. `NoParams` and `NoPayload` are any object, because the handler reads nothing from them. The two
-  trust points above are the only exceptions.
+- **No schema claims more than it checks.** A schema is a builder result, or a builder result spread with more JSON
+  Schema rules (`{ ...obj, not }`, `{ ...schema, allOf }`), which accepts less and claims nothing more. `NoParams` and
+  `NoPayload` are any object, because the handler reads nothing from them. The only unchecked claims in the code base are
+  the brand in `ids.ts`, the two trust points above, and the server's `webUiContext` `custom` member, which pi's generic
+  signature forces ([[submodule-server-agent]]).
 - **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
   `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
-- **An exclusive union keeps its hand type.** Builders cannot express the `?: never` branches of
-  `TemplateReadLocation`, so it stays a type beside a raw JSON Schema annotated `Schema<TemplateReadLocation>`:
-  `not: { required: [...] }` refuses both ids, and `template.get` adds its fields with `allOf`.
+- **An exclusive union is a spread.** `TemplateReadLocation` is `{ ...obj, not }`: the builder object types it, and
+  `not: { required: [...] }` refuses both ids. `template.get` adds its fields the same way.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
 - **Result and channel schemas are proven by tests.** The host's test harnesses check real replies and pushes against
@@ -98,8 +114,8 @@ that map.
   built on `getRandomValues` because `crypto.randomUUID` is missing on a plain-HTTP client; pi owns session ids, so
   they have no generator. Tests make ids with the `test*` makers of `@thinkrail/contracts/test-ids`, and a refusal test
   sends the raw string. `check:boundaries` refuses that entry outside test sources, and a relative import of `ids.ts`
-  from another module. `DelegationRunDetails.childSessionId` stays a `string`: it mirrors the `pi-delegation` type,
-  and the host's `piWireTies.ts` ties the two with `Same`.
+  from another module. `DelegationRunDetails.childSessionId` stays a `string`: the schema is `pi-delegation`'s own
+  `DELEGATION_RUN_FIELDS`, which knows no brand.
 - **An id has a strict check for a request and a lenient one for a read.** A request value may reach a file path, so
   it is strict. A stored value must never drop from a list, so it is lenient. `ids.test.ts` fails on a request field
   with a stored schema, or a reply or push with a strict one.
@@ -125,6 +141,6 @@ that map.
 - **One object check here; reply and push checks outside.** `checks.ts` exports `JsonObject`, for a reader that checks fields
   one by one. Result and channel schemas compile in contracts' `wireChecks.ts`, whose `parseWsResult` and `parseWsPush` the
   web transport, e2e fixtures and artifact probes share: it reads `WsResult` and `WsChannelPayload`, which this directory may not import.
-- **`@ts-expect-error` only in a negative type test**, one that proves bad code fails to compile, as `typeTie.test.ts`
-  does for `Same`.
+- **`@ts-expect-error` only in a negative type test**, one that proves bad code fails to compile, as `type-tie`'s
+  `index.test.ts` does for `Same`.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

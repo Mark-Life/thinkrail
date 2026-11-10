@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Wire contracts
 parent: architecture
-depends-on: []
+depends-on: [module-pi-todos, module-pi-background-commands, module-pi-delegation, module-pi-subagents, module-type-tie]
 references: [central-integration, module-pi-background-commands]
 tags: [wire]
 ---
@@ -56,6 +56,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`WS_RESULT_INVALID`** is the host's side of it: in a host that checks its replies and pushes (tests, e2e), one
   failed its schema ([[submodule-server-host]]).
   **`SESSION_MODEL_UNAVAILABLE`** — a chat's saved model reference is malformed, so the chat does not open.
+  **`HOST_ERROR`** — a request-path failure the host has no more specific code for, so Error Tracking still
+  gets a code and never the message. **`FONT_UPLOAD_FAILED`** — a font upload could not be stored.
+  **`SESSION_RELOAD_FAILED`** — a session reload did not finish. **`WORKSPACE_UNKNOWN`** is client-minted,
+  like `INVALID_REPLY`: the client named a workspace it no longer knows.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -138,9 +142,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `wsChannelOf`, `Parsed`, `WsClientChannelMap` and `WsClientPayload`.
 - **`@thinkrail/contracts/test-ids`:** the one other entry: `testProjectId`, `testWorkspaceId`, `testSessionId` and
   `testStoredSessionId` parse a string into an id and throw on a refusal, for test sources only ([[submodule-contracts-schema]]).
-- **Allowed deps:** `@earendil-works/pi-schema` at runtime, the one `pi` package without dependencies.
-  **Type-only** devDeps on `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`, imported **from their
-  package roots** (type-only → erased at build).
+- **Allowed deps** (runtime, all browser-safe): `@earendil-works/pi-schema`; pi-ai's
+  `@earendil-works/pi-ai/providers/model-schema` entry, which loads only `pi-schema` (`ThinkingLevel` and
+  `ModelInputModality` are its `ModelThinkingLevelSchema` and `ModelInputModalitySchema`); and the `wire` leaf
+  entries of the shape owners `pi-todos`, `pi-background-commands`, `pi-delegation` and `pi-subagents`, each of
+  which loads only `pi-schema`, `model-schema` and other leaves. `check:boundaries` refuses any other entry of
+  those packages. **Type-only:** `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core` from their
+  **package roots** (erased at build), and `type-tie` for `Same`, which `schema/` re-exports.
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
   or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
@@ -156,10 +164,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
   channel, version, URL, restart, or feed authority.
-- **Forbidden:** any *value* import of another `pi` package; **any** import (even `type`) of
-  `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
-  (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
-  importing `server` / `shared` / `web`.
+- **Forbidden:** any other *value* import of a `pi` package; **any** import (even `type`) of
+  `@earendil-works/pi-coding-agent` (pulls `node:fs`, and in the web program its type load turns on its
+  `AgentMessage` augmentation); every other pi-ai **provider / API subpath** (`/providers/*` except
+  `model-schema`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); a pi
+  package entry other than its `wire` leaf; and importing `server` / `shared` / `web`.
+- **One source per shape** ([[submodule-contracts-schema]] holds the full rule). An in-repo pi package owns its
+  shapes and exports them from its `wire` leaf; `contracts` value-imports the leaf and only extends it. A pi-ai
+  shape uses pi-ai's schema where one exists and is otherwise `Same`-tied. A pi-coding-agent shape is declared
+  here once and tied both ways in the server program.
 
 ## Contents
 
@@ -192,8 +205,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
     can neither read the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC).
     **`sameModel(a, b)`** is the one identity test — `{provider, id}` — every ring uses; no other field is
     identity, since name, context, prices and levels are catalog snapshots that may lag a refresh;
-  - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`; `ThinkingLevel` (the
-    `off`-inclusive one) is listed in `schema/`, tied to pi-ai's `ModelThinkingLevel`;
+  - `@earendil-works/pi-agent-core`: nothing. `contracts` does not re-export `AgentEvent` or `AgentMessage`: in
+    the web program `AgentMessage` lacks pi-coding-agent's roles, so it would mean a different union on each side.
+    The server keeps one `AgentMessage` alias (`SessionMessageEntry["message"]`). `ThinkingLevel` (the
+    `off`-inclusive one) is pi-ai's `ModelThinkingLevelSchema` in `schema/model.ts`;
+  - `isTranscriptMessageRole` is the role guard the transcript and history share; `SessionInputKind` is gone.
+    `NON_EXECUTABLE_STOP_REASONS` and `TextContent` live in `schema/transcript.ts`, and `SESSION_ENTRY_TYPES` in
+    `schema/piEvent.ts`, tied to pi-coding-agent's `SessionEntry["type"]` by the host;
   - the render union **`PiEvent`** (in `schema/piEvent.ts`) — pi-agent-core's `AgentEvent` plus the session events of
     the Node-only `pi-coding-agent`, declared there and tied to its `AgentSessionEvent` by the host
     ([[submodule-contracts-schema]]). `bash_execution_update` is in the union for fidelity only; the host never calls
@@ -546,7 +564,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`/`TodoArtifact`** + the **`TodoStatus`/`TodoOrigin`/
   `TodoArtifactKind`** unions — the in-chat plan
-  DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
+  DTOs, built from the `pi-todos/wire` leaf: the enum schemas are its own, and each object spreads its field record
+  (`TODO_FIELDS`, `TODO_ARTIFACT_FIELDS`, `TODO_GROUP_FIELDS`, `TODO_PLAN_FIELDS`) and adds only the wire's fields.
+  `todo.add` and `todo.update` take `title`, `note` and `status` from `TODO_FIELDS`. It carries the chat's per-session TODO list.
   `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
   (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
   stored: shipping it means the truth table has one home and no client re-derives it. A `commit`
@@ -558,7 +578,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate).
   `TodoItem.commitSubject` is the third stored done-time field: the git subject the host commits the
   item's delta under (the `title` is the plan step for the panel, this is the line that lands in the
-  repository's history — see [[submodule-server-todos]]). It is on the wire because the DTO mirrors the
+  repository's history — see [[submodule-server-todos]]). It is on the wire because the DTO is the
   stored item, not because any client renders it today; **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
   review decoration, present only on reviewable items (those with a host change set): `state`
   (`unreviewed`/`reviewed`/`changes_requested` — `unreviewed` = no stored record), `revision` (commit
@@ -572,19 +592,20 @@ the palette ranks with — kept here so host-side search can rank with the same 
   decoration and present only when non-empty: the `base..HEAD` commits owned by no item, surfaced as
   **wire-only `done` items** (`origin: "adopted"`, `id: "commit:<sha>"`, one `commit` artifact) so a
   chat that committed without planning still shows — and can review — that work. They are never stored;
-  the **`"adopted"`** member of `TodoOrigin` exists only on the wire (derivation: [[submodule-server-todos]]).
+  the **`"adopted"`** member of `TodoOrigin` (`WIRE_TODO_ORIGINS` = `pi-todos`' `TODO_ORIGINS` plus `"adopted"`)
+  exists only on the wire (derivation: [[submodule-server-todos]]).
   **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
-  **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
+  built from `pi-delegation/wire`'s `DELEGATION_RUN_FIELDS` and `RUN_LIFECYCLE_STATUSES`: rides `tool_execution_update.partialResult`
   (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the
   child transcript itself is read via `subagent.getTranscript`, keyed
   `(workspaceId, parentSessionId, childSessionId)` — its result also carries the run's current
   registry `status` (absent once the host no longer knows the run), the client's poll-while-live
   signal. The completion message's tag + pairing live in
   `wsProtocol` (the value-bearing half), mirroring the tool-response posture exactly: the
-  **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
-  never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
-  shape, its details **`SubagentCompletionDetails`**: the run details plus the optional
-  **`CompletionDelivery`** marker mirrored from `pi-subagents`) and the shared
+  **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (`pi-subagents/wire`'s `SUBAGENT_COMPLETION_MESSAGE`,
+  re-exported), **`SubagentCompletionMessage`** (the compile-held tag↔details
+  shape, its details **`SubagentCompletionDetails`**: `pi-subagents/wire`'s `SUBAGENT_COMPLETION_FIELDS`, the run
+  details plus the optional **`CompletionDelivery`** marker owned by `pi-background-commands/wire`) and the shared
   **`isSubagentCompletionMessage`** check — wire data is untrusted, so each completion, review-fix and
   command-completion check is compiled from a message schema in `wsProtocol` (the custom-message fields plus
   the tag and the details schema), and **`isDelegationRunDetails`** (domain) is the compiled
@@ -660,7 +681,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
-- **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
+- **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop's native
+  shapes (webview RPC frames and the files it stores) are schemas in `schema/native.ts`, owned here because they are
+  host-owned shapes; the desktop compiles them at its edge. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
   ready, and installing are distinct states. While installing, the snapshot carries a coarse install step
@@ -1020,12 +1043,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 The current-chat resource view is a projection of two existing capability owners, not a generic
 process API. `CHAT_RESOURCES_PROTOCOL_VERSION` (71) gates its methods and affordances; hosts through
-v70 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs mirror [[module-pi-background-commands]]
-without importing that package. Subagents retain their Pi child session ids and delegation statuses.
+v70 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs are built
+from the `pi-background-commands/wire` field records ([[module-pi-background-commands]]) plus the host's
+`sessionId: StoredSessionId` and `interrupted`; `BACKGROUND_COMMAND_TERMINAL_STATUSES` and
+`BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE` are the owner's, re-exported. Subagents retain their Pi child session ids and delegation statuses.
 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
   every live record plus the newest twenty finished ones per kind. The snapshot echoes workspace
-  and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
+  and session identity. Commands carry the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
   effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
   `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
@@ -1065,7 +1090,7 @@ without importing that package. Subagents retain their Pi child session ids and 
   lifecycle changes. Clients reread the snapshot; output bytes do not ride a broadcast or transcript
   tool update after the start acknowledgement. Existing `subagent.getTranscript` remains unchanged.
 
-`DelegationRunDetails.abortReason` mirrors the optional string owned by [[module-pi-delegation]].
+`DelegationRunDetails.abortReason` is the optional string owned by [[module-pi-delegation]].
 Historical details without this field stay valid; non-string values are rejected by its guard. User
 Stop uses `"user"` so the portable completion owner can suppress idle-parent wake-up without a
 wire-owned cancellation registry.
@@ -1192,7 +1217,8 @@ contracts only.
   `mcp.testConnection` judges the transport of the actual admitted configuration, not an approved but
   invalid project row that the loader skipped. Mutations and probes reject if workspace identity, cwd or
   project trust changed during async ownership resolution; no stale project grant admits a new operation.
-- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools;
+- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools. It is the one
+  untied copy, pending the user's approval: pi-coding-agent's type sits behind its exports map (`pi-compatibility.md`);
   `McpResultSummary` (schema in `schema/mcp.ts`, each block checked by `isMcpContentBlockSummary`) is the
   host-written, bounded, base64-free presentation summary under
   `details.thinkrail` that lets cards render identically live, after reload and on another client.

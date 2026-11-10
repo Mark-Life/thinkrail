@@ -31,7 +31,10 @@ answer mailbox.
   - `filePreviews` (default **off**) registers the file-preview fields. Vanilla pi keeps them off because
     nothing there renders files. `checkFile(path, cwd)` is awaited once per distinct path before asking;
     its error fails the call with a text telling the model to write the file first.
-- **`./core`**: no runtime imports. Exports the tool name, limits, reserved labels, discuss reasons, result
+- **`./core`** (`src/core.ts`), a browser leaf: ThinkRail's `ask-user-question` web half value-imports it,
+  so it never imports `@earendil-works/pi-coding-agent`, not even type-only (that type load would turn on
+  pi-coding-agent's `AgentMessage` augmentation in the web program), and value-imports only `pi-schema`,
+  pi-ai's `providers/model-schema` and other leaves, never a relative file (`check:boundaries`). Exports the tool name, limits, reserved labels, discuss reasons, result
   types and texts, plus `validateQuestionnaire`, `previewFileSources`, `buildQuestionnaireResponse`,
   `outcomeResult`, `isAckDetails`,
   `isAskUserQuestionArgs`, `isAskUserQuestionResult`, `isolateAskUserQuestionBatch` and
@@ -131,7 +134,8 @@ answer mailbox.
 ## Boundary
 
 - **Allowed deps:** peers `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui` and `typebox`;
-  test-only `@earendil-works/pi-ai` (faux provider).
+  `@earendil-works/pi-schema` as a real dependency (`pi install` skips peers); test-only
+  `@earendil-works/pi-ai` (faux provider).
 - **Forbidden:** anything from ThinkRail (`@thinkrail/*`, `apps/*`, `packages/server`) and Bun APIs in
   shipped code.
 

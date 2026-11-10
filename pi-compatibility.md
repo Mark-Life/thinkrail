@@ -128,6 +128,27 @@ The host stores bounded, base64-free presentation details so live and restored c
 full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card tests and
 `e2e/mcp-tool-cards.spec.ts`. Never persist the full raw result merely to delete the adapter.
 
+### Untied `McpToolDetails` mirror
+
+**Owner:** [[submodule-contracts-schema]] (`mcp.ts`). pi-coding-agent declares the MCP tool result's
+`details` in `dist/extensions/mcp/tools.d.ts`, which its exports map does not reach, so `contracts` keeps
+the one hand-written copy no tie checks. It waits for the user's approval as an exception.
+**Removal gate:** pi exports the type (or a schema for it) from a public entry. Then tie the wire schema
+to it with `Same` in the server program, or adopt the schema, and delete this entry.
+
+## Wire shapes from pi-ai's `providers/model-schema`
+
+**Owner:** [[submodule-contracts-schema]] (`model.ts`), `pi-delegation/wire` and `pi-subagents`
+(`thinking.ts`). `contracts` uses `ModelThinkingLevelSchema` and `ModelInputModalitySchema`, and
+`pi-subagents` uses `MODEL_THINKING_LEVELS`, from the `@earendil-works/pi-ai/providers/model-schema`
+subpath, reached through pi-ai's `./providers/*` export. Browser code may value-import it because the
+module loads only `@earendil-works/pi-schema`. pi-agent-core types `thinkingLevel` with its own union, so
+`pi-delegation/src/types.ts` ties it to `ModelThinkingLevel` with `Same`.
+**Gate on every upgrade:** `bun run check:boundaries` runs a test that resolves the subpath from
+`packages/contracts` and fails if the module or its relative imports load anything but `pi-schema`.
+If pi moves or drops the subpath, or the module gains a dependency, fall back to a `Same`-tied local
+schema and update this entry. `bun run typecheck` catches a drift between the two thinking-level unions.
+
 ## Other pi-sensitive host seams
 
 **Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
