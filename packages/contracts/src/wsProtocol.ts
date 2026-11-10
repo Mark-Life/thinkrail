@@ -19,6 +19,7 @@ import {
 	ReviewFixDetails,
 	type Same,
 	SubagentCompletionDetails,
+	ToolResponsePendingDetails,
 	type WireCustomMessage,
 	type WsAck,
 	type WsRequestFrame,
@@ -337,7 +338,7 @@ export interface ToolResponseMessage extends WireCustomMessage<ToolResponseDetai
 	details: ToolResponseDetails;
 }
 
-export const isToolResponsePending = compile(obj({ kind: lit("ack") }, { open: true })).check;
+export const isToolResponsePending = compile(ToolResponsePendingDetails).check;
 
 const ToolResponseView = compile(
 	obj(

@@ -309,14 +309,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
     client's `session.extUiReply` or a host `dismiss` frame; the host dismisses it on abort, dispose, or
     when it accepts a user message for that chat (a message an extension handles or preflight rejects
     leaves it pending), so a client never treats its own message send as an answer.
-  - the **interactive-tool** wire shapes — **`ToolResponsePendingDetails`** `{ kind: "ack" }` + the
-    **`isToolResponsePending`** guard (a tool result's `details` meaning "the person's response is still
+  - the **interactive-tool** wire shapes — the **`ToolResponsePendingDetails`** schema `{ kind: "ack" }`
+    (in `schema/transcript.ts`) + the **`isToolResponsePending`** guard compiled from it (a tool result's `details` meaning "the person's response is still
     pending": written by restart repair, returned by a tool that defers), the **`TOOL_RESPONSE_CUSTOM_TYPE`**
     constant, **`ToolResponseMessage`** / **`ToolResponseDetails`** `{ toolCallId, response: unknown }`
     (the late response the host appends when no live tool awaits it) and **`readToolResponseMessage`**
     (the shared reader; it also reads the retired `ask-user-answers` shape — `details.result` — so answered
-    questions in existing transcripts stay answered; the legacy literal is private to the reader). All in
-    `wsProtocol`. The shapes name **no tool**: which tools are interactive is declared by the server
+    questions in existing transcripts stay answered; the legacy literal is private to the reader). All but
+    the schema in `wsProtocol`. The shapes name **no tool**: which tools are interactive is declared by the server
     extension descriptor and the web renderer registration ([[module-extension-api]]); the tool's own
     argument/result types live in its pi package (`@thinkrail/pi-ask-user-question/core`), not here.
     `WireCustomMessage.customType` itself stays

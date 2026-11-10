@@ -49,10 +49,6 @@ export function canMarkCompletionUnread(state: SessionState): boolean {
 	);
 }
 
-export interface ToolResponsePendingDetails {
-	kind: "ack";
-}
-
 export interface ToolResponseDetails {
 	toolCallId: string;
 	response: unknown;
