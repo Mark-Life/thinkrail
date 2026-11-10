@@ -35,6 +35,7 @@ import {
 	setFeedbackPublisher,
 } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import { observeLoggedErrors } from "../log";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
@@ -1079,6 +1080,35 @@ test("workspace.rename locks the display name without changing Git or the worktr
 	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(created.branch);
 	const listed = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 	expect(listed.find((workspace) => workspace.id === created.id)).toMatchObject(renamed);
+});
+
+test("session.list logs a chat whose open todos cannot be counted, and still lists it", async () => {
+	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const agentDir = join(dataDir, "todo-count-agent");
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "host") logged.push(error);
+	});
+	try {
+		const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
+		const workspace = rows[0];
+		if (!workspace) throw new Error("expected a workspace");
+		const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, workspace.worktreePath), {
+			id: "dotted.session",
+			cwd: workspace.worktreePath,
+			messages: [{ role: "user", text: "hello", timestamp: Date.now() }],
+		});
+		const listed = await handleTypedRequest("session.list", { workspaceId: workspace.id }, CTX);
+		expect(listed.find((summary) => summary.sessionId === fixture.id)).not.toHaveProperty(
+			"openTodos",
+		);
+		expect(logged).toEqual([expect.objectContaining({ code: "TODO_COUNT_FAILED" })]);
+	} finally {
+		observeLoggedErrors(null);
+		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
 });
 
 test("session.rename persists a bounded title into a closed Pi transcript", async () => {

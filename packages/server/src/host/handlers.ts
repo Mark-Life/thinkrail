@@ -1198,7 +1198,11 @@ const handlers: WsHandlers = {
 			if (sessionId === null) return summary;
 			try {
 				return { ...summary, openTodos: countOpenTodos({ workspaceId, sessionId }) };
-			} catch {
+			} catch (error) {
+				log.warn(
+					"open todos were not counted",
+					new CodedError("TODO_COUNT_FAILED", `open todos not counted (${String(error)})`),
+				);
 				return summary;
 			}
 		});

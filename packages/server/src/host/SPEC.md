@@ -303,7 +303,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   every probe on stop — `mcp.login` / `mcp.testConnection` pushes go to the starting
   connection only (`ws.send`, not the broadcast topic) and foreign replies fail with `LOGIN_NOT_OWNER`; `session.list` decorates agent's `listSessions` summaries with
   `openTodos: countOpenTodos(…)` per session (a host-only composition of `agent` + `todos` — `agent`
-  stays todos-free; a failed count omits the field, never fails the list); **`todo.requestFix`** is the
+  stays todos-free; a failed count omits the field, is logged as `TODO_COUNT_FAILED`, and never fails the list); **`todo.requestFix`** is the
   same kind of composition (`todos` records + renders the fix package, `agent` delivers): the package is
   fired **detached** into the item's own chat as a **structured `todo-review-fix` custom message** —
   `sendReviewFixToSession` (`fireTodoFixPrompt`), which calls `AgentSession.sendCustomMessage` with the

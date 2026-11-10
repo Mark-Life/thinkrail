@@ -87,19 +87,17 @@ that map.
   shapes, so each entry is typed `Record<string, unknown>`. The client parses each project, `hostPlatform`, `hostUpdate` and
   `speech` against its schema, and the config field by field against `PartialAppConfig`, and drops and reports what fails. `ServerWelcome`
   must stay assignable to it. The test harness still checks `ServerWelcome`.
-- **Ids are branded and checked.** `ProjectId`, `WorkspaceId`, `StoredSessionId` and `SessionId` in `ids.ts` are strings
-  with a brand. A wire field uses the one for its entity, so a call site cannot swap them. `brandedString` is the one
-  place that claims a brand: it types each id schema with the brand that schema proves, and nothing else in contracts
-  asserts an id type. Every id value comes out of a parser, so a branded value has passed its check. `newProjectId` and
-  `newWorkspaceId` parse `randomUuid`, which builds on `getRandomValues` because `crypto.randomUUID` is missing on a
-  plain-HTTP client. A session id has no generator, because pi owns it. Each parser compiles in `ids.ts`, beside its schema.
-  Tests make ids with `testProjectId`, `testWorkspaceId`, `testSessionId` and `testStoredSessionId` from `@thinkrail/contracts/test-ids`; each runs the parser for
-  its brand and throws on a refusal. A test of a refusal sends the raw string, since dispatch takes `unknown` params.
-  `check:boundaries` refuses that entry outside test sources, and refuses a relative import of `ids.ts` from another module.
-  `DelegationRunDetails.childSessionId` stays a `string`: it mirrors the `pi-delegation` type, and a test pins the two.
-- **An id has two checks: one for a request, one for a read.** A value a caller supplies must be able to reach a file path and
-  name a real entity, so it is strict. A value read back from disk must never disappear from a list, so it is lenient. `ids.test.ts`
-  walks the wire and fails on a request field with a stored schema, or a reply or push with a strict one.
+- **Ids are branded and checked.** `ProjectId`, `WorkspaceId`, `StoredSessionId` and `SessionId` in `ids.ts` are
+  branded strings, so a call site cannot swap them. `brandedString` is the one place that claims a brand, and every id
+  value comes out of a parser that compiles beside its schema. `newProjectId` and `newWorkspaceId` parse `randomUuid`,
+  built on `getRandomValues` because `crypto.randomUUID` is missing on a plain-HTTP client; pi owns session ids, so
+  they have no generator. Tests make ids with the `test*` makers of `@thinkrail/contracts/test-ids`, and a refusal test
+  sends the raw string. `check:boundaries` refuses that entry outside test sources, and a relative import of `ids.ts`
+  from another module. `DelegationRunDetails.childSessionId` stays a `string`: it mirrors the `pi-delegation` type,
+  and a test pins the two.
+- **An id has a strict check for a request and a lenient one for a read.** A request value may reach a file path, so
+  it is strict. A stored value must never drop from a list, so it is lenient. `ids.test.ts` fails on a request field
+  with a stored schema, or a reply or push with a strict one.
 
   | Id | Request field, route, `parseX` | Reply, push, stored file, `parseStoredX` | Type |
   |---|---|---|---|
@@ -107,22 +105,15 @@ that map.
   | workspace | UUID, any version, lowercase | path-safe | `WorkspaceId` for both |
   | session | path-safe | any string | `SessionId`, a subtype of `StoredSessionId` |
 
-  A brand carries what code relies on, and code relies only on path safety. Both workspace checks are path-safe and no
-  project id reaches a path, so each has one brand. A session id has two: `SessionId` is path-safe, `StoredSessionId` is
-  any string, and only `SessionId` fits a function that builds a path. A stored id becomes a `SessionId` through
-  `parseSessionId` where code acts on it, and a refusal there skips the action, so the session still lists. The owning
-  module's SPEC names its path builders and the places it acts on a stored id.
-
-  Path-safe is pi's `--session-id` grammar with a limit of 200 characters. Every release writes `randomUUID()` for a project
-  or workspace, so a non-UUID there is a hand edit or a test seed. A reply may still carry one: it stays listed, and a request
-  that names it gets `INVALID_PARAMS`, so the app cannot rename or remove it. The way out is to edit the stored file. A
-  workspace read is still path-safe because a workspace id names a directory that removal deletes recursively
-  ([[submodule-server-agent]]), so `../..` in `workspaces.json` must drop, not load. Session ids stay any string on a read because pi owns that parse and only checks for
-  a string: a session from the pi CLI or an older pi file still lists. The way out is to delete its file. A session id pi
-  names for a live session goes through `requireSessionId`, which fails with `PI_SESSION_ID_INVALID`.
-  `WsRequestFrame.sessionId` is a plain string, not an id: only the replay fingerprint reads it, and a frame that fails its
-  schema gets no reply. The checks are not v4 and v7 regexes: those describe today's generators, and a gate on them would
-  refuse a real id when a generator changes.
+  A brand carries only path safety, the one thing code relies on. Only `SessionId` fits a path builder; a stored session
+  id becomes one through `parseSessionId` where code acts on it, and a refusal skips the action while the session still
+  lists. The owning module's SPEC names its path builders and those places. Path-safe is pi's `--session-id` grammar, up
+  to 200 characters. A stored project or workspace id that is not a UUID (a hand edit or a test seed) still lists, but a
+  request that names it gets `INVALID_PARAMS`. A workspace read stays path-safe because removal deletes the workspace
+  directory recursively ([[submodule-server-agent]]). A stored session id is any string because pi only checks for a
+  string, so a session from the pi CLI still lists. A live session id from pi goes through `requireSessionId`, which
+  fails with `PI_SESSION_ID_INVALID`. `WsRequestFrame.sessionId` is a plain string: only the replay fingerprint reads it.
+  No check is a v4 or v7 regex, so a generator change cannot refuse a real id.
 - **A reply is a union on `ok`.** A failure always carries `error`. Its `errorCode` is any string: a newer host may send a
   code this client has no name for. `WS_ERROR_CODES` lists the names, and the client reads a code outside it as no code.
   `INVALID_REPLY` is never sent: the client mints it.

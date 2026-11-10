@@ -1531,8 +1531,7 @@ function createParentSession(
 	} catch (error) {
 		return Promise.reject(error);
 	}
-	if (sessionIsTearingDown(sessionId))
-		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+	if (sessionIsTearingDown(sessionId)) return Promise.reject(unknownSession(sessionId));
 	return trackSessionPreparation(workspaceId, lifecycleToken, () =>
 		createParentSessionInternal(options, workspaceId, generation, lifecycleToken, announceCreation),
 	);
