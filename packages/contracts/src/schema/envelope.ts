@@ -64,6 +64,7 @@ export const WS_ERROR_CODES = [
 	"FONT_UPLOAD_FAILED",
 	"WORKSPACE_UNKNOWN",
 	"SESSION_RELOAD_FAILED",
+	"SESSION_DISPOSE_FAILED",
 	...SPEECH_ERROR_CODES,
 ] as const;
 export type WsErrorCode = (typeof WS_ERROR_CODES)[number];

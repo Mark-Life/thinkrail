@@ -21,6 +21,7 @@ import {
 	type Project,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { logger } from "../log";
 import {
 	dispatchSessionMcpCommand,
@@ -544,7 +545,10 @@ export async function readMcpToolOutput(
 	if (path === undefined || !isAbsolute(path)) return { available: false, reason: "unavailable" };
 	try {
 		return { available: true, ...readBounded(path) };
-	} catch {
-		return { available: false, reason: "expired" };
+	} catch (error) {
+		if (hasErrno(error, "ENOENT", "ENOTDIR")) return { available: false, reason: "expired" };
+		throw new CodedError("STATE_FILE_UNREADABLE", "Couldn't read the stored MCP output.", {
+			cause: error,
+		});
 	}
 }

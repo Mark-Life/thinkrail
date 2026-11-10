@@ -1042,5 +1042,10 @@ test("results carry a durable, base64-free summary, and Full output reads only t
 		available: false,
 		reason: "expired",
 	});
+	mkdirSync(fullOutputPath);
+	await expect(readMcpToolOutput(p.workspaceId, p.sessionId, "big", p.cwd)).rejects.toMatchObject({
+		code: "STATE_FILE_UNREADABLE",
+	});
+	rmSync(fullOutputPath, { recursive: true, force: true });
 	await removeSession(p.sessionId);
 });

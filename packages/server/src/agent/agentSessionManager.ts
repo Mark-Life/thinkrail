@@ -1642,7 +1642,12 @@ async function createParentSessionInternal(
 			try {
 				await disposeSession(sessionId);
 			} catch (disposeError) {
-				log.warn(`session ${sessionId} was not disposed after it failed to start`, disposeError);
+				log.warn(
+					`session ${sessionId} was not disposed after it failed to start`,
+					new CodedError("SESSION_DISPOSE_FAILED", "session dispose failed", {
+						cause: disposeError,
+					}),
+				);
 			}
 		} else if (!session) {
 			subagents.dispose();

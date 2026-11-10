@@ -1697,7 +1697,8 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   adds the bounded, base64-free `McpResultSummary` under `details.thinkrail` (`summarizeMcpResult`), and
   `readMcpToolOutput` serves a result's recorded full output (`mcp.readOutput`) from exactly its
   `fullOutputPath` (pi's owner-only temp file; at most 1 MiB, `truncated` beyond) — `unavailable` for a
-  result that recorded none, `expired` once the file is gone. Settings' *Show log* reads `readMcpServerLog`
+  result that recorded none, `expired` once the file is gone; any other read failure is a
+  `STATE_FILE_UNREADABLE` error. Settings' *Show log* reads `readMcpServerLog`
   ([[submodule-server-agent-mcp]]): pi appends what servers log (`notifications/message`) to one `mcp.log`
   per agent directory for every session, so a server's lines are picked by their entry head and masked.
 - **Sign-in** (`mcpSignIn.ts`; pi ≥ 1.1.0 for cancellable sign-in, #10565). `startMcpProbe({ action:
