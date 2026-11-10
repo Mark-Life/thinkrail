@@ -192,6 +192,38 @@ async function verifyShellMarker(
 	}
 }
 
+async function verifyFrameBridge(
+	controlPath: string,
+	probePath: string,
+	server: NavigationProbeServer,
+	exited: Promise<number>,
+	exitError: (code: number) => Error,
+): Promise<void> {
+	const reports = (prefix: string) =>
+		server.requests.filter((path) => path.startsWith(`/frame-bridge-${prefix}`));
+	writeFileSync(controlPath, "frame-bridge");
+	await pollUntil(() => reports("ran-").length > 0 && reports("marker-").length > 0, {
+		timeoutMs: 15_000,
+		what: "frame bridge probe report",
+		exited,
+		exitError,
+	});
+	await Bun.sleep(1000);
+	const opened = (readSettledJson(probePath) as { opened?: string[] } | undefined)?.opened ?? [];
+	const forged = opened.filter((url) => url.includes("/frame-bridge-forged"));
+	const globals = Number(reports("ran-")[0]?.slice("/frame-bridge-ran-".length));
+	const result = `${forged.length} forged opens, ${globals} Electrobun globals in the frame`;
+	const scripts = reports("marker-").join() === "/frame-bridge-marker-scripts";
+	console.log(
+		`frame bridge (${process.platform}, mockup scripts ${scripts ? "on" : "off"}): ${result}`,
+	);
+	if (scripts && (forged.length > 0 || globals !== 0)) {
+		throw new Error(
+			`a sandboxed frame reaches the native bridge while mockup scripts run: ${result}`,
+		);
+	}
+}
+
 type WindowControlsProbe = {
 	requests?: string[];
 	state?: { maximized?: boolean; fullScreen?: boolean } | null;
@@ -387,6 +419,13 @@ async function launchDesktop(
 					exitedEarly,
 				);
 				await verifyShellMarker(controlPath, navigationProbeServer, proc.exited, exitedEarly);
+				await verifyFrameBridge(
+					controlPath,
+					navigationProbePath,
+					navigationProbeServer,
+					proc.exited,
+					exitedEarly,
+				);
 			}
 		}
 		let stopPromise: Promise<void> | undefined;

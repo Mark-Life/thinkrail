@@ -583,8 +583,8 @@ a region comment's Send carrying the card's chat `sessionId` over the wire, HTML
 width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
 reload. `visualize-mockups.spec.ts` (Chromium and WebKit; it shares `fixtures/visualize.ts` with
 `visualize.spec.ts`) pins themed mockups. One `beforeEach` installs the desktop shell marker
-(`installDesktopShellMarker`), so its cards render what the desktop app renders, the scriptless themed
-frame; without the marker a shown mockup is scripted. The card of a mockup under the scratch dir takes the document's
+(`installDesktopShellMarker`, `mockupScripts: false`), so its cards render what the Linux and Windows
+desktop app renders, the scriptless themed frame; without the marker a shown mockup is scripted. The card of a mockup under the scratch dir takes the document's
 height (clamped at 1600 px, Fill width by default) and follows it when a `details` opens, closes and opens
 again; a re-measure leaves the scroll offset of a `scroll-behavior: smooth` document where it was in every
 frame; absolutely positioned boxes and a fixed dialog over a `body` with a pixel `min-height` are whole

@@ -65,6 +65,14 @@ export function scriptlessHtmlMode(path: string): ResourceHtmlMode {
 	return isMockupPath(path) ? "themed" : "static";
 }
 
+function shellRunsMockupScripts(shell: object): boolean {
+	if (!Object.hasOwn(shell, DESKTOP_SHELL_GLOBAL)) return true;
+	const marker: unknown = Reflect.get(shell, DESKTOP_SHELL_GLOBAL);
+	return (
+		typeof marker === "object" && marker !== null && Reflect.get(marker, "mockupScripts") === true
+	);
+}
+
 export function mockupHtmlMode(
 	state: MockupTrustState,
 	workspaceId: string,
@@ -72,6 +80,6 @@ export function mockupHtmlMode(
 	shell: object = globalThis,
 ): ResourceHtmlMode {
 	const scriptless = scriptlessHtmlMode(path);
-	if (scriptless === "static" || Object.hasOwn(shell, DESKTOP_SHELL_GLOBAL)) return scriptless;
+	if (scriptless === "static" || !shellRunsMockupScripts(shell)) return scriptless;
 	return isShownMockup(state, workspaceId, path) ? "scripted" : scriptless;
 }

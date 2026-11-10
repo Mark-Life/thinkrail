@@ -1,5 +1,9 @@
 export const DESKTOP_SHELL_GLOBAL = "__THINKRAIL_DESKTOP_SHELL__";
 
+export interface DesktopShellMarker {
+	readonly mockupScripts: boolean;
+}
+
 export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
 
 export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
