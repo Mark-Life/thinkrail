@@ -6,7 +6,9 @@ import {
 	type WsParams,
 	type WsResult,
 } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { selectWorkspaceTick, useAppStore } from "../store";
+import { RequestError } from "./requestError";
 import { getTransport } from "./wireTransport";
 
 export interface SkillLoadDependencies {
@@ -55,7 +57,11 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			const syncedTick = await prepare(params.workspaceId, false);
 			const created = await deps.createSession(params);
 			const sessionId = parseSessionId(created.sessionId);
-			if (sessionId === null) throw new Error("The host named the new session with an unusable id");
+			if (sessionId === null)
+				throw new RequestError(
+					"INVALID_REPLY",
+					t("app.transport.invalidReply", { method: "session.create" }),
+				);
 			return { result: { ...created, sessionId }, syncedTick };
 		},
 		async getSessionMessages(params: WsParams<"session.getMessages">) {

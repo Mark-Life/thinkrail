@@ -1,19 +1,21 @@
+import { compile } from "@earendil-works/pi-schema";
 import { expect, test } from "@playwright/test";
+import { WS_METHOD_SCHEMAS, type WsParams } from "@thinkrail/contracts";
 import { openFixtureProject, pressPlatformShortcut, worktreeRows } from "./fixtures/app";
 import { readPersistedWorkspaces } from "./fixtures/storedState";
+import { readRequest } from "./fixtures/wire";
+
+const SESSION_PROMPT_PARAMS = compile(WS_METHOD_SCHEMAS["session.prompt"].params);
 
 test("a start from the palette's typed text reaches the Create-workspace dialog prefilled, and Create sends exactly that prompt to the new workspace", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
-	const prompts: { sessionId?: string; text?: string }[] = [];
+	const prompts: WsParams<"session.prompt">[] = [];
 	page.on("websocket", (socket) =>
 		socket.on("framesent", ({ payload }) => {
-			const frame = JSON.parse(String(payload)) as {
-				method?: string;
-				params?: { sessionId?: string; text?: string };
-			};
-			if (frame.method === "session.prompt" && frame.params) prompts.push(frame.params);
+			const frame = readRequest(String(payload), "session.prompt", SESSION_PROMPT_PARAMS);
+			if (frame) prompts.push(frame.params);
 		}),
 	);
 	await openFixtureProject(page);
