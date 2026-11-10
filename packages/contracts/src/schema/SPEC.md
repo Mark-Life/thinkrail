@@ -73,7 +73,8 @@ that map.
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
 - **No schema claims more than it checks.** A `Schema<T>` annotation sits on a builder result that `tsc` checks against `T`,
   or on a raw JSON Schema for what builders cannot express (a recursive `$ref`, `TemplateReadLocation`), which states
-  every field of `T`. `NoParams` and `NoPayload` are any object, because the handler reads nothing from them. The two
+  every field of `T`. `narrowed` in `settings.ts` is the third raw one: an `allOf` of a `Schema<T>` and more rules, so
+  it accepts less than `T`'s schema and claims nothing more. `NoParams` and `NoPayload` are any object, because the handler reads nothing from them. The two
   trust points above are the only exceptions.
 - **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
   `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
