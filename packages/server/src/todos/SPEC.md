@@ -342,6 +342,11 @@ before the already-enqueued replacement pass has reconciled the current plan.
 sidecar suffix, so the owner scans skip it. The plan file itself stays with `pi-todos`, whose `sanitize` repairs
 field by field.
 
+The owner scans read a missing todo folder as no chats. A folder that cannot be listed also reads
+as none and is logged as `STATE_FILE_UNREADABLE`. A best-effort write or removal that fails, marking another chat's
+windows shared or removing a deleted chat's sidecars, is logged through `stateFileWriteFailure` and never stops the
+caller.
+
 Review, baseline and plan (`TodoStore`) paths are built only from a `SessionId`, which is path-safe by type
 ([[submodule-contracts-schema]]). A
 stored session id, such as a review finding's `origin.sessionId` or a plan or review file name, goes through
@@ -373,7 +378,7 @@ stored session id, such as a review finding's `origin.sessionId` or a plan or re
   `listCommits` — the `base..HEAD` enumeration behind `adoptedCommits` + the review resolver's
   synthetic-item reconstruction);
   `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
-  — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
+  — the app-state prefix filtered out of change sets); `@thinkrail/shared/codedError` and `errnoCode`; **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
   value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`); `log`.
 - **Forbidden:** `host`; sibling features other than `workspaces` + `git` + `log`; `pi-todos`' extension entry or
   `tools/` (pi-coupled); any pi package.

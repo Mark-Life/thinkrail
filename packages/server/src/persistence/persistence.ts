@@ -68,6 +68,7 @@ export {
 	observeStateFileProblems,
 	parseEntryRecord,
 	readStateFile,
+	stateFileWriteFailure,
 } from "./stateFile";
 
 export function dataDir(): string {

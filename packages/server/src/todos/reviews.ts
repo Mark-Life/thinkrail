@@ -14,7 +14,14 @@ import {
 import type { SessionId } from "@thinkrail/contracts";
 import { JsonObject, parseSessionId } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
-import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
+import { logger } from "../log";
+import {
+	assertOverwriteAllowed,
+	parseEntryRecord,
+	readStateFile,
+	stateFileWriteFailure,
+} from "../persistence";
+import { noteUnlistedTodoDir } from "./baselines";
 
 const REVIEWS_SUFFIX = ".reviews.json";
 
@@ -34,6 +41,7 @@ export type TodoReviewRecord = Static<typeof TodoReviewRecordSchema>;
 const PendingReviewSchema = obj({ at: str(), shas: opt(arr(str())) }, { open: true });
 type PendingReview = Static<typeof PendingReviewSchema>;
 
+const log = logger("todos");
 const TodoReviewEntry = compile(TodoReviewRecordSchema);
 const PendingEntry = compile(PendingReviewSchema);
 const AutoCycleEntry = compile(num());
@@ -213,7 +221,10 @@ export function dropReviewRecord(
 export function removeSessionReviews(root: string, sessionId: SessionId): void {
 	try {
 		rmSync(reviewsPath(root, sessionId), { force: true });
-	} catch {}
+	} catch (error) {
+		const failure = stateFileWriteFailure(reviewsPath(root, sessionId), error);
+		log.warn("a removed chat's reviews stayed", failure);
+	}
 }
 
 /** Host-restart reconciliation — see host/SPEC.md ("reconcilePendingReviewsOnBoot"). */
@@ -223,7 +234,8 @@ export function clearAllPendingReviews(
 	let names: string[];
 	try {
 		names = readdirSync(join(root, WORKSPACE_TODOS_DIR)).filter((n) => n.endsWith(REVIEWS_SUFFIX));
-	} catch {
+	} catch (error) {
+		noteUnlistedTodoDir(error);
 		return [];
 	}
 	const cleared: { sessionId: SessionId; itemIds: string[] }[] = [];

@@ -50,7 +50,7 @@ new required wire field on `Project`, `Workspace` or a model needs a default at 
 id schemas, which are lenient on purpose ([[submodule-contracts-schema]]): a strict check here would drop a project from the list.
 
 `stateFile.ts` owns the failure rules for `projects`, `workspaces`, `workspace-creations`, `terminals`, `config`,
-`environment`, and, through the barrel (`readStateFile`, `parseEntryRecord`, `assertOverwriteAllowed`, and
+`environment`, and, through the barrel (`readStateFile`, `parseEntryRecord`, `assertOverwriteAllowed`, `stateFileWriteFailure`, and
 `isConfigOverwriteRefused` and `setConfigAside` for `settings`), the `todos` sidecars and `feedback.json`:
 
 - **One bad entry costs one entry.** `parseEntries` and, for a keyed map, `parseEntryRecord` keep what passes and drops the rest. A record that passes also passes
@@ -63,6 +63,8 @@ id schemas, which are lenient on purpose ([[submodule-contracts-schema]]): a str
 - **What cannot be read or copied cannot be replaced.** An I/O failure other than `ENOENT`, or a failed copy, loads empty and
   a later save of that file throws `STATE_FILE_UNREADABLE`, until a read succeeds. The file stays in place. `settings` reads again before each save, so a config that recovered saves on top of the stored values. This keeps a transient
   `EMFILE` from replacing projects with an empty list. `StateFile.failed` tells a file that exists but gave no JSON from a missing one; `didLastConfigReadFail` is what `settings` uses to learn that its config is defaults.
+- **A best-effort write that fails is logged, not swallowed.** Its owner logs `stateFileWriteFailure(path, error)`:
+  `STATE_FILE_WRITE_FAILED` with the errno code, or the refusal's own `STATE_FILE_UNREADABLE`.
 - **Reporting goes through an observer.** `observeStateFileProblems` carries a `CodedError`, because `log` depends on this module.
   `host` wires it to `logger("persistence")` at boot, so the report reaches PostHog as a code only.
 

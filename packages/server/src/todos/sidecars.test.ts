@@ -12,13 +12,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
-import { otherSessionWindows, readBaselines, writeBaselines } from "./baselines";
+import { observeLoggedErrors } from "../log";
+import {
+	markOtherSessionWindowsShared,
+	otherSessionWindows,
+	readBaselines,
+	removeSessionBaselines,
+	writeBaselines,
+} from "./baselines";
 import {
 	clearAllPendingReviews,
 	markReviewPending,
 	readAutoCycles,
 	readReviewMeta,
 	readReviewRecords,
+	removeSessionReviews,
 } from "./reviews";
 
 let root: string;
@@ -34,7 +42,17 @@ beforeEach(() => {
 	mkdirSync(dir, { recursive: true });
 });
 
+let logged: unknown[] = [];
+
+beforeEach(() => {
+	logged = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "todos") logged.push(error);
+	});
+});
+
 afterEach(() => {
+	observeLoggedErrors(null);
 	rmSync(root, { recursive: true, force: true });
 });
 
@@ -127,4 +145,38 @@ test("a kept copy is never read back as a session", () => {
 	expect(otherSessionWindows(root, testSessionId("s0"))).toBe(false);
 	expect(clearAllPendingReviews(root)).toEqual([]);
 	expect(readdirSync(dir).length).toBe(2);
+});
+
+test("a missing todo folder lists no chats and logs nothing", () => {
+	rmSync(dir, { recursive: true });
+	expect(otherSessionWindows(root, testSessionId("s1"))).toBe(false);
+	expect(clearAllPendingReviews(root)).toEqual([]);
+	expect(logged).toEqual([]);
+});
+
+test("a todo folder that cannot be listed is logged with a code", () => {
+	rmSync(dir, { recursive: true });
+	writeFileSync(dir, "not a folder");
+	expect(otherSessionWindows(root, testSessionId("s1"))).toBe(false);
+	expect(clearAllPendingReviews(root)).toEqual([]);
+	expect(logged).toEqual([
+		expect.objectContaining({ code: "STATE_FILE_UNREADABLE" }),
+		expect.objectContaining({ code: "STATE_FILE_UNREADABLE" }),
+	]);
+});
+
+test("a sidecar that cannot be removed or marked shared is logged with a code", () => {
+	mkdirSync(join(dir, "s1.baselines.json", "held"), { recursive: true });
+	mkdirSync(join(dir, "s1.reviews.json", "held"), { recursive: true });
+	removeSessionBaselines(root, testSessionId("s1"));
+	removeSessionReviews(root, testSessionId("s1"));
+	write("s2.baselines.json", { version: 1, items: { t1: { paths: ["a.ts"], head: null } } });
+	mkdirSync(join(dir, "s2.baselines.json.tmp"));
+	markOtherSessionWindowsShared(root, testSessionId("s3"));
+	expect(logged).toEqual([
+		expect.objectContaining({ code: "STATE_FILE_WRITE_FAILED" }),
+		expect.objectContaining({ code: "STATE_FILE_WRITE_FAILED" }),
+		expect.objectContaining({ code: "STATE_FILE_WRITE_FAILED" }),
+	]);
+	expect(readBaselines(root, testSessionId("s2")).t1?.shared).toBeUndefined();
 });

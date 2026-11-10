@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GithubStarAsk } from "@thinkrail/contracts";
 import { fakeFetch } from "../../test/fakeFetch";
+import { observeLoggedErrors } from "../log";
 import {
 	completeSurvey,
 	recordAcceptedMessage,
@@ -703,4 +704,37 @@ test("a feedback file that could not be read is not replaced", () => {
 	mkdirSync(join(directory, "feedback.json"));
 	expect(() => completeSurvey("survey-1", 1)).toThrow("could not be read");
 	expect(readdirSync(join(directory, "feedback.json"))).toEqual([]);
+});
+
+test("a counted message that cannot be saved is logged with a code and kept in memory", () => {
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "feedback") logged.push(error);
+	});
+	try {
+		recordAcceptedMessage("client");
+		mkdirSync(join(directory, `feedback.json.${process.pid}.tmp`));
+		recordAcceptedMessage("client");
+		expect(logged).toEqual([expect.objectContaining({ code: "STATE_FILE_WRITE_FAILED" })]);
+		expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
+		recordAcceptedMessage("client");
+		expect(stored()).toEqual(feedback({ acceptedMessages: 3 }));
+	} finally {
+		observeLoggedErrors(null);
+	}
+});
+
+test("a counted message over an unreadable file logs the refusal's own code", () => {
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "feedback") logged.push(error);
+	});
+	try {
+		mkdirSync(join(directory, "feedback.json"));
+		recordAcceptedMessage("client");
+		expect(logged).toEqual([expect.objectContaining({ code: "STATE_FILE_UNREADABLE" })]);
+	} finally {
+		observeLoggedErrors(null);
+	}
+	expect(() => completeSurvey("", 1)).toThrow(expect.objectContaining({ code: "SURVEY_INVALID" }));
 });

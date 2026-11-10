@@ -14,10 +14,19 @@ import {
 } from "@earendil-works/pi-schema";
 import type { SessionId } from "@thinkrail/contracts";
 import { parseSessionId } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode, hasErrno } from "@thinkrail/shared/errnoCode";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
-import { assertOverwriteAllowed, parseEntryRecord, readStateFile } from "../persistence";
+import { logger } from "../log";
+import {
+	assertOverwriteAllowed,
+	parseEntryRecord,
+	readStateFile,
+	stateFileWriteFailure,
+} from "../persistence";
 
 const BASELINE_SUFFIX = ".baselines.json";
+const log = logger("todos");
 
 const BaselineSchema = obj(
 	{ paths: arr(str()), head: nullable(str()), shared: opt(bool()) },
@@ -60,8 +69,23 @@ export function markOtherSessionWindowsShared(root: string, sessionId: SessionId
 		for (const baseline of open) baseline.shared = true;
 		try {
 			writeBaselines(root, owner, items);
-		} catch {}
+		} catch (error) {
+			log.warn(
+				"another chat's windows were not marked shared",
+				stateFileWriteFailure(baselinePath(root, owner), error),
+			);
+		}
 	}
+}
+
+/** A missing todo folder holds no sidecars; one that cannot be listed is logged. */
+export function noteUnlistedTodoDir(error: unknown): void {
+	if (hasErrno(error, "ENOENT")) return;
+	const reason = errnoCode(error) ?? "no error code";
+	log.warn(
+		"todo sidecars could not be listed",
+		new CodedError("STATE_FILE_UNREADABLE", `${WORKSPACE_TODOS_DIR} was not listed (${reason})`),
+	);
 }
 
 function otherOwners(root: string, sessionId: SessionId): SessionId[] {
@@ -72,7 +96,8 @@ function otherOwners(root: string, sessionId: SessionId): SessionId[] {
 				const owner = parseSessionId(n.slice(0, -BASELINE_SUFFIX.length));
 				return owner === null || owner === sessionId ? [] : [owner];
 			});
-	} catch {
+	} catch (error) {
+		noteUnlistedTodoDir(error);
 		return [];
 	}
 }
@@ -87,7 +112,10 @@ export function dropItemBaseline(root: string, sessionId: SessionId, id: string)
 export function removeSessionBaselines(root: string, sessionId: SessionId): void {
 	try {
 		rmSync(baselinePath(root, sessionId), { force: true });
-	} catch {}
+	} catch (error) {
+		const failure = stateFileWriteFailure(baselinePath(root, sessionId), error);
+		log.warn("a removed chat's baselines stayed", failure);
+	}
 }
 
 export function writeBaselines(

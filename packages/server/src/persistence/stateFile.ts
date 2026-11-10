@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path";
 import type { Validator } from "@earendil-works/pi-schema";
 import { keepValidFields } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { hasErrno } from "@thinkrail/shared/errnoCode";
+import { errnoCode, hasErrno } from "@thinkrail/shared/errnoCode";
 
 type StateFileObserver = (problem: CodedError) => void;
 
@@ -174,6 +174,15 @@ export function parseFields<T>(
 
 export function isOverwriteRefused(path: string): boolean {
 	return refusedOverwrites.has(path);
+}
+
+/** A failed write or removal of a state file, for its owner to log; a refused overwrite keeps its own code. */
+export function stateFileWriteFailure(path: string, error: unknown): CodedError {
+	if (error instanceof CodedError) return error;
+	return new CodedError(
+		"STATE_FILE_WRITE_FAILED",
+		`${basename(path)} was not written (${errnoCode(error) ?? "no error code"})`,
+	);
 }
 
 export function assertOverwriteAllowed(path: string): void {

@@ -2,7 +2,14 @@ import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { bool, compile, int, nullable, obj, opt, str } from "@earendil-works/pi-schema";
 import type { GithubStarAsk, SurveyInvitationResponse } from "@thinkrail/contracts";
-import { assertOverwriteAllowed, dataDir, readStateFile } from "../persistence";
+import { CodedError } from "@thinkrail/shared/codedError";
+import { logger } from "../log";
+import {
+	assertOverwriteAllowed,
+	dataDir,
+	readStateFile,
+	stateFileWriteFailure,
+} from "../persistence";
 import { fetchGithubStars } from "./githubStars";
 import {
 	currentInAppSurvey,
@@ -58,6 +65,8 @@ const DEFAULT_STATE: FeedbackState = {
 	githubStarAsked: false,
 };
 
+const log = logger("feedback");
+
 let cachedState: FeedbackState | null = null;
 let claimedClient: string | null = null;
 let publishInvitation: FeedbackPublisher | null = null;
@@ -65,7 +74,7 @@ let publishGithubStar: GithubStarPublisher | null = null;
 let githubStarAskInFlight = false;
 
 function readState(): FeedbackState {
-	const file = readStateFile(join(dataDir(), "feedback.json"));
+	const file = readStateFile(feedbackFile());
 	if (StoredState.check(file.value)) {
 		const { acceptedMessages, nextInvitationAt, dismissed } = file.value;
 		return {
@@ -87,9 +96,13 @@ function loadState(): FeedbackState {
 	return cachedState;
 }
 
+function feedbackFile(): string {
+	return join(dataDir(), "feedback.json");
+}
+
 function writeState(next: FeedbackState): void {
 	const directory = dataDir();
-	const file = join(directory, "feedback.json");
+	const file = feedbackFile();
 	assertOverwriteAllowed(file);
 	const temporary = `${file}.${process.pid}.tmp`;
 	mkdirSync(directory, { recursive: true });
@@ -107,6 +120,17 @@ function writeState(next: FeedbackState): void {
 function saveState(next: FeedbackState): void {
 	writeState(next);
 	cachedState = next;
+}
+
+/** The in-memory state already changed; a failed write is logged and the next save carries it. */
+function writeStateOrLog(next: FeedbackState): boolean {
+	try {
+		writeState(next);
+		return true;
+	} catch (error) {
+		log.warn("feedback state was not saved", stateFileWriteFailure(feedbackFile(), error));
+		return false;
+	}
 }
 
 function addWithinSafeRange(value: number, amount: number): number {
@@ -128,7 +152,9 @@ export function surveyIsCompleted(id: string, iteration: number): boolean {
 }
 
 export function completeSurvey(id: string, iteration: number): void {
-	if (!id || !SurveyIteration.check(iteration)) throw new Error("Invalid survey completion");
+	if (!id || !SurveyIteration.check(iteration)) {
+		throw new CodedError("SURVEY_INVALID", "Invalid survey completion");
+	}
 	const next = { ...loadState(), submittedSurveyId: id, submittedIteration: iteration };
 	cachedState = next;
 	claimedClient = null;
@@ -142,11 +168,7 @@ export function recordAcceptedMessage(clientKey: string): void {
 		acceptedMessages: addWithinSafeRange(current.acceptedMessages, 1),
 	};
 	cachedState = next;
-	try {
-		writeState(next);
-	} catch {
-		return;
-	}
+	if (!writeStateOrLog(next)) return;
 	if (askForGithubStar(clientKey)) return;
 	if (surveyRefreshDue()) void refreshInAppSurvey().then(() => maybeOffer(clientKey));
 	else maybeOffer(clientKey);
@@ -176,9 +198,7 @@ function deliverGithubStar(clientKey: string, ask: GithubStarAsk): void {
 		return;
 	}
 	cachedState = { ...loadState(), githubStarAsked: true };
-	try {
-		writeState(cachedState);
-	} catch {}
+	writeStateOrLog(cachedState);
 }
 
 function maybeOffer(clientKey: string): void {
@@ -206,9 +226,7 @@ function surveyOfferAvailable(): boolean {
 function recordInvitation(): void {
 	const next = { ...loadState(), lastInvitedAt: surveyNow() };
 	cachedState = next;
-	try {
-		writeState(next);
-	} catch {}
+	writeStateOrLog(next);
 }
 
 function deliverInvitation(clientKey: string): boolean {
