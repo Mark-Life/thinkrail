@@ -487,7 +487,7 @@ test("a scripted frame carries exactly allow-scripts, its own notice and the unp
 		"sandbox",
 		"class",
 	]);
-	expect(markup).toContain('data-testid="html-scripted-notice"');
+	expect(markup).toContain('data-testid="html-viewport"');
 	expect(markup).not.toContain('data-testid="html-disabled-notice"');
 	expect(markup).toContain("draw()");
 	expect(parsed).toBe(0);

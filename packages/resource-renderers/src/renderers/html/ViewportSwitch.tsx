@@ -15,12 +15,8 @@ export function HtmlPreviewNotice({
 	const t = useT();
 	if (useResourceEnvironment().compact) return null;
 	return (
-		<div className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-feedback-info">
-			{scripted ? (
-				<span data-testid="html-scripted-notice" className="mr-auto">
-					{t("viewer.html.scriptedNotice")}
-				</span>
-			) : (
+		<div className="flex shrink-0 flex-wrap items-center justify-end gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-feedback-info">
+			{scripted ? null : (
 				<span data-testid="html-disabled-notice" className="mr-auto">
 					{t("viewer.html.disabledNotice")}
 				</span>

@@ -111,9 +111,7 @@ test("a shown mockup runs its scripts and the card follows the content height", 
 	const { preview, view, iframe, frame, box } = mockupView;
 	await expect(view).toHaveAttribute("data-html-mode", "scripted");
 	await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
-	await expect(preview.getByTestId("html-scripted-notice")).toContainText(
-		"fetch, XHR and WebSocket are blocked",
-	);
+	await expect(preview.getByTestId("html-viewport")).toBeVisible();
 	await expect(preview.getByTestId("html-disabled-notice")).toHaveCount(0);
 	await expect(frame.locator("#out")).toHaveText("script ran");
 	expect(await iframe.getAttribute("srcdoc")).toContain(
