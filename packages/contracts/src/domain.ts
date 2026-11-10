@@ -13,7 +13,6 @@ import type {
 	ResourceTally,
 	ReviewCommentKind,
 	ReviewReadingStep,
-	ReviewSnapshot,
 	SurveyRatingScale,
 	SystemThemePair,
 	TerminalWindowsShell,
@@ -84,15 +83,6 @@ export function firstPromptOfTexts(texts: Iterable<string>): string | undefined 
 }
 
 export const DEFAULT_WORKSPACE_NAME = "Default";
-
-export type WorkspaceSkillChange = "none" | "detected" | "unknown";
-
-export interface WorkspaceFsChangedPayload {
-	workspaceId: string;
-	paths: string[];
-	truncated: boolean;
-	skillChange: WorkspaceSkillChange;
-}
 
 const THINKING_LEVEL_SET = {
 	off: true,
@@ -413,29 +403,6 @@ export function isJbcentralConnected(status: JbcentralStatus): boolean {
 	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
 }
 
-export type LoginFrame =
-	| { kind: "authUrl"; url: string; instructions?: string }
-	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
-	| { kind: "select"; message: string; options: { id: string; label: string }[] }
-	| {
-			kind: "prompt";
-			message: string;
-			placeholder?: string;
-			allowEmpty?: boolean;
-			secret?: boolean;
-	  }
-	| { kind: "progress"; message: string }
-	| { kind: "success" }
-	| { kind: "error"; message: string };
-
-export interface LoginPush {
-	loginId: string;
-	providerId: string;
-	frame: LoginFrame;
-	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
-	target?: { kind: "mcp"; workspaceId: string; serverName: string };
-}
-
 export type ThemeId = string;
 
 export function isThemeMode(value: unknown): value is ThemeMode {
@@ -558,10 +525,6 @@ export function isSkillGroupEnabled(
 	if (project?.enabledGroups?.includes(group)) return true;
 	if (project?.disabledGroups?.includes(group)) return false;
 	return otherAgentSkills || !OTHER_AGENT_SKILL_GROUPS.includes(group);
-}
-
-export interface GithubStarAsk {
-	stars: number | null;
 }
 
 export const SURVEY_OPEN_TEXT_LIMIT = 2000;
@@ -787,21 +750,6 @@ export const MAX_SEARCH_QUERY_LENGTH = 200;
 export const MAX_SEARCH_GROUP_LIMIT = 50;
 
 export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
-
-export interface ReviewChangedPayload extends ReviewSnapshot {
-	workspaceId: string;
-}
-
-/** A plan review that failed after `todo.startReview` acknowledged — the detached button/auto path has no
- * chat of its own, so the owning plan session raises the failure as a toast. `sessionId` routes it to that
- * plan only; duplicate views of one session dedupe on the toast body. See apps/web/src/panels/SPEC.md. */
-export interface ReviewFailedPayload {
-	workspaceId: string;
-	sessionId: string;
-	itemId: string;
-	itemTitle: string;
-	message: string;
-}
 
 /** Slim view of a sent review finding on a todo-review-fix message (path/lines pre-resolved host-side). */
 export interface ReviewFixComment {

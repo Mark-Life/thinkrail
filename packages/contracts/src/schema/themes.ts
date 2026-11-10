@@ -1,5 +1,5 @@
 import { arr, lit, oneOf, opt, type Static, str, union, unknown } from "@earendil-works/pi-schema";
-import { Ack, NoParams, wireObj } from "./wire";
+import { Ack, NoParams, NoPayload, wireObj } from "./wire";
 
 export const UserThemeFileOk = wireObj({
 	fileName: str(),
@@ -36,4 +36,8 @@ export type UserThemesSnapshot = Static<typeof UserThemesSnapshot>;
 export const THEMES_METHODS = {
 	"themes.list": { params: NoParams, result: UserThemesSnapshot },
 	"themes.reveal": { params: NoParams, result: Ack },
+};
+
+export const THEMES_CHANNELS = {
+	"themes.changed": NoPayload,
 };

@@ -131,6 +131,9 @@ export type SessionSummary = Static<typeof SessionSummary>;
 
 const SessionTarget = wireObj({ sessionId: str() });
 const ScopedSession = wireObj({ workspaceId: str(), sessionId: str() });
+
+export const SessionDeletedPayload = ScopedSession;
+export type SessionDeletedPayload = Static<typeof ScopedSession>;
 const UserMessageParams = wireObj({
 	sessionId: str(),
 	text: str(),
@@ -223,4 +226,12 @@ export const SESSION_METHODS = {
 		}),
 		result: ResourceHistoryPage,
 	},
+};
+
+export const SESSION_CHANNELS = {
+	"pi.event": wireObj({ sessionId: str(), event: wireObj({ type: str() }) }),
+	"session.created": SessionSummary,
+	"session.deleted": SessionDeletedPayload,
+	"session.resourcesChanged": ScopedSession,
+	"session.state": SessionStateRecord,
 };

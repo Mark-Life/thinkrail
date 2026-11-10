@@ -9,7 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
-import { Ack, NoParams, wireObj } from "./wire";
+import { Ack, NoParams, NoPayload, wireObj } from "./wire";
 
 export const ProviderAuthKind = oneOf(["oauth", "api-key", "env", "central", "other"]);
 export type ProviderAuthKind = Static<typeof ProviderAuthKind>;
@@ -141,6 +141,41 @@ export type JbcentralQuotaSnapshot = Static<typeof JbcentralQuotaSnapshot>;
 export const LoginReply = wireObj({ loginId: str(), value: str() });
 export type LoginReply = Static<typeof LoginReply>;
 
+export const LoginFrame = union([
+	wireObj({ kind: lit("authUrl"), url: str(), instructions: opt(str()) }),
+	wireObj({
+		kind: lit("deviceCode"),
+		userCode: str(),
+		verificationUri: str(),
+		expiresInSeconds: opt(num()),
+	}),
+	wireObj({
+		kind: lit("select"),
+		message: str(),
+		options: arr(wireObj({ id: str(), label: str() })),
+	}),
+	wireObj({
+		kind: lit("prompt"),
+		message: str(),
+		placeholder: opt(str()),
+		allowEmpty: opt(bool()),
+		secret: opt(bool()),
+	}),
+	wireObj({ kind: lit("progress"), message: str() }),
+	wireObj({ kind: lit("success") }),
+	wireObj({ kind: lit("error"), message: str() }),
+]);
+export type LoginFrame = Static<typeof LoginFrame>;
+
+export const LoginPush = wireObj({
+	loginId: str(),
+	providerId: str(),
+	frame: LoginFrame,
+	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
+	target: opt(wireObj({ kind: lit("mcp"), workspaceId: str(), serverName: str() })),
+});
+export type LoginPush = Static<typeof LoginPush>;
+
 export const PROVIDER_METHODS = {
 	"provider.status": { params: NoParams, result: ProviderStatusReport },
 	"provider.detect": { params: NoParams, result: wireObj({ accounts: arr(DetectedAccount) }) },
@@ -161,4 +196,9 @@ export const PROVIDER_METHODS = {
 		params: wireObj({ force: opt(bool()) }),
 		result: JbcentralQuotaSnapshot,
 	},
+};
+
+export const PROVIDER_CHANNELS = {
+	"provider.login": LoginPush,
+	"provider.changed": NoPayload,
 };

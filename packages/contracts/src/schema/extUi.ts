@@ -88,3 +88,7 @@ export type ExtUiRequest = Static<typeof ExtUiRequest>;
 
 export const ExtUiResponse = wireObj({ id: str(), value: union([str(), bool(), nul()]) });
 export type ExtUiResponse = Static<typeof ExtUiResponse>;
+
+export const EXT_UI_CHANNELS = {
+	"pi.extensionUi": ExtUiRequest,
+};

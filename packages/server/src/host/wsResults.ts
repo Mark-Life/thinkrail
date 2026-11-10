@@ -1,11 +1,18 @@
 import { appendFileSync } from "node:fs";
 import type { Validator } from "@earendil-works/pi-schema";
-import { describeFailure, type WsMethodName, wsResultValidator } from "@thinkrail/contracts";
+import {
+	describeFailure,
+	type WsChannel,
+	type WsChannelPayload,
+	type WsMethodName,
+	wsPushValidator,
+	wsResultValidator,
+} from "@thinkrail/contracts";
 import { logger } from "../log";
 
 const log = logger("wsResults");
 
-/** Whether replies are checked: in every test run and in hosts started with `THINKRAIL_CHECK_WS_RESULTS=1`. */
+/** Whether replies and pushes are checked: in every test run and in hosts started with `THINKRAIL_CHECK_WS_RESULTS=1`. */
 export function wireChecksOn(env: Record<string, string | undefined>) {
 	return env.THINKRAIL_CHECK_WS_RESULTS === "1" || env.NODE_ENV === "test";
 }
@@ -27,4 +34,14 @@ function checkOnWire<T>(kind: string, name: string, validator: () => Validator<T
 /** Test harnesses only: refuses a reply whose JSON form breaks its result schema. @throws `Error` naming the method and fields. */
 export function checkWsResult(method: WsMethodName, result: unknown) {
 	checkOnWire("result", method, () => wsResultValidator(method), result);
+}
+
+/** Test harnesses only: refuses a push whose JSON form breaks its channel schema. @throws `Error` naming the channel and fields. */
+export function checkWsPush(channel: WsChannel, data: unknown) {
+	checkOnWire("push", channel, () => wsPushValidator(channel), data);
+}
+
+export function pushFrame<C extends WsChannel>(channel: C, data: WsChannelPayload<C>) {
+	checkWsPush(channel, data);
+	return JSON.stringify({ channel, data });
 }

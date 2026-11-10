@@ -26,6 +26,9 @@ export function partialWireObj<const P extends Properties>(
 /** The params of a method that takes none: any object passes, and the handler reads none of it. */
 export const NoParams = map(unknown());
 
+/** The payload of a channel that only says something changed. */
+export const NoPayload = NoParams;
+
 /** The result of a method that reports only success. */
 export const Ack = wireObj({ ok: lit(true) });
 export type Ack = Static<typeof Ack>;

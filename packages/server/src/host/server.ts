@@ -4,12 +4,11 @@ import type {
 	HostPlatform,
 	HostUpdateNotice,
 	ServerWelcome,
-	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionStateRecord,
+	SessionSummary,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
-	WsChannel,
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
@@ -212,6 +211,7 @@ import {
 } from "./terminalSend";
 import { titleToolHost } from "./titleTool";
 import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
+import { pushFrame } from "./wsResults";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -496,9 +496,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				setupObservation.observe(setupCapture, {
 					project_present: welcome.projects.length > 0 ? "yes" : "no",
 				});
-				const welcomeStatus = ws.send(
-					JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }),
-				);
+				const welcomeStatus = ws.send(pushFrame(WS_CHANNELS.serverWelcome, welcome));
 				const welcomeDelivery = terminalDeliveryForSendStatus(welcomeStatus);
 				if (welcomeDelivery === "unavailable") {
 					ws.close();
@@ -633,7 +631,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdateNotice = notice;
 		server.publish(
 			WS_CHANNELS.hostUpdateAvailable,
-			JSON.stringify({ channel: WS_CHANNELS.hostUpdateAvailable, data: notice }),
+			pushFrame(WS_CHANNELS.hostUpdateAvailable, notice),
 		);
 	};
 
@@ -698,7 +696,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const ws = sockets.get(clientKey);
 		if (!ws) return "unavailable";
 		try {
-			const delivery = terminalDeliveryForSendStatus(ws.send(JSON.stringify({ channel, data })));
+			const delivery = terminalDeliveryForSendStatus(ws.send(pushFrame(channel, data)));
 			if (delivery !== "delivered") terminalBackpressured.add(clientKey);
 			return delivery;
 		} catch {
@@ -712,7 +710,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const ws = sockets.get(clientKey);
 		if (!ws || ws.data.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION) return false;
 		try {
-			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} })) !== 0;
+			return ws.send(pushFrame(WS_CHANNELS.feedbackInterview, {})) !== 0;
 		} catch {
 			ws.close();
 			return false;
@@ -729,9 +727,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			const ws = githubStarSocket(clientKey);
 			if (!ws) return false;
 			try {
-				return (
-					ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackGithubStar, data: ask })) !== 0
-				);
+				return ws.send(pushFrame(WS_CHANNELS.feedbackGithubStar, ask)) !== 0;
 			} catch {
 				ws.close();
 				return false;
@@ -793,18 +789,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				});
 			} catch {}
 		}
-		server.publish(
-			WS_CHANNELS.projectUpdated,
-			JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: project }),
-		);
+		server.publish(WS_CHANNELS.projectUpdated, pushFrame(WS_CHANNELS.projectUpdated, project));
 	});
 
 	setTerminalTabsPublisher((workspaceId, tabs) => {
 		const data: TerminalTabsPush = { workspaceId, tabs };
-		server.publish(
-			WS_CHANNELS.terminalTabs,
-			JSON.stringify({ channel: WS_CHANNELS.terminalTabs, data }),
-		);
+		server.publish(WS_CHANNELS.terminalTabs, pushFrame(WS_CHANNELS.terminalTabs, data));
 	});
 
 	interruptWorkspaceCreations();
@@ -815,30 +805,36 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setWorkspaceCreationHandoff(workspaceCreationHandoff);
 	void replayPendingHandoffs().catch((err) => log.warn("replaying workspace handoffs failed", err));
 	setWorkspaceCreationPublisher((event) => {
-		const channel =
-			event.kind === "changed"
-				? WS_CHANNELS.workspaceCreationChanged
-				: WS_CHANNELS.workspaceCreationRemoved;
-		const data = event.kind === "changed" ? event.creation : event.removed;
-		server.publish(channel, JSON.stringify({ channel, data }));
+		if (event.kind === "changed") {
+			server.publish(
+				WS_CHANNELS.workspaceCreationChanged,
+				pushFrame(WS_CHANNELS.workspaceCreationChanged, event.creation),
+			);
+			return;
+		}
+		server.publish(
+			WS_CHANNELS.workspaceCreationRemoved,
+			pushFrame(WS_CHANNELS.workspaceCreationRemoved, event.removed),
+		);
 	});
 
 	setWorkspacePublisher((event) => {
+		if (event.kind === "removed") {
+			server.publish(
+				WS_CHANNELS.workspaceRemoved,
+				pushFrame(WS_CHANNELS.workspaceRemoved, { projectId: event.projectId, id: event.id }),
+			);
+			return;
+		}
 		const channel =
-			event.kind === "created"
-				? WS_CHANNELS.workspaceCreated
-				: event.kind === "updated"
-					? WS_CHANNELS.workspaceUpdated
-					: WS_CHANNELS.workspaceRemoved;
-		const data =
-			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
-		server.publish(channel, JSON.stringify({ channel, data }));
+			event.kind === "created" ? WS_CHANNELS.workspaceCreated : WS_CHANNELS.workspaceUpdated;
+		server.publish(channel, pushFrame(channel, event.workspace));
 	});
 
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
 		server.publish(
 			WS_CHANNELS.workspaceFsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
+			pushFrame(WS_CHANNELS.workspaceFsChanged, payload),
 		);
 		reanchorWorkspace(payload.workspaceId);
 		const changedRoot = loadWorkspaces().find((w) => w.id === payload.workspaceId)?.worktreePath;
@@ -864,22 +860,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	primeUserPiSettings();
 	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
 	setPiPackagesPublisher(() =>
-		server.publish(
-			WS_CHANNELS.packagesChanged,
-			JSON.stringify({ channel: WS_CHANNELS.packagesChanged, data: {} }),
-		),
+		server.publish(WS_CHANNELS.packagesChanged, pushFrame(WS_CHANNELS.packagesChanged, {})),
 	);
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
-	const nudge = (channel: WsChannel) => () =>
-		server.publish(channel, JSON.stringify({ channel, data: {} }));
+	const nudge = (channel: "locales.changed" | "themes.changed" | "fonts.changed") => () =>
+		server.publish(channel, pushFrame(channel, {}));
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
 	setSpeechPublisher((status) =>
-		server.publish(
-			WS_CHANNELS.speechChanged,
-			JSON.stringify({ channel: WS_CHANNELS.speechChanged, data: status }),
-		),
+		server.publish(WS_CHANNELS.speechChanged, pushFrame(WS_CHANNELS.speechChanged, status)),
 	);
 	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
@@ -898,17 +888,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setReviewPublisher((payload) => {
 		server.publish(
 			WS_CHANNELS.reviewChanged,
-			JSON.stringify({
-				channel: WS_CHANNELS.reviewChanged,
-				data: markClientStale(payload, payload.workspaceId),
-			}),
+			pushFrame(WS_CHANNELS.reviewChanged, markClientStale(payload, payload.workspaceId)),
 		);
 	});
 	setReviewFailedPublisher((payload) => {
-		server.publish(
-			WS_CHANNELS.reviewFailed,
-			JSON.stringify({ channel: WS_CHANNELS.reviewFailed, data: payload }),
-		);
+		server.publish(WS_CHANNELS.reviewFailed, pushFrame(WS_CHANNELS.reviewFailed, payload));
 	});
 	setReviewCommentHandler((sessionId, commentId, note) => {
 		const capture = additionalCapture();
@@ -921,10 +905,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
-		server.publish(
-			WS_CHANNELS.settingsChanged,
-			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
-		);
+		server.publish(WS_CHANNELS.settingsChanged, pushFrame(WS_CHANNELS.settingsChanged, config));
 		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
 			setupObservation.clear();
 			runObservation.clear();
@@ -953,49 +934,37 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.otherAgentSkills !== undefined) void refreshSkillAdmission();
 	});
 
-	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
-		server.publish(
-			WS_CHANNELS.sessionCreated,
-			JSON.stringify({ channel: WS_CHANNELS.sessionCreated, data: payload }),
-		);
+	setSessionCreatedPublisher((payload: SessionSummary) => {
+		server.publish(WS_CHANNELS.sessionCreated, pushFrame(WS_CHANNELS.sessionCreated, payload));
 	});
 
 	setSessionStatePublisher((record: SessionStateRecord) => {
 		stampSessionActivity(record);
-		server.publish(
-			WS_CHANNELS.sessionState,
-			JSON.stringify({ channel: WS_CHANNELS.sessionState, data: record }),
-		);
+		server.publish(WS_CHANNELS.sessionState, pushFrame(WS_CHANNELS.sessionState, record));
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
-		server.publish(
-			WS_CHANNELS.sessionDeleted,
-			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
-		);
+		server.publish(WS_CHANNELS.sessionDeleted, pushFrame(WS_CHANNELS.sessionDeleted, payload));
 	});
 
 	setMcpLoginPublisher((push, ownerClientKey) => {
 		const ws = sockets.get(ownerClientKey);
 		if (!ws) return;
 		try {
-			ws.send(JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }));
+			ws.send(pushFrame(WS_CHANNELS.providerLogin, push));
 		} catch {}
 	});
 
 	setMcpStatusPublisher((snapshot) => {
-		server.publish(
-			WS_CHANNELS.mcpStatus,
-			JSON.stringify({ channel: WS_CHANNELS.mcpStatus, data: snapshot }),
-		);
+		server.publish(WS_CHANNELS.mcpStatus, pushFrame(WS_CHANNELS.mcpStatus, snapshot));
 	});
 
 	setSessionResourcesPublisher((payload) => {
 		server.publish(
 			WS_CHANNELS.sessionResourcesChanged,
-			JSON.stringify({ channel: WS_CHANNELS.sessionResourcesChanged, data: payload }),
+			pushFrame(WS_CHANNELS.sessionResourcesChanged, payload),
 		);
 	});
 
@@ -1009,10 +978,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 	setTurnPublisher((turn) => {
-		server.publish(
-			WS_CHANNELS.turnChanged,
-			JSON.stringify({ channel: WS_CHANNELS.turnChanged, data: turn }),
-		);
+		server.publish(WS_CHANNELS.turnChanged, pushFrame(WS_CHANNELS.turnChanged, turn));
 	});
 	setSessionPublisher((payload) => {
 		runObservation.observe(payload.sessionId, payload.event);
@@ -1021,10 +987,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
-		server.publish(
-			WS_CHANNELS.piEvent,
-			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
-		);
+		server.publish(WS_CHANNELS.piEvent, pushFrame(WS_CHANNELS.piEvent, payload));
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			const observeCompletion = taskObservation.toolFinished(payload.sessionId, payload.event);
@@ -1037,7 +1000,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setExtUiPublisher((request, audience) => {
-		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
+		const frame = pushFrame(WS_CHANNELS.piExtensionUi, request);
 		if (!audience) {
 			server.publish(WS_CHANNELS.piExtensionUi, frame);
 			return;
@@ -1051,16 +1014,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	const publishProviderChanged = () => {
-		server.publish(
-			WS_CHANNELS.providerChanged,
-			JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }),
-		);
+		server.publish(WS_CHANNELS.providerChanged, pushFrame(WS_CHANNELS.providerChanged, {}));
 	};
 	setLoginPublisher((push, generation) => {
-		server.publish(
-			WS_CHANNELS.providerLogin,
-			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
-		);
+		server.publish(WS_CHANNELS.providerLogin, pushFrame(WS_CHANNELS.providerLogin, push));
 		if (push.frame.kind === "success" && !push.target) publishProviderChanged();
 		trackLoginOutcome(push, generation);
 	});

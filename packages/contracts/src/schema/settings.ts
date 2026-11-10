@@ -214,3 +214,7 @@ export type AppConfigUpdate = Static<typeof AppConfigUpdate>;
 export const SETTINGS_METHODS = {
 	"settings.update": { params: wireObj({ config: AppConfigUpdate }), result: AppConfig },
 };
+
+export const SETTINGS_CHANNELS = {
+	"settings.changed": AppConfig,
+};

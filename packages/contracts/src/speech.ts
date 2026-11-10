@@ -1,4 +1,9 @@
-import { SPEECH_MODELS, type SpeechModel } from "./schema";
+import {
+	SPEECH_ERROR_CODES,
+	SPEECH_MODELS,
+	type SpeechErrorCode,
+	type SpeechModel,
+} from "./schema";
 
 export function isSpeechModel(value: unknown): value is SpeechModel {
 	return SPEECH_MODELS.some((model) => model === value);
@@ -9,62 +14,8 @@ export const SPEECH_SOCKET_ROUTE = "/speech";
 /** Clients send mono little-endian PCM16 binary frames at this rate. */
 export const SPEECH_SAMPLE_RATE = 16_000;
 
-export const SPEECH_ERROR_CODES = [
-	"SPEECH_UNSUPPORTED_PLATFORM",
-	"SPEECH_NOT_INSTALLED",
-	"SPEECH_INSTALL_BUSY",
-	"SPEECH_DOWNLOAD_FAILED",
-	"SPEECH_CHECKSUM_MISMATCH",
-	"SPEECH_DISK_SPACE",
-	"SPEECH_ENGINE_FAILED",
-	"SPEECH_BUSY",
-	"SPEECH_PROTOCOL",
-] as const;
-export type SpeechErrorCode = (typeof SPEECH_ERROR_CODES)[number];
-
 export function isSpeechErrorCode(value: unknown): value is SpeechErrorCode {
 	return SPEECH_ERROR_CODES.some((code) => code === value);
-}
-
-export type SpeechInstallPhase = "runtime" | "model";
-
-export type SpeechInstallState =
-	| { status: "not-installed" }
-	| {
-			status: "installing";
-			model: SpeechModel;
-			phase: SpeechInstallPhase;
-			receivedBytes: number;
-			totalBytes: number;
-	  }
-	| { status: "ready"; model: SpeechModel }
-	| {
-			status: "failed";
-			model: SpeechModel;
-			code: SpeechErrorCode;
-			/** A previously installed model that still works after a failed switch. */
-			usable: SpeechModel | null;
-	  };
-
-/** `path` is a user-installed `nemo-speech`; ThinkRail never deletes it. */
-export interface SpeechRuntimeInfo {
-	source: "managed" | "path";
-	version: string;
-	backend: string;
-}
-
-export type SpeechEngineState = "stopped" | "starting" | "ready" | "failed";
-
-/** Voice input as the host reports it in `ServerWelcome.speech` and on `speech.changed`. */
-export interface SpeechStatus {
-	supported: boolean;
-	install: SpeechInstallState;
-	runtime: SpeechRuntimeInfo | null;
-	engine: SpeechEngineState;
-	/** Bytes ThinkRail's own speech files occupy on the host. */
-	diskBytes: number;
-	/** What installing each model would download now, given what is already present. */
-	downloadBytes: Record<SpeechModel, number>;
 }
 
 /**
