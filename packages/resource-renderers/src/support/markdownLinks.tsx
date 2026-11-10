@@ -1,4 +1,5 @@
 import type { WorkspaceId } from "@thinkrail/contracts";
+import type { Nodes, Root } from "mdast";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 import type { ResourceHost } from "../host";
@@ -46,20 +47,13 @@ function relativePathname(href: string): string {
 	return i < 0 ? href : href.slice(0, i);
 }
 
-interface MdNode {
-	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hProperties?: Record<string, unknown> };
-}
-
-function headingText(node: MdNode): string {
-	if (typeof node.value === "string") return node.value;
-	return (node.children ?? []).map(headingText).join("");
+function headingText(node: Nodes): string {
+	if ("value" in node) return node.value;
+	return "children" in node ? node.children.map(headingText).join("") : "";
 }
 
 export function remarkHeadingIds() {
-	return (tree: MdNode): void => {
+	return (tree: Root): void => {
 		const seen = new Map<string, number>();
 		walk(tree, (node) => {
 			if (node.type !== "heading") return;
@@ -73,9 +67,9 @@ export function remarkHeadingIds() {
 	};
 }
 
-function walk(node: MdNode, visit: (n: MdNode) => void): void {
+function walk(node: Nodes, visit: (n: Nodes) => void): void {
 	visit(node);
-	for (const child of node.children ?? []) walk(child, visit);
+	if ("children" in node) for (const child of node.children) walk(child, visit);
 }
 
 function scrollToAnchor(id: string): void {

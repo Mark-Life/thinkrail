@@ -1,4 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import type {
+	AssistantMessage,
+	StopReason,
+	ToolResultMessage,
+	UserMessage,
+} from "@earendil-works/pi-ai";
 import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	ACCEPTED_IMAGE_TYPES,
@@ -37,9 +43,26 @@ import {
 import { CODE_FONT_SIZE, JBCENTRAL_QUOTA_REFRESH_SECONDS, type ResourceRecord } from "./schema";
 
 describe("isRetriedAttempt", () => {
-	const failed = { role: "assistant", stopReason: "error" };
-	const ok = { role: "assistant", stopReason: "stop" };
-	const userMsg = { role: "user" };
+	const assistant = (stopReason: StopReason): AssistantMessage => ({
+		role: "assistant",
+		content: [],
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: "claude",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason,
+		timestamp: 0,
+	});
+	const failed = assistant("error");
+	const ok = assistant("stop");
+	const userMsg: UserMessage = { role: "user", content: "go", timestamp: 0 };
 
 	test("a failed assistant immediately followed by the retried assistant is superseded", () => {
 		expect(isRetriedAttempt([userMsg, failed, ok], 1)).toBe(true);
@@ -63,7 +86,14 @@ describe("isRetriedAttempt", () => {
 	});
 
 	test("an intervening toolResult breaks adjacency — pi's _prepareRetry re-runs the turn directly, so anything between the two means this was not a retry", () => {
-		const toolResult = { role: "toolResult" };
+		const toolResult: ToolResultMessage = {
+			role: "toolResult",
+			toolCallId: "call",
+			toolName: "read",
+			content: [],
+			isError: false,
+			timestamp: 0,
+		};
 		expect(isRetriedAttempt([userMsg, failed, toolResult, ok], 1)).toBe(false);
 	});
 });

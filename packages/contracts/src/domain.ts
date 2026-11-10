@@ -34,6 +34,7 @@ import {
 	type ThemeMode,
 	type ThemePreference,
 	UserFontFile,
+	type WireAgentMessage,
 } from "./schema";
 
 export const FIRST_PROMPT_MAX_LENGTH = 200;
@@ -498,10 +499,8 @@ export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
 
 export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
 
-export function isRetriedAttempt(
-	messages: readonly { role: string; stopReason?: string }[],
-	index: number,
-): boolean {
+/** True when the assistant message at `index` failed and pi's auto-retry produced the next assistant message. */
+export function isRetriedAttempt(messages: readonly WireAgentMessage[], index: number): boolean {
 	const message = messages[index];
 	if (message?.role !== "assistant" || message.stopReason !== "error") return false;
 	return messages[index + 1]?.role === "assistant";
