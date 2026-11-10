@@ -324,26 +324,18 @@ the palette ranks with — kept here so host-side search can rank with the same 
     findings) is what the chat card renders — the host resolves each finding's `path`/lines from its
     anchor at send time so the client re-parses nothing. See [[submodule-server-todos]] +
     [[submodule-web-chat]].
-- **domain.ts** — the rules and constants over the app entities. Their schemas live in `schema/` (`Project` and
-  `ProjectPathStatus` in `schema/project.ts`, `Workspace` in `schema/workspace.ts`): `Project` (git repo + unique `slug` + optional **`closed: true`** — the
-  persisted open-rail membership bit; absence means open for backward compatibility, and closing never
-  changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
-  (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
-  **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
-  plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
-  default), which gate what its skills contribute. **`isSkillGroupEnabled`** is the one group rule shared by
-  the host gate and the Skills dialog: a project's explicit choice (on wins over off) beats
-  `AppConfig.otherAgentSkills`, which governs only **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`).
-  **`SKILL_LISTING_MIN_TOKENS`** / **`SKILL_LISTING_MAX_TOKENS`** (4K / 8K) bound the host's per-request skill
-  listing budget, so the Skills dialog's size line names the same limits; a workspace layers
-  **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
-  **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
-  force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
-  optional **`Workspace.subagentMaxConcurrentOverride`** likewise overrides `AppConfig.subagentMaxConcurrent`;
-  "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
-  walk), **`ProjectPathStatus`** (a
-  candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
-  `git init`, or shows an error), `Workspace` (git worktree; its
+- **domain.ts** — the rules and constants over the app entities; each entity's shape is its schema in `schema/`
+  ([[submodule-contracts-schema]]). **`isSkillGroupEnabled`** is the one group rule shared by the host gate and the
+  Skills dialog: a project's explicit choice (on wins over off) beats `AppConfig.otherAgentSkills`, which governs only
+  **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`). **`SKILL_LISTING_MIN_TOKENS`** / **`SKILL_LISTING_MAX_TOKENS`**
+  (4K / 8K) bound the host's per-request skill listing budget, so the Skills dialog's size line names the same limits.
+  What the entity fields mean beyond their types: a `Project` is a git repository with a unique `slug`. Without
+  `closed` it is open, and closing never changes its id or deletes its workspace associations. Its skill trust is `trusted` (the grant), `acknowledgedSkills`
+  (re-confirm-new) and the per-skill and per-group baseline (a group is a plugin, a source tier, or the special
+  `@plugins`); a workspace layers `skillOverrides` over it. A workspace without `subagentsOverride` or
+  `subagentMaxConcurrentOverride` inherits the host's `AppConfig` default. "Does it have specs?" is not a field but
+  the lazy `project.hasSpecs` query, since it walks the whole tree. `ProjectPathStatus` tells the UI to open a path,
+  offer `git init`, or show an error. `Workspace` (a git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet named** (a fresh `workspace-N`, or a
   record an older host's provisional pass left unlocked), so the agent's `set_title` may still name it; `true` = named (automatically or by the user), never auto-touched
   again, except that optional **`branchNamePending`** (the naming chat's session id) marks a `set_title` that

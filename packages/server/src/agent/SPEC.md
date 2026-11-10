@@ -496,6 +496,8 @@ re-opened transcripts provider-valid.
     only after `createParentSession` accepts its id, so `sessionIdOf` cannot refuse on an attached session.
   - `transcriptMessages` — keeps the pi messages contracts' `isTranscriptMessageRole` admits and narrows each
     to `TranscriptMessage` by its role, with no cast. `getSessionMessages` and the subagent transcript read share it.
+  - `piWireTies` — types only: ties each pi-coding-agent shape contracts declares (`SlashCommandInfo`) to pi's own type
+    with contracts' `Same`, so a pi upgrade that changes one fails `tsc` here ([[submodule-contracts-schema]]).
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no

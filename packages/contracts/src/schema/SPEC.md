@@ -19,11 +19,10 @@ that map.
 
 ## Boundary
 
-- **Public surface (`index.ts`):** `export *` of every namespace and entity file: the entity schemas with their
-  types, the `*_METHODS` and `*_CHANNELS` records, `WS_METHOD_SCHEMAS`, `WsSchemaMethodMap`, `WS_CHANNEL_SCHEMAS`,
-  `WsSchemaChannelMap`, `WsEnvelope`, `WsResponse`, `WsErrorCode`, `WsRequestFrame`, `WsAck`, `WsResume`, `AnyHostWelcome`, the id brands (with the `StoredSessionId` type), `newProjectId`, `newWorkspaceId`, `parseProjectId`, `parseWorkspaceId`, `parseSessionId`, `parseStoredProjectId`, `parseStoredWorkspaceId`, `parseStoredSessionId` and `randomUuid`. From `wire.ts` only `Ack`; from `ids.ts` not the `test*` id makers, which only `@thinkrail/contracts/test-ids` exports: `wireObj`,
-  `partialWireObj`, `readonlyArr`, `NoParams` and `NoPayload` stay inside this directory. Schema values stay
-  public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they ship in web JS.
+- **Public surface (`index.ts`):** what `index.ts` re-exports. `wireObj`, `partialWireObj`, `readonlyArr`, `NoParams`
+  and `NoPayload` stay inside this directory, and only `@thinkrail/contracts/test-ids` exports the `test*` id makers.
+  Schema values stay public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they
+  ship in web JS.
 - **Allowed deps:** `@earendil-works/pi-schema`; `import type` from `@earendil-works/pi-ai` for pi-owned types.
 - **Forbidden:** importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling
   a schema here, except `JsonObject` in `checks.ts` and the id parsers: an id reaches code from a URL, a file name or
@@ -126,4 +125,6 @@ that map.
 - **One object check here; reply and push checks outside.** `checks.ts` exports `JsonObject`, for a reader that checks fields
   one by one. Result and channel schemas compile in contracts' `wireChecks.ts`, whose `parseWsResult` and `parseWsPush` the
   web transport, e2e fixtures and artifact probes share: it reads `WsResult` and `WsChannelPayload`, which this directory may not import.
+- **`@ts-expect-error` only in a negative type test**, one that proves bad code fails to compile, as `typeTie.test.ts`
+  does for `Same`.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.
