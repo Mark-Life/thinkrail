@@ -1,3 +1,8 @@
+import type {
+	ModelCost,
+	ModelThinkingLevel,
+	ModelInputModality as PiModelInputModality,
+} from "@earendil-works/pi-ai";
 import {
 	arr,
 	bool,
@@ -11,10 +16,20 @@ import {
 	union,
 } from "@earendil-works/pi-schema";
 import { ProviderAuthKind } from "./provider";
+import type { Same } from "./typeTie";
 import { NoParams, wireObj } from "./wire";
 
 export const ThinkingLevel = oneOf(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-export type ThinkingLevel = Static<typeof ThinkingLevel>;
+export type ThinkingLevel = Same<Static<typeof ThinkingLevel>, ModelThinkingLevel>;
+
+const ModelInputModality = oneOf(["text", "image"]);
+export type ModelInputModality = Same<Static<typeof ModelInputModality>, PiModelInputModality>;
+
+const ModelListPrice = wireObj({ input: num(), output: num() });
+export type ModelListPrice = Same<
+	Static<typeof ModelListPrice>,
+	Pick<ModelCost, "input" | "output">
+>;
 
 export const WireModelAuth = wireObj({
 	kind: ProviderAuthKind,
@@ -31,9 +46,9 @@ export const WireModel = wireObj({
 	reasoning: bool(),
 	thinkingLevels: arr(ThinkingLevel),
 	/** Per-million-token list prices; absent from hosts older than the picker-metadata protocol. */
-	cost: opt(wireObj({ input: num(), output: num() })),
+	cost: opt(ModelListPrice),
 	/** Accepted input modalities; absent from hosts older than the picker-metadata protocol. */
-	input: opt(arr(oneOf(["text", "image"]))),
+	input: opt(arr(ModelInputModality)),
 	/** How the model's provider is connected — decides whether `cost` is what the user pays. */
 	auth: opt(WireModelAuth),
 });

@@ -44,8 +44,11 @@ that map.
   or a canonical locale tag, stays with its handler. A handler does not check the shape again.
 - **A wire change is a schema edit.** It shows in the diff under this directory: decide on a `PROTOCOL_VERSION`
   bump in the same change.
-- **A `pi` union is listed by value.** `ThinkingLevel` and `WireModel.input` copy pi's values, with no type
-  import from `pi`. A value pi adds or removes fails `tsc` in `packages/server`, where pi's values meet these types.
+- **A dependency's shape is derived, never copied.** A type a dependency owns is imported, not declared again. A schema
+  that checks a shape the dependency types but ships no schema for is tied to that type with `Same` (`typeTie.ts`), so a
+  field or value either side adds, drops or changes fails `tsc`. `ThinkingLevel`, `ModelInputModality` and
+  `ModelListPrice` are tied to pi-ai here. pi-coding-agent is Node-only, so the shapes it owns (`SlashCommandInfo`) are
+  declared here and tied in the host's `piWireTies.ts` ([[submodule-server-agent]]).
 - **A pi shape in params has real values.** `ImageContent` lists its fields, annotated `Schema<pi's type>`, so a
   field pi adds or a field the schema drops fails `tsc` here. `StopReason` lists its values the same way.
 - **A pi message has a real schema.** `TranscriptMessage` lists every pi role with the fields pi types, so a reply never
