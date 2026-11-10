@@ -466,18 +466,19 @@ describe("WsTransport wire checks", () => {
 		expect(seen).toEqual([older]);
 	});
 
-	test("a pi event with an unknown type passes: only its tag is checked", () => {
+	test("a pi event passes on its type alone, and an unknown type is dropped", () => {
 		const { transport, socket } = connected();
 		const seen: unknown[] = [];
 		transport.subscribe(WS_CHANNELS.piEvent, (data) => seen.push(data));
-		const data = { sessionId: testSessionId("s1"), event: { type: "from_a_newer_pi", detail: {} } };
+		const data = { sessionId: testSessionId("s1"), event: { type: "agent_start", detail: {} } };
 		socket?.message(JSON.stringify({ channel: WS_CHANNELS.piEvent, data }));
-		socket?.message(
-			JSON.stringify({
-				channel: WS_CHANNELS.piEvent,
-				data: { sessionId: testSessionId("s1"), event: {} },
-			}),
-		);
+		for (const event of [{ type: "from_a_newer_pi" }, {}])
+			socket?.message(
+				JSON.stringify({
+					channel: WS_CHANNELS.piEvent,
+					data: { sessionId: testSessionId("s1"), event },
+				}),
+			);
 		expect(seen).toEqual([data]);
 	});
 });

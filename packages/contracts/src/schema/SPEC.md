@@ -70,9 +70,8 @@ that map.
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
 - **No schema claims more than it checks.** A `Schema<T>` annotation sits on a builder result that `tsc` checks against `T`,
   or on a raw JSON Schema for what builders cannot express (a recursive `$ref`, `TemplateReadLocation`), which states
-  every field of `T`. `NoParams` and `NoPayload` are any object, because the handler reads nothing from them. The one
-  exception is the `pi.event` push check in contracts' `wireChecks.ts`, typed `SessionEventPayload` over a tag-only
-  schema, as the `pi.event` rule above states.
+  every field of `T`. `NoParams` and `NoPayload` are any object, because the handler reads nothing from them. The two
+  trust points above are the only exceptions.
 - **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
   `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
 - **An exclusive union keeps its hand type.** Builders cannot express the `?: never` branches of
