@@ -143,7 +143,7 @@ The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-no
 `createErrorPropertiesBuilder` keeps the SDK's coercers and node parser but **no frame modifiers**: the
 default ones read ±7 source lines per frame from disk, make paths relative to `cwd` (still
 `../../Users/<name>/…`) and derive module names. `@posthog/core`, pinned to posthog-node's own core, is
-imported only for that builder. The sink's typed (doc-less) `before_send` then **rebuilds** every
+imported for that builder and for the types that name each field the sanitizer keeps. The sink's typed (doc-less) `before_send` then **rebuilds** every
 `$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, a classifier `value`,
 `mechanism.{handled,synthetic,type}` (the root's `handled` comes from the report, because the SDK's capture
 APIs take no hint and always default it to true; causes stay handled, and a mechanism without `handled`, as

@@ -378,7 +378,9 @@ re-opened transcripts provider-valid.
     read rather than masquerading as absent and being tombstoned by reconnect reconciliation. A `.jsonl`
     whose first parsed entry is not a session header is not a transcript — pi's own listing skips those
     files, and extensions keep sidecar logs there (e.g. pi-automode's `<session>-pi-automode.jsonl`) — but a
-    file with no parsed entry at all still rejects. A registered live
+    file with no parsed entry at all still rejects. The header read follows pi's: lines that are not JSON before
+    the header are skipped, and a header without a string `cwd` lists with cwd `""`, so its chat is hidden. Both
+    are logged once per file as `PI_SESSION_FILE_DAMAGED`. A registered live
     session's own exact `SessionManager.getSessionFile()` path is excluded from that disk preflight: its
     in-memory entry is already authoritative, and pi may truncate/rewrite that path while the host lists,
     so treating the transient physical state as a detached corrupt chat would blank every chat on reload) +

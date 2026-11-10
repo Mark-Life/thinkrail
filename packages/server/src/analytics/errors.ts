@@ -1,6 +1,7 @@
 import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { arr, compile, obj, str, unknown } from "@earendil-works/pi-schema";
+import type { ErrorTracking } from "@posthog/core";
 import { JsonObject } from "@thinkrail/contracts";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
@@ -138,27 +139,17 @@ const PASSTHROUGH_KEYS = [
 const Stacktrace = compile(obj({ frames: arr(unknown()) }, { open: true }));
 const WithCode = compile(obj({ code: str({ pattern: "^[A-Z][A-Z0-9_]{1,63}$" }) }, { open: true }));
 
-interface SanitizedMechanism {
-	handled?: boolean;
-	synthetic: boolean;
-	type: string;
-}
+type SanitizedMechanism = Pick<ErrorTracking.Mechanism, "handled"> &
+	Required<Pick<ErrorTracking.Mechanism, "synthetic" | "type">>;
 
-interface SanitizedFrame {
-	platform: "web:javascript" | "node:javascript";
-	filename: string;
-	function: string;
-	in_app: boolean;
-	lineno?: number;
-	colno?: number;
-	chunk_id?: string;
-}
+type SanitizedFrame = Pick<ErrorTracking.StackFrame, "platform" | "lineno" | "colno" | "chunk_id"> &
+	Required<Pick<ErrorTracking.StackFrame, "filename" | "function" | "in_app">>;
 
-interface SanitizedException {
-	type: string;
-	value: string;
+type PostHogStacktrace = NonNullable<ErrorTracking.Exception["stacktrace"]>;
+
+interface SanitizedException extends Required<Pick<ErrorTracking.Exception, "type" | "value">> {
 	mechanism?: SanitizedMechanism;
-	stacktrace?: { type: "raw"; frames: SanitizedFrame[] };
+	stacktrace?: Omit<PostHogStacktrace, "frames"> & { frames: SanitizedFrame[] };
 }
 
 function positiveInt(value: unknown): number | undefined {

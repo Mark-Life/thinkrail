@@ -38,6 +38,7 @@ import { readToolResponseMessage, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/c
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { interactiveTools } from "../extensions";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import { observeLoggedErrors } from "../log";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
@@ -732,6 +733,42 @@ test("a first line that is not a session header is skipped, and a bare value is 
 			writeFileSync(other, `${line}\n`);
 			await expect(listSessionStates([workspace])).rejects.toThrow("unreadable or malformed");
 		}
+	}));
+
+test("a session header after a line that is not JSON, or without a cwd, is logged once per file", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-header-damage-ws-");
+		const { id, dir } = writeFinishedDiskSession(cwd);
+		const workspace = {
+			id: testWorkspaceId("ws-header-damage"),
+			projectId: testProjectId("p-header-damage"),
+			cwd,
+		};
+		await initializeSessionStates([workspace]);
+		writeFileSync(join(dir, "0_damaged.jsonl"), 'not json\n{"type":"session","id":"orphan"}\n');
+		const logged: unknown[] = [];
+		observeLoggedErrors((scope, error) => {
+			if (scope === "agent") logged.push(error);
+		});
+		try {
+			for (let pass = 0; pass < 2; pass += 1) {
+				expect((await listSessionStates([workspace])).map((row) => row.sessionId)).toEqual([
+					testSessionId(id),
+				]);
+			}
+		} finally {
+			observeLoggedErrors(null);
+		}
+		expect(logged).toEqual([
+			expect.objectContaining({
+				code: "PI_SESSION_FILE_DAMAGED",
+				message: "session file has lines before its header that are not JSON",
+			}),
+			expect.objectContaining({
+				code: "PI_SESSION_FILE_DAMAGED",
+				message: "session file has a header without a cwd, so its chat is not listed",
+			}),
+		]);
 	}));
 
 test("a saved model with a wrong-type field stops the chat from opening", () =>

@@ -1,6 +1,6 @@
 import { createReadStream, existsSync, rmSync, statSync, truncateSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { clampThinkingLevel, getSupportedThinkingLevels, type Usage } from "@earendil-works/pi-ai";
 import {
@@ -15,12 +15,26 @@ import {
 	type McpServerConfig,
 	type PromptOptions,
 	type RegisteredMcpServer,
+	type SessionContext,
 	type SessionEntry,
+	type SessionHeader,
 	type SessionInfo,
 	SessionManager,
 	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { arr, compile, lit, map, obj, opt, str, union, unknown } from "@earendil-works/pi-schema";
+import {
+	arr,
+	compile,
+	lit,
+	map,
+	obj,
+	opt,
+	type Static,
+	str,
+	union,
+	unknown,
+	type Validator,
+} from "@earendil-works/pi-schema";
 import type {
 	AgentSettlement,
 	ImageContent,
@@ -56,6 +70,7 @@ import {
 	normalizeSessionTitle,
 	OTHER_AGENT_SKILL_GROUPS,
 	parseStoredSessionId,
+	type Same,
 	sameModel,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
@@ -1686,19 +1701,46 @@ function defaultSessionDirectory(cwd: string): string {
 	return join(resolve(getAgentDir()), "sessions", safePath);
 }
 
-const SessionHeaderLine = compile(
-	obj({ type: lit("session"), id: str(), cwd: opt(unknown()) }, { open: true }),
+const SessionHeaderShape = obj(
+	{ type: lit("session"), id: str(), cwd: opt(unknown()) },
+	{ open: true },
 );
+type SessionHeaderLine = Same<
+	Omit<Static<typeof SessionHeaderShape>, "cwd">,
+	Pick<SessionHeader, "type" | "id">
+>;
+const SessionHeaderLine: Validator<SessionHeaderLine & { cwd?: unknown }> =
+	compile(SessionHeaderShape);
 const SessionCwd = compile(str());
 const JsonContainer = compile(union([map(unknown()), arr(unknown())]));
-const SavedModelRef = compile(
-	obj({ provider: str({ minLength: 1 }), modelId: str({ minLength: 1 }) }, { open: true }),
+const SavedModelRefShape = obj(
+	{ provider: str({ minLength: 1 }), modelId: str({ minLength: 1 }) },
+	{ open: true },
 );
+const SavedModelRef: Validator<
+	Same<Static<typeof SavedModelRefShape>, NonNullable<SessionContext["model"]>>
+> = compile(SavedModelRefShape);
 
-/** Null when the file is not a pi session: pi's own listing skips those too. */
+const reportedSessionFileDamage = new Set<string>();
+
+function reportSessionFileDamage(path: string, problem: string): void {
+	const key = `${path}\u0000${problem}`;
+	if (reportedSessionFileDamage.has(key)) return;
+	reportedSessionFileDamage.add(key);
+	log.warn(
+		`session file ${basename(path)} ${problem}`,
+		new CodedError("PI_SESSION_FILE_DAMAGED", `session file ${problem}`),
+	);
+}
+
+/**
+ * Null when the file is not a pi session: pi's own listing skips those too. Like pi, it skips lines that are not
+ * JSON before the header and reads a header without a cwd as cwd "", and it logs both.
+ */
 async function readSessionFileIdentity(path: string): Promise<SessionFileIdentity | null> {
 	const input = createReadStream(path, { encoding: "utf8" });
 	const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY });
+	let skippedLines = false;
 	try {
 		for await (const line of lines) {
 			if (!line.trim()) continue;
@@ -1706,10 +1748,15 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 			try {
 				entry = JSON.parse(line);
 			} catch {
+				skippedLines = true;
 				continue;
 			}
 			if (SessionHeaderLine.check(entry)) {
-				return { id: entry.id, cwd: SessionCwd.check(entry.cwd) ? entry.cwd : "" };
+				if (skippedLines)
+					reportSessionFileDamage(path, "has lines before its header that are not JSON");
+				if (SessionCwd.check(entry.cwd)) return { id: entry.id, cwd: entry.cwd };
+				reportSessionFileDamage(path, "has a header without a cwd, so its chat is not listed");
+				return { id: entry.id, cwd: "" };
 			}
 			if (!JsonContainer.check(entry)) throw new Error("first parsed entry is not an object");
 			return null;
