@@ -51,7 +51,7 @@ test("the server runtime threads the opener and desktop proxies explicit readine
 	expect(generator).toContain('join(desktopDir, "runtimeEntry.ts")');
 	const launcher = readFileSync(resolve(desktopDir, "src/index.ts"), "utf8");
 	expect(launcher).toContain('mainWindow.webview.on("dom-ready"');
-	expect(launcher).toContain("host.server.startAttributionClaim()");
+	expect(launcher).toContain("host.startAttributionClaim()");
 });
 
 test("uses the exact npm bootstrap pin while Bun owns the workspace dependency graph", () => {

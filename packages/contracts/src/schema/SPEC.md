@@ -59,8 +59,9 @@ that map.
   - **pi-ai** ships schemas on its `providers/model-schema` subpath, which loads only `pi-schema`:
     `ThinkingLevel` is `ModelThinkingLevelSchema` and `ModelInputModality` is `ModelInputModalitySchema`. Where
     `pi-schema` cannot pick fields at run time, a hand projection is `Same`-tied to a `Pick` of pi's type
-    (`ModelListPrice`, `WireModelPiFields`). A shape pi-ai ships only as a type (`PiStopReason`, `ImageContent`,
-    `TextContent`, `CustomMessageContent`) is declared here and `Same`-tied.
+    (`ModelListPrice`, `WireModelPiFields`). A shape pi-ai ships only as a type (`ImageContent`, `TextContent`,
+    `CustomMessageContent`) is declared here and `Same`-tied. `PiStopReason` is `pi-delegation/wire`'s
+    `StopReason`, the one list of pi-ai's stop reasons, tied there.
   - **pi-coding-agent** is server-only, so browser code never sees its types, not even type-only (`AGENTS.md`).
     This is the one exception to "the type is pi's own": each shape it owns is declared here once and tied both
     ways in the server program (`piWireTies.ts`, `agent/mcp`, [[submodule-server-agent]]): the
@@ -98,11 +99,13 @@ that map.
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
 - **No schema claims more than it checks.** A schema is a builder result, or a builder result with more JSON
   Schema rules added to its `allOf` (`narrowed`), which accepts less and claims nothing more. `NoParams` and
-  `NoPayload` are any object, because the handler reads nothing from them. The only unchecked claims in the code base are
-  the brand in `ids.ts`, the two trust points above, the server's `webUiContext` `custom` member, which pi's generic
-  signature forces ([[submodule-server-agent]]), and two checks of objects of functions: the web's `readNativeBridge`
-  and the desktop's `isDesktopServerRuntime`. A run-time check sees that each member is a function, never its
-  parameters, so these trust the desktop build that installs the bridge or bundles the runtime ([[module-desktop]]).
+  `NoPayload` are any object, because the handler reads nothing from them. Among the schemas and the code that
+  parses wire, file and bridge data with them, the only unchecked claims are the brand in `ids.ts`, the two trust
+  points above and the server's `webUiContext` `custom` member, which pi's generic signature forces
+  ([[submodule-server-agent]]). The desktop bridges and the server runtime module carry functions, whose
+  signatures no run-time check sees, so their readers claim none: they call each function and check every value it
+  returns or pushes ([[module-web]], [[module-desktop]]). This rule covers schemas and parsers, not every cast
+  elsewhere in the code base.
 - **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
   `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
 - **An exclusive union is a narrowed object.** `TemplateReadLocation` is `narrowed(obj, { not })`: the builder object

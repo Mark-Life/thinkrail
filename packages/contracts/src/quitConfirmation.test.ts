@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { NativeQuitHint } from "./nativeClient";
 import { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
+import type { NativeQuitHint } from "./schema";
 
 const { holdMs, doublePressMs, pollMs } = QUIT_CONFIRMATION;
 

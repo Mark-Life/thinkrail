@@ -9,6 +9,7 @@ import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBound
 import { registerWebExtensions } from "./extensions";
 import { initializeFonts } from "./fonts";
 import { useLocaleSync } from "./i18n";
+import { setNativeBridgeReporter } from "./nativeBridge";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
@@ -23,6 +24,7 @@ import {
 	installClientErrorReporting,
 	reportClientError,
 	reportDroppedFrame,
+	reportHandledFailure,
 	reportInvalidReply,
 } from "./transport";
 
@@ -31,6 +33,9 @@ applyThemePreference(readThemeHint());
 initializeFonts();
 initTransport({ onInvalidReply: reportInvalidReply, onDroppedFrame: reportDroppedFrame });
 installClientErrorReporting();
+setNativeBridgeReporter((error) =>
+	reportHandledFailure("native-bridge", error, "NATIVE_RPC_INVALID"),
+);
 setErrorBoundaryReporter((error, reportId) =>
 	reportClientError(clientErrorReport("render", error, reportId)),
 );

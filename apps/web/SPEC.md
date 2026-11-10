@@ -59,12 +59,14 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter, and `firstPaintPreferenceStorage` — that adapter, else
-`localStorage` — which the theme and font first-paint hints share), `nativeBridge.ts` (`readNativeBridge` /
-`readGlobalNativeBridge`: the one typed reader of the optional bridges the desktop preload freezes onto
-`globalThis`; it returns the `contracts` bridge type only when every method a `BridgeMethods<T>` record lists is a
-function, and that record must name every member of `T`, so a new bridge method fails `tsc` until it is checked
-too. A run-time check cannot see a function's parameters, so the signatures are a trust point in the desktop build
-that installs the bridge ([[submodule-contracts-schema]])), and `styles/` — which holds the three
+`localStorage` — which the theme and font first-paint hints share), `nativeBridge.ts` (the helpers each optional
+bridge the desktop preload freezes onto `globalThis` is read through: `bridgeCall` takes one function off the
+bridge, and the reader of each bridge builds the `contracts` bridge type from those calls, so a new bridge method
+fails `tsc` until its reader handles it. A function's signature cannot be checked at run time, so nothing the
+bridge returns is trusted: `settledAs`, `returnedAs` and `checkedListener` check results and pushed values
+against the `contracts` schemas; `settled` and `unsubscriber` use a result only for its effect. A refused value
+is reported through `setNativeBridgeReporter`, which `main.tsx` points at `reportHandledFailure` with
+`NATIVE_RPC_INVALID`), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);

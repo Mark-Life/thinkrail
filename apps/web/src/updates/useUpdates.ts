@@ -1,12 +1,20 @@
-import type {
-	HostUpdateNotice,
-	NativeUpdateBridge,
-	NativeUpdateFailedPhase,
+import { compile } from "@earendil-works/pi-schema";
+import {
+	type HostUpdateNotice,
+	type NativeUpdateBridge,
+	type NativeUpdateFailedPhase,
 	NativeUpdateState,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
-import { type BridgeMethods, readGlobalNativeBridge, readNativeBridge } from "../nativeBridge";
+import {
+	bridgeCall,
+	checkedListener,
+	nativeGlobal,
+	settled,
+	settledAs,
+	unsubscriber,
+} from "../nativeBridge";
 import { useAppStore } from "../store";
 
 const NATIVE_UPDATES_GLOBAL = "__THINKRAIL_NATIVE_UPDATES__";
@@ -36,17 +44,37 @@ export type UpdatesController =
 			runUpdate(): void;
 	  };
 
-const UPDATE_METHODS: BridgeMethods<NativeUpdateBridge> = {
-	getState: "required",
-	checkForUpdates: "required",
-	downloadUpdate: "required",
-	restartToUpdate: "required",
-	dismissInstallResult: "required",
-	subscribe: "required",
-};
+const isNativeUpdateState = compile(NativeUpdateState).check;
 
+/** The update bridge at `value`, checking every value it hands back, or null without one. */
 export function getNativeUpdateBridge(value: unknown): NativeUpdateBridge | null {
-	return readNativeBridge(value, UPDATE_METHODS);
+	const getState = bridgeCall(value, "getState");
+	const checkForUpdates = bridgeCall(value, "checkForUpdates");
+	const downloadUpdate = bridgeCall(value, "downloadUpdate");
+	const restartToUpdate = bridgeCall(value, "restartToUpdate");
+	const dismissInstallResult = bridgeCall(value, "dismissInstallResult");
+	const subscribe = bridgeCall(value, "subscribe");
+	if (
+		!getState ||
+		!checkForUpdates ||
+		!downloadUpdate ||
+		!restartToUpdate ||
+		!dismissInstallResult ||
+		!subscribe
+	)
+		return null;
+	return {
+		getState: () => settledAs(isNativeUpdateState, getState(), "update state"),
+		checkForUpdates: () => settled(checkForUpdates()),
+		downloadUpdate: () => settled(downloadUpdate()),
+		restartToUpdate: () => settled(restartToUpdate()),
+		dismissInstallResult: () => settled(dismissInstallResult()),
+		subscribe: (listener) =>
+			unsubscriber(
+				subscribe(checkedListener(isNativeUpdateState, listener, "update state")),
+				"update state unsubscribe",
+			),
+	};
 }
 
 function nativeUpdateErrorText(error: unknown): string {
@@ -127,7 +155,7 @@ export function hasNativeUpdateSurface(
 }
 
 export function useUpdates(hostUpdateRunner: HostUpdateRunner | null): UpdatesController | null {
-	const [bridge] = useState(() => readGlobalNativeBridge(NATIVE_UPDATES_GLOBAL, UPDATE_METHODS));
+	const [bridge] = useState(() => getNativeUpdateBridge(nativeGlobal(NATIVE_UPDATES_GLOBAL)));
 	const [nativeState, setNativeState] = useState<NativeUpdateState | null>(null);
 	const [nativeRequestError, setNativeRequestError] = useState<NativeUpdateRequestError | null>(
 		null,

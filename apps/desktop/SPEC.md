@@ -46,8 +46,9 @@ keeps no copy. `rpcSchemas.ts` ties `NativeNotificationInput` with `Same` to a `
 `NotificationOptions`, and ties the options left out to an explicit list (empty today), so a new or renamed
 Electrobun option fails `tsc`. The tie needs Electrobun's types, which `typecheck` projects first with
 `electrobun prepare`. `DesktopRpc` derives its webview-sent messages from those schemas. A refused message
-never reaches its handler and reports `NATIVE_RPC_INVALID`. Native-to-webview messages are not parsed: the same binary
-writes them. Electrobun types an application-menu click as `unknown` at the listener, so `readMenuAction` checks it,
+never reaches its handler and reports `NATIVE_RPC_INVALID`. Native-to-webview messages are not parsed in the preload: the same binary
+writes them, and the web checks each value a bridge hands it against the `contracts` schemas
+(`NativeUpdateState`, `NativeWindowState`, `NativeQuitHint`, `NativeCommand`). Electrobun types an application-menu click as `unknown` at the listener, so `readMenuAction` checks it,
 and its schema is tied with `Same` to the data type of Electrobun's own `applicationMenuClicked` event.
 `preBuild.ts` checks the build-support manifest it reads from a child Bun process against the server's
 `BuildRuntimeSources` schema, and the runtime source map through `parseSourceMap` before it injects the chunk id.
@@ -107,10 +108,12 @@ another.
 3. Start `resolveShellEnv()` right after the `chdir`, so the login shell it spawns also starts outside the
    bundle, then dynamically import the separately built, unpacked `server-runtime.ts` resource, and await the
    shell env before `startDesktopHost()`. The import names a file path, so `tsc` cannot see the module: the
-   result is `unknown` until `isDesktopServerRuntime` finds a `startDesktopHost` function; anything else fails
-   startup. Its type is `ReturnType<typeof desktopHostStarter>` from `runtimeEntry.ts`, the module the bundle is
-   built from, so desktop and runtime share one signature. A run-time check cannot see a function's parameters, so
-   the predicate is a trust point: the bundle and the desktop come from one build. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
+   result is `unknown`. `startServerRuntime` calls its `startDesktopHost` with `DesktopHostOptions` from
+   `runtimeEntry.ts`, the module the bundle is built from, and checks the host it returns: a numeric `port`,
+   `reportError`, and the server's `shutdown` and `startAttributionClaim`, each name tied to that module's host
+   type. Anything else fails startup with a `HOST_ERROR` `CodedError`. A run-time check cannot see a function's
+   signature, so the desktop trusts none: it calls these functions through wrappers that ignore or await what they
+   return. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
    typical profile, seconds on a slow one); overlapping it with the splash and the bundle import hides up to
    that time. The bundle's own `shellEnv` copy is a separate module instance, so the run is cached on a
    `Symbol.for` global key: its `bootHost()` call awaits the same run instead of probing again. That bundle is

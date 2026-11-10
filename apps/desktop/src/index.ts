@@ -51,7 +51,7 @@ import {
 	RouteChange,
 } from "./rpcSchemas";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
-import { isDesktopServerRuntime } from "./serverRuntime";
+import { startServerRuntime } from "./serverRuntime";
 import {
 	handOffStartupSplash,
 	openStartupSplash,
@@ -308,11 +308,8 @@ async function start(): Promise<void> {
 	const serverRuntime: unknown = await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	);
-	if (!isDesktopServerRuntime(serverRuntime)) {
-		throw new Error("The server runtime does not export startDesktopHost");
-	}
 	await shellEnv;
-	const host = await serverRuntime.startDesktopHost({
+	const host = await startServerRuntime(serverRuntime, {
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
 		appVersion: version,
@@ -324,7 +321,7 @@ async function start(): Promise<void> {
 	});
 	setDesktopErrorReporter(host.reportError);
 	const quitCoordinator = createElectrobunQuitCoordinator(
-		() => host.server.shutdown(),
+		() => host.shutdown(),
 		() => dialogLabels,
 	);
 	startupQuitCoordinator = quitCoordinator;
@@ -577,7 +574,7 @@ async function start(): Promise<void> {
 
 	let ready = false;
 	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>
-		host.server.startAttributionClaim(),
+		host.startAttributionClaim(),
 	);
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;

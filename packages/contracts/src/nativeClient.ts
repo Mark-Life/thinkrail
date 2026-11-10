@@ -1,35 +1,10 @@
 import type {
+	NativeCommand,
 	NativeNotificationInput,
-	NativeUpdateInstallResult,
-	NativeUpdateLogEntry,
+	NativeQuitHint,
+	NativeUpdateState,
+	NativeWindowState,
 } from "./schema";
-
-export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
-
-export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
-
-export interface NativeUpdateState {
-	revision: number;
-	status:
-		| "disabled"
-		| "idle"
-		| "checking"
-		| "available"
-		| "downloading"
-		| "preparing"
-		| "ready"
-		| "installing"
-		| "error";
-	version: string;
-	channel: string;
-	availableVersion: string | null;
-	progress: number | null;
-	error: string | null;
-	failedPhase: NativeUpdateFailedPhase;
-	installStep: NativeUpdateInstallStep | null;
-	log: readonly NativeUpdateLogEntry[];
-	lastInstall: NativeUpdateInstallResult | null;
-}
 
 export interface NativeUpdateBridge {
 	getState(): Promise<NativeUpdateState>;
@@ -38,11 +13,6 @@ export interface NativeUpdateBridge {
 	restartToUpdate(): Promise<void>;
 	dismissInstallResult(): Promise<void>;
 	subscribe(listener: (state: NativeUpdateState) => void): () => void;
-}
-
-export interface NativeWindowState {
-	maximized: boolean;
-	fullScreen: boolean;
 }
 
 export interface NativeWindowControlsBridge {
@@ -58,10 +28,6 @@ export interface NativeNotificationBridge {
 	/** Whether the native window holds OS-level focus (true even when DevTools is focused). */
 	isWindowFocused?: () => boolean;
 }
-
-export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
-
-export type NativeCommand = "close-item" | "open-settings";
 
 export interface NativeShortcutsBridge {
 	subscribeQuitHint(listener: (hint: NativeQuitHint) => void): () => void;

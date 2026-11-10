@@ -681,9 +681,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
-- **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop's native
-  shapes (webview RPC frames and the files it stores) are schemas in `schema/native.ts`, owned here because they are
-  host-owned shapes; the desktop compiles them at its edge. The desktop
+- **nativeClient.ts** — type-only optional native-client capabilities outside the host wire: the bridge
+  interfaces. The desktop's native shapes (webview RPC frames, the files it stores, and the update state, window
+  state, quit hint and command values the bridges hand the web) are schemas in `schema/native.ts`, owned here
+  because they are host-owned shapes; the desktop compiles them at its edge, and the web checks bridge values with them. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
   ready, and installing are distinct states. While installing, the snapshot carries a coarse install step
