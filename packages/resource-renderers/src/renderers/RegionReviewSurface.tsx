@@ -25,7 +25,7 @@ import {
 	regionOfAnchor,
 	type Size,
 } from "./regionReview";
-import { useStampedComposer } from "./reviewComposerState";
+import { stampedComposerDraft, useStampedComposer } from "./reviewComposerState";
 import { StaleComposerNotice } from "./StaleComposerNotice";
 
 interface DragState {
@@ -38,6 +38,8 @@ export interface RegionReviewProjection {
 	review: SurfaceReview;
 	intrinsicSize: Size | null;
 }
+
+const REGION_DRAFT = stampedComposerDraft<Region>();
 
 function regionStyle(region: Region, bounds: Rect): CSSProperties {
 	const rect = denormalizeRegion(region, bounds);
@@ -77,7 +79,7 @@ export function RegionReviewSurface({
 	const t = useT();
 	const commentText = commentLabel ?? t("viewer.region.commentOnImage");
 	const [drag, setDrag] = useState<DragState | null>(null);
-	const composer = useStampedComposer<Region>(contentStamp, selectionKey);
+	const composer = useStampedComposer(REGION_DRAFT, contentStamp, selectionKey);
 	const cardsRef = useRef(new Map<string, HTMLDivElement>());
 	const { ref: mediaRef, element: media, size } = useElementSize<HTMLDivElement>();
 	const handledFocusRef = useRef<string | null>(null);
@@ -146,7 +148,7 @@ export function RegionReviewSurface({
 			!review ||
 			!primaryBounds ||
 			event.button !== 0 ||
-			(event.target as Element).closest("button")
+			(event.target instanceof Element && event.target.closest("button"))
 		) {
 			return;
 		}

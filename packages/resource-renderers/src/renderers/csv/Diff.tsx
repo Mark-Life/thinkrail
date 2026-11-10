@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
-import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
+import { diffContentStamp, stampedComposerDraft, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import {
 	type AlignedCsvRow,
@@ -32,6 +32,8 @@ interface ThreadEntry {
 	number: number;
 	side: Side;
 }
+
+const SELECTION_DRAFT = stampedComposerDraft<SelectionState>();
 
 function rowForSide(row: AlignedCsvRow, side: Side): CsvRow | null {
 	if (side === "base") return "original" in row ? row.original : null;
@@ -73,7 +75,7 @@ export default function CsvDiff({
 		() => alignCsvRows(originalTable.rows, modifiedTable.rows),
 		[originalTable.rows, modifiedTable.rows],
 	);
-	const composer = useStampedComposer<SelectionState>(diffContentStamp(original, modified));
+	const composer = useStampedComposer(SELECTION_DRAFT, diffContentStamp(original, modified));
 	const selection = composer.selection;
 	const cardRefs = useRef(new Map<string, HTMLDivElement>());
 	const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
@@ -146,6 +148,7 @@ export default function CsvDiff({
 	};
 	const surfaceFor = (side: Side): SurfaceReview | undefined =>
 		side === "base" ? review?.base : review?.worktree;
+	const composerSurface = selection ? surfaceFor(selection.side) : undefined;
 	const scrollToCard = (id: string) =>
 		cardRefs.current.get(id)?.scrollIntoView({ block: "center" });
 	const scrollToThread = (thread: ReviewThread, side: Side) => {
@@ -260,14 +263,14 @@ export default function CsvDiff({
 				</table>
 			</div>
 			<StaleComposerNotice visible={composer.stale} />
-			{composer.composing && selection && draft && surfaceFor(selection.side) ? (
+			{composer.composing && draft && composerSurface ? (
 				<div className="shrink-0 border-border-default border-t bg-container-header-bg p-8">
 					<ReviewComposer
 						key={composer.key}
 						input={composer.input}
 						draft={draft}
 						label={draft.label}
-						commenting={(surfaceFor(selection.side) as SurfaceReview).commenting}
+						commenting={composerSurface.commenting}
 						onClose={composer.close}
 					/>
 				</div>

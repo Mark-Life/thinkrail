@@ -116,7 +116,7 @@ export function PreviewCommenting({
 			node.setAttribute("data-visible", "true");
 		};
 		const onPointerDown = (e: PointerEvent) => {
-			if (e.button === 0 && !iconRef.current?.contains(e.target as Node | null)) {
+			if (e.button === 0 && !(e.target instanceof Node && iconRef.current?.contains(e.target))) {
 				draggingRef.current = true;
 				iconRef.current?.setAttribute("data-dragging", "true");
 			}

@@ -96,7 +96,9 @@ class JsonScanner {
 			if (!escaped && char === '"') {
 				this.index += 1;
 				const raw = this.text.slice(start, this.index);
-				return { value: JSON.parse(raw) as string, start, end: this.index };
+				const value: unknown = JSON.parse(raw);
+				if (typeof value !== "string") throw new Error("Expected JSON string");
+				return { value, start, end: this.index };
 			}
 			if (!escaped && (char === "\n" || char === "\r")) {
 				throw new Error("Line break in JSON string");
@@ -158,7 +160,7 @@ class JsonScanner {
 
 	private parseObject(pointer: string): ParsedValue {
 		this.index += 1;
-		const value: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+		const value: Record<string, unknown> = Object.create(null);
 		const children: JsonNode[] = [];
 		const childIndex = new Map<string, number>();
 		this.skipTrivia();

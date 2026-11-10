@@ -3,15 +3,19 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReviewThread } from "../registry";
 import { ReviewThreadCard } from "../support/ReviewThreadCard";
-import { useStampedComposer } from "./reviewComposerState";
+import { stampedComposerDraft, useStampedComposer } from "./reviewComposerState";
 import {
 	ReviewDraftContext,
 	type ReviewDraftPersistence,
+	reviewDraftKind,
 	reviewTextState,
+	THREAD_EDIT_DRAFT,
 } from "./reviewDraftState";
 
 type Selection = { side: "base" | "worktree"; anchor: string };
 type Composer = ReturnType<typeof useStampedComposer<Selection>>;
+
+const SELECTION_DRAFT = stampedComposerDraft<Selection>();
 
 const sections = new Map<string, Record<string, unknown>>();
 
@@ -41,7 +45,7 @@ function persistence(
 function mount(scope = persistence(), stamp = "content-hash", slot = "selection"): Composer {
 	const result: { current: Composer | null } = { current: null };
 	function Probe() {
-		result.current = useStampedComposer<Selection>(stamp, slot);
+		result.current = useStampedComposer(SELECTION_DRAFT, stamp, slot);
 		return null;
 	}
 	renderToStaticMarkup(
@@ -185,7 +189,7 @@ test("draft thread scratch restores in rich and source cards without a host writ
 		},
 	};
 	persistence("file.json").update(JSON.stringify([null, "thread:comment-1"]), () =>
-		reviewTextState("unsaved thread edit"),
+		THREAD_EDIT_DRAFT.wrap(reviewTextState("unsaved thread edit")),
 	);
 	for (const renderer of ["thinkrail/json", "thinkrail/code"]) {
 		const markup = renderToStaticMarkup(
@@ -204,4 +208,13 @@ test("draft thread scratch restores in rich and source cards without a host writ
 	);
 	expect(perFile).toContain(">host draft</textarea>");
 	expect(writes).toBe(0);
+});
+
+test("a draft kind reads back only the values it wrapped", () => {
+	const text = reviewDraftKind<string>();
+	const other = reviewDraftKind<string>();
+	const token = text.wrap("draft");
+	expect(text.unwrap(token)).toBe("draft");
+	expect(other.unwrap(token)).toBeUndefined();
+	expect(text.unwrap({ text: "draft" })).toBeUndefined();
 });

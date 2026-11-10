@@ -75,7 +75,8 @@ function* units(root: Element): Generator<Element> {
 }
 
 function shapeKey(element: Element): string {
-	const clone = element.cloneNode(true) as Element;
+	const clone = element.cloneNode(true);
+	if (!(clone instanceof Element)) return element.outerHTML;
 	for (const node of [clone, ...clone.querySelectorAll("*")]) {
 		for (const { name } of Array.from(node.attributes)) node.removeAttribute(name);
 	}

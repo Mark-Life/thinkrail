@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ResourceContent } from "../registry";
 import {
+	type ReviewDraftKind,
 	type ReviewTextBinding,
 	type ReviewTextState,
+	reviewDraftKind,
 	useReviewDraftSlot,
 	useReviewDraftState,
 } from "./reviewDraftState";
@@ -22,6 +24,13 @@ export interface StampedComposerState<T> {
 	composing: boolean;
 	stale: boolean;
 }
+
+/** The draft kind of one renderer's composer state; each selection type needs its own module-level kind. */
+export function stampedComposerDraft<T>(): ReviewDraftKind<StampedComposerState<T>> {
+	return reviewDraftKind();
+}
+
+const COMPOSER_TEXT_DRAFT = reviewDraftKind<ReviewTextState>();
 
 export type StampedComposerAction<T> =
 	| { type: "select"; stamp: string; value: T; composing: boolean }
@@ -57,11 +66,15 @@ export function stampedComposerReducer<T>(
 	};
 }
 
-export function useStampedComposer<T>(stamp: string, slot = "selection") {
+export function useStampedComposer<T>(
+	kind: ReviewDraftKind<StampedComposerState<T>>,
+	stamp: string,
+	slot = "selection",
+) {
 	const initial = useMemo(() => initialStampedComposerState<T>(), []);
-	const [state, change, scoped] = useReviewDraftState(slot, initial, true);
-	const selectionDraft = useReviewDraftSlot<StampedComposerState<T>>(slot, true);
-	const textDraft = useReviewDraftSlot<ReviewTextState>(JSON.stringify(["text", slot]), true);
+	const [state, change, scoped] = useReviewDraftState(kind, slot, initial, true);
+	const selectionDraft = useReviewDraftSlot(kind, slot, true);
+	const textDraft = useReviewDraftSlot(COMPOSER_TEXT_DRAFT, JSON.stringify(["text", slot]), true);
 	const [restoredSelection] = useState(state.selection);
 	const selectionIsCurrent = state.selection?.stamp === stamp;
 	const selection = state.selection;

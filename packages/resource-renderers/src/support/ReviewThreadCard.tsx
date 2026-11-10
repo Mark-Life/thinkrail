@@ -6,9 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import type { ReviewThread, ReviewThreadActions } from "../registry";
 import { outdatedReason, threadLabel } from "../registry";
 import {
-	type ReviewTextState,
 	reviewTextState,
 	selectedReviewText,
+	THREAD_EDIT_DRAFT,
 	useReviewDraftState,
 } from "../renderers/reviewDraftState";
 
@@ -27,7 +27,8 @@ export function ReviewThreadCard({
 	onActivate?: (() => void) | undefined;
 }) {
 	const t = useT();
-	const [edit, changeEdit] = useReviewDraftState<ReviewTextState | undefined>(
+	const [edit, changeEdit] = useReviewDraftState(
+		THREAD_EDIT_DRAFT,
 		`thread:${thread.id}`,
 		undefined,
 	);

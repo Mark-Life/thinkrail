@@ -9,7 +9,7 @@ import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
 import { useScrollViewState } from "../../support/useScrollViewState";
 import PierreProvider from "../code/PierreProvider";
-import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
+import { diffContentStamp, stampedComposerDraft, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { NotebookOutputsDiff, NotebookSourceDiff } from "./NotebookCellDiff";
 import { NotebookCellBody, NotebookOutputs } from "./NotebookOutputView";
@@ -42,6 +42,8 @@ const STATE_LABELS = {
 	changed: "viewer.notebook.stateChanged",
 	unchanged: "viewer.notebook.stateUnchanged",
 } as const satisfies Record<AlignedNotebookCell["state"], MessageKey>;
+
+const SELECTED_CELL_DRAFT = stampedComposerDraft<SelectedCell>();
 
 function entryKey(entry: AlignedNotebookCell): string {
 	if (entry.state === "added") return `added:${entry.modified.index}:${entry.modified.ref}`;
@@ -122,7 +124,7 @@ function NotebookDiffSurface({
 		[modifiedDocument, originalDocument],
 	);
 	const stamp = diffContentStamp(original, modified);
-	const composer = useStampedComposer<SelectedCell>(stamp);
+	const composer = useStampedComposer(SELECTED_CELL_DRAFT, stamp);
 	const cellRefs = useRef(new Map<string, HTMLElement>());
 	const handledFocusRef = useRef<string | null>(null);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
