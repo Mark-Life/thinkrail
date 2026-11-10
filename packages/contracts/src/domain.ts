@@ -2,10 +2,12 @@ import type { MatchTier } from "./match";
 import type {
 	BackgroundCommandSummary,
 	DelegationRunStatus,
+	GitFileChange,
 	JbcentralStatus,
 	McpProjectOverride,
 	McpServerState,
 	McpTransportKind,
+	OpenBranchReview,
 	ResourceHistoryCursor,
 	ResourceRecord,
 	ResourceTally,
@@ -61,106 +63,7 @@ export function firstPromptOfTexts(texts: Iterable<string>): string | undefined 
 	return undefined;
 }
 
-export interface DiffStats {
-	added: number;
-	removed: number;
-}
-
-export type SubagentOverride = "on" | "off";
-
-/** `"settled"` = the user parked the workspace on the shelf; `"active"` = the user pinned it live. */
-export type SettledOverride = "settled" | "active";
-
 export const DEFAULT_WORKSPACE_NAME = "Default";
-
-export interface Workspace {
-	id: string;
-	projectId: string;
-	kind?: "default" | "external";
-	name: string;
-	branch: string;
-	worktreePath: string;
-	baseBranch: string;
-	diffBase?: string;
-	renamed?: boolean;
-	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
-	branchNamePending?: string;
-	initialTerminalPending?: true;
-	diffStats?: DiffStats;
-	skillOverrides?: Record<string, "on" | "off">;
-	subagentsOverride?: SubagentOverride;
-	/** Per-chat concurrent-subagent limit for this workspace; absent = the global `subagentMaxConcurrent`. */
-	subagentMaxConcurrentOverride?: number;
-	/** Newest real activity (chat/agent turn, terminal input, HEAD move) in ms; viewing never counts. */
-	lastActiveAt?: number;
-	settledOverride?: SettledOverride;
-	settledAt?: number;
-	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
-	review?: OpenBranchReview;
-}
-
-export type BranchReviewState = "open" | "merged" | "closed";
-
-export interface OpenBranchReview {
-	kind: "pull-request" | "merge-request";
-	number: number;
-	/** The review's web page, when the provider reported one — what makes the `PR #N` chip a link. */
-	url?: string;
-	/** Absent on a pre-v78 host, which only ever reported open reviews. */
-	state?: BranchReviewState;
-	/** When the provider merged or closed the review, in ms. */
-	changedAt?: number;
-	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
-	unpushedCommits?: number;
-	/**
-	 * `workspace.openReview` only: last-known commits on origin/<branch> that HEAD doesn't have (the
-	 * tracking ref may be cached when the fetch fails). A plain push must wait until they're integrated;
-	 * this does not imply the checkout rewrote history or that a force-push is appropriate.
-	 */
-	behindCommits?: number;
-	/** v88 `workspace.branchStatus` only: an open GitHub PR's live review facts. Never in the host snapshot. */
-	details?: ReviewDetails;
-}
-
-export type ReviewDecision = "approved" | "changes_requested" | "review_required";
-
-/** GitHub's `mergeStateStatus`, lower-cased. */
-export type ReviewMergeState =
-	| "clean"
-	| "unstable"
-	| "has_hooks"
-	| "blocked"
-	| "behind"
-	| "dirty"
-	| "draft"
-	| "unknown";
-
-export type MergeMethod = "squash" | "merge" | "rebase";
-
-export interface ReviewChecks {
-	passing: number;
-	pending: number;
-	failing: number;
-	/** Bounded, in the provider's order. */
-	failingNames: string[];
-}
-
-export interface ReviewDetails {
-	draft: boolean;
-	/** The branch the PR merges into now — it may have been retargeted since the workspace was made. */
-	base?: string;
-	/** Absent when the PR has no checks. */
-	checks?: ReviewChecks;
-	/** Absent when the repository requires no review and nobody decided. */
-	reviewDecision?: ReviewDecision;
-	/** Latest approving / change-requesting reviewers, bounded. */
-	reviewers: { login: string; state: "approved" | "changes_requested" }[];
-	mergeState: ReviewMergeState;
-	/** What the repository allows; absent when `gh repo view` did not answer. */
-	mergeMethods?: MergeMethod[];
-	/** The repository deletes head branches on merge itself. */
-	deleteBranchOnMerge?: boolean;
-}
 
 export interface MergePrResult {
 	/** `false` when GitHub queued the PR (merge queue / auto-merge) instead of merging it now. */
@@ -189,28 +92,6 @@ export interface PrPreview extends PrDraft {
 	source?: PrBodySource;
 }
 
-export type ReviewProvider = "github" | "gitlab";
-
-/** `workspace.branchStatus`: where the branch stands against origin and its base, review or not. */
-export interface BranchStatus {
-	hasOrigin: boolean;
-	/** The forge `origin` points at; `null` without an origin or for any other host. */
-	provider: ReviewProvider | null;
-	/** The push repository has the branch; `null` when it couldn't be read (split origin, `ls-remote` failed). */
-	published: boolean | null;
-	/** Origin pushes to another URL than it fetches from: ahead/behind describe the push repository. */
-	pushesElsewhere: boolean;
-	/** Published only: local commits origin lacks. */
-	ahead?: number;
-	/** Published only: last-known origin commits HEAD lacks (the branch diverged). */
-	behind?: number;
-	/** Commits on HEAD that the workspace's base lacks. */
-	aheadOfBase: number;
-	/** The branch is its own base (Default on the default branch): no PR can be opened from it. */
-	onBase: boolean;
-	review: OpenBranchReview | null;
-}
-
 export interface OpenPrResult {
 	action: "created" | "updated" | "pushed" | "compare";
 	review?: OpenBranchReview;
@@ -221,16 +102,6 @@ export interface OpenPrResult {
 	/** `compare` only: why the direct gh path was unavailable, when the host could tell. */
 	ghProblem?: GhSetupProblem;
 	dirtyFiles: number;
-}
-
-export type ExistingWorktreeCandidate =
-	| { path: string; branch: string; status: "available" }
-	| { path: string; status: "detached" };
-
-export interface EditorInfo {
-	id: string;
-	label: string;
-	kind: "gui" | "terminal";
 }
 
 export type WorkspaceSkillChange = "none" | "detected" | "unknown";
@@ -838,15 +709,6 @@ export interface PiPackagesCatalog {
 	builtins: PiBuiltinExtension[];
 }
 
-export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
-
-export interface GitFileChange {
-	path: string;
-	status: GitFileStatus;
-	added?: number;
-	removed?: number;
-}
-
 export interface GitStatus {
 	branch: string;
 	changes: GitFileChange[];
@@ -858,17 +720,6 @@ export type GitDiffScope =
 	| { kind: "commit"; sha: string }
 	| { kind: "pinned"; baseRef: string }
 	| { kind: "turn"; id: string; baseTree: string; headTree: string; startedAt: number };
-
-export interface TurnChangeSet {
-	id: string;
-	workspaceId: string;
-	sessionId: string;
-	startedAt: number;
-	settledAt: number;
-	baseTree: string;
-	headTree: string;
-	changes: GitFileChange[];
-}
 
 export interface GitCommit {
 	sha: string;

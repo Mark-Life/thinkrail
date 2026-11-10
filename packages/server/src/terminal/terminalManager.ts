@@ -123,19 +123,14 @@ function assertTerminalTitle(title: string): void {
 
 const TERMINAL_GRID_DIMENSION = { min: 1, max: 32_767 } as const;
 
-function assertTerminalGridDimension(value: unknown): void {
+function assertTerminalGridDimension(value: number): void {
 	if (
-		typeof value !== "number" ||
 		!Number.isInteger(value) ||
 		value < TERMINAL_GRID_DIMENSION.min ||
 		value > TERMINAL_GRID_DIMENSION.max
 	) {
 		throw new Error("Invalid terminal size");
 	}
-}
-
-function assertTerminalData(data: unknown): void {
-	if (typeof data !== "string") throw new Error("Invalid terminal input");
 }
 
 function assertTerminalCatalogCapacity(tabs: readonly TabRecord[]): void {
@@ -323,7 +318,6 @@ function announceDisplaced(id: string, caller: string): void {
 }
 
 export function writeTerminal(id: string, data: string, caller: string): string | null {
-	assertTerminalData(data);
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
 		announceDisplaced(id, caller);
