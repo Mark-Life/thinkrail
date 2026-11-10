@@ -29,7 +29,7 @@ engine architecture.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
   for release identity, its Windows file identity and the early `resolveShellEnv()` start; `contracts`
   for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
-  web artifact; Electrobun `2.0.5` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.5
+  web artifact; Electrobun `2.0.6` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.6
   Windows executable-identity gap (below); shared's native icon set as build input; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
@@ -55,7 +55,7 @@ another.
    import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
    does not embed `bun-pty`'s library.
 2. Read Electrobun's bundle metadata, then leave the bundle. Electrobun's launcher starts the main
-   process with cwd inside the replaceable bundle (`app/bin`, `Contents/MacOS`), and Electrobun 2.0.5
+   process with cwd inside the replaceable bundle (`app/bin`, `Contents/MacOS`), and Electrobun 2.0.6
    resolves `../Resources/*.json` against cwd and caches the result: `PATHS` and `BuildConfig` at import,
    and `Utils.paths` version info and `Updater.getLocalInfo()` on first use. Startup reads
    `Utils.paths.userData` and creates the update controller, keeping its first `getLocalInfo()` and its
@@ -149,7 +149,7 @@ flow through the operating-system responder chain across ordinary inputs, Monaco
 webview surfaces without competing with their local key handling.
 
 macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
-Edit role menu. Linux skips registration because Electrobun 2.0.5 does not support application menus
+Edit role menu. Linux skips registration because Electrobun 2.0.6 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
 are custom-action items, not roles; see Confirmed quit and close. Their labels, plus the Edit and Window menu
@@ -220,7 +220,7 @@ when DevTools or other in-window chrome has renderer focus, unlike `document.has
 `false` in that case. **Platform caveat:** on Windows, DevTools is a separate native window; focusing it
 fires `blur` on the main `BrowserWindow`, so `isWindowFocused()` falls back to the same limitation as
 the browser channel. On macOS, DevTools is docked and the main-window focus is preserved. Electrobun
-2.0.5 has no application-level activation signal; a cross-window solution requires a future API. The web
+2.0.6 has no application-level activation signal; a cross-window solution requires a future API. The web
 client detects this bridge by capability and routes its attention notifications through it instead of the
 page Notifications API — the web shell keeps no desktop branch.
 Electrobun click callbacks are not landed yet, so the native notification carries no click action.
@@ -246,7 +246,7 @@ compound or introduce a second zoom owner. The web app owns no duplicate shortcu
 ## Native window chrome
 
 The web topbar ([[submodule-web-shell]]) is the window's title bar wherever the framework lets native
-controls survive without a native strip. Electrobun 2.0.5 exposes no caption-colour API on any platform
+controls survive without a native strip. Electrobun 2.0.6 exposes no caption-colour API on any platform
 (macOS and Windows only follow the system light/dark setting), so a theme-coloured title bar means
 removing the native strip and letting the web header occupy it. The policy is platform-pure
 (`windowChrome.ts`, pinned by unit tests) and spread into the main `BrowserWindow`:
@@ -257,7 +257,7 @@ removing the native strip and letting the web header occupy it. The policy is pl
 | Windows | `hiddenInset` — Electrobun creates `WS_CAPTION \| WS_THICKFRAME` and strips the caption in `WM_NCCALCSIZE`: resize borders and the DWM shadow survive, no native caption buttons | none native; the web renders minimize / maximize-or-restore / close ([[submodule-web-shell]]) and drives the window over RPC | right `138px` — three 46px caption buttons | yes |
 | Linux | `default` | GTK/WM decorations | none | no |
 
-**Windows.** Electrobun 2.0.5 already enables WebView2's non-client-region support, so the header's
+**Windows.** Electrobun 2.0.6 already enables WebView2's non-client-region support, so the header's
 `app-region: drag` is a real `HTCAPTION` hit: Aero Snap, drag-from-maximized, double-click-to-maximize and
 Alt+Space come from the OS, not from Electrobun's raw-input mover. What Electrobun omits from its
 `hiddenInset` style is `WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX` (upstream blackboardsh/electrobun#558):
@@ -306,7 +306,7 @@ property it hit-tests against on `mousedown`. A decorated window (Linux, the neu
 publishes `no-drag` and so never acquires a second, partial drag strip.
 
 **Title-bar double-click.** The webview covers the native strip, so `NSWindow` never sees a header
-double-click, and Electrobun 2.0.5 implements app-region dragging only. Its native move uses pass-through
+double-click, and Electrobun 2.0.6 implements app-region dragging only. Its native move uses pass-through
 event monitors, so the page still receives `dblclick`. The desktop preload listens for primary-button
 `dblclick` events the page did not `preventDefault` and sends a payload-free `titleBarDoubleClick` message
 when the target is a drag region by Electrobun's own hit-test input: the computed, inherited
@@ -333,7 +333,7 @@ confinement: navigation-event responses cannot cancel it. The launcher applies t
 `webview.setNavigationRules` right after creating the window: block everything, then allow the origin,
 `about:srcdoc`, and same-origin `blob:`. HTML, SVG and notebook previews update `srcDoc` in place and
 every srcdoc load is policy-checked, so blocking `about:srcdoc` blanks them; `blob:` keeps downloads
-working. Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
+working. Electrobun 2.0.6 documents a `navigationRules` constructor option but never forwards it to
 native code, so the launcher does not use it.
 
 Every external link activation reaches the OS through one path. The desktop preload turns unmodified
@@ -386,22 +386,32 @@ injects the literal URL as code on Linux.
 
 **Shell marker.** The main process prepends one statement to that source, before the injected preferences
 and window chrome and before any bundled code (`markDesktopShell`): it defines the global named by
-[[module-contracts]]' `DESKTOP_SHELL_GLOBAL` as `true`, non-writable and non-configurable. It is the first
+[[module-contracts]]' `DESKTOP_SHELL_GLOBAL` as a frozen `DesktopShellMarker` (`{ mockupScripts }`),
+non-writable and non-configurable. It is the first
 statement, so it exists even when the rest of the preload throws. The web client reads it to know it runs
 inside this shell; it is ThinkRail's own name, not an Electrobun internal that an upgrade could rename.
 The desktop smoke asks the packaged window for the property descriptor and fails unless it is present and
 locked ([[module-artifact-tests]]).
 
-**The desktop shell runs no author script in a preview frame.** In a browser, a mockup the agent showed
-runs its scripts in a `sandbox="allow-scripts"` frame ([[module-resource-renderers]]). The web client
-answers `themed` (no script) whenever the shell marker is present ([[module-web]]); on the macOS desktop
-build the marker is present and a mockup the agent showed renders in the themed frame with no request to
-another host. Reason, read from the Electrobun 2.0.5 source (Linux and Windows not run): on macOS its
-preload runs in every child frame, also one without `allow-scripts`; its native bridge takes messages from any
-frame on Linux and Windows, and on Windows its preloads are injected into child frames as soon as a frame
-may run scripts. A frame script could then reach the launcher's RPC. Removal gate in
-[[electrobun-compatibility]]. Limit: the marker arrives through the preload, so the gate fails open if
-Electrobun injects no preload at all into the window; the smoke check above is what catches that.
+**Mockup scripts run in the desktop shell on macOS only.** A mockup the agent showed runs its scripts in a
+`sandbox="allow-scripts"` frame ([[module-resource-renderers]]). The web client runs one only when the
+marker is absent (a browser) or says `mockupScripts: true`, and answers `themed` (no script) for any other
+marker value, so an older preload's `true` fails closed ([[module-web]]). `desktopMockupScripts(platform)`
+sets it: `true` on macOS, `false` on Linux and Windows. Reason: a frame script must not reach the
+launcher's RPC through Electrobun's native bridge or its preload. Measured in the macOS desktop build with a
+`sandbox="allow-scripts"` srcdoc frame against a control from the main page: on Electrobun 2.0.5 the frame
+gets the whole preload (including the RPC key) and a forged `new-window-open` or `will-navigate` event
+through `eventBridge` or `internalBridge` makes the launcher open the URL; on 2.0.6 the four bridges
+(`eventBridge`, `internalBridge`, `hostBridge`, `bunBridge`) drop the frame's messages, the frame's own
+navigation and `window.open` reach no handler, and only `__electrobunConsoleForwardingInstalled` remains in
+the frame (`electrobunConsole` still writes a frame's console line to the launcher log). Linux and Windows
+were not measured; read from the 2.0.5 source, the bridge takes messages from any frame there and Windows
+injects its preloads into frames that may run scripts. Removal gate per platform in
+[[electrobun-compatibility]]. The desktop smoke's `frame-bridge` probe repeats the measurement on every
+platform and fails when the marker allows scripts and a forged event opens a URL or an Electrobun global is
+present in the frame ([[module-artifact-tests]]); CI runs it on macOS, Linux and Windows. Limit: the marker
+arrives through the preload, so the gate fails open if Electrobun injects no preload at all into the
+window; the smoke's marker check is what catches that.
 
 ## Microphone
 
@@ -410,8 +420,8 @@ host's loopback origin, a secure context, and navigation rules keep every other 
 webview, so granting the microphone to the webview grants it only to ThinkRail's own UI.
 
 - **macOS.** `build.mac.entitlements` carries `com.apple.security.device.audio-input`, which the
-  hardened runtime needs before TCC can prompt. Its string value is the usage text: Electrobun 2.0.5
-  writes it as `NSMicrophoneUsageDescription` into `Info.plist` (verified on a `package:dev` build). The
+  hardened runtime needs before TCC can prompt. Its string value is the usage text: Electrobun 2.0.6
+  writes it as `NSMicrophoneUsageDescription` into `Info.plist` (verified on a 2.0.5 `package:dev` build). The
   first dictation shows macOS's own prompt, plus the Electrobun WKWebView wrapper's per-origin
   "Microphone Access" dialog.
 - **TCC attribution.** macOS asks the *responsible* process. A ThinkRail launched from another app's
@@ -462,13 +472,13 @@ drivers and assertions live in the test package, which product code never import
 
 ## Build and release
 
-The package pins the Electrobun `2.0.5` npm bootstrap as a build-only dependency. That exact pin selects
-its paired Hutch `0.28.2` toolchain and SDK; direct global Hutch invocation and floating version overrides
-are not part of the build path. Every bump re-checks the removal gates in [[electrobun-compatibility]]. The pin is the lowest release that publishes a macOS x64 core, so Intel
+The package pins the Electrobun `2.0.6` npm bootstrap as a build-only dependency. That exact pin selects
+its paired Hutch `0.29.0` toolchain and SDK; direct global Hutch invocation and floating version overrides
+are not part of the build path. Every bump re-checks the removal gates in [[electrobun-compatibility]]. The pin is no lower than the first release that publishes a macOS x64 core, so Intel
 Macs build from the same unmodified `electrobun build` path as every other target; both macOS
 architectures target macOS 14 or later and build only on a native runner. The application explicitly
 selects the Bun main process (`build.mainProcess: "bun"`, Electrobun's default since 2.0.4). The packaged
-Bun is `1.4.4`, pinned by `build.bun.version` even though it equals Electrobun 2.0.5's default, so a
+Bun is `1.4.4`, pinned by `build.bun.version` even though it equals Electrobun 2.0.6's default, so a
 framework bump cannot silently move the runtime. Hutch resolves that field like the other toolchain
 versions (`configuredToolchainVersion`), but `ElectrobunConfig` does not type it, so the config passes the
 Bun block as a named value. `buildConfig.test.ts` asserts that it equals the root `packageManager` pin,
@@ -498,7 +508,7 @@ The browser favicon and in-app shell mark are separate web-owned surfaces.
 
 On Windows, Hutch embeds the ICO in the setup/extractor executable and `bin/launcher.exe`, and the
 shortcuts and the Installed-apps entry point at the launcher. No release action substitutes a second
-installer icon. The running app, however, is `bin/bun.exe`, and there Electrobun 2.0.5 / Hutch 0.28.2 leave
+installer icon. The running app, however, is `bin/bun.exe`, and there Electrobun 2.0.6 / Hutch 0.29.0 leave
 three gaps, closed by the project:
 
 - **Icon group.** Hutch adds group 1 to `bun.exe`, but Bun's own named `IDI_MYICON` stays and is what
@@ -632,7 +642,7 @@ agents and PTYs may terminate, with no second confirmation or renderer-preparati
 also carries the attempt's steps and log and the durable post-relaunch result, which the web presents.
 [[submodule-desktop-updates]] owns the attempt and its journal.
 
-Quit coordination preserves its completion action. Electrobun 2.0.5's first `applyUpdate()` returns on the
+Quit coordination preserves its completion action. Electrobun 2.0.6's first `applyUpdate()` returns on the
 asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same
 idempotent host shutdown, waits for that first SDK call to settle, and then resumes `applyUpdate()` under the
 completed guard; ordinary completion still calls only `Utils.quit()`. A failed second handoff reports a
@@ -646,9 +656,9 @@ the JetBrains Central proxy daemon started from a pi `session_start`, editors, M
 made the helper's `app → app.previous` rename fail with `AccessDenied` for its whole retry window, roll
 back, and relaunch the old build. POSIX renames are unaffected. Children started by a build without this
 rule keep the old cwd, so the first update from such a build may still need them ended once. The step is an
-Electrobun 2.0.5 workaround; its two removal gates live in [[electrobun-compatibility]].
+Electrobun 2.0.6 workaround; its two removal gates live in [[electrobun-compatibility]].
 
-Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.5/package/src/sdks/main/core/Updater.ts#L2251-L2364).
+Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.6/package/src/sdks/main/core/Updater.ts#L2348-L2460).
 
 ## Verification
 

@@ -18,10 +18,15 @@ what would let us delete the adaptation. The installed versions come only from `
 
 ## Last re-check
 
-Electrobun 2.0.5 / Hutch 0.28.2, when this registry was created. Hutch `main` at
-[`e044ccf`](https://github.com/blackboardsh/hutch/blob/e044ccf1d700e26a40aa9d11f9fa8698fc4a0e09/src/electrobun.zig#L3238)
-(paired with Electrobun 2.0.7-beta.7) still archives the Linux installer's staging root; no other gate
-was re-verified then.
+Electrobun 2.0.6 / Hutch 0.29.0 ([`a2c9255`](https://github.com/blackboardsh/hutch/tree/a2c9255ed54f93225814d7d7cf04ad5a613e44eb)).
+Every gate was re-read in the generated SDK, the Electrobun `v2.0.6` native sources and the Hutch source,
+then desktop typecheck (both flags turned on as a probe), desktop unit tests and `bun run smoke:desktop` on
+a macOS `package:dev` build (all probes pass); the Linux and Windows smokes run in CI. The
+SDK changes from 2.0.5 are the updater, the native UI engine and the macOS main-frame-only bridge and
+preloads; preloads, `BrowserWindow`, `BrowserView`, events, `Utils` and the launcher are unchanged. Hutch
+0.29.0 changes only update manifests. The System32 `PATH` gate is met (Hutch already ran
+`%SystemRoot%\System32\tar.exe` in 0.28.2); its removal waits for a Windows packaging run. Every other
+gate still holds.
 
 ## Upgrade contract
 
@@ -54,11 +59,12 @@ product contract (it then guards upstream's behavior instead).
 - **Preload passed as source text.** Owner [[module-desktop]], `index.ts`. **Removal gate:** a
   `views://` preload URL loads as a script on Linux (Electrobun 1.18.1 injected it as code). Verify the
   Linux packaged preload smoke.
-- **No scripted mockup frames in the desktop window.** Owner [[module-desktop]], `shellMarker.ts`;
-  [[module-web]] reads the marker. **Removal gate:** on macOS, Linux and Windows the native bridge drops
-  messages that do not come from the main frame, and no preload runs inside a child frame. Verify on a
-  packaged build of each platform with a `sandbox="allow-scripts"` srcdoc frame, not from release notes.
-  The marker itself stays (it is how the web client knows the shell); only the web gate goes.
+- **No scripted mockup frames in the Linux and Windows desktop window.** Owner [[module-desktop]],
+  `shellMarker.ts` (`desktopMockupScripts`); [[module-web]] reads the marker's `mockupScripts`. Lifted on
+  macOS at 2.0.6: the bridges drop child-frame messages and no preload runs in a child frame (measured; the
+  smoke's `frame-bridge` probe enforces it). **Removal gate (per platform):** the same holds on that
+  platform's packaged build, shown by the `frame-bridge` line of `bun run smoke:desktop` (0 forged opens, 0
+  Electrobun globals), not by release notes. Then that platform joins `desktopMockupScripts`.
 - **Edge-triggered menu commands and Command-Q key state.** Owner [[module-desktop]], `repeatGate.ts`,
   `quitShortcut.ts`, `keyState.ts`. **Removal gate:** menu actions carry a key-repeat flag and their
   trigger (key or pointer). Verify `repeatGate.test.ts`, `quitShortcut.test.ts`, `keyState.test.ts`.

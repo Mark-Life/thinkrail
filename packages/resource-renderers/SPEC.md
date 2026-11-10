@@ -531,12 +531,10 @@ No script from the file and none from ThinkRail runs in a static or themed frame
 `allow-scripts` the document cannot run code to use the shared origin, whatever markup survives the
 sanitizer. A script that a native webview injects into every frame is outside this guarantee, in the
 static frame as well: WKWebView runs a user script added with `forMainFrameOnly: false` inside a frame
-that has no `allow-scripts`, and Electrobun 2.0.5 adds its preload that way on macOS. Removing
-`electrobun-*` elements in the sanitizer and a desktop probe that fails when a preview frame sends a bridge
-message are open work. The macOS desktop app (WKWebView,
-Electrobun 2.0.5) was run for the themed frame: theme, theme switches without a reload, `@layer`, card
-heights and page zoom from 100 % to 150 % match the browser, and Electrobun's preload globals are present
-inside the frame, where no script can read them. WebView2 and WebKitGTK were not run: their space-taking
+that has no `allow-scripts`; Electrobun 2.0.5 added its preload that way on macOS, 2.0.6 does not
+([[module-desktop]]). The macOS desktop app (WKWebView) was run for the themed frame: theme, theme switches
+without a reload, `@layer`, card heights and page zoom from 100 % to 150 % match the browser. WebView2 and
+WebKitGTK were not run: their space-taking
 scrollbars and `@layer` in the oldest WebKitGTK the app supports are open. The barrier is the
 `sandbox` attribute on the app's own `iframe` element, which author HTML cannot touch, where a script
 policy written inside the document could be removed by the document. **Invariant: a preview frame never
@@ -836,7 +834,8 @@ claimed.
   CDN prefixes; fonts only from `data:` or the CDN prefixes: the frame CSP.
 - Microphone, camera, screen capture, geolocation and clipboard read are denied: browser rules for a
   cross-origin frame (the iframe has no `allow` attribute).
-- Scripts run only for a mockup path the agent showed, never in the desktop shell, never in the search
+- Scripts run only for a mockup path the agent showed, in the desktop shell only when its marker allows them
+  (macOS), never in the search
   palette and never for a git revision: the host's mode answer and the palette host's own `html.mode`
   ([[module-web]]), and the `scope` rule in `useHtmlMode`.
 
@@ -935,8 +934,8 @@ work.
 - The frame CSP is the only thing between a mockup script and the host WebSocket: the host does not
   refuse a socket with `Origin: null`.
 - Not verified: Firefox, real Safari, headed Chrome with a user profile (whether a mockup can raise a
-  notification with the app's permission: Playwright Chromium allowed it), real CDN loads, the desktop
-  webviews, a hidden tab (Playwright keeps a page visible, so the `visibilitychange` request has a unit
+  notification with the app's permission: Playwright Chromium allowed it), real CDN loads, WebView2 and
+  WebKitGTK (they never run scripts), a hidden tab (Playwright keeps a page visible, so the `visibilitychange` request has a unit
   test only). Full Chrome differs from the headless shell that the e2e projects run: the prerender
   request, the big-message stall and the frame's own process above were seen only in full Chromium, run
   headless by hand, and no e2e case covers them.

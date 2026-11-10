@@ -823,6 +823,23 @@ test("a mockup that no visualize call showed runs no script", async ({ page: app
 	await expect(frame.locator("#out")).toHaveText("static");
 });
 
+test("a desktop shell that allows mockup scripts runs a shown mockup like the browser", async ({
+	page: app,
+}) => {
+	await installDesktopShellMarker(app, { mockupScripts: true });
+	const { view, iframe, frame } = await showMockup(
+		app,
+		"macos desktop mockup",
+		mockup(
+			`<button id="save">Save</button><script>document.getElementById("save").addEventListener("click", (event) => { event.target.textContent = "script ran"; });</script>`,
+		),
+	);
+	await expect(view).toHaveAttribute("data-html-mode", "scripted");
+	await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
+	await clickInTranscriptFrame(frame.locator("#save"));
+	await expect(frame.locator("#save")).toHaveText("script ran");
+});
+
 test("the desktop shell shows a shown mockup themed, with its controls and noscript content", async ({
 	page: app,
 }) => {

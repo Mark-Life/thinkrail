@@ -1,7 +1,7 @@
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { DESKTOP_SHELL_GLOBAL, type ToolCall } from "@thinkrail/contracts";
+import { DESKTOP_SHELL_GLOBAL, type DesktopShellMarker, type ToolCall } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
 	expandDisclosure,
@@ -135,10 +135,16 @@ export async function nodeColors(node: Locator): Promise<{ actual: string; expec
 	});
 }
 
-export async function installDesktopShellMarker(page: Page): Promise<void> {
-	await page.addInitScript((name) => {
-		Object.defineProperty(globalThis, name, { value: true });
-	}, DESKTOP_SHELL_GLOBAL);
+export async function installDesktopShellMarker(
+	page: Page,
+	marker: DesktopShellMarker = { mockupScripts: false },
+): Promise<void> {
+	await page.addInitScript(
+		({ name, value }) => {
+			Object.defineProperty(globalThis, name, { value: Object.freeze(value) });
+		},
+		{ name: DESKTOP_SHELL_GLOBAL, value: marker },
+	);
 }
 
 export async function hostColor(app: Page, token: string): Promise<string> {
