@@ -3,11 +3,12 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type {
-	McpServerEntryInput,
-	McpServerLog,
-	McpServerScope,
-	McpServerSummary,
+import {
+	MCP_ACTIVE_EXPOSURES,
+	type McpServerEntryInput,
+	type McpServerLog,
+	type McpServerScope,
+	type McpServerSummary,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, type Translator, useT } from "@thinkrail/locales/react";
@@ -34,7 +35,6 @@ import {
 	importIssues,
 	isMcpServerEntry,
 	MCP_EXPOSURE_HINT,
-	MCP_EXPOSURES,
 	MCP_HIDDEN_VALUE,
 	type McpFormDraft,
 	type McpServerReview,
@@ -381,7 +381,7 @@ function McpForm({
 				<Segments
 					testId="mcp-form-exposure"
 					value={draft.exposure}
-					options={MCP_EXPOSURES.map((id) => ({ id, label: mcpExposureLabel(t, id) }))}
+					options={MCP_ACTIVE_EXPOSURES.map((id) => ({ id, label: mcpExposureLabel(t, id) }))}
 					onChange={(exposure) => onChange({ ...draft, exposure })}
 				/>
 			</Field>

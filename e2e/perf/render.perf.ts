@@ -21,10 +21,9 @@ import {
 	attachRenderProfiler,
 	detachRenderProfiler,
 	MARKDOWN_SUBTREE,
-	type MainThreadCost,
-	type RenderProfile,
 	readRenderProfile,
 	resetRenderProfile,
+	type ScenarioRun,
 	startMainThreadProbe,
 } from "./renderProfiler";
 import { DEFAULT_SCENARIOS, SCENARIO_NAMES, type ScenarioName } from "./scenarios";
@@ -52,19 +51,7 @@ function pause(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-interface Counters {
-	[name: string]: number;
-}
-
-export interface ScenarioRun {
-	scenario: string;
-	run: number;
-	cpuRate: number;
-	wallMs: number;
-	counters: Counters;
-	mainThread: MainThreadCost;
-	profile: RenderProfile;
-}
+type Counters = ScenarioRun["counters"];
 
 function record(result: ScenarioRun): void {
 	mkdirSync(OUT_DIR, { recursive: true });

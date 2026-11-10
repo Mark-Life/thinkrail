@@ -1,4 +1,4 @@
-import { map, num, obj, type Static } from "@earendil-works/pi-schema";
+import { map, num, obj, type Static, str } from "@earendil-works/pi-schema";
 import type { Page, Request, Route } from "@playwright/test";
 
 const COST_FIELDS = {
@@ -330,6 +330,18 @@ export const MainThreadCost = obj({
 	heapDeltaMb: num(),
 });
 export type MainThreadCost = Static<typeof MainThreadCost>;
+
+/** One scenario run, as `render.perf.ts` writes it and `run.ts` reads it back. */
+export const ScenarioRun = obj({
+	scenario: str(),
+	run: num(),
+	cpuRate: num(),
+	wallMs: num(),
+	counters: map(num()),
+	mainThread: MainThreadCost,
+	profile: RenderProfile,
+});
+export type ScenarioRun = Static<typeof ScenarioRun>;
 
 const MAIN_THREAD_METRICS = {
 	taskMs: "TaskDuration",

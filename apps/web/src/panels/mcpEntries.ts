@@ -1,12 +1,11 @@
 import { compile, obj } from "@earendil-works/pi-schema";
 import {
 	JsonObject,
-	MCP_ACTIVE_EXPOSURES,
 	MCP_COMMON_FIELDS,
 	MCP_HTTP_FIELDS,
 	MCP_STDIO_FIELDS,
+	type McpActiveExposure,
 	McpEntryType,
-	type McpExposure,
 	McpServerEntryInput,
 	type McpServerScope,
 	type McpServerSummary,
@@ -14,15 +13,11 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, t } from "@thinkrail/locales/react";
 
-export type McpEditableExposure = Exclude<McpExposure, "codemode">;
-
-export const MCP_EXPOSURES: readonly McpEditableExposure[] = MCP_ACTIVE_EXPOSURES;
-
 export const MCP_EXPOSURE_HINT = {
 	deferred: "mcp.exposure.deferredHint",
 	direct: "mcp.exposure.directHint",
 	hidden: "mcp.exposure.hiddenHint",
-} as const satisfies Readonly<Record<McpEditableExposure, MessageKey>>;
+} as const satisfies Readonly<Record<McpActiveExposure, MessageKey>>;
 
 const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -63,7 +58,7 @@ export interface McpFormDraft {
 	command: string;
 	args: string;
 	values: McpValueRow[];
-	exposure: McpEditableExposure;
+	exposure: McpActiveExposure;
 	description: string;
 }
 
@@ -597,7 +592,7 @@ export function withEnabled(entry: McpServerEntryInput, enabled: boolean): McpSe
 
 export function withExposure(
 	entry: McpServerEntryInput,
-	exposure: McpEditableExposure,
+	exposure: McpActiveExposure,
 ): McpServerEntryInput {
 	return { ...entry, exposure };
 }

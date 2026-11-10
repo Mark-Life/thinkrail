@@ -3,34 +3,17 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compile, map, num, obj, type Static, str } from "@earendil-works/pi-schema";
-import type { Same } from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
 import {
 	E2E_ROOT_DIR,
 	processRunnerInterruption,
 	runE2eProcess,
 	signalExitCode,
 } from "../processRunner";
-import type { ScenarioRun } from "./render.perf";
-import {
-	type ComponentCost,
-	MARKDOWN_SUBTREE,
-	MainThreadCost,
-	RenderProfile,
-} from "./renderProfiler";
+import { type ComponentCost, MARKDOWN_SUBTREE, ScenarioRun } from "./renderProfiler";
 import { isScenarioName, SCENARIO_NAMES } from "./scenarios";
 
-const ScenarioRunFile = obj({
-	scenario: str(),
-	run: num(),
-	cpuRate: num(),
-	wallMs: num(),
-	counters: map(num()),
-	mainThread: MainThreadCost,
-	profile: RenderProfile,
-});
-export type ScenarioRunTie = Same<Static<typeof ScenarioRunFile>, ScenarioRun>;
-const scenarioRun = compile(ScenarioRunFile);
+const scenarioRun = compile(ScenarioRun);
 
 const bun = process.execPath;
 const DEFAULT_RUNS = 5;

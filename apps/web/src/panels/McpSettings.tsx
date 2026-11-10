@@ -7,15 +7,17 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type {
-	McpConfigFileError,
-	McpListResult,
-	McpServerEntryInput,
-	McpServerScope,
-	McpServerSummary,
-	SessionId,
-	Workspace,
-	WorkspaceId,
+import {
+	MCP_ACTIVE_EXPOSURES,
+	type McpActiveExposure,
+	type McpConfigFileError,
+	type McpListResult,
+	type McpServerEntryInput,
+	type McpServerScope,
+	type McpServerSummary,
+	type SessionId,
+	type Workspace,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, t as translate, useT } from "@thinkrail/locales/react";
@@ -67,13 +69,7 @@ import {
 	McpLogDialog,
 	type McpLogRead,
 } from "./McpServerDialogs";
-import {
-	MCP_EXPOSURE_HINT,
-	MCP_EXPOSURES,
-	type McpEditableExposure,
-	projectEntryFrom,
-	SCOPE_LABEL,
-} from "./mcpEntries";
+import { MCP_EXPOSURE_HINT, projectEntryFrom, SCOPE_LABEL } from "./mcpEntries";
 import { MCP_PRESETS, type McpPreset } from "./mcpPresets";
 import {
 	type McpChatFailure,
@@ -224,7 +220,7 @@ function writeSetting(
 
 type McpRowCommand =
 	| { kind: "toggle"; enabled: boolean }
-	| { kind: "exposure"; exposure: McpEditableExposure }
+	| { kind: "exposure"; exposure: McpActiveExposure }
 	| { kind: "revoke-tool"; tool: string }
 	| { kind: McpRowAction | "sign-out" | "remove" | "share" | "details" };
 
@@ -490,7 +486,7 @@ function ExposureMenu({
 }: {
 	summary: McpServerRow["summary"];
 	disabled: boolean;
-	onChange: (exposure: McpEditableExposure) => void;
+	onChange: (exposure: McpActiveExposure) => void;
 }) {
 	const t = useT();
 	return (
@@ -520,11 +516,11 @@ function ExposureMenu({
 				<DropdownMenuRadioGroup
 					value={summary.effectiveExposure}
 					onValueChange={(value) => {
-						const exposure = MCP_EXPOSURES.find((candidate) => candidate === value);
+						const exposure = MCP_ACTIVE_EXPOSURES.find((candidate) => candidate === value);
 						if (exposure && exposure !== summary.effectiveExposure) onChange(exposure);
 					}}
 				>
-					{MCP_EXPOSURES.map((exposure) => (
+					{MCP_ACTIVE_EXPOSURES.map((exposure) => (
 						<DropdownMenuRadioItem
 							key={exposure}
 							value={exposure}

@@ -1,4 +1,5 @@
 import type {
+	McpActiveExposure,
 	McpListResult,
 	McpRenderedTarget,
 	McpServerEntryInput,
@@ -10,7 +11,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, t } from "@thinkrail/locales/react";
 import { type McpStateTone, mcpStateLabel, mcpStateTone, mcpToolCountLabel } from "@/lib";
 import type { McpServerRow } from "@/store";
-import { type McpEditableExposure, withEnabled, withExposure } from "./mcpEntries";
+import { withEnabled, withExposure } from "./mcpEntries";
 
 export type McpRowAction =
 	| "sign-in"
@@ -232,7 +233,7 @@ function baseView(t: Translator, row: McpServerRow, now: number): McpRowView {
 	}
 }
 
-export type McpSettingChange = { enabled: boolean } | { exposure: McpEditableExposure };
+export type McpSettingChange = { enabled: boolean } | { exposure: McpActiveExposure };
 
 type McpSettingWrite =
 	| { method: "mcp.setProjectOverride"; params: WsParams<"mcp.setProjectOverride"> }
@@ -286,9 +287,9 @@ const EXPOSURE_LABEL = {
 	deferred: "mcp.exposure.deferred",
 	direct: "mcp.exposure.direct",
 	hidden: "mcp.exposure.hidden",
-} as const satisfies Record<McpEditableExposure, MessageKey>;
+} as const satisfies Record<McpActiveExposure, MessageKey>;
 
-export function mcpExposureLabel(t: Translator, exposure: McpEditableExposure): string {
+export function mcpExposureLabel(t: Translator, exposure: McpActiveExposure): string {
 	return t(EXPOSURE_LABEL[exposure]);
 }
 
