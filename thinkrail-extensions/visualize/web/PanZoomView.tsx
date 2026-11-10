@@ -5,6 +5,7 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import type {} from "@thinkrail/ui/css-custom-properties";
 import type * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -112,7 +113,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 				ref={scrollRef}
 				data-testid="mermaid-fullscreen-svg"
 				className="h-full w-full cursor-grab select-none overflow-auto active:cursor-grabbing [&_svg]:!h-auto [&_svg]:!w-[var(--zoom)] [&_svg]:!max-w-none"
-				style={{ "--zoom": `${scale * 100}%` } as React.CSSProperties}
+				style={{ "--zoom": `${scale * 100}%` }}
 				onPointerDown={onPointerDown}
 				onPointerMove={onPointerMove}
 				onPointerUp={endDrag}

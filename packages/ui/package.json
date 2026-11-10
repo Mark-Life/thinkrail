@@ -8,6 +8,7 @@
 		"./button": "./button.tsx",
 		"./command": "./command.tsx",
 		"./context-menu": "./context-menu.tsx",
+		"./css-custom-properties": "./css-custom-properties.ts",
 		"./dialog": "./dialog.tsx",
 		"./dropdown-menu": "./dropdown-menu.tsx",
 		"./keyboard": "./keyboard.ts",
