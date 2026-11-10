@@ -63,7 +63,8 @@ access to the optional native stable string adapter, and `firstPaintPreferenceSt
 `readGlobalNativeBridge`: the one typed reader of the optional bridges the desktop preload freezes onto
 `globalThis`; it returns the `contracts` bridge type only when every method a `BridgeMethods<T>` record lists is a
 function, and that record must name every member of `T`, so a new bridge method fails `tsc` until it is checked
-too), and `styles/` — which holds the three
+too. A run-time check cannot see a function's parameters, so the signatures are a trust point in the desktop build
+that installs the bridge ([[submodule-contracts-schema]])), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);

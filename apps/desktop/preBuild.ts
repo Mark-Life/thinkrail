@@ -10,7 +10,6 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import type { BundledExtensions } from "@thinkrail/server";
 import type { BuildRuntimeSources } from "@thinkrail/server/build-support";
 import { injectChunkId, type SourceMapJson } from "./src/runtimeSourceMap";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
@@ -20,11 +19,6 @@ const repoRoot = resolve(desktopDir, "..", "..");
 const stageDir = join(desktopDir, ".stage");
 const runtimeDir = join(stageDir, "runtime");
 const generatedEntry = join(stageDir, "server-entry.ts");
-const bundledRuntimeKeys = {
-	factories: "factories",
-	skillsDir: "skillsDir",
-	trashHelpers: "trashHelpers",
-} as const satisfies { [Key in keyof BundledExtensions]-?: Key };
 
 function runBun(args: string[]): void {
 	const result = spawnSync("bun", args, { cwd: repoRoot, stdio: "inherit" });
@@ -137,34 +131,9 @@ try {
 	writeFileSync(
 		generatedEntry,
 		`${sources.extensions.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`).join("\n")}
-import { bootHost, registerBundledRuntime, reportDesktopError } from "@thinkrail/server";
+import { desktopHostStarter } from ${JSON.stringify(join(desktopDir, "runtimeEntry.ts"))};
 
-export async function startDesktopHost(options) {
-  await registerBundledRuntime({
-    ${bundledRuntimeKeys.factories}: [${sources.extensions.map((_, index) => `factory${index}`).join(", ")}],
-    ${bundledRuntimeKeys.skillsDir}: options.runtimeDir + "/skills",
-    ${bundledRuntimeKeys.trashHelpers}: {
-      macos: options.runtimeDir + "/macos-trash",
-      windows: options.runtimeDir + "/windows-trash.exe",
-    },
-  });
-  const host = await bootHost({
-    port: 0,
-    host: "127.0.0.1",
-    portMode: "exact",
-    resolveShellEnv: true,
-    staticDir: options.staticDir,
-    appVersion: options.appVersion,
-    analytics: {
-      posthogApiKey: options.posthogProjectKey,
-      channel: options.channel,
-      build: "desktop",
-      appRoot: options.runtimeDir + "/..",
-      ...(options.openExternal ? { openExternal: options.openExternal } : {}),
-    },
-  });
-  return { ...host, reportError: reportDesktopError };
-}
+export const startDesktopHost = desktopHostStarter([${sources.extensions.map((_, index) => `factory${index}`).join(", ")}]);
 `,
 	);
 	const runtimeFile = join(runtimeDir, "server-runtime.ts");

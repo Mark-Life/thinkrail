@@ -105,8 +105,10 @@ another.
 3. Start `resolveShellEnv()` right after the `chdir`, so the login shell it spawns also starts outside the
    bundle, then dynamically import the separately built, unpacked `server-runtime.ts` resource, and await the
    shell env before `startDesktopHost()`. The import names a file path, so `tsc` cannot see the module: the
-   result is `unknown` until `isDesktopServerRuntime` finds a `startDesktopHost` function, the entry `preBuild.ts`
-   generates; anything else fails startup. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
+   result is `unknown` until `isDesktopServerRuntime` finds a `startDesktopHost` function; anything else fails
+   startup. Its type is `ReturnType<typeof desktopHostStarter>` from `runtimeEntry.ts`, the module the bundle is
+   built from, so desktop and runtime share one signature. A run-time check cannot see a function's parameters, so
+   the predicate is a trust point: the bundle and the desktop come from one build. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
    typical profile, seconds on a slow one); overlapping it with the splash and the bundle import hides up to
    that time. The bundle's own `shellEnv` copy is a separate module instance, so the run is cached on a
    `Symbol.for` global key: its `bootHost()` call awaits the same run instead of probing again. That bundle is
@@ -115,22 +117,23 @@ another.
    define a single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve
    inside it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
    forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
-4. The runtime value-imports the three bundled pi-package factories (`pi-spec-graph`,
-   `pi-thinkrail-workflow`, `pi-todos`) and calls `registerBundledRuntime()` with those factories, the
+4. `preBuild.ts` generates only the bundle's entry: it value-imports the three bundled pi-package factories
+   (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) and passes them to `desktopHostStarter` in
+   `runtimeEntry.ts`, a typed module. That calls `registerBundledRuntime()` with those factories, the
    staged skills (every `BuildRuntimeSources.skillRoots` entry copied into one dir under its `route` —
    host roots under `host/`, a registry extension's under `extensions/<name>/` — duplicate routes rejected), and
    macOS/Windows trash helpers. ThinkRail extensions from the server
    registry ([[submodule-server-extensions]]) need no generated entry: their factories reach the bundle
-   through `@thinkrail/server`'s static import graph. The generator's key map must satisfy every key of the server-owned
-   `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
-   producing a packaged-only `undefined`. It then calls `bootHost({ resolveShellEnv: true, … })` on loopback port `0` with the staged web
+   through `@thinkrail/server`'s static import graph. `runtimeEntry.ts` builds the server-owned `BundledExtensions`
+   in typed code, so adding a required launcher field fails desktop typecheck instead of producing a
+   packaged-only `undefined`. It then calls `bootHost({ resolveShellEnv: true, … })` on loopback port `0` with the staged web
    directory, baked version and release-only analytics key, `desktop` analytics provenance, and, only when packaged, the launcher-supplied
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
-   `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
+   `DesktopHostOptions` and `runtimeEntry.ts`. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
    saved-choice claim. No deep-link or RPC surface is added. The runtime also passes `appRoot`
    (`runtimeDir/..`, i.e. `Resources/app`) so error-report frames are rooted at the packaged app, and returns
-   `reportDesktopError` as `DesktopHost.reportError`.
+   `reportDesktopError` as the host's `reportError`.
 5. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
@@ -153,7 +156,7 @@ listener/lifecycle/journal, native-label writes, leaving the bundle working dire
 Windows window icon, Windows taskbar identity, startup) go through `errorReporting.ts`'s
 `desktopError(scope, message, error)`:
 the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
-`DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
+the host's `reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
 that it is console-only. Uncaught main-process faults need no seam — they share the host's process
 handlers. `updates` reaches this sibling helper directly.
 
