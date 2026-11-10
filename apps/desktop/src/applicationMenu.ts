@@ -1,7 +1,7 @@
-import { compile, obj, str } from "@earendil-works/pi-schema";
-import type { NativeCommand } from "@thinkrail/contracts";
+import { compile, obj, type Static, str, type Validator } from "@earendil-works/pi-schema";
+import type { NativeCommand, Same } from "@thinkrail/contracts";
 import type { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
-import type { ApplicationMenuItemConfig } from "electrobun/main";
+import type { ApplicationMenuItemConfig, default as Electrobun } from "electrobun/main";
 import { labelReader, type RawLabels } from "./nativeLabels";
 
 const MAX_MENU_LABEL_LENGTH = 80;
@@ -111,7 +111,14 @@ export function isNativeCommand(action: string | null): action is NativeCommand 
 	return action !== null && Object.hasOwn(NATIVE_COMMANDS, action);
 }
 
-const MenuClick = compile(obj({ data: obj({ action: str() }, { open: true }) }, { open: true }));
+type MenuClickEvent = ReturnType<typeof Electrobun.events.events.app.applicationMenuClicked>;
+const MenuClickShape = obj({ data: obj({ action: str() }, { open: true }) }, { open: true });
+const MenuClick: Validator<
+	Same<
+		Static<typeof MenuClickShape>,
+		Record<keyof Pick<MenuClickEvent, "data">, Pick<MenuClickEvent["data"], "action">>
+	>
+> = compile(MenuClickShape);
 
 export function readMenuAction(event: unknown) {
 	return MenuClick.check(event) ? event.data.action : null;

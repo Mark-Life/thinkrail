@@ -42,7 +42,8 @@ The main process parses at its edges with private `pi-schema` checks: every webv
 through `checked` in `rpcSchemas.ts`, and the preference, route, label, update-journal and Electrobun uninstall-manifest
 files where they are read. `DesktopRpc` derives its webview-sent messages from those schemas. A refused message
 never reaches its handler and reports `NATIVE_RPC_INVALID`. Native-to-webview messages are not parsed: the same binary
-writes them.
+writes them. Electrobun types an application-menu click as `unknown` at the listener, so `readMenuAction` checks it,
+and its schema is tied with `Same` to the data type of Electrobun's own `applicationMenuClicked` event.
 
 `preload.ts` and every module it value-imports never import `pi-schema`, so the bundle injected into each page has no
 schema compiler; `preloadBundle.test.ts` pins this. Those modules keep hand checks for the values they read
