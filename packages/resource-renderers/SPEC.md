@@ -648,8 +648,9 @@ height. A diff with a static side or a frame-sized side keeps the bounded box.
 the height clamp work as in the themed frame, and the theme is the same text: the one cascade layer
 `hostTheme.ts` builds, in the prefix and in every live update, so any author declaration wins here too.
 Each mode is its own component, so a mode change mounts a new
-`iframe` element; a `sandbox` change on a live element would not reach the loaded document. The notice bar
-says that scripts run (`viewer.html.scriptedNotice`).
+`iframe` element; a `sandbox` change on a live element would not reach the loaded document. The bar above
+the frame holds only the viewport switch: a running mockup needs no notice, and its limits are the agent's
+concern (`visualize` guideline), not the reader's.
 
 *Document* (`scriptedDocument.ts`). The `srcdoc` is a fixed host prefix followed by the author source, byte
 for byte. This mode neither parses nor sanitizes: a script re-creates anything a sanitizer removes, and the

@@ -2733,7 +2733,6 @@
 	"viewer.html.oldDocument": "Old document",
 	"viewer.html.originalPreview": "Original preview of {{path}}",
 	"viewer.html.preview": "Preview of {{path}}",
-	"viewer.html.scriptedNotice": "Mockup scripts run in a sandboxed frame. fetch, XHR and WebSocket are blocked.",
 	"viewer.html.viewport.desktop": "Desktop",
 	"viewer.html.viewport.fill": "Fill",
 	"viewer.html.viewport.label": "Preview width",
