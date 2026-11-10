@@ -1766,12 +1766,17 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 				reportSessionFileDamage(path, "has a header without a cwd, so its chat is not listed");
 				return { id: entry.id, cwd: "" };
 			}
-			if (!JsonContainer.check(entry)) throw new Error("first parsed entry is not an object");
+			if (!JsonContainer.check(entry))
+				throw new CodedError("PI_SESSION_FILE_DAMAGED", "first parsed entry is not an object");
 			return null;
 		}
-		throw new Error("session header is missing");
+		throw new CodedError("PI_SESSION_FILE_DAMAGED", "session header is missing");
 	} catch (error) {
-		throw new Error(`Session transcript is unreadable or malformed: ${path}`, { cause: error });
+		throw new CodedError(
+			"PI_SESSION_FILE_DAMAGED",
+			`Session transcript is unreadable or malformed: ${path}`,
+			{ cause: error },
+		);
 	} finally {
 		lines.close();
 		input.destroy();
@@ -2154,7 +2159,8 @@ function attachDiskSession(
 function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
 	if (!JsonObject.check(model)) return undefined;
 	if (model.provider === undefined && model.modelId === undefined) return undefined;
-	if (!SavedModelRef.check(model)) throw new Error("The chat's saved model is unavailable.");
+	if (!SavedModelRef.check(model))
+		throw new CodedError("SESSION_MODEL_UNAVAILABLE", "The chat's saved model is unavailable.");
 	return { provider: model.provider, id: model.modelId };
 }
 

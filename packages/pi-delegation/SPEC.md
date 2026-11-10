@@ -47,7 +47,9 @@ remain rejected. Empty cuts are explicit, tool-incomplete/corrupt captures fail,
 are preserved, and source history is never mutated. Resource transcript lookup is strict and shared
 by capture/reopen, not an arbitrary file importer. A transcript is read through pi's `parseSessionEntries`, so
 its types are pi's own; a line pi skips as malformed or blank fails the read, and every field the replay uses is
-then checked by hand.
+then checked by hand. pi ships no schema for entries or messages, so those per-field checks stay hand-written. Their
+value lists are not: block kinds, stop reasons and usage fields are tables typed by pi-ai's types, so a pi bump that
+adds or changes one fails `tsc`, and thinking levels are pi-ai's `MODEL_THINKING_LEVELS`.
 
 `reopenChild` consumes the saved immutable birth record excluding its path, plus saved declarative
 session configuration. It validates owner/scope/file identity and preserves birth metadata, resolving

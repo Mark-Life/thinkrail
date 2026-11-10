@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type {
+	AssistantMessage,
+	StopReason,
+	SystemMessage,
+	ToolResultMessage,
+	Usage,
+	UserMessage,
+} from "@earendil-works/pi-ai";
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import {
 	buildSessionContext,
 	parseSessionEntries,
@@ -41,25 +49,84 @@ function finite(value: unknown): boolean {
 	return typeof value === "number" && Number.isFinite(value);
 }
 
-function usage(value: unknown): boolean {
-	if (!object(value) || !object(value.cost)) return false;
-	return (
-		["input", "output", "cacheRead", "cacheWrite", "totalTokens"].every((key) =>
-			finite(value[key]),
-		) &&
-		["input", "output", "cacheRead", "cacheWrite", "total"].every(
-			(key) => object(value.cost) && finite(value.cost[key]),
-		) &&
-		optional(value.cacheWrite1h, finite) &&
-		optional(value.reasoning, finite)
+type Check = (candidate: unknown) => boolean;
+interface Field {
+	presence: "required" | "optional";
+	check: Check;
+}
+/** Each field of `T` with whether it may be absent: a table typed by it fails `tsc` when pi's type changes. */
+type Fields<T> = {
+	[K in keyof T]-?: Field & { presence: undefined extends T[K] ? "optional" : "required" };
+};
+const must = (check: Check) => ({ presence: "required", check }) as const;
+const may = (check: Check) => ({ presence: "optional", check }) as const;
+const flag: Check = (candidate) => typeof candidate === "boolean";
+
+const USAGE_COUNTS = {
+	input: must(finite),
+	output: must(finite),
+	cacheRead: must(finite),
+	cacheWrite: must(finite),
+	totalTokens: must(finite),
+	cacheWrite1h: may(finite),
+	reasoning: may(finite),
+} satisfies Fields<Omit<Usage, "cost">>;
+
+const USAGE_COSTS = {
+	input: must(finite),
+	output: must(finite),
+	cacheRead: must(finite),
+	cacheWrite: must(finite),
+	total: must(finite),
+	totalFromProvider: may(flag),
+} satisfies Fields<Usage["cost"]>;
+
+const USER_BLOCKS = { text: true, image: true } satisfies Record<
+	Exclude<UserMessage["content"], string>[number]["type"],
+	true
+>;
+const TOOL_RESULT_BLOCKS = { text: true, image: true } satisfies Record<
+	ToolResultMessage["content"][number]["type"],
+	true
+>;
+const SYSTEM_BLOCKS = { text: true } satisfies Record<
+	Exclude<SystemMessage["content"], string>[number]["type"],
+	true
+>;
+const ASSISTANT_BLOCKS = { text: true, thinking: true, toolCall: true } satisfies Record<
+	AssistantMessage["content"][number]["type"],
+	true
+>;
+const STOP_REASONS = {
+	pending: true,
+	stop: true,
+	length: true,
+	toolUse: true,
+	error: true,
+	aborted: true,
+	deferred: true,
+} satisfies Record<StopReason, true>;
+
+function fields(value: Record<string, unknown>, table: Record<string, Field>): boolean {
+	return Object.entries(table).every(([key, { presence, check }]) =>
+		presence === "optional" ? optional(value[key], check) : check(value[key]),
 	);
 }
 
-function content(value: unknown, kinds: readonly string[] = ["text", "image"]): boolean {
+function usage(value: unknown): boolean {
+	return (
+		object(value) &&
+		object(value.cost) &&
+		fields(value, USAGE_COUNTS) &&
+		fields(value.cost, USAGE_COSTS)
+	);
+}
+
+function content(value: unknown, kinds: Record<string, true> = USER_BLOCKS): boolean {
 	return (
 		Array.isArray(value) &&
 		value.every((block: unknown) => {
-			if (!object(block) || !kinds.includes(String(block.type))) return false;
+			if (!object(block) || !Object.hasOwn(kinds, String(block.type))) return false;
 			switch (block.type) {
 				case "text":
 					return text(block.text) && optional(block.textSignature, text);
@@ -67,7 +134,7 @@ function content(value: unknown, kinds: readonly string[] = ["text", "image"]): 
 					return (
 						text(block.thinking) &&
 						optional(block.thinkingSignature, text) &&
-						optional(block.redacted, (candidate) => typeof candidate === "boolean")
+						optional(block.redacted, flag)
 					);
 				case "image":
 					return text(block.data) && nonempty(block.mimeType);
@@ -100,7 +167,7 @@ function tool(value: unknown): boolean {
 function systemMessage(value: Record<string, unknown>): boolean {
 	return (
 		value.role === "system" &&
-		(text(value.content) || content(value.content, ["text"])) &&
+		(text(value.content) || content(value.content, SYSTEM_BLOCKS)) &&
 		optional(
 			value.sections,
 			(candidate) =>
@@ -125,7 +192,7 @@ function message(value: unknown): boolean {
 		return (
 			nonempty(value.toolCallId) &&
 			nonempty(value.toolName) &&
-			content(value.content) &&
+			content(value.content, TOOL_RESULT_BLOCKS) &&
 			typeof value.isError === "boolean" &&
 			optional(value.usage, usage)
 		);
@@ -146,21 +213,15 @@ function message(value: unknown): boolean {
 		);
 	if (value.role === "branchSummary") return text(value.summary) && nonempty(value.fromId);
 	if (value.role === "compactionSummary") return text(value.summary) && finite(value.tokensBefore);
-	if (value.role !== "assistant" || !content(value.content, ["text", "thinking", "toolCall"]))
-		return false;
+	if (value.role !== "assistant" || !content(value.content, ASSISTANT_BLOCKS)) return false;
 	if (!nonempty(value.api) || !nonempty(value.provider) || !nonempty(value.model)) return false;
-	if (
-		!["pending", "stop", "length", "toolUse", "error", "aborted", "deferred"].includes(
-			String(value.stopReason),
-		)
-	)
-		return false;
+	if (!Object.hasOwn(STOP_REASONS, String(value.stopReason))) return false;
 	return (
 		usage(value.usage) &&
 		["responseModel", "responseId", "providerThinkingLevel", "errorMessage", "rawStopReason"].every(
 			(key) => optional(value[key], text),
 		) &&
-		optional(value.endTurn, (candidate) => typeof candidate === "boolean") &&
+		optional(value.endTurn, flag) &&
 		optional(value.diagnostics, Array.isArray) &&
 		optional(
 			value.deferred,
@@ -186,11 +247,9 @@ function contextEditContent(target: SessionEntry, replacement: unknown): boolean
 		return text(replacement.content) || content(replacement.content);
 	if (target.type !== "message") return false;
 	if (target.message.role === "assistant")
-		return (
-			text(replacement.content) || content(replacement.content, ["text", "thinking", "toolCall"])
-		);
+		return text(replacement.content) || content(replacement.content, ASSISTANT_BLOCKS);
 	if (target.message.role === "toolResult")
-		return text(replacement.content) || content(replacement.content);
+		return text(replacement.content) || content(replacement.content, TOOL_RESULT_BLOCKS);
 	return false;
 }
 
@@ -201,9 +260,7 @@ function entryShape(entry: Record<string, unknown>): boolean {
 		case "model_change":
 			return nonempty(entry.provider) && nonempty(entry.modelId);
 		case "thinking_level_change":
-			return ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(
-				String(entry.thinkingLevel),
-			);
+			return MODEL_THINKING_LEVELS.some((level) => level === entry.thinkingLevel);
 		case "usage":
 			return (
 				nonempty(entry.kind) &&
@@ -218,7 +275,7 @@ function entryShape(entry: Record<string, unknown>): boolean {
 				nonempty(entry.firstKeptEntryId) &&
 				finite(entry.tokensBefore) &&
 				optional(entry.usage, usage) &&
-				optional(entry.fromHook, (candidate) => typeof candidate === "boolean") &&
+				optional(entry.fromHook, flag) &&
 				optional(entry.systemMessage, (candidate) => object(candidate) && message(candidate))
 			);
 		case "branch_summary":
@@ -226,7 +283,7 @@ function entryShape(entry: Record<string, unknown>): boolean {
 				text(entry.summary) &&
 				nonempty(entry.fromId) &&
 				optional(entry.usage, usage) &&
-				optional(entry.fromHook, (candidate) => typeof candidate === "boolean")
+				optional(entry.fromHook, flag)
 			);
 		case "label":
 			return nonempty(entry.targetId) && (entry.label === undefined || text(entry.label));

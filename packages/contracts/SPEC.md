@@ -55,6 +55,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   only the client mints it: a successful reply failed its result schema ([[submodule-web-transport]]).
   **`WS_RESULT_INVALID`** is the host's side of it: in a host that checks its replies and pushes (tests, e2e), one
   failed its schema ([[submodule-server-host]]).
+  **`SESSION_MODEL_UNAVAILABLE`** — a chat's saved model reference is malformed, so the chat does not open.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
