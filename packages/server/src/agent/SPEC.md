@@ -497,19 +497,38 @@ re-opened transcripts provider-valid.
     on refusal, with no id in the message. Use it where
     the caller already fails by throwing (tool `execute`, session creation, `sessionIdOf`). A session is attached
     only after `createParentSession` accepts its id, so `sessionIdOf` cannot refuse on an attached session.
-  - `transcriptMessages` — keeps the pi messages contracts' `isTranscriptMessageRole` admits and narrows each
-    to `TranscriptMessage` by its role, with no cast. `getSessionMessages` and the subagent transcript read share it.
-  - `piWireTies` — types only: ties each pi-coding-agent shape contracts declares (custom, compaction, branch and bash
-    messages, `WireAgentMessage`, the forwarded and projected `PiEvent` members, `CompactionEndResult`, `SessionStats`,
-    `ContextUsage`, `SlashCommandInfo`) to pi's own type with contracts' `Same`, so a pi upgrade that changes one fails
-    `tsc` here ([[submodule-contracts-schema]]). It ties contracts' `DelegationRunDetails` and `DelegationRunStatus` to
-    `pi-delegation`'s the same way.
+  - `transcriptMessages` — keeps the pi messages contracts' `isTranscriptMessageRole` admits; a message-level guard
+    over that role guard narrows each to `TranscriptMessage`, with no cast. `getSessionMessages` and the subagent
+    transcript read share it.
+  - `piTypes` — the server's one `AgentMessage`: `SessionMessageEntry["message"]` from pi-coding-agent's root. The
+    server has no pi-agent-core dependency, and contracts no longer re-exports `AgentMessage`, so every server reader
+    of pi messages (`sessionState`, `imageGuard`, `skillCarryover`, `toolResponses`, the ties) types them through it
+    and narrows by `role` and block `type`, never through a cast.
+  - `piWireTies` — types only: ties each pi-coding-agent shape contracts declares to pi's own type with `Same`, so a
+    pi upgrade that changes one fails `tsc` here ([[submodule-contracts-schema]]):
+    - the custom, compaction, branch and bash messages, `WireAgentMessage`, and the forwarded and projected `PiEvent`
+      members;
+    - a deep tie (`AddedMessageFields`): no forwarded event may carry a message with a role pi-ai's `Message` lacks
+      under a key other than `message` / `messages`, at any depth to six levels through arrays and objects. The
+      tool events' `args`, `partialResult` and `result` are excluded: pi types them `any`, and contracts sends them
+      as `unknown`;
+    - `SESSION_ENTRY_TYPES` = `SessionEntry["type"]`; the ext-UI `notify` level = `notify`'s second parameter; the
+      `setWidget` content = the content parameter of the overload that takes lines of text, picked by that
+      parameter, since `Parameters` would read the last (component) overload;
+    - `PiPackageScope`, `PiPackageResourceType` and `PiPackageSourceKind` (minus `local`), and `ProviderWarning`.
+      pi does not export `ConfiguredPackage`, `PackageUpdate` or `WarningSettings` at its root, so the ties reach
+      them through exported APIs: `PackageManager.listConfiguredPackages`, `ResolvedPaths`,
+      `DefaultPackageManager.checkForAvailableUpdates` and `SettingsManager.getWarnings`;
+    - `CompactionEndResult`, `SessionStats`, `ContextUsage` and `SlashCommandInfo`.
+
+    contracts re-exports pi-delegation's own run shapes, so no delegation tie is needed here.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no
     made-up session id. Its `custom` resolves `undefined`, as pi's RPC mode does, though pi types it `Promise<T>`: that
-    cast is kept because pi's own MCP manager and llama views call `custom` with no mode check, and a rejection would
-    show them as errors. A dialog names the tool call
+    cast is the one allowed forced cast in this module. pi's generic `custom<T>(): Promise<T>` cannot be met by
+    `undefined` without it; a never-settling promise would hang pi's MCP manager, and a rejection would show its
+    llama views as errors, because both call `custom` with no mode check. A dialog names the tool call
     it is about (`toolCallId`) so the web asks on that call's card: the manager passes pi's own
     `agent.state.pendingToolCalls` and a dialog anchors only while **exactly one** call is running (the
     common gate-before-a-tool case; parallel calls stay unanchored rather than guess), and
@@ -678,7 +697,8 @@ re-opened transcripts provider-valid.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager, interactiveTools)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
-    unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
+    unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay. It returns
+    the repaired calls as pi-delegation's `ReplayToolCall`, the shape `scanReplayTools` reports.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's
     **`context` event** (fired before every LLM
@@ -706,8 +726,9 @@ re-opened transcripts provider-valid.
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
     only** — session file and transcript stay untouched, and a stuck chat recovers on its very next
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
-    brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
-    unit-tested with hand-built header bytes.
+    brick once a session crosses 21 images. It reads image blocks by narrowing: the user, tool-result and custom
+    roles, then `block.type === "image"` to pi-ai's `ImageContent`. Pure core (`guardOversizedImages`,
+    `imageDimensions`, and `guardContextImages`, the `context` handler body) unit-tested with hand-built header bytes.
   - `skillCatalog` — the skill-listing budget (#1210): an inline extension in `buildResourceLoader`'s
     shared factories and the opt-in `childExtensionFactories` — never the tool-free base set, since it
     registers `skill_search` (pi-delegation decision #25), so a child gets it only with `extensions: true`
@@ -765,7 +786,9 @@ re-opened transcripts provider-valid.
     loads at or after it already show the whole file; reads of other `SKILL.md` files do not count.
     Any load before the cut, an excerpt included, is invocation evidence. In the kept tail each load
     counts by the lines it showed, computed like pi's `read` (1-indexed `offset`, `limit`, and
-    `details.truncation.outputLines` when truncated; a `/skill:` block shows all): only when their union
+    `details.truncation.outputLines` when truncated; a `/skill:` block shows all). The call arguments and the result
+    details are read with compiled pi-schema checks `Same`-tied to `ReadToolInput` and `TruncationResult`; details
+    of a shape the check refuses count as no lines shown, never the whole file. Only when their union
     covers every line of the current file does the body survive, so an excerpt never hides a compacted
     load, and pages that together show the file are not paid for twice. Skills are ordered by their
     latest load. Bodies are

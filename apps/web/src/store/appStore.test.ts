@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
+import type { SessionEntryType, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	DEFAULT_CONFIG,
 	type ExtUiRequest,
@@ -401,12 +401,13 @@ test("stats refresh ticks survive batching at finalized Pi state boundaries", ()
 	expect(rt(testSessionId("a")).statsRefreshTick).toBe(3);
 	store.handlePiEvent({ type: "entry_appended", entryType: "custom" }, testSessionId("a"));
 	expect(rt(testSessionId("a")).statsRefreshTick).toBe(3);
-	for (const [index, entryType] of [
+	const statsEntryTypes: SessionEntryType[] = [
 		"usage",
 		"compaction",
 		"branch_summary",
 		"context_edit",
-	].entries()) {
+	];
+	for (const [index, entryType] of statsEntryTypes.entries()) {
 		store.handlePiEvent({ type: "entry_appended", entryType }, testSessionId("a"));
 		expect(rt(testSessionId("a")).statsRefreshTick).toBe(4 + index);
 	}

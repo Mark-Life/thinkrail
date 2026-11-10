@@ -1,11 +1,9 @@
-export type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 export type {
 	AssistantMessage,
 	AssistantMessageEvent,
 	Message,
 	Model,
 	StopReason,
-	TextContent,
 	ThinkingContent,
 	ToolCall,
 	ToolResultMessage,
@@ -13,18 +11,20 @@ export type {
 	UserMessage,
 } from "@earendil-works/pi-ai";
 
-import { type SessionState, TRANSCRIPT_MESSAGE_ROLES, type WireModel } from "./schema";
+import type { StopReason } from "@earendil-works/pi-ai";
+import {
+	NON_EXECUTABLE_STOP_REASONS,
+	type SessionState,
+	TRANSCRIPT_MESSAGE_ROLES,
+	type TranscriptMessageRole,
+	type WireModel,
+} from "./schema";
 
 const TRANSCRIPT_ROLES: ReadonlySet<string> = new Set(TRANSCRIPT_MESSAGE_ROLES);
+const NON_EXECUTABLE: ReadonlySet<StopReason> = new Set(NON_EXECUTABLE_STOP_REASONS);
 
-const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
-	"error",
-	"aborted",
-	"length",
-]);
-
-export function assistantToolCallsAreExecutable(stopReason: string | undefined): boolean {
-	return stopReason === undefined || !NON_EXECUTABLE_TOOL_CALL_STOP_REASONS.has(stopReason);
+export function assistantToolCallsAreExecutable(stopReason: StopReason | undefined): boolean {
+	return stopReason === undefined || !NON_EXECUTABLE.has(stopReason);
 }
 
 /** `WireModel` identity is `{provider, id}`; every other field is a catalog snapshot that may lag. */
@@ -34,8 +34,6 @@ export function sameModel(
 ): boolean {
 	return !!a && !!b && a.provider === b.provider && a.id === b.id;
 }
-
-export type SessionInputKind = "tool-response" | "dialog";
 
 export function isSessionWorking(state: SessionState): boolean {
 	return state.execution === "running" || state.backgroundWork === true;
@@ -60,6 +58,6 @@ export interface ToolResponseDetails {
 	response: unknown;
 }
 
-export function isTranscriptMessageRole(role: string): boolean {
+export function isTranscriptMessageRole(role: string): role is TranscriptMessageRole {
 	return TRANSCRIPT_ROLES.has(role);
 }

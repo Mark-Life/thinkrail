@@ -1,12 +1,13 @@
+import type { AssistantMessage, StopReason } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
-	AgentMessage,
 	AgentSettlement,
 	ExtUiRequest,
 	SessionCompletion,
 	SessionState,
 } from "@thinkrail/contracts";
 import type { InteractiveTools } from "../extensions";
+import type { AgentMessage } from "./piTypes";
 import { awaitingToolCallId } from "./toolResponses";
 
 export interface LiveInteractionState {
@@ -29,12 +30,10 @@ export interface SessionStateInputs {
 	cancelledRunId: string | undefined;
 }
 
-interface MessageView {
-	role?: string;
-	stopReason?: string;
+interface LatestAssistant {
+	id: string;
+	message: AssistantMessage;
 }
-
-type MessageEntry = Extract<SessionEntry, { type: "message" }>;
 
 function customMessage(entry: Extract<SessionEntry, { type: "custom_message" }>): AgentMessage {
 	return {
@@ -55,43 +54,39 @@ export function sessionStateMessages(entries: readonly SessionEntry[]): AgentMes
 	});
 }
 
-function latestUser(
-	entries: readonly SessionEntry[],
-): { entry: MessageEntry; index: number } | null {
+function latestUser(entries: readonly SessionEntry[]): { id: string; index: number } | null {
 	for (let index = entries.length - 1; index >= 0; index--) {
 		const entry = entries[index];
-		if (entry?.type === "message" && (entry.message as MessageView).role === "user") {
-			return { entry, index };
-		}
+		if (entry?.type === "message" && entry.message.role === "user") return { id: entry.id, index };
 	}
 	return null;
 }
 
-function latestAssistant(
-	entries: readonly SessionEntry[],
-	after: number,
-): { entry: MessageEntry; index: number } | null {
+function latestAssistant(entries: readonly SessionEntry[], after: number): LatestAssistant | null {
 	for (let index = entries.length - 1; index > after; index--) {
 		const entry = entries[index];
-		if (entry?.type === "message" && (entry.message as MessageView).role === "assistant") {
-			return { entry, index };
+		if (entry?.type === "message" && entry.message.role === "assistant") {
+			return { id: entry.id, message: entry.message };
 		}
 	}
 	return null;
 }
 
-function latestConversationRole(entries: readonly SessionEntry[], after: number): string | null {
+function latestConversationRole(
+	entries: readonly SessionEntry[],
+	after: number,
+): AgentMessage["role"] | null {
 	for (let index = entries.length - 1; index > after; index--) {
 		const entry = entries[index];
 		if (entry?.type === "custom_message") return "custom";
-		if (entry?.type === "message") return (entry.message as MessageView).role ?? null;
+		if (entry?.type === "message") return entry.message.role;
 	}
 	return null;
 }
 
 function completionFrom(
 	completionId: string,
-	stopReason: string | undefined,
+	stopReason: StopReason | undefined,
 	cancelled: boolean,
 ): SessionCompletion {
 	if (cancelled) return { completionId, outcome: "cancelled" };
@@ -115,16 +110,16 @@ function deriveCompletion(
 		return completionFrom(`interrupted:${runId}`, undefined, cancelled);
 	}
 	if (inputs.lastSettlement !== undefined) {
-		const completionId = assistant ? `completion:${assistant.entry.id}` : `interrupted:${runId}`;
+		const completionId = assistant ? `completion:${assistant.id}` : `interrupted:${runId}`;
 		return completionFrom(completionId, inputs.lastSettlement?.stopReason, cancelled);
 	}
 	const terminalRole = latestConversationRole(inputs.entries, turnIndex);
 	if (assistant && terminalRole === "assistant") {
-		const stopReason = (assistant.entry.message as MessageView).stopReason;
+		const { stopReason } = assistant.message;
 		if (stopReason === "toolUse") {
 			return completionFrom(`interrupted:${runId}`, undefined, cancelled);
 		}
-		return completionFrom(`completion:${assistant.entry.id}`, stopReason, cancelled);
+		return completionFrom(`completion:${assistant.id}`, stopReason, cancelled);
 	}
 	return completionFrom(`interrupted:${runId}`, undefined, cancelled);
 }
@@ -135,7 +130,7 @@ function toolResponseInput(toolCallId: string): SessionState["needsInput"] {
 
 export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 	const turn = latestUser(inputs.entries);
-	const runId = turn?.entry.id ?? null;
+	const runId = turn?.id ?? null;
 	let needsInput: SessionState["needsInput"] = null;
 	if (inputs.pendingDialog !== null) {
 		needsInput = {

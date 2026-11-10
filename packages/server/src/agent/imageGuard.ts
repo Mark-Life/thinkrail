@@ -1,10 +1,11 @@
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	ACCEPTED_IMAGE_TYPES,
-	type AgentMessage,
 	IMAGE_MAX_BASE64_BYTES,
 	REQUEST_IMAGE_BASE64_BUDGET,
 } from "@thinkrail/contracts";
+import type { AgentMessage } from "./piTypes";
 
 export const SINGLE_IMAGE_EDGE_LIMIT = 8000;
 export const MANY_IMAGE_EDGE_LIMIT = 2000;
@@ -88,10 +89,38 @@ export function imageDimensions(base64: string): Dimensions | undefined {
 	}
 }
 
-type ContentBlock = { type: string } & Record<string, unknown>;
+type ContentBlock = TextContent | ImageContent;
 
-const isImageBlock = (block: ContentBlock): block is ContentBlock & { data: string } =>
-	block.type === "image" && typeof block.data === "string";
+/** The content blocks of the messages that may hold images: user, tool result and custom messages. */
+function blocksOf(message: AgentMessage): ContentBlock[] | undefined {
+	switch (message.role) {
+		case "user":
+		case "toolResult":
+		case "custom":
+			return Array.isArray(message.content) ? message.content : undefined;
+		default:
+			return undefined;
+	}
+}
+
+function withNotes(message: AgentMessage, notes: ReadonlyMap<ImageContent, string>): AgentMessage {
+	const note = (block: ContentBlock) => (block.type === "image" ? notes.get(block) : undefined);
+	const replaced = (blocks: ContentBlock[]): ContentBlock[] =>
+		blocks.map((block) => {
+			const text = note(block);
+			return text === undefined ? block : { type: "text", text };
+		});
+	switch (message.role) {
+		case "user":
+		case "toolResult":
+		case "custom":
+			if (!Array.isArray(message.content) || !message.content.some((b) => note(b) !== undefined))
+				return message;
+			return { ...message, content: replaced(message.content) };
+		default:
+			return message;
+	}
+}
 
 const REMOVAL_HINT = "ask the user to re-attach a smaller version if it is still needed";
 
@@ -99,16 +128,11 @@ const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 const mbLimit = (bytes: number) => `${bytes / (1024 * 1024)}MB`;
 
 export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] | undefined {
-	const blocksOf = (m: AgentMessage): ContentBlock[] | undefined => {
-		const content = (m as { content?: unknown }).content;
-		return Array.isArray(content) ? (content as ContentBlock[]) : undefined;
-	};
-
-	const sniffed = new Map<ContentBlock, Dimensions | undefined>();
-	const imageBlocks: (ContentBlock & { data: string })[] = [];
+	const sniffed = new Map<ImageContent, Dimensions | undefined>();
+	const imageBlocks: ImageContent[] = [];
 	for (const message of messages) {
 		for (const block of blocksOf(message) ?? []) {
-			if (isImageBlock(block)) {
+			if (block.type === "image") {
 				imageBlocks.push(block);
 				sniffed.set(block, imageDimensions(block.data));
 			}
@@ -116,10 +140,10 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 	}
 	if (imageBlocks.length === 0) return undefined;
 
-	const notes = new Map<ContentBlock, string>();
+	const notes = new Map<ImageContent, string>();
 	for (const block of imageBlocks) {
-		const mimeType = (block as { mimeType?: unknown }).mimeType;
-		if (typeof mimeType === "string" && !ACCEPTED_IMAGE_TYPES.includes(mimeType)) {
+		const { mimeType } = block;
+		if (!ACCEPTED_IMAGE_TYPES.includes(mimeType)) {
 			notes.set(
 				block,
 				`[image removed: media type ${mimeType} is not supported by the provider (accepted: ${ACCEPTED_IMAGE_TYPES.join(", ")}) — ${REMOVAL_HINT}]`,
@@ -144,7 +168,7 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 
 	let surviving = imageBlocks.length - notes.size;
 	if (surviving > MANY_IMAGE_THRESHOLD) {
-		const longEdge = (b: ContentBlock) => {
+		const longEdge = (b: ImageContent) => {
 			const d = sniffed.get(b);
 			return d ? Math.max(d.width, d.height) : 0;
 		};
@@ -177,16 +201,7 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 	}
 	if (notes.size === 0) return undefined;
 
-	const guarded = messages.map((message) => {
-		const blocks = blocksOf(message);
-		if (!blocks?.some((b) => notes.has(b))) return message;
-		const content = blocks.map((block) => {
-			const note = notes.get(block);
-			return note ? { type: "text", text: note } : block;
-		});
-		return Object.assign({}, message, { content });
-	});
-	return guarded;
+	return messages.map((message) => withNotes(message, notes));
 }
 
 export function isAnthropicFamilyModel(
@@ -197,10 +212,16 @@ export function isAnthropicFamilyModel(
 	return /claude/i.test(model.id ?? "");
 }
 
+/** The `context` result for `model`: the caps are Anthropic's, so other models keep their messages. */
+export function guardContextImages(
+	messages: AgentMessage[],
+	model: Parameters<typeof isAnthropicFamilyModel>[0],
+): { messages: AgentMessage[] } | undefined {
+	if (!isAnthropicFamilyModel(model)) return undefined;
+	const guarded = guardOversizedImages(messages);
+	return guarded ? { messages: guarded } : undefined;
+}
+
 export function oversizedImageGuard(pi: ExtensionAPI): void {
-	pi.on("context", (event, ctx) => {
-		if (!isAnthropicFamilyModel(ctx.model)) return undefined;
-		const messages = guardOversizedImages(event.messages);
-		return messages ? { messages } : undefined;
-	});
+	pi.on("context", (event, ctx) => guardContextImages(event.messages, ctx.model));
 }

@@ -66,6 +66,7 @@ import {
 	isTodoReviewFixMessage,
 	parseSessionId,
 	readToolResponseMessage,
+	type SessionEntryType,
 	sameModel,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
@@ -667,7 +668,12 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 		: rt;
 }
 
-const STATS_ENTRY_TYPES = new Set(["usage", "compaction", "branch_summary", "context_edit"]);
+const STATS_ENTRY_TYPES: ReadonlySet<SessionEntryType> = new Set([
+	"usage",
+	"compaction",
+	"branch_summary",
+	"context_edit",
+]);
 
 function invalidatesSessionStats(event: PiEvent): boolean {
 	return (

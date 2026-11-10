@@ -4,22 +4,12 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import {
-	arr,
-	compile,
-	lit,
-	obj,
-	type Static,
-	str,
-	unknown,
-	type Validator,
-} from "@earendil-works/pi-schema";
+import { arr, compile, unknown } from "@earendil-works/pi-schema";
 import {
 	isControlMessage,
 	isRetriedAttempt,
 	isTranscriptMessageRole,
-	type Same,
-	type TextContent,
+	TextContent,
 } from "@thinkrail/contracts";
 
 export interface HistoryEntry {
@@ -38,10 +28,7 @@ export interface ExtractedSession {
 }
 
 const TextBlocks = compile(arr(unknown()));
-const TextBlockShape = obj({ type: lit("text"), text: str() }, { open: true });
-const TextBlock: Validator<
-	Same<Static<typeof TextBlockShape>, Pick<TextContent, "type" | "text">>
-> = compile(TextBlockShape);
+const TextBlock = compile(TextContent);
 
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;

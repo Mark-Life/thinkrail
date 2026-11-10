@@ -9,6 +9,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import {
 	arr,
+	compile,
 	lit,
 	oneOf,
 	opt,
@@ -31,10 +32,21 @@ export const PiStopReason = oneOf([
 ]);
 export type PiStopReason = Same<Static<typeof PiStopReason>, PiStopReasonType>;
 
+/** The stop reasons after which an assistant message's tool calls may be cut off, so they must not run. */
+export const NON_EXECUTABLE_STOP_REASONS = [
+	"error",
+	"aborted",
+	"length",
+] as const satisfies readonly PiStopReasonType[];
+
 export const ImageContent = wireObj({ type: lit("image"), data: str(), mimeType: str() });
 export type ImageContent = Same<Static<typeof ImageContent>, PiImageContent>;
 
-const TextContent = wireObj({ type: lit("text"), text: str(), textSignature: opt(str()) });
+export const TextContent = wireObj({ type: lit("text"), text: str(), textSignature: opt(str()) });
+export type TextContent = Same<Static<typeof TextContent>, PiTextContent>;
+
+export const isImageContent = compile(ImageContent).check;
+export const isTextContent = compile(TextContent).check;
 
 /** A custom message's content: the text and image blocks a user message holds. */
 export const CustomMessageContent = union([str(), arr(union([TextContent, ImageContent]))]);

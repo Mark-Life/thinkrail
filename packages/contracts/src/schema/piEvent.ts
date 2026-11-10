@@ -2,23 +2,33 @@ import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import { oneOf, type Schema, type Static } from "@earendil-works/pi-schema";
 import { StoredSessionId } from "./ids";
 import type { ThinkingLevel } from "./model";
-import type { AgentSettlement } from "./session";
+import type { AgentSettlement, SessionQueueState } from "./session";
 import type { WireAgentMessage } from "./transcript";
 import type { Same } from "./typeTie";
 import { wireObj } from "./wire";
 
-/** Types pi's messages in an event as `WireAgentMessage`, which names the same union in a Node and a browser build. */
+type ToolExecutionType = "tool_execution_start" | "tool_execution_update" | "tool_execution_end";
+
+/** The tool event fields pi types as `any`: they cross as `unknown`, so a reader must check them. */
+type ToolPayloadField = "args" | "partialResult" | "result";
+
+/**
+ * Types pi's messages in an event as `WireAgentMessage`, which names the same union in a Node and a browser
+ * build, and a tool event's payload fields as `unknown`.
+ */
 export type WithWireMessages<E> = {
 	[K in keyof E]: K extends "message"
 		? WireAgentMessage
 		: K extends "messages"
 			? WireAgentMessage[]
-			: E[K];
+			: E extends { type: ToolExecutionType }
+				? K extends ToolPayloadField
+					? unknown
+					: E[K]
+				: E[K];
 };
 
-type WithParentToolCallId<E> = E extends {
-	type: "tool_execution_start" | "tool_execution_update" | "tool_execution_end";
-}
+type WithParentToolCallId<E> = E extends { type: ToolExecutionType }
 	? E & { parentToolCallId?: string }
 	: E;
 
@@ -57,16 +67,27 @@ export interface CompactionEndResult {
 	estimatedTokensAfter?: number;
 }
 
+/** pi-coding-agent's `SessionEntry["type"]`; the host ties the two. */
+export const SESSION_ENTRY_TYPES = [
+	"message",
+	"thinking_level_change",
+	"model_change",
+	"usage",
+	"compaction",
+	"branch_summary",
+	"custom",
+	"custom_message",
+	"context_edit",
+	"label",
+	"session_info",
+] as const;
+export type SessionEntryType = (typeof SESSION_ENTRY_TYPES)[number];
+
 /** The events the host rebuilds from pi's: a settlement, a queue with images, an entry type and a smaller result. */
 type PiProjectedEvent =
 	| { type: "agent_settled"; terminal: AgentSettlement | null }
-	| {
-			type: "queue_update";
-			steering: readonly string[];
-			followUp: readonly string[];
-			hasImages?: true;
-	  }
-	| { type: "entry_appended"; entryType: string }
+	| ({ type: "queue_update" } & SessionQueueState)
+	| { type: "entry_appended"; entryType: SessionEntryType }
 	| {
 			type: "compaction_end";
 			reason: CompactionReason;

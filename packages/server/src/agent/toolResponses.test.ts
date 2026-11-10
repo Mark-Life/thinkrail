@@ -1,13 +1,15 @@
 import { expect, test } from "bun:test";
+import type { StopReason, ToolCall, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { AgentMessage } from "@thinkrail/contracts";
-import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { NON_EXECUTABLE_STOP_REASONS, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
 import {
 	extensionSessionServices,
 	type InteractiveTools,
 	interactiveTools,
 	serverExtensions,
 } from "../extensions";
+import type { AgentMessage } from "./piTypes";
 import {
 	assessRespondability,
 	awaitingToolCallId,
@@ -49,7 +51,7 @@ interface PersistedToolResult {
 	isError?: boolean;
 }
 
-type MessageEndHook = (event: { message: unknown }) => { message: unknown } | undefined;
+type MessageEndHook = (event: { message: AgentMessage }) => { message: AgentMessage } | undefined;
 
 function composeAsk(waiters: ToolResponseWaiters): {
 	tool: AskTool;
@@ -83,17 +85,17 @@ function composeAsk(waiters: ToolResponseWaiters): {
 
 const askTool = (waiters: ToolResponseWaiters): AskTool => composeAsk(waiters).tool;
 
-interface Questionnaire {
+type Questionnaire = {
 	questions: {
 		question: string;
 		header: string;
 		options: { label: string; description: string }[];
 	}[];
-}
-interface QuestionnaireResult {
+};
+type QuestionnaireResult = {
 	cancelled: boolean;
 	answers: { questionIndex: number; question: string; kind: "option"; answer: string }[];
-}
+};
 
 const args = (over: Partial<Questionnaire> = {}): Questionnaire => ({
 	questions: [
@@ -127,27 +129,32 @@ const run = (hasUI = true, params: Questionnaire = args()) =>
 const toolCall = (
 	toolCallId: string,
 	name: string,
-	a: unknown = args(),
-	stopReason: string = "toolUse",
-) =>
-	({
-		role: "assistant",
-		content: [{ type: "toolCall", id: toolCallId, name, arguments: a }],
-		stopReason,
-	}) as unknown as AgentMessage;
+	a: ToolCall["arguments"] = args(),
+	stopReason: StopReason = "toolUse",
+): AgentMessage => fauxAssistantMessage(fauxToolCall(name, a, { id: toolCallId }), { stopReason });
 
-const askCall = (toolCallId: string, a: unknown = args(), stopReason: string = "toolUse") =>
-	toolCall(toolCallId, "ask_user_question", a, stopReason);
+const askCall = (
+	toolCallId: string,
+	a: ToolCall["arguments"] = args(),
+	stopReason: StopReason = "toolUse",
+) => toolCall(toolCallId, "ask_user_question", a, stopReason);
+
+const toolResult = (
+	toolCallId: string,
+	text: string,
+	details: NonNullable<ToolResultMessage["details"]>,
+): ToolResultMessage => ({
+	role: "toolResult",
+	toolCallId,
+	toolName: "ask_user_question",
+	content: [{ type: "text", text }],
+	details,
+	isError: false,
+	timestamp: 1,
+});
 
 const pendingResult = (toolCallId: string) =>
-	({
-		role: "toolResult",
-		toolCallId,
-		toolName: "ask_user_question",
-		content: [{ type: "text", text: TOOL_RESPONSE_PENDING_TEXT }],
-		details: { kind: "ack" },
-		isError: false,
-	}) as unknown as AgentMessage;
+	toolResult(toolCallId, TOOL_RESPONSE_PENDING_TEXT, { kind: "ack" });
 
 const persistedResponse = (toolCallId: string, details: unknown): PersistedToolResult => ({
 	toolCallId,
@@ -157,32 +164,32 @@ const persistedResponse = (toolCallId: string, details: unknown): PersistedToolR
 });
 
 const finalResult = (toolCallId: string) =>
-	({
-		role: "toolResult",
-		toolCallId,
-		toolName: "ask_user_question",
-		content: [{ type: "text", text: "User declined to answer questions" }],
-		details: declined,
-		isError: false,
-	}) as unknown as AgentMessage;
+	toolResult(toolCallId, "User declined to answer questions", declined);
+
+type CustomMessage = Extract<AgentMessage, { role: "custom" }>;
+
+const customMessage = (
+	fields: Pick<CustomMessage, "customType" | "content" | "display" | "details">,
+): CustomMessage => ({ role: "custom", ...fields, timestamp: 1 });
 
 const responseMessage = (toolCallId: string, response: unknown = declined) =>
-	({
-		role: "custom",
-		...buildToolResponseMessage("User has answered your questions: …", toolCallId, response),
-	}) as unknown as AgentMessage;
+	customMessage(
+		buildToolResponseMessage("User has answered your questions: …", toolCallId, response),
+	);
 
 const legacyAnswersMessage = (toolCallId: string) =>
-	({
-		role: "custom",
+	customMessage({
 		customType: "ask-user-answers",
 		content: "User has answered your questions: …",
 		display: true,
 		details: { toolCallId, result: declined },
-	}) as unknown as AgentMessage;
+	});
 
-const userMessage = (text = "actually, let me explain") =>
-	({ role: "user", content: [{ type: "text", text }] }) as unknown as AgentMessage;
+const userMessage = (text = "actually, let me explain"): UserMessage => ({
+	role: "user",
+	content: [{ type: "text", text }],
+	timestamp: 1,
+});
 
 test("the host path accepts more than four questions in one call", async () => {
 	const many: Questionnaire = {
@@ -208,19 +215,20 @@ test("the host path accepts more than four questions in one call", async () => {
 
 test("the composed extension keeps the first ask as its batch's only tool call", () => {
 	const { messageEnd } = composeAsk(createToolResponseWaiters());
-	const message = {
-		role: "assistant",
-		content: [
+	const message = fauxAssistantMessage(
+		[
 			{ type: "text", text: "I need input." },
-			{ type: "toolCall", id: "read-1", name: "read", arguments: {} },
-			{ type: "toolCall", id: "ask-1", name: "ask_user_question", arguments: args() },
-			{ type: "toolCall", id: "ask-2", name: "ask_user_question", arguments: args() },
+			fauxToolCall("read", {}, { id: "read-1" }),
+			fauxToolCall("ask_user_question", args(), { id: "ask-1" }),
+			fauxToolCall("ask_user_question", args(), { id: "ask-2" }),
 		],
-	};
-	const isolated = messageEnd?.({ message })?.message as {
-		content: { type: string; id?: string }[];
-	};
-	expect(isolated.content.map((block) => block.id ?? block.type)).toEqual(["text", "ask-1"]);
+		{ stopReason: "toolUse" },
+	);
+	const isolated = messageEnd?.({ message })?.message;
+	if (isolated?.role !== "assistant") throw new Error("expected an isolated assistant message");
+	expect(
+		isolated.content.map((block) => (block.type === "toolCall" ? block.id : block.type)),
+	).toEqual(["text", "ask-1"]);
 });
 
 test("a valid live execution is sequential, blocks for its response, and returns the real result", async () => {
@@ -601,7 +609,7 @@ test("the host's asker answers without pi's own UI, because the chat is the UI",
 test("execute returns a validation error (non-terminating) for a malformed questionnaire", async () => {
 	const r = await run(true, { questions: [] });
 	expect(textOf(r)).toContain("At least one question is required");
-	expect((r.details as QuestionnaireResult).cancelled).toBe(true);
+	expect(r.details).toMatchObject({ cancelled: true });
 	expect(r.terminate).toBeUndefined();
 });
 
@@ -615,7 +623,7 @@ test("assessRespondability: a pending, unresponded call is respondable and yield
 });
 
 test("assessRespondability: a call from a non-executable assistant is terminal", () => {
-	for (const stopReason of ["error", "aborted", "length"]) {
+	for (const stopReason of NON_EXECUTABLE_STOP_REASONS) {
 		const messages = [askCall("tc-dead", args(), stopReason)];
 		expect(assessRespondability(messages, "tc-dead", INTERACTIVE)).toEqual({
 			ok: false,
@@ -689,20 +697,18 @@ test("assessRespondability: a response message for ANOTHER call neither responds
 });
 
 test("assessRespondability: a tool-response message missing its correlation cannot mark a call responded", () => {
-	const noResponse = {
-		role: "custom",
+	const noResponse = customMessage({
 		customType: TOOL_RESPONSE_CUSTOM_TYPE,
 		content: "tag right, shape wrong",
 		display: true,
 		details: { toolCallId: "tc" },
-	} as unknown as AgentMessage;
-	const noToolCallId = {
-		role: "custom",
+	});
+	const noToolCallId = customMessage({
 		customType: TOOL_RESPONSE_CUSTOM_TYPE,
 		content: "tag right, shape wrong",
 		display: true,
 		details: { response: declined },
-	} as unknown as AgentMessage;
+	});
 	for (const malformed of [noResponse, noToolCallId]) {
 		expect(
 			assessRespondability([askCall("tc"), pendingResult("tc"), malformed], "tc", INTERACTIVE).ok,

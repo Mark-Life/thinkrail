@@ -1,24 +1,15 @@
 import {
-	type AgentMessage,
 	isTranscriptMessageRole,
 	type TranscriptMessage,
+	type TranscriptMessageRole,
 } from "@thinkrail/contracts";
+import type { AgentMessage } from "./piTypes";
 
-function transcriptMessageOf(message: AgentMessage): TranscriptMessage[] {
-	switch (message.role) {
-		case "user":
-		case "assistant":
-		case "toolResult":
-		case "custom":
-		case "compactionSummary":
-			return [message];
-		default:
-			return [];
-	}
-}
+const isTranscriptMessage = (
+	message: AgentMessage,
+): message is Extract<AgentMessage, { role: TranscriptMessageRole }> =>
+	isTranscriptMessageRole(message.role);
 
 export function transcriptMessages(messages: readonly AgentMessage[]): TranscriptMessage[] {
-	return messages.flatMap((message) =>
-		isTranscriptMessageRole(message.role) ? transcriptMessageOf(message) : [],
-	);
+	return messages.filter(isTranscriptMessage);
 }

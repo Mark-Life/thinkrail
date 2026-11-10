@@ -89,7 +89,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 
 Canonical tool-result parsing remains shared by renderer text extraction and the host's common image
 layer: accept only well-formed supported image blocks, preserve text-block order, and fall back to
-readable values for noncanonical results. Props-driven renderers receive optional file navigation from
+readable values for noncanonical results. Blocks are read with contracts' compiled `isTextContent` and
+`isImageContent`, the checks of the schemas tied to pi-ai's block types, never a cast. Props-driven renderers receive optional file navigation from
 the host, never acquire it from a store or transport. Extension composition rules live in
 [[module-thinkrail-extensions]].
 

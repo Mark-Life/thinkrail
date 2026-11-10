@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import type { AgentMessage, ToolCall, ToolResponseMessage } from "@thinkrail/contracts";
+import type { ToolCall } from "@earendil-works/pi-ai";
+import type { ToolResponseMessage } from "@thinkrail/contracts";
 import {
 	assistantToolCallsAreExecutable,
 	isToolResponsePending,
@@ -7,6 +8,7 @@ import {
 	TOOL_RESPONSE_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
 import type { ExtensionSessionServices, InteractiveTools } from "../extensions";
+import type { AgentMessage } from "./piTypes";
 
 export const TOOL_RESPONSE_PENDING_TEXT =
 	"This call is now waiting for the user's response. This turn ends here; the response (or the user's own free-form reply) will arrive as the next user message. Do not assume one until it arrives.";
