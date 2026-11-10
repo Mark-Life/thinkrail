@@ -275,7 +275,9 @@ function trackSessionPreparation<T>(
 	operation: () => Promise<T>,
 ): Promise<T> {
 	if (!workspaceAcceptsSessions(workspaceId, token))
-		return Promise.reject(new Error(`Workspace is unavailable: ${workspaceId}`));
+		return Promise.reject(
+			new CodedError("RESOURCE_UNAVAILABLE", `Workspace is unavailable: ${workspaceId}`),
+		);
 	const pending = operation();
 	let preparations = pendingSessionPreparations.get(workspaceId);
 	if (!preparations) {
@@ -1471,7 +1473,7 @@ async function registerSession(
 		sessionIsTearingDown(sessionIdOf(session))
 	) {
 		abandonPreparedEntry(prepared.entry);
-		throw new Error(`Workspace is unavailable: ${workspaceId}`);
+		throw new CodedError("RESOURCE_UNAVAILABLE", `Workspace is unavailable: ${workspaceId}`);
 	}
 	prepared.entry.registered = true;
 	sessions.set(sessionIdOf(session), prepared.entry);
@@ -2114,7 +2116,7 @@ export function renameSession(
 	options: RenameSessionOptions = {},
 ): Promise<boolean> {
 	const normalized = normalizeSessionTitle(title);
-	if (!normalized) return Promise.reject(new Error("Invalid session title"));
+	if (!normalized) return Promise.reject(new CodedError("INVALID_PARAMS", "Invalid session title"));
 	return serializeSessionFileOperation(sessionId, async () => {
 		if (hasDeletionTombstone(sessionId)) throw unknownSession(sessionId);
 		const live = sessions.get(sessionId);

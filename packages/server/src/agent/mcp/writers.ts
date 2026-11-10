@@ -67,6 +67,14 @@ function setOwnEntry(servers: McpServersObject, name: string, value: unknown): v
 	});
 }
 
+function parseMcpText(path: string, text: string): unknown {
+	try {
+		return JSON.parse(text);
+	} catch (error) {
+		throw new CodedError("MCP_CONFIG_INVALID", `${path} is not valid JSON`, { cause: error });
+	}
+}
+
 function editMcpServers(
 	path: string,
 	edit: (servers: McpServersObject | undefined, parsed: McpFile) => boolean,
@@ -75,9 +83,12 @@ function editMcpServers(
 	const target = file?.isSymbolicLink() ? realpathSync(path) : path;
 	const mode = (target === path ? file : lstatSync(target))?.mode;
 	const text = file ? readFileSync(target, "utf8").replace(/^\uFEFF/, "") : undefined;
-	const parsed: unknown = text === undefined ? {} : JSON.parse(text);
+	const parsed = text === undefined ? {} : parseMcpText(path, text);
 	if (!isMcpFile(parsed)) {
-		throw new Error(`${path}: expected an object with an "mcpServers" object`);
+		throw new CodedError(
+			"MCP_CONFIG_INVALID",
+			`${path}: expected an object with an "mcpServers" object`,
+		);
 	}
 	if (!edit(parsed.mcpServers, parsed)) return;
 	const indent = (text && /^([ \t]+)\S/m.exec(text)?.[1]) || "  ";
