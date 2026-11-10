@@ -65,7 +65,9 @@ export function splitModelsSource(source: string | undefined): { bom: string; bo
 function resolveModelsFile(path: string): string {
 	try {
 		return realpathSync(path);
-	} catch {}
+	} catch (error) {
+		if (!hasErrno(error, "ENOENT")) throw new Error(SAVE_FAILURE, { cause: error });
+	}
 	const seen = new Set<string>();
 	let current = path;
 	while (!seen.has(current)) {

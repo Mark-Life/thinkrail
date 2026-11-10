@@ -413,7 +413,16 @@ async function untrackedLineCounts(
 			budget -= size;
 			const bytes = await readFile(abs);
 			if (classifyBytes(bytes).text) counts.set(path, lineCount(decodeText(bytes)));
-		} catch {}
+		} catch (error) {
+			if (hasErrno(error, "ENOENT", "ENOTDIR", "EISDIR")) continue;
+			log.warn(
+				"untracked file shows no line count",
+				new CodedError(
+					"HOST_ERROR",
+					`untracked file unreadable (${errnoCode(error) ?? "no error code"})`,
+				),
+			);
+		}
 	}
 	return counts;
 }

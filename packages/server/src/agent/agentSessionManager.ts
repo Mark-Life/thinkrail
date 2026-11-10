@@ -1641,7 +1641,9 @@ async function createParentSessionInternal(
 		if (sessions.get(sessionId)?.commands === commands) {
 			try {
 				await disposeSession(sessionId);
-			} catch {}
+			} catch (disposeError) {
+				log.warn(`session ${sessionId} was not disposed after it failed to start`, disposeError);
+			}
 		} else if (!session) {
 			subagents.dispose();
 			void trackCascade(
