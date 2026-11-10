@@ -1,7 +1,23 @@
-import { expect, test } from "bun:test";
-import type { StopReason, ToolCall, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
+import { afterAll, afterEach, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+	InMemoryCredentialStore,
+	type StopReason,
+	type ToolCall,
+	type ToolResultMessage,
+	type UserMessage,
+} from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+	type AgentSession,
+	createAgentSession,
+	DefaultResourceLoader,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { NON_EXECUTABLE_STOP_REASONS, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
 import {
 	extensionSessionServices,
@@ -26,105 +42,99 @@ import {
 
 const INTERACTIVE: InteractiveTools = new Map([["ask_user_question", {}]]);
 
-interface AskToolResult {
-	content: { type: string; text?: string }[];
-	details: unknown;
-	terminate?: boolean;
-}
+/** A tool result as the host persists a turn: pi's message, with only the call id required. */
+type PersistedToolResult = Pick<ToolResultMessage, "toolCallId"> &
+	Partial<Pick<ToolResultMessage, "toolName" | "content" | "details" | "isError">>;
 
-interface AskTool {
-	executionMode?: string;
-	execute: (
-		toolCallId: string,
-		params: unknown,
-		signal: AbortSignal | undefined,
-		onUpdate: undefined,
-		ctx: unknown,
-	) => Promise<AskToolResult>;
-}
-
-interface PersistedToolResult {
-	toolCallId: string;
-	toolName?: string;
-	content?: { type: string; text?: string }[];
-	details?: unknown;
-	isError?: boolean;
-}
-
-type MessageEndHook = (event: { message: AgentMessage }) => { message: AgentMessage } | undefined;
-
-function composeAsk(waiters: ToolResponseWaiters): {
-	tool: AskTool;
-	messageEnd: MessageEndHook | undefined;
-} {
-	const entry = serverExtensions.find(
-		(candidate) => candidate.extension.name === "ask-user-question",
-	);
-	const services = toolResponseSessionServices(waiters);
-	let tool: AskTool | undefined;
-	let messageEnd: MessageEndHook | undefined;
-	const pi = {
-		registerTool: (definition: AskTool) => {
-			tool = definition;
-		},
-		on: (event: string, handler: MessageEndHook) => {
-			if (event === "message_end") messageEnd = handler;
-		},
-	} as unknown as ExtensionAPI;
-	const extension = entry?.extension;
-	const session =
-		extension &&
-		extensionSessionServices(extension, {
-			...services,
-			workspaceFiles: { check: async () => {}, scratchDir: "" },
-		});
-	for (const factory of (session && extension?.sessionExtensions?.(session)) ?? []) factory(pi);
-	if (!tool) throw new Error("the ask-user-question extension registered no tool");
-	return { tool, messageEnd };
-}
-
-const askTool = (waiters: ToolResponseWaiters): AskTool => composeAsk(waiters).tool;
-
-type Questionnaire = {
-	questions: {
-		question: string;
-		header: string;
-		options: { label: string; description: string }[];
-	}[];
-};
-type QuestionnaireResult = {
-	cancelled: boolean;
-	answers: { questionIndex: number; question: string; kind: "option"; answer: string }[];
-};
-
-const args = (over: Partial<Questionnaire> = {}): Questionnaire => ({
-	questions: [
-		{
-			question: "Which library?",
-			header: "Lib",
-			options: [
-				{ label: "date-fns", description: "small" },
-				{ label: "luxon", description: "rich" },
-			],
-		},
-	],
-	...over,
+const root = mkdtempSync(join(tmpdir(), "thinkrail-tool-responses-"));
+const sessions: AgentSession[] = [];
+afterEach(() => {
+	for (const session of sessions.splice(0)) session.dispose();
 });
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-const luxon: QuestionnaireResult = {
+/** The ask-user-question tool and its `message_end` hook, composed by the host into a real pi session. */
+async function composeAsk(waiters: ToolResponseWaiters, { hasUI = true } = {}) {
+	const extension = serverExtensions.find(
+		(candidate) => candidate.extension.name === "ask-user-question",
+	)?.extension;
+	if (!extension) throw new Error("the ask-user-question extension is not registered");
+	const services = extensionSessionServices(extension, {
+		...toolResponseSessionServices(waiters),
+		workspaceFiles: { check: async () => {}, scratchDir: "" },
+	});
+	const cwd = mkdtempSync(join(root, "session-"));
+	const agentDir = join(cwd, ".pi-agent");
+	const settingsManager = SettingsManager.inMemory();
+	const resourceLoader = new DefaultResourceLoader({
+		cwd,
+		agentDir,
+		settingsManager,
+		extensionFactories: extension.sessionExtensions?.(services) ?? [],
+		noExtensions: true,
+		noSkills: true,
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await resourceLoader.reload();
+	const { session } = await createAgentSession({
+		cwd,
+		agentDir,
+		settingsManager,
+		resourceLoader,
+		sessionManager: SessionManager.inMemory(cwd),
+		modelRuntime: await ModelRuntime.create({
+			credentials: new InMemoryCredentialStore(),
+			modelsPath: null,
+			allowModelNetwork: false,
+		}),
+		noTools: "builtin",
+	});
+	sessions.push(session);
+	const runner = session.extensionRunner;
+	if (hasUI) runner.setUIContext(runner.getUIContext(), "rpc");
+	const definition = session.getToolDefinition("ask_user_question");
+	if (!definition) throw new Error("the ask-user-question extension registered no tool");
+	return {
+		executionMode: definition.executionMode,
+		execute: (toolCallId: string, params: unknown, signal?: AbortSignal) =>
+			definition.execute(
+				toolCallId,
+				params,
+				signal,
+				undefined,
+				runner.createToolContext(toolCallId, signal),
+			),
+		messageEnd: (message: AgentMessage) => runner.emitMessageEnd({ type: "message_end", message }),
+	};
+}
+
+const askTool = composeAsk;
+
+const libraryQuestion = {
+	question: "Which library?",
+	header: "Lib",
+	options: [
+		{ label: "date-fns", description: "small" },
+		{ label: "luxon", description: "rich" },
+	],
+};
+
+const args = (questions: (typeof libraryQuestion)[] = [libraryQuestion]) => ({ questions });
+
+const luxon = {
 	cancelled: false,
 	answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
 };
 
-const declined: QuestionnaireResult = { answers: [], cancelled: true };
+const declined = { answers: [], cancelled: true };
 
 const textOf = (r: { content: { type: string; text?: string }[] }): string =>
 	r.content.map((c) => c.text ?? "").join("");
 
-const ctx = (hasUI = true): unknown => ({ hasUI });
-
-const run = (hasUI = true, params: Questionnaire = args()) =>
-	askTool(createToolResponseWaiters()).execute("tc-1", params, undefined, undefined, ctx(hasUI));
+const run = async (params: unknown = args()) =>
+	(await askTool(createToolResponseWaiters())).execute("tc-1", params);
 
 const toolCall = (
 	toolCallId: string,
@@ -156,7 +166,10 @@ const toolResult = (
 const pendingResult = (toolCallId: string) =>
 	toolResult(toolCallId, TOOL_RESPONSE_PENDING_TEXT, { kind: "ack" });
 
-const persistedResponse = (toolCallId: string, details: unknown): PersistedToolResult => ({
+const persistedResponse = (
+	toolCallId: string,
+	details: NonNullable<ToolResultMessage["details"]>,
+): PersistedToolResult => ({
 	toolCallId,
 	content: [{ type: "text", text: "whatever the tool told the model" }],
 	details,
@@ -192,8 +205,8 @@ const userMessage = (text = "actually, let me explain"): UserMessage => ({
 });
 
 test("the host path accepts more than four questions in one call", async () => {
-	const many: Questionnaire = {
-		questions: Array.from({ length: 6 }, (_, index) => ({
+	const many = args(
+		Array.from({ length: 6 }, (_, index) => ({
 			question: `Question ${index + 1}?`,
 			header: `Q${index + 1}`,
 			options: [
@@ -201,10 +214,10 @@ test("the host path accepts more than four questions in one call", async () => {
 				{ label: "Second", description: "Use the second choice." },
 			],
 		})),
-	};
+	);
 
 	const waiters = createToolResponseWaiters();
-	const pending = askTool(waiters).execute("tc-many", many, undefined, undefined, ctx());
+	const pending = (await askTool(waiters)).execute("tc-many", many);
 	await Promise.resolve();
 	const responded = waiters.respond("tc-many", declined);
 	expect(responded.handled).toBe(true);
@@ -213,8 +226,8 @@ test("the host path accepts more than four questions in one call", async () => {
 	if (responded.handled) await responded.persisted;
 });
 
-test("the composed extension keeps the first ask as its batch's only tool call", () => {
-	const { messageEnd } = composeAsk(createToolResponseWaiters());
+test("the composed extension keeps the first ask as its batch's only tool call", async () => {
+	const { messageEnd } = await composeAsk(createToolResponseWaiters());
 	const message = fauxAssistantMessage(
 		[
 			{ type: "text", text: "I need input." },
@@ -224,7 +237,7 @@ test("the composed extension keeps the first ask as its batch's only tool call",
 		],
 		{ stopReason: "toolUse" },
 	);
-	const isolated = messageEnd?.({ message })?.message;
+	const isolated = await messageEnd(message);
 	if (isolated?.role !== "assistant") throw new Error("expected an isolated assistant message");
 	expect(
 		isolated.content.map((block) => (block.type === "toolCall" ? block.id : block.type)),
@@ -233,10 +246,10 @@ test("the composed extension keeps the first ask as its batch's only tool call",
 
 test("a valid live execution is sequential, blocks for its response, and returns the real result", async () => {
 	const waiters = createToolResponseWaiters();
-	const tool = askTool(waiters);
+	const tool = await askTool(waiters);
 	expect(tool.executionMode).toBe("sequential");
 	let settled = false;
-	const pending = tool.execute("tc-1", args(), undefined, undefined, ctx()).then((result) => {
+	const pending = tool.execute("tc-1", args()).then((result) => {
 		settled = true;
 		return result;
 	});
@@ -303,7 +316,7 @@ test("an accepted response is acknowledged by its persisted details, whatever te
 	];
 	for (const [label, persisted, expected] of outcomes) {
 		const waiters = createToolResponseWaiters();
-		const pending = askTool(waiters).execute("tc-proof", args(), undefined, undefined, ctx());
+		const pending = (await askTool(waiters)).execute("tc-proof", args());
 		await Promise.resolve();
 		const responded = waiters.respond("tc-proof", luxon);
 		await pending;
@@ -319,7 +332,7 @@ test("a response arriving after tool_execution_start but before execute is retai
 	waiters.expect("tc-early");
 	const responded = waiters.respond("tc-early", luxon);
 	expect(responded.handled).toBe(true);
-	const response = await askTool(waiters).execute("tc-early", args(), undefined, undefined, ctx());
+	const response = await (await askTool(waiters)).execute("tc-early", args());
 	expect(response.details).toEqual(luxon);
 	waiters.persistTurn([persistedResponse("tc-early", luxon)]);
 	if (responded.handled) await responded.persisted;
@@ -331,12 +344,10 @@ test("an early response wins even if Stop reaches the tool before execute starts
 	waiters.expect("tc-early-stop");
 	const responded = waiters.respond("tc-early-stop", luxon);
 	controller.abort();
-	const response = await askTool(waiters).execute(
+	const response = await (await askTool(waiters)).execute(
 		"tc-early-stop",
 		args(),
 		controller.signal,
-		undefined,
-		ctx(),
 	);
 	expect(response.details).toEqual(luxon);
 	waiters.persistTurn([persistedResponse("tc-early-stop", luxon)]);
@@ -357,13 +368,7 @@ test("shutdown freezes an expected call before a late response can race its snap
 
 test("shutdown waits for a response already accepted before its snapshot", async () => {
 	const waiters = createToolResponseWaiters();
-	const pending = askTool(waiters).execute(
-		"tc-shutdown-accepted",
-		args(),
-		undefined,
-		undefined,
-		ctx(),
-	);
+	const pending = (await askTool(waiters)).execute("tc-shutdown-accepted", args(), undefined);
 	await Promise.resolve();
 	const responded = waiters.respond("tc-shutdown-accepted", declined);
 	expect(responded.handled).toBe(true);
@@ -391,7 +396,7 @@ test("semantic validation failure cannot acknowledge a response accepted before 
 	const waiters = createToolResponseWaiters();
 	waiters.expect("tc-invalid");
 	const responded = waiters.respond("tc-invalid", declined);
-	const response = await askTool(waiters).execute(
+	const response = await (await askTool(waiters)).execute(
 		"tc-invalid",
 		{
 			questions: [
@@ -406,8 +411,6 @@ test("semantic validation failure cannot acknowledge a response accepted before 
 			],
 		},
 		undefined,
-		undefined,
-		ctx(),
 	);
 	expect(textOf(response)).toContain("Option label is reserved");
 	waiters.persistTurn([{ toolCallId: "tc-invalid" }]);
@@ -420,9 +423,9 @@ test("a malformed response accepted before execute fails the tool instead of bei
 	waiters.expect("tc-malformed");
 	const responded = waiters.respond("tc-malformed", { choice: "b" });
 	expect(responded.handled).toBe(true);
-	await expect(
-		askTool(waiters).execute("tc-malformed", args(), undefined, undefined, ctx()),
-	).rejects.toThrow("Malformed ask_user_question response");
+	await expect((await askTool(waiters)).execute("tc-malformed", args())).rejects.toThrow(
+		"Malformed ask_user_question response",
+	);
 	waiters.persistTurn([{ toolCallId: "tc-malformed", isError: true }]);
 	if (responded.handled)
 		await expect(responded.persisted).rejects.toThrow("accepted response of this tool call");
@@ -430,13 +433,7 @@ test("a malformed response accepted before execute fails the tool instead of bei
 
 test("turn_end without the returned response rejects persistence instead of hanging", async () => {
 	const waiters = createToolResponseWaiters();
-	const pending = askTool(waiters).execute(
-		"tc-missing-result",
-		args(),
-		undefined,
-		undefined,
-		ctx(),
-	);
+	const pending = (await askTool(waiters)).execute("tc-missing-result", args(), undefined);
 	await Promise.resolve();
 	const responded = waiters.respond("tc-missing-result", declined);
 	await pending;
@@ -459,7 +456,7 @@ test("turn_end clears an expected call that Pi never executed", async () => {
 
 test("abandon rejects an accepted response's uncommitted persistence wait", async () => {
 	const waiters = createToolResponseWaiters();
-	const pending = askTool(waiters).execute("tc-dispose", args(), undefined, undefined, ctx());
+	const pending = (await askTool(waiters)).execute("tc-dispose", args());
 	await Promise.resolve();
 	const responded = waiters.respond("tc-dispose", declined);
 	expect(responded.handled).toBe(true);
@@ -483,13 +480,7 @@ test("abandon resolves a live wait as abandoned", async () => {
 test("an accepted response wins over a later Stop before its result boundary", async () => {
 	const waiters = createToolResponseWaiters();
 	const controller = new AbortController();
-	const pending = askTool(waiters).execute(
-		"tc-response-wins",
-		args(),
-		controller.signal,
-		undefined,
-		ctx(),
-	);
+	const pending = (await askTool(waiters)).execute("tc-response-wins", args(), controller.signal);
 	await Promise.resolve();
 	const responded = waiters.respond("tc-response-wins", luxon);
 	controller.abort();
@@ -501,13 +492,7 @@ test("an accepted response wins over a later Stop before its result boundary", a
 test("Stop remains terminal until turn_end and rejects a late response", async () => {
 	const waiters = createToolResponseWaiters();
 	const controller = new AbortController();
-	const pending = askTool(waiters).execute(
-		"tc-stop-first",
-		args(),
-		controller.signal,
-		undefined,
-		ctx(),
-	);
+	const pending = (await askTool(waiters)).execute("tc-stop-first", args(), controller.signal);
 	await Promise.resolve();
 	controller.abort();
 	expect(() => waiters.respond("tc-stop-first", declined)).toThrow("not awaiting a response");
@@ -518,7 +503,7 @@ test("Stop remains terminal until turn_end and rejects a late response", async (
 test("a live waiter rejects with the stable stopped result when Pi aborts", async () => {
 	const waiters = createToolResponseWaiters();
 	const controller = new AbortController();
-	const pending = askTool(waiters).execute("tc-abort", args(), controller.signal, undefined, ctx());
+	const pending = (await askTool(waiters)).execute("tc-abort", args(), controller.signal);
 	await Promise.resolve();
 	controller.abort(new Error("provider-specific abort text"));
 	await expect(pending).rejects.toThrow(TOOL_RESPONSE_STOPPED_ERROR);
@@ -538,7 +523,7 @@ test("a duplicate execute of the same interactive call is rejected", async () =>
 
 test("a user message typed past a waiting call supersedes it with the extension's own ack", async () => {
 	const waiters = createToolResponseWaiters();
-	const pending = askTool(waiters).execute("tc-typed-past", args(), undefined, undefined, ctx());
+	const pending = (await askTool(waiters)).execute("tc-typed-past", args());
 	await Promise.resolve();
 	expect(waiters.currentInteraction()?.needsInput).toBe(true);
 	expect(waiters.supersede()).toBe(true);
@@ -558,26 +543,14 @@ test("a user message typed in the pre-execute window supersedes the expected cal
 	const waiters = createToolResponseWaiters();
 	waiters.expect("tc-typed-early");
 	expect(waiters.supersede()).toBe(true);
-	const response = await askTool(waiters).execute(
-		"tc-typed-early",
-		args(),
-		undefined,
-		undefined,
-		ctx(),
-	);
+	const response = await (await askTool(waiters)).execute("tc-typed-early", args(), undefined);
 	expect(response.details).toEqual({ kind: "ack" });
 	waiters.persistTurn([]);
 });
 
 test("supersede never reverses a response that was already accepted", async () => {
 	const waiters = createToolResponseWaiters();
-	const pending = askTool(waiters).execute(
-		"tc-responded-first",
-		args(),
-		undefined,
-		undefined,
-		ctx(),
-	);
+	const pending = (await askTool(waiters)).execute("tc-responded-first", args(), undefined);
 	await Promise.resolve();
 	const responded = waiters.respond("tc-responded-first", luxon);
 	expect(waiters.supersede()).toBe(false);
@@ -597,7 +570,7 @@ test("supersede leaves a stopped call stopped", async () => {
 
 test("the host's asker answers without pi's own UI, because the chat is the UI", async () => {
 	const waiters = createToolResponseWaiters();
-	const pending = askTool(waiters).execute("tc-no-pi-ui", args(), undefined, undefined, ctx(false));
+	const pending = (await askTool(waiters, { hasUI: false })).execute("tc-no-pi-ui", args());
 	await Promise.resolve();
 	const responded = waiters.respond("tc-no-pi-ui", declined);
 	expect(responded.handled).toBe(true);
@@ -607,7 +580,7 @@ test("the host's asker answers without pi's own UI, because the chat is the UI",
 });
 
 test("execute returns a validation error (non-terminating) for a malformed questionnaire", async () => {
-	const r = await run(true, { questions: [] });
+	const r = await run(args([]));
 	expect(textOf(r)).toContain("At least one question is required");
 	expect(r.details).toMatchObject({ cancelled: true });
 	expect(r.terminate).toBeUndefined();

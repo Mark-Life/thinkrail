@@ -249,17 +249,17 @@ test("user navigation while the restore read is delayed wins over the late respo
 	const projectId = fixtureProjectId();
 
 	let heldFrame: string | null = null;
-	let releaseHeld: (() => void) | null = null;
+	const held: { release: (() => void) | null } = { release: null };
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
-		releaseHeld = () => {
+		held.release = () => {
 			if (heldFrame) server.send(heldFrame);
 			heldFrame = null;
 		};
 		ws.onMessage((message) => {
 			const raw = message.toString();
 			const frame = readRequest(raw, "workspace.list", WORKSPACE_LIST_PARAMS);
-			if (heldFrame === null && releaseHeld !== null && frame?.params.includeDiffStats === false) {
+			if (heldFrame === null && held.release !== null && frame?.params.includeDiffStats === false) {
 				heldFrame = raw;
 				return;
 			}
@@ -274,7 +274,7 @@ test("user navigation while the restore read is delayed wins over the late respo
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect.poll(() => currentHash(page)).toBe(`#/v1/projects/${projectId}`);
 
-	releaseHeld?.();
+	held.release?.();
 	await page.waitForTimeout(500);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(activeWorktreeRow(page)).toHaveCount(0);
@@ -327,17 +327,17 @@ test("a restored chat reveals as soon as its transcript arrives, with no Suspens
 	await expect(chatTabs(page)).toHaveCount(1);
 	const sessionId = chatIdFromHash(await currentHash(page));
 
-	let release: (() => void) | null = null;
+	const held: { release: (() => void) | null } = { release: null };
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
 			const raw = typeof message === "string" ? message : message.toString();
 			if (
-				release === null &&
+				held.release === null &&
 				raw.includes('"method":"session.getMessages"') &&
 				raw.includes(sessionId)
 			) {
-				release = () => server.send(raw);
+				held.release = () => server.send(raw);
 				return;
 			}
 			server.send(message);
@@ -353,7 +353,7 @@ test("a restored chat reveals as soon as its transcript arrives, with no Suspens
 	});
 
 	await page.reload();
-	await expect.poll(() => release !== null).toBe(true);
+	await expect.poll(() => held.release !== null).toBe(true);
 	await expect(page.getByLabel("Restoring chat")).toBeVisible();
 	await expect
 		.poll(() => chatChunkUrl, { message: "the ChatView chunk loads while the transcript is held" })
@@ -377,7 +377,7 @@ test("a restored chat reveals as soon as its transcript arrives, with no Suspens
 		}).observe(document.body, { childList: true, subtree: true });
 		return counter;
 	});
-	release?.();
+	held.release?.();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	expect(await seen.evaluate((counter) => counter.skeletons)).toBe(0);
 });

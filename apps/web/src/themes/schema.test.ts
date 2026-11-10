@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, JsonObject } from "@thinkrail/contracts";
+import colorTokens from "../styles/colors.json";
 import {
 	ANSI_COLOR_KEYS,
 	DERIVED_THEME_COLOR_KEYS,
@@ -79,33 +80,30 @@ test("the manifest schema lists the palette keys in their runtime order", () => 
 
 test("the parser rejects partial, unknown, and non-canonical manifest data all-or-nothing", () => {
 	const source = bundledCandidates()[0]?.value;
-	expect(source).toBeDefined();
+	if (
+		!JsonObject.check(source) ||
+		!JsonObject.check(source.syntax) ||
+		!JsonObject.check(source.colors)
+	)
+		throw new Error("the first bundled theme is not a manifest object");
+	expect(parseThemeManifest(source).ok).toBe(true);
 
-	const partial = structuredClone(source) as Record<string, unknown>;
-	delete (partial.syntax as Record<string, unknown>).keyword;
-	expect(parseThemeManifest(partial).ok).toBe(false);
-
-	const unknown = structuredClone(source) as Record<string, unknown>;
-	unknown.injectedCss = "body { display: none }";
-	expect(parseThemeManifest(unknown).ok).toBe(false);
-
-	const nonCanonical = structuredClone(source) as { colors: Record<string, unknown> };
-	nonCanonical.colors.accent = "rgb(0, 0, 0)";
-	expect(parseThemeManifest(nonCanonical).ok).toBe(false);
+	const { keyword: _keyword, ...partialSyntax } = source.syntax;
+	expect(parseThemeManifest({ ...source, syntax: partialSyntax }).ok).toBe(false);
+	expect(parseThemeManifest({ ...source, injectedCss: "body { display: none }" }).ok).toBe(false);
+	const colors = { ...source.colors, accent: "rgb(0, 0, 0)" };
+	expect(parseThemeManifest({ ...source, colors }).ok).toBe(false);
 });
 
 test("a manifest written before the destructive keys existed still parses, with both derived", () => {
 	for (const { file, value } of bundledCandidates()) {
-		const source = value as { colors: Record<string, string> };
-		const legacy = structuredClone(source);
-		delete legacy.colors.dangerHover;
-		delete legacy.colors.onDanger;
-		const parsed = parseThemeManifest(legacy);
+		if (!JsonObject.check(value) || !JsonObject.check(value.colors))
+			throw new Error(`${file}: not a manifest object`);
+		const { dangerHover: sourceDangerHover, onDanger: _onDanger, ...colors } = value.colors;
+		const parsed = parseThemeManifest({ ...value, colors });
 		if (!parsed.ok) throw new Error(`${file}: ${parsed.issues.join("; ")}`);
 		const { danger, dangerHover, onDanger, text, background } = parsed.value.colors;
-		expect<string | undefined>(dangerHover, `${file}: derived dangerHover`).toBe(
-			source.colors.dangerHover,
-		);
+		expect<unknown>(dangerHover, `${file}: derived dangerHover`).toBe(sourceDangerHover);
 		expect([text, background]).toContain(onDanger);
 		for (const fill of [danger, dangerHover])
 			expect(
@@ -133,7 +131,13 @@ test("high-contrast manifests provide legible selected-text foregrounds", () => 
 });
 
 const RESTING = ["background", "content", "sidebar", "header", "elevated", "input"] as const;
-const FLOORS = { text: 4.5, muted: 4.5, hint: 3, accent: 4.5, success: 4.5 } as const;
+const FLOORS = [
+	["text", 4.5],
+	["muted", 4.5],
+	["hint", 3],
+	["accent", 4.5],
+	["success", 4.5],
+] as const;
 const NOT_ON_INPUT: ReadonlySet<string> = new Set(["accent", "success"]);
 const HOVER_FLOOR = 3;
 
@@ -145,8 +149,8 @@ const restingFloor = (theme: { contrast: string }, key: string, floor: number) =
 
 test("every bundled manifest meets the contrast floors on every resting surface", () => {
 	for (const theme of bundledThemes()) {
-		for (const [key, floor] of Object.entries(FLOORS)) {
-			const foreground = theme.colors[key as keyof typeof FLOORS];
+		for (const [key, floor] of FLOORS) {
+			const foreground = theme.colors[key];
 			for (const surface of RESTING) {
 				if (NOT_ON_INPUT.has(key) && surface === "input") continue;
 				expect(
@@ -196,15 +200,11 @@ function tint(hex: string, over: string, percent: number): string {
 }
 
 test("the soft-primary label stays legible on its resting and hover tint over every resting surface", () => {
-	const scale = (
-		JSON.parse(readFileSync(join(import.meta.dir, "../styles/colors.json"), "utf8")) as {
-			scale: Record<string, number>;
-		}
-	).scale;
+	const { scale } = colorTokens;
 	for (const theme of bundledThemes()) {
 		for (const surface of ACTION_SURFACES) {
-			for (const step of ["subtle", "wash"]) {
-				const fill = tint(theme.colors.accent, theme.colors[surface], scale[step] ?? 0);
+			for (const step of ["subtle", "wash"] as const) {
+				const fill = tint(theme.colors.accent, theme.colors[surface], scale[step]);
 				expect(
 					contrast(theme.colors.accent, fill),
 					`${theme.id}: accent on accent@${step} over ${surface}`,
@@ -229,10 +229,10 @@ test("the hover/selected fill stays distinguishable from every resting surface",
 
 test("hovered text never drops below the visibility floor", () => {
 	for (const theme of bundledThemes()) {
-		for (const key of Object.keys(FLOORS)) {
+		for (const [key] of FLOORS) {
 			const floor = isHigh(theme) && key !== "hint" ? HIGH_CONTRAST_HOVER : HOVER_FLOOR;
 			expect(
-				contrast(theme.colors[key as keyof typeof FLOORS], theme.colors.hover),
+				contrast(theme.colors[key], theme.colors.hover),
 				`${theme.id}: ${key} on hover`,
 			).toBeGreaterThanOrEqual(floor);
 		}

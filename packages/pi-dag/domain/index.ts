@@ -58,7 +58,7 @@ export type {
 	StoredOutcome,
 	StoredValue,
 } from "./serialization.ts";
-export { decodeBirth, decodeState } from "./serialization.ts";
+export { DagReceiptSchema, decodeBirth, decodeState } from "./serialization.ts";
 export {
 	acceptedProposal,
 	active,

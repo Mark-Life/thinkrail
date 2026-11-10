@@ -238,7 +238,7 @@ const capture = Type.Object(
 	},
 	closed,
 );
-const receipt = Type.Object(
+export const DagReceiptSchema = Type.Object(
 	{ commandId: IdSchema, dagId: IdSchema, version: positive, graphRevision: positive },
 	closed,
 );
@@ -317,7 +317,7 @@ const StateSchema = Type.Object(
 		receipts: Type.Record(
 			IdSchema,
 			Type.Object(
-				{ authority: Type.Optional(AuthoritySchema), fingerprint: hash, receipt },
+				{ authority: Type.Optional(AuthoritySchema), fingerprint: hash, receipt: DagReceiptSchema },
 				closed,
 			),
 			closed,
@@ -334,7 +334,7 @@ export type StoredFile = Static<typeof file>;
 export type StoredValue = Static<typeof value>;
 export type DagCaller = Static<typeof actor>;
 export type DecisionRecord = Static<typeof decision>;
-export type DagReceipt = Static<typeof receipt>;
+export type DagReceipt = Static<typeof DagReceiptSchema>;
 export type DagNotice = Static<typeof notice>;
 export type StoredOutcome = Static<typeof outcome>;
 export type Activation = Static<typeof activation>;

@@ -1,5 +1,4 @@
 {
 	"extends": "../tsconfig.json",
-	"include": ["**/*.ts"],
-	"exclude": ["reload-navigation.spec.ts"]
+	"include": ["**/*.ts"]
 }

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { WorkspaceId } from "@thinkrail/contracts";
 import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { parseHTML } from "linkedom";
 import { act, type ReactNode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useAppStore } from "../store";
@@ -29,17 +30,7 @@ afterAll(() => {
 });
 
 function headlessContainer() {
-	const noop = () => {};
-	return {
-		nodeType: 1,
-		nodeName: "DIV",
-		tagName: "DIV",
-		namespaceURI: "http://www.w3.org/1999/xhtml",
-		textContent: "",
-		addEventListener: noop,
-		removeEventListener: noop,
-		ownerDocument: { nodeType: 9, addEventListener: noop, removeEventListener: noop },
-	} as unknown as Element;
+	return parseHTML("<!doctype html><html><body></body></html>").document.createElement("div");
 }
 
 async function mount(node: ReactNode) {
