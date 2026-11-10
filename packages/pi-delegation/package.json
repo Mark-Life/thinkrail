@@ -6,6 +6,7 @@
 	"exports": {
 		".": "./index.ts",
 		"./index.ts": "./index.ts",
+		"./wire": "./src/wire.ts",
 		"./package.json": "./package.json"
 	},
 	"description": "The session fabric for pi: create agent sessions from agent sessions — one creation primitive, a run-owning handle, lineage, a run registry, and lifecycle events.",
@@ -20,6 +21,9 @@
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
+	"dependencies": {
+		"@earendil-works/pi-schema": "catalog:"
+	},
 	"peerDependencies": {
 		"@earendil-works/pi-agent-core": "*",
 		"@earendil-works/pi-ai": "*",
@@ -30,6 +34,7 @@
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
+		"type-tie": "workspace:*",
 		"typebox": "catalog:",
 		"typescript": "catalog:"
 	}

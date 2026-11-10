@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Same } from "./typeTie";
+import type { Same } from "./index";
 
 test("Same accepts the same shape written as an intersection", () => {
 	const value: Same<{ a: string } & { b?: number }, { a: string; b?: number }> = { a: "x" };

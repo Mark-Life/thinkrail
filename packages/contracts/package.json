@@ -13,12 +13,17 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@earendil-works/pi-schema": "catalog:"
+		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-schema": "catalog:",
+		"pi-background-commands": "workspace:*",
+		"pi-delegation": "workspace:*",
+		"pi-subagents": "workspace:*",
+		"pi-todos": "workspace:*"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-agent-core": "catalog:",
 		"@types/bun": "catalog:",
-		"@earendil-works/pi-ai": "catalog:",
+		"type-tie": "workspace:*",
 		"typescript": "catalog:"
 	}
 }

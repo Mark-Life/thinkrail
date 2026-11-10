@@ -6,6 +6,7 @@
 	"exports": {
 		".": "./index.ts",
 		"./index.ts": "./index.ts",
+		"./wire": "./src/wire.ts",
 		"./package.json": "./package.json"
 	},
 	"description": "Claude Code-style subagents for pi: the Agent + get_subagent_result tools over the pi-delegation core — agent definitions with discovery/precedence/trust, foreground and background runs.",
@@ -21,6 +22,8 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@earendil-works/pi-schema": "catalog:",
+		"pi-background-commands": "workspace:*",
 		"pi-delegation": "workspace:*"
 	},
 	"peerDependencies": {
