@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { arr, compile, map, obj, type Static, str, unknown } from "@earendil-works/pi-schema";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
@@ -10,18 +11,18 @@ import {
 	type RunningArtifactHost,
 } from "./artifactProbes";
 
-export interface CollectedEvent {
-	event: string;
-	distinct_id: string;
-	properties: Record<string, unknown>;
-}
+const CollectedEvent = obj(
+	{ event: str(), distinct_id: str(), properties: map(unknown()) },
+	{ open: true },
+);
+export type CollectedEvent = Static<typeof CollectedEvent>;
+
+const PostHogBatch = compile(
+	obj({ api_key: str({ minLength: 1 }), batch: arr(CollectedEvent) }, { open: true }),
+);
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function startAnalyticsCollector() {
@@ -44,19 +45,8 @@ export function startAnalyticsCollector() {
 				assert(request.method === "POST", "collector expected POST");
 				assert(new URL(request.url).pathname === "/batch/", "collector expected /batch/");
 				const body: unknown = await request.json();
-				assert(isRecord(body) && Array.isArray(body.batch), "collector expected a PostHog batch");
-				assert(typeof body.api_key === "string" && body.api_key.length > 0, "missing project key");
-				for (const entry of body.batch) {
-					assert(isRecord(entry), "invalid batch entry");
-					assert(typeof entry.event === "string", "missing event name");
-					assert(typeof entry.distinct_id === "string", "missing installation id");
-					assert(isRecord(entry.properties), "missing event properties");
-					events.push({
-						event: entry.event,
-						distinct_id: entry.distinct_id,
-						properties: entry.properties,
-					});
-				}
+				assert(PostHogBatch.check(body), "collector expected a PostHog batch");
+				events.push(...body.batch);
 			} catch (error) {
 				errors.push(error);
 			}

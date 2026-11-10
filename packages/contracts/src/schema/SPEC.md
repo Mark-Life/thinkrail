@@ -86,5 +86,7 @@ that map.
 - **A reply is a union on `ok`.** A failure always carries `error`. Its `errorCode` is any string: a newer host may send a
   code this client has no name for. `WS_ERROR_CODES` lists the names, and the client reads a code outside it as no code.
   `INVALID_REPLY` is never sent: the client mints it.
-- **One object check.** `checks.ts` exports `JsonObject`, for a reader that checks fields one by one.
+- **One object check here; reply and push checks outside.** `checks.ts` exports `JsonObject`, for a reader that checks fields
+  one by one. Result and channel schemas compile in contracts' `wireChecks.ts`, whose `parseWsResult` and `parseWsPush` the
+  web transport, e2e fixtures and artifact probes share: it reads `WsResult` and `WsChannelPayload`, which this directory may not import.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

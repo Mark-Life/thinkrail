@@ -29,12 +29,27 @@ engine architecture.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
   for release identity, its Windows file identity, `errnoCode` and the early `resolveShellEnv()` start; `contracts`
   for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
-  web artifact; Electrobun `2.0.5` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.5
+  web artifact; `pi-schema` in the main process only; Electrobun `2.0.5` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.5
   Windows executable-identity gap (below); shared's native icon set as build input; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
   justifies it. Native shell, lifecycle, and packaging concerns are the only desktop-specific behavior.
+
+## Outside data
+
+The main process parses at its edges with private `pi-schema` checks: every webview message and `showNotification`
+through `checked` in `rpcSchemas.ts`, and the preference, route, label, update-journal and Electrobun uninstall-manifest
+files where they are read. `DesktopRpc` derives its webview-sent messages from those schemas. A refused message
+never reaches its handler and reports `NATIVE_RPC_INVALID`. Native-to-webview messages are not parsed: the same binary
+writes them.
+
+`preload.ts` and every module it value-imports never import `pi-schema`, so the bundle injected into each page has no
+schema compiler; `preloadBundle.test.ts` pins this. Those modules keep hand checks for the values they read
+(`preferenceAdapter`, `windowChrome`, `externalNavigation`, `pageZoom`), and may `import type` from `rpcSchemas`.
+
+A file rule keeps one bad entry from losing the rest: `preferences.json` and `routes.json` check the document,
+then each entry alone. A bare `num()` passes `Infinity` and `NaN`; a number that must be finite carries bounds.
 
 ## Profile and topology
 

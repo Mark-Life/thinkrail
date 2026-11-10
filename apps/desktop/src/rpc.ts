@@ -5,7 +5,14 @@ import type {
 	NativeUpdateState,
 	NativeWindowState,
 } from "@thinkrail/contracts";
-import type { PageZoomAction, PageZoomGesture } from "./pageZoom";
+import type {
+	MenuLabelsChange,
+	PageZoomGesture,
+	PageZoomRequest,
+	PreferenceRemove,
+	PreferenceWrite,
+	RouteChange,
+} from "./rpcSchemas";
 import type { WindowChromeGeometry } from "./windowChrome";
 
 export type DesktopRpc = {
@@ -24,13 +31,13 @@ export type DesktopRpc = {
 			showNotification: { params: NativeNotificationInput; response: undefined };
 		};
 		messages: {
-			routeChanged: { hash: string };
-			preferenceWrite: { key: string; value: string };
-			preferenceRemove: { key: string };
+			routeChanged: RouteChange;
+			preferenceWrite: PreferenceWrite;
+			preferenceRemove: PreferenceRemove;
 			titleBarDoubleClick: undefined;
-			pageZoomRequested: { action: PageZoomAction };
+			pageZoomRequested: PageZoomRequest;
 			pageZoomGestureRequested: PageZoomGesture;
-			menuLabelsChanged: { labels: Record<string, string> };
+			menuLabelsChanged: MenuLabelsChange;
 		};
 	};
 	webview: {

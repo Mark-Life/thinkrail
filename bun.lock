@@ -45,6 +45,7 @@
       "name": "@thinkrail/desktop",
       "version": "0.0.0",
       "dependencies": {
+        "@earendil-works/pi-schema": "catalog:",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/locales": "workspace:*",
         "@thinkrail/server": "workspace:*",
@@ -138,7 +139,9 @@
       "name": "@thinkrail/artifact-tests",
       "version": "0.0.0",
       "dependencies": {
+        "@earendil-works/pi-schema": "catalog:",
         "@thinkrail/cli": "workspace:*",
+        "@thinkrail/contracts": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
       },
