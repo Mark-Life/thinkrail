@@ -3,25 +3,24 @@ import type {
 	McpExposure as PiMcpExposure,
 } from "@earendil-works/pi-coding-agent";
 import {
-	arr,
-	bool,
 	compile,
-	int,
-	lit,
 	map,
-	num,
 	obj,
-	oneOf,
 	opt,
 	type Static,
-	str,
 	unknown,
 	type Validator,
 } from "@earendil-works/pi-schema";
 import {
 	JsonObject,
+	MCP_COMMON_FIELDS,
+	MCP_HTTP_FIELDS,
+	MCP_STDIO_FIELDS,
 	type McpActiveExposure,
 	McpExposure,
+	McpHttpServerConfig,
+	type McpOAuthConfig,
+	McpStdioServerConfig,
 	type McpTransportKind,
 	type Same,
 } from "@thinkrail/contracts";
@@ -32,57 +31,15 @@ type HttpConfig = Extract<McpServerConfig, { url: string }>;
 type Exposure = Same<McpExposure, PiMcpExposure>;
 export type McpActiveExposureTie = Same<McpActiveExposure, Exclude<PiMcpExposure, "codemode">>;
 export type McpTransportKindTie = Same<McpTransportKind, NonNullable<McpServerConfig["type"]>>;
-const StringMap = map(str());
-const StringList = arr(str());
-const Timeout = num({ exclusiveMinimum: 0 });
-const Port = int({ minimum: 1, maximum: 65535 });
-const ClientName = str({ pattern: "\\S" });
-const Auth = obj({ provider: str({ minLength: 1 }) }, { open: true });
-
-const OAuth = obj(
-	{
-		clientId: opt(str()),
-		clientSecret: opt(str()),
-		callbackPort: opt(Port),
-		callbackUrl: opt(str()),
-		scope: opt(str()),
-		clientName: opt(ClientName),
-		clientRegistration: opt(oneOf(["auto", "dcr", "cimd"])),
-		authServerMetadataUrl: opt(str()),
-	},
-	{ open: true },
-);
-export type McpOAuth = Same<Static<typeof OAuth>, NonNullable<HttpConfig["oauth"]>>;
-
-const COMMON_FIELDS = {
-	exposure: opt(McpExposure),
-	toolExposure: opt(map(McpExposure)),
-	enabled: opt(bool()),
-	description: opt(str()),
-	timeout: opt(Timeout),
-};
-
-const HTTP_FIELDS = { headers: opt(StringMap), oauth: opt(OAuth), auth: opt(Auth) };
-
-const STDIO_FIELDS = { args: opt(StringList), env: opt(StringMap), cwd: opt(str()) };
-
-const HttpServer = obj(
-	{
-		...COMMON_FIELDS,
-		...HTTP_FIELDS,
-		type: opt(oneOf(["http", "streamable-http"])),
-		url: str(),
-	},
-	{ open: true },
-);
+export type McpOAuth = Same<McpOAuthConfig, NonNullable<HttpConfig["oauth"]>>;
 /** pi reads `streamable-http` as `http`, so the parse result types `type` as pi does. */
-type HttpServer = Same<Omit<Static<typeof HttpServer>, "type"> & { type?: "http" }, HttpConfig>;
-
-const StdioServer = obj(
-	{ ...COMMON_FIELDS, ...STDIO_FIELDS, type: opt(lit("stdio")), command: str() },
-	{ open: true },
-);
-type StdioServer = Same<Static<typeof StdioServer>, StdioConfig>;
+type HttpServer = Same<
+	Omit<McpHttpServerConfig, "type"> & {
+		type?: Exclude<NonNullable<McpHttpServerConfig["type"]>, "streamable-http">;
+	},
+	HttpConfig
+>;
+type StdioServer = Same<McpStdioServerConfig, StdioConfig>;
 
 const McpFile = obj(
 	{ mcpServers: opt(map(unknown())), autoEnableCodemode: opt(unknown()) },
@@ -94,11 +51,11 @@ export type McpFile = Static<typeof McpFile>;
 export const isJsonObject = JsonObject.check;
 export const isMcpFile = compile(McpFile).check;
 export const isExposure: Validator<Exposure>["check"] = compile(McpExposure).check;
-export const CommonFields = compile(obj(COMMON_FIELDS, { open: true }));
-export const HttpFields = compile(obj(HTTP_FIELDS, { open: true }));
-export const StdioFields = compile(obj(STDIO_FIELDS, { open: true }));
-const isHttpServer = compile(HttpServer).check;
-const isStdioServer: Validator<StdioServer>["check"] = compile(StdioServer).check;
+export const CommonFields = compile(obj(MCP_COMMON_FIELDS, { open: true }));
+export const HttpFields = compile(obj(MCP_HTTP_FIELDS, { open: true }));
+export const StdioFields = compile(obj(MCP_STDIO_FIELDS, { open: true }));
+const isHttpServer = compile(McpHttpServerConfig).check;
+const isStdioServer: Validator<StdioServer>["check"] = compile(McpStdioServerConfig).check;
 
 export function refusedPath<T>(validator: Validator<T>, value: unknown): string[] {
 	const path = validator.errors(value)[0]?.path ?? "";

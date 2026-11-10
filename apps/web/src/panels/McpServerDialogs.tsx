@@ -32,6 +32,7 @@ import {
 	hasMcpValueCommands,
 	hideMcpLiterals,
 	importIssues,
+	isMcpServerEntry,
 	MCP_EXPOSURE_HINT,
 	MCP_EXPOSURES,
 	MCP_HIDDEN_VALUE,
@@ -855,10 +856,8 @@ function editErrors(
 		};
 	}
 	const errors = mcpEntryErrors(t, parsed);
-	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-		return { entry: null, errors };
-	}
-	const edited = mcpEditedEntry(t, parsed as McpServerEntryInput, written);
+	if (!isMcpServerEntry(parsed)) return { entry: null, errors };
+	const edited = mcpEditedEntry(t, parsed, written);
 	return { entry: edited.entry, errors: [...errors, ...edited.issues] };
 }
 

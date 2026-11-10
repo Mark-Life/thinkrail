@@ -408,6 +408,21 @@ test("pasted JSON accepts the mcpServers wrapper or a bare map and reports per-s
 	expect(
 		mcpEntryErrors(currentTranslator(), { command: "x", exposure: "codemode-deferred" }),
 	).toEqual([]);
+	expect(
+		mcpEntryErrors(currentTranslator(), {
+			type: "ws",
+			url: "https://x/mcp",
+			args: ["a", 1],
+			headers: { A: 1 },
+		}),
+	).toEqual([
+		'"type" must be stdio, http or streamable-http.',
+		'"args" must be a list of strings.',
+		'"headers" must map names to strings.',
+	]);
+	expect(
+		mcpEntryErrors(currentTranslator(), { type: "streamable-http", url: "https://x/mcp" }),
+	).toEqual([]);
 });
 
 test("import issues add name rules for the chosen scope and the project-file auth ban", () => {

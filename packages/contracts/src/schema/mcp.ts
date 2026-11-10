@@ -1,6 +1,7 @@
 import {
 	arr,
 	bool,
+	int,
 	lit,
 	map,
 	num,
@@ -94,6 +95,66 @@ export type McpServerScope = Static<typeof McpServerScope>;
 
 export const McpExposure = oneOf(MCP_EXPOSURES);
 export type McpExposure = Static<typeof McpExposure>;
+
+/** `type` values an `mcp.json` entry may carry; pi reads `streamable-http` as `http`. */
+export const MCP_ENTRY_TYPES = [...MCP_TRANSPORT_KINDS, "streamable-http"] as const;
+export const McpEntryType = oneOf(MCP_ENTRY_TYPES);
+export type McpEntryType = Static<typeof McpEntryType>;
+export const MCP_HTTP_ENTRY_TYPES = [
+	"http",
+	"streamable-http",
+] as const satisfies readonly McpEntryType[];
+
+export const MCP_OAUTH_CLIENT_REGISTRATIONS = ["auto", "dcr", "cimd"] as const;
+
+/** The `oauth` object of an HTTP entry, as pi reads it. */
+export const McpOAuthConfig = wireObj({
+	clientId: opt(str()),
+	clientSecret: opt(str()),
+	callbackPort: opt(int({ minimum: 1, maximum: 65535 })),
+	callbackUrl: opt(str()),
+	scope: opt(str()),
+	clientName: opt(str({ pattern: String.raw`\S` })),
+	clientRegistration: opt(oneOf(MCP_OAUTH_CLIENT_REGISTRATIONS)),
+	authServerMetadataUrl: opt(str()),
+});
+export type McpOAuthConfig = Static<typeof McpOAuthConfig>;
+
+const StringMap = map(str());
+
+/** Fields of every `mcp.json` entry; `codemode-deferred` is resolved to `codemode` before they are checked. */
+export const MCP_COMMON_FIELDS = {
+	exposure: opt(McpExposure),
+	toolExposure: opt(map(McpExposure)),
+	enabled: opt(bool()),
+	description: opt(str()),
+	timeout: opt(num({ exclusiveMinimum: 0 })),
+};
+
+export const MCP_HTTP_FIELDS = {
+	headers: opt(StringMap),
+	oauth: opt(McpOAuthConfig),
+	auth: opt(wireObj({ provider: str({ minLength: 1 }) })),
+};
+
+export const MCP_STDIO_FIELDS = { args: opt(arr(str())), env: opt(StringMap), cwd: opt(str()) };
+
+/** An HTTP `mcp.json` entry; URL schemes and the OAuth field pairs are rules a schema cannot hold. */
+export const McpHttpServerConfig = wireObj({
+	...MCP_COMMON_FIELDS,
+	...MCP_HTTP_FIELDS,
+	type: opt(oneOf(MCP_HTTP_ENTRY_TYPES)),
+	url: str(),
+});
+export type McpHttpServerConfig = Static<typeof McpHttpServerConfig>;
+
+export const McpStdioServerConfig = wireObj({
+	...MCP_COMMON_FIELDS,
+	...MCP_STDIO_FIELDS,
+	type: opt(lit("stdio")),
+	command: str(),
+});
+export type McpStdioServerConfig = Static<typeof McpStdioServerConfig>;
 
 /** The session-independent view of one configured server; secret literal values are masked. */
 export const McpServerSummary = wireObj({

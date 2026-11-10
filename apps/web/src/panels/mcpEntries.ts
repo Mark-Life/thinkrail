@@ -1,7 +1,13 @@
+import { compile, obj } from "@earendil-works/pi-schema";
 import {
+	JsonObject,
 	MCP_ACTIVE_EXPOSURES,
+	MCP_COMMON_FIELDS,
+	MCP_HTTP_FIELDS,
+	MCP_STDIO_FIELDS,
+	McpEntryType,
 	type McpExposure,
-	type McpServerEntryInput,
+	McpServerEntryInput,
 	type McpServerScope,
 	type McpServerSummary,
 } from "@thinkrail/contracts";
@@ -22,7 +28,25 @@ const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ENV_NAME_PREFIX = /^[A-Za-z_][A-Za-z0-9_]*/;
 const SECRET_NAME = /token|secret|passw(or)?d|api[-_]?key|auth|bearer|credential|session/i;
-const TYPES = new Set(["stdio", "http", "streamable-http"]);
+const LEGACY_EXPOSURE = "codemode-deferred";
+const isEntryType = compile(McpEntryType).check;
+
+const ENTRY_FIELDS = {
+	args: MCP_STDIO_FIELDS.args,
+	env: MCP_STDIO_FIELDS.env,
+	headers: MCP_HTTP_FIELDS.headers,
+	exposure: MCP_COMMON_FIELDS.exposure,
+	enabled: MCP_COMMON_FIELDS.enabled,
+};
+const EntryFields = compile(obj(ENTRY_FIELDS, { open: true }));
+
+const ENTRY_FIELD_ERRORS: { [Field in keyof typeof ENTRY_FIELDS]: (t: Translator) => string } = {
+	args: (t) => t("mcp.entries.argsInvalid"),
+	env: (t) => t("mcp.entries.mapInvalid", { key: "env" }),
+	headers: (t) => t("mcp.entries.mapInvalid", { key: "headers" }),
+	exposure: (t) => t("mcp.entries.exposureInvalid"),
+	enabled: (t) => t("mcp.entries.enabledInvalid"),
+};
 
 export const MCP_HIDDEN_VALUE = "<literal value hidden>";
 
@@ -65,14 +89,14 @@ interface McpValueFact {
 	value: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const isRecord = JsonObject.check;
+
+export const isMcpServerEntry = compile(McpServerEntryInput).check;
 
 function stringEntries(value: unknown): [string, string][] {
 	return isRecord(value)
-		? Object.entries(value).flatMap(([key, entry]) =>
-				typeof entry === "string" ? [[key, entry] as [string, string]] : [],
+		? Object.entries(value).flatMap(([key, entry]): [string, string][] =>
+				typeof entry === "string" ? [[key, entry]] : [],
 			)
 		: [];
 }
@@ -442,46 +466,23 @@ type McpImportResult = { ok: true; servers: McpImportServer[] } | { ok: false; e
 
 export function mcpEntryErrors(t: Translator, entry: unknown): string[] {
 	if (!isRecord(entry)) return [t("mcp.entries.entryNotObject")];
+	const { type, url, command } = entry;
 	const errors: string[] = [];
-	const type = entry.type;
 	if (type === "sse") errors.push(t("mcp.entries.sseUnsupported"));
-	else if (type !== undefined && (typeof type !== "string" || !TYPES.has(type))) {
-		errors.push(t("mcp.entries.typeInvalid"));
-	}
-	const hasUrl = typeof entry.url === "string";
-	if (hasUrl) {
-		const url = entry.url as string;
+	else if (type !== undefined && !isEntryType(type)) errors.push(t("mcp.entries.typeInvalid"));
+	if (typeof url === "string") {
 		if (!URL.canParse(url) || !/^https?:$/.test(new URL(url).protocol)) {
 			errors.push(t("mcp.entries.urlNotHttp"));
 		}
-	} else if (typeof entry.command !== "string" || entry.command === "") {
+	} else if (typeof command !== "string" || command === "") {
 		errors.push(t("mcp.entries.commandOrUrlRequired"));
 	}
-	if (
-		entry.args !== undefined &&
-		!(Array.isArray(entry.args) && entry.args.every((arg) => typeof arg === "string"))
-	) {
-		errors.push(t("mcp.entries.argsInvalid"));
-	}
-	for (const key of ["env", "headers"] as const) {
-		const value = entry[key];
-		if (
-			value !== undefined &&
-			(!isRecord(value) || stringEntries(value).length !== Object.keys(value).length)
-		) {
-			errors.push(t("mcp.entries.mapInvalid", { key }));
-		}
-	}
-	if (
-		entry.exposure !== undefined &&
-		!["codemode", "codemode-deferred", ...MCP_EXPOSURES].includes(String(entry.exposure))
-	) {
-		errors.push(t("mcp.entries.exposureInvalid"));
-	}
-	if (entry.enabled !== undefined && typeof entry.enabled !== "boolean") {
-		errors.push(t("mcp.entries.enabledInvalid"));
-	}
-	return errors;
+	const checked = entry.exposure === LEGACY_EXPOSURE ? { ...entry, exposure: "codemode" } : entry;
+	const refused = new Set(EntryFields.errors(checked).map(({ path }) => path.split("/")[1]));
+	const fieldErrors = Object.entries(ENTRY_FIELD_ERRORS).flatMap(([field, message]) =>
+		refused.has(field) ? [message(t)] : [],
+	);
+	return [...errors, ...fieldErrors];
 }
 
 export function parseMcpServersJson(t: Translator, text: string): McpImportResult {
