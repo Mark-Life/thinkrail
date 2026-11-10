@@ -33,4 +33,6 @@ runtime form yet.
   URL rules of `project.clone`, stays with its handler. A handler does not check the shape again.
 - **A wire change is a schema edit.** It shows in the diff under this directory: decide on a `PROTOCOL_VERSION`
   bump in the same change.
+- **A `pi` union is listed by value.** `ThinkingLevel` and `WireModel.input` copy pi's values, with no type
+  import from `pi`. A value pi adds or removes fails `tsc` in `packages/server`, where pi's values meet these types.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.
