@@ -35,8 +35,10 @@ PR and merge-queue gates cover dependency/boundary/seam/spec-surface conformance
 no-agent browser tests. Linux and Windows run native CLI artifact smoke; Linux also runs browser tests
 against the compiled binary. Desktop coverage builds the Linux target, runs native-window and shared
 artifact probes under Xvfb with test-only software-rendering flags, and runs desktop-backed browser tests.
-Windows also builds the desktop app and runs its native smoke, without browser tests (below).
-The Linux binary and desktop suites and the Windows desktop smoke run on every merge group but on a PR
+Windows and macOS also build the desktop app and run its native smoke, without browser tests (below). The
+macOS smoke is the only CI run of WKWebView: it fails when a sandboxed frame reaches the native bridge while the
+desktop shell runs mockup scripts ([[module-desktop]]).
+The Linux binary and desktop suites and the Windows and macOS desktop smokes run on every merge group but on a PR
 only when its change can affect artifacts (change classifier below). Real-provider tests remain explicitly authorized and separate.
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
@@ -62,7 +64,7 @@ conformance gates). In the merge queue it diffs against the target branch, not t
 is the previous entry's group head, and with HEADGREEN grouping a green head merges every entry ahead, so a
 site PR queued behind an app PR must still run the full set. Conformance, lint/typecheck and unit tests
 always run; they are cheap and cover the website too. A second output, `artifacts`, gates the Linux binary
-and desktop suites and the Windows desktop smoke; the Linux suites replay the no-agent browser suite against built artifacts and cost over half of
+and desktop suites and the Windows and macOS desktop smokes; the Linux suites replay the no-agent browser suite against built artifacts and cost over half of
 CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
 artifact tests, shared's native icon set, its generator, release identity and Windows file identity, the
 server's build support and bundled-runtime registration, the artifact Playwright runners, CI workflows,

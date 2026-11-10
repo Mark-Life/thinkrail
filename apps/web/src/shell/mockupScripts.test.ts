@@ -79,11 +79,26 @@ test("a file outside the mockups dir is static even when a visualize call showed
 	).toBe("static");
 });
 
-test("the desktop shell marker keeps a shown mockup themed", () => {
+const desktopShell = (marker: unknown) =>
+	Object.defineProperty({}, DESKTOP_SHELL_GLOBAL, { value: marker });
+
+test("a desktop shell without mockup scripts keeps a shown mockup themed", () => {
 	const shown = stateWith({ type: "file", path: MOCKUP });
-	const desktop = Object.defineProperty({}, DESKTOP_SHELL_GLOBAL, { value: true });
+	const desktop = desktopShell(Object.freeze({ mockupScripts: false }));
 	expect(mockupHtmlMode(shown, "ws", MOCKUP, desktop)).toBe("themed");
-	expect(mockupHtmlMode(shown, "ws", MOCKUP, { [DESKTOP_SHELL_GLOBAL]: false })).toBe("themed");
+	expect(mockupHtmlMode(shown, "ws", "index.html", desktop)).toBe("static");
+	for (const marker of [true, false, null, "yes", { mockupScripts: "true" }, {}]) {
+		expect(mockupHtmlMode(shown, "ws", MOCKUP, desktopShell(marker))).toBe("themed");
+	}
+});
+
+test("a desktop shell with mockup scripts runs a shown mockup like the browser", () => {
+	const shown = stateWith({ type: "file", path: MOCKUP });
+	const desktop = desktopShell(Object.freeze({ mockupScripts: true }));
+	expect(mockupHtmlMode(shown, "ws", MOCKUP, desktop)).toBe("scripted");
+	expect(
+		mockupHtmlMode(stateWith({ type: "file", path: "other.html" }), "ws", MOCKUP, desktop),
+	).toBe("themed");
 	expect(mockupHtmlMode(shown, "ws", "index.html", desktop)).toBe("static");
 });
 

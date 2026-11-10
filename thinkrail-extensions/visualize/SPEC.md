@@ -74,9 +74,9 @@ helps the agent and the user see a mockup outside the app, and a broken turn wou
 the link never loads (the themed frame removes it, the scripted frame's CSP refuses it) and the live theme
 replaces it ([[module-resource-renderers]], *Themed frame* and *Scripted frame*).
 
-`guidance.ts` supplies the pi package's `mockupGuideline` clause. The browser app runs the scripts of a
-mockup the agent showed; the desktop app, and the browser until the mockup is shown, render the same file
-with no script. So the clause must be true in both, and it asks for a mockup that is complete without
+`guidance.ts` supplies the pi package's `mockupGuideline` clause. The browser and the macOS desktop app run
+the scripts of a mockup the agent showed; the Linux and Windows desktop app, and every client until the
+mockup is shown, render the same file with no script. So the clause must be true in both, and it asks for a mockup that is complete without
 scripts:
 
 - write a self-contained HTML file in the scratch dir, link `thinkrail-theme.css` with a
@@ -125,8 +125,9 @@ bounded diffs need a height) with `fitContent`: an HTML mockup under the scratch
 before/after comparison of two mockups, grows the card to its content height (rendered box 120–1600 px,
 Fill width unless the user picks another) and takes the app's live theme, while code, images, other diffs,
 HTML outside the scratch dir and a mockup sized from its frame (`100vh`, `height: 100%`) keep the bounded
-box. In a browser the mockup a finished call showed (`path` and `before`) also runs its own scripts, in a
-sandboxed frame; in the desktop app, and for a file under the scratch dir that no call showed, no script
+box. In a browser and the macOS desktop app the mockup a finished call showed (`path` and `before`) also
+runs its own scripts, in a sandboxed frame; in the Linux and Windows desktop app, and for a file under the
+scratch dir that no call showed, no script
 from the file and none from ThinkRail runs and the file gets the theme and nothing more; a script that a
 native webview injects into frames is not covered ([[module-resource-renderers]], *Themed frame* and
 *Scripted frame*; [[module-web]] owns the rule). Its toolbar adds **Open in tab** (`host.openFile` keep, or
