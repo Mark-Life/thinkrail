@@ -2,303 +2,46 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-	AssistantMessage,
-	StopReason,
-	SystemMessage,
-	ToolResultMessage,
-	Usage,
-	UserMessage,
-} from "@earendil-works/pi-ai";
-import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
+	type ContextEditEntry,
 	parseSessionEntries,
 	type SessionEntry,
 	type SessionHeader,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { scanReplayTools } from "./replayTools";
+import {
+	validAssistantContent,
+	validEntry,
+	validHeader,
+	validThinkingLevel,
+	validToolResultContent,
+	validUserContent,
+} from "./sessionSchema";
 import { type CapturedHistory, DelegationError, type HistoryCaptureSource } from "./types";
 
 function invalid(message: string): never {
 	throw new DelegationError("invalid-history", message);
 }
 
-function object(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+function validTimestamp(value: string): boolean {
+	return Number.isFinite(Date.parse(value));
 }
 
-function text(value: unknown): value is string {
-	return typeof value === "string";
-}
-
-function nonempty(value: unknown): value is string {
-	return text(value) && value.length > 0;
-}
-
-function timestamp(value: unknown): boolean {
-	return text(value) && Number.isFinite(Date.parse(value));
-}
-
-function optional(value: unknown, check: (candidate: unknown) => boolean): boolean {
-	return value === undefined || check(value);
-}
-
-function finite(value: unknown): boolean {
-	return typeof value === "number" && Number.isFinite(value);
-}
-
-type Check = (candidate: unknown) => boolean;
-interface Field {
-	presence: "required" | "optional";
-	check: Check;
-}
-/** Each field of `T` with whether it may be absent: a table typed by it fails `tsc` when pi's type changes. */
-type Fields<T> = {
-	[K in keyof T]-?: Field & { presence: undefined extends T[K] ? "optional" : "required" };
-};
-const must = (check: Check) => ({ presence: "required", check }) as const;
-const may = (check: Check) => ({ presence: "optional", check }) as const;
-const flag: Check = (candidate) => typeof candidate === "boolean";
-
-const USAGE_COUNTS = {
-	input: must(finite),
-	output: must(finite),
-	cacheRead: must(finite),
-	cacheWrite: must(finite),
-	totalTokens: must(finite),
-	cacheWrite1h: may(finite),
-	reasoning: may(finite),
-} satisfies Fields<Omit<Usage, "cost">>;
-
-const USAGE_COSTS = {
-	input: must(finite),
-	output: must(finite),
-	cacheRead: must(finite),
-	cacheWrite: must(finite),
-	total: must(finite),
-	totalFromProvider: may(flag),
-} satisfies Fields<Usage["cost"]>;
-
-const USER_BLOCKS = { text: true, image: true } satisfies Record<
-	Exclude<UserMessage["content"], string>[number]["type"],
-	true
->;
-const TOOL_RESULT_BLOCKS = { text: true, image: true } satisfies Record<
-	ToolResultMessage["content"][number]["type"],
-	true
->;
-const SYSTEM_BLOCKS = { text: true } satisfies Record<
-	Exclude<SystemMessage["content"], string>[number]["type"],
-	true
->;
-const ASSISTANT_BLOCKS = { text: true, thinking: true, toolCall: true } satisfies Record<
-	AssistantMessage["content"][number]["type"],
-	true
->;
-const STOP_REASONS = {
-	pending: true,
-	stop: true,
-	length: true,
-	toolUse: true,
-	error: true,
-	aborted: true,
-	deferred: true,
-} satisfies Record<StopReason, true>;
-
-function fields(value: Record<string, unknown>, table: Record<string, Field>): boolean {
-	return Object.entries(table).every(([key, { presence, check }]) =>
-		presence === "optional" ? optional(value[key], check) : check(value[key]),
-	);
-}
-
-function usage(value: unknown): boolean {
-	return (
-		object(value) &&
-		object(value.cost) &&
-		fields(value, USAGE_COUNTS) &&
-		fields(value.cost, USAGE_COSTS)
-	);
-}
-
-function content(value: unknown, kinds: Record<string, true> = USER_BLOCKS): boolean {
-	return (
-		Array.isArray(value) &&
-		value.every((block: unknown) => {
-			if (!object(block) || !Object.hasOwn(kinds, String(block.type))) return false;
-			switch (block.type) {
-				case "text":
-					return text(block.text) && optional(block.textSignature, text);
-				case "thinking":
-					return (
-						text(block.thinking) &&
-						optional(block.thinkingSignature, text) &&
-						optional(block.redacted, flag)
-					);
-				case "image":
-					return text(block.data) && nonempty(block.mimeType);
-				case "toolCall":
-					return (
-						nonempty(block.id) &&
-						nonempty(block.name) &&
-						object(block.arguments) &&
-						optional(block.thoughtSignature, text) &&
-						optional(block.namespace, text)
-					);
-				default:
-					return false;
-			}
-		})
-	);
-}
-
-function tool(value: unknown): boolean {
-	if (!object(value)) return false;
-	const constrained = value.constrainedSampling;
-	return (
-		nonempty(value.name) &&
-		text(value.description) &&
-		object(value.parameters) &&
-		(constrained === undefined || constrained === false || object(constrained))
-	);
-}
-
-function systemMessage(value: Record<string, unknown>): boolean {
-	return (
-		value.role === "system" &&
-		(text(value.content) || content(value.content, SYSTEM_BLOCKS)) &&
-		optional(
-			value.sections,
-			(candidate) =>
-				object(candidate) &&
-				Object.values(candidate).every((section) => section === null || text(section)),
-		) &&
-		optional(value.toolsAdded, (candidate) => Array.isArray(candidate) && candidate.every(tool)) &&
-		optional(
-			value.toolsRemoved,
-			(candidate) =>
-				Array.isArray(candidate) &&
-				candidate.every((reference) => object(reference) && nonempty(reference.name)),
-		)
-	);
-}
-
-function message(value: unknown): boolean {
-	if (!object(value) || !finite(value.timestamp)) return false;
-	if (value.role === "system") return systemMessage(value);
-	if (value.role === "user") return text(value.content) || content(value.content);
-	if (value.role === "toolResult") {
-		return (
-			nonempty(value.toolCallId) &&
-			nonempty(value.toolName) &&
-			content(value.content, TOOL_RESULT_BLOCKS) &&
-			typeof value.isError === "boolean" &&
-			optional(value.usage, usage)
-		);
-	}
-	if (value.role === "bashExecution")
-		return (
-			text(value.command) &&
-			text(value.output) &&
-			optional(value.exitCode, finite) &&
-			typeof value.cancelled === "boolean" &&
-			typeof value.truncated === "boolean"
-		);
-	if (value.role === "custom")
-		return (
-			nonempty(value.customType) &&
-			(text(value.content) || content(value.content)) &&
-			typeof value.display === "boolean"
-		);
-	if (value.role === "branchSummary") return text(value.summary) && nonempty(value.fromId);
-	if (value.role === "compactionSummary") return text(value.summary) && finite(value.tokensBefore);
-	if (value.role !== "assistant" || !content(value.content, ASSISTANT_BLOCKS)) return false;
-	if (!nonempty(value.api) || !nonempty(value.provider) || !nonempty(value.model)) return false;
-	if (!Object.hasOwn(STOP_REASONS, String(value.stopReason))) return false;
-	return (
-		usage(value.usage) &&
-		["responseModel", "responseId", "providerThinkingLevel", "errorMessage", "rawStopReason"].every(
-			(key) => optional(value[key], text),
-		) &&
-		optional(value.endTurn, flag) &&
-		optional(value.diagnostics, Array.isArray) &&
-		optional(
-			value.deferred,
-			(candidate) =>
-				object(candidate) &&
-				nonempty(candidate.provider) &&
-				nonempty(candidate.modelId) &&
-				nonempty(candidate.api) &&
-				nonempty(candidate.id) &&
-				optional(candidate.expiresAt, finite) &&
-				optional(candidate.pollAfterMs, finite),
-		)
-	);
-}
-
-function contextEditContent(target: SessionEntry, replacement: unknown): boolean {
+function contextEditContent(target: SessionEntry, replacement: ContextEditEntry["replacement"]) {
 	if (replacement === null) return true;
-	if (!object(replacement)) return false;
-	if (
-		target.type === "custom_message" ||
-		(target.type === "message" && target.message.role === "user")
-	)
-		return text(replacement.content) || content(replacement.content);
+	const { content } = replacement;
+	if (target.type === "custom_message") return validUserContent(content);
 	if (target.type !== "message") return false;
-	if (target.message.role === "assistant")
-		return text(replacement.content) || content(replacement.content, ASSISTANT_BLOCKS);
-	if (target.message.role === "toolResult")
-		return text(replacement.content) || content(replacement.content, TOOL_RESULT_BLOCKS);
-	return false;
-}
-
-function entryShape(entry: Record<string, unknown>): boolean {
-	switch (entry.type) {
-		case "message":
-			return message(entry.message);
-		case "model_change":
-			return nonempty(entry.provider) && nonempty(entry.modelId);
-		case "thinking_level_change":
-			return MODEL_THINKING_LEVELS.some((level) => level === entry.thinkingLevel);
-		case "usage":
-			return (
-				nonempty(entry.kind) &&
-				nonempty(entry.provider) &&
-				nonempty(entry.model) &&
-				usage(entry.usage) &&
-				optional(entry.note, text)
-			);
-		case "compaction":
-			return (
-				text(entry.summary) &&
-				nonempty(entry.firstKeptEntryId) &&
-				finite(entry.tokensBefore) &&
-				optional(entry.usage, usage) &&
-				optional(entry.fromHook, flag) &&
-				optional(entry.systemMessage, (candidate) => object(candidate) && message(candidate))
-			);
-		case "branch_summary":
-			return (
-				text(entry.summary) &&
-				nonempty(entry.fromId) &&
-				optional(entry.usage, usage) &&
-				optional(entry.fromHook, flag)
-			);
-		case "label":
-			return nonempty(entry.targetId) && (entry.label === undefined || text(entry.label));
-		case "session_info":
-			return entry.name === undefined || text(entry.name);
-		case "custom":
-			return nonempty(entry.customType);
-		case "custom_message":
-			return (
-				nonempty(entry.customType) &&
-				(text(entry.content) || content(entry.content)) &&
-				typeof entry.display === "boolean"
-			);
-		case "context_edit":
-			return nonempty(entry.targetId) && (entry.replacement === null || object(entry.replacement));
+	switch (target.message.role) {
+		case "user":
+			return validUserContent(content);
+		case "assistant":
+			return typeof content === "string" || validAssistantContent(content);
+		case "toolResult":
+			return typeof content === "string" || validToolResultContent(content);
 		default:
 			return false;
 	}
@@ -316,27 +59,23 @@ export function parseTranscript(jsonl: string, sessionId: string): Transcript {
 		invalid("Malformed transcript JSONL");
 	const [header, ...rest] = values;
 	if (
-		!object(header) ||
-		header.type !== "session" ||
+		!validHeader(header) ||
+		header?.type !== "session" ||
 		header.version !== 3 ||
 		header.id !== sessionId ||
-		!nonempty(header.id) ||
-		!text(header.cwd) ||
-		!timestamp(header.timestamp) ||
-		(header.parentSession !== undefined && !text(header.parentSession))
+		!validTimestamp(header.timestamp)
 	)
 		invalid("Invalid pi v3 session header or identity");
 	const byId = new Map<string, SessionEntry>();
 	const entries: SessionEntry[] = [];
 	for (const entry of rest) {
 		if (
-			!object(entry) ||
+			!validEntry(entry) ||
 			entry.type === "session" ||
-			!nonempty(entry.id) ||
 			byId.has(entry.id) ||
-			!timestamp(entry.timestamp) ||
-			!(entry.parentId === null || (nonempty(entry.parentId) && byId.has(entry.parentId))) ||
-			!entryShape(entry)
+			!validTimestamp(entry.timestamp) ||
+			!(entry.parentId === null || byId.has(entry.parentId)) ||
+			(entry.type === "thinking_level_change" && !validThinkingLevel(entry.thinkingLevel))
 		) {
 			invalid("Invalid entry, duplicate id or broken ancestry");
 		}
@@ -408,7 +147,7 @@ export function validateHistory(history: CapturedHistory): Transcript {
 		typeof history.jsonl !== "string" ||
 		history.sizeBytes !== Buffer.byteLength(history.jsonl, "utf8") ||
 		history.sha256 !== digest(history.jsonl) ||
-		!(history.entryId === null || nonempty(history.entryId))
+		history.entryId === ""
 	)
 		invalid("Invalid capture format, boundary, digest or length");
 	const transcript = parseTranscript(history.jsonl, history.sourceSessionId);
@@ -471,9 +210,7 @@ function removeBoundThinking(manager: SessionManager): void {
 		);
 		if (!message || !isAnthropicFamily(message)) continue;
 		const content = message.content.filter(
-			(block) =>
-				block.type !== "thinking" ||
-				(block.redacted !== true && !nonempty(block.thinkingSignature)),
+			(block) => block.type !== "thinking" || (block.redacted !== true && !block.thinkingSignature),
 		);
 		if (content.length !== message.content.length)
 			manager.appendContextEdit(sourceEntry.id, { content });

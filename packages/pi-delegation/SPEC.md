@@ -50,6 +50,12 @@ its types are pi's own; a line pi skips as malformed or blank fails the read. Ea
 an open `pi-schema` schema, one per `SessionEntry` type and per `AgentMessage` role, each `Same`-tied (`type-tie`) to
 pi's type for that member, so a pi bump that adds, drops or changes a field or a member fails `tsc`. Open schemas pass
 fields pi adds later. The acceptance test is a real session written by the installed pi SDK: it must read cleanly.
+The schemas live in `src/sessionSchema.ts`. Each tie compares a schema's static type with pi's type as a JSON check
+sees it (`Checked`): a field pi types as `JsonValue`, `JsonObject` or bare `object` is any value or any object, an open
+string union such as `Api` is `string`, and a key whose value may be `undefined` may be absent, as `JSON.stringify`
+drops it. Every other field keeps pi's exact type. Run-time checks the schemas cannot state stay in code: entry
+ancestry, duplicate ids, the compaction and context-edit target paths, the replacement content allowed for each target
+role, parseable timestamps, and thinking-level entries restricted to pi-ai's `ModelThinkingLevelSchema`.
 
 `reopenChild` consumes the saved immutable birth record excluding its path, plus saved declarative
 session configuration. It validates owner/scope/file identity and preserves birth metadata, resolving
