@@ -22,6 +22,7 @@ describe("parseArgs", () => {
 		expect(parseArgs([], {})).toEqual({
 			port: DEFAULT_PORT,
 			host: DEFAULT_HOST,
+			allowedHosts: [],
 			open: true,
 			noAnalytics: false,
 			verbose: false,
@@ -66,6 +67,24 @@ describe("parseArgs", () => {
 
 	test("supports --flag=value form", () => {
 		expect(parseArgs(["--port=5000", "--host=h"], {})).toMatchObject({ port: 5000, host: "h" });
+	});
+
+	test("--allowed-host repeats, in both forms; its env spelling is the host's job", () => {
+		expect(
+			parseArgs(["--allowed-host", "tunnel.example.com", "--allowed-host=.proxy.example"], {})
+				.allowedHosts,
+		).toEqual(["tunnel.example.com", ".proxy.example"]);
+		expect(parseArgs([], { THINKRAIL_ALLOWED_HOSTS: "env.example" }).allowedHosts).toEqual([]);
+	});
+
+	test("throws on an empty or missing --allowed-host", () => {
+		expect(() => parseArgs(["--allowed-host="], {})).toThrow(
+			"Invalid --allowed-host: value is empty",
+		);
+		expect(() => parseArgs(["--allowed-host", " "], {})).toThrow(
+			"Invalid --allowed-host: value is empty",
+		);
+		expect(() => parseArgs(["--allowed-host"], {})).toThrow("Missing value for --allowed-host");
 	});
 
 	test("--no-open disables the browser", () => {

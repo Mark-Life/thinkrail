@@ -9,7 +9,8 @@ export const BLOB_SIZE_LIMIT = 64 * 1024 * 1024;
 const BLOB_STREAM_TIMEOUT_MS = 5 * 60_000;
 
 const OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
-const NO_STORE = { "Cache-Control": "no-store" };
+const SAME_ORIGIN = { "Cross-Origin-Resource-Policy": "same-origin" };
+const NO_STORE = { ...SAME_ORIGIN, "Cache-Control": "no-store" };
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const ACTIVE_TYPES = new Set(["text/html", "application/xhtml+xml", "image/svg+xml"]);
 
@@ -25,12 +26,13 @@ function contentHeaders(
 		"Cache-Control": cacheControl,
 		...(byteLength === null ? {} : { "Content-Length": String(byteLength) }),
 		"X-Content-Type-Options": "nosniff",
+		...SAME_ORIGIN,
 		...(ACTIVE_TYPES.has(mime) ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {}),
 	};
 }
 
-function notFound(headers?: Record<string, string>): Response {
-	return new Response("not found", { status: 404, ...(headers ? { headers } : {}) });
+function notFound(headers: Record<string, string> = SAME_ORIGIN): Response {
+	return new Response("not found", { status: 404, headers });
 }
 
 function decoded(segment: string): string | null {
@@ -96,7 +98,8 @@ export async function serveBlob(pathname: string, signal?: AbortSignal): Promise
 		resolveWorktreeFile(workspace.segment, relPath);
 		const size = await readBlobSizeAtAsync(worktreePath, blob.segment, relPath);
 		if (size === null) return notFound();
-		if (size > BLOB_SIZE_LIMIT) return new Response("blob too large", { status: 413 });
+		if (size > BLOB_SIZE_LIMIT)
+			return new Response("blob too large", { status: 413, headers: SAME_ORIGIN });
 		const stream = await readBlobStreamAtAsync(worktreePath, blob.segment, relPath, {
 			timeoutMs: BLOB_STREAM_TIMEOUT_MS,
 			...(signal ? { signal } : {}),

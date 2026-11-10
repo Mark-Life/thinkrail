@@ -161,6 +161,7 @@ test("GET serves a font with its type, revalidated, and 404s anything else", asy
 	expect(response.headers.get("Content-Type")).toBe("font/woff");
 	expect(response.headers.get("Cache-Control")).toBe("no-cache");
 	expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+	expect(response.headers.get("Cross-Origin-Resource-Policy")).toBe("same-origin");
 	withoutCors(response);
 	expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
 	for (const name of [
@@ -171,7 +172,9 @@ test("GET serves a font with its type, revalidated, and 404s anything else", asy
 		"..%2Fdata.ttf",
 		"%E0",
 	]) {
-		expect((await send("GET", name)).status).toBe(404);
+		const refused = await send("GET", name);
+		expect(refused.status).toBe(404);
+		expect(refused.headers.get("Cross-Origin-Resource-Policy")).toBe("same-origin");
 	}
 });
 

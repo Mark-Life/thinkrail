@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
@@ -194,6 +195,7 @@ import {
 	maybeAutoReReview,
 	setReviewFailedPublisher,
 } from "./requestReview";
+import { createRefusalLog, createRequestSourceCheck, parseAllowedHosts } from "./requestSource";
 import { runObservation } from "./runAnalytics";
 import { hostSearch } from "./search";
 import {
@@ -214,6 +216,7 @@ import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 export interface CreateServerOptions {
 	port?: number;
 	host?: string;
+	allowedHosts?: readonly string[];
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
@@ -260,6 +263,8 @@ interface SocketData {
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
+const REFUSAL_LOG_LIMIT = 50;
+const REFUSAL_LOG_WINDOW_MS = 600_000;
 
 const log = logger("host");
 
@@ -301,18 +306,25 @@ function sameHostUpdateRelease(
 }
 
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
-	await initializeJbcentralRuntime();
-	getConfig();
-	setPiTrustSeed(piTrustsProjectPath);
 	const {
 		port = 24242,
 		host = "localhost",
+		allowedHosts = [],
 		staticDir,
 		projectPath,
 		appVersion,
 		analytics,
 		hostUpdate,
 	} = options;
+	const checkRequestSource = createRequestSourceCheck({
+		bindHost: host,
+		machineName: hostname(),
+		allowedHosts: [...allowedHosts, ...parseAllowedHosts(process.env.THINKRAIL_ALLOWED_HOSTS)],
+	});
+	const shouldLogRefusal = createRefusalLog(REFUSAL_LOG_LIMIT, REFUSAL_LOG_WINDOW_MS);
+	await initializeJbcentralRuntime();
+	getConfig();
+	setPiTrustSeed(piTrustsProjectPath);
 
 	setSessionProjectResolver((workspaceId) => {
 		try {
@@ -381,6 +393,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		port,
 		hostname: host,
 		async fetch(req, srv) {
+			const source = checkRequestSource(req.headers.get("host"), req.headers.get("origin"));
+			if (!source.ok) {
+				if (shouldLogRefusal(source.message)) log.warn(`${source.rule} check: ${source.message}`);
+				return new Response(source.message, {
+					status: source.status,
+					headers: { "X-Content-Type-Options": "nosniff" },
+				});
+			}
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;

@@ -121,9 +121,13 @@ dependency. This keeps test process drivers outside both launchers and the serve
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
    [[submodule-server-pr]]).
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
-   not a login UI. The host sends no CORS headers, and its one HTTP write route (`PUT /fonts/<file>`)
-   requires a non-simple request header, so a website the user visits cannot write through it
-   ([[submodule-server-host]]).
+   not a login UI. The host carries no credential, but it refuses what only a browser can be tricked
+   into sending: a request whose `Origin` differs from its `Host` (another website, or a sandboxed frame),
+   and a `Host` name that a DNS-rebinding page could own. Which names pass depends on the bind: a
+   loopback bind admits only `localhost` names, IP literals and names the user admitted. A LAN or tailnet
+   peer is still left to the network, and a local process is not stopped at all. The host sends no CORS
+   headers, and its one HTTP write route (`PUT /fonts/<file>`) requires a non-simple request header, so
+   a website the user visits cannot write through it ([[submodule-server-host]]).
 8. **Hydrate-then-stream (every client reconstructs domain state from the host).** A client never relies on
    having *witnessed* events to know domain state—on connect it **reads** current state, then **subscribes**
    to live deltas. The host exposes `project.list` / `workspace.list` / **`session.list`** /
