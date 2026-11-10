@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
+	parseSessionEntries,
 	type SessionEntry,
 	type SessionHeader,
 	SessionManager,
@@ -253,16 +254,10 @@ export interface Transcript {
 
 export function parseTranscript(jsonl: string, sessionId: string): Transcript {
 	if (!jsonl.endsWith("\n")) invalid("Transcript must be newline-ended JSONL");
-	let values: unknown[];
-	try {
-		values = jsonl
-			.slice(0, -1)
-			.split("\n")
-			.map((line) => JSON.parse(line));
-	} catch {
+	const values = parseSessionEntries(jsonl);
+	if (values.length !== jsonl.slice(0, -1).split("\n").length)
 		invalid("Malformed transcript JSONL");
-	}
-	const header = values[0];
+	const [header, ...rest] = values;
 	if (
 		!object(header) ||
 		header.type !== "session" ||
@@ -276,18 +271,18 @@ export function parseTranscript(jsonl: string, sessionId: string): Transcript {
 		invalid("Invalid pi v3 session header or identity");
 	const byId = new Map<string, SessionEntry>();
 	const entries: SessionEntry[] = [];
-	for (const value of values.slice(1)) {
+	for (const entry of rest) {
 		if (
-			!object(value) ||
-			!nonempty(value.id) ||
-			byId.has(value.id) ||
-			!timestamp(value.timestamp) ||
-			!(value.parentId === null || (nonempty(value.parentId) && byId.has(value.parentId))) ||
-			!entryShape(value)
+			!object(entry) ||
+			entry.type === "session" ||
+			!nonempty(entry.id) ||
+			byId.has(entry.id) ||
+			!timestamp(entry.timestamp) ||
+			!(entry.parentId === null || (nonempty(entry.parentId) && byId.has(entry.parentId))) ||
+			!entryShape(entry)
 		) {
 			invalid("Invalid entry, duplicate id or broken ancestry");
 		}
-		const entry = value as unknown as SessionEntry;
 		if (entry.type === "compaction" && entry.firstKeptEntryId !== entry.id) {
 			let ancestor = entry.parentId === null ? undefined : byId.get(entry.parentId);
 			while (ancestor && ancestor.id !== entry.firstKeptEntryId) {
@@ -307,7 +302,7 @@ export function parseTranscript(jsonl: string, sessionId: string): Transcript {
 		byId.set(entry.id, entry);
 		entries.push(entry);
 	}
-	return { header: header as unknown as SessionHeader, entries };
+	return { header, entries };
 }
 
 export function branchAt(transcript: Transcript, entryId: string | null): SessionEntry[] {

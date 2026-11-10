@@ -4,6 +4,7 @@ import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai"
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { createDelegationService, DelegationError, type DelegationErrorCode } from "../index";
+import { validateHistory } from "./history";
 
 const core = createDelegationService({});
 function assistant(
@@ -253,4 +254,21 @@ test("compaction closure uses pi replay, preserves label first-kept references a
 	manager.branch(dangling);
 	manager.appendCompaction("invalid", offPath, 100);
 	await code(capture(manager), "invalid-history");
+});
+
+test("a malformed, blank or non-object transcript line is invalid history", async () => {
+	const manager = SessionManager.inMemory("/synthetic");
+	manager.appendMessage({ role: "user", content: "hello", timestamp: Date.now() });
+	const history = await capture(manager);
+	const [header, ...entries] = history.jsonl.slice(0, -1).split("\n");
+	for (const line of ["{", "", "null", "5"]) {
+		const jsonl = `${[header, line, ...entries].join("\n")}\n`;
+		const tampered = {
+			...history,
+			jsonl,
+			sizeBytes: Buffer.byteLength(jsonl, "utf8"),
+			sha256: createHash("sha256").update(jsonl).digest("hex"),
+		};
+		expect(() => validateHistory(tampered)).toThrow(DelegationError);
+	}
 });

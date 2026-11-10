@@ -66,6 +66,8 @@ describe("parsers", () => {
 			{ name: "Helvetica Neue", monospaceHint: false },
 		]);
 		expect(() => parseMacFamilies('{"name":"Menlo"}')).toThrow();
+		expect(() => parseMacFamilies('[{"name":5}]')).toThrow();
+		expect(() => parseMacFamilies('[{"name":"Menlo","monospaceHint":"yes"}]')).toThrow();
 		expect(() => parseMacFamilies("[1]")).toThrow();
 	});
 

@@ -58,7 +58,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - It runs once at boot. An install re-probes only when no PATH runtime was found, so a probe never
     delays the download.
   - It is compatible when it shares the pinned major.minor (0.x minors are breaking).
-  - The backend is the first of cuda/metal/vulkan the doctor reports, else cpu.
+  - The backend is the first of cuda/metal/vulkan the doctor reports, else cpu. A doctor reply that
+    fails its private schema reads as cpu.
   - A compatible PATH runtime wins over the managed copy.
 - **`installSpeech(model)`**
   - Throws `SPEECH_UNSUPPORTED_PLATFORM` or `SPEECH_INSTALL_BUSY`. It is a no-op when that model is
@@ -93,8 +94,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 - **`removeSpeech()`** cancels, waits for the install task, stops the engine, and deletes
   `<dataDir>/speech/`.
 - **Test seam.** `THINKRAIL_SPEECH_MANIFEST` names a JSON file that replaces the pinned manifest,
-  validated strictly (closed targets and models, safe file names, 64-hex SHA-256), so e2e can serve tiny
-  fixtures.
+  checked against a private schema (closed targets and models, safe file names, 64-hex SHA-256), so e2e
+  can serve tiny fixtures.
 
 ## Engine
 
@@ -149,6 +150,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
    flushes the buffer, and answers `ready`.
 4. **Events.** The engine's `delta` events are appends; the relay accumulates them and sends each as a
    replacing `partial`. `completed` becomes a `final` and resets the partial.
+   Each event is checked against a private schema; an unknown or malformed event is ignored, and a
+   wrong-type `transcript` or error `code` loses only that field.
 5. **Stop.** `stop` sends `input_audio_buffer.commit`, or defers it until upstream opens. `committed`, or
    an 8 s timeout counted from the commit, never from the stop, ends the dictation. A cold engine may
    still be loading the model when the user stops.

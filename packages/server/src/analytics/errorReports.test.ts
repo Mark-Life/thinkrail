@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, hostname, tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
+import { arr, bool, compile, map, obj, opt, str, unknown } from "@earendil-works/pi-schema";
+import { fakeFetch } from "../../test/fakeFetch";
 import { EXTERNAL_FRAME } from "./errors";
 import {
 	initializeAnalyticsWithSinkFactoryForTests,
@@ -47,10 +49,10 @@ function boot(
 			build: "binary",
 			additionalEnabled: false,
 			env: {},
-			fetchImpl: ((_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			fetchImpl: fakeFetch((_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 				sent.push(...JSON.parse(String(init?.body)).batch);
 				return Promise.resolve(new Response("{}", { status: 200 }));
-			}) as typeof fetch,
+			}),
 			...overrides,
 		},
 		(options) => createPostHogSink({ ...options, retryDelayMs: 10 }),
@@ -59,6 +61,32 @@ function boot(
 
 function exceptions(sent: BatchEntry[]): BatchEntry[] {
 	return sent.filter((entry) => entry.event === "$exception");
+}
+
+const ExceptionList = compile(
+	arr(
+		obj(
+			{
+				type: opt(str()),
+				value: str(),
+				mechanism: opt(obj({ handled: opt(bool()), type: opt(str()) }, { open: true })),
+				stacktrace: opt(obj({ frames: arr(map(unknown())) }, { open: true })),
+			},
+			{ open: true },
+		),
+	),
+);
+
+function exceptionList(entry: BatchEntry | undefined) {
+	const list = entry?.properties.$exception_list;
+	if (!ExceptionList.check(list)) throw new Error("not a PostHog exception list");
+	return list;
+}
+
+function framesOf(exception: ReturnType<typeof exceptionList>[number] | undefined) {
+	const frames = exception?.stacktrace?.frames;
+	if (!frames) throw new Error("exception has no stack frames");
+	return frames;
 }
 
 function piiLadenError(): Error {
@@ -113,10 +141,9 @@ test("a reported error reaches PostHog as a classifier with no personal data in 
 	]) {
 		expect(wire).not.toContain(forbidden);
 	}
-	const list = entry.properties.$exception_list as Array<Record<string, unknown>>;
+	const list = exceptionList(entry);
 	expect(list.map((exception) => exception.value)).toEqual(["request project.open", ""]);
-	const frames = (list[0] as { stacktrace: { frames: Array<Record<string, unknown>> } }).stacktrace
-		.frames;
+	const frames = framesOf(list[0]);
 	expect(
 		frames.some((frame) => frame.filename === "packages/server/src/analytics/errorReports.test.ts"),
 	).toBe(true);
@@ -153,7 +180,7 @@ test("third-party diagnostics in a message never leave the host", async () => {
 	}
 	expect(
 		exceptions(sent)
-			.map((entry) => (entry.properties.$exception_list as Array<{ value: string }>)[0]?.value)
+			.map((entry) => exceptionList(entry)[0]?.value)
 			.sort(),
 	).toEqual(["host_logged agent", "request pr.open PUSH_AUTH_FAILED"]);
 });
@@ -260,7 +287,7 @@ test("a fatal report is sent immediately as level fatal, tagged with its crash k
 		code: "ENOENT",
 		$exception_level: "fatal",
 	});
-	const [root] = (entry as BatchEntry).properties.$exception_list as Array<Record<string, unknown>>;
+	const [root] = exceptionList(entry);
 	expect(root?.value).toBe("host_crash unhandledRejection ENOENT");
 	expect(root?.mechanism).toMatchObject({ handled: false, type: "onunhandledrejection" });
 });
@@ -268,7 +295,7 @@ test("a fatal report is sent immediately as level fatal, tagged with its crash k
 test("an unreachable collector delays a fatal report's exit by at most one second", async () => {
 	const sent: BatchEntry[] = [];
 	boot(sent, {
-		fetchImpl: (() => new Promise<Response>(() => {})) as unknown as typeof fetch,
+		fetchImpl: fakeFetch(() => new Promise<Response>(() => {})),
 	});
 	const started = performance.now();
 	await reportFatalError(new Error("stuck"), "uncaughtException");
@@ -286,7 +313,7 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 		type: "TypeError",
 		stack: "render@http://127.0.0.1:4317/assets/index-abc.js:10:5\nhttps://evil.example/x.js:1:1",
 	});
-	reportClientError({ kind: "bogus", type: 42, stack: { jane: true } });
+	reportClientError({ kind: "window", type: "x".repeat(200) });
 	await shutdownAnalytics();
 	expect(
 		exceptions(sent)
@@ -297,11 +324,10 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 		["window", false],
 	]);
 	const render = exceptions(sent).find((entry) => entry.properties.scope === "render:plan_rail");
-	const list = render?.properties.$exception_list as Array<Record<string, unknown>>;
+	const list = exceptionList(render);
 	expect(list[0]?.type).toBe("TypeError");
 	expect(list[0]?.value).toBe("ui render:plan_rail");
-	const frames = (list[0] as { stacktrace: { frames: Array<Record<string, unknown>> } }).stacktrace
-		.frames;
+	const frames = framesOf(list[0]);
 	expect(frames).toContainEqual({
 		platform: "web:javascript",
 		filename: "web/assets/index-abc.js",
@@ -316,8 +342,7 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 test("chunk ids reach PostHog: registered bundles via the SDK, browser chunks via the report", async () => {
 	const id = "01a15438-b3fb-7af1-a9d9-5a7475549eac";
 	const webId = "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e";
-	const registry = globalThis as { _posthogChunkIds?: Record<string, string> };
-	registry._posthogChunkIds = { [`Error\n    at ${import.meta.path}:1:1`]: id };
+	Reflect.set(globalThis, "_posthogChunkIds", { [`Error\n    at ${import.meta.path}:1:1`]: id });
 	try {
 		const sent: BatchEntry[] = [];
 		boot(sent);
@@ -330,12 +355,8 @@ test("chunk ids reach PostHog: registered bundles via the SDK, browser chunks vi
 		});
 		await shutdownAnalytics();
 		const chunkIds = exceptions(sent).flatMap((entry) =>
-			(
-				entry.properties.$exception_list as Array<{
-					stacktrace: { frames: Array<Record<string, unknown>> };
-				}>
-			)
-				.flatMap((exception) => exception.stacktrace.frames)
+			exceptionList(entry)
+				.flatMap((exception) => framesOf(exception))
 				.map((frame) => frame.chunk_id)
 				.filter(Boolean),
 		);
@@ -343,7 +364,7 @@ test("chunk ids reach PostHog: registered bundles via the SDK, browser chunks vi
 		expect(chunkIds).toContain(webId);
 		expect(JSON.stringify(sent)).not.toContain("$thinkrail_chunk_ids");
 	} finally {
-		delete registry._posthogChunkIds;
+		Reflect.deleteProperty(globalThis, "_posthogChunkIds");
 	}
 });
 
@@ -359,9 +380,7 @@ test("the report's handled flag reaches the root exception mechanism; causes sta
 	const mechanisms = Object.fromEntries(
 		exceptions(sent).map((entry) => [
 			entry.properties.source,
-			(entry.properties.$exception_list as Array<{ mechanism?: { handled?: boolean } }>).map(
-				(exception) => exception.mechanism?.handled,
-			),
+			exceptionList(entry).map((exception) => exception.mechanism?.handled),
 		]),
 	);
 	expect(mechanisms).toEqual({

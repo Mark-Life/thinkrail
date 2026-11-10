@@ -19,7 +19,9 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
   and response capture (`surveyEndpoint`, `SurveyEndpoint`, `captureSurveyResponse`), additional-data
   enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
   shutdown/test reset, event types, bucket helpers and `BuildKind`.
-- **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
+- **`errors.ts` filters field by field.** It reads SDK-built properties with an object check and per-field rules, so one odd
+  field loses only itself and never a report. `reportClientError` takes `ClientErrorReport`, parsed at dispatch.
+- **Allowed deps:** `pi-schema`, persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
   UUID on the wire; copying rich feature payloads into telemetry except the survey response documented
