@@ -107,8 +107,10 @@ that map.
   signatures no run-time check sees, so their readers claim none: they call each function and check every value it
   returns or pushes ([[module-web]], [[module-desktop]]). This rule covers schemas and parsers, not every cast
   elsewhere in the code base.
-- **An enum is one tuple.** Each `oneOf` value list is an exported `as const` tuple, such as `THEME_MODES` or
-  `WS_ERROR_CODES`. A guard or a list outside this directory reads that tuple, so there is no second copy to keep in step.
+- **An enum read outside its schema is one tuple.** A `oneOf` value list that code outside this directory also
+  needs, such as `THEME_MODES` or `WS_ERROR_CODES`, is an exported `as const` tuple, and that code reads the tuple,
+  so there is no second copy to keep in step. A list only its schema uses stays inline in `oneOf([...])`; anything
+  else reads it through the schema's `Static` type.
 - **An exclusive union is a narrowed object.** `TemplateReadLocation` is `narrowed(obj, { not })`: the builder object
   types it, and `not: { required: [...] }`, added to its `allOf`, refuses both ids. `template.get` narrows its
   params the same way.
