@@ -1,10 +1,5 @@
-import { type ClassValue, clsx } from "clsx";
-import { extendTailwindMerge } from "tailwind-merge";
+import { createCn } from "cn/config";
 
 const isLayoutRole = (value: string) => /^[a-z]+(?:-[a-z]+)+$/.test(value);
 
-const twMerge = extendTailwindMerge({ extend: { theme: { spacing: [isLayoutRole] } } });
-
-export function cn(...inputs: ClassValue[]): string {
-	return twMerge(clsx(inputs));
-}
+export const cn = createCn({ extend: { theme: { spacing: [isLayoutRole] } } });

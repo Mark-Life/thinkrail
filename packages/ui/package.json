@@ -38,12 +38,11 @@
 		"@remixicon/react": "catalog:",
 		"@thinkrail/locales": "workspace:*",
 		"class-variance-authority": "0.7.1",
-		"clsx": "2.1.1",
 		"cmdk": "1.1.1",
+		"cn": "0.5.2",
 		"react": "catalog:",
 		"react-dom": "catalog:",
-		"react-resizable-panels": "2.1.9",
-		"tailwind-merge": "3.7.0"
+		"react-resizable-panels": "2.1.9"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
