@@ -574,7 +574,7 @@ for (const [sender, button] of [
 	});
 }
 
-const FLOOD_OVER_LIMIT = 1500;
+const FLOOD_OVER_LIMIT = 2500;
 
 const CLOSES_ON_KEY = mockup(
 	`<input id="field"><script>
