@@ -1,17 +1,19 @@
 import type { NativeWindowControlsBridge, NativeWindowState } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { type BridgeMethods, readGlobalNativeBridge, readNativeBridge } from "../nativeBridge";
 
 const NATIVE_WINDOW_CONTROLS_GLOBAL = "__THINKRAIL_NATIVE_WINDOW_CONTROLS__";
 
+const WINDOW_CONTROLS_METHODS: BridgeMethods<NativeWindowControlsBridge> = {
+	getState: "required",
+	minimize: "required",
+	toggleMaximize: "required",
+	close: "required",
+	subscribe: "required",
+};
+
 export function getNativeWindowControlsBridge(value: unknown): NativeWindowControlsBridge | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	return typeof Reflect.get(value, "getState") === "function" &&
-		typeof Reflect.get(value, "minimize") === "function" &&
-		typeof Reflect.get(value, "toggleMaximize") === "function" &&
-		typeof Reflect.get(value, "close") === "function" &&
-		typeof Reflect.get(value, "subscribe") === "function"
-		? (value as NativeWindowControlsBridge)
-		: null;
+	return readNativeBridge(value, WINDOW_CONTROLS_METHODS);
 }
 
 export type NativeWindowControlsController = {
@@ -58,7 +60,7 @@ export function subscribeToNativeWindowState(
 
 export function useNativeWindowControls(): NativeWindowControlsController | null {
 	const [bridge] = useState(() =>
-		getNativeWindowControlsBridge(Reflect.get(globalThis, NATIVE_WINDOW_CONTROLS_GLOBAL)),
+		readGlobalNativeBridge(NATIVE_WINDOW_CONTROLS_GLOBAL, WINDOW_CONTROLS_METHODS),
 	);
 	const [state, setState] = useState<NativeWindowState | null>(null);
 

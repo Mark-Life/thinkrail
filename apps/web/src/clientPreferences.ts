@@ -1,3 +1,5 @@
+import { type BridgeMethods, readGlobalNativeBridge, readNativeBridge } from "./nativeBridge";
+
 export interface StablePreferenceAdapter {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
@@ -6,18 +8,18 @@ export interface StablePreferenceAdapter {
 
 const STABLE_PREFERENCES_GLOBAL = "__THINKRAIL_STABLE_PREFERENCES__";
 
+const PREFERENCE_ADAPTER_METHODS: BridgeMethods<StablePreferenceAdapter> = {
+	getItem: "required",
+	setItem: "required",
+	removeItem: "required",
+};
+
 export function asStablePreferenceAdapter(value: unknown): StablePreferenceAdapter | null {
-	return typeof value === "object" && value !== null && !Array.isArray(value)
-		? typeof Reflect.get(value, "getItem") === "function" &&
-			typeof Reflect.get(value, "setItem") === "function" &&
-			typeof Reflect.get(value, "removeItem") === "function"
-			? (value as StablePreferenceAdapter)
-			: null
-		: null;
+	return readNativeBridge(value, PREFERENCE_ADAPTER_METHODS);
 }
 
 export function getStablePreferenceAdapter(): StablePreferenceAdapter | null {
-	return asStablePreferenceAdapter(Reflect.get(globalThis, STABLE_PREFERENCES_GLOBAL));
+	return readGlobalNativeBridge(STABLE_PREFERENCES_GLOBAL, PREFERENCE_ADAPTER_METHODS);
 }
 
 export function firstPaintPreferenceStorage(): StablePreferenceAdapter | null {

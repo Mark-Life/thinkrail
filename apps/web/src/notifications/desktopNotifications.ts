@@ -1,23 +1,22 @@
 import type { NativeNotificationBridge } from "@thinkrail/contracts";
+import { type BridgeMethods, readGlobalNativeBridge, readNativeBridge } from "../nativeBridge";
 import type { NotificationChannel } from "./channel";
 import { isWindowFocused } from "./webNotifications";
 
 const NATIVE_NOTIFICATIONS_GLOBAL = "__THINKRAIL_NATIVE_NOTIFICATIONS__";
 
+const NOTIFICATION_METHODS: BridgeMethods<NativeNotificationBridge> = {
+	show: "required",
+	isWindowFocused: "optional",
+};
+
 /** Shape-guard the optional native bridge the desktop preload freezes onto the global. */
 export function getNativeNotificationBridge(value: unknown): NativeNotificationBridge | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	try {
-		return typeof Reflect.get(value, "show") === "function"
-			? (value as NativeNotificationBridge)
-			: null;
-	} catch {
-		return null;
-	}
+	return readNativeBridge(value, NOTIFICATION_METHODS);
 }
 
 export function readNativeNotificationBridge(): NativeNotificationBridge | null {
-	return getNativeNotificationBridge(Reflect.get(globalThis, NATIVE_NOTIFICATIONS_GLOBAL));
+	return readGlobalNativeBridge(NATIVE_NOTIFICATIONS_GLOBAL, NOTIFICATION_METHODS);
 }
 
 /**

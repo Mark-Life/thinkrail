@@ -59,7 +59,11 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter, and `firstPaintPreferenceStorage` — that adapter, else
-`localStorage` — which the theme and font first-paint hints share), and `styles/` — which holds the three
+`localStorage` — which the theme and font first-paint hints share), `nativeBridge.ts` (`readNativeBridge` /
+`readGlobalNativeBridge`: the one typed reader of the optional bridges the desktop preload freezes onto
+`globalThis`; it returns the `contracts` bridge type only when every method a `BridgeMethods<T>` record lists is a
+function, and that record must name every member of `T`, so a new bridge method fails `tsc` until it is checked
+too), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);

@@ -6,6 +6,7 @@ import type {
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
+import { type BridgeMethods, readGlobalNativeBridge, readNativeBridge } from "../nativeBridge";
 import { useAppStore } from "../store";
 
 const NATIVE_UPDATES_GLOBAL = "__THINKRAIL_NATIVE_UPDATES__";
@@ -35,20 +36,17 @@ export type UpdatesController =
 			runUpdate(): void;
 	  };
 
+const UPDATE_METHODS: BridgeMethods<NativeUpdateBridge> = {
+	getState: "required",
+	checkForUpdates: "required",
+	downloadUpdate: "required",
+	restartToUpdate: "required",
+	dismissInstallResult: "required",
+	subscribe: "required",
+};
+
 export function getNativeUpdateBridge(value: unknown): NativeUpdateBridge | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	try {
-		return typeof Reflect.get(value, "getState") === "function" &&
-			typeof Reflect.get(value, "checkForUpdates") === "function" &&
-			typeof Reflect.get(value, "downloadUpdate") === "function" &&
-			typeof Reflect.get(value, "restartToUpdate") === "function" &&
-			typeof Reflect.get(value, "dismissInstallResult") === "function" &&
-			typeof Reflect.get(value, "subscribe") === "function"
-			? (value as NativeUpdateBridge)
-			: null;
-	} catch {
-		return null;
-	}
+	return readNativeBridge(value, UPDATE_METHODS);
 }
 
 function nativeUpdateErrorText(error: unknown): string {
@@ -129,9 +127,7 @@ export function hasNativeUpdateSurface(
 }
 
 export function useUpdates(hostUpdateRunner: HostUpdateRunner | null): UpdatesController | null {
-	const [bridge] = useState(() =>
-		getNativeUpdateBridge(Reflect.get(globalThis, NATIVE_UPDATES_GLOBAL)),
-	);
+	const [bridge] = useState(() => readGlobalNativeBridge(NATIVE_UPDATES_GLOBAL, UPDATE_METHODS));
 	const [nativeState, setNativeState] = useState<NativeUpdateState | null>(null);
 	const [nativeRequestError, setNativeRequestError] = useState<NativeUpdateRequestError | null>(
 		null,

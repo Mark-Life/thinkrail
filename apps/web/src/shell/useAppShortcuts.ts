@@ -1,6 +1,7 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { platformShortcutLabel } from "../lib";
+import { type BridgeMethods, readGlobalNativeBridge, readNativeBridge } from "../nativeBridge";
 import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
@@ -13,21 +14,18 @@ import {
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
+const SHORTCUTS_METHODS: BridgeMethods<NativeShortcutsBridge> = {
+	subscribeQuitHint: "required",
+	subscribeCommand: "required",
+	quit: "required",
+};
+
 export function getNativeShortcutsBridge(value: unknown): NativeShortcutsBridge | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	try {
-		return typeof Reflect.get(value, "subscribeQuitHint") === "function" &&
-			typeof Reflect.get(value, "subscribeCommand") === "function" &&
-			typeof Reflect.get(value, "quit") === "function"
-			? (value as NativeShortcutsBridge)
-			: null;
-	} catch {
-		return null;
-	}
+	return readNativeBridge(value, SHORTCUTS_METHODS);
 }
 
 function readNativeShortcutsBridge() {
-	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
+	return readGlobalNativeBridge(NATIVE_SHORTCUTS_GLOBAL, SHORTCUTS_METHODS);
 }
 
 export function readSettingsShortcutLabel(): string | null {
