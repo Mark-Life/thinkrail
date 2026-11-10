@@ -45,9 +45,15 @@ import {
 	type SessionOptions,
 	type SpawnRecord,
 } from "./types";
-import { SessionOptions as SessionOptionsSchema } from "./wire";
+import {
+	ChildInfo as ChildInfoSchema,
+	ResourceChildBirth as ResourceChildBirthSchema,
+	SessionOptions as SessionOptionsSchema,
+} from "./wire";
 
 const SessionOptionsCheck = compile(SessionOptionsSchema);
+const ChildInfoCheck = compile(ChildInfoSchema);
+const ResourceChildBirthCheck = compile(ResourceChildBirthSchema);
 
 const DEFAULT_MAX_CONCURRENT_PER_PARENT = 4;
 
@@ -438,20 +444,30 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			);
 	}
 
-	function steerResource(entry: ChildEntry, activeRun: ActiveRun | undefined, text: string): void {
+	/** Why a resource child cannot take a steer now, or undefined when it can. */
+	function resourceSteerBlock(
+		entry: ChildEntry,
+		activeRun: ActiveRun | undefined,
+	): DelegationError | undefined {
 		if (entry.disposed)
-			throw new DelegationError("disposed", `Child ${entry.record.sessionId} is disposed`);
+			return new DelegationError("disposed", `Child ${entry.record.sessionId} is disposed`);
 		if (
 			!activeRun ||
 			entry.activeRun !== activeRun ||
 			activeRun.controller.signal.aborted ||
 			!entry.session.isStreaming
 		) {
-			throw new DelegationError(
+			return new DelegationError(
 				"not-running",
 				"Resource steering requires an active streaming invocation",
 			);
 		}
+		return undefined;
+	}
+
+	function steerResource(entry: ChildEntry, activeRun: ActiveRun | undefined, text: string): void {
+		const blocked = resourceSteerBlock(entry, activeRun);
+		if (blocked) throw blocked;
 		entry.session.agent.steer({
 			role: "user",
 			content: [{ type: "text", text }],
@@ -547,9 +563,8 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				if (cap !== undefined && turns >= cap && continues && !capSteered) {
 					capSteered = true;
 					if (entry.resource) {
-						try {
+						if (!resourceSteerBlock(entry, activeRun))
 							steerResource(entry, activeRun, WRAP_UP_INSTRUCTION);
-						} catch {}
 					} else void session.steer(WRAP_UP_INSTRUCTION).catch(() => {});
 				}
 				pushUpdate("running");
@@ -905,7 +920,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				? { entryId: spec.origin.history.entryId }
 				: {}),
 			info: Object.freeze({ ...spec.info }),
-			interactive: false,
+			interactive: false as const,
 			visibility: "hidden" as const,
 			createdAt: new Date().toISOString(),
 			sessionFile: session.sessionManager.getSessionFile() ?? "",
@@ -1087,36 +1102,16 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 
 	function validateBirth(resource: ResourceState, birth: ResourceChildBirth): ResourceChildBirth {
 		if (
-			!birth ||
+			!ResourceChildBirthCheck.check(birth) ||
 			birth.resourceId !== resource.id ||
 			birth.scope !== scope ||
-			birth.visibility !== "hidden" ||
-			birth.interactive !== false ||
-			(birth.originKind !== "fresh" && birth.originKind !== "fork") ||
-			!birth.info ||
-			typeof birth.info.createdBy !== "string" ||
-			!birth.info.createdBy ||
-			(birth.info.roleName !== undefined && typeof birth.info.roleName !== "string") ||
-			(birth.info.roleSource !== undefined && typeof birth.info.roleSource !== "string") ||
-			typeof birth.createdAt !== "string" ||
 			!Number.isFinite(Date.parse(birth.createdAt)) ||
-			("entryId" in birth &&
-				(birth.originKind !== "fork" || typeof birth.entryId !== "string" || !birth.entryId))
+			(birth.entryId !== undefined && birth.originKind !== "fork")
 		) {
 			throw new DelegationError("invalid-child-record", "Invalid resource child birth metadata");
 		}
 		assertSegment(birth.sessionId, "invalid-child-record");
-		return Object.freeze({
-			sessionId: birth.sessionId,
-			resourceId: birth.resourceId,
-			scope: birth.scope,
-			originKind: birth.originKind,
-			...(birth.entryId !== undefined ? { entryId: birth.entryId } : {}),
-			info: Object.freeze({ ...birth.info }),
-			interactive: birth.interactive,
-			visibility: birth.visibility,
-			createdAt: birth.createdAt,
-		});
+		return Object.freeze({ ...birth, info: Object.freeze({ ...birth.info }) });
 	}
 
 	async function createResourceChild(
@@ -1127,13 +1122,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const spec = snapshotChildSpec(input);
 		const options = assertV1Combination(spec);
 		validateSessionOptions(options);
-		if (
-			!spec.info ||
-			typeof spec.info.createdBy !== "string" ||
-			!spec.info.createdBy ||
-			(spec.info.roleName !== undefined && typeof spec.info.roleName !== "string") ||
-			(spec.info.roleSource !== undefined && typeof spec.info.roleSource !== "string")
-		) {
+		if (!ChildInfoCheck.check(spec.info)) {
 			throw new DelegationError("invalid-child-record", "Invalid resource child info");
 		}
 		const context = await preparedContext(resource);

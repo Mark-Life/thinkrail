@@ -1,4 +1,6 @@
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
+import type { SessionOptions } from "pi-delegation";
+import type { Same } from "type-tie";
 import { type Static, Type } from "typebox";
 
 export const LIMITS = {
@@ -75,6 +77,12 @@ export const SessionSchema = Type.Object(
 	},
 	closed,
 );
+/** A node's session shaping is the part of delegation's `SessionOptions` a definition may set, with `tools` required. */
+export type SessionTie = Same<
+	Static<typeof SessionSchema>,
+	Pick<SessionOptions, "model" | "thinkingLevel" | "systemPrompt" | "contextFiles" | "skills"> &
+		Required<Pick<SessionOptions, "tools">>
+>;
 export const NodeSchema = Type.Object(
 	{
 		id: IdSchema,

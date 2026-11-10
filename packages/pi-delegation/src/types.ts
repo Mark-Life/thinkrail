@@ -7,21 +7,22 @@ import type {
 	ModelRuntime,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { StaticObject } from "@earendil-works/pi-schema";
+import type { Static, StaticObject } from "@earendil-works/pi-schema";
 import type { Same } from "type-tie";
-import type { DELEGATION_RUN_FIELDS, RunLifecycleStatus, RunStatus, SessionOptions } from "./wire";
+import type {
+	ChildInfo,
+	DELEGATION_RUN_FIELDS,
+	ResourceChildBirth as ResourceChildBirthSchema,
+	RunLifecycleStatus,
+	RunStatus,
+	SessionOptions,
+	StopReason,
+} from "./wire";
 
-export type { RunLifecycleStatus, RunStatus, SessionOptions };
+export type { ChildInfo, RunLifecycleStatus, RunStatus, SessionOptions, StopReason };
 
 /** The wire uses pi-ai's thinking-level schema for fields pi-agent-core types with its own union. */
 export type ThinkingLevelTie = Same<ModelThinkingLevel, ThinkingLevel>;
-
-export interface ChildInfo {
-	createdBy: string;
-	roleName?: string;
-	roleSource?: string;
-	detached?: boolean;
-}
 
 export interface WorkspaceProvider {
 	prepare(ctx: {
@@ -212,10 +213,16 @@ export interface ResourceDelegationOptions {
 	childExtensionFactories?: InlineExtension[];
 }
 
-export type ResourceSpawnRecord = Omit<SpawnRecord, "parentSessionId"> & {
-	readonly resourceId: string;
-};
-export type ResourceChildBirth = Readonly<Omit<ResourceSpawnRecord, "sessionFile">>;
+export type ResourceChildBirth = Readonly<Static<typeof ResourceChildBirthSchema>>;
+export type ResourceSpawnRecord = ResourceChildBirth & { readonly sessionFile: string };
+
+type Narrows<A extends B, B> = A;
+type ParentlessRecord = Omit<SpawnRecord, "parentSessionId">;
+/** A resource spawn record is a spawn record with a resource for a parent, narrowed to what reopening accepts. */
+export type ResourceSpawnRecordTie = [
+	Narrows<ResourceSpawnRecord, ParentlessRecord>,
+	Same<keyof ResourceSpawnRecord, keyof ParentlessRecord | "resourceId">,
+];
 export type ResourceChildHandle = Pick<
 	ChildHandle,
 	"sessionId" | "runQueued" | "steer" | "abort" | "dispose"

@@ -190,11 +190,16 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   `@earendil-works/pi-tui` (headless by design — rendering is the embedder's);
   importing another workspace package's internals.
 - **`./wire` leaf entry** (`src/wire.ts`): `RUN_STATUSES`, `RUN_LIFECYCLE_STATUSES`, the
-  `RunStatus` / `RunLifecycleStatus` schemas, `DELEGATION_RUN_FIELDS` and the `SessionOptions`
-  schema. It value-imports only `pi-schema` and pi-ai's `providers/model-schema`, so browser code
-  may load it ([[module-contracts]] does). `src/types.ts` derives `DelegationRunDetails`,
-  `RunStatus`, `RunLifecycleStatus` and `SessionOptions` from it, and `reopenChild` checks saved
-  session configuration with the compiled `SessionOptions` schema. `thinkingLevel` uses pi-ai's
+  `RunStatus` / `RunLifecycleStatus` schemas, `DELEGATION_RUN_FIELDS`, the `SessionOptions`,
+  `ChildInfo` and `ResourceChildBirth` schemas, and `STOP_REASONS` / `StopReason`. It value-imports
+  only `pi-schema` and pi-ai's `providers/model-schema`, so browser code may load it
+  ([[module-contracts]] does), and [[module-pi-dag]] stores its records with these schemas.
+  `src/types.ts` derives `DelegationRunDetails`, `RunStatus`, `RunLifecycleStatus`,
+  `SessionOptions`, `ChildInfo`, `ResourceChildBirth` and `ResourceSpawnRecord` from it, and ties
+  the resource record to `SpawnRecord` (same fields, narrower values). `reopenChild` checks a saved
+  birth and session configuration with the compiled schemas. pi-ai ships `StopReason` only as a
+  type, so `STOP_REASONS` is the one list of its values, `Same`-tied to it; the session-file
+  schema and [[module-contracts]] read it. `thinkingLevel` uses pi-ai's
   `ModelThinkingLevelSchema`; pi-agent-core types the same field with its own union, so
   `types.ts` ties the two with `Same<ModelThinkingLevel, ThinkingLevel>`.
 - `DelegationRunDetails` is **owned here; `@thinkrail/contracts` builds its wire schema from

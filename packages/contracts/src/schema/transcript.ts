@@ -21,16 +21,7 @@ import {
 import type { Same } from "./typeTie";
 import { wireObj } from "./wire";
 
-export const PiStopReason = oneOf([
-	"pending",
-	"stop",
-	"length",
-	"toolUse",
-	"error",
-	"aborted",
-	"deferred",
-]);
-export type PiStopReason = Same<Static<typeof PiStopReason>, PiStopReasonType>;
+export { StopReason as PiStopReason } from "pi-delegation/wire";
 
 /** The stop reasons after which an assistant message's tool calls may be cut off, so they must not run. */
 export const NON_EXECUTABLE_STOP_REASONS = [
@@ -44,6 +35,10 @@ export type ImageContent = Same<Static<typeof ImageContent>, PiImageContent>;
 
 export const TextContent = wireObj({ type: lit("text"), text: str(), textSignature: opt(str()) });
 export type TextContent = Same<Static<typeof TextContent>, PiTextContent>;
+
+/** A tool result's `details` while the tool waits for the user's response. */
+export const ToolResponsePendingDetails = wireObj({ kind: lit("ack") });
+export type ToolResponsePendingDetails = Static<typeof ToolResponsePendingDetails>;
 
 export const isImageContent = compile(ImageContent).check;
 export const isTextContent = compile(TextContent).check;

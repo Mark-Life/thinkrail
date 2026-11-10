@@ -233,6 +233,7 @@
       "name": "pi-dag",
       "version": "0.0.0",
       "dependencies": {
+        "@earendil-works/pi-schema": "catalog:",
         "pi-delegation": "workspace:*",
       },
       "devDependencies": {
@@ -240,6 +241,7 @@
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
+        "type-tie": "workspace:*",
         "typebox": "catalog:",
         "typescript": "catalog:",
       },

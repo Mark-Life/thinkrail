@@ -22,7 +22,8 @@ and the typed command/read/binding contracts. Four reads (`listDags`, `getDag`, 
 `listHistory`) and one `execute` dispatcher are the controller surface. No raw AgentSession,
 checkpoint CRUD, generic query language, alternate spawner or public effect engine.
 
-Allowed dependencies: `pi-delegation` through its barrel, public pi/typebox peer APIs and `node:*`.
+Allowed dependencies: `pi-delegation` through its barrel and its `./wire` schema leaf, public
+pi/typebox peer APIs, `pi-schema`, `type-tie` (type-only) and `node:*`.
 Forbidden: ThinkRail workspace packages, `pi-subagents` policy, pi private fields and sibling internals.
 Internal dependency edges are `extension → runtime + domain + pi-delegation`,
 `runtime → domain + persistence + pi-delegation`, and `persistence → domain`.
@@ -118,9 +119,13 @@ before references; sync/replace the snapshot before ACK. There is one controllin
 with exclusive ownership checked before mutations; dead-owner recovery is not lease-expiry stealing.
 Reads do not claim ownership. They distinguish local, other/indeterminate and inactive ownership;
 inactive execution is projected paused/uncertain without writing a snapshot. Unknown/corrupt state
-fails closed, so the snapshot schema is closed: a stored outcome keeps only the run-detail fields it
-names, and fields newly added to `DelegationRunDetails` must be stripped at settlement until the
-schema deliberately adopts them. Stored outcomes retain the child's effective `model` and optional
+fails closed, so the snapshot schema is closed. What delegation reports is stored with delegation's
+own schemas from `pi-delegation/wire`: the run status, the run details without `task`
+(`DELEGATION_RUN_FIELDS`), the stop reason and the worker birth. A field delegation adds is stored at
+once, and a field it drops refuses older snapshots that hold it. TypeBox checks these pi-schema
+schemas as plain JSON Schema; `Type.Unsafe` gives them the type pi-schema's `Static` derives, so the
+claim is the owner's own. `SessionSchema` adds definition bounds to part of delegation's
+`SessionOptions` and is `Same`-tied to that `Pick`. Stored outcomes retain the child's effective `model` and optional
 `thinkingLevel`, which `getDag` exposes unchanged after restoration. Missing effort in older outcomes
 remains absent, never inferred from configuration. This optional addition keeps snapshot schema
 version 1: older snapshots remain readable, but downgrading to a host whose closed schema predates

@@ -21,6 +21,7 @@ import {
 	unknown,
 } from "@earendil-works/pi-schema";
 import type { Same } from "type-tie";
+import { StopReason } from "./wire";
 
 type Exactly<T, U> = [T] extends [U] ? ([U] extends [T] ? true : false) : false;
 type Flat<T> = { [K in keyof T]: T[K] };
@@ -146,7 +147,7 @@ const assistant = open({
 		),
 	),
 	usage,
-	stopReason: oneOf(["pending", "stop", "length", "toolUse", "error", "aborted", "deferred"]),
+	stopReason: StopReason,
 	deferred: opt(
 		open({
 			provider: str(),
