@@ -5,12 +5,13 @@ import {
 	RiHome4Line,
 	RiLoader4Line,
 } from "@remixicon/react";
-import type {
-	BranchReviewState,
-	ProjectId,
-	SessionId,
-	Workspace,
-	WorkspaceId,
+import {
+	type BranchReviewState,
+	type ProjectId,
+	parseSessionId,
+	type SessionId,
+	type Workspace,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
@@ -137,8 +138,10 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 		for (const record of Object.values(records)) {
 			const recordAttention = getSessionAttention(record.state);
 			attention = strongest(attention, recordAttention);
-			const knownTitle = selectKnownChatTitle(state, workspaceId, record.sessionId);
-			const firstPrompt = input.firstPrompts[record.sessionId];
+			const sessionId = parseSessionId(record.sessionId);
+			if (sessionId === null) continue;
+			const knownTitle = selectKnownChatTitle(state, workspaceId, sessionId);
+			const firstPrompt = input.firstPrompts[sessionId];
 			if (!knownTitle && !firstPrompt && !recordAttention) continue;
 			const projectName = projectNames.get(record.projectId);
 			if (projectName === undefined) continue;
@@ -151,7 +154,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 					})
 				: projectName;
 			items.push({
-				id: `chat:${record.sessionId}`,
+				id: `chat:${sessionId}`,
 				kind: "chat",
 				title,
 				titleSource: label.source,
@@ -163,14 +166,9 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 				running: recordAttention === "running",
 				...(recordAttention ? { attention: recordAttention } : {}),
 				contextBoost: contextBoost(record.projectId, workspaceId, input),
-				...(input.transcriptPreviews
-					? { previewTarget: { kind: "chat", sessionId: record.sessionId } }
-					: {}),
+				...(input.transcriptPreviews ? { previewTarget: { kind: "chat", sessionId } } : {}),
 				run: () =>
-					input.navigateToWorkspace(
-						{ id: workspaceId, projectId: record.projectId },
-						record.sessionId,
-					),
+					input.navigateToWorkspace({ id: workspaceId, projectId: record.projectId }, sessionId),
 				preview: () => ({
 					title,
 					subtitle: where,

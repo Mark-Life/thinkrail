@@ -1,1 +1,1 @@
-export { testProjectId, testSessionId, testWorkspaceId } from "./schema/ids";
+export { testProjectId, testSessionId, testStoredSessionId, testWorkspaceId } from "./schema/ids";

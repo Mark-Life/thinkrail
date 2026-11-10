@@ -1,4 +1,5 @@
 import type { ReviewComment, ReviewSnapshot, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { getProjects } from "../projects";
 import { getReviewSnapshot } from "../reviews";
 import {
@@ -14,6 +15,14 @@ interface ItemRef {
 	workspaceId: WorkspaceId;
 	sessionId: SessionId;
 	id: string;
+}
+
+export function findingItem(
+	workspaceId: WorkspaceId,
+	origin: NonNullable<ReviewComment["origin"]>,
+): ItemRef | null {
+	const sessionId = parseSessionId(origin.sessionId);
+	return sessionId === null ? null : { workspaceId, sessionId, id: origin.todoId };
 }
 
 const activeFixItems = new Set<string>();
@@ -37,15 +46,10 @@ export function isItemUnderActiveReview(sessionId: SessionId, id: string): boole
 }
 
 function isFindingStale(workspaceId: WorkspaceId, comment: ReviewComment): boolean {
-	const origin = comment.origin;
-	return (
-		comment.anchorState === "outdated" &&
-		origin !== undefined &&
-		reviewedShaSuperseded(
-			{ workspaceId, sessionId: origin.sessionId, id: origin.todoId },
-			origin.reviewedSha,
-		)
-	);
+	const { origin } = comment;
+	if (comment.anchorState !== "outdated" || origin === undefined) return false;
+	const item = findingItem(workspaceId, origin);
+	return item !== null && reviewedShaSuperseded(item, origin.reviewedSha);
 }
 
 export function markClientStale<T extends ReviewSnapshot>(

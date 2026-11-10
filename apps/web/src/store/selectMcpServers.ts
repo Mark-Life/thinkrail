@@ -1,10 +1,11 @@
-import type {
-	McpServerScope,
-	McpServerState,
-	McpServerStatus,
-	McpServerSummary,
-	SessionId,
-	WorkspaceId,
+import {
+	type McpServerScope,
+	type McpServerState,
+	type McpServerStatus,
+	type McpServerSummary,
+	parseSessionId,
+	type SessionId,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import { isMcpAttentionState } from "../lib";
 import type { McpHeldSnapshot, McpRead, McpWorkspaceProjection } from "./mcp";
@@ -114,7 +115,10 @@ function aggregate(
 		...(detail ? { detail } : {}),
 		sessions: {
 			total: sessions.length,
-			reporting: matching.map(({ held }) => held.snapshot.sessionId),
+			reporting: matching.flatMap(({ held }) => {
+				const sessionId = parseSessionId(held.snapshot.sessionId);
+				return sessionId === null ? [] : [sessionId];
+			}),
 			connected: reports.filter(({ status }) => status?.state === "connected").length,
 		},
 		...(startingSince !== undefined ? { startingSince } : {}),

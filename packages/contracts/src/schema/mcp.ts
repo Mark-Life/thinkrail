@@ -11,7 +11,7 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
-import { SessionId, WorkspaceId } from "./ids";
+import { SessionId, StoredSessionId, StoredWorkspaceId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const McpActiveExposure = oneOf(["deferred", "direct", "hidden"]);
@@ -136,8 +136,8 @@ export const McpServerStatus = wireObj({
 export type McpServerStatus = Static<typeof McpServerStatus>;
 
 export const McpStatusSnapshot = wireObj({
-	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	workspaceId: StoredWorkspaceId,
+	sessionId: StoredSessionId,
 	/** Monotonic per session; a stale snapshot never overwrites a newer one. */
 	generation: num(),
 	servers: arr(McpServerStatus),

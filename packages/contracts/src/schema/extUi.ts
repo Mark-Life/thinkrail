@@ -12,7 +12,7 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
-import { SessionId } from "./ids";
+import { StoredSessionId } from "./ids";
 import { ProviderWarning } from "./provider";
 import { wireObj } from "./wire";
 
@@ -26,7 +26,7 @@ const ExtUiDialogAnchor = {
 export const ExtUiDialogRequest = union([
 	wireObj({
 		id: str(),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		kind: lit("select"),
 		title: str(),
 		options: arr(str()),
@@ -34,7 +34,7 @@ export const ExtUiDialogRequest = union([
 	}),
 	wireObj({
 		id: str(),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		kind: lit("confirm"),
 		title: str(),
 		message: str(),
@@ -42,7 +42,7 @@ export const ExtUiDialogRequest = union([
 	}),
 	wireObj({
 		id: str(),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		kind: lit("input"),
 		title: str(),
 		placeholder: opt(str()),
@@ -50,7 +50,7 @@ export const ExtUiDialogRequest = union([
 	}),
 	wireObj({
 		id: str(),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		kind: lit("editor"),
 		title: str(),
 		prefill: opt(str()),
@@ -62,28 +62,28 @@ export const ExtUiRequest = union([
 	ExtUiDialogRequest,
 	wireObj({
 		id: str(),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		kind: lit("notify"),
 		message: str(),
 		level: oneOf(["info", "warning", "error"]),
 	}),
 	wireObj({
 		id: str(),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		kind: lit("setStatus"),
 		key: str(),
 		text: nullable(str()),
 	}),
 	wireObj({
 		id: str(),
-		sessionId: SessionId,
+		sessionId: StoredSessionId,
 		kind: lit("setWidget"),
 		key: str(),
 		content: nullable(arr(str())),
 	}),
-	wireObj({ id: str(), sessionId: SessionId, kind: lit("setTitle"), title: str() }),
-	wireObj({ id: str(), sessionId: SessionId, kind: lit("notice"), notice: ProviderWarning }),
-	wireObj({ id: str(), sessionId: SessionId, kind: lit("dismiss") }),
+	wireObj({ id: str(), sessionId: StoredSessionId, kind: lit("setTitle"), title: str() }),
+	wireObj({ id: str(), sessionId: StoredSessionId, kind: lit("notice"), notice: ProviderWarning }),
+	wireObj({ id: str(), sessionId: StoredSessionId, kind: lit("dismiss") }),
 ]);
 export type ExtUiRequest = Static<typeof ExtUiRequest>;
 

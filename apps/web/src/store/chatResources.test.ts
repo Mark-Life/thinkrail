@@ -34,13 +34,13 @@ const snapshot: SessionResources = {
 		command("error"),
 		command("stopped"),
 	],
-	subagents: ["queued", "running", "completed", "error", "aborted"].map((status) => ({
-		childSessionId: status,
+	subagents: (["queued", "running", "completed", "error", "aborted"] as const).map((status) => ({
+		childSessionId: testSessionId(status),
 		parentSessionId: scope.sessionId,
 		task: "inspect",
 		createdAt: "2026-01-01",
 		status,
-	})) as SessionResources["subagents"],
+	})),
 };
 const state = useAppStore.getState;
 const projection = () => selectChatResourceProjection(state(), scope);

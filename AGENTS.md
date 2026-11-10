@@ -49,6 +49,9 @@ Clear, fractal module boundaries are a top-priority requirement:
   dependencies. Import types only from the `pi-ai` / `pi-agent-core` package roots;
   `@earendil-works/pi-coding-agent` is server-only.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
+- A request field, route or other outside id uses a strict id (`ProjectId`, `parseProjectId`). A reply, push or disk read uses
+  the lenient one (`StoredProjectId`, `parseStoredProjectId`), so an old id never drops from a user's list. A file name
+  that goes back into a path stays strict. See `packages/contracts/src/schema/SPEC.md`.
 - `pi` owns state. The host exposes what pi reports rather than recomputing cost, stats, or state.
 - Streaming semantics: `text_delta` / `thinking_delta` append;
   `tool_execution_update.partialResult` replaces.

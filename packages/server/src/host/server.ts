@@ -4,7 +4,6 @@ import type {
 	HostPlatform,
 	HostUpdateNotice,
 	ServerWelcome,
-	SessionDeletedPayload,
 	SessionStateRecord,
 	SessionSummary,
 	TerminalTabsPush,
@@ -926,7 +925,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		server.publish(WS_CHANNELS.sessionState, pushFrame(WS_CHANNELS.sessionState, record));
 	});
 
-	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
+	setSessionDeletedPublisher((payload) => {
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
 		server.publish(WS_CHANNELS.sessionDeleted, pushFrame(WS_CHANNELS.sessionDeleted, payload));

@@ -1,3 +1,4 @@
+import { parseSessionId } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { useEffect } from "react";
 import {
@@ -23,9 +24,11 @@ function collectCandidates(state: AppState): AttentionCandidate[] {
 	const t = currentTranslator();
 	for (const records of Object.values(state.sessionStateByWorkspace)) {
 		for (const record of Object.values(records)) {
+			const sessionId = parseSessionId(record.sessionId);
+			if (sessionId === null) continue;
 			const workspace = selectWorkspaceById(state, record.workspaceId);
 			candidates.push({
-				sessionId: record.sessionId,
+				sessionId,
 				workspaceId: record.workspaceId,
 				worktreeName: workspace ? workspaceName(t, workspace) : "",
 				state: record.state,
@@ -81,7 +84,7 @@ export function useAttentionNotifications(): void {
 				useAppStore.getState().openNotificationPrompt();
 			},
 			schedule: (callback, delay): TimerHandle => setTimeout(callback, delay),
-			cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+			cancel: (handle) => clearTimeout(handle),
 		});
 
 		const observer = createAttentionObserver((event) => engine.enqueue(event));

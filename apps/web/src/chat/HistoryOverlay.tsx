@@ -4,12 +4,14 @@ import {
 	RiSaveLine as Save,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import type {
-	HistoryScope,
-	MessageHit,
-	PromptHit,
-	SessionId,
-	WorkspaceId,
+import {
+	type HistoryScope,
+	type MessageHit,
+	type PromptHit,
+	parseSessionId,
+	type SessionId,
+	type StoredSessionId,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
@@ -98,12 +100,13 @@ function DeleteChatButton({
 	onDeleteChat,
 }: {
 	workspaceId: WorkspaceId | undefined;
-	sessionId: SessionId;
+	sessionId: StoredSessionId;
 	isSelected: boolean;
 	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 }) {
 	const t = useT();
-	if (!workspaceId) return null;
+	const chatId = parseSessionId(sessionId);
+	if (!workspaceId || chatId === null) return null;
 	return (
 		<IconTooltip label={t("chat.history.deleteChat")}>
 			<button
@@ -112,7 +115,7 @@ function DeleteChatButton({
 				aria-label={t("chat.history.deleteChat")}
 				onClick={(event) => {
 					event.stopPropagation();
-					onDeleteChat(workspaceId, sessionId);
+					onDeleteChat(workspaceId, chatId);
 				}}
 				className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""

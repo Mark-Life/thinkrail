@@ -561,9 +561,8 @@ describe("frontend-local layout state", () => {
 		setLayoutStateStablePreferencesForTests(stablePreferences);
 		await initializeLocalLayoutState();
 
-		const oversizedWorkspaceId = testWorkspaceId(`workspace-${"x".repeat(256 * 1024)}`);
 		useAppStore.setState({
-			workspaceViewsByWorkspace: { [oversizedWorkspaceId]: { groups: {} } },
+			workspaceViewsByWorkspace: { [`workspace-${"x".repeat(256 * 1024)}`]: { groups: {} } },
 		});
 
 		expect(stablePreferences.length).toBe(0);

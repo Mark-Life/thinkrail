@@ -1,4 +1,4 @@
-import type { ProjectId, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import type { ProjectId, SessionId, StoredSessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
@@ -16,8 +16,7 @@ import {
 	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
-	parseSessionId,
-	parseWorkspaceId,
+	parseStoredWorkspaceId,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
 	type ResourceRecord,
@@ -76,6 +75,7 @@ import {
 	type ChatResourceScope,
 	type ChatResourceState,
 	finishedChain,
+	type ReportedChatScope,
 } from "./chatResources";
 
 export function selectLoginBusy(state: {
@@ -202,7 +202,7 @@ export function selectSupportsModelPicker(state: ProtocolState): boolean {
 
 export function isChatResourceScopeAlive(
 	state: ChatResourceState,
-	scope: ChatResourceScope,
+	scope: ReportedChatScope,
 ): boolean {
 	return (
 		!state.removedWorkspaceIds[scope.workspaceId] &&
@@ -784,7 +784,7 @@ export function selectAttendedSessionId(
 export function selectChatAttended(
 	state: ChatAttentionState,
 	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 ): boolean {
 	return selectAttendedSessionId(state, workspaceId) === sessionId;
 }
@@ -980,7 +980,7 @@ export function selectKnownChatLocation(
 	}
 	for (const [key, chats] of Object.entries(state.closedChatsByWorkspace)) {
 		const chat = chats.find((candidate) => candidate.sessionId === sessionId);
-		const workspaceId = parseWorkspaceId(key);
+		const workspaceId = parseStoredWorkspaceId(key);
 		if (chat && workspaceId !== null) return { workspaceId, title: chat.title };
 	}
 	return null;
@@ -993,13 +993,13 @@ export function selectWorkspaceSessionIds(
 		layoutDocumentsByWorkspace?: Record<string, WorkspaceLayoutDocument>;
 	},
 	workspaceId: WorkspaceId,
-): SessionId[] {
-	const sessionIds = new Set(
+): StoredSessionId[] {
+	const sessionIds = new Set<StoredSessionId>(
 		(state.tabsByWorkspace[workspaceId] ?? []).flatMap((tab) =>
 			tab.kind === "chat" || tab.kind === "plan"
 				? [tab.sessionId]
 				: tab.kind === "doc"
-					? [parseSessionId(tab.sourceId)].filter((id) => id !== null)
+					? [tab.sourceId]
 					: [],
 		),
 	);
@@ -1014,10 +1014,7 @@ export function selectWorkspaceSessionIds(
 		}
 		for (const tab of node.tabs) {
 			if (tab.kind === "chat") sessionIds.add(tab.sessionId);
-			if (tab.kind === "document" && tab.documentKind === "todo-plan") {
-				const planSessionId = parseSessionId(tab.sourceId);
-				if (planSessionId !== null) sessionIds.add(planSessionId);
-			}
+			if (tab.kind === "document" && tab.documentKind === "todo-plan") sessionIds.add(tab.sourceId);
 		}
 	};
 	const document = state.layoutDocumentsByWorkspace?.[workspaceId];
@@ -1174,7 +1171,7 @@ export function selectKnownChatTitle(
 export function selectChatFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 ): string | undefined {
 	const reported =
 		state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.firstPrompt ??

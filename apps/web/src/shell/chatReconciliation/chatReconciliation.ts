@@ -1,4 +1,4 @@
-import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
+import type { SessionId, SessionSummary, StoredSessionId, WorkspaceId } from "@thinkrail/contracts";
 import { parseSessionId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
@@ -11,6 +11,7 @@ import {
 	type EditorTab,
 	isConnectedGeneration,
 	layoutOpenOptionsForNavigation,
+	type OpenedSessionSummary,
 	selectAttentionCenterTab,
 	selectComposerFocusRequestStale,
 	selectCurrentRouteChatTarget,
@@ -37,9 +38,12 @@ const AUTO_OPEN_CHAT_LIMIT = 4;
 
 function placedSessionId(tab: LayoutTab): SessionId | null {
 	if (tab.kind === "chat") return tab.sessionId;
-	return tab.kind === "document" && tab.documentKind === "todo-plan"
-		? parseSessionId(tab.sourceId)
-		: null;
+	return tab.kind === "document" && tab.documentKind === "todo-plan" ? tab.sourceId : null;
+}
+
+function openable(summary: SessionSummary | undefined): OpenedSessionSummary | null {
+	const sessionId = summary ? parseSessionId(summary.sessionId) : null;
+	return summary && sessionId ? { ...summary, sessionId } : null;
 }
 
 let autoOpenAttemptGeneration = 0;
@@ -155,7 +159,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: WorkspaceId):
 		if (!document || !deletedSessions || tombstonePruneAttempts.current.has(document)) return;
 		if (useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] !== document) return;
 		const deletedPlacedSessions = [
-			...new Set(
+			...new Set<StoredSessionId>(
 				collectAllGroups(document)
 					.flatMap((group) => group.tabs)
 					.flatMap((tab) => {
@@ -277,7 +281,7 @@ export function useWorkspaceChatCatalogReconciliation(
 						commit(pruned);
 					}
 				}
-				const placed = new Set(
+				const placed = new Set<StoredSessionId>(
 					latestDocument
 						? collectAllGroups(latestDocument)
 								.flatMap((group) => group.tabs)
@@ -337,18 +341,20 @@ export function useWorkspaceChatCatalogReconciliation(
 					}
 				}
 				const autoOpenAlreadyAttempted = !claimAutoOpenAttempt(workspaceId, connectionGeneration);
-				const toOpen: typeof summaries = [];
+				const toOpen: OpenedSessionSummary[] = [];
 				const toHistory: typeof summaries = [];
 				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
 					if (summary.sessionId === handledRouteSessionId || placed.has(summary.sessionId))
 						continue;
+					const opened = openable(summary);
 					if (
+						opened !== null &&
 						handledRouteSessionId === null &&
 						!autoOpenAlreadyAttempted &&
 						(summary.live || (summary.openTodos ?? 0) > 0) &&
 						toOpen.length < AUTO_OPEN_CHAT_LIMIT
 					) {
-						toOpen.push(summary);
+						toOpen.push(opened);
 					} else {
 						toHistory.push(summary);
 					}
@@ -359,7 +365,8 @@ export function useWorkspaceChatCatalogReconciliation(
 					placed.size === 0 &&
 					toOpen.length === 0
 				) {
-					const fallback = toHistory.shift();
+					const index = toHistory.findIndex((summary) => openable(summary) !== null);
+					const fallback = index < 0 ? null : openable(toHistory.splice(index, 1)[0]);
 					if (fallback) toOpen.push(fallback);
 				}
 				const navigation =

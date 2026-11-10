@@ -20,6 +20,7 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
+	parseSessionId,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_METHODS,
 } from "@thinkrail/contracts";
@@ -47,7 +48,6 @@ import {
 	hasSession,
 	isHostResourceId,
 	isMcpLoginId,
-	isPiSessionId,
 	listAvailableModels,
 	listCustomEndpoints,
 	listModelContextSettings,
@@ -312,6 +312,7 @@ import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
 	clearChangesRequestedIfResolved,
+	findingItem,
 	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
@@ -369,7 +370,7 @@ async function sendUserMessage(
 async function startChat(
 	workspaceId: WorkspaceId,
 	choice: { model?: WireModel; thinkingLevel?: ThinkingLevel },
-): Promise<WsResult<"session.create">> {
+) {
 	const ws = getWorkspace(workspaceId);
 	ensureWorkspaceScratchDir(ws);
 	const defaults = await resolveNewChatModel(choice);
@@ -566,14 +567,15 @@ function resourceCwd(workspaceId: WorkspaceId): string {
 	}
 }
 
-function checkResourceIds(hostIds: string[], sessionIds: SessionId[]) {
-	if (!hostIds.every(isHostResourceId) || !sessionIds.every(isPiSessionId))
-		throw new Error("Invalid resource ids");
+function checkCommandId(commandId: string) {
+	if (!isHostResourceId(commandId)) throw new CodedError("INVALID_PARAMS", "Invalid resource ids");
 }
 
 function checkResourceHistoryCursor(kind: ResourceKind, before: ResourceHistoryCursor) {
-	const idValid = kind === "subagent" ? isPiSessionId(before.id) : isHostResourceId(before.id);
-	if (!Number.isFinite(before.at) || !idValid) throw new Error("Invalid resource history cursor");
+	const idValid =
+		kind === "subagent" ? parseSessionId(before.id) !== null : isHostResourceId(before.id);
+	if (!Number.isFinite(before.at) || !idValid)
+		throw new CodedError("INVALID_PARAMS", "Invalid resource history cursor");
 }
 
 async function deliverToolResponse(
@@ -1199,11 +1201,10 @@ const handlers: WsHandlers = {
 		const { workspaceId } = params;
 		const summaries = await listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
 		return summaries.map((summary) => {
+			const sessionId = parseSessionId(summary.sessionId);
+			if (sessionId === null) return summary;
 			try {
-				return {
-					...summary,
-					openTodos: countOpenTodos({ workspaceId, sessionId: summary.sessionId }),
-				};
+				return { ...summary, openTodos: countOpenTodos({ workspaceId, sessionId }) };
 			} catch {
 				return summary;
 			}
@@ -1251,16 +1252,14 @@ const handlers: WsHandlers = {
 	"mcp.readLog": (params) => mcpReadLog(params),
 	"mcp.testConnection": (params, ctx) => mcpTestConnection(params, ctx.clientKey),
 	"session.resources": (p) => {
-		checkResourceIds([p.workspaceId], [p.sessionId]);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
 	},
 	"session.resourceHistory": ({ workspaceId, sessionId, ...request }) => {
-		checkResourceIds([workspaceId], [sessionId]);
 		if (request.before) checkResourceHistoryCursor(request.kind, request.before);
 		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
 	},
 	"backgroundCommand.output": (p) => {
-		checkResourceIds([p.workspaceId, p.commandId], [p.sessionId]);
+		checkCommandId(p.commandId);
 		return readBackgroundCommandOutput(
 			p.workspaceId,
 			p.sessionId,
@@ -1269,7 +1268,7 @@ const handlers: WsHandlers = {
 		);
 	},
 	"backgroundCommand.stop": async (p) => {
-		checkResourceIds([p.workspaceId, p.commandId], [p.sessionId]);
+		checkCommandId(p.commandId);
 		await stopBackgroundCommand(
 			p.workspaceId,
 			p.sessionId,
@@ -1279,7 +1278,6 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"subagent.stop": async (p) => {
-		checkResourceIds([p.workspaceId], [p.parentSessionId, p.childSessionId]);
 		await stopSubagent(
 			p.workspaceId,
 			p.parentSessionId,
@@ -1289,7 +1287,6 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"subagent.stopAll": async (p) => {
-		checkResourceIds([p.workspaceId], [p.parentSessionId]);
 		const targeted = await stopAllSubagents(
 			p.workspaceId,
 			p.parentSessionId,
@@ -1482,12 +1479,8 @@ const handlers: WsHandlers = {
 				captureReviewCommentResolved(capture, "user", terminal);
 			// Resolving/dismissing the item's last open finding must clear its changes_requested verdict
 			// too (no-op while findings remain), the same invariant as commentDelete.
-			if (updated.origin?.todoId)
-				await clearChangesRequestedIfResolved({
-					workspaceId: p.workspaceId,
-					sessionId: updated.origin.sessionId,
-					id: updated.origin.todoId,
-				});
+			const item = updated.origin?.todoId ? findingItem(p.workspaceId, updated.origin) : null;
+			if (item) await clearChangesRequestedIfResolved(item);
 			return updated;
 		});
 	},
@@ -1499,12 +1492,8 @@ const handlers: WsHandlers = {
 			await deleteComment(p.workspaceId, p.id);
 			// A changes_requested verdict must not outlive its findings: if this was the item's last open
 			// finding, drop the verdict back to unreviewed.
-			if (origin?.todoId)
-				await clearChangesRequestedIfResolved({
-					workspaceId: p.workspaceId,
-					sessionId: origin.sessionId,
-					id: origin.todoId,
-				});
+			const item = origin?.todoId ? findingItem(p.workspaceId, origin) : null;
+			if (item) await clearChangesRequestedIfResolved(item);
 			return { ok: true } as const;
 		});
 	},

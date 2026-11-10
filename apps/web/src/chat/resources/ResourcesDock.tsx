@@ -8,7 +8,7 @@ import {
 } from "@remixicon/react";
 import type {
 	BackgroundCommandSummary,
-	SessionId,
+	StoredSessionId,
 	SubagentResourceSummary,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
@@ -52,7 +52,7 @@ export function ResourcesDock({
 	onInspect: (resourceId: string) => void;
 	onOpenFinished: () => void;
 	onStopCommand: (commandId: string) => void;
-	onStopSubagent: (childSessionId: SessionId) => void;
+	onStopSubagent: (childSessionId: StoredSessionId) => void;
 }) {
 	const t = useT();
 	const stop = (resource: Resource) =>

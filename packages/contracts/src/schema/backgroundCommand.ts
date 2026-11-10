@@ -9,7 +9,7 @@ import {
 	str,
 	union,
 } from "@earendil-works/pi-schema";
-import { SessionId, WorkspaceId } from "./ids";
+import { SessionId, StoredSessionId, WorkspaceId } from "./ids";
 import { CompletionDelivery } from "./subagent";
 import { Ack, wireObj } from "./wire";
 
@@ -27,7 +27,7 @@ const EpochMs = num({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 
 const RUN_FIELDS = {
 	id: str(),
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	name: str(),
 	startedAt: EpochMs,
 	exitCode: opt(nullable(num())),

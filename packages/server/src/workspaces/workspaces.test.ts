@@ -445,7 +445,8 @@ posix(
 	"a git that hangs reading the branch keeps the stored Default branch instead of saving HEAD",
 	async () => {
 		const [stored] = await listWorkspaces(testProjectId("p1"));
-		expect(stored?.branch).toBe("main");
+		if (!stored) throw new Error("Missing stored workspace");
+		expect(stored.branch).toBe("main");
 		const events: WorkspaceLifecycleEvent[] = [];
 		setWorkspacePublisher((event) => events.push(event));
 
@@ -453,15 +454,15 @@ posix(
 		setSyncGitTimeoutForTests(2_000);
 		const listed = await withGitWrapper(hang, async () => {
 			const result = await listWorkspaces(testProjectId("p1"), { includeDiffStats: false });
-			syncWorkspaceBranch(stored?.id ?? testWorkspaceId(""));
+			syncWorkspaceBranch(stored.id);
 			return result;
 		}).finally(() => setSyncGitTimeoutForTests(undefined));
 
-		expect(listed.find((w) => w.id === stored?.id)?.branch).toBe("main");
+		expect(listed.find((w) => w.id === stored.id)?.branch).toBe("main");
 		expect(events).toHaveLength(0);
-		const record = listWorkspaceRecords(testProjectId("p1")).find((w) => w.id === stored?.id);
+		const record = listWorkspaceRecords(testProjectId("p1")).find((w) => w.id === stored.id);
 		expect(record?.branch).toBe("main");
-		expect(record?.baseBranch).toBe(stored?.baseBranch ?? "");
+		expect(record?.baseBranch).toBe(stored.baseBranch ?? "");
 	},
 );
 

@@ -8,7 +8,7 @@ import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetConfigCache, setSettingsPublisher } from "../settings";
-import { handleRequest } from "./handlers";
+import { handleRequest, handleTypedRequest } from "./handlers";
 import { createServer, type RunningServer } from "./server";
 
 const CTX = { clientKey: "host-params-test" };
@@ -122,7 +122,7 @@ test("settings.update takes a nested layout preset and clears overrides with nul
 		CTX,
 	);
 	expect(next).toMatchObject({ customLayoutPresets: [{ center }], defaultModel: MODEL });
-	const cleared = await handleRequest(
+	const cleared = await handleTypedRequest(
 		"settings.update",
 		{ config: { defaultModel: null, defaultEffort: null } },
 		CTX,
@@ -176,7 +176,9 @@ test("a client report with the wrong shape never reaches the sanitizer", async (
 		const refusal = handleRequest("client.reportError", report, CTX);
 		await expect(refusal).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 	}
-	expect(await handleRequest("client.reportError", { kind: "window", type: "T" }, CTX)).toEqual({
+	expect(
+		await handleTypedRequest("client.reportError", { kind: "window", type: "T" }, CTX),
+	).toEqual({
 		ok: true,
 	});
 });
@@ -313,7 +315,7 @@ test("oversized refused params never build a per-element report", async () => {
 test("params too deep to measure are refused with the same coded error", async () => {
 	const depth = 200_000;
 	const workspaceId = JSON.parse(`${"[".repeat(depth)}${"]".repeat(depth)}`);
-	const refusal = handleRequest("review.sendBatch", { workspaceId, commentIds: [] }, CTX);
+	const refusal = handleTypedRequest("review.sendBatch", { workspaceId, commentIds: [] }, CTX);
 	await expect(refusal).rejects.toMatchObject({
 		code: "INVALID_PARAMS",
 		message: "Invalid review.sendBatch",
@@ -329,4 +331,43 @@ test("small refused params keep their reasons, and a missing params object is on
 	await expect(refusal).rejects.toThrow(/^Invalid review\.sendBatch: /);
 	const missing = handleRequest("review.sendBatch", undefined, CTX);
 	await expect(missing).rejects.toThrow(/^Invalid review\.sendBatch: /);
+});
+
+const WORKSPACE_ID = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
+const PATH_ESCAPES = ["..", "../escape", "a/../b", "a/b", "a\\b", "/absolute", "a\u0000b"];
+
+test.each(["", "w1", "..%2Fescape", ...PATH_ESCAPES])(
+	"dispatch refuses %j as a project or workspace id",
+	async (id) => {
+		await expect(handleRequest("workspace.list", { projectId: id }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
+		await expect(handleRequest("session.list", { workspaceId: id }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
+	},
+);
+
+test.each(["", "a b", "probe:mcplogin_1", "a".repeat(201), ...PATH_ESCAPES])(
+	"dispatch refuses %j as a session id",
+	async (id) => {
+		await expect(
+			handleRequest("session.resources", { workspaceId: WORKSPACE_ID, sessionId: id }, CTX),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	},
+);
+
+test.each([
+	"019a2b3c-4d5e-7f60-8a7b-1c2d3e4f5a6b",
+	"0f8fad5b-d9cb-469f-a165-70867728950e",
+	"my.custom_id-1",
+	"e2e-fixture-deploy-docs",
+	"sess-0f8fad5b-d9cb-469f-a165-70867728950e",
+])("dispatch passes the real session id %s to its handler", async (id) => {
+	const outcome = await handleRequest(
+		"session.resources",
+		{ workspaceId: WORKSPACE_ID, sessionId: id },
+		CTX,
+	).catch((error: unknown) => error);
+	expect(outcome).not.toMatchObject({ code: "INVALID_PARAMS" });
 });

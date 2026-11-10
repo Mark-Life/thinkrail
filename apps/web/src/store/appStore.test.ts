@@ -8,7 +8,6 @@ import {
 	type Project,
 	type SessionEventPayload,
 	type SessionStateRecord,
-	type SessionSummary,
 	type SpecGraphNode,
 	type WireModel,
 	type Workspace,
@@ -34,6 +33,7 @@ import {
 	isCenterNavigationCurrent,
 	isFileComparison,
 	layoutOpenOptionsForNavigation,
+	type OpenedSessionSummary,
 	type SessionRuntime,
 	shouldAdvanceAcceptedNavigation,
 	toast,
@@ -539,7 +539,7 @@ test("normalized session snapshots and pushes gate acknowledgement on the exact 
 test("hydrateSession seeds the queue from the summary snapshot", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: testWorkspaceId("ws1") });
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("q1"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Chat",
@@ -1486,7 +1486,7 @@ test("a durable title refreshes a placed plan document's name without requesting
 							id: "plan-placement",
 							name: "",
 							documentKind: "todo-plan",
-							sourceId: "placed-plan",
+							sourceId: testSessionId("placed-plan"),
 							docPath: "TODO.md",
 						},
 					],
@@ -1909,7 +1909,7 @@ test("a frame that beats a reopened chat's transcript is replayed by hydrateSess
 	});
 	expect(useAppStore.getState().extUiOrphans).toMatchObject([{ id: "s1" }]);
 
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("reopened"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Chat",
@@ -2249,7 +2249,7 @@ test("a deletion that beats session.create prevents its late response from resto
 		name: "Late TODO",
 		content: "# Late",
 		docPath: "TODO.md",
-		sourceId: "late",
+		sourceId: testSessionId("late"),
 	});
 	store.requestChatLocation({
 		workspaceId: testWorkspaceId("ws1"),
@@ -2276,7 +2276,7 @@ test("a deletion that beats session.create prevents its late response from resto
 
 test("a deletion that beats getMessages prevents its late hydrate from restoring the chat", () => {
 	const store = useAppStore.getState();
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("late"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Deleted chat",
@@ -2303,7 +2303,7 @@ test("a deletion that beats getMessages prevents its late hydrate from restoring
 
 test("a page-lifetime deletion tombstone survives workspace cleanup until late hydration settles", () => {
 	const store = useAppStore.getState();
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("late"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Deleted chat",
@@ -2336,7 +2336,7 @@ test("a deletion that beats session.list prevents its late history row from retu
 test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a live one", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: testWorkspaceId("ws1") });
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("h1"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Chat",
@@ -2383,7 +2383,7 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 	const before = rt(testSessionId("sync"));
 	const liveCompaction = before.turns.findLast((turn) => turn.kind === "compaction");
 	if (liveCompaction?.kind !== "compaction") throw new Error("live compaction missing");
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("sync"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Chat",
@@ -2570,7 +2570,7 @@ test("restoring a stable chat placement never steals another resource's cache id
 
 test("hydrateSession preserves the stable id of an already-restored shared placement", () => {
 	const store = useAppStore.getState();
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("legacy-session"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Restored",
@@ -2601,7 +2601,7 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 		{ sessionId: testSessionId("disk1"), title: "Old", closedAt: 1 },
 	]);
 
-	const summary: SessionSummary = {
+	const summary: OpenedSessionSummary = {
 		sessionId: testSessionId("disk1"),
 		workspaceId: testWorkspaceId("ws1"),
 		title: "Old",
@@ -4975,7 +4975,7 @@ test("skills badge: markSkillsSynced is monotonic and ignores a disposed session
 	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
 });
 
-const summaryFor = (sessionId: SessionId, live: boolean): SessionSummary => ({
+const summaryFor = (sessionId: SessionId, live: boolean): OpenedSessionSummary => ({
 	sessionId,
 	workspaceId: testWorkspaceId("ws1"),
 	title: "Chat",
@@ -5124,7 +5124,7 @@ test("chat, document, and plan tabs never enter the preview slot", () => {
 		name: "Plan",
 		content: "# plan",
 		docPath: "plan.md",
-		sourceId: "s1",
+		sourceId: testSessionId("s1"),
 	});
 	store.openTab(
 		{
@@ -5190,7 +5190,7 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 			name: "Plan",
 			content: "# p",
 			docPath: "plan.md",
-			sourceId: "s1",
+			sourceId: testSessionId("s1"),
 		}),
 	);
 	bumps("openChatSession", () =>
@@ -5213,17 +5213,7 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 
 	useAppStore.setState({ activeTabByWorkspace: { ws1: "ws1:sess" } });
 	const before = tick();
-	s().hydrateSession(
-		{
-			sessionId: testSessionId("bg"),
-			workspaceId: testWorkspaceId("ws1"),
-			title: "bg",
-			createdAt: 0,
-			updatedAt: 0,
-			live: true,
-		} as unknown as SessionSummary,
-		emptyHydration(),
-	);
+	s().hydrateSession({ ...summaryFor(testSessionId("bg"), true), title: "bg" }, emptyHydration());
 	expect(tick()).toBe(before);
 
 	expect(useAppStore.getState().navTickByWorkspace.ws2).toBeUndefined();

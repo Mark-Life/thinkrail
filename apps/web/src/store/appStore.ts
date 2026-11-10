@@ -36,6 +36,7 @@ import type {
 	SlashCommandInfo,
 	SpecGraphNode,
 	SpeechStatus,
+	StoredSessionId,
 	SystemThemePair,
 	TerminalTabInfo,
 	TerminalWindowsShell,
@@ -172,7 +173,7 @@ export interface DocTab {
 	name: string;
 	content: string;
 	docPath: string;
-	sourceId: string;
+	sourceId: SessionId;
 }
 export type DiffTabView = "split" | "inline";
 interface DiffTabBase {
@@ -287,7 +288,7 @@ function editorResourceIdentity(tab: EditorTab): string {
 
 export function editorSessionId(tab: EditorTab): SessionId | null {
 	if (tab.kind === "chat" || tab.kind === "plan") return tab.sessionId;
-	return tab.kind === "doc" ? parseSessionId(tab.sourceId) : null;
+	return tab.kind === "doc" ? tab.sourceId : null;
 }
 
 function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): string {
@@ -376,7 +377,7 @@ export type LayoutIntent =
 			countNavigation?: boolean;
 	  }
 	| { id: string; kind: "reveal-tool"; workspaceId: WorkspaceId; tool: LayoutToolId }
-	| { id: string; kind: "remove-session"; workspaceId: WorkspaceId; sessionId: SessionId }
+	| { id: string; kind: "remove-session"; workspaceId: WorkspaceId; sessionId: StoredSessionId }
 	| {
 			id: string;
 			kind: "place-terminal";
@@ -457,8 +458,12 @@ export interface TerminalTab {
 	reservationPending?: true;
 }
 
-export interface ClosedChat {
+export interface OpenedSessionSummary extends SessionSummary {
 	sessionId: SessionId;
+}
+
+export interface ClosedChat {
+	sessionId: StoredSessionId;
 	title: string;
 	firstPrompt?: string;
 	closedAt: number;
@@ -475,7 +480,7 @@ export interface ChatLocationRequest {
 
 export interface PendingMarkUnread {
 	candidates: Record<string, string>;
-	attendedSessionId: SessionId | null;
+	attendedSessionId: StoredSessionId | null;
 }
 
 export interface MarkedUnread {
@@ -1367,11 +1372,15 @@ interface AppState {
 		workspaceId?: WorkspaceId,
 		countNavigation?: boolean,
 	) => void;
-	deleteChat: (workspaceId: WorkspaceId, sessionId: SessionId, countNavigation?: boolean) => void;
+	deleteChat: (
+		workspaceId: WorkspaceId,
+		sessionId: StoredSessionId,
+		countNavigation?: boolean,
+	) => void;
 	reconcileWorkspaceSessions: (
 		workspaceId: WorkspaceId,
-		baselineSessionIds: readonly SessionId[],
-		authoritativeSessionIds: readonly SessionId[],
+		baselineSessionIds: readonly StoredSessionId[],
+		authoritativeSessionIds: readonly StoredSessionId[],
 	) => void;
 	installSessionStateSnapshot: (records: readonly SessionStateRecord[]) => void;
 	applySessionState: (record: SessionStateRecord) => void;
@@ -1389,7 +1398,7 @@ interface AppState {
 	) => void;
 	noteClosedChats: (workspaceId: WorkspaceId, entries: ClosedChat[]) => void;
 	hydrateSession: (
-		summary: SessionSummary,
+		summary: OpenedSessionSummary,
 		hydrated: HydratedRuntime,
 		activate?: boolean,
 		syncedTick?: number,
@@ -1713,7 +1722,7 @@ function navigationCountedAtRequest(options: LayoutOpenOptions): boolean {
 function isSessionDeleted(
 	state: Pick<AppState, "deletedSessionsByWorkspace">,
 	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 ): boolean {
 	return state.deletedSessionsByWorkspace[workspaceId]?.[sessionId] === true;
 }
@@ -1931,7 +1940,7 @@ export function isCenterNavigationCurrent(
 function layoutIntentTargetsSession(
 	intent: LayoutIntent,
 	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 ): boolean {
 	if (intent.workspaceId !== workspaceId) return false;
 	if (intent.kind === "open") return editorSessionId(intent.tab) === sessionId;
@@ -1944,7 +1953,7 @@ function layoutIntentTargetsSession(
 function withoutChat(
 	s: AppState,
 	workspaceId: WorkspaceId,
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	countNavigation: boolean,
 ): AppState {
 	if (s.removedWorkspaceIds[workspaceId]) return s;
@@ -2134,7 +2143,7 @@ function bufferExtUiOrphan(s: AppState, request: ExtUiRequest): Partial<AppState
 }
 
 function replayExtUiOrphans(
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	set: (updater: (s: AppState) => Partial<AppState>) => void,
 	get: () => AppState,
 ): void {
@@ -2209,7 +2218,11 @@ function renameSessionTabs(
 	};
 }
 
-function renameChat(s: AppState, sessionId: SessionId, title: string): Partial<AppState> | null {
+function renameChat(
+	s: AppState,
+	sessionId: StoredSessionId,
+	title: string,
+): Partial<AppState> | null {
 	let found = false;
 	let patch: Partial<AppState> = {};
 	for (const tabs of Object.values(s.tabsByWorkspace)) {
@@ -2240,7 +2253,7 @@ function renameChat(s: AppState, sessionId: SessionId, title: string): Partial<A
 
 function withRuntime(
 	s: AppState,
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	update: (rt: SessionRuntime) => SessionRuntime,
 ): Partial<AppState> {
 	const rt = s.sessions[sessionId];
@@ -3704,11 +3717,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return;
 		}
 		get().activateWorkspace(removed.workspace);
-		if (removed.sessionId || removed.kickoffError)
+		const sessionId = removed.sessionId === undefined ? null : parseSessionId(removed.sessionId);
+		if (sessionId || removed.kickoffError)
 			set({
 				creationChatToOpen: {
 					workspaceId: removed.workspace.id,
-					...(removed.sessionId ? { sessionId: removed.sessionId } : {}),
+					...(sessionId ? { sessionId } : {}),
 					...(removed.kickoffError ? { kickoffError: removed.kickoffError } : {}),
 					...(sentPrompt ? { sentPrompt } : {}),
 				},
@@ -3990,7 +4004,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (get().markingUnreadWorkspaces[workspaceId]) return false;
 		set((s) => {
 			const candidates: Record<string, string> = {};
-			let attendedSessionId: SessionId | null = null;
+			let attendedSessionId: StoredSessionId | null = null;
 			for (const record of Object.values(s.sessionStateByWorkspace[workspaceId] ?? {})) {
 				const completionId = record.state.completion?.completionId;
 				if (completionId && canMarkCompletionUnread(record.state)) {
@@ -4171,7 +4185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const existing = s.closedChatsByWorkspace[workspaceId] ?? [];
-			const open = new Set(
+			const open = new Set<StoredSessionId>(
 				(s.tabsByWorkspace[workspaceId] ?? [])
 					.filter((tab): tab is ChatTab => tab.kind === "chat")
 					.map((tab) => tab.sessionId),

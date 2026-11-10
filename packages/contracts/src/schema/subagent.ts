@@ -1,5 +1,5 @@
 import { arr, bool, lit, num, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
-import { SessionId, WorkspaceId } from "./ids";
+import { SessionId, StoredSessionId, WorkspaceId } from "./ids";
 import { ThinkingLevel } from "./model";
 import { TranscriptMessage } from "./transcript";
 import { Ack, wireObj } from "./wire";
@@ -50,8 +50,8 @@ export const SubagentCompletionDetails = wireObj({
 export type SubagentCompletionDetails = Static<typeof SubagentCompletionDetails>;
 
 export const SubagentResourceSummary = wireObj({
-	childSessionId: SessionId,
-	parentSessionId: SessionId,
+	childSessionId: StoredSessionId,
+	parentSessionId: StoredSessionId,
 	roleName: opt(str()),
 	task: str(),
 	status: DelegationRunStatus,

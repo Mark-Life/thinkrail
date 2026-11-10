@@ -45,8 +45,8 @@ export function listStoredPlans(root: string): StoredPlanFile[] {
 	for (const name of names) {
 		const stem = PLAN_FILE.exec(name)?.[1];
 		const sessionId = stem ? parseSessionId(stem) : null;
-		if (!stem || sessionId === null) continue;
-		const store = new TodoStore(root, stem);
+		if (sessionId === null) continue;
+		const store = new TodoStore(root, sessionId);
 		plans.push({ sessionId, path: store.file, read: () => readPlan(store) });
 	}
 	return plans;

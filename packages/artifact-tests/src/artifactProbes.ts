@@ -4,6 +4,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
 import {
 	LoginPush,
+	parseSessionId,
 	parseWsResult,
 	type SessionId,
 	type WireToolResultMessage,
@@ -14,7 +15,6 @@ import {
 	WsResponse,
 	type WsResult,
 } from "@thinkrail/contracts";
-import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
@@ -155,6 +155,12 @@ async function assertMcpServersReported(
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
+}
+
+function sessionIdOf(raw: string, source: string) {
+	const sessionId = parseSessionId(raw);
+	assert(sessionId, `${source} named a session with an id that is not path-safe`);
+	return sessionId;
 }
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
@@ -553,7 +559,7 @@ export default function syntheticExternalExtension(pi) {
 		});
 		await within(
 			rpc(socket, "session.delete", {
-				sessionId: testSessionId(transcript.id),
+				sessionId: sessionIdOf(transcript.id, "the fixture transcript"),
 				workspaceId: workspace.id,
 			}),
 			10_000,
@@ -583,9 +589,10 @@ export default function syntheticExternalExtension(pi) {
 			30_000,
 			"session.create with bundled factories",
 		);
-		await assertMcpServersReported(socket, workspace.id, created.sessionId);
+		const sessionId = sessionIdOf(created.sessionId, "session.create");
+		await assertMcpServersReported(socket, workspace.id, sessionId);
 		const commands = await within(
-			rpc(socket, "session.getCommands", { sessionId: created.sessionId }),
+			rpc(socket, "session.getCommands", { sessionId }),
 			10_000,
 			"session.getCommands",
 		);
@@ -593,13 +600,9 @@ export default function syntheticExternalExtension(pi) {
 			commands.some((entry) => entry.name === "skill:brainstorming"),
 			"session resource loader omitted bundled skills",
 		);
-		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);
-		await assertAskUserQuestionRoundTrip(socket, workspace.id, created.sessionId);
-		await within(
-			rpc(socket, "session.dispose", { sessionId: created.sessionId }),
-			10_000,
-			"session.dispose",
-		);
+		await assertStrictVisualizeValidation(socket, workspace.id, sessionId);
+		await assertAskUserQuestionRoundTrip(socket, workspace.id, sessionId);
+		await within(rpc(socket, "session.dispose", { sessionId }), 10_000, "session.dispose");
 		await assertOAuthLoginReachesAuthUrl(socket);
 
 		for (const helper of Object.values(customHost.resources.trashHelpers)) {

@@ -1,5 +1,6 @@
 import {
 	type PromptHit,
+	parseSessionId,
 	type QueueLane,
 	type ResourceKind,
 	type SessionQueueContent,
@@ -285,9 +286,11 @@ export default function ChatView({
 			: null;
 	const selectedSubagentId =
 		inspectorOpen && inspectorSelectedId
-			? ([...resources.groups.subagents, ...resources.groups.finishedSubagents].find(
-					(child) => child.childSessionId === inspectorSelectedId,
-				)?.childSessionId ?? null)
+			? parseSessionId(
+					[...resources.groups.subagents, ...resources.groups.finishedSubagents].find(
+						(child) => child.childSessionId === inspectorSelectedId,
+					)?.childSessionId,
+				)
 			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
 	const markResultSeen = freshResults.markSeen;
@@ -344,9 +347,9 @@ export default function ChatView({
 			if (target.kind === "command")
 				return commandIds.has(target.id) ? () => openInspector(target.id) : undefined;
 			const { childSessionId } = target;
-			return subagentIds.has(childSessionId)
-				? () => openInspector(childSessionId)
-				: () => setTranscriptChildId(childSessionId);
+			if (subagentIds.has(childSessionId)) return () => openInspector(childSessionId);
+			const transcriptId = parseSessionId(childSessionId);
+			return transcriptId === null ? undefined : () => setTranscriptChildId(transcriptId);
 		};
 	}, [resources.visible, resources.groups, openInspector, setTranscriptChildId]);
 

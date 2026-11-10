@@ -1,4 +1,4 @@
-import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
+import type { SessionId, StoredSessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	compareResourceHistory,
 	isLiveResource,
@@ -10,8 +10,12 @@ import {
 } from "@thinkrail/contracts";
 import type { ConnectionStatus } from "../transport";
 
-export interface ChatResourceScope {
+export interface ReportedChatScope {
 	workspaceId: WorkspaceId;
+	sessionId: StoredSessionId;
+}
+
+export interface ChatResourceScope extends ReportedChatScope {
 	sessionId: SessionId;
 }
 

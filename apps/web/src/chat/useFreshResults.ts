@@ -1,6 +1,7 @@
 import type {
 	BackgroundCommandSummary,
 	SessionId,
+	StoredSessionId,
 	SubagentResourceSummary,
 	WorkspaceId,
 } from "@thinkrail/contracts";
@@ -46,7 +47,7 @@ export function freshOf(finished: FinishedResources, seen: ReadonlySet<string> |
 export function inspectedResult(
 	finished: FinishedResources,
 	commandId: string | null,
-	childSessionId: SessionId | null,
+	childSessionId: StoredSessionId | null,
 ): ResultTarget | null {
 	if (commandId && finished.finishedCommands.some((command) => command.id === commandId))
 		return { kind: "command", id: commandId };

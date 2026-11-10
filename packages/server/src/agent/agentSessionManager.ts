@@ -42,6 +42,7 @@ import type {
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
+	StoredSessionId,
 	ThinkingLevel,
 	TranscriptMessage,
 	WireModel,
@@ -54,7 +55,7 @@ import {
 	JsonObject,
 	normalizeSessionTitle,
 	OTHER_AGENT_SKILL_GROUPS,
-	parseSessionId,
+	parseStoredSessionId,
 	sameModel,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
@@ -315,7 +316,7 @@ function omitMetadataKey<T>(record: Record<string, T>, key: string): Record<stri
 	return rest;
 }
 
-function removeSessionStateMetadata(sessionId: SessionId): void {
+function removeSessionStateMetadata(sessionId: StoredSessionId): void {
 	const currentLifecycle = lifecycle();
 	const nextLifecycle: SessionLifecycle = {
 		...currentLifecycle,
@@ -348,11 +349,11 @@ export async function usePiRuntime<T>(
 	return operation(generation.runtime, generation);
 }
 
-const deletedSessions = new Map<SessionId, WorkspaceId>();
+const deletedSessions = new Map<StoredSessionId, WorkspaceId>();
 
 const deletingSessions = new Map<SessionId, { workspaceId: WorkspaceId; done: Promise<void> }>();
 
-function isSessionDeleted(sessionId: SessionId, workspaceId: WorkspaceId): boolean {
+function isSessionDeleted(sessionId: StoredSessionId, workspaceId: WorkspaceId): boolean {
 	return deletedSessions.get(sessionId) === workspaceId;
 }
 
@@ -380,8 +381,12 @@ export function setSessionCreatedPublisher(fn: (payload: SessionSummary) => void
 	publishCreated = fn;
 }
 
-let publishDeleted: (payload: SessionDeletedPayload) => void = () => {};
-export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) => void): void {
+interface DeletedSession extends SessionDeletedPayload {
+	sessionId: SessionId;
+}
+
+let publishDeleted: (payload: DeletedSession) => void = () => {};
+export function setSessionDeletedPublisher(fn: (payload: DeletedSession) => void): void {
 	publishDeleted = fn;
 }
 
@@ -406,7 +411,7 @@ function effectivePendingCount(entry: Entry): number {
 	return Math.max(0, entry.session.pendingMessageCount - stuck);
 }
 
-function persistedCompletion(sessionId: SessionId) {
+function persistedCompletion(sessionId: StoredSessionId) {
 	const stateReceipts = receipts();
 	return stateReceipts?.baselineComplete
 		? (lifecycle().completionBySession[sessionId] ?? null)
@@ -520,7 +525,7 @@ export function scheduleSessionStatePublish(sessionId: SessionId): void {
 }
 
 function diskStateRecord(
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	workspace: { id: WorkspaceId; projectId: ProjectId },
 	manager: SessionManager,
 	legacy = false,
@@ -536,7 +541,7 @@ function diskStateRecord(
 }
 
 function stateFromDisk(
-	sessionId: SessionId,
+	sessionId: StoredSessionId,
 	manager: SessionManager,
 	legacy = false,
 ): SessionState {
@@ -1494,10 +1499,14 @@ function createParentSession(
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const rawSessionId = options.sessionManager.getSessionId();
-	const sessionId = parseSessionId(rawSessionId);
-	if (sessionId === null || sessionIsTearingDown(sessionId))
-		return Promise.reject(new Error(`Unknown session: ${rawSessionId}`));
+	let sessionId: SessionId;
+	try {
+		sessionId = requireSessionId(options.sessionManager.getSessionId());
+	} catch (error) {
+		return Promise.reject(error);
+	}
+	if (sessionIsTearingDown(sessionId))
+		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 	return trackSessionPreparation(workspaceId, lifecycleToken, () =>
 		createParentSessionInternal(options, workspaceId, generation, lifecycleToken, announceCreation),
 	);
@@ -1766,7 +1775,7 @@ async function listSessionsInternal(
 	cwd: string,
 ): Promise<SessionSummary[]> {
 	const live: SessionSummary[] = [];
-	const liveIds = new Set<SessionId>();
+	const liveIds = new Set<StoredSessionId>();
 	const liveFiles = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
 		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
@@ -1777,7 +1786,7 @@ async function listSessionsInternal(
 	}
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	const disk = infos.flatMap((info): SessionSummary[] => {
-		const sessionId = parseSessionId(info.id);
+		const sessionId = parseStoredSessionId(info.id);
 		if (
 			sessionId === null ||
 			info.cwd !== cwd ||
@@ -1871,13 +1880,14 @@ async function collectSessionStateSources(
 			},
 		});
 	}
+	const liveIds = new Set<StoredSessionId>(sessions.keys());
 	for (const { workspace, infos } of discovered) {
 		for (const info of infos) {
-			const sessionId = parseSessionId(info.id);
+			const sessionId = parseStoredSessionId(info.id);
 			if (
 				sessionId === null ||
 				info.cwd !== workspace.cwd ||
-				sessions.has(sessionId) ||
+				liveIds.has(sessionId) ||
 				isSessionDeleted(sessionId, workspace.id)
 			) {
 				continue;
@@ -3147,7 +3157,7 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 	for (const info of infos) {
 		if (info.cwd !== cwd) continue;
 		rmSync(info.path, { force: true });
-		const sessionId = parseSessionId(info.id);
+		const sessionId = parseStoredSessionId(info.id);
 		if (sessionId === null) continue;
 		try {
 			removeSessionStateMetadata(sessionId);

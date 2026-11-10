@@ -2465,6 +2465,29 @@ test("switching ask-user-question off while a question waits still persists its 
 	}
 });
 
+test("a session with any id pi accepts in a file stays in the list", async () => {
+	const cwd = tmpCwd("trpi-old-session-ids-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const ids = [
+		"019a2b3c-4d5e-7f60-8a7b-1c2d3e4f5a6b",
+		"0f8fad5b-d9cb-469f-a165-70867728950e",
+		"my.custom_id-1",
+		"edited header",
+		"probe:mcplogin_1",
+	];
+	for (const id of ids) {
+		writeFixtureSession(dir, {
+			id,
+			cwd,
+			messages: [{ role: "user", text: "An old session", timestamp: 1 }],
+		});
+	}
+
+	const listed = await listSessions(testWorkspaceId("ws-old-session-ids"), cwd);
+
+	expect(listed.map((row) => String(row.sessionId)).toSorted()).toEqual(ids.toSorted());
+});
+
 test("with ask-user-question off, restart repair and responding leave its dangling call alone", async () => {
 	setDisabledExtensionsResolver(() => new Set(["ask-user-question"]));
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));

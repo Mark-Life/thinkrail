@@ -8,7 +8,12 @@ import {
 	RiSendPlaneLine as Send,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import type { ReviewComment, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import {
+	parseSessionId,
+	type ReviewComment,
+	type SessionId,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { outdatedReason } from "@thinkrail/resource-renderers";
 import { IconButton } from "@thinkrail/ui/button";
@@ -360,6 +365,7 @@ function CommentRow({
 }) {
 	const t = useT();
 	const isDraft = comment.status === "draft";
+	const chatId = linkedChat(comment);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
 	const glance = useAppStore((s) => {
@@ -397,8 +403,8 @@ function CommentRow({
 			<button
 				type="button"
 				data-testid="review-comment-open"
-				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
-				title={comment.sessionId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
+				onClick={() => (chatId ? onOpenChat(chatId) : onNavigate())}
+				title={chatId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
 				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
@@ -482,7 +488,7 @@ function CommentRow({
 						</ConfirmPopover>
 					</>
 				)}
-				{comment.sessionId && (
+				{chatId && (
 					<IconButton
 						variant="ghost"
 						size="s"
@@ -510,6 +516,10 @@ function CommentRow({
 	);
 }
 
+function linkedChat(comment: ReviewComment) {
+	return comment.sessionId === undefined ? null : parseSessionId(comment.sessionId);
+}
+
 function ResolvedRow({
 	comment,
 	onOpenChat,
@@ -518,6 +528,7 @@ function ResolvedRow({
 	onOpenChat: (sessionId: SessionId) => void;
 }) {
 	const t = useT();
+	const chatId = linkedChat(comment);
 	return (
 		<div
 			data-testid="review-comment-resolved"
@@ -531,14 +542,14 @@ function ResolvedRow({
 				{comment.body}
 			</span>
 			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-				{comment.sessionId && (
+				{chatId && (
 					<IconButton
 						variant="ghost"
 						size="s"
 						icon={MessageSquare}
 						label={t("review.panel.openLinkedChat")}
 						data-testid="review-comment-chat"
-						onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
+						onClick={() => onOpenChat(chatId)}
 					/>
 				)}
 			</span>

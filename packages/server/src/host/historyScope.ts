@@ -2,7 +2,7 @@ import type {
 	HistoryScope,
 	Project,
 	ProjectId,
-	SessionId,
+	StoredSessionId,
 	Workspace,
 	WorkspaceId,
 } from "@thinkrail/contracts";
@@ -14,7 +14,7 @@ export function buildHistoryScope(
 		projectId: ProjectId,
 	) => Array<Pick<Workspace, "id" | "projectId" | "worktreePath">>,
 ): {
-	filter: (cwd: string, sessionId: SessionId) => boolean;
+	filter: (cwd: string, sessionId: StoredSessionId) => boolean;
 	labels: (cwd: string) => { workspaceId?: WorkspaceId; projectId?: ProjectId };
 } {
 	const pathMap = new Map<string, { workspaceId: WorkspaceId; projectId: ProjectId }>();
@@ -35,12 +35,12 @@ export function buildHistoryScope(
 		projectIdMap.set(project.id, pathSet);
 	}
 
-	let filter: (cwd: string, sessionId: SessionId) => boolean;
+	let filter: (cwd: string, sessionId: StoredSessionId) => boolean;
 
 	if (scope.kind === "all") {
 		filter = () => true;
 	} else if (scope.kind === "chat") {
-		filter = (_cwd: string, sessionId: SessionId) => sessionId === scope.sessionId;
+		filter = (_cwd: string, sessionId: StoredSessionId) => sessionId === scope.sessionId;
 	} else if (scope.kind === "workspace") {
 		const targetPath = workspaceIdMap.get(scope.workspaceId);
 		if (targetPath === undefined) {

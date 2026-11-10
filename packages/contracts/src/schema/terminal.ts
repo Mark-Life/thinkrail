@@ -1,5 +1,5 @@
 import { arr, bool, num, opt, type Static, str } from "@earendil-works/pi-schema";
-import { WorkspaceId } from "./ids";
+import { StoredWorkspaceId, WorkspaceId } from "./ids";
 import { Ack, wireObj } from "./wire";
 
 export const TerminalTabInfo = wireObj({ tabKey: str(), title: str() });
@@ -11,10 +11,13 @@ export type TerminalDataPush = Static<typeof TerminalDataPush>;
 export const TerminalExitPush = wireObj({ id: str(), exitCode: num() });
 export type TerminalExitPush = Static<typeof TerminalExitPush>;
 
-export const TerminalDetachedPush = wireObj({ workspaceId: WorkspaceId, tabKey: str() });
+export const TerminalDetachedPush = wireObj({ workspaceId: StoredWorkspaceId, tabKey: str() });
 export type TerminalDetachedPush = Static<typeof TerminalDetachedPush>;
 
-export const TerminalTabsPush = wireObj({ workspaceId: WorkspaceId, tabs: arr(TerminalTabInfo) });
+export const TerminalTabsPush = wireObj({
+	workspaceId: StoredWorkspaceId,
+	tabs: arr(TerminalTabInfo),
+});
 export type TerminalTabsPush = Static<typeof TerminalTabsPush>;
 
 export const TERMINAL_METHODS = {

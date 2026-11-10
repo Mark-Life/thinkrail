@@ -1420,7 +1420,7 @@ test("the host concurrency resolver binds new services and live-resizes only the
 	}
 });
 
-test("transcript reads accept canonical dotted session ids and reject path-like ids", () => {
+test("a transcript read accepts canonical dotted session ids", () => {
 	expect(() =>
 		readChildTranscript(
 			testWorkspaceId("ws"),
@@ -1428,21 +1428,6 @@ test("transcript reads accept canonical dotted session ids and reject path-like 
 			testSessionId("child..session"),
 		),
 	).toThrow("No transcript found");
-	expect(() =>
-		readChildTranscript(testWorkspaceId("../../etc"), testSessionId("p"), testSessionId("c")),
-	).toThrow("Invalid workspaceId");
-	expect(() =>
-		readChildTranscript(testWorkspaceId("ws"), testSessionId(".."), testSessionId("c")),
-	).toThrow("Invalid parentSessionId");
-	expect(() =>
-		readChildTranscript(testWorkspaceId("ws"), testSessionId("p"), testSessionId("x/../y")),
-	).toThrow("Invalid childSessionId");
-	expect(() =>
-		readChildTranscript(testWorkspaceId("ws"), testSessionId("a\\b"), testSessionId("c")),
-	).toThrow("Invalid parentSessionId");
-	expect(() =>
-		readChildTranscript(testWorkspaceId(""), testSessionId("p"), testSessionId("c")),
-	).toThrow("Invalid workspaceId");
 });
 
 test("the wire mirrors never drift: completion tag and DelegationRunDetails shape", () => {

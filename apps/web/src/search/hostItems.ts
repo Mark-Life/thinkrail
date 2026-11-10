@@ -7,6 +7,7 @@ import {
 	matchContent,
 	matchFields,
 	type ProjectId,
+	parseSessionId,
 	prepareContent,
 	type SearchGroup,
 	type SearchHit,
@@ -155,7 +156,8 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem {
 				icon: RiListCheck3,
 				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
 			};
-		case "transcript":
+		case "transcript": {
+			const sessionId = parseSessionId(hit.sessionId);
 			return {
 				...base,
 				kind: "transcript",
@@ -165,13 +167,18 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem {
 				scope: "work",
 				icon: RiChatHistoryLine,
 				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
-				previewTarget: {
-					kind: "chat",
-					sessionId: hit.sessionId,
-					messageIndex: hit.messageIndex,
-					anchorText: hit.anchorText,
-				},
+				...(sessionId
+					? {
+							previewTarget: {
+								kind: "chat",
+								sessionId,
+								messageIndex: hit.messageIndex,
+								anchorText: hit.anchorText,
+							},
+						}
+					: {}),
 			};
+		}
 	}
 }
 
