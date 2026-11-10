@@ -92,7 +92,8 @@ without bypassing approvals or treating an occupied name as absent.
   and treats it as, so the loaded config holds what its type says; this is the one place the load differs from pi's,
   which keeps the alias. This file ties the exposure, `oauth`, HTTP and stdio schemas with `Same` to pi's `McpExposure`
   and the members of its `McpServerConfig` (the HTTP `type` list minus the alias included), so a pi bump that changes a
-  server field fails `tsc`. `summarizeMcpServers` and `maskMcpEndpoint` read fields of an entry that may be invalid, so they keep their field reads.
+  server field fails `tsc`. It also ties contracts' `McpToolDetails` to pi's, which pi's root does not export, so the
+  type is read by a relative path into `node_modules` (`pi-compatibility.md`). `summarizeMcpServers` and `maskMcpEndpoint` read fields of an entry that may be invalid, so they keep their field reads.
 - `results.ts` — `summarizeMcpResult()`: the `McpResultSummary` the session host's `tool_result` handler
   writes into `details.thinkrail` for `mcp__*` and the three resource tools, built from pi's
   machine-readable result (`structuredContent` = the server's raw `CallToolResult`, or the resource

@@ -128,13 +128,16 @@ The host stores bounded, base64-free presentation details so live and restored c
 full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card tests and
 `e2e/mcp-tool-cards.spec.ts`. Never persist the full raw result merely to delete the adapter.
 
-### Untied `McpToolDetails` mirror
+### Ties to types pi does not export
 
-**Owner:** [[submodule-contracts-schema]] (`mcp.ts`). pi-coding-agent declares the MCP tool result's
-`details` in `dist/extensions/mcp/tools.d.ts`, which its exports map does not reach, so `contracts` keeps
-the one hand-written copy no tie checks. It waits for the user's approval as an exception.
-**Removal gate:** pi exports the type (or a schema for it) from a public entry. Then tie the wire schema
-to it with `Same` in the server program, or adopt the schema, and delete this entry.
+**Owner:** [[submodule-server-agent-mcp]] (`mcp/schemas.ts`) and [[submodule-server-extensions]] (`skills.ts`).
+Two shapes pi-coding-agent declares only behind its exports map: `McpToolDetails` (the MCP tool result's
+`details`, `dist/extensions/mcp/tools.d.ts`), which contracts' `McpToolDetails` copies for the browser, and
+`PiManifest` (the `pi` field of a package manifest, `dist/core/pi-manifest.d.ts`), whose `skills` the host
+reads from a skill package. The server type-imports each by a relative path into its own `node_modules` and
+ties the copy with `Same`. A moved file fails `tsc` on the import; a changed shape fails the tie.
+**Removal gate:** pi exports the type (or a schema for it) from its root. Then import it from there and delete
+the path import.
 
 ## Wire shapes from pi-ai's `providers/model-schema`
 

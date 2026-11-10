@@ -21,9 +21,11 @@ import {
 	McpHttpServerConfig,
 	type McpOAuthConfig,
 	McpStdioServerConfig,
+	type McpToolDetails,
 	type McpTransportKind,
 	type Same,
 } from "@thinkrail/contracts";
+import type { McpToolDetails as PiMcpToolDetails } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/extensions/mcp/tools.d.ts";
 
 type StdioConfig = Extract<McpServerConfig, { command: string }>;
 type HttpConfig = Extract<McpServerConfig, { url: string }>;
@@ -40,6 +42,7 @@ type HttpServer = Same<
 	HttpConfig
 >;
 type StdioServer = Same<McpStdioServerConfig, StdioConfig>;
+export type McpToolDetailsTie = Same<McpToolDetails, PiMcpToolDetails>;
 
 const McpFile = obj(
 	{ mcpServers: opt(map(unknown())), autoEnableCodemode: opt(unknown()) },
