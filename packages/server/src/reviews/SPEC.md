@@ -214,7 +214,7 @@ lands can still finish its record; archived updates persist without publishing a
   without a second read; written by `host`'s verdict recorder, never by a client) (+ the pure
   anchoring/render helpers: `reanchor`, `buildTextQuote`, `hashContent`, `lineRangeOf`, `textQuoteOf`,
   `renderPackage`).
-- **Allowed deps:** `pi-schema`, `@thinkrail/shared/errnoCode`, `contracts` (types and `ReviewSnapshot`), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
+- **Allowed deps:** `pi-schema`, `@thinkrail/shared/errnoCode`, `@thinkrail/shared/codedError`, `contracts` (types and `ReviewSnapshot`), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
   `git` (the review's `baseSha` resolve, the diff range behind a base anchor's `baseRef`, and blob
   reads for the base side), `fs` (`classifyBytes`/`decodeText`/`hashBytes` — textness and the sha-256
   an anchor's `contentHash` *is* are decided once, there, so a comment's hash and a revert's expectation
@@ -242,7 +242,9 @@ lands can still finish its record; archived updates persist without publishing a
   because the one caller acting on "absent" (`ensureSnapshot`) responds by writing a fresh empty review
   over it. The failure surfaces on `review.get` (the panel says so) instead of silently discarding every
   comment. The one exception is the cross-workspace scan behind an agent resolve: a damaged *sibling*
-  is logged and skipped, never allowed to fail a resolve belonging to a healthy review.
+  is logged and skipped, never allowed to fail a resolve belonging to a healthy review. A reviews folder that
+  exists but cannot be listed fails the resolve. The re-anchor that follows a worktree change is best effort:
+  a failure is logged as `REVIEW_REANCHOR_FAILED` with the read failure's kind, and the next read retries.
 - An **unknown/duplicate agent resolve fails loud** (error text back to the model), never silently. A
   resolve that arrives after Clear updates the archived record in place and emits no active-review push.
   An agent resolve accepts `sent` comments AND **agent-authored `draft`s**: with auto-fix off, a

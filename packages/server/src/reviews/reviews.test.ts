@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
 import { type ReviewChangedPayload, ReviewSnapshot, type Workspace } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { observeLoggedErrors } from "../log";
 import { saveWorkspaces } from "../persistence";
 import { setWorkspaceDiffBase } from "../workspaces";
 import { hashContent } from "./anchoring";
@@ -222,6 +223,37 @@ test("reanchorWorkspace publishes only when something moved", async () => {
 	writeFileSync(join(worktree, "a.ts"), "// x\nconst a = 1;\nconst b = 2;\nconst c = 3;\n");
 	reanchorWorkspace(WS_ID);
 	expect(pushes.length).toBe(before + 1);
+});
+
+test("reanchorWorkspace logs a damaged review with a code and leaves it on disk", async () => {
+	await addInline();
+	const activeFile = join(dataDir, "reviews", `${WS_ID}.json`);
+	writeFileSync(activeFile, "{ not json");
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "reviews") logged.push(error);
+	});
+	try {
+		reanchorWorkspace(WS_ID);
+	} finally {
+		observeLoggedErrors(null);
+	}
+	expect(logged).toEqual([
+		expect.objectContaining({
+			code: "REVIEW_REANCHOR_FAILED",
+			message: "review not reanchored (damaged)",
+		}),
+	]);
+	expect(readFileSync(activeFile, "utf8")).toBe("{ not json");
+});
+
+test("an agent resolve fails when the reviews folder cannot be listed", async () => {
+	const comment = await addInline();
+	rmSync(join(dataDir, "reviews"), { recursive: true });
+	writeFileSync(join(dataDir, "reviews"), "not a folder");
+	expect(() => resolveCommentFromAgent(testSessionId("sess1"), comment.id)).toThrow(
+		expect.objectContaining({ code: "ENOTDIR" }),
+	);
 });
 
 test("update edits drafts only; manual resolve stamps resolvedBy user; resolved is final", async () => {

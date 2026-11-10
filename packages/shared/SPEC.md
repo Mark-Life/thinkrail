@@ -33,8 +33,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/errnoCode` → `errnoCode(cause)`, the one read of a string `code` off a caught value. It reads
   inherited properties too, so it stays a hand check: an own-properties schema would miss them.
-  `hasErrno(cause, ...codes)` is the compare: its `ErrnoCode` union lists the codes the app checks, so a
-  misspelled code fails typecheck. Add a code to the union when a new check needs it;
+  `hasErrno(cause, ...codes)` is the compare: `ErrnoCode` is the key set of Node's `os.constants.errno`, so a
+  misspelled code fails typecheck;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
   overrides that would reach outside it — the single list every hermetic host spawner (e2e, workflow

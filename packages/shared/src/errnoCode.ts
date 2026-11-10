@@ -1,17 +1,6 @@
-export type ErrnoCode =
-	| "EACCES"
-	| "EBUSY"
-	| "ECONNREFUSED"
-	| "EEXIST"
-	| "EISDIR"
-	| "ELOOP"
-	| "EMFILE"
-	| "ENFILE"
-	| "ENOENT"
-	| "ENOTDIR"
-	| "ENOTEMPTY"
-	| "EPERM"
-	| "ESRCH";
+import type { constants } from "node:os";
+
+export type ErrnoCode = keyof typeof constants.errno;
 
 export function errnoCode(cause: unknown): string | undefined {
 	if (typeof cause !== "object" || cause === null || !("code" in cause)) return undefined;

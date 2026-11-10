@@ -23,6 +23,7 @@ import {
 	type ReviewGuide,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { classifyBytes, decodeText, workspaceRelativePath } from "../fs";
 import {
@@ -307,7 +308,15 @@ export function reanchorWorkspace(workspaceId: WorkspaceId): void {
 		const snapshot = openSnapshot(workspaceId);
 		if (!snapshot || snapshot.comments.length === 0) return;
 		if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
-	} catch {}
+	} catch (error) {
+		log.warn(
+			"review anchors were not updated",
+			new CodedError(
+				"REVIEW_REANCHOR_FAILED",
+				`review not reanchored (${reviewReadFailure(error)})`,
+			),
+		);
+	}
 }
 
 export function anchorProblem(
@@ -609,7 +618,9 @@ export function resolveCommentFromAgent(
 	let files: string[] = [];
 	try {
 		files = readdirSync(reviewsDir()).filter((file) => file.endsWith(".json"));
-	} catch {}
+	} catch (err) {
+		if (!hasErrno(err, "ENOENT")) throw err;
+	}
 	for (const file of files) {
 		const workspaceId = parseStoredWorkspaceId(file.slice(0, -".json".length));
 		if (workspaceId === null) continue;
