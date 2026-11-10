@@ -44,16 +44,22 @@ answer mailbox.
     schemas with `Static` types: `AskUserQuestionAnswer`, `AskUserQuestionResult` and
     `AskUserQuestionAckDetails`. `isAskUserQuestionResult` and `isAckDetails` are their compiled checks; the
     objects are open, so a field a newer version adds passes;
-  - `isAskUserQuestionArgs` and `isAskUserQuestionItem`, lenient guards over the derived types for args a
-    model may still be streaming: a question needs its text and labelled options;
+  - `AskUserQuestionArgsView`, `AskUserQuestionItemView` and `AskUserQuestionOptionView`: pi-schema schemas of
+    what a host reads of args a model may still be streaming. A question needs its text and labelled options;
+    every other field is optional, and each field they name is checked. `isAskUserQuestionArgsView` and
+    `isAskUserQuestionItemView` are their compiled checks. The TypeBox schema stays the field list: ThinkRail's
+    web half ties the views to it with `Same`;
   - `NON_EXECUTABLE_STOP_REASONS` (`error`, `aborted`, `length`), and `executableAskCallIds` and
     `isolateAskUserQuestionBatch`, which take pi-ai's `AssistantMessage` and narrow its blocks by `type`;
-  - `validateQuestionnaire`, `previewFileSources`, `buildQuestionnaireResponse` and `outcomeResult`.
+  - `validateQuestionnaire`, `previewFileSources`, `buildQuestionnaireResponse` (it reads only the question
+    texts, `QuestionTexts`, so a host can pass a checked view) and `outcomeResult`.
 
   These are what an embedder needs to repair or continue a question outside `execute()`. `AskRequest` and
   `AskUserQuestionAsker` carry pi-coding-agent's `ExtensionContext`, so they live in `src/asker.ts` and only
   the root exports them. ThinkRail's web half ties `NON_EXECUTABLE_STOP_REASONS` to contracts' list of the
-  same name ([[module-ext-ask-user-question]]).
+  same name ([[module-ext-ask-user-question]]). The list is written twice on purpose: this package is
+  published and imports nothing from the repository, and contracts holds the host's rule for every tool, so
+  neither can take it from the other. The tie fails `tsc` when they differ.
 - **The tool contract**, which renderers and embedders key on:
   - the name;
   - the argument shape: `questions[]` of `{ question, header, preview?, options[]{ label, description,

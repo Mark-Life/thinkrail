@@ -10,7 +10,7 @@ import {
 import {
 	ASK_USER_QUESTION_TOOL_NAME,
 	buildQuestionnaireResponse,
-	isAskUserQuestionArgs,
+	isAskUserQuestionArgsView,
 } from "@thinkrail/pi-ask-user-question/core";
 import { thinkrailGuidance } from "./guidance";
 
@@ -25,7 +25,7 @@ function askThroughHost(session: ExtensionSessionServices): AskUserQuestionAsker
 }
 
 function describeResponse(args: unknown, response: unknown): string | undefined {
-	if (!isAskUserQuestionArgs(args) || !isAskUserQuestionResult(response)) return undefined;
+	if (!isAskUserQuestionArgsView(args) || !isAskUserQuestionResult(response)) return undefined;
 	return buildQuestionnaireResponse(response, args)
 		.content.map((block) => block.text)
 		.join("");

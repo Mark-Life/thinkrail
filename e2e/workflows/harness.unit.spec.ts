@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { PiEvent } from "@thinkrail/contracts";
 import { testSessionId } from "@thinkrail/contracts/test-ids";
-import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
+import type { AskUserQuestionItemView } from "@thinkrail/pi-ask-user-question/core";
 import {
 	attachDialog,
 	checkBudget,
@@ -99,7 +99,7 @@ test("signals: skillRead + turnEnd; forbid wins over stop", async () => {
 	watcher.cancel();
 });
 
-const QUESTIONS: AskUserQuestionItem[] = [
+const QUESTIONS: AskUserQuestionItemView[] = [
 	{
 		question: "Which log format?",
 		header: "Format",

@@ -8,6 +8,10 @@ schemas (`AskUserQuestionAnswer`, `AskUserQuestionResult`, `AskUserQuestionAckDe
 is now refused. The argument types derive from the tool's TypeBox schema.
 
 `./core` changes for browser use: it no longer loads `@earendil-works/pi-coding-agent`, so `AskRequest` and
-`AskUserQuestionAsker` are exported from the package root only. It adds `ANSWER_KINDS`,
-`NON_EXECUTABLE_STOP_REASONS` and `isAskUserQuestionItem`. `executableAskCallIds` and
+`AskUserQuestionAsker` are exported from the package root only. It adds `ANSWER_KINDS` and
+`NON_EXECUTABLE_STOP_REASONS`. `isAskUserQuestionArgs` is replaced by `isAskUserQuestionArgsView` and
+`isAskUserQuestionItemView`: compiled checks of `AskUserQuestionArgsView`, `AskUserQuestionItemView` and
+`AskUserQuestionOptionView`, the shape a host reads of args that may still stream. Only the question text and
+option labels are required, and every field the views name is checked. `buildQuestionnaireResponse` takes
+any `QuestionTexts`, so a host can pass a checked view. `executableAskCallIds` and
 `isolateAskUserQuestionBatch` take pi-ai's `AssistantMessage`; callers narrow by `role` first.

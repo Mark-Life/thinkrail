@@ -41,6 +41,47 @@ export type AskUserQuestionPreviewFields = Pick<
 	"preview" | "previewFile" | "previewBefore"
 >;
 
+const PREVIEW_FILE_FIELDS = { previewFile: opt(str()), previewBefore: opt(str()) };
+
+/**
+ * What a host reads of an option, also while the args stream: a label, and every other field optional. Each
+ * field it names is checked; ThinkRail's web half ties the field list to the TypeBox schema's.
+ */
+export const AskUserQuestionOptionView = obj(
+	{
+		label: str(),
+		description: opt(str()),
+		preview: opt(str()),
+		recommendedReason: opt(str()),
+		...PREVIEW_FILE_FIELDS,
+	},
+	{ open: true },
+);
+export type AskUserQuestionOptionView = Static<typeof AskUserQuestionOptionView>;
+
+/** What a host reads of a question, also while the args stream: its text and labelled options. */
+export const AskUserQuestionItemView = obj(
+	{
+		question: str(),
+		header: opt(str()),
+		preview: opt(str()),
+		multiSelect: opt(bool()),
+		...PREVIEW_FILE_FIELDS,
+		options: arr(AskUserQuestionOptionView),
+	},
+	{ open: true },
+);
+export type AskUserQuestionItemView = Static<typeof AskUserQuestionItemView>;
+
+export const AskUserQuestionArgsView = obj(
+	{ questions: arr(AskUserQuestionItemView, { minItems: 1 }) },
+	{ open: true },
+);
+export type AskUserQuestionArgsView = Static<typeof AskUserQuestionArgsView>;
+
+export const isAskUserQuestionItemView = compile(AskUserQuestionItemView).check;
+export const isAskUserQuestionArgsView = compile(AskUserQuestionArgsView).check;
+
 export const DISCUSS_REASONS = ["unclear", "irrelevant", "context"] as const;
 export type AskUserQuestionDiscussReason = (typeof DISCUSS_REASONS)[number];
 
@@ -236,9 +277,14 @@ function answerSegment(a: AskUserQuestionAnswer): string {
 	return `${parts.join(". ")}.`;
 }
 
+/** The question texts a response names: the tool's own args, or a host's checked view of them. */
+export interface QuestionTexts {
+	questions: readonly Pick<AskUserQuestionItem, "question">[];
+}
+
 export function buildQuestionnaireResponse(
 	result: AskUserQuestionResult,
-	args: AskUserQuestionArgs,
+	args: QuestionTexts,
 ): AskToolResult<AskUserQuestionResult> {
 	if (result.cancelled)
 		return textResult(DECLINE_MESSAGE, { answers: result.answers, cancelled: true });
@@ -283,25 +329,6 @@ export function outcomeResult(
 				terminate: true,
 			};
 	}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object";
-}
-
-/** A lenient guard for a question, also while its args stream: the text and labelled options it renders. */
-export function isAskUserQuestionItem(value: unknown): value is AskUserQuestionItem {
-	return (
-		isRecord(value) &&
-		typeof value.question === "string" &&
-		Array.isArray(value.options) &&
-		value.options.every((option) => isRecord(option) && typeof option.label === "string")
-	);
-}
-
-export function isAskUserQuestionArgs(value: unknown): value is AskUserQuestionArgs {
-	const questions = isRecord(value) ? value.questions : undefined;
-	return Array.isArray(questions) && questions.length > 0 && questions.every(isAskUserQuestionItem);
 }
 
 const NON_EXECUTABLE: ReadonlySet<StopReason> = new Set(NON_EXECUTABLE_STOP_REASONS);

@@ -194,7 +194,7 @@ export function OptionRow({
 }: {
 	buttonRef: (node: HTMLButtonElement | null) => void;
 	label: string;
-	description: string;
+	description?: string | undefined;
 	recommendedReason?: string | undefined;
 	selected: boolean;
 	cursor: boolean;

@@ -3,16 +3,16 @@ import { arr, compile, obj, opt, unknown } from "@earendil-works/pi-schema";
 import type { SessionId } from "@thinkrail/contracts";
 import {
 	type AskUserQuestionAnswer,
-	type AskUserQuestionItem,
+	type AskUserQuestionItemView,
 	type AskUserQuestionResult,
-	isAskUserQuestionArgs,
+	isAskUserQuestionArgsView,
 } from "@thinkrail/pi-ask-user-question/core";
 import { completeOnce, respondToTool } from "@thinkrail/server/agent";
 import type { EventLog } from "./events";
 
 export interface DialogScriptEntry {
-	match: (questions: AskUserQuestionItem[]) => boolean;
-	answer: (questions: AskUserQuestionItem[]) => AskUserQuestionResult;
+	match: (questions: AskUserQuestionItemView[]) => boolean;
+	answer: (questions: AskUserQuestionItemView[]) => AskUserQuestionResult;
 }
 
 export interface DialogConfig {
@@ -24,13 +24,13 @@ export interface DialogConfig {
 export type DialogRung = "script" | "persona" | "fallback";
 
 export interface AnsweredRound {
-	questions: AskUserQuestionItem[];
+	questions: AskUserQuestionItemView[];
 	result: AskUserQuestionResult;
 	rung: DialogRung;
 	error?: string;
 }
 
-export function pickRecommended(questions: AskUserQuestionItem[]): AskUserQuestionResult {
+export function pickRecommended(questions: AskUserQuestionItemView[]): AskUserQuestionResult {
 	const answers: AskUserQuestionAnswer[] = questions.map((q, i) => ({
 		questionIndex: i,
 		question: q.question,
@@ -63,7 +63,7 @@ const PERSONA_SYSTEM = [
 
 export function parsePersonaReply(
 	reply: string,
-	questions: AskUserQuestionItem[],
+	questions: AskUserQuestionItemView[],
 ): AskUserQuestionResult | null {
 	const jsonMatch = reply.match(/\{[\s\S]*\}/);
 	if (!jsonMatch) return null;
@@ -93,7 +93,7 @@ export function parsePersonaReply(
 }
 
 async function personaAnswer(
-	questions: AskUserQuestionItem[],
+	questions: AskUserQuestionItemView[],
 	brief: string,
 ): Promise<AskUserQuestionResult | null> {
 	try {
@@ -123,14 +123,14 @@ export function attachDialog(
 		for (const call of log.toolCalls("ask_user_question")) {
 			if (handled.has(call.toolCallId)) continue;
 			handled.add(call.toolCallId);
-			const questions = isAskUserQuestionArgs(call.args) ? call.args.questions : [];
+			const questions = isAskUserQuestionArgsView(call.args) ? call.args.questions : [];
 			pending.push(answerRound(call.toolCallId, questions));
 		}
 	};
 
 	const answerRound = async (
 		toolCallId: string,
-		questions: AskUserQuestionItem[],
+		questions: AskUserQuestionItemView[],
 	): Promise<void> => {
 		let rung: DialogRung = "fallback";
 		let result: AskUserQuestionResult | null = null;
