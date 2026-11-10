@@ -81,6 +81,7 @@ test("/files and /blob use the same extension fallback as ResourceMeta", async (
 		expect(response.status).toBe(200);
 		expect(response.headers.get("Content-Type")).toBe("text/markdown");
 		expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+		expect(response.headers.get("Cross-Origin-Resource-Policy")).toBe("same-origin");
 	}
 });
 
@@ -97,6 +98,7 @@ test("active resource types are sandboxed on both raw routes", async () => {
 			expect(response.headers.get("Content-Type")).toBe(mime);
 			expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
 			expect(response.headers.get("Content-Security-Policy")).toBe("sandbox; default-src 'none'");
+			expect(response.headers.get("Cross-Origin-Resource-Policy")).toBe("same-origin");
 		}
 	}
 });
@@ -110,6 +112,23 @@ test("/blob 404s on malformed locations, absent blobs, and tree paths", async ()
 	expect((await serveBlob(`/blob/w1/${head}/docs`)).status).toBe(404);
 	expect((await serveBlob(`/blob/w1/${head}/`)).status).toBe(404);
 	expect((await serveBlob("/blob/w1/")).status).toBe(404);
+});
+
+test("refusals carry the same embedding guard as the bytes, so another site cannot probe for a file", async () => {
+	writeFileSync(join(repo, "notes.md"), "# edited\n");
+	const refusals = [
+		await serveWorktreeFile("/files/w1/gone.md"),
+		await serveWorktreeFile("/files/w1"),
+		await serveWorktreeFile("/files/w1/notes.md", "8"),
+		await serveWorktreeFile("/files/w1/notes.md", "lots"),
+		await serveBlob(`/blob/w1/${head}/gone.txt`),
+		await serveBlob("/blob/w1/not-an-oid/notes.md"),
+		await serveBlob(`/blob/nope/${head}/notes.md`),
+	];
+	expect(refusals.map((response) => response.status)).toEqual([404, 404, 413, 400, 404, 404, 404]);
+	for (const response of refusals) {
+		expect(response.headers.get("Cross-Origin-Resource-Policy")).toBe("same-origin");
+	}
 });
 
 test("/files streams the worktree's current bytes with sniffed headers and never caches them", async () => {

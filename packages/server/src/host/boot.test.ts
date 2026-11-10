@@ -449,6 +449,20 @@ test('portMode "exact" binds the requested port', async () => {
 	expect(await res.text()).toBe("ok");
 });
 
+test("allowedHosts admits a Host name the host otherwise refuses", async () => {
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		allowedHosts: ["tunnel.example"],
+	});
+	const health = (name: string) =>
+		fetch(`http://localhost:${b.port}/health`, { headers: { Host: name } });
+
+	expect((await health("tunnel.example")).status).toBe(200);
+	expect((await health("other.example")).status).toBe(403);
+});
+
 test('portMode "free" scans upward past a taken port', async () => {
 	const holder = Bun.serve({ port: 0, hostname: "localhost", fetch: () => new Response("x") });
 	const taken = holder.port as number;

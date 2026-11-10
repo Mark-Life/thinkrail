@@ -9,6 +9,7 @@ import {
 import { fontFileKind, fontsDir, MAX_FONT_FILE_BYTES, saveUserFont } from "../fonts";
 
 const ALLOWED_METHODS = "GET, PUT";
+const SAME_ORIGIN = { "Cross-Origin-Resource-Policy": "same-origin" };
 const ERROR_STATUS: Record<UserFontFileErrorCode, number> = {
 	"too-large": 413,
 	"too-many": 409,
@@ -18,7 +19,7 @@ const ERROR_STATUS: Record<UserFontFileErrorCode, number> = {
 };
 
 function plain(status: number, text: string, headers?: Record<string, string>): Response {
-	return new Response(text, { status, ...(headers ? { headers } : {}) });
+	return new Response(text, { status, headers: { ...SAME_ORIGIN, ...headers } });
 }
 
 function entryResponse(entry: UserFontFile): Response {
@@ -42,7 +43,11 @@ function serveFont(fileName: string | null): Response {
 		return plain(404, "not found");
 	}
 	return new Response(Bun.file(path), {
-		headers: { "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" },
+		headers: {
+			"Cache-Control": "no-cache",
+			"X-Content-Type-Options": "nosniff",
+			...SAME_ORIGIN,
+		},
 	});
 }
 

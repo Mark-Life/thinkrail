@@ -17,7 +17,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
   the initial current PI runtime, falling back to plain PI with closed `load-failed` state when needed, then creates
-  `Bun.serve` with `/health`, `/ws` upgrade, a
+  `Bun.serve`, whose `fetch` passes every request through the `requestSource.ts` check before it reads
+  the URL (see "Get right"), with `/health`, `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes from `Bun.file`
   after classifying only its bounded 8 KiB head (via `fs`'s `resolveWorktreeFile` — path-contained; bad
   id/escape/miss → 404; `Cache-Control: no-store`, because the worktree moves under the URL) so the
@@ -40,14 +41,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   because `fs.readFile` and `git.diffFile` answer `""` for bytes they must not decode, so a byte-only
   resource is fetched over HTTP instead. Both derive `Content-Type` through the shared byte classifier plus
   filename fallback (falling back to `application/octet-stream`) and
-  send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
+  send `X-Content-Type-Options: nosniff`. Every answer of both routes, a 404, 400 or 413 included, sends
+  `Cross-Origin-Resource-Policy: same-origin`: another site cannot embed the bytes, and a blocked load
+  looks the same to it whether the file exists or not. Active same-origin types (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
   script, the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
   [[submodule-server-fonts]] folder — the host's one HTTP write route and the only route that checks its
   method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
-  `Cache-Control: no-cache` (list URLs carry a content version) and 404s any name `fontFileKind` refuses,
-  a collection, or a missing file; `PUT` (behind the upload guard below) answers 400 for a refused name,
+  `Cache-Control: no-cache` (list URLs carry a content version), and 404s any name `fontFileKind` refuses,
+  a collection, or a missing file, with the same `Cross-Origin-Resource-Policy: same-origin` on the font
+  and on the 404; `PUT` (behind the upload guard below) answers 400 for a refused name,
   else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
@@ -760,8 +764,73 @@ enabled/confirmed choice before entering analytics attribution.
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
 - The host is the single place features are wired together — features never reach back into it.
+- **Every request passes the request source check first** (`requestSource.ts`, not in the barrel; the
+  check is a pure function of the `Host` and `Origin` headers). It runs before `new URL(req.url)`,
+  because Bun gives a relative `req.url` for a missing or malformed `Host` and that line would throw.
+  Two rules:
+  - **Host.** A missing `Host`, one longer than 300 characters, or one with a character outside
+    `[A-Za-z0-9._\-:\[\]]` (two `Host` headers arrive joined by `, `), is 400 and the value is not
+    echoed. The rest is parsed as a URL authority, so decimal, hex and long IP forms are normalised; one
+    trailing dot is dropped. Admitted on every bind: an IP literal, `localhost`, `*.localhost`, and a
+    name the user admitted. Admitted only when the bind host is **not loopback**: `*.local`, `*.ts.net`,
+    a single-label name, `os.hostname()`, and the bind host when it is a name. Anything else is 403, and
+    the body names the parsed host and `--allowed-host`. The bind is loopback when it is `localhost`,
+    `*.localhost`, in 127.0.0.0/8, `::1`, or the IPv4-mapped form of a 127.0.0.0/8 address
+    (`::ffff:127.0.0.1`); a bind host that does not parse gets the loopback rule. The bind is classified
+    by its spelling, with no DNS lookup. The split exists because a LAN peer can answer mDNS or LLMNR
+    for a `.local` or single-label name, and a rogue DNS can answer for a `.ts.net` name: on a loopback
+    bind those names would let a peer rebind into a host it cannot reach directly. On a wider bind these
+    names stay admitted because other devices reach the host by them; a peer on that network can usually
+    connect directly anyway.
+  - **Origin.** Checked only when the header is present. It must parse as an `http:` or `https:` URL
+    whose host and port equal the `Host` header's, with the default port of the Origin's scheme dropped
+    on both sides. `null` (a sandboxed frame), an empty value, `file://` and extension origins are 403.
+    The scheme is not compared, so a TLS proxy that keeps `Host` works. A request with no `Origin` is a
+    non-browser client (CLI probes, tests, native apps) and is admitted.
+
+  User-admitted names come from `CreateServerOptions.allowedHosts` (the CLI's `--allowed-host`) and from
+  `THINKRAIL_ALLOWED_HOSTS` (comma-separated), which `createServer` alone reads, so the dev launcher and
+  the desktop app honor it too. An entry is a host name without a port; a leading dot admits every
+  subdomain; an invalid entry makes `createServer` throw. A reverse proxy must forward the original
+  `Host`: one that rewrites it lets the page load (a navigation carries no `Origin`) and then every
+  socket is refused. A proxy or `tailscale serve` in front of a loopback bind also needs its name
+  admitted with `--allowed-host`, because the forwarded `Host` is a name the loopback rule refuses.
+  Page script cannot read a refused handshake, so the host logs each distinct refusal once per
+  10-minute window (`createRefusalLog`; `host` scope, at most 50 per window, no error object, so nothing
+  reaches PostHog). A window starts at the first refusal after the previous window ended and is checked
+  when a refusal arrives, so there is no timer; a page that fills the log with made-up names silences it
+  for one window, not for the life of the process. The log line and the response body are one text. It
+  names only the parsed `Host` and the host of the `Origin`, both held to the `Host` character set and
+  length, never a raw header value. All refusals are `text/plain` with `nosniff`.
+
+  The check stops a website the user visits, a sandboxed frame inside the app, and a DNS-rebinding page.
+  It does **not** stop:
+  - a local non-browser process, including another OS user on the machine;
+  - a LAN or tailnet peer when the bind is not loopback ([[architecture]] Decision 7);
+  - a stale page from an earlier occupant of the same host and port;
+  - blind cross-site `GET`s (another site cannot read the response, nor embed `/files`, `/blob` or
+    `/fonts`, but the request runs);
+  - a plain-http page on the same name as an HTTPS front, on the same port or with both on their
+    default ports (the scheme is not compared; the front should send HSTS);
+  - a LAN peer's rebinding through `.local`, `.ts.net` or a single-label name on any bind that counts
+    as non-loopback, also when that peer cannot connect directly: a host firewall, a container port
+    published on loopback only, a tailnet-only bind address, or a bind name that resolves to loopback
+    (the bind is classified by its spelling);
+  - another site that shows the app in a frame and steers the user's clicks: the frame's own `Origin`
+    passes, and the host sends no `frame-ancestors`.
+
+  The first three need a per-instance secret. It is not added here: every other device (a phone, a
+  second browser) would have to carry it.
+- **Same-origin is the trust anchor.** Script that runs on the host's own origin gets the whole wire.
+  `/files` and `/blob` serve repository bytes on that origin, so a type that can run script must never
+  leave `/files`, `/blob` or `/fonts` without `Content-Security-Policy: sandbox`, which gives the
+  document an opaque origin that the Origin rule refuses. Extend `ACTIVE_TYPES` in the same change that
+  teaches the type table a new scriptable type.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
-  The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
+  A browser sends `Origin` on a cross-origin upload and on its CORS preflight, so the request source
+  check above refuses both with 403 before the route. The header check and the route's 405 for `OPTIONS`
+  stay as a second barrier that does not depend on `Origin`: the host sends no CORS headers
+  ([[architecture]] Decision 7), and a cross-origin upload
   needs a CORS preflight — by the `PUT` method, and by this non-simple header whatever the method — which
   the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
   browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the

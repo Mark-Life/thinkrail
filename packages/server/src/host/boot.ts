@@ -11,6 +11,7 @@ export interface BootHostOptions {
 	port: number;
 	host: string;
 	portMode: "exact" | "free";
+	allowedHosts?: readonly string[];
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
@@ -76,6 +77,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	const running = await createServer({
 		port,
 		host: options.host,
+		...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
 		...(options.staticDir ? { staticDir: options.staticDir } : {}),
 		...(options.projectPath ? { projectPath: options.projectPath } : {}),
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
