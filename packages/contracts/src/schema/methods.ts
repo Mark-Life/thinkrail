@@ -1,11 +1,17 @@
 import type { Static } from "@earendil-works/pi-schema";
 import { BACKGROUND_COMMAND_METHODS } from "./backgroundCommand";
+import { CHANGE_METHODS } from "./change";
 import { CUSTOM_ENDPOINT_METHODS } from "./customEndpoint";
 import { EDITOR_METHODS } from "./editor";
+import { FS_METHODS } from "./fs";
+import { GIT_METHODS } from "./git";
+import { GITHUB_METHODS } from "./github";
 import { MODEL_METHODS } from "./model";
+import { PR_METHODS } from "./pr";
 import { PROJECT_METHODS } from "./project";
 import { PROVIDER_METHODS } from "./provider";
 import { SESSION_METHODS } from "./session";
+import { SPEC_METHODS } from "./spec";
 import { SUBAGENT_METHODS } from "./subagent";
 import { TERMINAL_METHODS } from "./terminal";
 import { WORKSPACE_METHODS } from "./workspace";
@@ -22,6 +28,12 @@ export const WS_METHOD_SCHEMAS = {
 	...WORKSPACE_METHODS,
 	...EDITOR_METHODS,
 	...TERMINAL_METHODS,
+	...GIT_METHODS,
+	...CHANGE_METHODS,
+	...FS_METHODS,
+	...SPEC_METHODS,
+	...GITHUB_METHODS,
+	...PR_METHODS,
 };
 
 type WsMethodSchemas = typeof WS_METHOD_SCHEMAS;

@@ -1,5 +1,15 @@
-import { arr, bool, num, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
-import { wireObj } from "./wire";
+import {
+	arr,
+	bool,
+	lit,
+	nullable,
+	num,
+	oneOf,
+	opt,
+	type Static,
+	str,
+} from "@earendil-works/pi-schema";
+import { Ack, wireObj } from "./wire";
 
 export const BranchReviewState = oneOf(["open", "merged", "closed"]);
 export type BranchReviewState = Static<typeof BranchReviewState>;
@@ -74,3 +84,89 @@ export type OpenBranchReview = Static<typeof OpenBranchReview>;
 
 export const ReviewProvider = oneOf(["github", "gitlab"]);
 export type ReviewProvider = Static<typeof ReviewProvider>;
+
+export const MergePrResult = wireObj({
+	/** `false` when GitHub queued the PR (merge queue / auto-merge) instead of merging it now. */
+	merged: bool(),
+	/** `deleteBranch` only: whether `origin/<branch>` is gone — never deleted for a queued PR. */
+	branchDeleted: bool(),
+	/** Why the deletion after a successful merge failed. */
+	deleteError: opt(str()),
+});
+export type MergePrResult = Static<typeof MergePrResult>;
+
+export const GhSetupProblem = oneOf(["missing", "unauthenticated"]);
+export type GhSetupProblem = Static<typeof GhSetupProblem>;
+
+export const PrDraft = wireObj({ title: str(), body: str() });
+export type PrDraft = Static<typeof PrDraft>;
+
+export const PrBodySource = oneOf(["plan", "commits", "template", "empty"]);
+export type PrBodySource = Static<typeof PrBodySource>;
+
+export const PrPreview = wireObj({
+	title: str(),
+	body: str(),
+	/** v87: worktree-relative PR/MR templates the host found, in discovery order. */
+	templates: opt(arr(str())),
+	/** v87: whether the session (when one was given) has a plan body to render. */
+	planAvailable: opt(bool()),
+	/** v87: the source the body was rendered from. */
+	source: opt(PrBodySource),
+});
+export type PrPreview = Static<typeof PrPreview>;
+
+export const OpenPrResult = wireObj({
+	action: oneOf(["created", "updated", "pushed", "compare"]),
+	review: opt(OpenBranchReview),
+	url: opt(str()),
+	compareUrl: opt(str()),
+	/** `updated` only: whether the `gh pr edit --body` refresh actually succeeded. */
+	bodyRefreshed: opt(bool()),
+	/** `compare` only: why the direct gh path was unavailable, when the host could tell. */
+	ghProblem: opt(GhSetupProblem),
+	dirtyFiles: num(),
+});
+export type OpenPrResult = Static<typeof OpenPrResult>;
+
+const PrActionParams = {
+	workspaceId: str(),
+	branch: str(),
+	number: num(),
+};
+
+export const PR_METHODS = {
+	"pr.preview": {
+		params: wireObj({
+			workspaceId: str(),
+			sessionId: opt(str()),
+			title: opt(str()),
+			source: opt(PrBodySource),
+			template: opt(str()),
+		}),
+		result: PrPreview,
+	},
+	"pr.generate": {
+		params: wireObj({ workspaceId: str(), sessionId: opt(str()), template: opt(str()) }),
+		result: wireObj({ body: nullable(str()) }),
+	},
+	"pr.ready": { params: wireObj(PrActionParams), result: Ack },
+	"pr.merge": {
+		params: wireObj({ ...PrActionParams, method: MergeMethod, deleteBranch: bool() }),
+		result: MergePrResult,
+	},
+	"pr.reopen": { params: wireObj(PrActionParams), result: Ack },
+	"pr.open": {
+		params: wireObj({
+			workspaceId: str(),
+			sessionId: opt(str()),
+			branch: opt(str()),
+			title: opt(str()),
+			titleEdited: opt(bool()),
+			body: opt(str()),
+			draft: opt(bool()),
+			source: opt(lit("plan_page")),
+		}),
+		result: OpenPrResult,
+	},
+};

@@ -42,6 +42,9 @@ runtime form yet.
   declares and are annotated with pi's type. pi types tool-call `arguments` and tool-result `details` as JSON, which a
   schema cannot state, so the assistant and tool-result messages keep their own derived types (`WireAssistantMessage`,
   `WireToolResultMessage`). pi's messages are assignable to them; the reverse is not.
+- **A recursive shape keeps its hand type.** A derived type cannot refer to itself, so `FileNode` stays a hand type.
+  Its schema is a builder result that `tsc` checks against the hand type; only the `{ $ref: "#" }` it nests is a raw
+  JSON Schema annotated `Schema<FileNode>`. `$id` makes that `$ref` point at the node, not at the schema that embeds it.
 - **A readonly wire array stays readonly.** `readonlyArr` keeps the `readonly` of the queue types, which hold
   pi's own arrays.
 - **No tests that restate a schema.** Test what a boundary does with a refusal, not what `str()` accepts.

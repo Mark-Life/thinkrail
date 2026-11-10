@@ -317,9 +317,6 @@ export async function revertChange(params: RevertChangeParams): Promise<ChangeRe
 		writeAtomic(abs, next);
 		return record({ ...change, before: modified, after: next });
 	}
-	if (params.target.kind !== "file") {
-		throw new CodedError("RANGE_INVALID", `Unknown revert target for ${params.path}.`);
-	}
 	if (original.bytes === null) {
 		if (modified.bytes === null) {
 			throw new CodedError(
