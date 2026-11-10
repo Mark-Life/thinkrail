@@ -8,6 +8,7 @@ const ALLOWED_RUNTIME_IMPORTS = [
 	"@earendil-works/pi-ai/providers/model-schema",
 	"@earendil-works/pi-schema",
 	"@thinkrail/contracts",
+	"@thinkrail/pi-ask-user-question/core",
 	"pi-background-commands/wire",
 	"pi-delegation/wire",
 	"pi-subagents/wire",
