@@ -10,8 +10,9 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import type { BuildRuntimeSources } from "@thinkrail/server/build-support";
-import { injectChunkId, type SourceMapJson } from "./src/runtimeSourceMap";
+import { compile } from "@earendil-works/pi-schema";
+import { BuildRuntimeSources } from "@thinkrail/server/build-support/schema";
+import { injectChunkId, parseSourceMap } from "./src/runtimeSourceMap";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -28,7 +29,9 @@ function runBun(args: string[]): void {
 	}
 }
 
-function resolveRuntimeSources(): BuildRuntimeSources {
+const isBuildRuntimeSources = compile(BuildRuntimeSources).check;
+
+function resolveRuntimeSources() {
 	const result = spawnSync(
 		"bun",
 		[
@@ -41,7 +44,10 @@ function resolveRuntimeSources(): BuildRuntimeSources {
 	if (result.status !== 0) {
 		throw new Error(`build-support manifest exited ${result.status ?? result.signal}`);
 	}
-	return JSON.parse(result.stdout) as BuildRuntimeSources;
+	const sources: unknown = JSON.parse(result.stdout);
+	if (!isBuildRuntimeSources(sources))
+		throw new Error("build-support manifest has the wrong shape");
+	return sources;
 }
 
 function sourceMapRelease(): string | null {
@@ -59,7 +65,7 @@ function uploadRuntimeSourceMap(runtimeFile: string, release: string): void {
 	const mapFile = `${runtimeFile}.map`;
 	const injected = injectChunkId(
 		readFileSync(runtimeFile, "utf8"),
-		JSON.parse(readFileSync(mapFile, "utf8")) as SourceMapJson,
+		parseSourceMap(readFileSync(mapFile, "utf8")),
 		release,
 	);
 	writeFileSync(runtimeFile, injected.code);

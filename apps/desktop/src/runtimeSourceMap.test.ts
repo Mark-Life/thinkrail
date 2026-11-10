@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { chunkIdFor, injectChunkId, type SourceMapJson } from "./runtimeSourceMap";
+import { chunkIdFor, injectChunkId, parseSourceMap, type SourceMapJson } from "./runtimeSourceMap";
 
 const dir = mkdtempSync(join(tmpdir(), "thinkrail-runtime-map-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -33,7 +33,7 @@ test("identical code with a different map never reuses a chunk id", async () => 
 		const file = join(dir, "map-only", "server-runtime.ts");
 		builds.push({
 			code: readFileSync(file, "utf8"),
-			map: JSON.parse(readFileSync(`${file}.map`, "utf8")) as SourceMapJson,
+			map: parseSourceMap(readFileSync(`${file}.map`, "utf8")),
 		});
 	}
 	const [first, second] = builds;
@@ -69,7 +69,7 @@ test("injection keeps the @bun pragma first, registers the chunk, and keeps the 
 	expect(built.success).toBe(true);
 	const file = join(dir, "out", "server-runtime.ts");
 	const code = readFileSync(file, "utf8");
-	const map = JSON.parse(readFileSync(`${file}.map`, "utf8")) as SourceMapJson;
+	const map = parseSourceMap(readFileSync(`${file}.map`, "utf8"));
 	expect(code.startsWith("// @bun")).toBe(true);
 
 	const injected = injectChunkId(code, map, "1.2.3");
@@ -85,7 +85,7 @@ test("injection keeps the @bun pragma first, registers the chunk, and keeps the 
 		try {
 			loaded.explode();
 		} catch (error) {
-			return String((error as Error).stack).split("\n")[1];
+			return String(error instanceof Error ? error.stack : error).split("\n")[1];
 		}
 	};
 	const original = await frameOf("original.ts", code, map);

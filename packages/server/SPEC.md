@@ -41,7 +41,9 @@ e2e).
   (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
   variable-specifier dynamic imports (see the agent SPEC). Build-only
   **`@thinkrail/server/build-support`** is the single manifest of bundled extension entries, skill roots,
-  per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Artifact
+  per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Its shape is the
+  `BuildRuntimeSources` schema on **`@thinkrail/server/build-support/schema`**, which loads only `pi-schema`,
+  so the desktop build hook checks the manifest it reads from a child Bun process without loading the server. Artifact
   fixture/assertion runners live in [[module-artifact-tests]], not in this library. The package also exposes the
   **`@thinkrail/server/agent` subpath export** (the `agent` barrel): the
   server-side session surface for the **headless workflow-test harness** (`e2e/workflows/`), which

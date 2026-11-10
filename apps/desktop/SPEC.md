@@ -49,6 +49,8 @@ Electrobun option fails `tsc`. The tie needs Electrobun's types, which `typechec
 never reaches its handler and reports `NATIVE_RPC_INVALID`. Native-to-webview messages are not parsed: the same binary
 writes them. Electrobun types an application-menu click as `unknown` at the listener, so `readMenuAction` checks it,
 and its schema is tied with `Same` to the data type of Electrobun's own `applicationMenuClicked` event.
+`preBuild.ts` checks the build-support manifest it reads from a child Bun process against the server's
+`BuildRuntimeSources` schema, and the runtime source map through `parseSourceMap` before it injects the chunk id.
 
 `preload.ts` and every module it value-imports never import `pi-schema`, so the bundle injected into each page has no
 schema compiler; `preloadBundle.test.ts` pins this. Those modules keep hand checks for the values they read

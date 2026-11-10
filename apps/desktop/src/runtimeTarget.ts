@@ -1,9 +1,4 @@
-export type RuntimeTarget =
-	| "darwin-arm64"
-	| "darwin-x64"
-	| "linux-arm64"
-	| "linux-x64"
-	| "win32-x64";
+import type { DesktopRuntimeTarget as RuntimeTarget } from "@thinkrail/server/build-support/schema";
 
 export function runtimeTarget(platform: NodeJS.Platform, arch: string): RuntimeTarget {
 	const target = `${platform}-${arch}`;

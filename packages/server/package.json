@@ -7,6 +7,7 @@
 		".": "./src/index.ts",
 		"./agent": "./src/agent/index.ts",
 		"./build-support": "./src/buildSupport.ts",
+		"./build-support/schema": "./src/buildSupportSchema.ts",
 		"./history-test-fixtures": "./src/history/testFixtures.ts",
 		"./gh-test-fixtures": "./src/branch-review/testFixtures.ts"
 	},
