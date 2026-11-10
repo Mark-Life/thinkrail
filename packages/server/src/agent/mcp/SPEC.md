@@ -100,10 +100,11 @@ without bypassing approvals or treating an occupied name as absent.
   resource links with long URIs), and `structuredContent` is kept only if it fits what remains (else
   `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops
   `structuredContent` from finalized messages, so this is what lets a card render the same live, after
-  reload and on another client. A content block with a wrong-type field is dropped, like one of an unknown type, and is not
+  reload and on another client. A content block with a wrong-type field is left out, like one of an unknown type, and is
   counted in `omittedBlocks`; an absent field keeps its default. A wrong-type `content` or `contents` reads as empty.
   The block schemas are tied with `Same` to `pi-mcp`'s `ContentBlock` and `TextResourceContents`, with each
-  field the summary reads made optional, so a `pi-mcp` bump that renames or retypes one fails `tsc`.
+  field the summary reads made optional, and their tags and the summary kinds to `ContentBlock`'s tags, so a `pi-mcp`
+  bump that adds a block type or renames or retypes a field fails `tsc`.
 - `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
   used by sessions, so probes never infer it from a presentation row. The host composes
   `writeMcpServerEntry` (pi validation plus the project `auth` ban, add vs update, project containment;

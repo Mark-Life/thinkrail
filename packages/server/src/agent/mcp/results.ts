@@ -56,6 +56,8 @@ type SummaryBlock = Same<
 	| SentBlock<"resource_link", "uri" | "name" | "mimeType">
 	| (SentBlock<"resource"> & Record<keyof Pick<BlockOf<"resource">, "resource">, SentResource>)
 >;
+export type SummaryBlockTypeTie = Same<SummaryBlock["type"], McpContentBlock["type"]>;
+export type SummaryKindTie = Same<McpContentBlockSummary["kind"], McpContentBlock["type"]>;
 const isContentBlock: Validator<SummaryBlock>["check"] = compile(ContentBlock).check;
 const isEntryList = compile(arr(unknown())).check;
 const hasFullOutputPath = compile(obj({ fullOutputPath: str() }, { open: true })).check;
@@ -95,19 +97,23 @@ function resourceSummary(resource: Resource): McpContentBlockSummary {
 
 const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value) ?? "");
 
-function boundedBlocks(
-	all: McpContentBlockSummary[],
+function boundedBlocks<T>(
+	entries: unknown[],
+	readable: (entry: unknown) => entry is T,
+	summary: (entry: T) => McpContentBlockSummary,
 	budget: number,
 ): { kept: Pick<McpResultSummary, "blocks" | "omittedBlocks">; remaining: number } {
 	const blocks: McpContentBlockSummary[] = [];
 	let used = bytes([]);
-	for (const block of all) {
+	for (const entry of entries) {
+		if (!readable(entry)) continue;
+		const block = summary(entry);
 		const size = bytes(block) + 1;
 		if (used + size > budget) break;
 		blocks.push(block);
 		used += size;
 	}
-	const omitted = all.length - blocks.length;
+	const omitted = entries.length - blocks.length;
 	return {
 		kept: { blocks, ...(omitted > 0 ? { omittedBlocks: omitted } : {}) },
 		remaining: budget - used,
@@ -135,17 +141,16 @@ export function summarizeMcpResult(
 	const flag = isError ? { isError: true } : {};
 	if (toolName === "read_mcp_resource") {
 		const contents = isEntryList(structured.contents) ? structured.contents : [];
-		const { kept } = boundedBlocks(
-			contents.filter(isResource).map(resourceSummary),
-			MCP_SUMMARY_BYTES,
-		);
+		const { kept } = boundedBlocks(contents, isResource, resourceSummary, MCP_SUMMARY_BYTES);
 		return { ...kept, ...flag };
 	}
 	if (RESOURCE_TOOLS.has(toolName))
 		return { blocks: [], ...boundedStructured(structured, MCP_SUMMARY_BYTES), ...flag };
 	const content = isEntryList(structured.content) ? structured.content : [];
 	const { kept, remaining } = boundedBlocks(
-		content.filter(isContentBlock).map(blockSummary),
+		content,
+		isContentBlock,
+		blockSummary,
 		MCP_SUMMARY_BYTES,
 	);
 	return { ...kept, ...boundedStructured(structured.structuredContent, remaining), ...flag };

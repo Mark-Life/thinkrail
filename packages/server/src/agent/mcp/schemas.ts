@@ -1,4 +1,7 @@
-import type { McpExposure, McpServerConfig } from "@earendil-works/pi-coding-agent";
+import type {
+	McpServerConfig,
+	McpExposure as PiMcpExposure,
+} from "@earendil-works/pi-coding-agent";
 import {
 	arr,
 	bool,
@@ -15,15 +18,20 @@ import {
 	unknown,
 	type Validator,
 } from "@earendil-works/pi-schema";
-import { JsonObject, type Same } from "@thinkrail/contracts";
-
-export const MCP_EXPOSURES = ["codemode", "deferred", "direct", "hidden"] as const;
+import {
+	JsonObject,
+	type McpActiveExposure,
+	McpExposure,
+	type McpTransportKind,
+	type Same,
+} from "@thinkrail/contracts";
 
 type StdioConfig = Extract<McpServerConfig, { command: string }>;
 type HttpConfig = Extract<McpServerConfig, { url: string }>;
 
-const Exposure = oneOf(MCP_EXPOSURES);
-type Exposure = Same<Static<typeof Exposure>, McpExposure>;
+type Exposure = Same<McpExposure, PiMcpExposure>;
+export type McpActiveExposureTie = Same<McpActiveExposure, Exclude<PiMcpExposure, "codemode">>;
+export type McpTransportKindTie = Same<McpTransportKind, NonNullable<McpServerConfig["type"]>>;
 const StringMap = map(str());
 const StringList = arr(str());
 const Timeout = num({ exclusiveMinimum: 0 });
@@ -47,8 +55,8 @@ const OAuth = obj(
 export type McpOAuth = Same<Static<typeof OAuth>, NonNullable<HttpConfig["oauth"]>>;
 
 const COMMON_FIELDS = {
-	exposure: opt(Exposure),
-	toolExposure: opt(map(Exposure)),
+	exposure: opt(McpExposure),
+	toolExposure: opt(map(McpExposure)),
 	enabled: opt(bool()),
 	description: opt(str()),
 	timeout: opt(Timeout),
@@ -85,7 +93,7 @@ export type McpFile = Static<typeof McpFile>;
 
 export const isJsonObject = JsonObject.check;
 export const isMcpFile = compile(McpFile).check;
-export const isExposure: Validator<Exposure>["check"] = compile(Exposure).check;
+export const isExposure: Validator<Exposure>["check"] = compile(McpExposure).check;
 export const CommonFields = compile(obj(COMMON_FIELDS, { open: true }));
 export const HttpFields = compile(obj(HTTP_FIELDS, { open: true }));
 export const StdioFields = compile(obj(STDIO_FIELDS, { open: true }));

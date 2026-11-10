@@ -8,13 +8,17 @@ import type {
 	McpServerEntry,
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
-import type { McpProjectOverride, McpToolGrant, Project } from "@thinkrail/contracts";
+import {
+	MCP_EXPOSURES,
+	type McpProjectOverride,
+	type McpToolGrant,
+	type Project,
+} from "@thinkrail/contracts";
 import {
 	CommonFields,
 	HttpFields,
 	isJsonObject,
 	isMcpFile,
-	MCP_EXPOSURES,
 	type McpOAuth,
 	parseHttpServer,
 	parseStdioServer,

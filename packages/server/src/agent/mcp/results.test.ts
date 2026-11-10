@@ -66,7 +66,7 @@ test("structured content is bounded, resource reads drop blobs, listings keep th
 	}
 });
 
-test("a wrong-type block is dropped, its neighbours stay, and absent fields keep their defaults", () => {
+test("a wrong-type block is left out and counted, its neighbours stay, and absent fields keep their defaults", () => {
 	expect(
 		summarizeMcpResult(
 			"mcp__s__t",
@@ -86,6 +86,7 @@ test("a wrong-type block is dropped, its neighbours stay, and absent fields keep
 			{ kind: "image", mimeType: "image/*" },
 			{ kind: "resource_link", uri: "" },
 		],
+		omittedBlocks: 3,
 	});
 	expect(
 		summarizeMcpResult(
@@ -93,7 +94,7 @@ test("a wrong-type block is dropped, its neighbours stay, and absent fields keep
 			{ contents: [{ uri: "file:///a" }, { uri: 7 }, null] },
 			false,
 		),
-	).toEqual({ blocks: [{ kind: "resource", uri: "file:///a" }] });
+	).toEqual({ blocks: [{ kind: "resource", uri: "file:///a" }], omittedBlocks: 2 });
 });
 
 test("a wrong-type block list reads as empty and keeps structured content", () => {
