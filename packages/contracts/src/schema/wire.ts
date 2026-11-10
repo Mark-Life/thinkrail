@@ -36,3 +36,21 @@ export type Ack = Static<typeof Ack>;
 export function readonlyArr<T>(items: Schema<T>): Schema<readonly T[]> {
 	return arr(items);
 }
+
+/**
+ * A `$ref` to the nearest `$id` (or the document root): the one place a recursive schema's type is claimed rather
+ * than built, since pi-schema has no recursive builder.
+ */
+export function selfRef<T>(): Schema<T> {
+	return { $ref: "#" };
+}
+
+/** `schema` named by `$id`, so a `selfRef` inside it points at it, not at a schema that embeds it. */
+export function withId<S extends Schema>(schema: S, $id: string): S {
+	return { ...schema, $id };
+}
+
+/** `schema` with more JSON Schema rules: it accepts less, so its values keep `schema`'s type. */
+export function narrowed<S extends Schema>(schema: S, rules: Schema): S {
+	return { ...schema, allOf: [rules] };
+}
