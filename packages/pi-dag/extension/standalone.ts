@@ -7,40 +7,51 @@ import type { DagService } from "../domain/index.ts";
 import { createDagService } from "../runtime/index.ts";
 import { installDagAdapter } from "./adapter.ts";
 
-const registryKey = Symbol.for("pi-dag.standalone-owners");
 const registryVersion = 1;
 interface Registry {
 	version: typeof registryVersion;
 	owners: Map<string, DagService>;
 	closing?: Promise<void>;
 }
-const processState = globalThis as typeof globalThis & { [registryKey]?: unknown };
+
+declare global {
+	/** Standalone DAG owners, shared by every pi-dag copy loaded in this process. */
+	var piDagStandaloneOwners: unknown;
+}
+
+const isService = (value: unknown) =>
+	typeof value === "object" &&
+	value !== null &&
+	"bind" in value &&
+	typeof value.bind === "function" &&
+	"close" in value &&
+	typeof value.close === "function";
+
+function isRegistry(value: unknown): value is Registry {
+	if (
+		typeof value !== "object" ||
+		value === null ||
+		!("version" in value) ||
+		value.version !== registryVersion ||
+		!("owners" in value) ||
+		!(value.owners instanceof Map) ||
+		("closing" in value && !(value.closing instanceof Promise))
+	)
+		return false;
+	const owners: Iterable<[unknown, unknown]> = value.owners;
+	return [...owners].every(([key, service]) => typeof key === "string" && isService(service));
+}
 
 function registry(): Registry {
-	const existing = processState[registryKey];
+	const existing = globalThis.piDagStandaloneOwners;
 	if (existing === undefined) {
 		const created: Registry = { version: registryVersion, owners: new Map() };
-		processState[registryKey] = created;
+		globalThis.piDagStandaloneOwners = created;
 		return created;
 	}
-	if (
-		typeof existing !== "object" ||
-		existing === null ||
-		!("version" in existing) ||
-		existing.version !== registryVersion ||
-		!("owners" in existing) ||
-		!(existing.owners instanceof Map) ||
-		("closing" in existing && !(existing.closing instanceof Promise)) ||
-		[...existing.owners].some(
-			([key, service]) =>
-				typeof key !== "string" ||
-				!service ||
-				typeof service.bind !== "function" ||
-				typeof service.close !== "function",
-		)
-	)
+	if (!isRegistry(existing))
 		throw new Error("Incompatible pi-dag standalone owner registry; restart the process");
-	return existing as Registry;
+	return existing;
 }
 
 function canonical(path: string): string {
@@ -75,7 +86,7 @@ function standaloneService(cwd: string): DagService {
 }
 
 async function closeStandalone(): Promise<void> {
-	if (processState[registryKey] === undefined) return;
+	if (globalThis.piDagStandaloneOwners === undefined) return;
 	const state = registry();
 	state.closing ??= Promise.resolve().then(async () => {
 		const results = await Promise.allSettled(
@@ -88,7 +99,7 @@ async function closeStandalone(): Promise<void> {
 				"DAG standalone shutdown failed",
 			);
 		state.owners.clear();
-		delete processState[registryKey];
+		globalThis.piDagStandaloneOwners = undefined;
 	});
 	await state.closing;
 }

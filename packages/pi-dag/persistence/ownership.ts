@@ -2,44 +2,25 @@ import { randomBytes } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { canonicalJson, fail } from "../domain/index.ts";
+import { Check } from "typebox/value";
+import {
+	canonicalJson,
+	type DagOwner,
+	fail,
+	OwnerReleaseSchema,
+	OwnerSchema,
+} from "../domain/index.ts";
 import { directory, hasCode, json, publishExclusive, readRegular } from "./files.ts";
-
-interface Owner {
-	schemaVersion: 1;
-	host: string;
-	pid: number;
-	token: string;
-}
 
 export interface Ownership {
 	directory: string;
 	generation: number;
-	owner: Owner;
+	owner: DagOwner;
 }
 
-function object(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function decodeOwner(value: unknown): Owner {
-	if (
-		!object(value) ||
-		Object.keys(value).sort().join(",") !== "host,pid,schemaVersion,token" ||
-		value.schemaVersion !== 1 ||
-		typeof value.host !== "string" ||
-		value.host.length === 0 ||
-		typeof value.pid !== "number" ||
-		!Number.isSafeInteger(value.pid) ||
-		value.pid <= 0 ||
-		value.pid > 2147483647 ||
-		typeof value.token !== "string" ||
-		value.token.length !== 64 ||
-		!/^[a-f0-9]{64}$/.test(value.token)
-	) {
-		return fail("resource-in-use", "Malformed ownership record");
-	}
-	return { schemaVersion: 1, host: value.host, pid: value.pid, token: value.token };
+function decodeOwner(value: unknown): DagOwner {
+	if (!Check(OwnerSchema, value)) return fail("resource-in-use", "Malformed ownership record");
+	return value;
 }
 
 async function record(path: string): Promise<unknown> {
@@ -84,18 +65,13 @@ async function head(dir: string): Promise<Ownership | undefined> {
 async function released(ownership: Ownership): Promise<boolean> {
 	const value = await record(join(ownership.directory, `${ownership.generation}.released`));
 	if (value === undefined) return false;
-	if (
-		!object(value) ||
-		Object.keys(value).sort().join(",") !== "schemaVersion,token" ||
-		value.schemaVersion !== 1 ||
-		value.token !== ownership.owner.token
-	) {
+	if (!Check(OwnerReleaseSchema, value) || value.token !== ownership.owner.token) {
 		fail("resource-in-use", "Malformed ownership release");
 	}
 	return true;
 }
 
-function provenDead(owner: Owner): boolean {
+function provenDead(owner: DagOwner): boolean {
 	if (owner.host !== hostname()) return false;
 	try {
 		process.kill(owner.pid, 0);
@@ -113,7 +89,7 @@ export async function ownerStatus(dir: string): Promise<"held" | "inactive"> {
 
 export async function acquire(dir: string): Promise<Ownership> {
 	await directory(dir, true);
-	const owner: Owner = {
+	const owner: DagOwner = {
 		schemaVersion: 1,
 		host: hostname(),
 		pid: process.pid,

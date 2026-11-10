@@ -17,11 +17,14 @@ identities and resolves every evidence target, worker-call receipt and output se
 must carry the decisions/files their meaning requires, and each gate decision actor is re-authorized
 against its stored policy. Delegation birth metadata is checked against
 the same stored birth schema before entering state; the broader delegation contract is not duplicated.
+The ownership record and its release marker are domain schemas (`OwnerSchema`, `OwnerReleaseSchema`);
+persistence decodes them with TypeBox `Check`, and `DagOwner` is their static type.
 
 ## Boundary
 
 The barrel exposes contracts, schemas, validation/error helpers and pure graph/state operations to
-package siblings. Allowed external dependencies are typebox and type-only public pi/delegation types.
+package siblings. Allowed external dependencies are typebox, type-only public pi/delegation types and the value
+`MODEL_THINKING_LEVELS` from pi-ai's `providers/model-schema`, the one source of the session thinking-level list.
 Forbidden: filesystem, provider/session instantiation, transport, runtime or persistence imports.
 The parent spec owns sibling dependency edges. Public package exports select client contracts; private
 persisted state is not automatically published through the package barrel.

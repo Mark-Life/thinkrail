@@ -46,7 +46,8 @@ and owners retain separate attachment identities; no second observer or hidden a
 
 ## Standalone owners
 
-A lazy versioned globalThis Symbol.for registry, not module cache persistence, owns scoped services.
+A lazy versioned registry on the typed global `piDagStandaloneOwners`, not module cache persistence, owns
+scoped services. A type guard checks its version, owner map and each owner before reuse.
 Keys contain canonical agent root and cwd; scope is the cwd's SHA-256. Storage is under the canonical
 agent root's dags and delegation directories. Canonicalization resolves the nearest existing ancestor
 for initially absent directories and propagates errors other than ENOENT. Dangling symlinks fail

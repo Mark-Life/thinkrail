@@ -671,15 +671,15 @@ test("standalone canonicalizes an initially absent agent root through its existi
 });
 
 test("factory loading is lazy and incompatible process registries fail loudly across module replacement", async () => {
-	const key = Symbol.for("pi-dag.standalone-owners");
-	expect(Reflect.get(globalThis, key)).toBeUndefined();
+	expect(globalThis.piDagStandaloneOwners).toBeUndefined();
 	await resources(await replacedModule(), root);
-	expect(Reflect.get(globalThis, key)).toBeUndefined();
+	expect(globalThis.piDagStandaloneOwners).toBeUndefined();
 	for (const incompatible of [
 		{ version: 0, owners: new Map() },
 		{ version: 1, owners: "not owners" },
+		{ version: 1, owners: new Map([["scope", { bind: "not a service" }]]) },
 	]) {
-		Reflect.set(globalThis, key, incompatible);
+		globalThis.piDagStandaloneOwners = incompatible;
 		try {
 			const session = await sessionWith(await replacedModule());
 			expect(errors.get(session)?.splice(0)).toEqual([
@@ -689,9 +689,9 @@ test("factory loading is lazy and incompatible process registries fail loudly ac
 				ok: false,
 				error: { code: "revoked" },
 			});
-			expect(Reflect.get(globalThis, key)).toBe(incompatible);
+			expect(globalThis.piDagStandaloneOwners).toBe(incompatible);
 		} finally {
-			Reflect.deleteProperty(globalThis, key);
+			globalThis.piDagStandaloneOwners = undefined;
 		}
 	}
 });

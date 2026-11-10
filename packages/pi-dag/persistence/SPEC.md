@@ -48,7 +48,7 @@ that DAG's `owners/`; release publishes a token-matching immutable release marke
 These small records are retained, not removed or compacted. This avoids compare-then-unlink races:
 competing recoverers can only contend for the same next slot, never delete a newer owner's lock.
 Temporary unpublished files are ignored. Unknown or discontinuous ownership filenames, or malformed
-active owner/release records, fail closed. Retired records have no control authority. Unreleased
+active owner/release records (checked against the domain's `OwnerSchema` / `OwnerReleaseSchema`), fail closed. Retired records have no control authority. Unreleased
 ownership on another host is ambiguous and blocks acquisition.
 
 A live PID, including this process through another store, blocks claims. Only `kill(pid, 0)` failing
