@@ -127,7 +127,7 @@ and truncating first can separate a secret suffix from the URL prefix needed to 
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,
   `setPiTrustSeed`.
-- **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
+- **Allowed deps:** `persistence`; `@thinkrail/shared/errnoCode`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
   `shared/codedError` (the two named open failures); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the

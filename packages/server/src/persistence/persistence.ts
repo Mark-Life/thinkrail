@@ -24,6 +24,7 @@ import {
 	type WorkspaceCreation,
 	type WorkspaceKickoff,
 } from "@thinkrail/contracts";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import {
 	claimBrowserAttributionAttemptIn,
 	readAcquisitionIn,
@@ -104,7 +105,7 @@ function loadSessionMetadata<T>(
 		if (value !== null) return { kind: "loaded", value };
 		error = new Error(`Invalid ${file}`);
 	} catch (caught) {
-		if ((caught as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+		if (hasErrno(caught, "ENOENT")) return { kind: "missing" };
 		error = caught;
 	}
 	const setAsidePath = `${path}.corrupt-${Date.now()}`;

@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { type Node, type ParseError, parseTree } from "jsonc-parser";
 
 export const MODELS_JSON_PARSE = { allowTrailingComma: true };
@@ -41,7 +42,7 @@ export function readModelsSource(path: string): string | undefined {
 	try {
 		return readFileSync(path, "utf8");
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		if (hasErrno(error, "ENOENT")) return undefined;
 		throw new Error("Couldn't read pi's models.json. Fix the file and retry.");
 	}
 }

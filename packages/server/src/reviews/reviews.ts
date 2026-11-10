@@ -19,6 +19,7 @@ import type {
 	ReviewGuide,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { classifyBytes, decodeText, workspaceRelativePath } from "../fs";
 import {
 	diffBaseRef,
@@ -90,7 +91,7 @@ function readSnapshot(file: string): ReviewSnapshot | null {
 	try {
 		raw = readFileSync(file, "utf8");
 	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+		if (hasErrno(err, "ENOENT")) return null;
 		throw err;
 	}
 	try {
@@ -105,9 +106,8 @@ function readSnapshot(file: string): ReviewSnapshot | null {
 export function reviewReadFailure(error: unknown): string {
 	if (error instanceof DamagedReviewFileError) return "damaged";
 	if (error instanceof InvalidReviewIdError) return "invalid id";
-	const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
-	if (code === "EACCES" || code === "EPERM") return "permission denied";
-	if (code === "EISDIR" || code === "ENOTDIR") return "not a file";
+	if (hasErrno(error, "EACCES", "EPERM")) return "permission denied";
+	if (hasErrno(error, "EISDIR", "ENOTDIR")) return "not a file";
 	return "read failure";
 }
 
@@ -140,7 +140,7 @@ function archivedReviewFiles(): string[] {
 	try {
 		workspaceDirs = readdirSync(archiveRoot(), { withFileTypes: true });
 	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+		if (hasErrno(err, "ENOENT")) return [];
 		throw err;
 	}
 	const files: string[] = [];

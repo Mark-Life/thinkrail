@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 
 export interface InstallationRecord {
 	id: string;
@@ -25,10 +26,6 @@ function hasInstallationId(
 	return typeof record.id === "string" && record.id.length > 0;
 }
 
-function isAlreadyExists(error: unknown): boolean {
-	return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
-}
-
 export function ensureInstallationIn(
 	directory: string,
 	publish: typeof linkSync = linkSync,
@@ -46,7 +43,7 @@ export function ensureInstallationIn(
 			publish(temp, target);
 			return record;
 		} catch (error) {
-			if (!isAlreadyExists(error)) throw error;
+			if (!hasErrno(error, "EEXIST")) throw error;
 			const winner = readInstallation(directory);
 			if (hasInstallationId(winner)) return { id: winner.id };
 			throw new Error("installation.json exists without a valid installation id", { cause: error });
@@ -68,7 +65,7 @@ export function claimAppInstalledIn(
 	try {
 		writeFileSync(claim, "", { flag: "wx" });
 	} catch (error) {
-		if (isAlreadyExists(error)) return false;
+		if (hasErrno(error, "EEXIST")) return false;
 		throw error;
 	}
 

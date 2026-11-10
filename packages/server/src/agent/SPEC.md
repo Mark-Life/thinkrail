@@ -1232,7 +1232,7 @@ re-opened transcripts provider-valid.
   `null`, the default resolver policy, no concurrency resolver, and the unavailable `request_review` /
   `resolve_comment` / `set_title` handlers. The PI runtime, its factories, the session manager factory
   and `registerBundledRuntime` are not reset by `stop()`; whoever configures them restores them.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
+- **Allowed deps:** `@thinkrail/shared/errnoCode`; `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`

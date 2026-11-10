@@ -12,6 +12,7 @@ import type {
 	ResourceMeta,
 	Workspace,
 } from "@thinkrail/contracts";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import {
 	CONTENT_SNIFF_BYTES,
 	classifyBytes,
@@ -653,9 +654,7 @@ function worktreeBytes(abs: string): Uint8Array | null {
 	try {
 		return readFileSync(abs);
 	} catch (error) {
-		const code =
-			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-		if (code === "ENOENT") return null;
+		if (hasErrno(error, "ENOENT")) return null;
 		throw error;
 	}
 }
