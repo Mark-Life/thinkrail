@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compile, map, num, obj, type Static, str } from "@earendil-works/pi-schema";
+import type { Same } from "@thinkrail/contracts";
 import {
 	E2E_ROOT_DIR,
 	processRunnerInterruption,
@@ -10,8 +12,25 @@ import {
 	signalExitCode,
 } from "../processRunner";
 import type { ScenarioRun } from "./render.perf";
-import { type ComponentCost, MARKDOWN_SUBTREE } from "./renderProfiler";
+import {
+	type ComponentCost,
+	MARKDOWN_SUBTREE,
+	MainThreadCost,
+	RenderProfile,
+} from "./renderProfiler";
 import { isScenarioName, SCENARIO_NAMES } from "./scenarios";
+
+const ScenarioRunFile = obj({
+	scenario: str(),
+	run: num(),
+	cpuRate: num(),
+	wallMs: num(),
+	counters: map(num()),
+	mainThread: MainThreadCost,
+	profile: RenderProfile,
+});
+export type ScenarioRunTie = Same<Static<typeof ScenarioRunFile>, ScenarioRun>;
+const scenarioRun = compile(ScenarioRunFile);
 
 const bun = process.execPath;
 const DEFAULT_RUNS = 5;
@@ -242,7 +261,8 @@ async function main(): Promise<number> {
 
 	const runsByScenario = new Map<string, ScenarioRun[]>();
 	for (const file of readdirSync(runDir).filter((name) => name.endsWith(".json"))) {
-		const run = JSON.parse(readFileSync(join(runDir, file), "utf8")) as ScenarioRun;
+		const run: unknown = JSON.parse(readFileSync(join(runDir, file), "utf8"));
+		if (!scenarioRun.check(run)) throw new Error(`perf: ${file} is not a scenario run`);
 		runsByScenario.set(run.scenario, [...(runsByScenario.get(run.scenario) ?? []), run]);
 	}
 	if (result.exitCode !== 0 || runsByScenario.size === 0) {

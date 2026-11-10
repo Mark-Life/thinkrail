@@ -19,5 +19,5 @@ export const DEFAULT_SCENARIOS: readonly ScenarioName[] = [
 ];
 
 export function isScenarioName(name: string): name is ScenarioName {
-	return (SCENARIO_NAMES as readonly string[]).includes(name);
+	return SCENARIO_NAMES.some((scenario) => scenario === name);
 }

@@ -1,17 +1,22 @@
+import { map, num, obj, type Static } from "@earendil-works/pi-schema";
 import type { Page, Request, Route } from "@playwright/test";
 
-export interface ComponentCost {
-	commits: number;
-	renders: number;
-	selfTotalMs: number;
-	selfMaxMs: number;
-	inclusiveTotalMs: number;
-	inclusiveMaxMs: number;
-}
+const COST_FIELDS = {
+	commits: num(),
+	renders: num(),
+	selfTotalMs: num(),
+	selfMaxMs: num(),
+};
 
-interface SubtreeCost extends Omit<ComponentCost, "inclusiveTotalMs" | "inclusiveMaxMs"> {
-	rootRenders: number;
-}
+export const ComponentCost = obj({
+	...COST_FIELDS,
+	inclusiveTotalMs: num(),
+	inclusiveMaxMs: num(),
+});
+export type ComponentCost = Static<typeof ComponentCost>;
+
+const SubtreeCost = obj({ ...COST_FIELDS, rootRenders: num() });
+type SubtreeCost = Static<typeof SubtreeCost>;
 
 export const MARKDOWN_SUBTREE = "markdown";
 
@@ -19,29 +24,27 @@ interface SubtreeRoots {
 	[subtree: string]: string[];
 }
 
-interface LongTaskStats {
-	count: number;
-	totalMs: number;
-	maxMs: number;
-}
+const LongTaskStats = obj({ count: num(), totalMs: num(), maxMs: num() });
 
-interface FrameStats {
-	frames: number;
-	p50GapMs: number;
-	p95GapMs: number;
-	maxGapMs: number;
-	droppedFrames: number;
-}
+const FrameStats = obj({
+	frames: num(),
+	p50GapMs: num(),
+	p95GapMs: num(),
+	maxGapMs: num(),
+	droppedFrames: num(),
+});
+type FrameStats = Static<typeof FrameStats>;
 
-export interface RenderProfile {
-	commits: number;
-	totalMs: number;
-	maxCommitMs: number;
-	components: Record<string, ComponentCost>;
-	subtrees: Record<string, SubtreeCost>;
-	longTasks: LongTaskStats;
-	frames: FrameStats;
-}
+export const RenderProfile = obj({
+	commits: num(),
+	totalMs: num(),
+	maxCommitMs: num(),
+	components: map(ComponentCost),
+	subtrees: map(SubtreeCost),
+	longTasks: LongTaskStats,
+	frames: FrameStats,
+});
+export type RenderProfile = Static<typeof RenderProfile>;
 
 interface RenderProfilerHandle {
 	reset: () => void;
@@ -130,15 +133,27 @@ function installRenderProfiler(subtreeRoots: SubtreeRoots): void {
 		};
 	}
 
+	function field(value: unknown, key: "displayName" | "name" | "render"): unknown {
+		return (typeof value === "object" || typeof value === "function") && value !== null
+			? Reflect.get(value, key)
+			: undefined;
+	}
+
+	function label(value: unknown): string | null {
+		return typeof value === "string" && value ? value : null;
+	}
+
 	function componentName(fiber: Fiber): string | null {
-		const type = fiber.type as
-			| { displayName?: string; name?: string; render?: { displayName?: string; name?: string } }
-			| null
-			| undefined;
-		if (!type) return null;
-		if (fiber.tag === FORWARD_REF)
-			return type.displayName || type.render?.displayName || type.render?.name || null;
-		return type.displayName || type.name || null;
+		const { type } = fiber;
+		if (fiber.tag === FORWARD_REF) {
+			const render = field(type, "render");
+			return (
+				label(field(type, "displayName")) ??
+				label(field(render, "displayName")) ??
+				label(field(render, "name"))
+			);
+		}
+		return label(field(type, "displayName")) ?? label(field(type, "name"));
 	}
 
 	function isComponent(tag: number): boolean {
@@ -307,13 +322,14 @@ export async function detachRenderProfiler(page: Page): Promise<void> {
 	await page.unrouteAll({ behavior: "ignoreErrors" });
 }
 
-export interface MainThreadCost {
-	taskMs: number;
-	scriptMs: number;
-	layoutMs: number;
-	styleMs: number;
-	heapDeltaMb: number;
-}
+export const MainThreadCost = obj({
+	taskMs: num(),
+	scriptMs: num(),
+	layoutMs: num(),
+	styleMs: num(),
+	heapDeltaMb: num(),
+});
+export type MainThreadCost = Static<typeof MainThreadCost>;
 
 const MAIN_THREAD_METRICS = {
 	taskMs: "TaskDuration",

@@ -1,9 +1,10 @@
+import { compile, map, unknown } from "@earendil-works/pi-schema";
 export type FullRunPhase = "no-agent" | "agent";
 
-type JsonRecord = Record<string, unknown>;
+const jsonRecord = compile(map(unknown()));
 
-function record(value: unknown): JsonRecord | null {
-	return value !== null && typeof value === "object" ? (value as JsonRecord) : null;
+function record(value: unknown): Record<string, unknown> | null {
+	return jsonRecord.check(value) ? value : null;
 }
 
 function countSuiteTests(value: unknown): number {
