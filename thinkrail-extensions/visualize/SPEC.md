@@ -71,18 +71,45 @@ segment before any `mkdir`, refuses a symlinked segment, creates only the `mocku
 that is not a regular file, and rewrites only when the content differs. Together the first three keep the
 write inside the workspace, so there is no separate resolved-path check. A failed write is ignored: the file only
 helps the agent and the user see a mockup outside the app, and a broken turn would cost more. In the app
-the link is removed and the live theme replaces it ([[module-resource-renderers]], *Themed frame*).
+the link never loads (the themed frame removes it, the scripted frame's CSP refuses it) and the live theme
+replaces it ([[module-resource-renderers]], *Themed frame* and *Scripted frame*).
 
-`guidance.ts` supplies the pi package's `mockupGuideline` clause: write a self-contained HTML file in the
-scratch dir, link `thinkrail-theme.css` with a relative href (not copy it in) and read it for token names,
-colour with its tokens and leave the page background to the theme, inline all data and images, draw
-controls with styled elements because the preview removes scripts, buttons, inputs and forms, draw a
-dialog, drawer, toast or open dropdown in normal flow or give `body` a pixel `min-height` (a `position:
-fixed` layer adds no height, so a fixed-only dialog would get the 120 px minimum and be cut off; an
-absolutely positioned panel that opens after load is not measured either), and no `vh`
-or `height: 100%` on `html`/`body` (a document sized from its frame keeps the bounded card). The browser
-and the desktop app render the same themed frame, so every sentence is meant for both; it was checked in
-Chromium, WebKit and the macOS desktop app; WebView2 and WebKitGTK were not run.
+`guidance.ts` supplies the pi package's `mockupGuideline` clause. The browser app runs the scripts of a
+mockup the agent showed; the desktop app, and the browser until the mockup is shown, render the same file
+with no script. So the clause must be true in both, and it asks for a mockup that is complete without
+scripts:
+
+- write a self-contained HTML file in the scratch dir, link `thinkrail-theme.css` with a
+  relative href (not copy it in) and read it for token names, colour with its tokens and leave the page
+  background to the theme, inline all data and images, draw a dialog, drawer, toast or open dropdown in
+  normal flow or give `body` a pixel `min-height` (a `position: fixed` layer adds no height, so a
+  fixed-only dialog would get the 120 px minimum and be cut off; an absolutely positioned panel that opens
+  after load is not measured either), and no `vh` or `height: 100%` on `html`/`body` (a document sized
+  from its frame keeps the bounded card);
+- some clients run no script and load nothing from a URL: there scripts and handlers are removed, a CDN
+  file does not load and a `<form>` is dropped with everything in it. So controls go directly in the page
+  with no `<form>`, all the mockup's own CSS is in the file (a CDN stylesheet would style it in the browser
+  and leave it unstyled on desktop, so a CDN file may only add what a script draws), and anything a script
+  draws has a static version as normal markup that the script replaces when it runs. The clause forbids
+  `<noscript>` for that version: the themed frame shows it, but where scripts run it never renders, also
+  when the library does not load (offline, a proxy), and the card would be empty;
+- where scripts run, inline scripts and handlers work and a library loads only from the CDN prefixes,
+  with an exact version (the text lists `MOCKUP_CDN_SOURCES`; with an empty list it says no library loads
+  from a URL);
+- not to use fetch, XHR, WebSocket, workers, `eval`, `new Function`, `localStorage`, cookies, `alert`, form
+  submit, links, navigation or `document.write` after load (blocked, or they close the mockup);
+  WebAssembly only from inline bytes;
+- not to call `history.pushState` or set `location.hash` (no hash router, no hash tabs): nothing blocks
+  them, and each call adds an entry to the app tab's history;
+- not to call `scrollIntoView()`, to call `focus()` only in a handler of a user action, and not to cancel
+  the Tab key: nothing blocks them, in Chromium the first two move the chat transcript to the mockup, and
+  a cancelled Tab keeps the keyboard inside the frame;
+- a script that reads token colours redraws on the window's `thinkrail:themechange` event.
+
+The list of blocked things is an instruction, not a promise of isolation:
+[[module-resource-renderers]] *Known limits of a scripted frame* says what a hostile mockup can still do.
+The clause was checked in Chromium, WebKit and the macOS desktop app; WebView2 and WebKitGTK were not
+run.
 
 The host composes this descriptor from the server registry ([[submodule-server-extensions]]); a strict
 validation call through that composition is pinned in `packages/server` (dev) and in the artifact probes
@@ -98,9 +125,11 @@ bounded diffs need a height) with `fitContent`: an HTML mockup under the scratch
 before/after comparison of two mockups, grows the card to its content height (rendered box 120–1600 px,
 Fill width unless the user picks another) and takes the app's live theme, while code, images, other diffs,
 HTML outside the scratch dir and a mockup sized from its frame (`100vh`, `height: 100%`) keep the bounded
-box. No script from the file and none from ThinkRail runs in either kind of HTML preview, so a committed
-file under the scratch dir gets the theme and nothing more; a script that a native webview injects into
-frames is not covered ([[module-resource-renderers]], *Themed frame*). Its toolbar adds **Open in tab** (`host.openFile` keep, or
+box. In a browser the mockup a finished call showed (`path` and `before`) also runs its own scripts, in a
+sandboxed frame; in the desktop app, and for a file under the scratch dir that no call showed, no script
+from the file and none from ThinkRail runs and the file gets the theme and nothing more; a script that a
+native webview injects into frames is not covered ([[module-resource-renderers]], *Themed frame* and
+*Scripted frame*; [[module-web]] owns the rule). Its toolbar adds **Open in tab** (`host.openFile` keep, or
 `host.openComparison` for a before/after) and **Full screen** (a dialog rendering the same preview with
 Split/Inline; renderer choice and view state, such as the HTML preview width, are shared with the card).
 The frame and its actions live in the SDK because the questionnaire's previews use the same one. A card always shows the file's

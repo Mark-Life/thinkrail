@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
+import {
+	type ExtensionSessionServices,
+	MOCKUP_CDN_SOURCES,
+	MOCKUP_THEME_CHANGE_EVENT,
+} from "@thinkrail/extension-api/server";
+import { mockupGuideline } from "./guidance";
 import extension from "./index";
 import { THEME_CSS } from "./themeFile";
 
@@ -168,12 +173,53 @@ describe("visualize server half", () => {
 		expect(guideline).toContain("`.thinkrail/context/mockups/thinkrail-theme.css`");
 		expect(guideline).toContain('href="thinkrail-theme.css"');
 		expect(guideline).toContain("`var(--…)` tokens");
-		expect(guideline).toContain("removes scripts, buttons, inputs and forms");
 		expect(guideline).toContain(
 			"in normal flow, or give `body` a pixel `min-height` that holds it: a `position: fixed` layer adds no height to the card, and neither does an absolutely positioned panel that opens after load",
 		);
 		expect(guideline).toContain("html/body) and show it with visualize type 'file'");
 		expect(guideline).not.toContain("hosts may strip scripts");
+	});
+
+	test("offers scripts as an extra and asks for a mockup that is complete without them", () => {
+		const guideline = loadTool().promptGuidelines?.[0] ?? "";
+		expect(guideline).toContain("Some clients run no script and load nothing from a URL");
+		expect(guideline).toContain("must look complete with no script and no CDN file");
+		expect(guideline).toContain(
+			"write all your own CSS in the file itself (a CDN file may only add what a script draws)",
+		);
+		expect(guideline).toContain(
+			"a static version of anything a script draws as normal markup that the script replaces when it runs",
+		);
+		expect(guideline).toContain("Do not put that static version in `<noscript>`");
+		expect(guideline).toContain("with no `<form>`");
+		expect(guideline).toContain(
+			"Do not call `history.pushState` or set `location.hash` (no hash router, no hash tabs): each call adds an entry to the app tab's history",
+		);
+		expect(guideline).toContain("WebAssembly runs only from inline bytes");
+		expect(guideline).toContain(
+			"Do not call `scrollIntoView()`, call `focus()` only in a handler of a user action, and do not cancel the Tab key",
+		);
+		expect(guideline).toContain(`\`${MOCKUP_THEME_CHANGE_EVENT}\` event`);
+		for (const blocked of ["fetch", "XHR", "WebSocket", "workers", "`eval`", "`localStorage`"]) {
+			expect(guideline).toContain(blocked);
+		}
+		for (const untrue of ["scripts run in the app", "the preview removes", "no network"]) {
+			expect(guideline).not.toContain(untrue);
+		}
+	});
+
+	test("names the library prefixes from the one CDN constant", () => {
+		expect(MOCKUP_CDN_SOURCES.length).toBeGreaterThan(0);
+		const guideline = loadTool().promptGuidelines?.[0] ?? "";
+		for (const source of MOCKUP_CDN_SOURCES) expect(guideline).toContain(`\`${source}\``);
+		expect(guideline).toContain("with an exact version in the URL");
+		expect([...guideline.matchAll(/https:\/\/[^`]*/g)].map((match) => match[0])).toEqual([
+			...MOCKUP_CDN_SOURCES,
+		]);
+
+		const none = mockupGuideline(".thinkrail/context/mockups/", []);
+		expect(none).toContain("no library loads from a URL, so inline what you need.");
+		expect(none).not.toContain("https://");
 	});
 
 	test("writes the theme file into the session's scratch directory before the agent starts", async () => {
