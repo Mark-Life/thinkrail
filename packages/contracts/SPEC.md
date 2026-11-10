@@ -45,12 +45,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
   differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it or Error Tracking must tell it apart (it never sees `message`). Three codes exist for the latter:
+  for it or Error Tracking must tell it apart (it never sees `message`). Four codes exist for the latter:
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
   ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
-  code, so it needs no protocol bump — and **`INVALID_PARAMS`** — dispatch refused params that do not match
-  the method's schema, which only a client bug or a version mismatch produces. **`INVALID_REPLY`** is the reverse, and
+  code, so it needs no protocol bump — **`INVALID_PARAMS`** — dispatch refused params that do not match
+  the method's schema or a check the schema cannot express, which only a client bug or a version mismatch produces, and
+  **`PI_SESSION_ID_INVALID`** — pi named a live session with an id that is not path-safe ([[submodule-contracts-schema]]). **`INVALID_REPLY`** is the reverse, and
   only the client mints it: a successful reply failed its result schema ([[submodule-web-transport]]).
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.

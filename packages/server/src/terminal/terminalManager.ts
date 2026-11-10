@@ -6,7 +6,7 @@ import type {
 	TerminalTabInfo,
 	WorkspaceId,
 } from "@thinkrail/contracts";
-import { asWorkspaceId, WS_CHANNELS } from "@thinkrail/contracts";
+import { parseWorkspaceId, WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import {
 	loadConfig,
@@ -403,7 +403,8 @@ export function persistTerminalSessions(): void {
 
 export function reviveTerminalSessions(): void {
 	for (const [rawWorkspaceId, tabs] of Object.entries(loadTerminalSessions())) {
-		const workspaceId = asWorkspaceId(rawWorkspaceId);
+		const workspaceId = parseWorkspaceId(rawWorkspaceId);
+		if (workspaceId === null) continue;
 		const restored: TabRecord[] = [];
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
 			if (!isValidTerminalTabKey(tab.tabKey)) continue;

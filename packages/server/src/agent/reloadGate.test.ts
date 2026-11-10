@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { compile, obj, opt, str } from "@earendil-works/pi-schema";
 import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { readMarkerLines } from "../../test/markerLines";
 import {
 	createSession,
 	disposeAllSessions,
@@ -25,7 +27,7 @@ const model = {
 	id: "gate",
 	name: "gate",
 	reasoning: false,
-	input: ["text"] as ("text" | "image")[],
+	input: ["text"] satisfies ("text" | "image")[],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 100_000,
 	maxTokens: 4096,
@@ -116,16 +118,9 @@ afterAll(async () => {
 	rmSync(root, { recursive: true, force: true });
 });
 
-function events(): { kind: string; reason?: string }[] {
-	try {
-		return readFileSync(marker, "utf8")
-			.split("\n")
-			.filter(Boolean)
-			.map((line) => JSON.parse(line) as { kind: string; reason?: string });
-	} catch {
-		return [];
-	}
-}
+const MarkerEvent = compile(obj({ kind: str(), reason: opt(str()) }, { open: true }));
+
+const events = () => readMarkerLines(marker, MarkerEvent);
 const reloads = () => events().filter((e) => e.kind === "shutdown" && e.reason === "reload").length;
 
 async function waitFor(read: () => boolean, ms = 8000): Promise<void> {

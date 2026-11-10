@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -12,7 +11,7 @@ import type {
 	WorkspaceKickoff,
 	WsErrorCode,
 } from "@thinkrail/contracts";
-import { asWorkspaceId } from "@thinkrail/contracts";
+import { newWorkspaceId } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	git,
@@ -481,7 +480,7 @@ export function startWorkspaceCreation(
 ): WorkspaceCreation {
 	const plan = planManagedWorkspace(projectId, opts.name, opts.baseRef);
 	const record: WorkspaceCreationRecord = {
-		id: asWorkspaceId(randomUUID()),
+		id: newWorkspaceId(),
 		projectId,
 		name: plan.name,
 		branch: plan.branch,

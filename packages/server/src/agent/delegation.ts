@@ -7,9 +7,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
-	asSessionId,
 	type DelegationRunStatus,
-	isTranscriptMessageRole,
+	parseSessionId,
 	type ThinkingLevel,
 	type TranscriptMessage,
 } from "@thinkrail/contracts";
@@ -34,6 +33,7 @@ import {
 import { archiveSubagentRun, publishSessionResourcesChanged } from "./chatResources";
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
+import { requireSessionId } from "./requireSessionId";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 import {
 	createRunUsageRecorder,
@@ -41,6 +41,7 @@ import {
 	SUBAGENT_USAGE_KIND,
 	type SubagentUsage,
 } from "./subagentUsage";
+import { transcriptMessages } from "./transcriptMessages";
 
 export function delegationRootDir(): string {
 	return join(dataDir(), "delegation");
@@ -92,6 +93,12 @@ export function reconcileSessionSubagentUsage(
 	});
 }
 
+function runIdsOf(event: { parentSessionId: string; sessionId: string }) {
+	const parent = parseSessionId(event.parentSessionId);
+	const child = parseSessionId(event.sessionId);
+	return parent === null || child === null ? null : { parent, child };
+}
+
 export function delegationServiceFor(workspaceId: WorkspaceId): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
@@ -99,8 +106,8 @@ export function delegationServiceFor(workspaceId: WorkspaceId): DelegationServic
 		const created = createDelegationService({
 			...(maxConcurrentPerParent === undefined ? {} : { maxConcurrentPerParent }),
 			resolveParent: (rawSessionId) => {
-				const sessionId = asSessionId(rawSessionId);
-				return canUseSessionResources(sessionId, workspaceId)
+				const sessionId = parseSessionId(rawSessionId);
+				return sessionId !== null && canUseSessionResources(sessionId, workspaceId)
 					? liveParentContext(sessionId)
 					: undefined;
 			},
@@ -113,24 +120,19 @@ export function delegationServiceFor(workspaceId: WorkspaceId): DelegationServic
 		});
 		created.onLifecycle((event) => {
 			if (event.type === "run-progress") {
-				runUsage.progress(
-					asSessionId(event.parentSessionId),
-					asSessionId(event.sessionId),
-					event.details,
-				);
+				const run = runIdsOf(event);
+				if (run) runUsage.progress(run.parent, run.child, event.details);
 				return;
 			}
-			if (event.type === "run-terminal")
-				runUsage.terminal(
-					asSessionId(event.parentSessionId),
-					asSessionId(event.sessionId),
-					event.outcome.details,
-				);
+			if (event.type === "run-terminal") {
+				const run = runIdsOf(event);
+				if (run) runUsage.terminal(run.parent, run.child, event.outcome.details);
+			}
 			if (services.get(workspaceId) === created) archiveSubagentRun(workspaceId, created, event);
-			const parentSessionId = asSessionId(
+			const parentSessionId = parseSessionId(
 				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId,
 			);
-			if (canUseSessionResources(parentSessionId, workspaceId)) {
+			if (parentSessionId !== null && canUseSessionResources(parentSessionId, workspaceId)) {
 				publishSessionResourcesChanged(workspaceId, parentSessionId);
 				scheduleSessionStatePublish(parentSessionId);
 			}
@@ -234,9 +236,7 @@ export function readChildTranscript(
 		);
 	}
 	const sessionManager = SessionManager.open(path);
-	const messages = buildSessionContext(sessionManager.getEntries()).messages.filter((message) =>
-		isTranscriptMessageRole(message.role),
-	) as TranscriptMessage[];
+	const messages = transcriptMessages(buildSessionContext(sessionManager.getEntries()).messages);
 	const status = ownedChild?.snapshot?.status;
 	return { messages, ...(status !== undefined ? { status } : {}) };
 }
@@ -280,9 +280,10 @@ export async function runReviewSubagent(
 		},
 	});
 	try {
+		const childSessionId = requireSessionId(child.sessionId);
 		const outcome = await child.runQueued(task, signal ? { signal } : {});
 		return {
-			childSessionId: asSessionId(child.sessionId),
+			childSessionId,
 			status: outcome.status,
 			...(outcome.finalText !== undefined ? { finalText: outcome.finalText } : {}),
 		};

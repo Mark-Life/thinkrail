@@ -9,7 +9,6 @@ import type {
 	WsResult,
 } from "@thinkrail/contracts";
 import {
-	asProjectId,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
@@ -231,9 +230,9 @@ function refreshUserFonts(connectionGeneration: number): void {
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
-	for (const [key, held] of Object.entries(snapshot.workspaces)) {
-		const projectId = asProjectId(key);
-		if (!openProjectIds.has(projectId)) continue;
+	for (const projectId of openProjectIds) {
+		const held = snapshot.workspaces[projectId];
+		if (!held) continue;
 		const heldAtRequest = held.map((workspace) => workspace.id);
 		void getTransport()
 			.request("workspace.list", { projectId, includeDiffStats: false })

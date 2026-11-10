@@ -7,6 +7,7 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/prov
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { type SessionId, TODO_NUDGE_PREFIX, type WsResult } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { fakeFetch } from "../../test/fakeFetch";
 import {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
@@ -136,11 +137,11 @@ beforeEach(async () => {
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
-		fetchImpl: ((url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		fetchImpl: fakeFetch((url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			outgoing.push(String(url), JSON.stringify(init));
 			events.push(...JSON.parse(String(init?.body)).batch);
 			return Promise.resolve(new Response("{}"));
-		}) as typeof fetch,
+		}),
 	});
 });
 

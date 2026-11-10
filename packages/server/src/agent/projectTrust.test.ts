@@ -33,7 +33,7 @@ const model = {
 	id: "trust",
 	name: "trust",
 	reasoning: false,
-	input: ["text"] as ("text" | "image")[],
+	input: ["text"] satisfies ("text" | "image")[],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 100_000,
 	maxTokens: 4096,
@@ -232,7 +232,6 @@ test("every reload applies the project's current trust, and a busy session takes
 });
 
 test("a session whose trust changed while it was opening reloads into the new trust before it is returned", async () => {
-	const hook = globalThis as typeof globalThis & { __projectTrustFlip?: () => void };
 	const flipPath = join(agentDir, "extensions", "trust-flip.ts");
 	mkdirSync(join(agentDir, "extensions"), { recursive: true });
 	writeFileSync(
@@ -240,12 +239,12 @@ test("a session whose trust changed while it was opening reloads into the new tr
 		"export default function flip(pi) { pi.on('session_start', () => { globalThis.__projectTrustFlip?.(); }); }\n",
 	);
 	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
-	hook.__projectTrustFlip = () => trustedWorkspaces.add(workspaceId);
+	Reflect.set(globalThis, "__projectTrustFlip", () => trustedWorkspaces.add(workspaceId));
 	try {
 		const { sessionId } = await createSession({ workspaceId, cwd: projectCwd() });
 		expect(hasNativeTemplate(sessionId)).toBe(true);
 	} finally {
-		delete hook.__projectTrustFlip;
+		Reflect.deleteProperty(globalThis, "__projectTrustFlip");
 		rmSync(flipPath, { force: true });
 	}
 });
@@ -269,11 +268,7 @@ test("a child derives no more trust than its parent has loaded or the project re
 });
 
 test("a revoke deferred on a busy parent keeps its project provider extension out of new children", async () => {
-	const hook = globalThis as typeof globalThis & {
-		__trustOwnerLoads?: number;
-		__trustOwnerFaux?: typeof faux;
-	};
-	hook.__trustOwnerFaux = faux;
+	Reflect.set(globalThis, "__trustOwnerFaux", faux);
 	const workspaceId = testWorkspaceId(`trust-${++sequence}`);
 	const cwd = projectCwd();
 	mkdirSync(join(cwd, ".pi", "extensions"), { recursive: true });
@@ -293,7 +288,7 @@ test("a revoke deferred on a busy parent keeps its project provider extension ou
 	const { sessionId } = await createSession({ workspaceId, cwd });
 	const runtime = liveParentContext(sessionId)?.modelRuntime;
 	try {
-		expect(hook.__trustOwnerLoads).toBe(1);
+		expect(Reflect.get(globalThis, "__trustOwnerLoads")).toBe(1);
 		expect(liveParentContext(sessionId)?.providerExtensionPaths?.("trust-owned")).toHaveLength(1);
 		faux.setResponses([fauxAssistantMessage("word ".repeat(60))]);
 		const turn = promptSession(sessionId, "Say many words.");
@@ -307,13 +302,13 @@ test("a revoke deferred on a busy parent keeps its project provider extension ou
 			info: { createdBy: "test" },
 			session: { model: { provider: "trust-owned", id: "trust-owned" } },
 		});
-		expect(hook.__trustOwnerLoads).toBe(1);
+		expect(Reflect.get(globalThis, "__trustOwnerLoads")).toBe(1);
 		await child.dispose();
 		await turn;
 	} finally {
 		runtime?.unregisterProvider("trust-owned");
-		delete hook.__trustOwnerLoads;
-		delete hook.__trustOwnerFaux;
+		Reflect.deleteProperty(globalThis, "__trustOwnerLoads");
+		Reflect.deleteProperty(globalThis, "__trustOwnerFaux");
 	}
 });
 

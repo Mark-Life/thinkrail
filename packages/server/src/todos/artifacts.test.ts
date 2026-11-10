@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { GitFileChange, Workspace } from "@thinkrail/contracts";
+import type { GitFileChange } from "@thinkrail/contracts";
 import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { STORE_DIR, storeRel, TodoStore } from "pi-todos/core";
@@ -110,8 +110,7 @@ test("a newly active window is captured before a held queue or an earlier done i
 				branch: "main",
 				baseBranch: "main",
 				worktreePath: worktree,
-				createdAt: 0,
-			} as Workspace,
+			},
 		]);
 		const store = new TodoStore(worktree, SESSION);
 		const done = store.add({ title: "earlier done" });

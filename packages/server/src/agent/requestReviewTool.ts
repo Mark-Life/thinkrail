@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { PlanReviewResult, SessionId } from "@thinkrail/contracts";
-import { asSessionId } from "@thinkrail/contracts";
 import { Type } from "typebox";
+import { requireSessionId } from "./requireSessionId";
 
 export const REQUEST_REVIEW_TOOL_NAME = "request_review";
 
@@ -41,6 +41,16 @@ export function setRequestReviewHandler(fn: RequestReviewHandler | null): void {
 	handler = fn ?? unavailableHandler;
 }
 
+/** The `request_review` tool's body, for the session pi names. */
+export async function runRequestReview(
+	sessionId: string,
+	itemId: string,
+	signal: AbortSignal | undefined,
+) {
+	const { result, text } = await handler(requireSessionId(sessionId), itemId, signal);
+	return { content: [{ type: "text" as const, text }], details: result };
+}
+
 export function createRequestReviewTool(): ToolDefinition<
 	typeof RequestReviewSchema,
 	PlanReviewResult
@@ -51,14 +61,8 @@ export function createRequestReviewTool(): ToolDefinition<
 		description: DESCRIPTION,
 		promptGuidelines: PROMPT_GUIDELINES,
 		parameters: RequestReviewSchema,
-		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			const { itemId } = params;
-			const { result, text } = await handler(
-				asSessionId(ctx.sessionManager.getSessionId()),
-				itemId,
-				signal,
-			);
-			return { content: [{ type: "text", text }], details: result };
+		execute(_toolCallId, { itemId }, signal, _onUpdate, ctx) {
+			return runRequestReview(ctx.sessionManager.getSessionId(), itemId, signal);
 		},
 	};
 }
