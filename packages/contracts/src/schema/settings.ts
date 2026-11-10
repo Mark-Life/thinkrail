@@ -11,6 +11,7 @@ import {
 	opt,
 	type Schema,
 	type Static,
+	type StaticObject,
 	str,
 	tuple,
 	union,
@@ -18,7 +19,8 @@ import {
 } from "@earendil-works/pi-schema";
 import { ExtensionSettingValues } from "./extension";
 import { ThinkingLevel, WireModel } from "./model";
-import { partialWireObj, wireObj } from "./wire";
+import type { Same } from "./typeTie";
+import { narrowed, partialWireObj, selfRef, wireObj, withId } from "./wire";
 
 export const THEME_MODES = ["fixed", "system"] as const;
 export const ThemeMode = oneOf(THEME_MODES);
@@ -113,30 +115,29 @@ export type LayoutPresetCenterGroup = Static<typeof LayoutPresetCenterGroup>;
 
 const LayoutDirection = oneOf(["horizontal", "vertical"]);
 
-export type LayoutPresetCenterSplit = {
-	kind: "split";
-	id: string;
-	direction: "horizontal" | "vertical";
-	weights: [number, number];
-	children: [LayoutPresetCenterNode, LayoutPresetCenterNode];
+const LAYOUT_PRESET_SPLIT_FIELDS = {
+	kind: lit("split"),
+	id: str(),
+	direction: LayoutDirection,
+	weights: tuple([num(), num()]),
 };
+
+export interface LayoutPresetCenterSplit extends StaticObject<typeof LAYOUT_PRESET_SPLIT_FIELDS> {
+	children: [LayoutPresetCenterNode, LayoutPresetCenterNode];
+}
 export type LayoutPresetCenterNode = LayoutPresetCenterGroup | LayoutPresetCenterSplit;
 
-const LayoutPresetCenterNodeRef: Schema<LayoutPresetCenterNode> = { $ref: "#" };
-
-export const LayoutPresetCenterNode: Schema<LayoutPresetCenterNode> = {
-	...union([
+const CenterChild = selfRef<LayoutPresetCenterNode>();
+const CenterNode = withId(
+	union([
 		LayoutPresetCenterGroup,
-		wireObj({
-			kind: lit("split"),
-			id: str(),
-			direction: LayoutDirection,
-			weights: tuple([num(), num()]),
-			children: tuple([LayoutPresetCenterNodeRef, LayoutPresetCenterNodeRef]),
-		}),
+		wireObj({ ...LAYOUT_PRESET_SPLIT_FIELDS, children: tuple([CenterChild, CenterChild]) }),
 	]),
-	$id: "LayoutPresetCenterNode",
-};
+	"LayoutPresetCenterNode",
+);
+export const LayoutPresetCenterNode: Schema<
+	Same<Static<typeof CenterNode>, LayoutPresetCenterNode>
+> = CenterNode;
 
 export const LayoutPresetSideGroup = wireObj({
 	id: str(),
@@ -256,11 +257,6 @@ export type AppConfig = Static<typeof AppConfig>;
 /** Every `AppConfig` field optional: a stored config or any host's welcome keeps each field that passes alone. */
 export const PartialAppConfig = partialWireObj(APP_CONFIG_RESULT_FIELDS);
 export type PartialAppConfig = Static<typeof PartialAppConfig>;
-
-/** `schema` with more JSON Schema rules: it accepts less, and its values keep `schema`'s type. */
-function narrowed<T>(schema: Schema<T>, rules: Schema): Schema<T> {
-	return { allOf: [schema, rules] };
-}
 
 const NonBlank = str({ pattern: String.raw`\S` });
 const NonEmpty = str({ minLength: 1 });
