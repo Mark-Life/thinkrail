@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import {
 	FIELDS,
 	type Frontmatter,
@@ -37,6 +37,8 @@ const parameters = Type.Object({
 	covers: Type.Optional(Type.Array(Type.String(), { description: "covers ids." })),
 	tags: Type.Optional(Type.Array(Type.String(), { description: "tags." })),
 });
+/** The `spec_create` tool's arguments. */
+export type SpecCreateInput = Static<typeof parameters>;
 
 export function registerSpecCreate(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, { path: string; id: string } | { error: string }>({

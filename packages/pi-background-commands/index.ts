@@ -3,6 +3,7 @@ import { createBackgroundCommandsExtension } from "./src/extension";
 export {
 	type BackgroundCommandInput,
 	type BackgroundCommandsExtensionOptions,
+	type BackgroundCommandToolArgs,
 	createBackgroundCommandsExtension,
 } from "./src/extension";
 export { createBackgroundCommands } from "./src/service";

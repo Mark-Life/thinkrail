@@ -55,6 +55,7 @@ export * from "./template";
 export * from "./terminal";
 export * from "./themes";
 export * from "./todo";
+export type * from "./toolInputs";
 export * from "./transcript";
 export type { Same } from "./typeTie";
 export { Ack } from "./wire";

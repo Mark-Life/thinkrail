@@ -143,6 +143,16 @@ under their own `tsconfig`, where the alias would not apply.
 **Removal gate:** pi exports the type (or a schema for it) from its root. Then import it from there and delete
 the path import.
 
+### Untied MCP tool arguments
+
+**Owner:** [[submodule-web-chat-tools]] (`apps/web/src/chat/tools/mcp/inputs.ts`). pi declares the arguments of
+`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource` (plain JSON Schema in
+`extensions/mcp/resources`) and `tool_search` (a TypeBox schema in `extensions/tool-search/tool`) in modules it
+does not export, and no exported API names their types. The cards read `server`, `cursor`, `uri`, `query` and
+`limit` through `inputs.ts`, untied. **Gate on every upgrade:** compare those fields with the two modules; a
+renamed one only blanks a card header. **Removal gate:** pi exports the input types; then add them to
+`ToolInputs` and tie them in `toolInputTies`.
+
 ## Wire shapes from pi-ai's `providers/model-schema`
 
 **Owner:** [[submodule-contracts-schema]] (`model.ts`), `pi-delegation/wire` and `pi-subagents`

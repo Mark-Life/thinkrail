@@ -1,6 +1,15 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { registerSpecTools } from "./tools/index.ts";
 
+export type {
+	SpecCreateInput,
+	SpecDeleteInput,
+	SpecGetInput,
+	SpecGraphInput,
+	SpecGrepInput,
+	SpecUpdateInput,
+} from "./tools/index.ts";
+
 const SPEC_SECTION = "pi-spec-graph";
 
 const SPEC_RULE = [

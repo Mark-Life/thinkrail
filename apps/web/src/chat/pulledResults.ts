@@ -5,8 +5,9 @@ import {
 	isDelegationRunDetails,
 	JsonObject,
 	type SubagentCompletionDetails,
+	type ToolInputs,
 } from "@thinkrail/contracts";
-import { parseToolResultContent } from "@thinkrail/extension-api/web";
+import { parseToolResultContent, strArg } from "@thinkrail/extension-api/web";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export type PulledResult =
@@ -70,7 +71,10 @@ export function pulledResult(
 			text: parseToolResultContent(tool.raw).text,
 		};
 	}
-	if (toolName === "background_command" && args.action === "output") {
+	if (
+		toolName === "background_command" &&
+		strArg<ToolInputs["background_command"]>(args, "action") === "output"
+	) {
 		const details = pulledCommand(tool.raw);
 		return details
 			? { kind: "backgroundCommandCompletion", key: `command:${details.id}`, details }

@@ -4,6 +4,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useFold } from "../../foldState";
+import type { McpListResourcesInput, ReadMcpResourceInput } from "./inputs";
 import { McpActions, McpCliActionButton, useMcpFailureText } from "./McpActions";
 import { McpHeader, McpOutput, McpRunning } from "./McpCardParts";
 import {
@@ -35,7 +36,7 @@ const LISTING_TEXT = {
 } as const satisfies Record<ListingKind, Record<string, MessageKey>>;
 
 function listingServer(args: Record<string, unknown>, result: unknown): string {
-	return strArg(args, "server") || readMcpToolDetails(result)?.server || "";
+	return strArg<McpListResourcesInput>(args, "server") || readMcpToolDetails(result)?.server || "";
 }
 
 export function mcpListingSummary({ args, result }: ToolRenderProps, t: Translator): string {
@@ -43,7 +44,9 @@ export function mcpListingSummary({ args, result }: ToolRenderProps, t: Translat
 }
 
 export function mcpReadSummary({ args }: ToolRenderProps): string {
-	return [strArg(args, "server"), strArg(args, "uri")].filter(Boolean).join(" · ");
+	return [strArg<ReadMcpResourceInput>(args, "server"), strArg<ReadMcpResourceInput>(args, "uri")]
+		.filter(Boolean)
+		.join(" · ");
 }
 
 function ListedRow({ item, showServer }: { item: McpListedItem; showServer: boolean }) {
@@ -169,7 +172,7 @@ export function McpResourceListCard({
 				<span className={cn("min-w-0 truncate", server ? "text-primary" : "text-text-muted")}>
 					{server || t("mcp.listing.allServers")}
 				</span>
-				{strArg(args, "cursor") ? (
+				{strArg<McpListResourcesInput>(args, "cursor") ? (
 					<span className="shrink-0 text-text-subtle">{t("mcp.listing.nextPage")}</span>
 				) : null}
 			</McpHeader>
@@ -206,7 +209,7 @@ export function McpReadResourceCard({
 }: ToolRenderProps) {
 	const t = useT();
 	const server = listingServer(args, result);
-	const uri = strArg(args, "uri");
+	const uri = strArg<ReadMcpResourceInput>(args, "uri");
 	const failed = status === "error";
 	const raw = mcpText(result);
 	const text = useMcpFailureText(raw, failed);

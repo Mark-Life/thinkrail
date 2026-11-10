@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import { type GraphSlice, graphSlice, LINK_KINDS, SLICE_DIRECTIONS } from "../core/index.ts";
 import { errorResult, getIndex, stringEnum, textResult } from "./shared.ts";
 
@@ -16,6 +16,8 @@ const parameters = Type.Object({
 		}),
 	),
 });
+/** The `spec_graph` tool's arguments. */
+export type SpecGraphInput = Static<typeof parameters>;
 
 export function registerSpecGraph(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, GraphSlice | { error: string }>({

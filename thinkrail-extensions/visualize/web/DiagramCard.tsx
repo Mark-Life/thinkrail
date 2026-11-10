@@ -1,11 +1,12 @@
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import type { VisualizeParams } from "@thinkrail/pi-visualize/schema";
 import { MermaidView } from "./MermaidView";
 
 export function DiagramCard({ args, status }: ToolRenderProps) {
 	const t = useT();
-	const source = strArg(args, "mermaid");
-	const title = strArg(args, "title");
+	const source = strArg<VisualizeParams>(args, "mermaid");
+	const title = strArg<VisualizeParams>(args, "title");
 
 	if (!source) {
 		return (

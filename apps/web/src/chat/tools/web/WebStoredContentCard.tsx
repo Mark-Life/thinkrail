@@ -2,6 +2,7 @@ import { compile, obj, str } from "@earendil-works/pi-schema";
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
 import { numArg, resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import type { GetSearchContentInput } from "./inputs";
 import { WebResultBody } from "./WebResultBody";
 
 const OPEN = { open: true };
@@ -13,24 +14,28 @@ export function storedContentTarget(
 	args: Record<string, unknown>,
 	result: unknown,
 ): string {
-	const query = strArg(args, "query") || (detailsQuery.check(result) ? result.details.query : "");
+	const query =
+		strArg<GetSearchContentInput>(args, "query") ||
+		(detailsQuery.check(result) ? result.details.query : "");
 	if (query) return query;
-	const url = strArg(args, "url") || (detailsUrl.check(result) ? result.details.url : "");
+	const url =
+		strArg<GetSearchContentInput>(args, "url") ||
+		(detailsUrl.check(result) ? result.details.url : "");
 	if (url) return url;
-	const queryIndex = numArg(args, "queryIndex");
+	const queryIndex = numArg<GetSearchContentInput>(args, "queryIndex");
 	if (queryIndex !== null) return t("tools.webStored.queryIndex", { index: queryIndex });
-	const urlIndex = numArg(args, "urlIndex");
+	const urlIndex = numArg<GetSearchContentInput>(args, "urlIndex");
 	if (urlIndex !== null) return t("tools.webStored.urlIndex", { index: urlIndex });
 	return "";
 }
 
 export function storedContentSummary({ args, result }: ToolRenderProps, t: Translator): string {
-	return storedContentTarget(t, args, result) || strArg(args, "responseId");
+	return storedContentTarget(t, args, result) || strArg<GetSearchContentInput>(args, "responseId");
 }
 
 export function WebStoredContentCard({ toolCallId, args, result, status }: ToolRenderProps) {
 	const t = useT();
-	const responseId = strArg(args, "responseId");
+	const responseId = strArg<GetSearchContentInput>(args, "responseId");
 	const target = storedContentTarget(t, args, result);
 	const output = resultText(result);
 	return (

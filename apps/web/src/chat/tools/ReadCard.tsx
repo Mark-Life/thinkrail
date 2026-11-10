@@ -1,4 +1,5 @@
 import { RiFileTextLine as FileText } from "@remixicon/react";
+import type { ToolInputs } from "@thinkrail/contracts";
 import {
 	languageFromPath,
 	numArg,
@@ -11,6 +12,8 @@ import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
 
+type Input = ToolInputs["read"];
+
 export function ReadCard({
 	toolCallId,
 	args,
@@ -20,9 +23,9 @@ export function ReadCard({
 	onOpenFile,
 }: ToolRenderProps) {
 	const t = useT();
-	const path = strArg(args, "path");
-	const offset = numArg(args, "offset");
-	const limit = numArg(args, "limit");
+	const path = strArg<Input>(args, "path");
+	const offset = numArg<Input>(args, "offset");
+	const limit = numArg<Input>(args, "limit");
 	const output = resultText(result);
 	const lang = languageFromPath(path);
 

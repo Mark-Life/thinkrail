@@ -38,7 +38,8 @@ by tool name, so moving them later changes nothing on the wire.
   `node_modules`, so a plain import would break that harness. Replaced by a plain import once the package passes strict checks or ships types.
 - The pinned version is this package's dependency; the host no longer depends on `pi-web-access`.
 - On a version bump, check the `details` fields the web cards read (`provider`, `results[].provider`,
-  `query`, `url`; see the web chat `tools/web` SPEC) against the package's `index.ts`. They are inline
+  `query`, `url`; see the web chat `tools/web` SPEC) and the tool arguments in the web's `tools/web/inputs.ts`
+  against the package's `index.ts`. They are inline
   literals with no exported type, so nothing fails at compile time when one is renamed.
 
 ## Invariants

@@ -9,8 +9,10 @@ export {
 	parseAgentDefinition,
 } from "./src/definitions";
 export {
+	type AgentToolInput,
 	createSubagents,
 	createSubagentsExtension,
+	type GetSubagentResultInput,
 	type Subagents,
 	type SubagentsExtensionOptions,
 } from "./src/extension";

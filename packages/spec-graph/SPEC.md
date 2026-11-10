@@ -30,7 +30,8 @@ used), and leaves every byte of the body untouched.
   `package.json` (`{ extensions: ["./index.ts"], skills: ["./skills"] }`) — how vanilla `pi` (`pi install`)
   and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
   export** (the pi-free read model), consumable by hosts (thinkrail's server) without going through the
-  agent. `tools/` stays internal.
+  agent, and the type-only `Spec*Input` exports (each tool's `Static` arguments), which a host ties its own
+  view of the arguments to. `tools/` stays internal otherwise.
 - **Allowed deps:** `@earendil-works/pi-coding-agent`, `typebox` (peer); `yaml` (frontmatter
   parse/serialize); Node built-ins.
 - **Forbidden:** any `@thinkrail/*` package — the dependency edge is one-way (thinkrail → this

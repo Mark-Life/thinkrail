@@ -5,8 +5,8 @@ import {
 	RiLoader4Line as Loader2,
 	RiFileList3Line as ScrollText,
 } from "@remixicon/react";
-import { parseSessionId } from "@thinkrail/contracts";
-import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { parseSessionId, type ToolInputs } from "@thinkrail/contracts";
+import { boolArg, resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
@@ -20,10 +20,13 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 	const actions = useChatActions();
 	const details = readRunDetails(result);
 	const childSessionId = parseSessionId(details?.childSessionId);
-	const role = details?.roleName ?? strArg(args, "subagent_type");
-	const task = details?.task || strArg(args, "task");
+	const role = details?.roleName ?? strArg<ToolInputs["Agent"]>(args, "subagent_type");
+	const task = details?.task || strArg<ToolInputs["Agent"]>(args, "task");
 	const terminal = details !== undefined && isTerminalRunStatus(details.status);
-	const backgroundAck = args.run_in_background === true && details !== undefined && !terminal;
+	const backgroundAck =
+		boolArg<ToolInputs["Agent"]>(args, "run_in_background") === true &&
+		details !== undefined &&
+		!terminal;
 	const counters = details ? runCounters(t, details, "split") : [];
 	const output = resultText(result);
 	const [reportOpen, toggleReport, reportToggleRef] = useFold(`${toolCallId}:report`, false);

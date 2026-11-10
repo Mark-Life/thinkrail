@@ -81,6 +81,11 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 
 - **Render defensively:** a tool's `details` result shape is not a stable API — read best-effort and
   fall back to its text content (`resultText`). Missing structured references remove links, never prose.
+- **Arguments are read by key of a typed input.** Every `strArg` / `numArg` / `boolArg` / `listArg` names the
+  tool's input type. For tools whose owner types its input, that is contracts' `ToolInputs[tool]`, tied to the
+  owner in the server program. pi's built-in MCP tools (`mcp/inputs.ts`) and `pi-web-access` (`web/inputs.ts`)
+  export no input type, so those two files are the accepted untied reads, reviewed on an upgrade. `edit` reads
+  pi's `edits` array, and the legacy top-level `oldText` / `newText` that pi's edit tool still accepts.
 - File actions come only from explicit args/details and only through `ToolRenderProps.onOpenFile` (open) or
   the chat's resource scope and host (render a `ResourcePreview`, open in tab); never infer them from arbitrary result
   text or import app integration into a renderer.

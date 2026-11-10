@@ -1,11 +1,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import { type Frontmatter, LINK_KINDS, type LinkKind, linkTargets } from "../core/index.ts";
 import { errorResult, getIndex, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
 	id: Type.String({ description: "The spec id to look up." }),
 });
+/** The `spec_get` tool's arguments. */
+export type SpecGetInput = Static<typeof parameters>;
 
 interface ResolvedLink {
 	kind: LinkKind;

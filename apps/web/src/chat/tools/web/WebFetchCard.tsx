@@ -1,7 +1,8 @@
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
-import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { resultText, strArg, strListArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { ToolFileLink } from "../ToolFileLink";
+import type { FetchContentInput } from "./inputs";
 import { WebResultBody } from "./WebResultBody";
 
 function httpUrl(value: string): URL | null {
@@ -14,10 +15,9 @@ function httpUrl(value: string): URL | null {
 }
 
 function firstUrl(args: Record<string, unknown>): string {
-	const single = strArg(args, "url");
-	if (single) return single;
-	const many = args.urls;
-	return Array.isArray(many) && typeof many[0] === "string" ? many[0] : "";
+	return (
+		strArg<FetchContentInput>(args, "url") || (strListArg<FetchContentInput>(args, "urls")[0] ?? "")
+	);
 }
 
 export function webFetchSummary({ args }: ToolRenderProps): string {

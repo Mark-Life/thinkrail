@@ -1,4 +1,4 @@
-import { JsonObject } from "@thinkrail/contracts";
+import { JsonObject, type ToolInputs } from "@thinkrail/contracts";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
@@ -76,7 +76,10 @@ export function specToolPaths(
 		case "spec_graph":
 			return uniquePaths(objectsField(details, "nodes").map((node) => stringField(node, "path")));
 		case "spec_create":
-			return uniquePaths([strArg(args, "path"), stringField(details, "path")]);
+			return uniquePaths([
+				strArg<ToolInputs["spec_create"]>(args, "path"),
+				stringField(details, "path"),
+			]);
 		case "spec_update":
 			return uniquePaths([stringField(details, "path")]);
 		case "spec_validate":
@@ -156,15 +159,15 @@ function LinkedResultText({
 export function specToolSummary({ toolName, args }: ToolRenderProps, t: Translator): string {
 	switch (toolName) {
 		case "spec_grep":
-			return strArg(args, "pattern");
+			return strArg<ToolInputs["spec_grep"]>(args, "pattern");
 		case "spec_graph":
-			return strArg(args, "root");
+			return strArg<ToolInputs["spec_graph"]>(args, "root");
 		case "spec_create":
-			return strArg(args, "path");
+			return strArg<ToolInputs["spec_create"]>(args, "path");
 		case "spec_validate":
 			return t("tools.spec.validateSummary");
 		default:
-			return strArg(args, "id");
+			return strArg<ToolInputs["spec_get" | "spec_update" | "spec_delete"]>(args, "id");
 	}
 }
 

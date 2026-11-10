@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import { FIELDS, type FrontmatterEdit, updateFrontmatterText } from "../core/index.ts";
 import { errorResult, getIndex, textResult } from "./shared.ts";
 
@@ -26,6 +26,8 @@ const parameters = Type.Object({
 	addList: Type.Optional(listGroup),
 	removeList: Type.Optional(listGroup),
 });
+/** The `spec_update` tool's arguments. */
+export type SpecUpdateInput = Static<typeof parameters>;
 
 export function registerSpecUpdate(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, { id: string; path: string } | { error: string }>({

@@ -523,6 +523,11 @@ re-opened transcripts provider-valid.
     - `CompactionEndResult`, `SessionStats`, `ContextUsage` and `SlashCommandInfo`.
 
     contracts re-exports pi-delegation's own run shapes, so no delegation tie is needed here.
+  - `toolInputTies` — types only: ties each `ToolInputs` entry (the tool arguments chat cards read) with `Same` to
+    a `Pick` of its owner's input type: pi's `ReadToolInput` / `WriteToolInput` / `EditToolInput` / `BashToolInput`,
+    `pi-spec-graph`'s `Spec*Input`, `pi-subagents`' `AgentToolInput` / `GetSubagentResultInput`,
+    `pi-background-commands`' `BackgroundCommandToolArgs` and `resolve_comment`'s `ResolveCommentSchema`. A renamed,
+    retyped or newly optional field the web reads fails `tsc` here.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no

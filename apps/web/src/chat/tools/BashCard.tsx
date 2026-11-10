@@ -1,9 +1,12 @@
+import type { ToolInputs } from "@thinkrail/contracts";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 
+type Input = ToolInputs["bash"];
+
 export function BashCard({ args, result, status }: ToolRenderProps) {
 	const t = useT();
-	const command = strArg(args, "command");
+	const command = strArg<Input>(args, "command");
 	const output = resultText(result);
 	const isError = status === "error";
 

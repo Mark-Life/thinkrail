@@ -51,6 +51,8 @@ choice was settled: the decision log below.
   that unstarted child before rejecting. `canDeliverCompletion` defaults to true and temporarily gates
   both transcript append and automatic wake-up, without closing the owner or losing pending outcomes.
   An embedder flushes after a provisional deletion rolls back or registration becomes addressable.
+- `AgentToolInput`, `GetSubagentResultInput` — the `Agent` and `get_subagent_result` tools' arguments, `Static`
+  of their TypeBox parameters, so a host can tie what it reads of them.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's background result row keys on;
   `SubagentCompletionDetails` (the run's `DelegationRunDetails` plus `delivery: CompletionDelivery` —
   `wake` | `run` | `appended`, see Result delivery). Both live in the `./wire` leaf entry

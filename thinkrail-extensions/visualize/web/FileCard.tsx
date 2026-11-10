@@ -1,5 +1,6 @@
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import type { VisualizeParams } from "@thinkrail/pi-visualize/schema";
 import { FramedResourcePreview } from "@thinkrail/resource-renderers";
 
 function FileLink({
@@ -24,9 +25,9 @@ function FileLink({
 
 export function FileCard({ args, status, onOpenFile }: ToolRenderProps) {
 	const t = useT();
-	const title = strArg(args, "title");
-	const path = strArg(args, "path");
-	const before = strArg(args, "before") || undefined;
+	const title = strArg<VisualizeParams>(args, "title");
+	const path = strArg<VisualizeParams>(args, "path");
+	const before = strArg<VisualizeParams>(args, "before") || undefined;
 
 	if (!path || status !== "done") {
 		return (

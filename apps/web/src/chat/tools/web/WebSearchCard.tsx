@@ -1,14 +1,14 @@
 import { arr, compile, obj, str, unknown } from "@earendil-works/pi-schema";
 import { RiSearchLine as Search } from "@remixicon/react";
-import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { resultText, strArg, strListArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import type { WebSearchInput } from "./inputs";
 import { WebResultBody } from "./WebResultBody";
 
 function firstQuery(args: Record<string, unknown>): string {
-	const single = strArg(args, "query");
-	if (single) return single;
-	const many = args.queries;
-	return Array.isArray(many) && typeof many[0] === "string" ? many[0] : "";
+	return (
+		strArg<WebSearchInput>(args, "query") || (strListArg<WebSearchInput>(args, "queries")[0] ?? "")
+	);
 }
 
 export function webSearchSummary({ args }: ToolRenderProps): string {

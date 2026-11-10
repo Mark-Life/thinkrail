@@ -20,6 +20,7 @@ restart/rerun, daemon discovery, or arbitrary-process management.
   snapshots, bounded output, cancellation and completion-delivery bookkeeping; the
   `background_command` Pi tool and a default vanilla-Pi extension entry.
 - **Public surface:** `BACKGROUND_COMMAND_COMPLETION_MESSAGE`, `BackgroundCommandInput`,
+  `BackgroundCommandToolArgs`,
   `BackgroundCommandsExtensionOptions`, `CompletionDelivery`, `createBackgroundCommandsExtension`,
   `createBackgroundCommands`, `default`, `BackgroundCommandCompletion`,
   `BackgroundCommandCompletionBinding`, `BackgroundCommandCompletionDetails`,
@@ -28,6 +29,8 @@ restart/rerun, daemon discovery, or arbitrary-process management.
   `BackgroundCommandStart`, `BackgroundCommandStatus`, `BackgroundCommands`,
   `BackgroundCommandsBinding`, `BackgroundCommandsOptions`, `BackgroundCommandTerminalSnapshot`,
   `BackgroundCommandTerminalStatus`.
+- `BackgroundCommandToolArgs` is the tool's raw arguments, `Static` of its TypeBox parameters, for a host to
+  tie what it reads of them.
 - **`./wire` leaf entry** (`src/wire.ts`) owns every shape that leaves the package:
   `BACKGROUND_COMMAND_STATUSES`, `BACKGROUND_COMMAND_TERMINAL_STATUSES`, their schemas and types,
   `BACKGROUND_COMMAND_SNAPSHOT_FIELDS` (`startedAt` and `finishedAt` are bounded epoch ms),

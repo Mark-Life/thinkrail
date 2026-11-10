@@ -1,5 +1,5 @@
 import { DEFAULT_MAX_BYTES, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import { DEFAULT_GREP_LIMIT, formatGrepMatch, type GrepResult, grepSpecs } from "../core/index.ts";
 import { errorResult, getIndex, textResult } from "./shared.ts";
 
@@ -33,6 +33,8 @@ const parameters = Type.Object({
 		}),
 	),
 });
+/** The `spec_grep` tool's arguments. */
+export type SpecGrepInput = Static<typeof parameters>;
 
 export function registerSpecGrep(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, GrepResult | { error: string }>({

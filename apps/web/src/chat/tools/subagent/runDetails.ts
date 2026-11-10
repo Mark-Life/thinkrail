@@ -1,6 +1,6 @@
-import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
+import type { DelegationRunDetails, DelegationRunStatus, ToolInputs } from "@thinkrail/contracts";
 import { isDelegationRunDetails } from "@thinkrail/contracts";
-import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { boolArg, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { Translator } from "@thinkrail/locales/react";
 import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
 
@@ -67,14 +67,19 @@ export function reportTeaser(report: string): string {
 export function agentSummary({ args, result }: ToolRenderProps, t: Translator): string {
 	const details = readRunDetails(result);
 	if (!details) {
-		const role = strArg(args, "subagent_type") || strArg(args, "session_id");
-		const task = strArg(args, "task");
+		const role =
+			strArg<ToolInputs["Agent"]>(args, "subagent_type") ||
+			strArg<ToolInputs["get_subagent_result"]>(args, "session_id");
+		const task = strArg<ToolInputs["Agent"]>(args, "task");
 		return role && task ? t("tools.agent.summaryRoleTask", { role, task }) : role || task;
 	}
 	const parts = [details.roleName ?? t("tools.agent.fallbackRole")];
 	if (details.status === "queued") parts.push(t("tools.agent.summaryQueued"));
 	if (details.status === "aborted") parts.push(t("tools.agent.summaryAborted"));
-	if (args.run_in_background === true && !isTerminalRunStatus(details.status)) {
+	if (
+		boolArg<ToolInputs["Agent"]>(args, "run_in_background") === true &&
+		!isTerminalRunStatus(details.status)
+	) {
 		parts.push(t("tools.agent.summaryBackground"));
 	}
 	parts.push(...runCounters(t, details));

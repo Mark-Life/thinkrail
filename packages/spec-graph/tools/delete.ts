@@ -1,11 +1,13 @@
 import { rmSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import { errorResult, getIndex, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
 	id: Type.String({ description: "Id of the spec to delete." }),
 });
+/** The `spec_delete` tool's arguments. */
+export type SpecDeleteInput = Static<typeof parameters>;
 
 export function registerSpecDelete(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, { id: string; path: string } | { error: string }>({

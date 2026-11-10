@@ -19,8 +19,10 @@ None edit prose.
 
 - **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache and the
   `spec_create` scaffold headings (`shared.ts`).
-- **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
-  (`../index.ts`) is the only caller.
+- **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)` and each tool's argument type
+  (`SpecGrepInput`, `SpecGetInput`, `SpecGraphInput`, `SpecCreateInput`, `SpecUpdateInput`, `SpecDeleteInput`,
+  each `Static` of its TypeBox `parameters`); the extension entry (`../index.ts`) is the only caller and
+  re-exports the types.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types and public
   truncation helpers), `typebox`, Node built-ins. Project writes remain confined to write tools; any tool may capture oversized responses
   in private OS temporary files, never in the project.

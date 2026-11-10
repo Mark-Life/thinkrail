@@ -1,5 +1,6 @@
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import type { VisualizeParams } from "@thinkrail/pi-visualize/schema";
 import { ComparisonCard } from "./ComparisonCard";
 import { DiagramCard } from "./DiagramCard";
 import { FileCard } from "./FileCard";
@@ -18,7 +19,7 @@ export function VisualizationCard(props: ToolRenderProps) {
 		);
 	}
 
-	const type = strArg(args, "type");
+	const type = strArg<VisualizeParams>(args, "type");
 	return (
 		<div data-testid="tool-visualize" data-status={status}>
 			{type === "comparison" ? (

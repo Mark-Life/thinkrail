@@ -3,7 +3,7 @@ import type {
 	ExtensionFactory,
 	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import { tail } from "./output";
 import { createBackgroundCommands } from "./service";
 import { standaloneContext } from "./shell-context";
@@ -55,6 +55,8 @@ const parameters = Type.Object(
 	},
 	{ additionalProperties: false },
 );
+/** The `background_command` tool's raw arguments, before `assertInput` narrows them by `action`. */
+export type BackgroundCommandToolArgs = Static<typeof parameters>;
 
 function assertInput(input: unknown): asserts input is BackgroundCommandInput {
 	if (!input || typeof input !== "object" || !("action" in input))
