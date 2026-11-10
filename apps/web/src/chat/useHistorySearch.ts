@@ -10,7 +10,7 @@ import {
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatLocationRequest, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { getTransport, reportHandledFailure } from "@/transport";
 
 export type { ChatLocationRequest };
 
@@ -242,7 +242,9 @@ export function useHistorySearch(
 						projectId: target.projectId,
 					});
 					useAppStore.getState().setWorkspaces(target.projectId, list);
-				} catch {}
+				} catch (error) {
+					reportHandledFailure("history-workspace-list", error, "HOST_ERROR");
+				}
 			}
 			close();
 			const store = useAppStore.getState();

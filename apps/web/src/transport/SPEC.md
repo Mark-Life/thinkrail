@@ -113,8 +113,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `WsResponse.errorCode`. A response whose code is in `WS_ERROR_CODES` rejects with a `RequestError`, a request that outlives its
   `timeoutMs` with a **`RequestTimeoutError`** (the host may still finish it — a long install dialog says
   "check the list" rather than "nothing happened"), and an unnamed host error, or one whose code a newer host
-  added, with a plain `Error`, so *having*
-  a code is exactly how a caller tells "this specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
+  added, with a `RequestError` coded **`HOST_ERROR`**, so error tracking always gets a code. A caller tells
+  "this specific failure" from "the read failed" by comparing to the code it handles, never by the mere
+  presence of a code); `skillLoad.ts` (the one app-integration coordinator for session
   resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
   ready, fold the conservative `skillChange: "unknown"` wildcard locally as a replay-safe fallback; capture
   the store tick only afterward. Its narrow `prewarmWorkspaceSkillLoad` entry lets a workspace navigator start
@@ -166,6 +167,9 @@ page sends at most 50. Each report carries the PostHog chunk ids (≤ 20) that t
 injected `_posthogChunkIds` registry assigns to URLs in its own stack, so uploaded maps resolve its frames.
 The browser never scrubs or holds a vendor client: the host is the only sanitizer.
 `main.tsx` installs the listeners and injects the forwarder into `components`' error-boundary seam.
+**`reportHandledFailure(place, error, fallback)`** is for a failure the UI recovers from (a chat that did
+not hydrate, a `localStorage` write that failed): it reports once per page and place, with
+`boundary` = the error's `RequestError` code, else `fallback`, then `:place`. The UI keeps its fallback.
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
@@ -174,7 +178,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
-  `installClientErrorReporting`, `reportClientError`, `reportInvalidReply`, `reportDroppedFrame`, `clientErrorReport`. `respondToTool(sessionId,
+  `installClientErrorReporting`, `reportClientError`, `reportHandledFailure`, `reportInvalidReply`, `reportDroppedFrame`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
   (`supportsToolResponses`), for one compatibility window — [[module-contracts]]. `runHostUpdate` is the typed empty host action
@@ -183,7 +187,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   serve theme files has welcomed it; `supportsFonts` (v102) gates the same way for the font settings and the
   custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
-  header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
+  header, answered by that file's `UserFontFile` entry; any other answer, a plain-text refusal or a body
+  that is not JSON, rejects with a `RequestError` coded **`FONT_UPLOAD_FAILED`** — while `hostUrl` resolves a host-relative path
   (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
   offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].

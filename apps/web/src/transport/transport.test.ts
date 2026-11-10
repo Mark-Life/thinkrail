@@ -378,9 +378,9 @@ describe("WsTransport wire checks", () => {
 		);
 
 		const failure = await result.catch((error: unknown) => error);
-		expect(failure).not.toBeInstanceOf(RequestError);
+		expect(failure).toBeInstanceOf(RequestError);
 		expect(failure).toMatchObject({ message: "nope" });
-		expect(wsErrorCode(failure)).toBeUndefined();
+		expect(wsErrorCode(failure)).toBe("HOST_ERROR");
 		expect(invalid).toEqual([]);
 	});
 

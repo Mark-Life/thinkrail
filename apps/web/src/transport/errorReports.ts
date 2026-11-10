@@ -4,9 +4,11 @@ import {
 	type ClientErrorReport,
 	JsonObject,
 	WS_METHODS,
+	type WsErrorCode,
 	type WsMethodName,
 } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
+import { wsErrorCode } from "./requestError";
 import { type DroppedFrame, droppedFrameCode } from "./transport";
 import { getTransport } from "./wireTransport";
 
@@ -86,6 +88,15 @@ export function reportInvalidReply(method: WsMethodName): void {
 }
 
 const reportedFrames = new Set<string>();
+const reportedFailures = new Set<string>();
+
+/** A failure the UI recovers from: reported once per page and place, by the error's own code or `fallback`. */
+export function reportHandledFailure(place: string, error: unknown, fallback: WsErrorCode): void {
+	const boundary = `${wsErrorCode(error) ?? fallback}:${place}`;
+	if (reportedFailures.has(boundary)) return;
+	reportedFailures.add(boundary);
+	reportClientError(clientErrorReport("rejection", error, boundary));
+}
 
 export function reportDroppedFrame(frame: DroppedFrame): void {
 	const boundary = droppedFrameCode(frame);
@@ -149,6 +160,7 @@ export function installClientErrorReporting(target: EventTarget = window): () =>
 export function resetClientErrorReportsForTests(): void {
 	sent = 0;
 	reportedFrames.clear();
+	reportedFailures.clear();
 	pending = [];
 	unsubscribe?.();
 	unsubscribe = null;

@@ -1,7 +1,7 @@
 import { compile } from "@earendil-works/pi-schema";
 import { JsonObject, MergeMethod, type ProjectId } from "@thinkrail/contracts";
 import { STORAGE_PREFIX } from "../constants/branding";
-import { getTransport } from "../transport";
+import { getTransport, reportHandledFailure } from "../transport";
 
 export interface MergePrefs {
 	method?: MergeMethod;
@@ -32,7 +32,9 @@ export function loadMergePrefs(projectId: ProjectId): MergePrefs {
 export function saveMergePrefs(projectId: ProjectId, prefs: Required<MergePrefs>): void {
 	try {
 		localStorage.setItem(storageKey(projectId), JSON.stringify(prefs));
-	} catch {}
+	} catch (error) {
+		reportHandledFailure("merge-prefs-write", error, "STATE_FILE_WRITE_FAILED");
+	}
 }
 
 export function allowedMergeMethods(reported: MergeMethod[] | undefined): MergeMethod[] {

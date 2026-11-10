@@ -7,7 +7,7 @@ import type {
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { STORAGE_PREFIX } from "@/constants/branding";
-import { getTransport } from "@/transport";
+import { getTransport, reportHandledFailure } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
 
 export interface FinishedResources {
@@ -88,7 +88,9 @@ function readSeen(key: string): ReadonlySet<string> | null {
 function writeSeen(key: string, seen: ReadonlySet<string>): void {
 	try {
 		localStorage.setItem(key, JSON.stringify([...seen]));
-	} catch {}
+	} catch (error) {
+		reportHandledFailure("fresh-results-write", error, "STATE_FILE_WRITE_FAILED");
+	}
 }
 
 export function useFreshResults(

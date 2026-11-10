@@ -1,7 +1,7 @@
 import { type ProjectId, parseStoredProjectId } from "@thinkrail/contracts";
 import { STORAGE_PREFIX } from "../constants/branding";
 import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { getTransport, reportHandledFailure } from "../transport";
 
 function storageKey(): string {
 	return `${STORAGE_PREFIX}expanded-projects:${getTransport().httpBase()}`;
@@ -22,7 +22,9 @@ function readPersistedExpansion(): ProjectId[] {
 function persistExpansion(expanded: Record<string, true>): void {
 	try {
 		localStorage.setItem(storageKey(), JSON.stringify(Object.keys(expanded)));
-	} catch {}
+	} catch (error) {
+		reportHandledFailure("project-expansion-write", error, "STATE_FILE_WRITE_FAILED");
+	}
 }
 
 export function initProjectExpansionPersistence(): void {

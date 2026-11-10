@@ -24,7 +24,7 @@ import {
 import { type ReactNode, useRef, useState } from "react";
 import { copyText } from "../lib";
 import { useAppStore } from "../store";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import { errorText, getTransport, RequestError, wsErrorCode } from "../transport";
 import type { BranchFacts } from "./branchStatusState";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MergePrDialog, type MergePrState, type MergePrSubmit } from "./MergePrDialog";
@@ -93,7 +93,9 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	const t = useT();
 	const { workspace, sessionId, openReview, noteOpenReview, refresh } = options;
 	const withWorkspace = <T,>(send: (workspaceId: WorkspaceId) => Promise<T>): Promise<T> =>
-		workspace ? send(workspace.id) : Promise.reject(new Error("Unknown workspace"));
+		workspace
+			? send(workspace.id)
+			: Promise.reject(new RequestError("WORKSPACE_UNKNOWN", "Unknown workspace"));
 	const branch = workspace?.branch ?? "";
 	const pushToast = useAppStore((s) => s.pushToast);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);

@@ -20,7 +20,12 @@ import {
 	toast,
 	useAppStore,
 } from "../../store";
-import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../../transport";
+import {
+	errorText,
+	getSessionMessagesWithSkillBaseline,
+	getTransport,
+	reportHandledFailure,
+} from "../../transport";
 import {
 	collectAllGroups,
 	findPlacedResource,
@@ -484,7 +489,9 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (state.sessions[currentPlacement.sessionId]) continue;
 				try {
 					await hydrateChatResource(workspaceId, currentPlacement.sessionId);
-				} catch {}
+				} catch (error) {
+					reportHandledFailure("chat-hydrate", error, "HOST_ERROR");
+				}
 			}
 		})();
 		return () => {

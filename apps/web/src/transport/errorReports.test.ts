@@ -7,10 +7,12 @@ import {
 	installClientErrorReporting,
 	reportClientError,
 	reportDroppedFrame,
+	reportHandledFailure,
 	reportInvalidReply,
 	resetClientErrorReportsForTests,
 	supportsClientErrorReports,
 } from "./errorReports";
+import { RequestError } from "./requestError";
 import { type FakeRequest, fakeTransport } from "./transportFixtures.test";
 import * as wireTransport from "./wireTransport";
 
@@ -57,6 +59,23 @@ test("a dropped frame reports its code and channel only", () => {
 		{ kind: "window", type: "WireError", boundary: "INVALID_PUSH:pi.event" },
 		{ kind: "window", type: "WireError", boundary: "UNKNOWN_PUSH" },
 	]);
+});
+
+test("a handled failure reports its own code or the fallback, once per place, never its message", () => {
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	reportHandledFailure(
+		"chat-hydrate",
+		new RequestError("SESSION_UNKNOWN", "secret text"),
+		"HOST_ERROR",
+	);
+	reportHandledFailure("chat-hydrate", new RequestError("SESSION_UNKNOWN", "again"), "HOST_ERROR");
+	reportHandledFailure("prefs-write", new Error("quota"), "STATE_FILE_WRITE_FAILED");
+	const reports = requests.map((request) => request.params);
+	expect(reports).toMatchObject([
+		{ kind: "rejection", type: "RequestError", boundary: "SESSION_UNKNOWN:chat-hydrate" },
+		{ kind: "rejection", type: "Error", boundary: "STATE_FILE_WRITE_FAILED:prefs-write" },
+	]);
+	expect(JSON.stringify(reports)).not.toContain("secret text");
 });
 
 test("reports are offered only to a host at or beyond the v90 capability", () => {

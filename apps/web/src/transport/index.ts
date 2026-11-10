@@ -3,6 +3,7 @@ export {
 	installClientErrorReporting,
 	reportClientError,
 	reportDroppedFrame,
+	reportHandledFailure,
 	reportInvalidReply,
 } from "./errorReports";
 export { errorText } from "./errorText";

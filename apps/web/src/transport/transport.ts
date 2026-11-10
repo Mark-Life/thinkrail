@@ -246,7 +246,7 @@ export class WsTransport {
 			return;
 		}
 		const code = knownErrorCode(msg.errorCode);
-		entry.reject(code ? new RequestError(code, msg.error) : new Error(msg.error));
+		entry.reject(new RequestError(code ?? "HOST_ERROR", msg.error));
 	}
 
 	private dispatchPush<C extends WsChannel>(
