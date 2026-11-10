@@ -124,8 +124,12 @@ own schemas from `pi-delegation/wire`: the run status, the run details without `
 (`DELEGATION_RUN_FIELDS`), the stop reason and the worker birth. A field delegation adds is stored at
 once, and a field it drops refuses older snapshots that hold it. TypeBox checks these pi-schema
 schemas as plain JSON Schema; `Type.Unsafe` gives them the type pi-schema's `Static` derives, so the
-claim is the owner's own. `SessionSchema` adds definition bounds to part of delegation's
-`SessionOptions` and is `Same`-tied to that `Pick`. Stored outcomes retain the child's effective `model` and optional
+claim is the owner's own. `SessionSchema` is the one TypeBox schema written beside an owner's
+pi-schema schema, on purpose: it is part of `DefinitionSchema`, which the `dag_create` / `dag_edit` tools
+send to the model as TypeBox parameters, and it is a policy, not a copy. A definition may set only part of
+delegation's `SessionOptions` (no `excludeTools` or `extensions`), must name `tools`, and is closed and
+size-bounded. `Same` ties its static type to that `Pick`, so a field delegation renames, retypes or makes
+optional fails `tsc` here. Stored outcomes retain the child's effective `model` and optional
 `thinkingLevel`, which `getDag` exposes unchanged after restoration. Missing effort in older outcomes
 remains absent, never inferred from configuration. This optional addition keeps snapshot schema
 version 1: older snapshots remain readable, but downgrading to a host whose closed schema predates
