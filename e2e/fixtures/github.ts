@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { FakeGhScenario } from "./fakeGh";
+import { type FakeGhScenario, readFakeGhScenario } from "./fakeGh";
 import { gitAs } from "./git";
 import { E2E_FAKE_BIN_DIR, E2E_GH_LOG, E2E_GH_SCENARIO } from "./paths";
 
@@ -33,7 +33,7 @@ export function writeGhScenario(scenario: FakeGhScenario): void {
 }
 
 export function readGhScenario(): FakeGhScenario {
-	return JSON.parse(readFileSync(E2E_GH_SCENARIO, "utf8")) as FakeGhScenario;
+	return readFakeGhScenario(E2E_GH_SCENARIO);
 }
 
 export function ghCalls(): string[][] {
