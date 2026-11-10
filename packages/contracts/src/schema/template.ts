@@ -1,6 +1,6 @@
-import { arr, oneOf, opt, type Schema, type Static, str } from "@earendil-works/pi-schema";
+import { arr, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
 import { ProjectId, WorkspaceId } from "./ids";
-import { Ack, wireObj } from "./wire";
+import { Ack, narrowed, wireObj } from "./wire";
 
 export const TemplateScope = oneOf(["global", "project"]);
 export type TemplateScope = Static<typeof TemplateScope>;
@@ -19,20 +19,17 @@ export type TemplateInfo = Static<typeof TemplateInfo>;
 export const Template = wireObj({ ...TEMPLATE_INFO_FIELDS, content: str() });
 export type Template = Static<typeof Template>;
 
-export type TemplateReadLocation =
-	| { workspaceId: WorkspaceId; projectId?: never }
-	| { projectId: ProjectId; workspaceId?: never }
-	| { workspaceId?: never; projectId?: never };
+const TEMPLATE_LOCATION_FIELDS = { workspaceId: opt(WorkspaceId), projectId: opt(ProjectId) };
+/** A template is read from a workspace, a project, or neither (global only), never both. */
+const ONE_LOCATION = { not: { required: ["workspaceId", "projectId"] } };
 
-export const TemplateReadLocation: Schema<TemplateReadLocation> = {
-	type: "object",
-	properties: { workspaceId: WorkspaceId, projectId: ProjectId },
-	not: { required: ["workspaceId", "projectId"] },
-};
+export const TemplateReadLocation = narrowed(wireObj(TEMPLATE_LOCATION_FIELDS), ONE_LOCATION);
+export type TemplateReadLocation = Static<typeof TemplateReadLocation>;
 
-const TemplateGetParams: Schema<TemplateReadLocation & { name: string; scope?: TemplateScope }> = {
-	allOf: [TemplateReadLocation, wireObj({ name: str(), scope: opt(TemplateScope) })],
-};
+const TemplateGetParams = narrowed(
+	wireObj({ ...TEMPLATE_LOCATION_FIELDS, name: str(), scope: opt(TemplateScope) }),
+	ONE_LOCATION,
+);
 
 export const TEMPLATE_METHODS = {
 	"template.list": {
