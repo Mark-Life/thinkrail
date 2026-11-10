@@ -9,7 +9,13 @@ describe("parseWelcome", () => {
 			protocolVersion: 1,
 			hostPlatform: "plan9",
 			projects: [project, { id: "", name: "broken" }],
-			config: { analyticsEnabled: "yes", chatLineWidth: 100, themeMode: "system" },
+			config: {
+				analyticsEnabled: "yes",
+				chatLineWidth: 100,
+				fileLineWidth: 999,
+				subagentMaxConcurrent: 99,
+				themeMode: "system",
+			},
 			speech: { status: "unknown" },
 		});
 
@@ -18,12 +24,16 @@ describe("parseWelcome", () => {
 		expect(welcome.config).toEqual({ chatLineWidth: 100, themeMode: "system" });
 		expect(welcome.hostPlatform).toBeUndefined();
 		expect(welcome.speech).toBeUndefined();
-		expect(welcome.dropped).toEqual([
-			"projects",
-			"hostPlatform",
-			"config.analyticsEnabled",
-			"speech",
-		]);
+		expect(new Set(welcome.dropped)).toEqual(
+			new Set([
+				"projects",
+				"hostPlatform",
+				"config.analyticsEnabled",
+				"config.fileLineWidth",
+				"config.subagentMaxConcurrent",
+				"speech",
+			]),
+		);
 	});
 
 	test("a current welcome loses nothing", () => {

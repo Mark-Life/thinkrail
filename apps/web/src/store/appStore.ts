@@ -57,14 +57,9 @@ import {
 	type ExtensionSettingValues,
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
-	isLineWidth,
 	isLocalePreference,
-	isSettleIdleDays,
 	isSubagentCompletionMessage,
-	isSubagentMaxConcurrent,
 	isTodoReviewFixMessage,
-	normalizeFontSettings,
-	normalizeThemePreference,
 	readToolResponseMessage,
 	sameModel,
 } from "@thinkrail/contracts";
@@ -1142,6 +1137,7 @@ interface AppState {
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
+	configReadNoticeId: string | null;
 	setStatus: (status: ConnectionStatus) => void;
 	setOnboardingWizard: (gate: OnboardingWizardGate) => void;
 	installWelcomeSnapshot: (
@@ -1469,6 +1465,7 @@ interface AppState {
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
+	syncConfigReadNotice: (failed: boolean) => void;
 	dismissToast: (id: string) => void;
 }
 
@@ -1482,53 +1479,50 @@ function normalizeWorkspaceTurns(turns: readonly TurnChangeSet[]): TurnChangeSet
 		.slice(-TURNS_PER_WORKSPACE);
 }
 
-function configPatch(config: PartialAppConfig) {
-	const themePreference = normalizeThemePreference(config);
+/** A welcome from an older host omits later fields; each one it lacks keeps its default. */
+function configPatch(fields: PartialAppConfig) {
+	const config: AppConfig = { ...DEFAULT_CONFIG, otherAgentSkills: true, ...fields };
+	const paired = config.themeMode === "fixed" || config.systemThemePair !== undefined;
 	return {
-		...themePreference,
-		systemThemePair: themePreference.systemThemePair,
-		analyticsEnabled: config.analyticsEnabled ?? DEFAULT_CONFIG.analyticsEnabled,
-		analyticsConsentConfirmed:
-			config.analyticsConsentConfirmed ?? DEFAULT_CONFIG.analyticsConsentConfirmed,
-		notificationsEnabled: config.notificationsEnabled ?? DEFAULT_CONFIG.notificationsEnabled,
-		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
-		subagentMaxConcurrent: isSubagentMaxConcurrent(config.subagentMaxConcurrent)
-			? config.subagentMaxConcurrent
-			: DEFAULT_CONFIG.subagentMaxConcurrent,
-		settleIdleDays: isSettleIdleDays(config.settleIdleDays)
-			? config.settleIdleDays
-			: DEFAULT_CONFIG.settleIdleDays,
-		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
-		jbcentralQuotaRefreshSeconds:
-			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
-		terminalReplayKb: config.terminalReplayKb ?? DEFAULT_CONFIG.terminalReplayKb,
-		terminalWindowsShell: config.terminalWindowsShell ?? DEFAULT_CONFIG.terminalWindowsShell,
-		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
-		chatLineWidth: isLineWidth(config.chatLineWidth)
-			? config.chatLineWidth
-			: DEFAULT_CONFIG.chatLineWidth,
-		fileLineWidth: isLineWidth(config.fileLineWidth)
-			? config.fileLineWidth
-			: DEFAULT_CONFIG.fileLineWidth,
-		chatLineWidthBounded: config.chatLineWidthBounded ?? DEFAULT_CONFIG.chatLineWidthBounded,
-		fileLineWidthBounded: config.fileLineWidthBounded ?? DEFAULT_CONFIG.fileLineWidthBounded,
-		voiceInputEnabled: config.voiceInputEnabled ?? DEFAULT_CONFIG.voiceInputEnabled,
-		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
+		theme: config.theme,
+		themeMode: paired ? config.themeMode : "fixed",
+		systemThemePair: config.systemThemePair,
+		analyticsEnabled: config.analyticsEnabled,
+		analyticsConsentConfirmed: config.analyticsConsentConfirmed,
+		notificationsEnabled: config.notificationsEnabled,
+		subagentsEnabled: config.subagentsEnabled,
+		subagentMaxConcurrent: config.subagentMaxConcurrent,
+		settleIdleDays: config.settleIdleDays,
+		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled,
+		jbcentralQuotaRefreshSeconds: config.jbcentralQuotaRefreshSeconds,
+		terminalReplayKb: config.terminalReplayKb,
+		terminalWindowsShell: config.terminalWindowsShell,
+		composerGrowthLimit: config.composerGrowthLimit,
+		chatLineWidth: config.chatLineWidth,
+		fileLineWidth: config.fileLineWidth,
+		chatLineWidthBounded: config.chatLineWidthBounded,
+		fileLineWidthBounded: config.fileLineWidthBounded,
+		voiceInputEnabled: config.voiceInputEnabled,
+		customLayoutPresets: config.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
-		favoriteModels: config.favoriteModels ?? DEFAULT_CONFIG.favoriteModels,
-		recentModels: config.recentModels ?? DEFAULT_CONFIG.recentModels,
-		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
-		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
-		disabledExtensions: config.disabledExtensions ?? DEFAULT_CONFIG.disabledExtensions,
-		extensionSettings: config.extensionSettings ?? DEFAULT_CONFIG.extensionSettings,
-		otherAgentSkills: config.otherAgentSkills ?? true,
-		disabledPackages: config.disabledPackages ?? DEFAULT_CONFIG.disabledPackages,
+		favoriteModels: config.favoriteModels,
+		recentModels: config.recentModels,
+		reviewAutoFix: config.reviewAutoFix,
+		agentReviewEnabled: config.agentReviewEnabled,
+		disabledExtensions: config.disabledExtensions,
+		extensionSettings: config.extensionSettings,
+		otherAgentSkills: config.otherAgentSkills,
+		disabledPackages: config.disabledPackages,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
-		onboardingDismissed: config.onboardingDismissed ?? false,
-		...normalizeFontSettings(config),
+		onboardingDismissed: config.onboardingDismissed,
+		interfaceFont: config.interfaceFont,
+		codeFont: config.codeFont,
+		codeFontSize: config.codeFontSize,
+		codeLigatures: config.codeLigatures,
+		fontWeightOffset: config.fontWeightOffset,
 	};
 }
 
@@ -2443,6 +2437,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
+	configReadNoticeId: null,
 	resourceSnapshots: {},
 	resourceRevision: 0,
 	mcpByWorkspace: {},
@@ -4750,6 +4745,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		});
 		return id;
+	},
+	syncConfigReadNotice: (failed) => {
+		const { configReadNoticeId, dismissToast, pushToast } = get();
+		if (failed === (configReadNoticeId !== null)) return;
+		if (configReadNoticeId !== null) dismissToast(configReadNoticeId);
+		set({
+			configReadNoticeId: failed
+				? pushToast({
+						variant: "warning",
+						message: t("store.config.readFailed"),
+						durationMs: Number.POSITIVE_INFINITY,
+					})
+				: null,
+		});
 	},
 	dismissToast: (id) =>
 		set((s) =>

@@ -3,6 +3,9 @@ import { SPEECH_ERROR_CODES } from "./speech";
 import { wireObj } from "./wire";
 
 export const WS_ERROR_CODES = [
+	"STATE_FILE_SET_ASIDE",
+	"STATE_FILE_UNREADABLE",
+	"STATE_FILE_PRUNE_FAILED",
 	"UNKNOWN_COMMIT",
 	"PUSH_AUTH_FAILED",
 	"NOT_GIT",

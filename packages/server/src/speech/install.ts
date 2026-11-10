@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readdir, rename, rm, statfs, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { compile, obj, type Static } from "@earendil-works/pi-schema";
 import {
 	isSpeechErrorCode,
-	isSpeechModel,
 	SPEECH_MODELS,
 	type SpeechErrorCode,
 	type SpeechInstallState,
-	type SpeechModel,
+	SpeechModel,
 	type SpeechRuntimeInfo,
 } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
@@ -34,9 +34,9 @@ export interface EngineInputs {
 	model: SpeechModel;
 }
 
-interface Marker {
-	model: SpeechModel;
-}
+const Marker = obj({ model: SpeechModel }, { open: true });
+type Marker = Static<typeof Marker>;
+const MarkerFile = compile(Marker);
 
 let manifest: SpeechManifest | null = null;
 let pathRuntime: PathRuntime | null = null;
@@ -79,8 +79,8 @@ function modelPresent(model: SpeechModel): boolean {
 
 function readMarker(): Marker | null {
 	try {
-		const model = Reflect.get(JSON.parse(readFileSync(markerPath(), "utf8")), "model");
-		return isSpeechModel(model) ? { model } : null;
+		const marker: unknown = JSON.parse(readFileSync(markerPath(), "utf8"));
+		return MarkerFile.check(marker) ? marker : null;
 	} catch {
 		return null;
 	}

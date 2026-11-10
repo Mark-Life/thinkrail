@@ -329,6 +329,7 @@ export function initTransport(
 				welcome.appVersion,
 				welcome.speech,
 			);
+		useAppStore.getState().syncConfigReadNotice(welcome.configReadFailed);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);
@@ -489,6 +490,7 @@ export function initTransport(
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data);
+		useAppStore.getState().syncConfigReadNotice(false);
 	});
 
 	transport.connect();

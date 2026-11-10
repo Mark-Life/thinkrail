@@ -2431,6 +2431,7 @@
 	"speech.offer.retry": "Try again",
 	"speech.offer.title": "Set up voice input",
 	"store.chatTab.defaultName": "Chat",
+	"store.config.readFailed": "Your settings could not be read from config.json. Defaults are in use until the file is fixed.",
 	"store.settled.byYou": "by you",
 	"store.settled.byYouTitle": "Settled by you",
 	"store.settled.byYouTitleAt": "Settled by you {{time}}",

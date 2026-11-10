@@ -92,11 +92,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   theme schema is owned by [[submodule-web-themes]]),
   the font settings — `FONT_ROLES`, `FontFamilyRef` (a bundled face named by its role, or a family name),
   `FontChoice` (family or `null` for the role's default, plus ≤ `FONT_FALLBACKS_MAX` distinct fallbacks),
-  `CODE_FONT_SIZE` (with the editor's `editorDelta`), `FONT_WEIGHT_OFFSET`, and the guards `isFontFamilyName`
-  (no CSS delimiters or control characters, ≤ `FONT_FAMILY_NAME_MAX_LENGTH`), `isFontFamilyRef`, `isFontRole`,
-  `isFontChoice`, `isCodeFontSize`, `isFontWeightOffset`, `fontFamilyRefKey`, `FontSettings` +
+  `CODE_FONT_SIZE` (with the editor's `editorDelta`), `FONT_WEIGHT_OFFSET`, and the checks `isFontFamilyName`
+  (no CSS delimiters or control characters, ≤ `FONT_FAMILY_NAME_MAX_LENGTH`), `isFontFamilyRef`,
+  `isFontChoice`, `isCodeFontSize`, `isFontWeightOffset` — each the compiled check of its `schema/` schema,
+  which holds the bounds — `fontFamilyRefKey`, `FontSettings` +
   `normalizeFontSettings`, and `hasControlCharacter` (shared with the host's font file-name rule) — and user font files as
-  `UserFontsSnapshot` / `UserFontFile` (closed error codes, guarded by `isUserFontFile`) plus
+  `UserFontsSnapshot` / `UserFontFile` (closed error codes; `parseUserFontFile` also refuses a weight range out of order) plus
   `InstalledFontsResult`, served by `fonts.list` /
   `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
@@ -114,7 +115,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   its head; only the first 800 units of a line are normalized —
   host and client call the same functions over their user texts so the label never jumps),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
-  chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  chat/file wrap columns, from the `LineWidth` schema), **`parseAppConfigFields(value)`** (the fields of a stored or
+  received config that pass their `PartialAppConfig` schema one by one, over **`keepValidFields`** from `fieldwise`: one
+  bad field costs one field, and the dropped names come back for the caller to report), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
@@ -940,7 +943,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed, minus closed records whose
   folder is definitively gone), plus optional
-  **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
+  **`hostUpdate: HostUpdateNotice`**, **`configReadFailed: true`** (v108: the host's `config` is defaults because
+  its `config.json` could not be read; absent otherwise and from an older host, so it needs no gate) and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
   the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially

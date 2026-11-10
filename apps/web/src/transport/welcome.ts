@@ -3,8 +3,9 @@ import {
 	type AnyHostWelcome,
 	HostPlatform,
 	HostUpdateNotice,
-	PartialAppConfig,
+	type PartialAppConfig,
 	Project,
+	parseAppConfigFields,
 	SpeechStatus,
 } from "@thinkrail/contracts";
 
@@ -12,26 +13,15 @@ const project = compile(Project);
 const hostPlatform = compile(HostPlatform);
 const hostUpdate = compile(HostUpdateNotice);
 const speechStatus = compile(SpeechStatus);
-const partialConfig = compile(PartialAppConfig);
-
-function topField(pointer: string): string {
-	const [, first = ""] = pointer.split("/");
-	return first.replaceAll("~1", "/").replaceAll("~0", "~");
-}
 
 function configOf(raw: Record<string, unknown>, dropped: string[]): PartialAppConfig | undefined {
-	let kept = raw;
-	while (!partialConfig.check(kept)) {
-		const refused = new Set(partialConfig.errors(kept).map((error) => topField(error.path)));
-		refused.delete("");
-		if (refused.size === 0) {
-			dropped.push("config");
-			return undefined;
-		}
-		for (const field of refused) dropped.push(`config.${field}`);
-		kept = Object.fromEntries(Object.entries(kept).filter(([field]) => !refused.has(field)));
+	const parsed = parseAppConfigFields(raw);
+	if (parsed === null) {
+		dropped.push("config");
+		return undefined;
 	}
-	return kept;
+	for (const field of parsed.dropped) dropped.push(`config.${field}`);
+	return parsed.fields;
 }
 
 function projectsOf(raw: Record<string, unknown>[], field: string, dropped: string[]): Project[] {
@@ -60,6 +50,7 @@ export function parseWelcome(welcome: AnyHostWelcome) {
 		appVersion: welcome.appVersion,
 		hostPlatform: entryOf(welcome.hostPlatform, hostPlatform.check, "hostPlatform", dropped),
 		hostUpdate: entryOf(welcome.hostUpdate, hostUpdate.check, "hostUpdate", dropped),
+		configReadFailed: welcome.configReadFailed === true,
 		projects,
 		recentProjects: welcome.recentProjects
 			? projectsOf(welcome.recentProjects, "recentProjects", dropped)

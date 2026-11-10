@@ -66,3 +66,18 @@ test("a stored face missing its weight is dropped instead of reaching FontFace a
 	);
 	expect(readFontsHint().files.map((entry) => entry.fileName)).toEqual(["FiraCode.woff2"]);
 });
+
+test("a stored face whose weight range is out of order is dropped", () => {
+	const valid = file("FiraCode.woff2", "Fira Code");
+	const reversed = {
+		fileName: "Reversed.woff2",
+		ok: true,
+		url: "/fonts/Reversed.woff2?v=1",
+		face: { family: "Fira Code", style: "normal", weight: { min: 700, max: 300 }, monospace: true },
+	};
+	store.set(
+		"thinkrail-fonts",
+		JSON.stringify({ version: 1, preference: DEFAULT_FONT_PREFERENCE, files: [valid, reversed] }),
+	);
+	expect(readFontsHint().files.map((entry) => entry.fileName)).toEqual(["FiraCode.woff2"]);
+});

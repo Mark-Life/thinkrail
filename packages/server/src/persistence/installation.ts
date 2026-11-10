@@ -1,29 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { compile, lit, obj, str } from "@earendil-works/pi-schema";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
 
 export interface InstallationRecord {
 	id: string;
 }
 
-interface PersistedInstallationRecord extends InstallationRecord {
-	appInstalled?: true;
-}
+const InstallationIdFile = compile(obj({ id: str({ minLength: 1 }) }, { open: true }));
+const AppInstalledFile = compile(obj({ appInstalled: lit(true) }, { open: true }));
 
-function readInstallation(directory: string): Partial<PersistedInstallationRecord> {
+function readInstallation(directory: string): unknown {
 	try {
-		const parsed: unknown = JSON.parse(readFileSync(join(directory, "installation.json"), "utf8"));
-		return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+		return JSON.parse(readFileSync(join(directory, "installation.json"), "utf8"));
 	} catch {
-		return {};
+		return undefined;
 	}
-}
-
-function hasInstallationId(
-	record: Partial<PersistedInstallationRecord>,
-): record is PersistedInstallationRecord {
-	return typeof record.id === "string" && record.id.length > 0;
 }
 
 export function ensureInstallationIn(
@@ -32,7 +25,7 @@ export function ensureInstallationIn(
 ): InstallationRecord {
 	mkdirSync(directory, { recursive: true });
 	const raw = readInstallation(directory);
-	if (hasInstallationId(raw)) return { id: raw.id };
+	if (InstallationIdFile.check(raw)) return { id: raw.id };
 
 	const target = join(directory, "installation.json");
 	const temp = join(directory, `.installation.json.${process.pid}.${randomUUID()}.tmp`);
@@ -45,7 +38,7 @@ export function ensureInstallationIn(
 		} catch (error) {
 			if (!hasErrno(error, "EEXIST")) throw error;
 			const winner = readInstallation(directory);
-			if (hasInstallationId(winner)) return { id: winner.id };
+			if (InstallationIdFile.check(winner)) return { id: winner.id };
 			throw new Error("installation.json exists without a valid installation id", { cause: error });
 		}
 	} finally {
@@ -59,7 +52,7 @@ export function claimAppInstalledIn(
 	directory: string,
 	replace: typeof renameSync = renameSync,
 ): boolean {
-	if (readInstallation(directory).appInstalled === true) return false;
+	if (AppInstalledFile.check(readInstallation(directory))) return false;
 	const { id } = ensureInstallationIn(directory);
 	const claim = join(directory, ".installation-app-installed.claim");
 	try {
@@ -72,11 +65,9 @@ export function claimAppInstalledIn(
 	const target = join(directory, "installation.json");
 	const temp = join(directory, `.installation.json.${process.pid}.${randomUUID()}.tmp`);
 	try {
-		writeFileSync(
-			temp,
-			`${JSON.stringify({ id, appInstalled: true } satisfies PersistedInstallationRecord, null, "\t")}\n`,
-			{ flag: "wx" },
-		);
+		writeFileSync(temp, `${JSON.stringify({ id, appInstalled: true }, null, "\t")}\n`, {
+			flag: "wx",
+		});
 		replace(temp, target);
 	} catch (error) {
 		try {

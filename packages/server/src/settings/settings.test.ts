@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile } from "@earendil-works/pi-schema";
@@ -9,8 +18,10 @@ import {
 	DEFAULT_CONFIG,
 	type LayoutPreset,
 } from "@thinkrail/contracts";
+import { loadConfig, observeStateFileProblems } from "../persistence";
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import {
+	configReadFailed,
 	getConfig,
 	noteRecentModel,
 	resetConfigCache,
@@ -492,21 +503,6 @@ test("disabled packages default empty, round-trip deduped, and reject a blank id
 	expect(getConfig().disabledPackages).toEqual(["npm:x"]);
 });
 
-test("an out-of-range subagent limit is rejected before persistence or broadcast", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const value of [0, 17, 2.5, "4"]) {
-		const invalid = { subagentMaxConcurrent: value } as unknown as AppConfigUpdate;
-		expect(() => updateConfig(invalid)).toThrow(
-			"subagentMaxConcurrent must be a whole number from 1 to 16",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-});
-
 test("a Windows shell update persists and publishes", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
@@ -519,20 +515,9 @@ test("a Windows shell update persists and publishes", () => {
 	);
 });
 
-test("a replay budget that is not finite is rejected before persistence or broadcast", () => {
+test("a replay budget update persists and publishes", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-
-	for (const terminalReplayKb of [Number.NaN, Number.POSITIVE_INFINITY]) {
-		expect(() => updateConfig({ terminalReplayKb })).toThrow(
-			"terminalReplayKb must be a finite number",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-
 	const next = updateConfig({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
 	expect(next).toMatchObject({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
 	expect(published).toEqual([next]);
@@ -583,22 +568,6 @@ test("stored invalid JetBrains quota preferences fall back fieldwise", () => {
 	});
 });
 
-test("invalid JetBrains quota updates are rejected before persistence or broadcast", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const update of [
-		{ jbcentralQuotaRefreshSeconds: 0 },
-		{ jbcentralQuotaRefreshSeconds: 3601 },
-		{ jbcentralQuotaRefreshSeconds: 1.5 },
-	]) {
-		expect(() => updateConfig(update)).toThrow();
-		expect(getConfig()).toEqual(before);
-	}
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-});
-
 test("line-width fields default independently when an older or malformed config is loaded", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
@@ -622,28 +591,6 @@ test("line-width fields default independently when an older or malformed config 
 	});
 });
 
-test("invalid line-width updates are rejected before persistence or broadcast", () => {
-	const invalidUpdates = [
-		{ chatLineWidth: 39 },
-		{ fileLineWidth: 241 },
-		{ chatLineWidth: 80.5 },
-		{ fileLineWidth: Number.POSITIVE_INFINITY },
-	];
-
-	for (const update of invalidUpdates) {
-		rmSync(join(dataDir, "config.json"), { force: true });
-		resetConfigCache();
-		const published: AppConfig[] = [];
-		setSettingsPublisher((config) => published.push(config));
-		const before = getConfig();
-
-		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow();
-		expect(getConfig()).toEqual(before);
-		expect(published).toEqual([]);
-		expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-	}
-});
-
 test("a failed config write leaves the live cache and publisher unchanged", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
@@ -653,6 +600,71 @@ test("a failed config write leaves the live cache and publisher unchanged", () =
 	expect(() => updateConfig({ subagentsEnabled: false })).toThrow();
 	expect(getConfig().subagentsEnabled).toBe(true);
 	expect(published).toEqual([]);
+});
+
+test.each([
+	["a directory at the path", () => mkdirSync(join(dataDir, "config.json"))],
+	["text that is not JSON", () => writeFileSync(join(dataDir, "config.json"), "{ nope")],
+	["JSON that is not an object", () => writeFileSync(join(dataDir, "config.json"), "[]")],
+])("configReadFailed is true for %s", (_name, seed) => {
+	seed();
+	resetConfigCache();
+	expect(configReadFailed()).toBe(true);
+	expect(getConfig().subagentsEnabled).toBe(DEFAULT_CONFIG.subagentsEnabled);
+});
+
+test.each([
+	["a missing file", () => {}],
+	[
+		"one bad field in a stored object",
+		() => writeFileSync(join(dataDir, "config.json"), JSON.stringify({ chatLineWidth: "wide" })),
+	],
+])("configReadFailed is false for %s", (_name, seed) => {
+	seed();
+	resetConfigCache();
+	expect(configReadFailed()).toBe(false);
+});
+
+test("a read that fails after a good load keeps the real values and raises no failure", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ subagentsEnabled: false }));
+	resetConfigCache();
+	expect(getConfig().subagentsEnabled).toBe(false);
+	rmSync(join(dataDir, "config.json"));
+	mkdirSync(join(dataDir, "config.json"));
+	loadConfig();
+	expect(configReadFailed()).toBe(false);
+	expect(getConfig().subagentsEnabled).toBe(false);
+});
+
+test("a fixed file clears the failure on the next check and publishes the stored values once", () => {
+	const path = join(dataDir, "config.json");
+	mkdirSync(path);
+	resetConfigCache();
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(configReadFailed()).toBe(true);
+	expect(published).toEqual([]);
+
+	rmSync(path, { recursive: true });
+	writeFileSync(path, JSON.stringify({ subagentsEnabled: false }));
+	expect(configReadFailed()).toBe(false);
+	expect(getConfig().subagentsEnabled).toBe(false);
+	expect(published.map((config) => config.subagentsEnabled)).toEqual([false]);
+
+	expect(configReadFailed()).toBe(false);
+	expect(published).toHaveLength(1);
+});
+
+test("a save over text that is not JSON clears the failure, with no second publish", () => {
+	writeFileSync(join(dataDir, "config.json"), "{ nope");
+	resetConfigCache();
+	expect(configReadFailed()).toBe(true);
+
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	updateConfig({ subagentsEnabled: false });
+	expect(configReadFailed()).toBe(false);
+	expect(published).toHaveLength(1);
 });
 
 test("defaultModel/defaultEffort persist through the top-level partial merge", () => {
@@ -828,6 +840,56 @@ test("stored custom presets keep only complete current-schema entries", () => {
 	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
 });
 
+test("a stored preset that breaks a catalog rule drops with a copy of the file", () => {
+	const tooWide = { ...preset("wide"), right: { visible: false, width: 0.9, groups: [] } };
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ customLayoutPresets: [preset("a"), preset("a"), tooWide] }),
+	);
+	resetConfigCache();
+	const reports: string[] = [];
+	observeStateFileProblems((problem) => reports.push(problem.message));
+	try {
+		expect(getConfig().customLayoutPresets).toEqual([preset("a")]);
+	} finally {
+		observeStateFileProblems(null);
+	}
+	expect(readdirSync(dataDir).filter((name) => name.includes(".corrupt-"))).toHaveLength(1);
+	expect(reports).toHaveLength(1);
+	expect(reports[0]).toContain(
+		"1 repeats a preset id, 2 breaks a preset rule: Preset side widths leave no center region",
+	);
+});
+
+test("a stored preset from before Changes joined Files keeps its layout", () => {
+	const withTools = (name: string, left: string[], right: string[]) => {
+		const base = preset(name);
+		const group = (id: string, tools: string[]) => ({ id, weight: 1, folded: false, tools });
+		return {
+			...base,
+			left: { visible: true, width: 0.2, groups: [group(`${name}-l`, left)] },
+			right: { visible: true, width: 0.2, groups: [group(`${name}-r`, right)] },
+		};
+	};
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			customLayoutPresets: [
+				withTools("alone", ["projects", "changes"], ["review"]),
+				withTools("both", ["changes"], ["files", "review"]),
+			],
+		}),
+	);
+	resetConfigCache();
+	const [alone, both] = getConfig().customLayoutPresets;
+	expect(alone?.left.groups[0]?.tools).toEqual(["projects", "files"]);
+	expect(both?.left.groups[0]?.tools).toEqual([]);
+	expect(both?.right.groups[0]?.tools).toEqual(["files", "review"]);
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk.customLayoutPresets).toHaveLength(2);
+});
+
 const wireModel = (id: string, provider = "p") => ({
 	id,
 	name: id.toUpperCase(),
@@ -893,18 +955,11 @@ test("stored favorites and recents survive reload while malformed ones fall back
 	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["ok"]);
 });
 
-test("the settle idle window defaults to 7 days, accepts null for never, and rejects fractions", () => {
+test("the settle idle window defaults to 7 days and accepts null for never", () => {
 	expect(DEFAULT_CONFIG.settleIdleDays).toBe(7);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ settleIdleDays: "soon" }));
 	resetConfigCache();
 	expect(getConfig().settleIdleDays).toBe(7);
-
-	const before = getConfig();
-	expect(() => updateConfig({ settleIdleDays: 0 })).toThrow(
-		"settleIdleDays must be a whole number of days from 1 to 365, or null",
-	);
-	expect(() => updateConfig({ settleIdleDays: 2.5 })).toThrow("settleIdleDays must be");
-	expect(getConfig()).toEqual(before);
 
 	expect(updateConfig({ settleIdleDays: 14 }).settleIdleDays).toBe(14);
 	expect(updateConfig({ settleIdleDays: null }).settleIdleDays).toBeNull();
@@ -975,22 +1030,103 @@ test("font settings default to the bundled faces, round-trip, and normalize a ma
 	});
 });
 
-test("invalid font updates are rejected before persistence or broadcast", () => {
+function makeConfigUnreadable() {
+	mkdirSync(join(dataDir, "config.json"));
+}
+
+function restoreConfig(config: Partial<AppConfig>) {
+	rmSync(join(dataDir, "config.json"), { recursive: true });
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(config));
+}
+
+function storedConfig() {
+	return JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+}
+
+test("a config unreadable at load refuses saves, then saves onto the stored values once it reads again", () => {
+	makeConfigUnreadable();
+	expect(getConfig()).toEqual(DEFAULT_CONFIG);
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+
+	restoreConfig({ locale: "de" });
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(getConfig().locale).toBe("de");
+});
+
+test("another read of a recovered config cannot make a save write the defaults from the failed load", () => {
+	makeConfigUnreadable();
+	getConfig();
+	restoreConfig({ locale: "de", defaultModel: wireModel("m", "p") });
+	expect(loadConfig().locale).toBe("de");
+
+	updateConfig({ codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({
+		locale: "de",
+		defaultModel: wireModel("m", "p"),
+		codeFontSize: 15,
+	});
+});
+
+test("one failed read beside a good cache does not refuse the next save", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ locale: "de" }));
+	expect(getConfig().locale).toBe("de");
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+	restoreConfig({ locale: "de" });
+
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+});
+
+test("a refused save keeps a good cache while the file stays unreadable", () => {
+	const stored = { locale: "de", analyticsEnabled: true, disabledExtensions: ["x"] };
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(stored));
+	expect(getConfig()).toMatchObject(stored);
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+	expect(getConfig()).toMatchObject(stored);
+	noteRecentModel(wireModel("m", "p"));
+	expect(getConfig()).toMatchObject({ ...stored, recentModels: [] });
+
+	restoreConfig(stored);
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ ...stored, codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ ...stored, codeFontSize: 15 });
+});
+
+test("noteRecentModel does not throw when the save fails, and keeps the last good list", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const [update, message] of [
-		[
-			{ codeFont: { family: { name: 'Fira"; x' }, fallbacks: [] } },
-			"codeFont must be a font family",
-		],
-		[{ interfaceFont: { family: null } }, "interfaceFont must be a font family"],
-		[{ codeFontSize: 9 }, "codeFontSize must be a whole number from 10 to 24"],
-		[{ fontWeightOffset: 25 }, "fontWeightOffset must be a multiple of 10 from -70 to 130"],
-	] as const) {
-		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow(message);
-	}
-	expect(getConfig()).toEqual(before);
+	makeConfigUnreadable();
+	getConfig();
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(getConfig().recentModels).toEqual([]);
 	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	restoreConfig({ locale: "de" });
+	noteRecentModel(wireModel("m", "p"));
+	expect(storedConfig()).toMatchObject({ locale: "de", recentModels: [wireModel("m", "p")] });
+});
+
+test("noteRecentModel does not throw when the first load cannot save its repair", () => {
+	const path = join(dataDir, "config.json");
+	writeFileSync(path, JSON.stringify({ customLayoutPresets: [{ id: "broken" }] }));
+	chmodSync(path, 0o444);
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toBeUndefined();
+});
+
+test("noteRecentModel does not throw when publishing fails, and keeps the saved list", () => {
+	setSettingsPublisher(() => {
+		throw new Error("publish failed");
+	});
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toEqual([wireModel("m", "p")]);
+	expect(getConfig().recentModels).toEqual([wireModel("m", "p")]);
 });

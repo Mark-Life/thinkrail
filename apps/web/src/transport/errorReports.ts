@@ -2,12 +2,17 @@ import {
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	type ClientErrorKind,
 	type ClientErrorReport,
+	JsonObject,
 	WS_METHODS,
 	type WsMethodName,
 } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import { type DroppedFrame, droppedFrameCode } from "./transport";
 import { getTransport } from "./wireTransport";
+
+declare global {
+	var _posthogChunkIds: unknown;
+}
 
 const MAX_REPORTS_PER_PAGE = 50;
 const MAX_PENDING = 10;
@@ -24,14 +29,14 @@ const MAX_CHUNK_IDS = 20;
 const STACK_URL = /((?:https?|views):\/\/[^\s()@]+):\d+:\d+(?=[)\s]|$)/gm;
 
 function stackUrls(stack: string): string[] {
-	return Array.from(stack.matchAll(STACK_URL), (match) => match[1] as string);
+	return Array.from(stack.matchAll(STACK_URL)).flatMap((match) => match[1] ?? []);
 }
 
 export function chunkIdsForStack(
 	stack: string,
-	registry: unknown = (globalThis as { _posthogChunkIds?: unknown })._posthogChunkIds,
+	registry: unknown = globalThis._posthogChunkIds,
 ): Record<string, string> | undefined {
-	if (typeof registry !== "object" || registry === null) return undefined;
+	if (!JsonObject.check(registry)) return undefined;
 	const wanted = new Set(stackUrls(stack));
 	const out: Record<string, string> = {};
 	let count = 0;
@@ -122,14 +127,16 @@ export function reportClientError(report: ClientErrorReport): void {
 	} catch {}
 }
 
-export function installClientErrorReporting(target: Window = window): () => void {
-	const onError = (event: ErrorEvent) => {
-		if (event.error !== undefined || event.message) {
-			reportClientError(clientErrorReport("window", event.error ?? event.message));
+export function installClientErrorReporting(target: EventTarget = window): () => void {
+	const onError = (event: Event) => {
+		const error = "error" in event ? event.error : undefined;
+		const message = "message" in event ? event.message : undefined;
+		if (error !== undefined || message) {
+			reportClientError(clientErrorReport("window", error ?? message));
 		}
 	};
-	const onRejection = (event: PromiseRejectionEvent) => {
-		reportClientError(clientErrorReport("rejection", event.reason));
+	const onRejection = (event: Event) => {
+		reportClientError(clientErrorReport("rejection", "reason" in event ? event.reason : undefined));
 	};
 	target.addEventListener("error", onError);
 	target.addEventListener("unhandledrejection", onRejection);

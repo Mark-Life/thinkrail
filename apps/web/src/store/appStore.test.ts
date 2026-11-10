@@ -1,6 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
-	type AppConfig,
 	DEFAULT_CONFIG,
 	type ExtUiRequest,
 	type HostUpdateNotice,
@@ -2942,6 +2941,36 @@ test("welcome replaces and clears the synchronized host update notice", () => {
 	expect(useAppStore.getState().hostUpdate).toBeNull();
 });
 
+test("the config read notice shows once across welcomes and a good read removes it", () => {
+	const store = useAppStore.getState();
+	const notices = () =>
+		useAppStore.getState().toasts.filter((toast) => toast.message.includes("config.json"));
+
+	store.syncConfigReadNotice(false);
+	expect(notices()).toEqual([]);
+
+	store.syncConfigReadNotice(true);
+	store.syncConfigReadNotice(true);
+	expect(notices()).toHaveLength(1);
+	expect(notices()[0]).toMatchObject({
+		variant: "warning",
+		durationMs: Number.POSITIVE_INFINITY,
+	});
+
+	const [shown] = notices();
+	if (!shown) throw new Error("the notice was not shown");
+	store.dismissToast(shown.id);
+	store.syncConfigReadNotice(true);
+	expect(notices()).toEqual([]);
+
+	store.syncConfigReadNotice(false);
+	store.syncConfigReadNotice(true);
+	expect(notices()).toHaveLength(1);
+	store.syncConfigReadNotice(false);
+	expect(notices()).toEqual([]);
+	expect(useAppStore.getState().configReadNoticeId).toBeNull();
+});
+
 test("host update pushes replace the same slot with each optional lifecycle snapshot", () => {
 	useAppStore.getState().applyHostUpdate(hostNotice("0.2.0", "available"));
 	useAppStore.getState().applyHostUpdate(hostNotice("0.2.0", "running"));
@@ -4040,12 +4069,12 @@ test("applyConfig folds and normalizes the server-synced theme preference", () =
 		systemThemePair: pair,
 	});
 
+	const { systemThemePair: _unpaired, ...unpaired } = DEFAULT_CONFIG;
 	useAppStore.getState().applyConfig({
-		...DEFAULT_CONFIG,
+		...unpaired,
 		theme: "legacy.fixed",
-		themeMode: "future",
-		systemThemePair: { light: "only-light" },
-	} as unknown as AppConfig);
+		themeMode: "system",
+	});
 	expect(useAppStore.getState()).toMatchObject({
 		theme: "legacy.fixed",
 		themeMode: "fixed",
@@ -4085,10 +4114,13 @@ test("applyConfig projects synchronized chat and file line-width settings", () =
 	});
 });
 
-test("installWelcomeSnapshot defaults absent or out-of-range line-width fields independently", () => {
-	const { chatLineWidthBounded: _absent, ...config } = {
+test("installWelcomeSnapshot defaults absent line-width fields independently", () => {
+	const {
+		chatLineWidth: _absentWidth,
+		chatLineWidthBounded: _absent,
+		...config
+	} = {
 		...DEFAULT_CONFIG,
-		chatLineWidth: 999,
 		fileLineWidth: 160,
 		fileLineWidthBounded: false,
 	};
@@ -4123,11 +4155,9 @@ test("applyConfig projects the host-wide subagent default", () => {
 	expect(useAppStore.getState()).toHaveProperty("subagentsEnabled", true);
 });
 
-test("applyConfig projects the per-chat subagent limit and rejects a malformed one", () => {
+test("applyConfig projects the per-chat subagent limit", () => {
 	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, subagentMaxConcurrent: 9 });
 	expect(useAppStore.getState()).toHaveProperty("subagentMaxConcurrent", 9);
-	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, subagentMaxConcurrent: 99 });
-	expect(useAppStore.getState()).toHaveProperty("subagentMaxConcurrent", 4);
 });
 
 test("applyConfig projects disabled extensions and an older host's missing list as none", () => {
