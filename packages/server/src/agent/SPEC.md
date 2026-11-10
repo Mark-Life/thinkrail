@@ -507,7 +507,9 @@ re-opened transcripts provider-valid.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no
-    made-up session id. A dialog names the tool call
+    made-up session id. Its `custom` resolves `undefined`, as pi's RPC mode does, though pi types it `Promise<T>`: that
+    cast is kept because pi's own MCP manager and llama views call `custom` with no mode check, and a rejection would
+    show them as errors. A dialog names the tool call
     it is about (`toolCallId`) so the web asks on that call's card: the manager passes pi's own
     `agent.state.pendingToolCalls` and a dialog anchors only while **exactly one** call is running (the
     common gate-before-a-tool case; parallel calls stay unanchored rather than guess), and
