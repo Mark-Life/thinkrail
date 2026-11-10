@@ -1,5 +1,7 @@
+import { CodedError } from "@thinkrail/shared/codedError";
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
+import { observeTodoStoreProblems } from "pi-todos/core";
 import { reportError } from "../analytics";
 import { initializeJbcentralRuntime } from "../auth";
 import { applyHostEnvironment } from "../environment";
@@ -69,6 +71,10 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	installCrashLog(options.appVersion);
 	const persistenceLog = logger("persistence");
 	observeStateFileProblems((problem) => persistenceLog.warn(problem.message, problem));
+	const todosLog = logger("todos");
+	observeTodoStoreProblems(({ code, message }) =>
+		todosLog.warn(message, new CodedError(code, message)),
+	);
 	await shellEnv;
 	applyHostEnvironment();
 	await initializeJbcentralRuntime();

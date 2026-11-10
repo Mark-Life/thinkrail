@@ -7,6 +7,7 @@ import type {
 	PiPackageSummary,
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
+import { JsonObject } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { refreshExtensionTools } from "./agentSessionManager";
 import { bumpPackagesRevision, setInstalledPackagesListener } from "./extensions";
@@ -206,7 +207,7 @@ const RESOURCE_KEYS = ["packages", "extensions", "skills", "prompts"] as const;
 function resourceFingerprint(path: string): string {
 	try {
 		const raw: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
-		const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+		const record = JsonObject.check(raw) ? raw : {};
 		return JSON.stringify(RESOURCE_KEYS.map((key) => record[key] ?? null));
 	} catch {
 		return "";

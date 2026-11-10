@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compile, num } from "@earendil-works/pi-schema";
 import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import type { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -20,6 +21,8 @@ import {
 	loadTerminalSessions,
 	loadWorkspaces,
 	observeStateFileProblems,
+	parseEntryRecord,
+	readStateFile,
 	saveConfig,
 	saveProjects,
 } from "./persistence";
@@ -216,6 +219,18 @@ test("an environment whose vars or agent dir fail their schema keeps a copy", ()
 	writeFileSync(join(root, "environment.json"), JSON.stringify({ agentDir: "", vars: "A=1" }));
 	expect(loadHostEnvironment()).toEqual({ vars: [] });
 	expect(copies()).toHaveLength(1);
+});
+
+test("parseEntryRecord keeps good keys, sets the bad ones aside and takes __proto__ as a plain key", () => {
+	const path = join(root, "items.json");
+	const raw = '{"good":1,"bad":"x","__proto__":2}';
+	writeFileSync(path, raw);
+	const file = readStateFile(path);
+	const kept = parseEntryRecord(file, JSON.parse(raw), compile(num()));
+	expect(Object.keys(kept).sort()).toEqual(["__proto__", "good"]);
+	expect(Object.getPrototypeOf(kept)).toBe(Object.prototype);
+	expect(readdirSync(root).filter((name) => name.includes(".corrupt-")).length).toBe(1);
+	expect(problems.map((problem) => problem.code)).toEqual(["STATE_FILE_SET_ASIDE"]);
 });
 
 test("an old copy that cannot be removed is reported, and the new copy is still kept", () => {

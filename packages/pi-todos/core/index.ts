@@ -1,4 +1,13 @@
-export { countItems, flatItems, groupStatus, STORE_DIR, storeRel, TodoStore } from "./store.ts";
+export {
+	countItems,
+	flatItems,
+	groupStatus,
+	observeTodoStoreProblems,
+	STORE_DIR,
+	storeRel,
+	TodoStore,
+	TodoStoreError,
+} from "./store.ts";
 export {
 	TODO_ARTIFACT_KINDS,
 	TODO_GROUP_STATUSES,
@@ -17,6 +26,7 @@ export {
 	type TodoPromoteFailure,
 	type TodoPromoteResult,
 	type TodoStatus,
+	type TodoStoreProblem,
 	type TodoUpdateResult,
 	type WriteItem,
 	type WritePlan,

@@ -23,13 +23,13 @@ import {
 	pageResources,
 	recordResource,
 	removeWorkspaceResourceHistory,
+	resetResourceHistoryForTests,
 	resourceHistoryRoot,
 } from "./resourceHistory";
 
 type Archive = typeof import("./resourceHistory");
 
 let dataDir: string;
-let restarts = 0;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 const scope = { workspaceId: "w1", sessionId: "chat-1" };
 const none = new Set<string>();
@@ -46,7 +46,8 @@ afterEach(() => {
 });
 
 async function restartedArchive(): Promise<Archive> {
-	return (await import(`${"./resourceHistory.ts"}?restart=${++restarts}`)) as Archive;
+	resetResourceHistoryForTests();
+	return import("./resourceHistory");
 }
 
 function command(
@@ -242,4 +243,27 @@ test("removing a workspace drops its history on disk and in memory", () => {
 	expect(
 		finishedResources({ workspaceId: "w2", sessionId: "chat-2" }, "command", none),
 	).toHaveLength(1);
+});
+
+test("a line with one wrong field is skipped, the rest load, and the file keeps its bytes", async () => {
+	const dir = join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId);
+	mkdirSync(dir, { recursive: true });
+	const good = JSON.stringify(command("good"));
+	const bad = JSON.stringify({
+		kind: "command",
+		summary: { ...command("bad").summary, finishedAt: "soon" },
+	});
+	const raw = `${good}\n${bad}\n`;
+	writeFileSync(join(dir, "index.jsonl"), raw);
+	const archive = await restartedArchive();
+	expect(archive.finishedResources(scope, "command", none).map(resourceRecordId)).toEqual(["good"]);
+	archive.recordResource(scope, command("next"));
+	expect(readFileSync(join(dir, "index.jsonl"), "utf8").startsWith(raw)).toBe(true);
+});
+
+test("an archived log of the wrong shape reads as no output", () => {
+	const dir = join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId, "logs");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "c1.json"), JSON.stringify({ text: 1, truncated: false }));
+	expect(archivedCommandOutput(scope, "c1")).toBeUndefined();
 });

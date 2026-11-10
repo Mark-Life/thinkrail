@@ -24,7 +24,7 @@ never grants control: nothing here is live authority.
 - **Public surface (barrel):** `recordResource`, `finishedResources`, `pageResources`,
   `archivedCommandOutput`, `removeWorkspaceResourceHistory`, `resourceHistoryRoot`, and the
   `ResourceHistoryScope` / `ArchivedOutput` types.
-- **Allowed deps:** `@thinkrail/shared/errnoCode`, `contracts` (the resource record vocabulary and ordering), `persistence` (`dataDir`),
+- **Allowed deps:** `pi-schema`, `@thinkrail/shared/errnoCode`, `contracts` (the resource record vocabulary and ordering), `persistence` (`dataDir`),
   `log`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `agent` or any live owner, pi, sessions or transcripts; deciding liveness itself (the caller
   passes the ids its owners still report); stopping or reading live work.
@@ -32,9 +32,10 @@ never grants control: nothing here is live authority.
 ## Format and invariants
 
 - The index is append-only JSON lines `{ kind, summary }`; the last line per `kind:id` wins and an identical
-  summary is never appended twice, so a record costs one line per reported status. Lines that do not parse
-  or fail the shape guard are skipped — a torn last line from a crash is one such line, and the next append
-  starts on a fresh line so it cannot swallow it.
+  summary is never appended twice, so a record costs one line per reported status. A line that is not JSON
+  or fails the `ResourceRecord` schema is skipped and counted in one warning, because the web refuses a whole page
+  with a bad record. The index is never rewritten, so the line's bytes stay. A torn last line from a crash is one
+  such line, and the next append starts on a fresh line so it cannot swallow it.
 - Writes are synchronous: a graceful shutdown's terminal edges arrive right before the process exits, and an
   awaited write could be lost. A finished command's log is written atomically before its index line, so a crash
   between the two leaves an unclaimed log rather than a claimed missing one. Write failures are logged, never
@@ -57,6 +58,6 @@ never grants control: nothing here is live authority.
 
 ## Verification obligations
 
-Upsert/dedupe, survival across a fresh module instance (the restart), derived interruption against a live
+Upsert/dedupe, survival across a dropped in-memory cache (the restart), derived interruption against a live
 set, log round-trip and its absence for a crash, torn/foreign line tolerance and recovery after a failed append, newest-first paging from a
 cursor, unsafe-id refusal, and workspace removal on disk and in cache.

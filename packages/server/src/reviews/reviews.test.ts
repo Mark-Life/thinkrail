@@ -704,6 +704,45 @@ test("writes land atomically: a rename, and no temp file left behind", async () 
 	expect(readdirSync(dir)).toEqual([`${WS_ID}.json`]);
 });
 
+test("a review file with the wrong shape is refused like a torn one, and stays on disk", async () => {
+	await addComment({ workspaceId: WS_ID, kind: "review", anchor: null, body: "keep me" });
+	const file = join(dataDir, "reviews", `${WS_ID}.json`);
+	const wrong = JSON.stringify({ review: { id: "r1" }, comments: "none" });
+	writeFileSync(file, wrong);
+	await expect(getReviewSnapshot(WS_ID)).rejects.toThrow(/damaged/);
+	await expect(clearReview(WS_ID)).rejects.toThrow(/damaged/);
+	expect(readFileSync(file, "utf8")).toBe(wrong);
+});
+
+test("a review file from the first release that had reviews loads whole", async () => {
+	const anchor = {
+		path: "a.ts",
+		side: "base",
+		baseRef: "abc",
+		selectors: [{ kind: "lineRange", startLine: 1, endLine: 2 }],
+	};
+	const comment = {
+		id: "c1",
+		reviewId: "r1",
+		kind: "inline",
+		anchor,
+		body: "older",
+		status: "sent",
+		anchorState: "anchored",
+		createdAt: 1,
+		sentAt: 2,
+	};
+	const review = { id: "r1", workspaceId: WS_ID, status: "open", baseSha: "abc", createdAt: 1 };
+	mkdirSync(join(dataDir, "reviews"), { recursive: true });
+	writeFileSync(
+		join(dataDir, "reviews", `${WS_ID}.json`),
+		JSON.stringify({ review, comments: [comment] }),
+	);
+	const loaded = await getReviewSnapshot(WS_ID);
+	expect(loaded.review.id).toBe("r1");
+	expect(loaded.comments.map((c) => c.body)).toEqual(["older"]);
+});
+
 test("resolve_comment skips a damaged sibling review rather than failing the resolve it belongs to", async () => {
 	const comment = await addComment({
 		workspaceId: WS_ID,

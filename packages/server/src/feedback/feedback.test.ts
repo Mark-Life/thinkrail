@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GithubStarAsk } from "@thinkrail/contracts";
@@ -642,4 +650,30 @@ test("a client that cannot show the star ask neither reads GitHub nor holds back
 	expect(sent).toEqual(["survey"]);
 	expect(calls.count).toBe(0);
 	expect(stored()).toMatchObject({ githubStarAsked: false });
+});
+
+test("a feedback file from before the survey fields loads with their defaults", () => {
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify({ acceptedMessages: 7, nextInvitationAt: 20, dismissed: true }),
+	);
+	recordAcceptedMessage("client");
+	const saved = JSON.parse(readFileSync(join(directory, "feedback.json"), "utf8"));
+	expect(saved).toEqual(feedback({ acceptedMessages: 8, nextInvitationAt: 20, dismissed: true }));
+});
+
+test("a feedback file of the wrong shape starts over and keeps a copy", () => {
+	const raw = JSON.stringify({ acceptedMessages: -1, nextInvitationAt: 20, dismissed: true });
+	writeFileSync(join(directory, "feedback.json"), raw);
+	recordAcceptedMessage("client");
+	const saved = JSON.parse(readFileSync(join(directory, "feedback.json"), "utf8"));
+	expect(saved).toEqual(feedback({ acceptedMessages: 1 }));
+	const copy = readdirSync(directory).find((name) => name.includes(".corrupt-"));
+	expect(readFileSync(join(directory, `${copy}`), "utf8")).toBe(raw);
+});
+
+test("a feedback file that could not be read is not replaced", () => {
+	mkdirSync(join(directory, "feedback.json"));
+	expect(() => completeSurvey("survey-1", 1)).toThrow("could not be read");
+	expect(readdirSync(join(directory, "feedback.json"))).toEqual([]);
 });

@@ -1,6 +1,16 @@
-import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import {
+	arr,
+	compile,
+	obj,
+	oneOf,
+	opt,
+	str,
+	unknown,
+	type Validator,
+} from "@earendil-works/pi-schema";
 import {
 	TODO_ARTIFACT_KINDS,
 	TODO_ORIGINS,
@@ -16,6 +26,7 @@ import {
 	type TodoPlan,
 	type TodoPromoteResult,
 	type TodoStatus,
+	type TodoStoreProblem,
 	type TodoUpdateResult,
 	type WriteItem,
 	type WritePlan,
@@ -56,15 +67,91 @@ const CURRENT_VERSION = 6 as const;
 // Home for a stray: an agent `done` item left in the loose lane on re-plan (see core/SPEC.md).
 const CARRIED_LOOSE_GROUP = "Completed";
 
-const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
-const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
-const ARTIFACT_KIND_SET: ReadonlySet<string> = new Set(TODO_ARTIFACT_KINDS);
+const StoredFile = compile(
+	obj(
+		{ todos: opt(arr(unknown())), groups: opt(arr(unknown())), summary: opt(str()) },
+		{ open: true },
+	),
+);
+const StoredItem = compile(
+	obj(
+		{
+			id: str(),
+			title: str(),
+			status: opt(oneOf(TODO_STATUSES)),
+			origin: opt(oneOf(TODO_ORIGINS)),
+			createdAt: opt(str()),
+			updatedAt: opt(str()),
+			note: opt(str()),
+			summary: opt(str()),
+			verification: opt(str()),
+			commitSubject: opt(str()),
+			artifacts: opt(arr(unknown())),
+		},
+		{ open: true },
+	),
+);
+const StoredGroup = compile(
+	obj({ id: opt(str()), title: str(), todos: opt(arr(unknown())) }, { open: true }),
+);
+const StoredArtifact = compile(
+	obj(
+		{
+			kind: oneOf(TODO_ARTIFACT_KINDS),
+			path: opt(str()),
+			sha: opt(str()),
+			label: opt(str()),
+			specId: opt(str()),
+		},
+		{ open: true },
+	),
+);
+const ArtifactWithLabel = compile(obj({ label: str() }, { open: true }));
 
-function isStatus(v: unknown): v is TodoStatus {
-	return typeof v === "string" && STATUS_SET.has(v);
+function parseFieldwise<T>(raw: unknown, validator: Validator<T>, onDrop: () => void): T | null {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+	const fields: Record<string, unknown> = { ...raw };
+	while (!validator.check(fields)) {
+		const field = validator
+			.errors(fields)[0]
+			?.path.split("/")[1]
+			?.replaceAll("~1", "/")
+			.replaceAll("~0", "~");
+		if (field === undefined || !Object.hasOwn(fields, field)) return null;
+		delete fields[field];
+		onDrop();
+	}
+	return fields;
 }
-function isOrigin(v: unknown): v is TodoOrigin {
-	return typeof v === "string" && ORIGIN_SET.has(v);
+
+type ProblemObserver = (problem: TodoStoreProblem) => void;
+
+let observer: ProblemObserver | null = null;
+const refusedOverwrites = new Set<string>();
+
+export function observeTodoStoreProblems(next: ProblemObserver | null): void {
+	observer = next;
+}
+
+export class TodoStoreError extends Error {
+	readonly code = "STATE_FILE_UNREADABLE";
+
+	constructor(message: string) {
+		super(message);
+		this.name = "TodoStoreError";
+	}
+}
+
+function isMissingFile(error: unknown): boolean {
+	return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+function isExistingFile(error: unknown): boolean {
+	return error instanceof Error && "code" in error && error.code === "EEXIST";
+}
+
+function emptyPlan(): TodoPlan {
+	return { todos: [], groups: [] };
 }
 
 function nowIso(): string {
@@ -100,11 +187,9 @@ function decodeMarkdownIfAgent(s: string, origin: TodoOrigin): string {
 
 function decodeArtifactsIfAgent(raw: unknown, origin: TodoOrigin): unknown {
 	if (origin !== "agent" || !Array.isArray(raw)) return raw;
-	return raw.map((entry) => {
-		if (typeof entry !== "object" || entry === null) return entry;
-		const o = entry as Record<string, unknown>;
-		return typeof o.label === "string" ? { ...o, label: decodeUnicode(o.label) } : o;
-	});
+	return raw.map((entry) =>
+		ArtifactWithLabel.check(entry) ? { ...entry, label: decodeUnicode(entry.label) } : entry,
+	);
 }
 
 // Titles are single-line by contract (item bullets and `##` group headings in the markdown export). A
@@ -114,59 +199,83 @@ function flattenTitle(s: string): string {
 	return s.replace(/\s+/g, " ").trim();
 }
 
-function sanitizeArtifacts(raw: unknown): TodoArtifact[] | undefined {
-	if (!Array.isArray(raw)) return undefined;
-	const out: TodoArtifact[] = [];
-	for (const entry of raw) {
-		if (typeof entry !== "object" || entry === null) continue;
-		const o = entry as Record<string, unknown>;
-		if (typeof o.kind !== "string" || !ARTIFACT_KIND_SET.has(o.kind)) continue;
-		const artifact: TodoArtifact = { kind: o.kind as TodoArtifact["kind"] };
-		if (typeof o.path === "string" && o.path) artifact.path = o.path;
-		if (typeof o.sha === "string" && o.sha) artifact.sha = o.sha;
-		if (typeof o.label === "string" && o.label) artifact.label = o.label;
-		if (typeof o.specId === "string" && o.specId) artifact.specId = o.specId;
-		if (artifact.kind === "commit" ? !artifact.sha : !artifact.path) continue;
-		out.push(artifact);
-	}
-	return out.length > 0 ? out : undefined;
+function artifactOf(entry: unknown): TodoArtifact | null {
+	if (!StoredArtifact.check(entry)) return null;
+	const artifact: TodoArtifact = { kind: entry.kind };
+	if (entry.path) artifact.path = entry.path;
+	if (entry.sha) artifact.sha = entry.sha;
+	if (entry.label) artifact.label = entry.label;
+	if (entry.specId) artifact.specId = entry.specId;
+	return (artifact.kind === "commit" ? artifact.sha : artifact.path) ? artifact : null;
 }
 
-function sanitize(raw: unknown): Todo | null {
-	if (typeof raw !== "object" || raw === null) return null;
-	const o = raw as Record<string, unknown>;
-	if (typeof o.id !== "string" || typeof o.title !== "string") return null;
+function inputArtifacts(raw: unknown): TodoArtifact[] | undefined {
+	const kept = Array.isArray(raw) ? raw.map(artifactOf).filter((entry) => entry !== null) : [];
+	return kept.length > 0 ? kept : undefined;
+}
+
+function sanitize(raw: unknown, onDrop: () => void): Todo | null {
+	const item = parseFieldwise(raw, StoredItem, onDrop);
+	if (!item) return null;
 	const now = nowIso();
-	const origin: TodoOrigin = isOrigin(o.origin) ? o.origin : "agent";
 	const todo: Todo = {
-		id: o.id,
-		title: flattenTitle(o.title),
-		status: isStatus(o.status) ? o.status : "pending",
-		origin,
-		createdAt: typeof o.createdAt === "string" ? o.createdAt : now,
-		updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : now,
+		id: item.id,
+		title: flattenTitle(item.title),
+		status: item.status ?? "pending",
+		origin: item.origin ?? "agent",
+		createdAt: item.createdAt ?? now,
+		updatedAt: item.updatedAt ?? now,
 	};
-	if (typeof o.note === "string" && o.note) todo.note = o.note;
-	if (typeof o.summary === "string" && o.summary) todo.summary = o.summary;
-	if (typeof o.verification === "string" && o.verification) todo.verification = o.verification;
-	if (typeof o.commitSubject === "string" && o.commitSubject) todo.commitSubject = o.commitSubject;
-	const artifacts = sanitizeArtifacts(o.artifacts);
-	if (artifacts) todo.artifacts = artifacts;
+	if (item.note) todo.note = item.note;
+	if (item.summary) todo.summary = item.summary;
+	if (item.verification) todo.verification = item.verification;
+	if (item.commitSubject) todo.commitSubject = item.commitSubject;
+	const artifacts = keptEntries(item.artifacts, artifactOf, onDrop);
+	if (artifacts.length > 0) todo.artifacts = artifacts;
 	return todo;
 }
 
-function sanitizeGroup(raw: unknown): TodoGroup | null {
-	if (typeof raw !== "object" || raw === null) return null;
-	const o = raw as Record<string, unknown>;
-	if (typeof o.title !== "string") return null;
-	const todos = Array.isArray(o.todos)
-		? o.todos.map(sanitize).filter((t): t is Todo => t !== null)
-		: [];
+function keptEntries<T>(
+	raw: readonly unknown[] | undefined,
+	parse: (entry: unknown) => T | null,
+	onDrop: () => void,
+): T[] {
+	if (raw === undefined) return [];
+	const kept = raw.map(parse).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+	if (kept.length < raw.length) onDrop();
+	return kept;
+}
+
+function sanitizeGroup(raw: unknown, onDrop: () => void): TodoGroup | null {
+	const group = parseFieldwise(raw, StoredGroup, onDrop);
+	if (!group) return null;
 	return {
-		id: typeof o.id === "string" ? o.id : freshId("g"),
-		title: flattenTitle(o.title),
-		todos,
+		id: group.id ?? freshId("g"),
+		title: flattenTitle(group.title),
+		todos: keptEntries(group.todos, (entry) => sanitize(entry, onDrop), onDrop),
 	};
+}
+
+function report(code: TodoStoreProblem["code"], message: string): void {
+	observer?.({ code, message });
+}
+
+function keepCorruptCopy(file: string, raw: string, refusedBefore: boolean): void {
+	const hash = createHash("sha256").update(raw).digest("hex").slice(0, 12);
+	const copy = `${file}.corrupt-${hash}`;
+	try {
+		writeFileSync(copy, raw, { flag: "wx", mode: 0o600 });
+	} catch (error) {
+		if (isExistingFile(error)) return;
+		refusedOverwrites.add(file);
+		if (refusedBefore) return;
+		report(
+			"STATE_FILE_UNREADABLE",
+			`${basename(file)}: a read lost data, and no copy could be kept`,
+		);
+		return;
+	}
+	report("STATE_FILE_SET_ASIDE", `${basename(file)}: a read lost data; copy at ${basename(copy)}`);
 }
 
 function makeTodo(
@@ -190,7 +299,7 @@ function makeTodo(
 	if (note) todo.note = decodeIfAgent(note, origin);
 	if (summary) todo.summary = decodeMarkdownIfAgent(summary, origin);
 	if (verification) todo.verification = decodeMarkdownIfAgent(verification, origin);
-	const clean = sanitizeArtifacts(decodeArtifactsIfAgent(artifacts, origin));
+	const clean = inputArtifacts(decodeArtifactsIfAgent(artifacts, origin));
 	if (clean) todo.artifacts = clean;
 	return todo;
 }
@@ -203,22 +312,37 @@ export class TodoStore {
 	}
 
 	read(): TodoPlan {
-		if (!existsSync(this.file)) return { todos: [], groups: [] };
+		let raw: string;
+		try {
+			raw = readFileSync(this.file, "utf8");
+		} catch (error) {
+			if (isMissingFile(error)) {
+				refusedOverwrites.delete(this.file);
+			} else if (!refusedOverwrites.has(this.file)) {
+				refusedOverwrites.add(this.file);
+				report("STATE_FILE_UNREADABLE", `${basename(this.file)}: could not be read`);
+			}
+			return emptyPlan();
+		}
+		const refusedBefore = refusedOverwrites.delete(this.file);
+		const onDrop = () => keepCorruptCopy(this.file, raw, refusedBefore);
 		let parsed: unknown;
 		try {
-			parsed = JSON.parse(readFileSync(this.file, "utf8"));
+			parsed = JSON.parse(raw);
 		} catch {
-			return { todos: [], groups: [] };
+			onDrop();
+			return emptyPlan();
 		}
-		const file = parsed as Partial<TodoFile> | null;
-		const todos = Array.isArray(file?.todos)
-			? file.todos.map(sanitize).filter((t): t is Todo => t !== null)
-			: [];
-		const groups = Array.isArray(file?.groups)
-			? file.groups.map(sanitizeGroup).filter((g): g is TodoGroup => g !== null)
-			: [];
-		const plan: TodoPlan = { todos, groups };
-		if (typeof file?.summary === "string" && file.summary) plan.summary = file.summary;
+		const stored = parseFieldwise(parsed, StoredFile, onDrop);
+		if (!stored) {
+			onDrop();
+			return emptyPlan();
+		}
+		const plan: TodoPlan = {
+			todos: keptEntries(stored.todos, (entry) => sanitize(entry, onDrop), onDrop),
+			groups: keptEntries(stored.groups, (entry) => sanitizeGroup(entry, onDrop), onDrop),
+		};
+		if (stored.summary) plan.summary = stored.summary;
 		return plan;
 	}
 
@@ -336,7 +460,7 @@ export class TodoStore {
 			else delete todo.commitSubject;
 		}
 		if (patch.artifacts !== undefined) {
-			const clean = sanitizeArtifacts(decodeArtifactsIfAgent(patch.artifacts, todo.origin));
+			const clean = inputArtifacts(decodeArtifactsIfAgent(patch.artifacts, todo.origin));
 			if (clean) todo.artifacts = clean;
 			else delete todo.artifacts;
 		}
@@ -364,11 +488,11 @@ export class TodoStore {
 	promote(id: string, titleOverride?: string): TodoPromoteResult {
 		const plan = this.read();
 		const idx = plan.todos.findIndex((t) => t.id === id);
-		if (idx === -1) {
+		const item = plan.todos[idx];
+		if (!item) {
 			const inGroup = plan.groups.some((g) => g.todos.some((t) => t.id === id));
 			return { ok: false, reason: inGroup ? "grouped-step" : "unknown-id" };
 		}
-		const item = plan.todos[idx] as Todo;
 		const title = flattenTitle(
 			titleOverride !== undefined ? decodeUnicode(titleOverride) : item.title,
 		);
@@ -468,6 +592,9 @@ export class TodoStore {
 	}
 
 	private write(plan: TodoPlan): void {
+		if (refusedOverwrites.has(this.file)) {
+			throw new TodoStoreError(`${basename(this.file)} could not be read, so it was not replaced`);
+		}
 		const file: TodoFile = {
 			version: CURRENT_VERSION,
 			todos: plan.todos,

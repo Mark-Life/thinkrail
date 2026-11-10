@@ -9,14 +9,15 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type {
-	GitDiffScope,
-	ReviewAnchor,
-	ReviewChangedPayload,
-	ReviewComment,
-	ReviewCommentKind,
-	ReviewCommentStatus,
-	ReviewGuide,
+import { compile } from "@earendil-works/pi-schema";
+import {
+	type GitDiffScope,
+	type ReviewAnchor,
+	type ReviewChangedPayload,
+	type ReviewComment,
+	type ReviewCommentKind,
+	type ReviewCommentStatus,
+	type ReviewGuide,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
 import { hasErrno } from "@thinkrail/shared/errnoCode";
@@ -60,6 +61,8 @@ function reviewsDir(): string {
 
 const SAFE_ID = /^[\w-]+$/;
 
+const StoredSnapshot = compile(ReviewSnapshot);
+
 class InvalidReviewIdError extends Error {}
 class DamagedReviewFileError extends Error {}
 
@@ -94,13 +97,16 @@ function readSnapshot(file: string): ReviewSnapshot | null {
 		if (hasErrno(err, "ENOENT")) return null;
 		throw err;
 	}
+	let parsed: unknown;
 	try {
-		return JSON.parse(raw) as ReviewSnapshot;
+		parsed = JSON.parse(raw);
 	} catch {
-		throw new DamagedReviewFileError(
-			`Review file ${file} is damaged and was left in place — repair or remove it.`,
-		);
+		parsed = undefined;
 	}
+	if (StoredSnapshot.check(parsed)) return parsed;
+	throw new DamagedReviewFileError(
+		`Review file ${file} is damaged and was left in place — repair or remove it.`,
+	);
 }
 
 export function reviewReadFailure(error: unknown): string {

@@ -90,6 +90,27 @@ describe("discoverCompatibilitySkillSources", () => {
 		expect(sources.map((source) => source.path)).not.toContain(join(project, ".cursor", "skills"));
 	});
 
+	it("keeps the good installs when installed_plugins.json has entries of another shape", () => {
+		const root = temporaryRoot();
+		const project = directory(join(root, "project"));
+		const claudeConfig = directory(join(root, "claude-config"));
+		const installPath = directory(join(root, "plugin"));
+		directory(join(installPath, "skills"));
+		directory(join(claudeConfig, "plugins"));
+		writeFileSync(
+			join(claudeConfig, "plugins", "installed_plugins.json"),
+			JSON.stringify({
+				plugins: { "a@m": [null, { installPath: 1 }, { installPath }], "b@m": "not a list" },
+			}),
+		);
+
+		const sources = discoverCompatibilitySkillSources(project, {
+			env: { HOME: directory(join(root, "home")), CLAUDE_CONFIG_DIR: claudeConfig },
+		});
+
+		expect(sources.filter((s) => s.plugin).map((s) => s.plugin)).toEqual(["a"]);
+	});
+
 	it("discovers installed Claude plugins' skills from installed_plugins.json, not a cache sweep", () => {
 		const root = temporaryRoot();
 		const project = directory(join(root, "project"));

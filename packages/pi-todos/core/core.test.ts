@@ -1,8 +1,26 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { flatItems, groupStatus, storeRel, type TodoGroup, TodoStore } from "./index.ts";
+import {
+	flatItems,
+	groupStatus,
+	observeTodoStoreProblems,
+	storeRel,
+	type TodoGroup,
+	TodoStore,
+	TodoStoreError,
+	type TodoStoreProblem,
+} from "./index.ts";
 
 const SESSION = "sess-test";
 
@@ -460,8 +478,8 @@ test("a legacy on-disk agent item with literal \\uXXXX is NOT decoded on read, a
 		const s = store(root);
 		expect(s.get("t_old")?.title).toBe("\\u0411\\u041b\\u041e\\u041a");
 		s.update("t_old", { status: "done" });
-		const raw = JSON.parse(readFileSync(file, "utf8")) as { todos: { title: string }[] };
-		expect(raw.todos[0]?.title).toBe("\\u0411\\u041b\\u041e\\u041a");
+		const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+		expect(raw).toMatchObject({ todos: [{ title: "\\u0411\\u041b\\u041e\\u041a" }] });
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -569,6 +587,100 @@ test("a corrupt store file degrades to an empty list rather than throwing", () =
 		writeFileSync(file, "not json{", "utf8");
 		expect(store(root).read()).toEqual({ todos: [], groups: [] });
 	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a plan a hand edit broke survives the next write in a copy", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		s.add({ title: "first" });
+		s.add({ title: "second" });
+		const broken = readFileSync(s.file, "utf8").replace(/\n\}\s*$/, ",\n}");
+		writeFileSync(s.file, broken, "utf8");
+
+		expect(s.read()).toEqual({ todos: [], groups: [] });
+		s.add({ title: "new" });
+
+		expect(s.read().todos.map((todo) => todo.title)).toEqual(["new"]);
+		const copies = readdirSync(dirname(s.file)).filter((name) => name.includes(".corrupt-"));
+		expect(copies).toHaveLength(1);
+		expect(readFileSync(join(dirname(s.file), copies[0] ?? ""), "utf8")).toBe(broken);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a dropped item or field keeps a copy, and a clean file makes none", () => {
+	const root = tempRoot();
+	const copies = (s: TodoStore) =>
+		readdirSync(dirname(s.file)).filter((name) => name.includes(".corrupt-"));
+	try {
+		const s = store(root);
+		s.add({ title: "kept" });
+		s.read();
+		expect(copies(s)).toEqual([]);
+
+		writeFileSync(s.file, JSON.stringify({ todos: [{ id: "a", title: "a", status: "weird" }] }));
+		expect(s.read().todos[0]?.status).toBe("pending");
+		expect(copies(s)).toHaveLength(1);
+
+		writeFileSync(s.file, JSON.stringify({ todos: [{ id: "a", title: "a" }, null] }));
+		expect(s.read().todos).toHaveLength(1);
+		expect(copies(s)).toHaveLength(2);
+
+		writeFileSync(
+			s.file,
+			JSON.stringify({ todos: [{ id: "a", title: "a", artifacts: [{ kind: "commit" }] }] }),
+		);
+		expect(s.read().todos[0]?.artifacts).toBeUndefined();
+		expect(copies(s)).toHaveLength(3);
+
+		for (const shape of ["[1]", "null", '{"todos":5}', '{"groups":[{"title":"g","todos":[1]}]}']) {
+			writeFileSync(s.file, shape);
+			s.read();
+		}
+		expect(copies(s)).toHaveLength(7);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a plan that cannot be read or copied is never replaced, and each problem is reported", () => {
+	const root = tempRoot();
+	const problems: TodoStoreProblem[] = [];
+	observeTodoStoreProblems((problem) => problems.push(problem));
+	try {
+		const s = store(root);
+		s.add({ title: "private step" });
+		const stored = readFileSync(s.file, "utf8");
+		rmSync(s.file);
+		mkdirSync(s.file);
+		expect(s.read()).toEqual({ todos: [], groups: [] });
+		expect(() => s.add({ title: "lost" })).toThrow(TodoStoreError);
+		expect(problems.map((problem) => problem.code)).toEqual(["STATE_FILE_UNREADABLE"]);
+
+		rmSync(s.file, { recursive: true });
+		writeFileSync(s.file, stored);
+		expect(s.read().todos.map((todo) => todo.title)).toEqual(["private step"]);
+		s.add({ title: "after" });
+
+		writeFileSync(s.file, JSON.stringify({ todos: [null] }));
+		chmodSync(dirname(s.file), 0o500);
+		try {
+			expect(s.read().todos).toEqual([]);
+			expect(() => s.add({ title: "lost" })).toThrow(TodoStoreError);
+		} finally {
+			chmodSync(dirname(s.file), 0o700);
+		}
+		expect(problems.map((problem) => problem.code)).toEqual([
+			"STATE_FILE_UNREADABLE",
+			"STATE_FILE_UNREADABLE",
+		]);
+		expect(problems.every((problem) => !problem.message.includes("private"))).toBe(true);
+	} finally {
+		observeTodoStoreProblems(null);
 		rmSync(root, { recursive: true, force: true });
 	}
 });
@@ -765,7 +877,8 @@ test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to the curre
 		);
 		expect(store(root).get("t_old")?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
 		store(root).add({ title: "new" }); // any write upgrades the file version
-		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(6);
+		const stored: unknown = JSON.parse(readFileSync(file, "utf8"));
+		expect(stored).toMatchObject({ version: 6 });
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
