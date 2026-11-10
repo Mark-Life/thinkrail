@@ -1,6 +1,7 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	DROPPED_UPDATE_KEYS,
 	type ExtensionSettingValues,
 	isLocalePreference,
 	RECENT_MODELS_LIMIT,
@@ -20,79 +21,11 @@ import { keepValidStoredPresets, validateCustomLayoutPresets } from "./layoutPre
 const log = logger("settings");
 
 export type SettingsPublisher = (config: AppConfig, appliedUpdate: AppConfigUpdate) => void;
-type RuntimeAppConfigUpdate = AppConfigUpdate & {
-	chatMessageOrder?: unknown;
-	layout?: unknown;
-	recentModels?: unknown;
-};
+type RuntimeAppConfigUpdate = AppConfigUpdate &
+	Partial<Record<(typeof DROPPED_UPDATE_KEYS)[number], unknown>>;
 
-const ACCEPTED_UPDATE_KEYS = {
-	theme: true,
-	themeMode: true,
-	systemThemePair: true,
-	analyticsEnabled: true,
-	analyticsConsentConfirmed: true,
-	notificationsEnabled: true,
-	terminalReplayKb: true,
-	terminalWindowsShell: true,
-	composerGrowthLimit: true,
-	chatLineWidth: true,
-	fileLineWidth: true,
-	chatLineWidthBounded: true,
-	fileLineWidthBounded: true,
-	voiceInputEnabled: true,
-	customLayoutPresets: true,
-	favoriteModels: true,
-	defaultModel: true,
-	defaultEffort: true,
-	reviewModel: true,
-	reviewEffort: true,
-	reviewAutoFix: true,
-	agentReviewEnabled: true,
-	subagentsEnabled: true,
-	subagentMaxConcurrent: true,
-	jbcentralQuotaEnabled: true,
-	jbcentralQuotaRefreshSeconds: true,
-	settleIdleDays: true,
-	disabledExtensions: true,
-	extensionSettings: true,
-	otherAgentSkills: true,
-	disabledPackages: true,
-	locale: true,
-	onboardingDismissed: true,
-	interfaceFont: true,
-	codeFont: true,
-	codeFontSize: true,
-	codeLigatures: true,
-	fontWeightOffset: true,
-	chatMessageOrder: true,
-	layout: true,
-	recentModels: true,
-} satisfies Record<keyof RuntimeAppConfigUpdate, true>;
-
-function assertKnownKeys(update: AppConfigUpdate): void {
-	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
-	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
-}
-
-function identifiesModel(model: WireModel): boolean {
-	return model.provider.length > 0 && model.id.length > 0;
-}
-
-function validateFavoriteModels(value: WireModel[]): WireModel[] {
-	if (!value.every(identifiesModel)) {
-		throw new Error("favoriteModels must be a list of models");
-	}
-	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
-}
-
-function validateExtensionSettings(value: ExtensionSettingValues): ExtensionSettingValues {
-	const named = Object.entries(value).every(
-		([name, settings]) =>
-			name.trim().length > 0 && Object.keys(settings).every((key) => key.trim().length > 0),
-	);
-	if (!named) throw new Error("extensionSettings must map extension names to boolean settings");
-	return value;
+function withoutRepeats(models: WireModel[]): WireModel[] {
+	return models.filter((model, index) => models.findIndex((m) => sameModel(m, model)) === index);
 }
 
 function mergeExtensionSettings(
@@ -104,13 +37,6 @@ function mergeExtensionSettings(
 		next[name] = { ...(current[name] ?? {}), ...settings };
 	}
 	return next;
-}
-
-function validateNameList(value: string[], setting: string, noun: string): string[] {
-	if (!value.every((name) => name.trim().length > 0)) {
-		throw new Error(`${setting} must be a list of ${noun}`);
-	}
-	return [...new Set(value)];
 }
 
 let publishSettings: SettingsPublisher | null = null;
@@ -159,17 +85,10 @@ export function configReadFailed(): boolean {
 	return false;
 }
 
+/** `partial` passed the `AppConfigUpdate` params schema at dispatch. */
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
-	assertKnownKeys(partial);
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
-	delete runtimeUpdate.chatMessageOrder;
-	delete runtimeUpdate.layout;
-	if (
-		runtimeUpdate.analyticsConsentConfirmed !== undefined &&
-		runtimeUpdate.analyticsEnabled === undefined
-	) {
-		throw new Error("analytics consent must include the sharing preference");
-	}
+	for (const key of DROPPED_UPDATE_KEYS) delete runtimeUpdate[key];
 	const {
 		defaultModel,
 		defaultEffort,
@@ -189,24 +108,6 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		disabledPackages,
 		...rest
 	} = runtimeUpdate;
-	const extensionSettingsUpdate =
-		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
-	const nextDisabledExtensions =
-		disabledExtensions === undefined
-			? undefined
-			: validateNameList(disabledExtensions, "disabledExtensions", "extension names");
-	const nextDisabledPackages =
-		disabledPackages === undefined
-			? undefined
-			: validateNameList(disabledPackages, "disabledPackages", "package identities");
-	for (const [name, value] of [
-		["defaultModel", defaultModel],
-		["reviewModel", reviewModel],
-	] as const) {
-		if (value !== undefined && value !== null && !identifiesModel(value)) {
-			throw new Error(`${name} must be a model or null`);
-		}
-	}
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
 		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
 	}
@@ -239,19 +140,19 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),
-		...(favoriteModels === undefined
+		...(favoriteModels === undefined ? {} : { favoriteModels: withoutRepeats(favoriteModels) }),
+		...(disabledExtensions === undefined
 			? {}
-			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
-		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
-		...(extensionSettingsUpdate === undefined
+			: { disabledExtensions: [...new Set(disabledExtensions)] }),
+		...(extensionSettings === undefined
 			? {}
 			: {
 					extensionSettings: mergeExtensionSettings(
 						current.extensionSettings ?? {},
-						extensionSettingsUpdate,
+						extensionSettings,
 					),
 				}),
-		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
+		...(disabledPackages === undefined ? {} : { disabledPackages: [...new Set(disabledPackages)] }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;

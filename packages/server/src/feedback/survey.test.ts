@@ -273,7 +273,9 @@ test("a submission must name its survey version and a v4 submission id", () => {
 		{ iteration: -1 },
 		{ iteration: 1.5 },
 	]) {
-		expect(() => submission({}, overrides)).toThrow("Invalid survey submission");
+		expect(() => submission({}, overrides)).toThrow(
+			expect.objectContaining({ code: "SURVEY_INVALID", message: "Invalid survey submission" }),
+		);
 	}
 });
 

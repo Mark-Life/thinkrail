@@ -34,13 +34,14 @@ that map.
   working together. `obj()` without `open` is closed, so it is not used for wire shapes, except `FontFamilyRef`:
   each branch holds one key, and a ref with both keys would read as two fonts.
 - **A `Partial` wire type uses `partialWireObj`.** `AppConfigUpdate` and `PartialAppConfig` take the fields of `AppConfig`,
-  so a setting is declared once. The update stays open here; `updateConfig` owns the closed key set. `PartialAppConfig`
-  is what a reader of a stored or older config checks field by field.
+  so a setting is declared once. `AppConfigUpdate` also closes its key set through `propertyNames`, built from the
+  same field table, and adds the request rules JSON Schema holds: non-blank names, a named model, and consent only
+  with the preference. `PartialAppConfig` is what a reader of a stored or older config checks field by field.
 - **One file per method namespace.** A namespace file exports its entity schemas, a `*_METHODS` record and, if it owns
   a push channel, a `*_CHANNELS` record; `methods.ts` and `channels.ts` merge the records. An entity several namespaces share gets its own file.
 - **Schemas check shape and fixed bounds.** A setting's range (`LineWidth`, `CodeFontSize`, `SettleIdleDays`, ...), a
   font family name's pattern and a fallback list's size live in the schema, with the constant that names them. A rule
-  that needs host state, crosses fields, or gives the user a specific message, such as the URL rules of `project.clone`
+  that needs host state, or gives the user a specific message, such as the URL rules of `project.clone`
   or a canonical locale tag, stays with its handler. A handler does not check the shape again.
 - **A wire change is a schema edit.** It shows in the diff under this directory: decide on a `PROTOCOL_VERSION`
   bump in the same change.

@@ -40,6 +40,15 @@ function wireUpdate(raw: unknown): AppConfigUpdate {
 	return raw;
 }
 
+const wireModel = (id: string, provider = "p") => ({
+	id,
+	name: id.toUpperCase(),
+	provider,
+	contextWindow: 1,
+	reasoning: false,
+	thinkingLevels: [],
+});
+
 function preset(id = "custom"): LayoutPreset {
 	return {
 		id,
@@ -138,17 +147,33 @@ test("a legacy preference-only write cannot re-enable additional data after a de
 	expect(() => updateConfig({ analyticsEnabled: true })).toThrow("explicit confirmation");
 });
 
-test("incomplete consent updates leave disk, cache and broadcasts unchanged", () => {
-	updateConfig({ analyticsEnabled: false, analyticsConsentConfirmed: false });
-	const before = readFileSync(join(dataDir, "config.json"), "utf8");
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	expect(() => updateConfig({ analyticsConsentConfirmed: true })).toThrow(
-		"analytics consent must include the sharing preference",
-	);
-	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(before);
-	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
-	expect(published).toEqual([]);
+test.each([
+	["a consent confirmation without the sharing preference", { analyticsConsentConfirmed: true }],
+	["an unknown key", { futureSetting: true }],
+	["an unknown key beside a known one", { theme: "acme.dark", futureSetting: 1 }],
+	["a prototype key", JSON.parse('{"__proto__":{"theme":"x"}}')],
+	["an inherited key", { toString: "x" }],
+	["a blank disabled-extensions name", { disabledExtensions: [""] }],
+	["a whitespace disabled-extensions name", { disabledExtensions: ["  "] }],
+	["a blank disabled-packages identity", { disabledPackages: [""] }],
+	["a blank extension name", { extensionSettings: { "": { flag: true } } }],
+	["a blank extension setting key", { extensionSettings: { x: { " ": true } } }],
+	["a defaultModel with no provider", { defaultModel: { ...wireModel("m"), provider: "" } }],
+	["a reviewModel with no id", { reviewModel: { ...wireModel("m"), id: "" } }],
+	["a favorite with no id", { favoriteModels: [{ ...wireModel("x"), id: "" }] }],
+])("the settings.update params schema refuses %s", (_label, update) => {
+	expect(WireUpdate.check(update)).toBe(false);
+});
+
+test("the settings.update params schema passes the keys an older client still sends", () => {
+	for (const update of [
+		{ chatMessageOrder: "newest-first" },
+		{ layout: { left: 1 } },
+		{ recentModels: "junk" },
+		{ analyticsEnabled: false, analyticsConsentConfirmed: true },
+	]) {
+		expect(WireUpdate.check(update)).toBe(true);
+	}
 });
 
 test("failed consent persistence never updates the cached choice or publishes it", () => {
@@ -264,29 +289,6 @@ test("an older host preserves unknown top-level config extensions when updating 
 	updateConfig({ theme: "acme.changed" });
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
 	expect(onDisk.futureSetting).toEqual({ mode: "new" });
-});
-
-test("an unknown update key rejects the whole update before persistence or broadcast", () => {
-	writeFileSync(join(dataDir, "config.json"), JSON.stringify(DEFAULT_CONFIG));
-	resetConfigCache();
-	const before = getConfig();
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-
-	expect(() => updateConfig(wireUpdate({ futureSetting: true }))).toThrow(
-		"Unknown setting: futureSetting",
-	);
-	expect(() => updateConfig(wireUpdate({ theme: "acme.dark", futureSetting: 1 }))).toThrow(
-		"Unknown setting: futureSetting",
-	);
-	expect(() => updateConfig(wireUpdate(JSON.parse('{"__proto__":{"theme":"x"}}')))).toThrow(
-		"Unknown setting: __proto__",
-	);
-	expect(() => updateConfig(wireUpdate({ toString: "x" }))).toThrow("Unknown setting: toString");
-
-	expect(getConfig()).toEqual(before);
-	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toEqual(before);
-	expect(published).toEqual([]);
 });
 
 test("empty and multi-key valid updates persist and publish", () => {
@@ -422,19 +424,7 @@ test("disabled extensions default empty, round-trip deduped, and keep unknown na
 	expect(updateConfig({ disabledExtensions: [] }).disabledExtensions).toEqual([]);
 });
 
-test("a blank disabled-extensions name is rejected; a malformed stored list keeps valid names", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const disabledExtensions of [[""], ["  "]]) {
-		expect(() => updateConfig({ disabledExtensions })).toThrow(
-			"disabledExtensions must be a list of extension names",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-
+test("a malformed stored disabled-extensions list keeps valid names", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({ disabledExtensions: ["visualize", 3, "", "visualize"] }),
@@ -469,12 +459,6 @@ test("extension settings merge per extension and key, persist, and drop non-bool
 		other: true,
 	});
 
-	for (const extensionSettings of [{ "": { flag: true } }, { x: { " ": true } }]) {
-		expect(() => updateConfig({ extensionSettings })).toThrow(
-			"extensionSettings must map extension names to boolean settings",
-		);
-	}
-
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({ extensionSettings: { a: { on: true, bad: "x" }, b: "nope", c: { bad: 1 } } }),
@@ -483,7 +467,7 @@ test("extension settings merge per extension and key, persist, and drop non-bool
 	expect(getConfig().extensionSettings).toEqual({ a: { on: true } });
 });
 
-test("disabled packages default empty, round-trip deduped, and reject a blank identity", () => {
+test("disabled packages default empty and round-trip deduped", () => {
 	expect(DEFAULT_CONFIG.disabledPackages).toEqual([]);
 	expect(getConfig().disabledPackages).toEqual([]);
 	const next = updateConfig({
@@ -492,9 +476,6 @@ test("disabled packages default empty, round-trip deduped, and reject a blank id
 	expect(next.disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
 	resetConfigCache();
 	expect(getConfig().disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
-	expect(() => updateConfig({ disabledPackages: [""] })).toThrow(
-		"disabledPackages must be a list of package identities",
-	);
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({ disabledPackages: ["npm:x", 3, ""] }),
@@ -736,26 +717,6 @@ test("a null reviewModel/reviewEffort clears the override back to unset, and it 
 	expect(getConfig().reviewEffort).toBeUndefined();
 });
 
-test("a defaultModel or reviewModel with no identity rejects the whole update before persistence or broadcast", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const model of [
-		{ ...wireModel("m"), provider: "" },
-		{ ...wireModel("m"), id: "" },
-	]) {
-		expect(() => updateConfig({ defaultModel: model })).toThrow(
-			"defaultModel must be a model or null",
-		);
-		expect(() => updateConfig({ reviewModel: model })).toThrow(
-			"reviewModel must be a model or null",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-});
-
 test("loadConfig ignores the old layout settings object", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
@@ -890,15 +851,6 @@ test("a stored preset from before Changes joined Files keeps its layout", () => 
 	expect(onDisk.customLayoutPresets).toHaveLength(2);
 });
 
-const wireModel = (id: string, provider = "p") => ({
-	id,
-	name: id.toUpperCase(),
-	provider,
-	contextWindow: 1,
-	reasoning: false,
-	thinkingLevels: [],
-});
-
 test("favoriteModels persist as a whole list, deduped by provider/id", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
@@ -909,13 +861,6 @@ test("favoriteModels persist as a whole list, deduped by provider/id", () => {
 	resetConfigCache();
 	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["a", "b"]);
 	expect(published).toHaveLength(1);
-});
-
-test("a favoriteModels entry with no identity rejects the whole update before persisting", () => {
-	expect(() => updateConfig({ favoriteModels: [{ ...wireModel("x"), id: "" }] })).toThrow(
-		"favoriteModels must be a list of models",
-	);
-	expect(getConfig().favoriteModels).toEqual([]);
 });
 
 test("recentModels is host-owned: client writes are ignored, noteRecentModel caps and dedupes", () => {

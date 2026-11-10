@@ -257,14 +257,38 @@ export type AppConfig = Static<typeof AppConfig>;
 export const PartialAppConfig = partialWireObj(APP_CONFIG_RESULT_FIELDS);
 export type PartialAppConfig = Static<typeof PartialAppConfig>;
 
-/** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
-export const AppConfigUpdate = partialWireObj({
+/** `schema` with more JSON Schema rules: it accepts less, and its values keep `schema`'s type. */
+function narrowed<T>(schema: Schema<T>, rules: Schema): Schema<T> {
+	return { allOf: [schema, rules] };
+}
+
+const NonBlank = str({ pattern: String.raw`\S` });
+const NonEmpty = str({ minLength: 1 });
+const NamedModel = narrowed(WireModel, { properties: { provider: NonEmpty, id: NonEmpty } });
+
+const APP_CONFIG_UPDATE_FIELDS = {
 	...APP_CONFIG_FIELDS,
+	favoriteModels: arr(NamedModel),
+	disabledExtensions: arr(NonBlank),
+	disabledPackages: arr(NonBlank),
+	extensionSettings: narrowed(ExtensionSettingValues, {
+		propertyNames: NonBlank,
+		additionalProperties: { propertyNames: NonBlank },
+	}),
 	customLayoutPresets: arr(LayoutPresetParams),
-	defaultModel: nullable(WireModel),
+	defaultModel: nullable(NamedModel),
 	defaultEffort: nullable(ThinkingLevel),
-	reviewModel: nullable(WireModel),
+	reviewModel: nullable(NamedModel),
 	reviewEffort: nullable(ThinkingLevel),
+};
+
+/** Keys an older client may still send: they pass, and the host drops them. */
+export const DROPPED_UPDATE_KEYS = ["chatMessageOrder", "layout", "recentModels"] as const;
+
+/** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
+export const AppConfigUpdate = narrowed(partialWireObj(APP_CONFIG_UPDATE_FIELDS), {
+	propertyNames: oneOf([...Object.keys(APP_CONFIG_UPDATE_FIELDS), ...DROPPED_UPDATE_KEYS]),
+	dependentRequired: { analyticsConsentConfirmed: ["analyticsEnabled"] },
 });
 export type AppConfigUpdate = Static<typeof AppConfigUpdate>;
 

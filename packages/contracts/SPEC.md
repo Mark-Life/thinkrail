@@ -698,7 +698,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   naming the method or channel and the failing fields. A client reads `server.welcome` through `WsClientChannelMap`, where
   it is the `AnyHostWelcome` floor, so it can start against a host of any version. `wsChannelOf(name)` names a channel
   this client knows, never an inherited object key.
-- **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
+- **wsProtocol.ts** — the name records `WS_METHODS` and `WS_CHANNELS`, `PROTOCOL_VERSION` and the feature versions,
+  the typed maps `WsMethodMap` and `WsChannelMap` with the `WsParams` / `WsResult` / `WsChannelPayload` helpers, and
+  the custom-message tags and checks. Each method's params and result and each channel's payload are its schema in
+  `schema/<namespace>.ts`, collected in `WS_METHOD_SCHEMAS` and `WS_CHANNEL_SCHEMAS`. A private type check ties each
+  name record to its map in both directions, so a name in one and not the other fails to compile.
+- **Methods and channels** — what each promises beyond its schema. Methods: `project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
   `PROJECT_RENAME_PROTOCOL_VERSION` pins its v85 introduction so a newer client omits the action against
@@ -939,8 +944,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (**`template.list`**, **`template.get`** — reads accept one optional location, `workspaceId` or
   `projectId`, and reject both; no location is global-only, while either located form merges project over
   global; **`template.save`**, **`template.delete`**) — all
-  read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
-  `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
+  read/write pi's prompt dirs (global + project), so templates stay CLI-portable.
+  Channels: `server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed, minus closed records whose
   folder is definitively gone), plus optional
   **`hostUpdate: HostUpdateNotice`**, **`configReadFailed: true`** (v108: the host's `config` is defaults because
@@ -997,9 +1002,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
-  The `WsMethodMap` typed request/result map, derived whole from `WS_METHOD_SCHEMAS` +
-  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
-  in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:
+  Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
   `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close
   that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names

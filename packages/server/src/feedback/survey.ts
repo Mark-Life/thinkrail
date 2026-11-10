@@ -8,6 +8,7 @@ import {
 	type SurveySubmitParams,
 	surveyRatingValues,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	Conditions,
 	LANGUAGE_KEY,
@@ -180,8 +181,16 @@ export function selectInAppSurvey(payload: unknown): AppSurvey | null {
 	return best?.survey ?? null;
 }
 
+function invalidAnswer() {
+	return new CodedError("SURVEY_INVALID", "Invalid survey answer");
+}
+
+function invalidSubmission() {
+	return new CodedError("SURVEY_INVALID", "Invalid survey submission");
+}
+
 export function parseSurveySubmission(value: SurveySubmitParams): ParsedSurveySubmission {
-	if (!SubmissionFields.check(value)) throw new Error("Invalid survey submission");
+	if (!SubmissionFields.check(value)) throw invalidSubmission();
 	const { submissionId, surveyId, iteration, language } = value;
 	return {
 		submissionId,
@@ -215,7 +224,7 @@ export function surveyResponse(
 ): Record<string, unknown> {
 	const shown = localizeSurvey(survey, submission.language);
 	if (submission.language !== undefined && shown.language !== submission.language) {
-		throw new Error("Invalid survey answer");
+		throw invalidAnswer();
 	}
 	return {
 		$survey_id: survey.id,
@@ -367,7 +376,7 @@ function resolveResponses(
 	for (const id of ids) {
 		const question = questions.get(id);
 		const baseQuestion = baseQuestions.get(id);
-		if (!question || !baseQuestion) throw new Error("Invalid survey answer");
+		if (!question || !baseQuestion) throw invalidAnswer();
 		const [value, other] = others
 			? [submission.answers[id], others[id]]
 			: splitLegacyOther(question, submission.answers[id]);
@@ -376,7 +385,7 @@ function resolveResponses(
 	for (const question of survey.questions) {
 		if (question.optional) continue;
 		if (!Object.hasOwn(responses, `$survey_response_${question.id}`)) {
-			throw new Error("Invalid survey answer");
+			throw invalidAnswer();
 		}
 	}
 	return responses;
@@ -389,42 +398,41 @@ function answerFor(
 	other: string | undefined,
 ): SurveyAnswerValue {
 	if (question.type === "open" || question.type === "rating") {
-		if (typeof value !== "string" || other !== undefined) throw new Error("Invalid survey answer");
+		if (typeof value !== "string" || other !== undefined) throw invalidAnswer();
 		if (question.type === "open") {
 			const text = value.trim();
-			if (!text || text.length > SURVEY_OPEN_TEXT_LIMIT) throw new Error("Invalid survey answer");
+			if (!text || text.length > SURVEY_OPEN_TEXT_LIMIT) throw invalidAnswer();
 			return text;
 		}
 		if (!surveyRatingValues(question.scale).some((point) => String(point) === value)) {
-			throw new Error("Invalid survey answer");
+			throw invalidAnswer();
 		}
 		return value;
 	}
-	if (base.type !== question.type) throw new Error("Invalid survey answer");
-	if (other !== undefined && !question.hasOpenChoice) throw new Error("Invalid survey answer");
+	if (base.type !== question.type) throw invalidAnswer();
+	if (other !== undefined && !question.hasOpenChoice) throw invalidAnswer();
 	const otherText = other === undefined ? undefined : choiceText(other);
 	const toBase = (item: string) => {
 		const original = base.choices[question.choices.indexOf(choiceText(item))];
-		if (original === undefined) throw new Error("Invalid survey answer");
+		if (original === undefined) throw invalidAnswer();
 		return original;
 	};
 	if (question.type === "single_choice") {
-		if ((value === undefined) === (otherText === undefined))
-			throw new Error("Invalid survey answer");
+		if ((value === undefined) === (otherText === undefined)) throw invalidAnswer();
 		if (otherText !== undefined) return otherText;
-		if (typeof value !== "string") throw new Error("Invalid survey answer");
+		if (typeof value !== "string") throw invalidAnswer();
 		return toBase(value);
 	}
-	if (value !== undefined && !Array.isArray(value)) throw new Error("Invalid survey answer");
+	if (value !== undefined && !Array.isArray(value)) throw invalidAnswer();
 	const chosen = [...new Set((value ?? []).map(toBase))];
 	if (otherText !== undefined) chosen.push(otherText);
-	if (chosen.length === 0) throw new Error("Invalid survey answer");
+	if (chosen.length === 0) throw invalidAnswer();
 	return chosen;
 }
 
 function choiceText(value: string): string {
 	const text = value.trim();
-	if (!text || text.length > SURVEY_OPEN_TEXT_LIMIT) throw new Error("Invalid survey answer");
+	if (!text || text.length > SURVEY_OPEN_TEXT_LIMIT) throw invalidAnswer();
 	return text;
 }
 
@@ -438,7 +446,7 @@ function splitLegacyOther(
 	const isChoice = (item: string) => question.choices.includes(item.trim());
 	if (typeof value === "string") return isChoice(value) ? [value, undefined] : [undefined, value];
 	const typed = value.filter((item) => !isChoice(item));
-	if (typed.length > 1) throw new Error("Invalid survey answer");
+	if (typed.length > 1) throw invalidAnswer();
 	const picked = value.filter(isChoice);
 	return [picked.length > 0 ? picked : undefined, typed[0]];
 }
@@ -513,7 +521,7 @@ function translateQuestion(
 function parseAnswerIds<T>(value: Record<string, T>): Record<string, T> {
 	const parsed: Record<string, T> = {};
 	for (const [id, answer] of Object.entries(value)) {
-		if (!id || id.length > 80) throw new Error("Invalid survey submission");
+		if (!id || id.length > 80) throw invalidSubmission();
 		parsed[id] = answer;
 	}
 	return parsed;

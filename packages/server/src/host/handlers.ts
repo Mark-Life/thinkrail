@@ -588,14 +588,6 @@ async function deliverToolResponse(
 	return { ok: true };
 }
 
-function invalidSurveyOnThrow<T>(build: () => T): T {
-	try {
-		return build();
-	} catch {
-		throw new CodedError("SURVEY_INVALID", "Invalid survey submission");
-	}
-}
-
 const handlers: WsHandlers = {
 	"project.open": (params) => observeSetupAction("project_open", () => openProject(params.path)),
 	"project.inspect": (params) => inspectProjectPath(params.path),
@@ -1405,7 +1397,7 @@ const handlers: WsHandlers = {
 		return { survey: localizeSurvey(survey, language) };
 	},
 	"feedback.survey.submit": async (params) => {
-		const submission = invalidSurveyOnThrow(() => parseSurveySubmission(params));
+		const submission = parseSurveySubmission(params);
 		const survey = await confirmInAppSurvey().catch(() => {
 			throw new CodedError("SURVEY_NOT_SENT", "Survey could not be confirmed");
 		});
@@ -1419,7 +1411,7 @@ const handlers: WsHandlers = {
 		) {
 			throw new CodedError("SURVEY_CHANGED", "Survey changed");
 		}
-		const properties = invalidSurveyOnThrow(() => surveyResponse(survey, submission));
+		const properties = surveyResponse(survey, submission);
 		if (!captureSurveyResponse(properties)) {
 			throw new CodedError("SURVEY_NOT_SENT", "Survey answers were not sent");
 		}

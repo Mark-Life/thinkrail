@@ -16,7 +16,7 @@ Own the host-scoped lifecycle of the in-app survey invitation and the survey it 
 
 - **Owns:** validated `feedback.json` (`acceptedMessages`, `nextInvitationAt`, `dismissed`, `submittedSurveyId`, `submittedIteration`, `lastInvitedAt`, `githubStarAsked`); the fixed 20-message first invitation and 10-message retry interval; the 10-message star ask, its addressed publisher and the star-count read in `githubStars.ts`; one memory-only claimant client; `recordAcceptedMessage`; `respondToInvitation`; `completeSurvey`; the addressed publisher; the public-survey loader, submission parser and `survey sent` payload builder in `survey.ts`, and its schemas in `surveyReply.ts`.
 - **Public surface (barrel):** the lifecycle operations, survey source configuration, selection and refresh, submission parsing, the response builder, the publisher installer, and test resets.
-- **Allowed deps:** `pi-schema`; `persistence` (`dataDir` and the state-file rules for `feedback.json`); `contracts` survey and invitation types; Node filesystem/path APIs; `fetch` for `GET /api/surveys/` in `survey.ts` and for the public repo read in `githubStars.ts` only.
+- **Allowed deps:** `pi-schema`; `@thinkrail/shared/codedError`; `persistence` (`dataDir` and the state-file rules for `feedback.json`); `contracts` survey and invitation types; Node filesystem/path APIs; `fetch` for `GET /api/surveys/` in `survey.ts` and for the public repo read in `githubStars.ts` only.
 - **Forbidden:** importing `host` or analytics. The host passes in the survey endpoint analytics exposes and captures the payload this module builds. This module does not target people in PostHog or open a calendar.
 
 ## Get right

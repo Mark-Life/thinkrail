@@ -77,6 +77,9 @@ test.each([
 	["a non-object config", "theme"],
 	["a non-string theme", { theme: 7 }],
 	["a preset center that is not an object", { customLayoutPresets: [preset(7)] }],
+	["consent without the sharing preference", { analyticsConsentConfirmed: true }],
+	["a blank disabled-package identity", { disabledPackages: [" "] }],
+	["a favorite with no provider", { favoriteModels: [{ ...MODEL, provider: "" }] }],
 ])("settings.update refuses %s at dispatch, before disk or broadcast", async (_label, config) => {
 	const published: unknown[] = [];
 	setSettingsPublisher((next) => published.push(next));
@@ -89,7 +92,7 @@ test.each([
 test("settings.update never persists an undeclared field", async () => {
 	await expect(
 		handleRequest("settings.update", { config: { theme: "a", futureSetting: 1 } }, CTX),
-	).rejects.toThrow("Unknown setting: futureSetting");
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 	expect(existsSync(configPath())).toBe(false);
 
 	const next = await handleRequest(
