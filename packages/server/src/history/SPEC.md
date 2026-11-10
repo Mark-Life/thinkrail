@@ -79,7 +79,12 @@ to preserve).
   minimal but real pi-shaped JSONL, one flat file per session, that `historyIndex` tests, the e2e fixture
   seeder, and its own format-pinning test (`testFixtures.test.ts`) drive against; `defaultSessionDirFor`
   replicates pi's private default-layout directory encoding (not importable — see "pi file format" below)
-  so fixtures can land where a real no-arg `listAll()` would actually look.
+  so fixtures can land where a real no-arg `listAll()` would actually look. Every line is a value of
+  pi-coding-agent's `SessionHeader` / `SessionEntry` and every message a pi-ai message, with no casts, so a
+  fixture cannot drift from what pi writes. `fixtureAssistant` is the one fake assistant builder (full
+  `api`/`provider`/`model`/zero `usage`, `stopReason` default `stop`); `fixtureUser`, `fixtureToolResult`
+  (stores `details` in its JSON form), `fixtureMessageEntry` and `appendFixtureEntries` let tests append
+  entries to a seeded transcript. `FixtureMessage` inputs are `Pick`/`Omit` of pi's message types.
 
 ## On-disk JSONL structure (observed from pi session files)
 - **`message` entries:** `{ type: "message", ..., message: { role: "system"|"user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`.
@@ -120,7 +125,7 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   build budget for a cold build **or** a warm revalidation, and a `state` (`cold` / `refreshing` /
   `ready`, **`HistoryState`**) instead of the prompt-recall `indexing` flag; the `search` module matches entries with the shared content matcher, so no second
   parse of the corpus exists (prompt recall keeps its own `matchesTerms` / `makeSnippet`).
-- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
+- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, types. **No test helpers** — the `testFixtures.ts` builders
   are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only
   through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export
   (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package

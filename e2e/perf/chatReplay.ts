@@ -7,7 +7,7 @@ import type {
 	ToolResultMessage,
 	WsPush,
 } from "@thinkrail/contracts";
-import type { FixtureMessage } from "@thinkrail/server/history-test-fixtures";
+import { type FixtureMessage, fixtureAssistant } from "@thinkrail/server/history-test-fixtures";
 import { seededRandom } from "./seededRandom";
 
 const WORDS = [
@@ -76,26 +76,6 @@ function chunks(text: string, random: () => number, [min, max]: DeltaRange): str
 		at += size;
 	}
 	return out;
-}
-
-function assistantShell(timestamp: number): AssistantMessage {
-	return {
-		role: "assistant",
-		content: [],
-		api: "anthropic-messages",
-		provider: "anthropic",
-		model: "claude-replay",
-		usage: {
-			input: 0,
-			output: 0,
-			cacheRead: 0,
-			cacheWrite: 0,
-			totalTokens: 0,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		},
-		stopReason: "stop",
-		timestamp,
-	};
 }
 
 interface ToolPlan {
@@ -178,7 +158,7 @@ function replayPlans(
 
 	for (const plan of plans) {
 		timestamp += 1_000;
-		const message = assistantShell(timestamp);
+		const message = fixtureAssistant({ content: [], timestamp });
 		steps.push({
 			frames: [
 				push({ type: "turn_start" }),

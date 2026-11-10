@@ -1,5 +1,12 @@
-import { appendFileSync, realpathSync, utimesSync } from "node:fs";
+import { realpathSync, utimesSync } from "node:fs";
+import type { SessionMessageEntry } from "@earendil-works/pi-coding-agent";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import {
+	appendFixtureEntries,
+	fixtureAssistant,
+	fixtureMessageEntry,
+	fixtureToolResult,
+} from "@thinkrail/server/history-test-fixtures";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import {
 	moveMouseToChatViewport,
@@ -12,26 +19,13 @@ import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_400_000_000;
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
-const usage = {
-	input: 10,
-	output: 10,
-	cacheRead: 0,
-	cacheWrite: 0,
-	totalTokens: 20,
-	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-};
-
-function appendMessage(path: string, id: string, parentId: string, message: object): string {
-	appendFileSync(
-		path,
-		`${JSON.stringify({
-			type: "message",
-			id,
-			parentId,
-			timestamp: new Date(BASE_TS).toISOString(),
-			message,
-		})}\n`,
-	);
+function appendMessage(
+	path: string,
+	id: string,
+	parentId: string,
+	message: SessionMessageEntry["message"],
+): string {
+	appendFixtureEntries(path, [fixtureMessageEntry(id, parentId, message)]);
 	return id;
 }
 
@@ -71,24 +65,27 @@ function seedNestedActivityChat(name: string) {
 		],
 	});
 	const assistantId = `${chat.id}-a1`;
-	appendMessage(chat.path, assistantId, `${chat.id}-m2`, {
-		role: "assistant",
-		content: [
-			{ type: "toolCall", id: "read-prefix", name: "read", arguments: { path: "watch.ts" } },
-			{ type: "thinking", thinking: "I should inspect the coalescer test next." },
-			{ type: "toolCall", id: "read-nested", name: "read", arguments: { path: "watch.test.ts" } },
-			{ type: "thinking", thinking: "The failing case needs a bounded max-wait assertion." },
-			{
-				type: "toolCall",
-				id: "bash-long",
-				name: "bash",
-				arguments: { command: "bun test watch.test.ts" },
-			},
-		],
-		usage,
-		stopReason: "toolUse",
-		timestamp: BASE_TS + 1_000,
-	});
+	appendMessage(
+		chat.path,
+		assistantId,
+		`${chat.id}-m2`,
+		fixtureAssistant({
+			content: [
+				{ type: "toolCall", id: "read-prefix", name: "read", arguments: { path: "watch.ts" } },
+				{ type: "thinking", thinking: "I should inspect the coalescer test next." },
+				{ type: "toolCall", id: "read-nested", name: "read", arguments: { path: "watch.test.ts" } },
+				{ type: "thinking", thinking: "The failing case needs a bounded max-wait assertion." },
+				{
+					type: "toolCall",
+					id: "bash-long",
+					name: "bash",
+					arguments: { command: "bun test watch.test.ts" },
+				},
+			],
+			stopReason: "toolUse",
+			timestamp: BASE_TS + 1_000,
+		}),
+	);
 	let parentId = assistantId;
 	for (const [toolCallId, toolName, output] of [
 		["read-prefix", "read", "watcher source"],
@@ -105,31 +102,38 @@ function seedNestedActivityChat(name: string) {
 			),
 		],
 	] as const) {
-		parentId = appendMessage(chat.path, `${chat.id}-${toolCallId}`, parentId, {
-			role: "toolResult",
-			toolCallId,
-			toolName,
-			content: [{ type: "text", text: output }],
-			isError: false,
-			timestamp: BASE_TS + 2_000,
-		});
+		parentId = appendMessage(
+			chat.path,
+			`${chat.id}-${toolCallId}`,
+			parentId,
+			fixtureToolResult({
+				toolCallId,
+				toolName,
+				content: [{ type: "text", text: output }],
+				isError: false,
+				timestamp: BASE_TS + 2_000,
+			}),
+		);
 	}
-	appendMessage(chat.path, `${chat.id}-a2`, parentId, {
-		role: "assistant",
-		content: [
-			{
-				type: "text",
-				text: Array.from(
-					{ length: 15 },
-					(_, index) =>
-						`The watcher checkpoint ${index + 1} now flushes within the bounded window.`,
-				).join("\n\n"),
-			},
-		],
-		usage,
-		stopReason: "stop",
-		timestamp: BASE_TS + 3_000,
-	});
+	appendMessage(
+		chat.path,
+		`${chat.id}-a2`,
+		parentId,
+		fixtureAssistant({
+			content: [
+				{
+					type: "text",
+					text: Array.from(
+						{ length: 15 },
+						(_, index) =>
+							`The watcher checkpoint ${index + 1} now flushes within the bounded window.`,
+					).join("\n\n"),
+				},
+			],
+			stopReason: "stop",
+			timestamp: BASE_TS + 3_000,
+		}),
+	);
 	utimesSync(chat.path, new Date(BASE_TS), new Date(BASE_TS));
 	return chat;
 }
@@ -145,43 +149,53 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	});
 	const assistantId = `${chat.id}-a1`;
 	const toolNames = ["get_search_content", "fetch_content", "web_search", "spec_grep", "read"];
-	appendMessage(chat.path, assistantId, `${chat.id}-m0`, {
-		role: "assistant",
-		content: [
-			{
-				type: "thinking",
-				thinking:
-					"**Evaluating formatting process**\n\nI should inspect the formatted file before continuing.",
-			},
-			...toolNames.map((name, index) => ({
-				type: "toolCall",
-				id: `summary-tool-${index}`,
-				name,
-				arguments: {},
-			})),
-		],
-		usage,
-		stopReason: "toolUse",
-		timestamp: BASE_TS + 1_000,
-	});
+	appendMessage(
+		chat.path,
+		assistantId,
+		`${chat.id}-m0`,
+		fixtureAssistant({
+			content: [
+				{
+					type: "thinking",
+					thinking:
+						"**Evaluating formatting process**\n\nI should inspect the formatted file before continuing.",
+				},
+				...toolNames.map((name, index) => ({
+					type: "toolCall" as const,
+					id: `summary-tool-${index}`,
+					name,
+					arguments: {},
+				})),
+			],
+			stopReason: "toolUse",
+			timestamp: BASE_TS + 1_000,
+		}),
+	);
 	let parentId = assistantId;
 	for (const [index, toolName] of toolNames.entries()) {
-		parentId = appendMessage(chat.path, `${chat.id}-summary-tool-${index}`, parentId, {
-			role: "toolResult",
-			toolCallId: `summary-tool-${index}`,
-			toolName,
-			content: [{ type: "text", text: "completed" }],
-			isError: false,
-			timestamp: BASE_TS + 2_000 + index,
-		});
+		parentId = appendMessage(
+			chat.path,
+			`${chat.id}-summary-tool-${index}`,
+			parentId,
+			fixtureToolResult({
+				toolCallId: `summary-tool-${index}`,
+				toolName,
+				content: [{ type: "text", text: "completed" }],
+				isError: false,
+				timestamp: BASE_TS + 2_000 + index,
+			}),
+		);
 	}
-	appendMessage(chat.path, `${chat.id}-a2`, parentId, {
-		role: "assistant",
-		content: [{ type: "text", text: "The formatter output is consistent." }],
-		usage,
-		stopReason: "stop",
-		timestamp: BASE_TS + 3_000,
-	});
+	appendMessage(
+		chat.path,
+		`${chat.id}-a2`,
+		parentId,
+		fixtureAssistant({
+			content: [{ type: "text", text: "The formatter output is consistent." }],
+			stopReason: "stop",
+			timestamp: BASE_TS + 3_000,
+		}),
+	);
 	utimesSync(chat.path, new Date(BASE_TS), new Date(BASE_TS));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();

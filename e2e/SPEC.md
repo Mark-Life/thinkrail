@@ -111,6 +111,12 @@ wire reply to prove that an ack does not unlock the form before cleanup complete
 and cleanup are exercised separately by the projects and subprocess unit tests. No production Git
 credentials or remote repositories are used.
 
+Seeded transcripts are pi-typed. Specs seed through `writeFixtureSession` and append later entries with
+the `@thinkrail/server/history-test-fixtures` builders (`fixtureAssistant`, `fixtureToolResult`,
+`fixtureMessageEntry`, `appendFixtureEntries`); no spec writes a raw JSON entry. Specs that read a live
+transcript open it with pi's `SessionManager`. Fake event streams build their assistant message with the
+same `fixtureAssistant`, so the host never sees a reply shape pi cannot produce.
+
 ## Chat resource controls
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative

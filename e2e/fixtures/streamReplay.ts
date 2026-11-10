@@ -6,6 +6,7 @@ import {
 	WS_CHANNELS,
 	type WsPush,
 } from "@thinkrail/contracts";
+import { fixtureAssistant } from "@thinkrail/server/history-test-fixtures";
 
 const DELTA_CHARS = 40;
 const WORDS = ["stream", "row", "measure", "scroll", "virtual", "anchor", "layout", "delta"];
@@ -41,24 +42,6 @@ export const streamedMarkdown = (marker: string, minChars: number) => {
 	return blocks.join("\n\n");
 };
 
-const assistantShell = (timestamp: number): AssistantMessage => ({
-	role: "assistant",
-	content: [],
-	api: "anthropic-messages",
-	provider: "anthropic",
-	model: "claude-replay",
-	usage: {
-		input: 0,
-		output: 0,
-		cacheRead: 0,
-		cacheWrite: 0,
-		totalTokens: 0,
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-	},
-	stopReason: "stop",
-	timestamp,
-});
-
 export const textStreamReplay = (
 	sessionId: SessionId,
 	text: string,
@@ -66,7 +49,7 @@ export const textStreamReplay = (
 ): StreamReplay => {
 	const push = (event: PiEvent) =>
 		JSON.stringify({ channel: WS_CHANNELS.piEvent, data: { sessionId, event } } satisfies WsPush);
-	const message = assistantShell(timestamp);
+	const message = fixtureAssistant({ content: [], timestamp });
 	const deltas = Array.from({ length: Math.ceil(text.length / DELTA_CHARS) }, (_, index) => {
 		const end = (index + 1) * DELTA_CHARS;
 		const partial: AssistantMessage = {
