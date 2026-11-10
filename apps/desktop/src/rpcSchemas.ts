@@ -13,7 +13,7 @@ import {
 	union,
 	unknown,
 } from "@earendil-works/pi-schema";
-import type { NativeNotificationInput } from "@thinkrail/contracts";
+import type { NativeNotificationInput, Same } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { desktopError } from "./errorReporting";
 
@@ -42,10 +42,11 @@ export type PageZoomGesture = Static<typeof PageZoomGesture>;
 export const MenuLabelsChange = obj({ labels: map(unknown()) }, OPEN);
 export type MenuLabelsChange = Static<typeof MenuLabelsChange>;
 
-export const NotificationRequest: Schema<NativeNotificationInput> = obj(
+export const NotificationRequest = obj(
 	{ title: str(), subtitle: opt(str()), body: str(), silent: opt(bool()) },
 	OPEN,
 );
+export type NotificationRequest = Same<Static<typeof NotificationRequest>, NativeNotificationInput>;
 
 export function checked<T>(name: string, schema: Schema<T>, handle: (payload: T) => void) {
 	const validator = compile(schema);

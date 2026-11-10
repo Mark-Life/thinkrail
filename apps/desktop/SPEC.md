@@ -97,7 +97,8 @@ another.
      and host-bound RPC ahead of host boot.
 3. Start `resolveShellEnv()` right after the `chdir`, so the login shell it spawns also starts outside the
    bundle, then dynamically import the separately built, unpacked `server-runtime.ts` resource, and await the
-   shell env before `startDesktopHost()`. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
+   shell env before `startDesktopHost()`. The import names a file path, so `tsc` cannot see the module: it is cast
+   to `DesktopServerRuntime`, the shape of the entry `preBuild.ts` generates. That is the one cast in startup. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
    typical profile, seconds on a slow one); overlapping it with the splash and the bundle import hides up to
    that time. The bundle's own `shellEnv` copy is a separate module instance, so the run is cached on a
    `Symbol.for` global key: its `bootHost()` call awaits the same run instead of probing again. That bundle is

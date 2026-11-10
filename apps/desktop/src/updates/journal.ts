@@ -16,6 +16,7 @@ import type {
 	NativeUpdateInstallResult,
 	NativeUpdateLogEntry,
 	NativeUpdateLogEvent,
+	Same,
 } from "@thinkrail/contracts";
 
 export const UPDATE_JOURNAL_FILE = "update-journal.json";
@@ -28,15 +29,20 @@ const Text = str({ maxLength: MAX_TEXT_LENGTH });
 const Version = str({ minLength: 1, maxLength: MAX_TEXT_LENGTH });
 const Finite = num({ minimum: -Number.MAX_VALUE, maximum: Number.MAX_VALUE });
 
-const LogEvent: Schema<NativeUpdateLogEvent> = union([
-	obj({ kind: oneOf(["hostStopping", "handoffStarted", "restarting"]) }, OPEN),
+const LogEvent = union([
+	obj({ kind: lit("installStarted"), version: Version }, OPEN),
+	obj({ kind: lit("hostStopping") }, OPEN),
 	obj({ kind: lit("hostStopped"), seconds: Finite }, OPEN),
-	obj({ kind: oneOf(["installStarted", "installed"]), version: Version }, OPEN),
+	obj({ kind: lit("handoffStarted") }, OPEN),
+	obj({ kind: lit("restarting") }, OPEN),
+	obj({ kind: lit("installed"), version: Version }, OPEN),
 	obj({ kind: lit("installFailed"), version: Version, step: Text, detail: Text }, OPEN),
 	obj({ kind: lit("diagnostic"), text: Text }, OPEN),
 ]);
 
-const LogEntry: Schema<NativeUpdateLogEntry> = obj(
+export type LogEventTie = Same<Static<typeof LogEvent>, NativeUpdateLogEvent>;
+
+const LogEntry = obj(
 	{
 		at: Finite,
 		source: oneOf(["update", "host", "installer"]),
@@ -46,9 +52,11 @@ const LogEntry: Schema<NativeUpdateLogEntry> = obj(
 	OPEN,
 );
 
-const Log = arr(LogEntry, { maxItems: MAX_UPDATE_LOG_ENTRIES });
+export type LogEntryTie = Same<Static<typeof LogEntry>, NativeUpdateLogEntry>;
 
-const InstallResult: Schema<NativeUpdateInstallResult> = obj(
+const Log: Schema<readonly LogEntryTie[]> = arr(LogEntry, { maxItems: MAX_UPDATE_LOG_ENTRIES });
+
+const InstallResult = obj(
 	{
 		outcome: oneOf(["installed", "failed", "unreported"]),
 		fromVersion: nullable(Text),
@@ -59,6 +67,7 @@ const InstallResult: Schema<NativeUpdateInstallResult> = obj(
 	},
 	OPEN,
 );
+export type InstallResultTie = Same<Static<typeof InstallResult>, NativeUpdateInstallResult>;
 
 const UpdateJournal = union([
 	obj(
