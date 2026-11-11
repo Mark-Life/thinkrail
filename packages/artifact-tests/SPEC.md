@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Native artifact test harnesses
 parent: architecture
-depends-on: [module-cli, module-server, module-shared]
+depends-on: [module-cli, module-contracts, module-server, module-shared]
 references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize, module-ext-ask-user-question]
 tags: [testing, artifacts, public-surface-checked]
 ---
@@ -21,8 +21,8 @@ It consumes finished artifacts; it does not build the application or supply appl
   probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
   and artifact-collector contract tests.
 - **Public surface:** `locateDesktopLauncher`, `waitForDocument`, `within`
-- **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
-  release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
+- **Allowed deps:** contracts' wire schemas and `pi-schema`, so a probe refuses a reply that drifts from the wire; CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
+  release identity, its Windows file identity and icon, `errnoCode`, and retrying teardown; `resedit` to read Windows
   executable resources;
   read-only access to
   `.github/actions/build-binary/action.yml` for executing its packaging invocation and collector in

@@ -128,6 +128,44 @@ The host stores bounded, base64-free presentation details so live and restored c
 full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card tests and
 `e2e/mcp-tool-cards.spec.ts`. Never persist the full raw result merely to delete the adapter.
 
+### Ties to types pi does not export
+
+**Owner:** [[submodule-server-agent-mcp]] (`mcp/schemas.ts`) and [[submodule-server-extensions]] (`skills.ts`).
+Two shapes pi-coding-agent declares only behind its exports map: `McpToolDetails` (the MCP tool result's
+`details`, `dist/extensions/mcp/tools.d.ts`), which contracts' `McpToolDetails` copies for the browser, and
+`PiManifest` (the `pi` field of a package manifest, `dist/core/pi-manifest.d.ts`), whose `skills` the host
+reads from a skill package. The server type-imports each by a relative path into its own `node_modules` and
+ties the copy with `Same`. A moved file fails `tsc` on the import; a changed shape fails the tie. The path
+works because bun's isolated linker (`configVersion: 1` in `bun.lock`) links every declared dependency into
+the package's own `node_modules`; a hoisted install also fails `tsc` loudly. It stays a relative path, not a
+`tsconfig` `paths` alias, because `apps/desktop`, `apps/cli` and `artifact-tests` compile the server sources
+under their own `tsconfig`, where the alias would not apply.
+**Removal gate:** pi exports the type (or a schema for it) from its root. Then import it from there and delete
+the path import.
+
+### Untied MCP tool arguments
+
+**Owner:** [[submodule-web-chat-tools]] (`apps/web/src/chat/tools/mcp/inputs.ts`). pi declares the arguments of
+`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource` (plain JSON Schema in
+`extensions/mcp/resources`) and `tool_search` (a TypeBox schema in `extensions/tool-search/tool`) in modules it
+does not export, and no exported API names their types. The cards read `server`, `cursor`, `uri`, `query` and
+`limit` through `inputs.ts`, untied. **Gate on every upgrade:** compare those fields with the two modules; a
+renamed one only blanks a card header. **Removal gate:** pi exports the input types; then add them to
+`ToolInputs` and tie them in `toolInputTies`.
+
+## Wire shapes from pi-ai's `providers/model-schema`
+
+**Owner:** [[submodule-contracts-schema]] (`model.ts`), `pi-delegation/wire` and `pi-subagents`
+(`thinking.ts`). `contracts` uses `ModelThinkingLevelSchema` and `ModelInputModalitySchema`, and
+`pi-subagents` uses `MODEL_THINKING_LEVELS`, from the `@earendil-works/pi-ai/providers/model-schema`
+subpath, reached through pi-ai's `./providers/*` export. Browser code may value-import it because the
+module loads only `@earendil-works/pi-schema`. pi-agent-core types `thinkingLevel` with its own union, so
+`pi-delegation/src/types.ts` ties it to `ModelThinkingLevel` with `Same`.
+**Gate on every upgrade:** `bun run check:boundaries` runs a test that resolves the subpath from
+`packages/contracts` and fails if the module or its relative imports load anything but `pi-schema`.
+If pi moves or drops the subpath, or the module gains a dependency, fall back to a `Same`-tied local
+schema and update this entry. `bun run typecheck` catches a drift between the two thinking-level unions.
+
 ## Other pi-sensitive host seams
 
 **Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3

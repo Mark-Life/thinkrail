@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Project, WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { gitAsync } from "../git";
 import { assertProjectPathAllowed, openProject, resolveProjectPath } from "./projects";
 
@@ -15,7 +16,7 @@ function invalid(message: string): never {
 }
 
 function repositoryUrl(value: string): string {
-	if (typeof value !== "string" || value.length > 8192) invalid("Enter a Git repository URL.");
+	if (value.length > 8192) invalid("Enter a Git repository URL.");
 	const url = value.trim();
 	if (!url || /[\\\s\p{Cc}]/u.test(url)) invalid("Enter a valid Git repository URL.");
 	if (!url.includes("://") && /^(?:[\w.-]+@)?[a-zA-Z0-9][\w.-]*:[^\s]+$/.test(url)) {
@@ -52,9 +53,8 @@ function repositoryUrl(value: string): string {
 }
 
 export function inspectCloneDestination(parentPath: string, requestedName: string): string {
-	if (typeof parentPath !== "string" || !parentPath.trim() || parentPath.includes("\0"))
+	if (!parentPath.trim() || parentPath.includes("\0"))
 		invalid("Choose a parent folder on the host.");
-	if (typeof requestedName !== "string") invalid("Enter a folder name.");
 	const name = requestedName.trim();
 	if (
 		!name ||
@@ -79,7 +79,7 @@ export function inspectCloneDestination(parentPath: string, requestedName: strin
 	try {
 		lstatSync(path);
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return path;
+		if (hasErrno(error, "ENOENT")) return path;
 		throw error;
 	}
 	return invalid(`Destination already exists: ${path}`);
@@ -103,7 +103,7 @@ async function removeIncompleteClone(
 		if (current.dev === reserved.dev && current.ino === reserved.ino && current.isDirectory())
 			await rm(path, { recursive: true, force: true });
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+		if (hasErrno(error, "ENOENT")) return;
 		throw new CodedError(
 			"PROJECT_CLONE_CLEANUP_FAILED",
 			`Could not remove the incomplete clone at ${path}. Remove it manually before retrying.`,
@@ -126,8 +126,7 @@ export async function cloneProject(
 	try {
 		mkdirSync(path);
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "EEXIST")
-			invalid(`Destination already exists: ${path}`);
+		if (hasErrno(error, "EEXIST")) invalid(`Destination already exists: ${path}`);
 		throw error;
 	}
 	const reserved = lstatSync(path);
@@ -188,8 +187,7 @@ export async function startProjectClone(
 	input: WsParams<"project.clone">,
 	clientKey: string,
 ): Promise<Project | null> {
-	if (typeof input.operationId !== "string" || !/^[\w-]{1,100}$/.test(input.operationId))
-		invalid("Invalid clone operation id.");
+	if (!/^[\w-]{1,100}$/.test(input.operationId)) invalid("Invalid clone operation id.");
 	let owned = activeClones.get(clientKey);
 	if (!owned) {
 		owned = new Map();

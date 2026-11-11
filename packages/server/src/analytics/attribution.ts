@@ -1,18 +1,27 @@
 import { createHash, randomBytes } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { compile, int, lit, obj, str } from "@earendil-works/pi-schema";
+import { logger } from "../log";
 import {
 	ATTRIBUTION_MAX_POLLS,
 	ATTRIBUTION_ORIGIN,
 	ATTRIBUTION_POLL_INTERVAL_MS,
 	claimIdPattern,
-	hasExactKeys,
-	isRecord,
 	parseRedeemedAttribution,
 	type RedeemedAttribution,
+	stateFileWriteFailure,
 } from "../persistence";
+
+const log = logger("analytics");
 
 export const ATTRIBUTION_REQUEST_TIMEOUT_MS = 5_000;
 export const ATTRIBUTION_DEADLINE_MS = 9 * 60 * 1_000;
+
+const ClaimCreatedReply = compile(
+	obj({ claim_id: str({ pattern: claimIdPattern.source }), claim_url: str(), expires_at: int() }),
+);
+const ClaimPendingReply = compile(obj({ error: lit("pending") }));
+const ClaimBoundReply = compile(obj({ status: lit("bound") }));
 
 export interface AttributionClaimDependencies {
 	endpoint?: string;
@@ -97,7 +106,8 @@ async function strictJson(response: Response, signal: AbortSignal): Promise<unkn
 			offset += chunk.byteLength;
 		}
 		const text = new TextDecoder("utf-8", { fatal: true }).decode(body);
-		return JSON.parse(text) as unknown;
+		const parsed: unknown = JSON.parse(text);
+		return parsed;
 	} catch {
 		return undefined;
 	} finally {
@@ -138,8 +148,8 @@ async function postJson(
 	}
 }
 
-function claimUrl(endpoint: URL, claimId: string, value: unknown): string | undefined {
-	if (typeof value !== "string" || value !== `/attribution/claim/?id=${claimId}`) return undefined;
+function claimUrl(endpoint: URL, claimId: string, value: string): string | undefined {
+	if (value !== `/attribution/claim/?id=${claimId}`) return undefined;
 	const resolved = new URL(value, endpoint);
 	return resolved.origin === endpoint.origin ? resolved.href : undefined;
 }
@@ -175,19 +185,10 @@ export async function runAttributionClaim(
 			requestTimeoutMs,
 		);
 		const { response: createdResponse, value: created } = createdResult;
-		if (!dependencies.active() || createdResponse.status !== 201 || !isRecord(created)) return;
-		if (!hasExactKeys(created, ["claim_id", "claim_url", "expires_at"])) return;
+		if (!dependencies.active() || createdResponse.status !== 201) return;
+		if (!ClaimCreatedReply.check(created)) return;
 		const now = Date.now();
-		if (
-			typeof created.claim_id !== "string" ||
-			!claimIdPattern.test(created.claim_id) ||
-			typeof created.expires_at !== "number" ||
-			!Number.isSafeInteger(created.expires_at) ||
-			created.expires_at <= now ||
-			created.expires_at > now + 11 * 60 * 1_000
-		) {
-			return;
-		}
+		if (created.expires_at <= now || created.expires_at > now + 11 * 60 * 1_000) return;
 		const externalUrl = claimUrl(endpoint, created.claim_id, created.claim_url);
 		if (!externalUrl) return;
 		try {
@@ -214,21 +215,9 @@ export async function runAttributionClaim(
 				requestTimeoutMs,
 			);
 			const { response: statusResponse, value: status } = statusResult;
-			if (!dependencies.active() || !isRecord(status)) return;
-			if (
-				statusResponse.status === 409 &&
-				hasExactKeys(status, ["error"]) &&
-				status.error === "pending"
-			) {
-				continue;
-			}
-			if (
-				statusResponse.status !== 200 ||
-				!hasExactKeys(status, ["status"]) ||
-				status.status !== "bound"
-			) {
-				return;
-			}
+			if (!dependencies.active()) return;
+			if (statusResponse.status === 409 && ClaimPendingReply.check(status)) continue;
+			if (statusResponse.status !== 200 || !ClaimBoundReply.check(status)) return;
 
 			const redeemResult = await postJson(
 				new URL(`/api/attribution/claims/${created.claim_id}/redeem`, endpoint).href,
@@ -243,12 +232,15 @@ export async function runAttributionClaim(
 			if (!redeemed) return;
 			try {
 				dependencies.persist(redeemed);
-			} catch {}
+			} catch (error) {
+				log.warn("acquisition not saved", stateFileWriteFailure("attribution.json", error));
+			}
 			if (!dependencies.active()) return;
 			dependencies.linked(redeemed);
 			return;
 		}
-	} catch {
+	} catch (error) {
+		if (!overall.signal.aborted) log.debug("attribution claim stopped", error);
 	} finally {
 		clearTimeout(deadline);
 		dependencies.signal?.removeEventListener("abort", abortOverall);

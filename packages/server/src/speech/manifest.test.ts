@@ -50,6 +50,9 @@ test("a manifest override is validated strictly", () => {
 	expect(() =>
 		parseManifest({ ...good, models: { ...good.models, klingon: good.models.english } }),
 	).toThrow();
+	expect(() => loadManifest({ [SPEECH_MANIFEST_ENV]: "/nonexistent/manifest.json" })).toThrow(
+		expect.objectContaining({ code: "SPEECH_DOWNLOAD_FAILED" }),
+	);
 });
 
 test("a PATH runtime is compatible only within the pinned minor", () => {
@@ -67,4 +70,6 @@ test("the doctor report names the accelerated backend", () => {
 	);
 	expect(backendFromDoctor('{"features":{}}')).toBe("cpu");
 	expect(backendFromDoctor("not json")).toBe("cpu");
+	expect(backendFromDoctor('{"features":[true]}')).toBe("cpu");
+	expect(backendFromDoctor('{"features":{"backend_vulkan":"yes"}}')).toBe("cpu");
 });

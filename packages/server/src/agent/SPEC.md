@@ -139,7 +139,8 @@ re-opened transcripts provider-valid.
     symlinked `models.json` to its target, and creating a dangling link's target rather than replacing the
     link — one in-process write chain both adapters queue on (so their read-modify-writes never
     interleave), and the `provider.changed` publisher seam (`setModelsFilePublisher`). Error messages are
-    generic and never carry file contents.
+    generic and never carry file contents. Failures are `CodedError`s: a read failure is
+    `STATE_FILE_UNREADABLE`, invalid JSON is `PI_MODELS_FILE_DAMAGED`, a failed save is `STATE_FILE_WRITE_FAILED`.
   - `modelContext` — a narrow settings adapter for the `contextWindow` override in pi's shared
     `models.json`, not a second model registry. It lists the OpenAI Responses / Codex
     Responses models from `settledAvailableModels` whose effective budget still equals the contracts'
@@ -378,7 +379,9 @@ re-opened transcripts provider-valid.
     read rather than masquerading as absent and being tombstoned by reconnect reconciliation. A `.jsonl`
     whose first parsed entry is not a session header is not a transcript — pi's own listing skips those
     files, and extensions keep sidecar logs there (e.g. pi-automode's `<session>-pi-automode.jsonl`) — but a
-    file with no parsed entry at all still rejects. A registered live
+    file with no parsed entry at all still rejects. The header read follows pi's: lines that are not JSON before
+    the header are skipped, and a header without a string `cwd` lists with cwd `""`, so its chat is hidden. Both
+    are logged once per file as `PI_SESSION_FILE_DAMAGED`. A registered live
     session's own exact `SessionManager.getSessionFile()` path is excluded from that disk preflight: its
     in-memory entry is already authoritative, and pi may truncate/rewrite that path while the host lists,
     so treating the transient physical state as a detached corrupt chat would blank every chat on reload) +
@@ -461,7 +464,8 @@ re-opened transcripts provider-valid.
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
     attach cannot register afterward; that tombstone also makes a retained live entry non-addressable to
-    **every session command, including `session.dispose`, for the full delete transaction**, so another
+    **every session command, including `session.dispose`, for the full delete transaction** (each
+    refuses with `SESSION_UNKNOWN`, the code every session lookup miss carries), so another
     client cannot append a turn behind the pending trash move or destroy the rollback target. **The
     transaction is single-flighted per session id**: a concurrent second trash click (another tab/client)
     for the same chat joins the running transaction (or is rejected as unknown when a foreign workspace
@@ -490,8 +494,48 @@ re-opened transcripts provider-valid.
     or stealth tier that rate-limits or disappears), else the `default` pick; `default`
     = `preferredDefaultModel`; `null` when nothing is authenticated. This is the primitive the `assist` tasks
     (plan summaries, PR drafting) run on — the only place model **dispatch** happens outside a session.
+  - `requireSessionId` — turns a session id pi hands the host into a `SessionId`, and throws `PI_SESSION_ID_INVALID`
+    on refusal, with no id in the message. Use it where
+    the caller already fails by throwing (tool `execute`, session creation, `sessionIdOf`). A session is attached
+    only after `createParentSession` accepts its id, so `sessionIdOf` cannot refuse on an attached session.
+  - `transcriptMessages` — keeps the pi messages contracts' `isTranscriptMessageRole` admits; a message-level guard
+    over that role guard narrows each to `TranscriptMessage`, with no cast. `getSessionMessages` and the subagent
+    transcript read share it.
+  - `piTypes` — the server's one `AgentMessage`: `SessionMessageEntry["message"]` from pi-coding-agent's root. The
+    server has no pi-agent-core dependency, and contracts no longer re-exports `AgentMessage`, so every server reader
+    of pi messages (`sessionState`, `imageGuard`, `skillCarryover`, `toolResponses`, the ties) types them through it
+    and narrows by `role` and block `type`, never through a cast.
+  - `piWireTies` — types only: ties each pi-coding-agent shape contracts declares to pi's own type with `Same`, so a
+    pi upgrade that changes one fails `tsc` here ([[submodule-contracts-schema]]):
+    - the custom, compaction, branch and bash messages, `WireAgentMessage`, and the forwarded and projected `PiEvent`
+      members;
+    - a deep tie (`AddedMessageFields`): no forwarded event may carry a message with a role pi-ai's `Message` lacks
+      under a key other than `message` / `messages`, at any depth to six levels through arrays and objects. The
+      tool events' `args`, `partialResult` and `result` are excluded: pi types them `any`, and contracts sends them
+      as `unknown`;
+    - `SessionEntryType` = `SessionEntry["type"]`; the ext-UI `notify` level = `notify`'s second parameter; the
+      `setWidget` content = the content parameter of the overload that takes lines of text, picked by that
+      parameter, since `Parameters` would read the last (component) overload;
+    - `PiPackageScope`, `PiPackageResourceType` and `PiPackageSourceKind` (minus `local`), and `ProviderWarning`.
+      pi does not export `ConfiguredPackage`, `PackageUpdate` or `WarningSettings` at its root, so the ties reach
+      them through exported APIs: `PackageManager.listConfiguredPackages`, `ResolvedPaths`,
+      `DefaultPackageManager.checkForAvailableUpdates` and `SettingsManager.getWarnings`;
+    - `CompactionEndResult`, `SessionStats`, `ContextUsage` and `SlashCommandInfo`.
+
+    contracts re-exports pi-delegation's own run shapes, so no delegation tie is needed here.
+  - `toolInputTies` — types only: ties the four `ToolInputs` entries of pi's built-in tools with `Same` to a `Pick`
+    of pi's `ReadToolInput` / `WriteToolInput` / `EditToolInput` / `BashToolInput`. A renamed, retyped or newly
+    optional field the web reads fails `tsc` here. The other entries pick from their owners' schemas in contracts.
+  - `reviewTool` — the `resolve_comment` tool. Its arguments are contracts' `ResolveCommentInput`; pi types
+    `parameters` as TypeBox, so the tool passes the schema through `Type.Unsafe` typed as its own `Static`.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
-    calls (dialogs round-trip to the browser, fire-and-forget methods push). A dialog names the tool call
+    calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
+    that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no
+    made-up session id. Its `custom` resolves `undefined`, as pi's RPC mode does, though pi types it `Promise<T>`: that
+    cast is the one allowed forced cast in this module, an approved exception ([[submodule-contracts-schema]] lists
+    all three). pi's generic `custom<T>(): Promise<T>` cannot be met by
+    `undefined` without it; a never-settling promise would hang pi's MCP manager, and a rejection would show its
+    llama views as errors, because both call `custom` with no mode check. A dialog names the tool call
     it is about (`toolCallId`) so the web asks on that call's card: the manager passes pi's own
     `agent.state.pendingToolCalls` and a dialog anchors only while **exactly one** call is running (the
     common gate-before-a-tool case; parallel calls stay unanchored rather than guess), and
@@ -660,7 +704,8 @@ re-opened transcripts provider-valid.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager, interactiveTools)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
-    unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
+    unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay. It returns
+    the repaired calls as pi-delegation's `ReplayToolCall`, the shape `scanReplayTools` reports.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's
     **`context` event** (fired before every LLM
@@ -688,8 +733,9 @@ re-opened transcripts provider-valid.
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
     only** — session file and transcript stay untouched, and a stuck chat recovers on its very next
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
-    brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
-    unit-tested with hand-built header bytes.
+    brick once a session crosses 21 images. It reads image blocks by narrowing: the user, tool-result and custom
+    roles, then `block.type === "image"` to pi-ai's `ImageContent`. Pure core (`guardOversizedImages`,
+    `imageDimensions`, and `guardContextImages`, the `context` handler body) unit-tested with hand-built header bytes.
   - `skillCatalog` — the skill-listing budget (#1210): an inline extension in `buildResourceLoader`'s
     shared factories and the opt-in `childExtensionFactories` — never the tool-free base set, since it
     registers `skill_search` (pi-delegation decision #25), so a child gets it only with `extensions: true`
@@ -747,7 +793,9 @@ re-opened transcripts provider-valid.
     loads at or after it already show the whole file; reads of other `SKILL.md` files do not count.
     Any load before the cut, an excerpt included, is invocation evidence. In the kept tail each load
     counts by the lines it showed, computed like pi's `read` (1-indexed `offset`, `limit`, and
-    `details.truncation.outputLines` when truncated; a `/skill:` block shows all): only when their union
+    `details.truncation.outputLines` when truncated; a `/skill:` block shows all). The call arguments and the result
+    details are read with compiled pi-schema checks `Same`-tied to `ReadToolInput` and `TruncationResult`; details
+    of a shape the check refuses count as no lines shown, never the whole file. Only when their union
     covers every line of the current file does the body survive, so an excerpt never hides a compacted
     load, and pages that together show the file are not paid for twice. Skills are ordered by their
     latest load. Bodies are
@@ -1170,7 +1218,8 @@ re-opened transcripts provider-valid.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `respondToTool` +
-  `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
+  `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload` (contracts' payload with a path-safe `SessionId`, since
+  the host publishes only for live sessions);
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /
@@ -1193,7 +1242,10 @@ re-opened transcripts provider-valid.
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
-  opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
+  opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce);
+  `sessionReloadFailure(error)` (a reload failure as logged: a `CodedError` keeps its code, anything else becomes
+  `SESSION_RELOAD_FAILED`; a session that fails to start and then fails to dispose logs `SESSION_DISPOSE_FAILED`, and a
+  chat whose saved model reference is malformed refuses to open with `SESSION_MODEL_UNAVAILABLE`); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals, overrides
   and tool grants, derived by `mcpPolicyOf(project)`) and its writer twin **`setMcpToolGrantWriter`**; the MCP management surface — `listMcpServers`,
@@ -1232,7 +1284,7 @@ re-opened transcripts provider-valid.
   `null`, the default resolver policy, no concurrency resolver, and the unavailable `request_review` /
   `resolve_comment` / `set_title` handlers. The PI runtime, its factories, the session manager factory
   and `registerBundledRuntime` are not reset by `stop()`; whoever configures them restores them.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
+- **Allowed deps:** `pi-schema`; `@thinkrail/shared/errnoCode`; `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
@@ -1654,7 +1706,8 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   adds the bounded, base64-free `McpResultSummary` under `details.thinkrail` (`summarizeMcpResult`), and
   `readMcpToolOutput` serves a result's recorded full output (`mcp.readOutput`) from exactly its
   `fullOutputPath` (pi's owner-only temp file; at most 1 MiB, `truncated` beyond) — `unavailable` for a
-  result that recorded none, `expired` once the file is gone. Settings' *Show log* reads `readMcpServerLog`
+  result that recorded none, `expired` once the file is gone; any other read failure is a
+  `STATE_FILE_UNREADABLE` error. Settings' *Show log* reads `readMcpServerLog`
   ([[submodule-server-agent-mcp]]): pi appends what servers log (`notifications/message`) to one `mcp.log`
   per agent directory for every session, so a server's lines are picked by their entry head and masked.
 - **Sign-in** (`mcpSignIn.ts`; pi ≥ 1.1.0 for cancellable sign-in, #10565). `startMcpProbe({ action:
@@ -1713,10 +1766,10 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   one `readAvailableWireModels` read so the projection can't be bypassed by adding a caller; every inbound
   model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
-  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels +
-  cost{input,output} + input + auth` is an
-  **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit test pins the
-  exact key set). `thinkingLevels` is a computed field: pi-ai's `getSupportedThinkingLevels(model)`
+  `WireModel` is a schema in `contracts/src/schema/model.ts`: `id`, `name`, `provider`, `contextWindow`,
+  `reasoning`, `thinkingLevels`, `cost{input,output}`, `input`, `auth`. `toWireModel` copies those fields by name,
+  so the projection is an **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit
+  test pins the exact key set). `thinkingLevels` is a computed field: pi-ai's `getSupportedThinkingLevels(model)`
   mapped at the same choke point, so the effort picker renders pi's per-model support truth without the
   client re-deriving it. `cost` keeps only the two list prices (pi's `ModelCost` tiers and cache rates stay
   host-side) and `input` the modality list. **`auth`** is the per-provider connection kind projected onto

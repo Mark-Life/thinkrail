@@ -76,7 +76,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   successful `send` says the bytes were queued, not that the page read them, and a socket that dies holding a
   reply is indistinguishable from one that flushed it — so any result dropped on the host's own initiative may
   be the one a replay is about to ask for. A result leaves only on the client's own word, via two frames handled
-  here and never routed to a handler: `{ ack: [id] }` names responses it has **read** (the steady state) and
+  here and never routed to a handler, and read by `clientFrames.ts`, which silently drops a frame the schemas refuse: `{ ack: [id] }` names responses it has **read** (the steady state) and
   requests whose own deadline fired, and `{ resume: [id] }` on each reconnect names everything it still
   considers **unresolved**, freeing all other settled results. A still-running entry that an `ack` names, or a
   `resume` omits, is **abandoned**: the page will never replay that id (ids only grow, and a timed-out id has left
@@ -229,12 +229,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   except a session blocked on `ask_user_question`: shutdown deliberately leaves that call dangling and the
   next attach repairs it to an answerable ack; explicit user Stop remains the terminal-abort path); `handlers.ts` (the WS method→handler
   registry, typed `WsHandlers = { [M in WsMethodName]: WsHandler<M> }`, so a missing, extra, or mistyped
-  handler fails typecheck; `handleRequest` narrows the wire's `unknown` params once, at dispatch, and
-  params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
+  handler fails typecheck; `handleRequest` checks the wire's `unknown` params once, at dispatch, through `wsParams.ts`, which
+  compiles each method's schema from `WS_METHOD_SCHEMAS` at startup and refuses a mismatch with
+  `INVALID_PARAMS`, naming the failing fields but never their values. Params whose JSON is over 64 KB, or that cannot be
+  serialized, get the method name alone: building a report for them costs more than the request should. The replay
+  fingerprint of a frame too deep to serialize gets the same code, as a reply and with nothing retained. Every method has a schema, and a handler
+  does not check the shape of its params again. A method name off the wire can still be unknown: `handleRequest` refuses it first, with the plain `Unknown method` error. In every `bun test` run (`NODE_ENV=test`) and in a host started with `THINKRAIL_CHECK_WS_RESULTS=1`, as e2e does, `wsResults.ts` also checks each reply's JSON form against the method's result schema, compiled once by contracts' `wsResultValidator`, and turns a mismatch into a failed request naming the method and field, coded `WS_RESULT_INVALID`. A test file run alone checks too, so no runner skips it. Every push goes through `pushFrame`, typed by its channel, which runs the same check through `wsPushValidator` and throws to the publisher. e2e also writes each mismatch to `THINKRAIL_E2E_WS_RESULT_LOG`. Without either, nothing compiles and nothing is checked, so result and channel schemas stay types only in production. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
-  only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
+  only sanitizer, which dispatch does not replace: it still bounds every field) and acks; dispatch refuses a report of the wrong shape, and that refusal is not reported. Error tracking also rides two `server.ts` seams: every other failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
   the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with pi's global default model, the agent's settled available
@@ -299,7 +303,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   every probe on stop — `mcp.login` / `mcp.testConnection` pushes go to the starting
   connection only (`ws.send`, not the broadcast topic) and foreign replies fail with `LOGIN_NOT_OWNER`; `session.list` decorates agent's `listSessions` summaries with
   `openTodos: countOpenTodos(…)` per session (a host-only composition of `agent` + `todos` — `agent`
-  stays todos-free; a failed count omits the field, never fails the list); **`todo.requestFix`** is the
+  stays todos-free; a failed count omits the field, is logged as `TODO_COUNT_FAILED`, and never fails the list); **`todo.requestFix`** is the
   same kind of composition (`todos` records + renders the fix package, `agent` delivers): the package is
   fired **detached** into the item's own chat as a **structured `todo-review-fix` custom message** —
   `sendReviewFixToSession` (`fireTodoFixPrompt`), which calls `AgentSession.sendCustomMessage` with the
@@ -613,11 +617,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
 - **Chat Resources:** the scoped resource read, command output/stop and direct-child stop/stop-all
-  handlers enforce each request's exact key set before resolving workspace membership and passing ids plus
-  the registry-owned cwd to the agent barrel. Parent/child ids follow Pi's canonical session grammar
+  handlers check id grammar before resolving workspace membership and passing ids plus the registry-owned
+  cwd to the agent barrel. Dispatch checks the shape; wire objects are open, so an unknown key passes and no
+  handler reads it. Parent/child ids follow Pi's canonical session grammar
   (including internal dots); workspace and command ids retain their owner-specific grammar and authority.
   Missing parents/resources use `RESOURCE_UNAVAILABLE`; output's missing-command result is
-  `available:false` only after validating its parent. No client path/PID field is accepted.
+  `available:false` only after validating its parent. No client path/PID field is read.
   The agent's resource publisher maps to `session.resourcesChanged`, subscribed in the WS open handler;
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
@@ -648,7 +653,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
   analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
   applies. A source dev host fetches only when `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`
-  are both set. `feedback.survey.submit` re-reads the survey list (no cache), refuses with `SURVEY_INVALID`,
+  are both set. `feedback.survey.submit` re-reads the survey list (no cache), refuses a value rule with `SURVEY_INVALID`,
   `SURVEY_UNAVAILABLE` (none launched, or already completed) or `SURVEY_CHANGED` (another id or
   iteration, or the translation the user saw is gone), hands the built payload to `captureSurveyResponse`, and records completion only when that
   capture is accepted (`SURVEY_NOT_SENT` otherwise, and when the list cannot be read). Once accepted the
@@ -660,6 +665,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   writes converge every client through the existing `pi.event`/`session_info_changed` channel and the
   titled `session.state` record (see Session-state composition), with `session.list` repair; no new push
   channel exists.
+
+- **Typed in-process requests:** `handleTypedRequest` runs the same params parse and reply check as
+  `handleRequest`, typed `WsParams<M>` in and `WsResult<M>` out, so a test reads a reply without a cast.
+  `handleRequest` stays the door for a raw frame or a deliberately malformed one.
 
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
@@ -675,7 +684,7 @@ enabled/confirmed choice before entering analytics attribution.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
-  `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
+  `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes; `boot.ts` logs `observeStateFileProblems`); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
   routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.

@@ -153,8 +153,16 @@ class Lease implements DagLease {
 					replaced = true;
 				} catch (error) {
 					if (
-						!["EACCES", "EPERM", "ENOENT", "ENOTDIR", "EISDIR", "ENOTEMPTY", "EXDEV", "EROFS"].some(
-							(code) => hasCode(error, code),
+						!hasCode(
+							error,
+							"EACCES",
+							"EPERM",
+							"ENOENT",
+							"ENOTDIR",
+							"EISDIR",
+							"ENOTEMPTY",
+							"EXDEV",
+							"EROFS",
 						)
 					)
 						fail("commit-unknown", "Snapshot replacement could not be confirmed");
@@ -305,7 +313,7 @@ export function createDagStore(options: { storageRoot: string; scope: string }):
 				try {
 					regularHint(localPath, file.sizeBytes);
 				} catch (error) {
-					if (hasCode(error, "ENOENT") || hasCode(error, "ELOOP"))
+					if (hasCode(error, "ENOENT", "ELOOP"))
 						fail("corrupt-state", "Missing or symlinked captured payload");
 					throw error;
 				}

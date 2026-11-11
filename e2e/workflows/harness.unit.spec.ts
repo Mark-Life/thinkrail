@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { PiEvent } from "@thinkrail/contracts";
-import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
+import type { AskUserQuestionItemView } from "@thinkrail/pi-ask-user-question/core";
 import {
 	attachDialog,
 	checkBudget,
@@ -30,7 +31,7 @@ import {
 const SKILLS = "/repo/packages/pi-thinkrail-workflow/skills";
 
 function toolStart(id: string, name: string, args: Record<string, unknown>): PiEvent {
-	return { type: "tool_execution_start", toolCallId: id, toolName: name, args } as PiEvent;
+	return { type: "tool_execution_start", toolCallId: id, toolName: name, args };
 }
 function toolEnd(id: string, name: string, result: unknown): PiEvent {
 	return {
@@ -39,14 +40,30 @@ function toolEnd(id: string, name: string, result: unknown): PiEvent {
 		toolName: name,
 		result,
 		isError: false,
-	} as PiEvent;
+	};
 }
 function turnEnd(): PiEvent {
 	return {
 		type: "turn_end",
-		message: { role: "assistant" },
+		message: {
+			role: "assistant",
+			content: [],
+			api: "anthropic-messages",
+			provider: "anthropic",
+			model: "claude-unit",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: 0,
+		},
 		toolResults: [],
-	} as unknown as PiEvent;
+	};
 }
 
 function routedLog(): EventLog {
@@ -82,7 +99,7 @@ test("signals: skillRead + turnEnd; forbid wins over stop", async () => {
 	watcher.cancel();
 });
 
-const QUESTIONS: AskUserQuestionItem[] = [
+const QUESTIONS: AskUserQuestionItemView[] = [
 	{
 		question: "Which log format?",
 		header: "Format",
@@ -95,7 +112,7 @@ const QUESTIONS: AskUserQuestionItem[] = [
 
 test("dialog: a throwing script degrades to the fallback rung and records the error", async () => {
 	const log = new EventLog();
-	const { answered, detach } = attachDialog("unit-session-throwing-script", log, {
+	const { answered, detach } = attachDialog(testSessionId("unit-session-throwing-script"), log, {
 		script: [
 			{
 				match: () => {
@@ -116,7 +133,7 @@ test("dialog: a throwing script degrades to the fallback rung and records the er
 
 test("dialog: settle resolves once deliveries finish and records delivery failures", async () => {
 	const log = new EventLog();
-	const { answered, detach, settle } = attachDialog("unit-session-settle", log, {
+	const { answered, detach, settle } = attachDialog(testSessionId("unit-session-settle"), log, {
 		fallback: "pickRecommended",
 	});
 	log.push(toolStart("q1", "ask_user_question", { questions: QUESTIONS }));
@@ -197,13 +214,11 @@ test("scenario: a crashed run records `crashed` and never a false pass", async (
 			),
 		).rejects.toThrow(/does-not-exist-fixture/);
 		const lines = readFileSync(tmpLog, "utf8").trim().split("\n");
-		const record = JSON.parse(lines[lines.length - 1] ?? "{}") as {
-			crashed?: string;
-			deterministic?: { pass: boolean; checks: unknown[] };
-		};
-		expect(record.crashed).toContain("does-not-exist-fixture");
-		expect(record.deterministic?.pass).toBe(false);
-		expect(record.deterministic?.checks).toEqual([]);
+		const record: unknown = JSON.parse(lines[lines.length - 1] ?? "{}");
+		expect(record).toMatchObject({
+			crashed: expect.stringContaining("does-not-exist-fixture"),
+			deterministic: { pass: false, checks: [] },
+		});
 	} finally {
 		delete process.env.THINKRAIL_WORKFLOW_RUNLOG;
 	}

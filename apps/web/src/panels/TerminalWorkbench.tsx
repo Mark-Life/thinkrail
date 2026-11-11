@@ -1,5 +1,5 @@
 import { RiAddLine as Plus } from "@remixicon/react";
-import type { TerminalTabsPush } from "@thinkrail/contracts";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
@@ -12,15 +12,14 @@ import { ConfirmDialog } from "./ConfirmDialog";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
-export function useTerminalCatalog(workspaceId: string | null): boolean {
+export function useTerminalCatalog(workspaceId: WorkspaceId | null): boolean {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const status = useAppStore((state) => state.status);
 	const [readyFor, setReadyFor] = useState<string | null>(null);
 	const pushEpochByWorkspace = useRef(new Map<string, number>());
 	useEffect(
 		() =>
-			getTransport().subscribe(WS_CHANNELS.terminalTabs, (payload) => {
-				const event = payload as TerminalTabsPush;
+			getTransport().subscribe(WS_CHANNELS.terminalTabs, (event) => {
 				pushEpochByWorkspace.current.set(
 					event.workspaceId,
 					(pushEpochByWorkspace.current.get(event.workspaceId) ?? 0) + 1,

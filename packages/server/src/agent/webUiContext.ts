@@ -4,7 +4,7 @@ import type {
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
 } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest, ExtUiResponse, ProviderWarning } from "@thinkrail/contracts";
+import type { ExtUiRequest, ExtUiResponse, ProviderWarning, SessionId } from "@thinkrail/contracts";
 import { plainTextTheme } from "./plainTextTheme";
 
 /** Clients whose protocol version is below `belowProtocol`; absent means every client. */
@@ -18,8 +18,8 @@ export function setExtUiPublisher(fn: ExtUiPublisher): void {
 	publish = fn;
 }
 
-let stateChanged: (sessionId: string) => void = () => {};
-export function setExtUiStateChanged(fn: (sessionId: string) => void): void {
+let stateChanged: (sessionId: SessionId) => void = () => {};
+export function setExtUiStateChanged(fn: (sessionId: SessionId) => void): void {
 	stateChanged = fn;
 }
 
@@ -30,7 +30,7 @@ type NotifyInterceptor = (message: string, level: "info" | "warning" | "error") 
 const interceptors = new Map<string, Set<NotifyInterceptor>>();
 
 export function interceptExtUiNotify(
-	sessionId: string,
+	sessionId: SessionId,
 	interceptor: NotifyInterceptor,
 ): () => void {
 	const set = interceptors.get(sessionId) ?? new Set<NotifyInterceptor>();
@@ -42,7 +42,7 @@ export function interceptExtUiNotify(
 	};
 }
 
-function intercepted(sessionId: string, message: string, level: "info" | "warning" | "error") {
+function intercepted(sessionId: SessionId, message: string, level: "info" | "warning" | "error") {
 	for (const interceptor of interceptors.get(sessionId) ?? []) {
 		if (interceptor(message, level)) return true;
 	}
@@ -52,7 +52,7 @@ function intercepted(sessionId: string, message: string, level: "info" | "warnin
 type DialogRequest = Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }>;
 
 interface Pending {
-	sessionId: string;
+	sessionId: SessionId;
 	request: DialogRequest;
 	finish: (value: string | boolean | null, dismiss: boolean) => void;
 }
@@ -62,13 +62,13 @@ export function resolveExtUi(response: ExtUiResponse): void {
 	pending.get(response.id)?.finish(response.value, false);
 }
 
-export function cancelExtUiForSession(sessionId: string): void {
+export function cancelExtUiForSession(sessionId: SessionId): void {
 	for (const entry of [...pending.values()]) {
 		if (entry.sessionId === sessionId) entry.finish(null, true);
 	}
 }
 
-export function pendingExtUiDialog(sessionId: string): DialogRequest | null {
+export function pendingExtUiDialog(sessionId: SessionId): DialogRequest | null {
 	for (const entry of pending.values()) {
 		if (entry.sessionId === sessionId) return entry.request;
 	}
@@ -76,7 +76,7 @@ export function pendingExtUiDialog(sessionId: string): DialogRequest | null {
 }
 
 export function notifyExtUi(
-	sessionId: string,
+	sessionId: SessionId,
 	message: string,
 	level: "info" | "warning" | "error",
 	audience?: ExtUiAudience,
@@ -84,7 +84,7 @@ export function notifyExtUi(
 	publish({ id: nextId(), sessionId, kind: "notify", message, level }, audience);
 }
 
-export function publishSessionNotice(sessionId: string, notice: ProviderWarning): void {
+export function publishSessionNotice(sessionId: SessionId, notice: ProviderWarning): void {
 	publish({ id: nextId(), sessionId, kind: "notice", notice });
 }
 
@@ -97,7 +97,7 @@ function extensionName(extensionPath: string): string {
 	return basename(dirname(extensionPath)) || file;
 }
 
-export function notifyExtensionError(sessionId: string, error: ExtensionError): void {
+export function notifyExtensionError(sessionId: SessionId, error: ExtensionError): void {
 	const cause =
 		error.error.length > MAX_EXTENSION_ERROR_CHARS
 			? `${error.error.slice(0, MAX_EXTENSION_ERROR_CHARS)}…`
@@ -110,7 +110,7 @@ export function notifyExtensionError(sessionId: string, error: ExtensionError): 
 }
 
 function bridgeDialog(
-	sessionId: string,
+	sessionId: SessionId,
 	request: DialogRequest,
 	opts?: ExtensionUIDialogOptions,
 ): Promise<string | boolean | null> {
@@ -142,7 +142,7 @@ function bridgeDialog(
 }
 
 export async function selectForToolCall(
-	sessionId: string,
+	sessionId: SessionId,
 	call: { toolCallId: string; toolInput: Record<string, unknown> },
 	title: string,
 	options: string[],
@@ -156,8 +156,31 @@ export async function selectForToolCall(
 	return typeof v === "string" ? v : undefined;
 }
 
+export const inertUiMembers = {
+	onTerminalInput: () => () => {},
+	setWorkingMessage: () => {},
+	setWorkingVisible: () => {},
+	setWorkingIndicator: () => {},
+	setHiddenThinkingLabel: () => {},
+	setFooter: () => {},
+	setHeader: () => {},
+	custom: (() => Promise.resolve(undefined)) as ExtensionUIContext["custom"],
+	pasteToEditor: () => {},
+	setEditorText: () => {},
+	getEditorText: () => "",
+	addAutocompleteProvider: () => {},
+	setEditorComponent: () => {},
+	getEditorComponent: () => undefined,
+	theme: plainTextTheme,
+	getAllThemes: () => [],
+	getTheme: () => undefined,
+	setTheme: () => ({ success: true }),
+	getToolsExpanded: () => false,
+	setToolsExpanded: () => {},
+} satisfies Partial<ExtensionUIContext>;
+
 export function createWebUiContext(
-	sessionId: string,
+	sessionId: SessionId,
 	currentToolCall: () => string | undefined = () => undefined,
 ): ExtensionUIContext {
 	const anchor = (): { toolCallId?: string } => {
@@ -214,26 +237,6 @@ export function createWebUiContext(
 		setTitle(title) {
 			publish({ id: nextId(), sessionId, kind: "setTitle", title });
 		},
-
-		onTerminalInput: () => () => {},
-		setWorkingMessage: () => {},
-		setWorkingVisible: () => {},
-		setWorkingIndicator: () => {},
-		setHiddenThinkingLabel: () => {},
-		setFooter: () => {},
-		setHeader: () => {},
-		custom: (() => Promise.resolve(undefined)) as ExtensionUIContext["custom"],
-		pasteToEditor: () => {},
-		setEditorText: () => {},
-		getEditorText: () => "",
-		addAutocompleteProvider: () => {},
-		setEditorComponent: () => {},
-		getEditorComponent: () => undefined,
-		theme: plainTextTheme,
-		getAllThemes: () => [],
-		getTheme: () => undefined,
-		setTheme: () => ({ success: true }),
-		getToolsExpanded: () => false,
-		setToolsExpanded: () => {},
+		...inertUiMembers,
 	} satisfies ExtensionUIContext;
 }

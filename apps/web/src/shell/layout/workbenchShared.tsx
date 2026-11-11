@@ -1,4 +1,6 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
+import { compile, lit, num, obj, oneOf, type Static, str, union } from "@earendil-works/pi-schema";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
@@ -31,8 +33,8 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
+import { LayoutAuxiliaryRegion } from "./schema";
 import type {
-	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
 	LayoutSideTab,
 	LayoutTab,
@@ -41,7 +43,7 @@ import type {
 } from "./types";
 
 export interface LayoutTabFocusRequest {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	key: string;
 	location: LayoutGroupLocation;
 	tabId?: string;
@@ -54,7 +56,7 @@ export interface PreparedLayoutClose {
 }
 
 export interface WorkbenchProps {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
@@ -75,7 +77,7 @@ export interface WorkbenchProps {
 		tab: LayoutTab,
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
-	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	onRenameChat?: (sessionId: SessionId, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
@@ -86,14 +88,30 @@ export interface WorkbenchProps {
 	onGestureCanceled?: () => void;
 }
 
-export type DropTarget =
-	| { kind: "group"; location: LayoutGroupLocation }
-	| { kind: "insert"; location: LayoutGroupLocation; index: number }
-	| { kind: "split"; groupId: string; direction: CenterSplitDirection }
-	| { kind: "auxiliary-edge"; region: LayoutAuxiliaryRegion; index: number };
+const GroupLocation = union([
+	obj({ area: lit("center"), groupId: str() }),
+	obj({ area: LayoutAuxiliaryRegion, groupId: str() }),
+]);
+const DropTargetSchema = union([
+	obj({ kind: lit("group"), location: GroupLocation }),
+	obj({ kind: lit("insert"), location: GroupLocation, index: num() }),
+	obj({ kind: lit("split"), groupId: str(), direction: oneOf(["left", "right", "up", "down"]) }),
+	obj({ kind: lit("auxiliary-edge"), region: LayoutAuxiliaryRegion, index: num() }),
+]);
+export type DropTarget = Static<typeof DropTargetSchema>;
+const DropData = compile(obj({ target: DropTargetSchema }, { open: true }));
+const DragTabId = compile(obj({ tab: obj({ id: str() }, { open: true }) }, { open: true }));
 
 export interface DragData {
 	tab: LayoutTab;
+}
+
+export function readDropTarget(data: unknown): DropTarget | undefined {
+	return DropData.check(data) ? data.target : undefined;
+}
+
+export function readDragTabId(data: unknown): string | undefined {
+	return DragTabId.check(data) ? data.tab.id : undefined;
 }
 
 export const HIDDEN_BOTTOM_DROP_ID = "dnd-hidden-bottom-edge";
@@ -445,7 +463,7 @@ export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
 
 export function useLayoutFocus(
 	request: LayoutTabFocusRequest | null | undefined,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	workspaceRef: React.RefObject<string>,
 ): void {
 	const consumed = useRef<string | null>(null);
@@ -595,7 +613,7 @@ export function findLayoutGroupTabs(
 }
 
 export interface SharedGroupProps {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;

@@ -121,7 +121,7 @@ function isAdaptiveEntry(value: unknown): value is AdaptiveEntry {
 export function parseLearning(raw: string | null, nowMs: number): LearningSnapshot {
 	if (!raw) return EMPTY_LEARNING;
 	try {
-		const value = JSON.parse(raw) as unknown;
+		const value: unknown = JSON.parse(raw);
 		if (typeof value !== "object" || value === null || Reflect.get(value, "version") !== 1) {
 			return EMPTY_LEARNING;
 		}

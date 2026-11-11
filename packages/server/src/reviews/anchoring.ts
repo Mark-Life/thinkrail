@@ -1,4 +1,5 @@
 import type { ReviewAnchor, ReviewAnchorState, ReviewSelector } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { hashBytes } from "../fs";
 
 const UTF8_BYTES = new TextEncoder();
@@ -11,7 +12,6 @@ export const TEXT_QUOTE_CONTEXT_CHARS = 32;
 
 type LineRange = Extract<ReviewSelector, { kind: "lineRange" }>;
 type TextQuote = Extract<ReviewSelector, { kind: "textQuote" }>;
-type DiffHunk = Extract<ReviewSelector, { kind: "diffHunk" }>;
 type Structural = Extract<ReviewSelector, { kind: "structural" }>;
 type Region = Extract<ReviewSelector, { kind: "region" }>;
 
@@ -31,108 +31,88 @@ export function isPositioned(anchor: ReviewAnchor): boolean {
 	);
 }
 
-function shown(value: unknown): string {
-	if (typeof value === "string") return JSON.stringify(value);
-	if (value === null) return "null";
-	if (Array.isArray(value)) return "an array";
-	if (typeof value === "object") return "an object";
-	return String(value);
+function shown(value: string | number): string {
+	return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
-function selectorFields(value: unknown): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value))
-		throw new Error(`A selector must be an object, got ${shown(value)}.`);
-	return value as Record<string, unknown>;
-}
-
-function fraction(fields: Record<string, unknown>, name: string): number {
-	const value = fields[name];
-	if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)
-		throw new Error(
+function fraction(selector: Region, name: "x" | "y" | "width" | "height"): number {
+	const value = selector[name];
+	if (!Number.isFinite(value) || value < 0 || value > 1)
+		throw new CodedError(
+			"INVALID_PARAMS",
 			`A region selector's ${name} must be a fraction in [0, 1], got ${shown(value)}.`,
 		);
 	return value;
 }
 
-function page(value: unknown): number | undefined {
+function page(value: number | undefined): number | undefined {
 	if (value === undefined) return undefined;
-	if (typeof value !== "number" || !Number.isInteger(value) || value < 1)
-		throw new Error(`A region selector's page must be a positive integer, got ${shown(value)}.`);
+	if (!Number.isInteger(value) || value < 1)
+		throw new CodedError(
+			"INVALID_PARAMS",
+			`A region selector's page must be a positive integer, got ${shown(value)}.`,
+		);
 	return value;
 }
 
-function narrowRegion(fields: Record<string, unknown>): Region {
-	const paged = page(fields.page);
+function narrowRegion(selector: Region): Region {
+	const paged = page(selector.page);
 	return {
 		kind: "region",
-		x: fraction(fields, "x"),
-		y: fraction(fields, "y"),
-		width: fraction(fields, "width"),
-		height: fraction(fields, "height"),
+		x: fraction(selector, "x"),
+		y: fraction(selector, "y"),
+		width: fraction(selector, "width"),
+		height: fraction(selector, "height"),
 		...(paged === undefined ? {} : { page: paged }),
 	};
 }
 
-function integer(value: unknown): number | null {
-	return typeof value === "number" && Number.isInteger(value) ? value : null;
-}
-
-function narrowLineRange(fields: Record<string, unknown>): LineRange {
-	const startLine = integer(fields.startLine);
-	const endLine = integer(fields.endLine);
-	if (startLine === null || endLine === null)
-		throw new Error(
-			`A lineRange selector's lines must be integers, got ${shown(fields.startLine)}-${shown(fields.endLine)}.`,
+function narrowLineRange({ startLine, endLine }: LineRange): LineRange {
+	if (!Number.isInteger(startLine) || !Number.isInteger(endLine))
+		throw new CodedError(
+			"INVALID_PARAMS",
+			`A lineRange selector's lines must be integers, got ${shown(startLine)}-${shown(endLine)}.`,
 		);
 	if (startLine < 1 || endLine < startLine)
-		throw new Error(
+		throw new CodedError(
+			"INVALID_PARAMS",
 			`A lineRange selector must run from line 1 onwards, got ${startLine}-${endLine}.`,
 		);
 	return { kind: "lineRange", startLine, endLine };
 }
 
-function narrowTextQuote(fields: Record<string, unknown>): TextQuote {
-	const { exact, prefix, suffix } = fields;
-	if (typeof exact !== "string" || typeof prefix !== "string" || typeof suffix !== "string")
-		throw new Error("A textQuote selector needs string exact, prefix and suffix fields.");
-	return { kind: "textQuote", exact, prefix, suffix };
-}
-
-function narrowDiffHunk(fields: Record<string, unknown>): DiffHunk {
-	const hunkHeader = fields.hunkHeader;
-	if (typeof hunkHeader !== "string")
-		throw new Error(`A diffHunk selector needs a string hunkHeader, got ${shown(hunkHeader)}.`);
-	return { kind: "diffHunk", hunkHeader };
-}
-
-function narrowStructural(fields: Record<string, unknown>): Structural {
-	const scheme = fields.scheme;
-	if (typeof scheme !== "string" || !STRUCTURAL_SCHEME.test(scheme))
-		throw new Error(
+function narrowStructural({ scheme, ref }: Structural): Structural {
+	if (!STRUCTURAL_SCHEME.test(scheme))
+		throw new CodedError(
+			"INVALID_PARAMS",
 			`A structural selector's scheme must match ${STRUCTURAL_SCHEME.source}, got ${shown(scheme)}.`,
 		);
-	const ref = fields.ref;
-	if (typeof ref !== "string" || ref.length === 0)
-		throw new Error(`A ${scheme} selector needs a non-empty ref, got ${shown(ref)}.`);
+	if (ref.length === 0)
+		throw new CodedError("INVALID_PARAMS", `A ${scheme} selector needs a non-empty ref.`);
 	return { kind: "structural", scheme, ref };
 }
 
-function narrowSelector(value: unknown): ReviewSelector {
-	const fields = selectorFields(value);
-	const kind = fields.kind;
-	if (kind === "lineRange") return narrowLineRange(fields);
-	if (kind === "textQuote") return narrowTextQuote(fields);
-	if (kind === "diffHunk") return narrowDiffHunk(fields);
-	if (kind === "structural") return narrowStructural(fields);
-	if (kind === "region") return narrowRegion(fields);
-	throw new Error(
-		`Unknown selector kind ${shown(kind)} — a selector is one of lineRange, textQuote, diffHunk, structural, region.`,
-	);
+function narrowSelector(selector: ReviewSelector): ReviewSelector {
+	switch (selector.kind) {
+		case "lineRange":
+			return narrowLineRange(selector);
+		case "textQuote":
+			return {
+				kind: "textQuote",
+				exact: selector.exact,
+				prefix: selector.prefix,
+				suffix: selector.suffix,
+			};
+		case "diffHunk":
+			return { kind: "diffHunk", hunkHeader: selector.hunkHeader };
+		case "structural":
+			return narrowStructural(selector);
+		case "region":
+			return narrowRegion(selector);
+	}
 }
 
-export function validateSelectors(selectors: unknown): ReviewSelector[] {
-	if (!Array.isArray(selectors))
-		throw new Error(`An anchor's selectors must be an array, got ${shown(selectors)}.`);
+export function validateSelectors(selectors: readonly ReviewSelector[]): ReviewSelector[] {
 	return selectors.map(narrowSelector);
 }
 

@@ -1,4 +1,9 @@
-import { ACCEPTED_IMAGE_TYPES, type ImageContent } from "@thinkrail/contracts";
+import {
+	ACCEPTED_IMAGE_TYPES,
+	type ImageContent,
+	isImageContent,
+	isTextContent,
+} from "@thinkrail/contracts";
 
 const acceptedImageTypes = new Set(ACCEPTED_IMAGE_TYPES);
 
@@ -25,33 +30,21 @@ export function parseToolResultContent(result: unknown): ParsedToolResultContent
 		return { text: toolValueText(result), images: [] };
 	}
 
-	const content = result.content;
+	const content: unknown = result.content;
 	if (!Array.isArray(content)) {
 		return { text: toolValueText(result), images: [] };
 	}
 
+	const blocks: readonly unknown[] = content;
 	const text: string[] = [];
 	const images: ImageContent[] = [];
-	for (const block of content) {
-		if (typeof block !== "object" || block === null) continue;
-		const candidate = block as {
-			type?: unknown;
-			text?: unknown;
-			data?: unknown;
-			mimeType?: unknown;
-		};
-		if (candidate.type === "text" && typeof candidate.text === "string") {
-			text.push(candidate.text);
+	for (const block of blocks) {
+		if (isTextContent(block)) {
+			text.push(block.text);
 			continue;
 		}
-		if (
-			candidate.type === "image" &&
-			typeof candidate.data === "string" &&
-			candidate.data.length > 0 &&
-			typeof candidate.mimeType === "string" &&
-			acceptedImageTypes.has(candidate.mimeType)
-		) {
-			images.push({ type: "image", data: candidate.data, mimeType: candidate.mimeType });
+		if (isImageContent(block) && block.data.length > 0 && acceptedImageTypes.has(block.mimeType)) {
+			images.push({ type: "image", data: block.data, mimeType: block.mimeType });
 		}
 	}
 	return { text: text.join(""), images };

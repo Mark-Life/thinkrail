@@ -1,4 +1,4 @@
-import type { GitFileChange, PiEvent } from "@thinkrail/contracts";
+import type { GitFileChange, PiEvent, SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 import { type TodoArtifact, type TodoPlan, TodoStore } from "pi-todos/core";
 import {
@@ -40,7 +40,10 @@ function flatten(plan: TodoPlan): TodoPlan["todos"] {
 
 const commitQueues = new Map<string, Promise<void>>();
 
-export function enqueueTodoMutation<T>(workspaceId: string, fn: () => T | Promise<T>): Promise<T> {
+export function enqueueTodoMutation<T>(
+	workspaceId: WorkspaceId,
+	fn: () => T | Promise<T>,
+): Promise<T> {
 	const prev = commitQueues.get(workspaceId);
 	let reservation: Promise<void> | undefined;
 	let next: Promise<T>;
@@ -73,7 +76,7 @@ export function enqueueTodoMutation<T>(workspaceId: string, fn: () => T | Promis
 	return next;
 }
 
-function captureNewWorkWindow(workspaceId: string, sessionId: string): void {
+function captureNewWorkWindow(workspaceId: WorkspaceId, sessionId: SessionId): void {
 	const root = getWorkspace(workspaceId).worktreePath;
 	const store = new TodoStore(root, sessionId);
 	const active = flatten(store.read()).find((item) => item.status === "in_progress");
@@ -90,7 +93,10 @@ function captureNewWorkWindow(workspaceId: string, sessionId: string): void {
 	writeBaselines(root, sessionId, baselines);
 }
 
-export function maybeAttachChangeArtifacts(workspaceId: string, sessionId: string): Promise<void> {
+export function maybeAttachChangeArtifacts(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+): Promise<void> {
 	try {
 		captureNewWorkWindow(workspaceId, sessionId);
 	} catch {
@@ -99,7 +105,7 @@ export function maybeAttachChangeArtifacts(workspaceId: string, sessionId: strin
 	return enqueueTodoMutation(workspaceId, () => runReconcile(workspaceId, sessionId));
 }
 
-export async function settleChangeArtifacts(workspaceId: string): Promise<void> {
+export async function settleChangeArtifacts(workspaceId: WorkspaceId): Promise<void> {
 	let current = commitQueues.get(workspaceId);
 	while (current) {
 		await current;
@@ -109,7 +115,7 @@ export async function settleChangeArtifacts(workspaceId: string): Promise<void> 
 	}
 }
 
-async function runReconcile(workspaceId: string, sessionId: string): Promise<void> {
+async function runReconcile(workspaceId: WorkspaceId, sessionId: SessionId): Promise<void> {
 	try {
 		const root = getWorkspace(workspaceId).worktreePath;
 		const store = new TodoStore(root, sessionId);
@@ -161,7 +167,7 @@ export type WindowCommits = (head: string | null) => Promise<{ sha: string; subj
 export async function reconcileChangeArtifacts(
 	store: TodoStore,
 	root: string,
-	sessionId: string,
+	sessionId: SessionId,
 	getChangedPaths: () => Promise<string[]>,
 	commit?: CommitWindow,
 	getHead: () => string | null = () => null,

@@ -14,8 +14,7 @@ export function prependPreloadGlobal(
 }
 
 export function takePreloadGlobal(globalName: string): unknown {
-	const globals = globalThis as typeof globalThis & Record<string, unknown>;
-	const value = Reflect.get(globals, globalName);
-	Reflect.deleteProperty(globals, globalName);
+	const value: unknown = Reflect.get(globalThis, globalName);
+	Reflect.deleteProperty(globalThis, globalName);
 	return value;
 }

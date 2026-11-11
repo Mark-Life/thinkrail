@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
-import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
+import { diffContentStamp, stampedComposerDraft, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { JsonTree, type JsonTreeThread } from "./JsonTree";
 import { classifyJsonDiff, type JsonDiffMark } from "./jsonDiff";
@@ -23,6 +23,8 @@ interface SelectedNode {
 	node: JsonNode;
 	side: Side;
 }
+
+const SELECTED_NODE_DRAFT = stampedComposerDraft<SelectedNode>();
 
 function nodeSummary(node: JsonNode): string {
 	if (node.type === "object") return `{${node.children.length}}`;
@@ -72,7 +74,7 @@ export default function JsonDiff({
 			review?.worktree.threads,
 		],
 	);
-	const composer = useStampedComposer<SelectedNode>(diffContentStamp(original, modified));
+	const composer = useStampedComposer(SELECTED_NODE_DRAFT, diffContentStamp(original, modified));
 	const selected = composer.selection;
 	const rootRef = useRef<HTMLDivElement>(null);
 	const cardRefs = useRef(new Map<string, HTMLDivElement>());
@@ -136,6 +138,7 @@ export default function JsonDiff({
 	}
 	const surfaceFor = (side: Side): SurfaceReview | undefined =>
 		side === "base" ? review?.base : review?.worktree;
+	const composerSurface = selected ? surfaceFor(selected.side) : undefined;
 	const scrollToCard = (id: string) =>
 		cardRefs.current.get(id)?.scrollIntoView({ block: "center" });
 	const scrollToThread = (thread: ReviewThread, side: Side) => {
@@ -210,13 +213,13 @@ export default function JsonDiff({
 				</section>
 			) : null}
 			<StaleComposerNotice visible={composer.stale} />
-			{composer.composing && selected && draft && surfaceFor(selected.side) ? (
+			{composer.composing && draft && composerSurface ? (
 				<ReviewComposer
 					key={composer.key}
 					input={composer.input}
 					draft={draft}
 					label={draft.label}
-					commenting={(surfaceFor(selected.side) as SurfaceReview).commenting}
+					commenting={composerSurface.commenting}
 					onClose={composer.close}
 					className="review-composer-flow"
 				/>

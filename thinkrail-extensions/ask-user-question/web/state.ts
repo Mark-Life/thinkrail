@@ -1,14 +1,16 @@
-import type {
-	AskUserQuestionAnswer,
-	AskUserQuestionArgs,
-	AskUserQuestionDiscussReason,
-	AskUserQuestionItem,
-	AskUserQuestionOption,
+import {
+	type AskUserQuestionAnswer,
+	type AskUserQuestionDiscussReason,
+	type AskUserQuestionItemView,
+	type AskUserQuestionOptionView,
+	isAskUserQuestionItemView,
 } from "@thinkrail/pi-ask-user-question/core";
 
-export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItem[] {
-	const qs = (args as Partial<AskUserQuestionArgs>).questions;
-	return Array.isArray(qs) ? qs.filter((q) => q && Array.isArray(q.options)) : [];
+export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItemView[] {
+	const { questions } = args;
+	if (!Array.isArray(questions)) return [];
+	const items: readonly unknown[] = questions;
+	return items.filter(isAskUserQuestionItemView);
 }
 
 export function splitRecommended(label: string): { text: string; recommended: boolean } {
@@ -59,14 +61,8 @@ export const emptyQState = (): QState => ({
 	previewExpanded: false,
 });
 
-export const DISCUSS_REASONS: readonly AskUserQuestionDiscussReason[] = [
-	"unclear",
-	"irrelevant",
-	"context",
-];
-
 export function previewEcho(
-	option: AskUserQuestionOption,
+	option: AskUserQuestionOptionView,
 ): Pick<AskUserQuestionAnswer, "preview" | "previewFile" | "previewBefore"> {
 	if (option.previewFile)
 		return {
@@ -77,7 +73,7 @@ export function previewEcho(
 }
 
 export function deriveAnswer(
-	question: AskUserQuestionItem,
+	question: AskUserQuestionItemView,
 	index: number,
 	state: QState,
 ): AskUserQuestionAnswer | null {
@@ -127,7 +123,7 @@ export function deriveAnswer(
 }
 
 export function deriveAnswers(
-	questions: AskUserQuestionItem[],
+	questions: AskUserQuestionItemView[],
 	states: Record<number, QState>,
 ): AskUserQuestionAnswer[] {
 	return questions
@@ -184,7 +180,7 @@ export function choiceKeyAction(
 }
 
 export function paneOptionIndex(
-	question: AskUserQuestionItem,
+	question: AskUserQuestionItemView,
 	state: QState,
 	cursor: number,
 ): number | null {

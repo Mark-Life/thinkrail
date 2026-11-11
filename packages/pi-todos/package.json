@@ -7,6 +7,7 @@
 		".": "./index.ts",
 		"./index.ts": "./index.ts",
 		"./core": "./core/index.ts",
+		"./wire": "./core/wire.ts",
 		"./package.json": "./package.json"
 	},
 	"description": "Teaches the pi agent a project's TODO backlog: a durable, user-owned list of work items with todo_* tools.",
@@ -20,6 +21,9 @@
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
+	},
+	"dependencies": {
+		"@earendil-works/pi-schema": "catalog:"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",

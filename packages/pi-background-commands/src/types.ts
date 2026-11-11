@@ -1,6 +1,14 @@
 import type { BashOperations, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { Static, StaticObject } from "@earendil-works/pi-schema";
+import type {
+	BACKGROUND_COMMAND_COMPLETION_FIELDS,
+	BACKGROUND_COMMAND_OUTPUT_DETAILS_FIELDS,
+	BACKGROUND_COMMAND_SNAPSHOT_FIELDS,
+	BACKGROUND_COMMAND_TERMINAL_SNAPSHOT_FIELDS,
+	BackgroundCommandOutput as BackgroundCommandOutputSchema,
+} from "./wire";
 
-export type BackgroundCommandStatus = "running" | "stopping" | "completed" | "error" | "stopped";
+export type { BackgroundCommandStatus, BackgroundCommandTerminalStatus } from "./wire";
 
 export interface BackgroundCommandStart {
 	command: string;
@@ -28,22 +36,26 @@ export interface BackgroundCommandsOptions {
 	createOperations?(options: { shellPath?: string }): BashOperations;
 }
 
-export interface BackgroundCommandSnapshot {
-	readonly id: string;
-	readonly sessionId: string;
-	readonly name: string;
-	readonly command: string;
-	readonly status: BackgroundCommandStatus;
-	readonly startedAt: number;
-	readonly finishedAt?: number;
-	readonly exitCode?: number | null;
-	readonly errorMessage?: string;
-}
+export type BackgroundCommandSnapshot = Readonly<
+	StaticObject<typeof BACKGROUND_COMMAND_SNAPSHOT_FIELDS>
+>;
 
-export interface BackgroundCommandOutput {
-	readonly text: string;
-	readonly truncated: boolean;
-}
+/** A settled run: its status is terminal and `finishedAt` is set. */
+export type BackgroundCommandTerminalSnapshot = Readonly<
+	StaticObject<typeof BACKGROUND_COMMAND_TERMINAL_SNAPSHOT_FIELDS>
+>;
+
+export type BackgroundCommandOutput = Readonly<Static<typeof BackgroundCommandOutputSchema>>;
+
+/** The `details` of a `background_command` `output` call. */
+export type BackgroundCommandOutputDetails = Readonly<
+	StaticObject<typeof BACKGROUND_COMMAND_OUTPUT_DETAILS_FIELDS>
+>;
+
+/** The `details` of a completion message. */
+export type BackgroundCommandCompletionDetails = StaticObject<
+	typeof BACKGROUND_COMMAND_COMPLETION_FIELDS
+>;
 
 export interface BackgroundCommandHandle {
 	readonly id: string;
@@ -54,7 +66,7 @@ export interface BackgroundCommandHandle {
 }
 
 export interface BackgroundCommandCompletion {
-	readonly snapshot: BackgroundCommandSnapshot;
+	readonly snapshot: BackgroundCommandTerminalSnapshot;
 	readonly output: BackgroundCommandOutput;
 }
 

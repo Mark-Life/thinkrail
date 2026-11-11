@@ -1,17 +1,18 @@
 import { RiSearchLine } from "@remixicon/react";
 import { numArg, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import type { ToolSearchInput } from "./inputs";
 import { McpHeader, McpOutput, McpRunning } from "./McpCardParts";
 import { mcpText, readToolSearchLoaded, toolSearchDescriptions } from "./mcpResult";
 
 export function toolSearchSummary({ args }: ToolRenderProps): string {
-	return strArg(args, "query");
+	return strArg<ToolSearchInput>(args, "query");
 }
 
 export function ToolSearchCard({ toolCallId, args, result, status }: ToolRenderProps) {
 	const t = useT();
-	const query = strArg(args, "query");
-	const limit = numArg(args, "limit");
+	const query = strArg<ToolSearchInput>(args, "query");
+	const limit = numArg<ToolSearchInput>(args, "limit");
 	const text = mcpText(result);
 	const loaded = status === "done" ? readToolSearchLoaded(result) : null;
 	const descriptions = toolSearchDescriptions(text);

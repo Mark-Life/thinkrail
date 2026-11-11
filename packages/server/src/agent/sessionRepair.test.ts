@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
+import type {
+	AssistantMessage,
+	ImageContent,
+	TextContent,
+	ToolCall,
+	ToolResultMessage,
+	UserMessage,
+} from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { Message } from "@thinkrail/contracts";
 import { type InteractiveTools, interactiveTools } from "../extensions";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { TOOL_RESPONSE_PENDING_TEXT } from "./toolResponses";
@@ -21,49 +29,34 @@ const QUESTION = {
 };
 
 const assistantWithCalls = (
-	calls: { id: string; name: string; args?: Record<string, unknown> }[],
-	stopReason: "toolUse" | "error" | "aborted" | "length" = "toolUse",
-): Message =>
-	({
-		role: "assistant",
-		content: calls.map((c) => ({
-			type: "toolCall",
-			id: c.id,
-			name: c.name,
-			arguments: c.args ?? {},
-		})),
-		api: "anthropic-messages",
-		provider: "anthropic",
-		model: "test",
-		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		stopReason,
-		timestamp: Date.now(),
-	}) as unknown as Message;
+	calls: { id: string; name: string; args?: ToolCall["arguments"] }[],
+	stopReason: AssistantMessage["stopReason"] = "toolUse",
+): AssistantMessage =>
+	fauxAssistantMessage(
+		calls.map((c) => fauxToolCall(c.name, c.args ?? {}, { id: c.id })),
+		{ stopReason },
+	);
 
-const assistantText = (text: string): Message =>
-	({
-		role: "assistant",
-		content: [{ type: "text", text }],
-		api: "anthropic-messages",
-		provider: "anthropic",
-		model: "test",
-		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		stopReason: "stop",
-		timestamp: Date.now(),
-	}) as unknown as Message;
+const assistantText = (text: string): AssistantMessage =>
+	fauxAssistantMessage(text, { stopReason: "stop" });
 
-const toolResult = (toolCallId: string, toolName: string): Message =>
-	({
-		role: "toolResult",
-		toolCallId,
-		toolName,
-		content: [{ type: "text", text: "ok" }],
-		isError: false,
-		timestamp: Date.now(),
-	}) as unknown as Message;
+const toolResult = (toolCallId: string, toolName: string): ToolResultMessage => ({
+	role: "toolResult",
+	toolCallId,
+	toolName,
+	content: [{ type: "text", text: "ok" }],
+	isError: false,
+	timestamp: Date.now(),
+});
 
-const user = (text: string): Message =>
-	({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() }) as Message;
+const user = (text: string): UserMessage => ({
+	role: "user",
+	content: [{ type: "text", text }],
+	timestamp: Date.now(),
+});
+
+const firstText = (content: (TextContent | ImageContent)[]) =>
+	content[0]?.type === "text" ? content[0].text : "";
 
 test("a healthy transcript is untouched", () => {
 	const sm = SessionManager.inMemory("/tmp/repair-test");
@@ -88,7 +81,7 @@ test("a dangling generic tool call gets an error 'Operation aborted' result", ()
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.toolCallId).toBe("b1");
 	expect(repaired.isError).toBe(true);
-	expect((repaired.content[0] as { text?: string }).text ?? "").toContain("host restarted");
+	expect(firstText(repaired.content)).toContain("host restarted");
 	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 });
 
@@ -103,7 +96,7 @@ test("a dangling interactive tool call is repaired to the canonical pending ack"
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.isError).toBe(false);
 	expect(repaired.details).toEqual({ kind: "ack" });
-	const text = (repaired.content[0] as { text?: string }).text ?? "";
+	const text = firstText(repaired.content);
 	expect(text).toBe(TOOL_RESPONSE_PENDING_TEXT);
 });
 
@@ -118,7 +111,7 @@ test("a dangling call whose tool is not in the interactive map is repaired as an
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.isError).toBe(true);
 	expect(repaired.details).toBeUndefined();
-	expect((repaired.content[0] as { text?: string }).text).toContain("host restarted");
+	expect(firstText(repaired.content)).toContain("host restarted");
 });
 
 test("a disabled extension's tool is not interactive and gets the interrupted repair", () => {
@@ -134,7 +127,7 @@ test("a disabled extension's tool is not interactive and gets the interrupted re
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.isError).toBe(true);
 	expect(repaired.details).toBeUndefined();
-	expect((repaired.content[0] as { text?: string }).text).toContain("host restarted");
+	expect(firstText(repaired.content)).toContain("host restarted");
 });
 
 test("a length-truncated ask is repaired as a terminal error, never an answerable ack", () => {
@@ -150,7 +143,7 @@ test("a length-truncated ask is repaired as a terminal error, never an answerabl
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.isError).toBe(true);
 	expect(repaired.details).toBeUndefined();
-	expect((repaired.content[0] as { text?: string }).text).toContain("output token limit");
+	expect(firstText(repaired.content)).toContain("output token limit");
 });
 
 test("several orphans in one batch are all paired (mixed ask + generic)", () => {

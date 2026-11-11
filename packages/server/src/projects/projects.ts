@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -10,6 +9,8 @@ import type {
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
+import { newProjectId } from "@thinkrail/shared/newIds";
 import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
@@ -130,7 +131,7 @@ export function openProject(inputPath: string, displayName?: string): Project {
 	const taken = new Set(projects.map((p) => p.slug));
 	const label = displayName?.replace(/\s+/g, " ").trim();
 	const project: Project = {
-		id: randomUUID(),
+		id: newProjectId(),
 		name: label && label.length <= PROJECT_NAME_MAX_LENGTH ? label : basename(root),
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
@@ -160,10 +161,7 @@ function checkFolder(path: string): Promise<void> {
 	const check = stat(path)
 		.then(
 			(stats) => !stats.isDirectory(),
-			(error) => {
-				const code = (error as { code?: string }).code;
-				return code === "ENOENT" || code === "ENOTDIR";
-			},
+			(error) => hasErrno(error, "ENOENT", "ENOTDIR"),
 		)
 		.then((gone) => {
 			if (gone) goneFolders.add(path);
@@ -250,22 +248,6 @@ export function setProjectMcpOverride(
 	name: string,
 	patch: McpProjectOverride | null,
 ): Project {
-	if (patch !== null) {
-		if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") {
-			throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
-		}
-		if (
-			patch.exposure !== undefined &&
-			patch.exposure !== "deferred" &&
-			patch.exposure !== "direct" &&
-			patch.exposure !== "hidden"
-		) {
-			throw new CodedError(
-				"MCP_CONFIG_INVALID",
-				"MCP server exposure must be deferred, direct or hidden",
-			);
-		}
-	}
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
@@ -424,7 +406,7 @@ export function createProject(
 		if (readdirSync(path).length > 0)
 			throw new Error(`Folder already exists and isn't empty: ${path}`);
 	} catch (err) {
-		if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) throw err;
+		if (!hasErrno(err, "ENOENT")) throw err;
 		mkdirSync(path);
 		created = true;
 	}

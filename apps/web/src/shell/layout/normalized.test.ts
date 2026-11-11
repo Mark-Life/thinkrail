@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { closeLayoutTab, removeLayoutGroup, toolTab } from "./model";
 import {
@@ -15,7 +16,8 @@ import {
 	frameMatchesPreset,
 	instantiateWorkbenchFrame,
 } from "./presets";
-import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
+import type { LayoutTerminalTab } from "./schema";
+import type { LayoutCenterTab, WorkspaceLayoutDocument } from "./types";
 
 const file = (id: string): LayoutCenterTab => ({
 	kind: "file",
@@ -115,7 +117,7 @@ describe("normalized workbench layout", () => {
 		const closed = closeLayoutTab(projectWorkspaceLayout(frame, firstView), "a").document;
 		const next = applyProjectedLayoutDocument(
 			{ frame, viewsByWorkspace: { a: firstView, b: secondView } },
-			"a",
+			testWorkspaceId("a"),
 			closed,
 		);
 
@@ -147,7 +149,7 @@ describe("normalized workbench layout", () => {
 		if ("reason" in removed) throw new Error(removed.reason);
 		const next = applyProjectedLayoutDocument(
 			{ frame, viewsByWorkspace: { a: firstView, b: secondView } },
-			"a",
+			testWorkspaceId("a"),
 			removed.document,
 		);
 

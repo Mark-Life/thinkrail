@@ -19,7 +19,9 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
   and response capture (`surveyEndpoint`, `SurveyEndpoint`, `captureSurveyResponse`), additional-data
   enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
   shutdown/test reset, event types, bucket helpers and `BuildKind`.
-- **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
+- **`errors.ts` filters field by field.** It reads SDK-built properties with an object check and per-field rules, so one odd
+  field loses only itself and never a report. `reportClientError` takes `ClientErrorReport`, parsed at dispatch.
+- **Allowed deps:** `pi-schema`, persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
   UUID on the wire; copying rich feature payloads into telemetry except the survey response documented
@@ -133,7 +135,7 @@ and never campaign-enriched. Closed `source`: `host_crash` (crashLog's uncaught/
 of that, and every extra second keeps a faulted host running), `host_logged` (a host
 `log.warn/error` carrying an error, with its `scope`), `request` (every failed WS request, CodedErrors
 included — revisitable; PostHog itself excludes expected 4xx outcomes — with `request_method` only for a
-registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
+registered method; a refused `client.reportError` is the exception, so a bad report never raises another), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
 (handled desktop main-process errors, with their scope). An error `code` passes only as `^[A-Z][A-Z0-9_]+$`.
 
 The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-node 5.57.2's
@@ -141,7 +143,7 @@ The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-no
 `createErrorPropertiesBuilder` keeps the SDK's coercers and node parser but **no frame modifiers**: the
 default ones read ±7 source lines per frame from disk, make paths relative to `cwd` (still
 `../../Users/<name>/…`) and derive module names. `@posthog/core`, pinned to posthog-node's own core, is
-imported only for that builder. The sink's typed (doc-less) `before_send` then **rebuilds** every
+imported for that builder and for the types that name each field the sanitizer keeps. The sink's typed (doc-less) `before_send` then **rebuilds** every
 `$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, a classifier `value`,
 `mechanism.{handled,synthetic,type}` (the root's `handled` comes from the report, because the SDK's capture
 APIs take no hint and always default it to true; causes stay handled, and a mechanism without `handled`, as

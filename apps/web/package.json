@@ -19,12 +19,14 @@
 		"spacing:check": "bun scripts/generate-spacing.ts --check && bun test src/styles/spacingUsage.test.ts",
 		"provider-glyphs:generate": "bun scripts/generate-provider-glyphs.ts",
 		"provider-glyphs:check": "bun scripts/generate-provider-glyphs.ts --check",
+		"theme-schema:generate": "bun scripts/generate-theme-schema.ts && biome format --write src/themes/theme.schema.json",
 		"compiler:census": "bun scripts/compiler-census.ts",
 		"compiler:census:generate": "bun scripts/compiler-census.ts --write",
 		"compiler:census:check": "bun scripts/compiler-census.ts --check"
 	},
 	"dependencies": {
 		"@dnd-kit/core": "6.3.1",
+		"@earendil-works/pi-schema": "catalog:",
 		"@fontsource-variable/geist": "catalog:",
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
@@ -62,6 +64,7 @@
 		"@types/react-dom": "catalog:",
 		"@vitejs/plugin-react": "6.1.2",
 		"babel-plugin-react-compiler": "1.0.0",
+		"linkedom": "catalog:",
 		"tailwindcss": "catalog:",
 		"typescript": "catalog:",
 		"vite": "8.3.5"

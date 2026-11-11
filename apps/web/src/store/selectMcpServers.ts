@@ -1,8 +1,11 @@
-import type {
-	McpServerScope,
-	McpServerState,
-	McpServerStatus,
-	McpServerSummary,
+import {
+	type McpServerScope,
+	type McpServerState,
+	type McpServerStatus,
+	type McpServerSummary,
+	parseSessionId,
+	type SessionId,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import { isMcpAttentionState } from "../lib";
 import type { McpHeldSnapshot, McpRead, McpWorkspaceProjection } from "./mcp";
@@ -19,7 +22,7 @@ export interface McpServerRow {
 	effective: boolean;
 	toolCount?: number;
 	detail?: string;
-	sessions: { total: number; reporting: string[]; connected: number };
+	sessions: { total: number; reporting: SessionId[]; connected: number };
 	startingSince?: number;
 	startingStalled: boolean;
 	approvalPending: boolean;
@@ -112,7 +115,10 @@ function aggregate(
 		...(detail ? { detail } : {}),
 		sessions: {
 			total: sessions.length,
-			reporting: matching.map(({ held }) => held.snapshot.sessionId),
+			reporting: matching.flatMap(({ held }) => {
+				const sessionId = parseSessionId(held.snapshot.sessionId);
+				return sessionId === null ? [] : [sessionId];
+			}),
 			connected: reports.filter(({ status }) => status?.state === "connected").length,
 		},
 		...(startingSince !== undefined ? { startingSince } : {}),
@@ -188,7 +194,7 @@ export function selectMcpRead(
 		mcpRevision: number;
 		removedWorkspaceIds: Record<string, true>;
 	},
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): McpRead | null {
 	if (
 		state.status !== "connected" ||
@@ -206,7 +212,7 @@ export function selectMcpRead(
 
 export function selectMcpWorkspaceStarting(
 	state: { mcpByWorkspace: Record<string, McpWorkspaceProjection> },
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): boolean {
 	return Object.values(state.mcpByWorkspace[workspaceId]?.sessions ?? {}).some((held) =>
 		held.snapshot.servers.some((server) => server.state === "starting"),

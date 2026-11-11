@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
-import { contentStamp, useStampedComposer } from "../reviewComposerState";
+import { contentStamp, stampedComposerDraft, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { JsonTree, type JsonTreeThread } from "./JsonTree";
 import {
@@ -17,6 +17,8 @@ import {
 } from "./jsonScanner";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
+
+const JSON_NODE_DRAFT = stampedComposerDraft<JsonNode>();
 
 function dialectNotice(path: string, dialect: JsonDialect): MessageKey | null {
 	if (dialect !== "jsonc") return null;
@@ -32,7 +34,7 @@ export default function JsonView({
 	const t = useT();
 	const text = content.kind === "text" ? content.text : "";
 	const document = useMemo(() => scanJson(text), [text]);
-	const composer = useStampedComposer<JsonNode>(contentStamp(content));
+	const composer = useStampedComposer(JSON_NODE_DRAFT, contentStamp(content));
 	const selected = composer.selection;
 	const rootRef = useRef<HTMLDivElement>(null);
 	const cardRefs = useRef(new Map<string, HTMLDivElement>());

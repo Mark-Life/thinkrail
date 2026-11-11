@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ToolResponsePendingDetails } from "@thinkrail/contracts";
+import { createDelegationService } from "pi-delegation";
 import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
 
 describe("writeFixtureSession — pinned against pi's real SessionManager", () => {
@@ -166,6 +167,46 @@ test("pi records a new transcript's cwd in resolved spelling (stored directories
 
 		expect(manager.getCwd()).toBe(cwd);
 		expect((await SessionManager.list(cwd, sessionDir)).map((info) => info.cwd)).toEqual([cwd]);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("a fixture session is history pi-delegation accepts, so no host reader refuses it", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "trpi-fixture-delegation-"));
+	try {
+		const { id, path } = writeFixtureSession(dir, {
+			cwd: "/tmp/thinkrail-fixture-delegation",
+			name: "delegation pin",
+			messages: [
+				{ role: "user", text: "read it", timestamp: 1_700_000_000_000 },
+				{
+					role: "assistant",
+					content: [{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "a" } }],
+					stopReason: "toolUse",
+					timestamp: 1_700_000_001_000,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "call-1",
+					toolName: "read",
+					content: [{ type: "text", text: "a" }],
+					details: { lines: 1, skipped: undefined },
+					isError: false,
+					timestamp: 1_700_000_002_000,
+				},
+				{ role: "assistant", text: "done", timestamp: 1_700_000_003_000 },
+			],
+		});
+		const sessionManager = SessionManager.open(path);
+		const history = await createDelegationService({}).captureHistory({
+			kind: "session",
+			sessionId: id,
+			sessionManager,
+			cut: { kind: "at-entry", entryId: sessionManager.getLeafId() },
+		});
+		expect(history.jsonl).toContain('"provider":"anthropic"');
+		expect(history.jsonl).toContain('"details":{"lines":1}');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}

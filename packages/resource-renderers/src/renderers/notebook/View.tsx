@@ -7,7 +7,7 @@ import { anchorLabel, type ResourceViewProps, type ReviewThread } from "../../re
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
 import { useScrollViewState } from "../../support/useScrollViewState";
-import { contentStamp, useStampedComposer } from "../reviewComposerState";
+import { contentStamp, stampedComposerDraft, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { NotebookCellBody } from "./NotebookOutputView";
 import {
@@ -19,6 +19,7 @@ import {
 } from "./notebookModel";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
+const NOTEBOOK_CELL_DRAFT = stampedComposerDraft<NotebookCell>();
 
 export default function NotebookView({
 	resource,
@@ -32,7 +33,7 @@ export default function NotebookView({
 	const text = content.kind === "text" ? content.text : "";
 	const { languageId } = useResourceHost().code;
 	const document = useMemo(() => parseNotebook(text, languageId), [text, languageId]);
-	const composer = useStampedComposer<NotebookCell>(contentStamp(content));
+	const composer = useStampedComposer(NOTEBOOK_CELL_DRAFT, contentStamp(content));
 	const cellRefs = useRef(new Map<string, HTMLElement>());
 	const handledFocusRef = useRef<string | null>(null);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);

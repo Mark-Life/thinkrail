@@ -328,7 +328,8 @@ ref off the workspace-create critical path.
   snapshot would silently unstage it). Staging succeeds but committing is fallible (an unset identity, an
   unavailable signing key), and a best-effort feature must not leave the user's next commit carrying files
   they never staged. An index with unmerged entries (a conflicted merge in flight) bails out untouched; a
-  half-merged worktree is nothing to auto-commit anyway. A commit that **landed** before git reported
+  half-merged worktree is nothing to auto-commit anyway. An index file that exists but cannot be read also bails out
+  untouched (`STATE_FILE_UNREADABLE` warning), and a failed restore is logged `STATE_FILE_WRITE_FAILED`. A commit that **landed** before git reported
   failure (a `post-commit` hook killed at the deadline: HEAD moved to a child of the old HEAD) is kept and
   its sha returned. **The index is restored only when HEAD is proven unchanged** (the post-commit read
   succeeded and equals the pre-staging HEAD): if HEAD moved to a commit that is not provably ours (a
@@ -383,7 +384,7 @@ ref off the workspace-create critical path.
   the one content classification, so a diff side's metadata cannot disagree with `fs.readFile`'s);
   `contracts` (`Git*`/`BranchList`/`ResourceMeta` types);
   `subprocess` (`runBounded`, the bounded child behind both async runners);
-  `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/spawn`
+  `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/errnoCode`; `@thinkrail/shared/spawn`
   (`spawnSyncCaptured` / `spawnSyncCapturedBytes`, the sync runners with `windowsHide`).
 - **Forbidden:** `host`; sibling features.
 

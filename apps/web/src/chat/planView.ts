@@ -1,3 +1,4 @@
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	type GitFileChange,
 	isSessionWorking,
@@ -147,7 +148,7 @@ export function reviewChangesRequested(item: TodoItem): boolean {
 export function itemOpenFindings(
 	item: TodoItem,
 	comments: Pick<ReviewComment, "author" | "status" | "anchor" | "origin">[] | undefined,
-	sessionId?: string,
+	sessionId?: SessionId,
 ): number {
 	if (!comments || comments.length === 0) return 0;
 	const set = itemChangeSet(item);

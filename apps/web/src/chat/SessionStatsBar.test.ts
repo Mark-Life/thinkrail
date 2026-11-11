@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { SessionStats } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -13,7 +14,7 @@ import {
 
 function stats(overrides: Partial<SessionStats> = {}): SessionStats {
 	return {
-		sessionId: "session-1",
+		sessionId: testSessionId("session-1"),
 		totalMessages: 1,
 		tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		cost: 0,

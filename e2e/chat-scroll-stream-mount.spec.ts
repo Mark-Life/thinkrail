@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -27,14 +28,21 @@ interface ProbeFrame {
 	edgeInView: boolean | null;
 }
 
-interface ProbeWindow {
-	__streamMountProbe: { frames: ProbeFrame[]; stopped: boolean };
+interface StreamMountProbe {
+	frames: ProbeFrame[];
+	stopped: boolean;
+}
+
+declare global {
+	interface Window {
+		__streamMountProbe?: StreamMountProbe;
+	}
 }
 
 const installProbe = (page: Page, latestFirst: boolean) =>
 	page.evaluate((newestFirst) => {
-		const probe: ProbeWindow["__streamMountProbe"] = { frames: [], stopped: false };
-		(window as unknown as ProbeWindow).__streamMountProbe = probe;
+		const probe: StreamMountProbe = { frames: [], stopped: false };
+		window.__streamMountProbe = probe;
 		const tick = () => {
 			if (probe.stopped) return;
 			const chat = [...document.querySelectorAll<HTMLElement>('[data-testid="chat-scroll"]')].find(
@@ -67,7 +75,8 @@ const installProbe = (page: Page, latestFirst: boolean) =>
 
 const readProbe = (page: Page) =>
 	page.evaluate(() => {
-		const probe = (window as unknown as ProbeWindow).__streamMountProbe;
+		const probe = window.__streamMountProbe;
+		if (!probe) throw new Error("The stream mount probe is not installed");
 		probe.stopped = true;
 		return probe.frames;
 	});
@@ -127,7 +136,7 @@ for (const { order, mode, viewport } of cases) {
 			.filter({ hasText: title });
 		const chat = page.getByTestId("chat-scroll").filter({ visible: true });
 		const replay = textStreamReplay(
-			seeded.id,
+			testSessionId(seeded.id),
 			streamedMarkdown(title, STREAM_CHARS),
 			BASE_TS + 100_000,
 		);

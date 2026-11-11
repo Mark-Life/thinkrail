@@ -12,7 +12,19 @@ import type {
 	BackgroundCommands,
 	BackgroundCommandsBinding,
 	BackgroundCommandsOptions,
+	BackgroundCommandTerminalSnapshot,
 } from "./types";
+
+interface CommandRecord {
+	handle: BackgroundCommandHandle;
+	output: OutputTail;
+	settlement: Promise<void>;
+	pending: boolean;
+	terminal: BackgroundCommandTerminalSnapshot | undefined;
+}
+
+type Settlement = Pick<BackgroundCommandTerminalSnapshot, "status"> &
+	Partial<Pick<BackgroundCommandTerminalSnapshot, "exitCode" | "errorMessage">>;
 
 function validateStart(input: BackgroundCommandStart): void {
 	if (!input.command.trim() || Buffer.byteLength(input.command, "utf8") > 64 * 1024) {
@@ -35,15 +47,7 @@ export function createBackgroundCommands(
 ): BackgroundCommands {
 	const sessionId = binding.sessionId;
 	if (!sessionId) throw new Error("A session identity is required");
-	const records = new Map<
-		string,
-		{
-			handle: BackgroundCommandHandle;
-			output: OutputTail;
-			settlement: Promise<void>;
-			pending: boolean;
-		}
-	>();
+	const records = new Map<string, CommandRecord>();
 	const finished: string[] = [];
 	const listeners = new Set<() => void>();
 	let completionBinding: BackgroundCommandCompletionBinding | undefined;
@@ -75,7 +79,9 @@ export function createBackgroundCommands(
 			if (!gateOpen(target, flush)) return;
 			const batch = [...records.values()].flatMap((record) => {
 				const output = record.pending ? record.handle.output : undefined;
-				return output ? [{ record, completion: { snapshot: record.handle.snapshot, output } }] : [];
+				return output && record.terminal
+					? [{ record, completion: { snapshot: { ...record.terminal }, output } }]
+					: [];
 			});
 			if (batch.length === 0) return;
 			for (const { record } of batch) record.pending = false;
@@ -143,10 +149,17 @@ export function createBackgroundCommands(
 			const settlement = new Promise<void>((resolve) => {
 				settle = resolve;
 			});
-			const record = { handle, output, pending: false, settlement };
+			const record: CommandRecord = {
+				handle,
+				output,
+				pending: false,
+				settlement,
+				terminal: undefined,
+			};
 			records.set(id, record);
 			changed();
 			const execute = async () => {
+				let settled: Settlement;
 				try {
 					controller.signal.throwIfAborted();
 					const context = binding.getContext();
@@ -163,27 +176,26 @@ export function createBackgroundCommands(
 						signal: controller.signal,
 						...(timeout === undefined ? {} : { timeout }),
 					});
-					snapshot = {
-						...snapshot,
-						exitCode,
-						status: controller.signal.aborted ? "stopped" : exitCode === 0 ? "completed" : "error",
-					};
-					if (snapshot.status === "error") {
-						snapshot = {
-							...snapshot,
+					if (controller.signal.aborted) settled = { status: "stopped", exitCode };
+					else if (exitCode === 0) settled = { status: "completed", exitCode };
+					else
+						settled = {
+							status: "error",
+							exitCode,
 							errorMessage:
 								exitCode === null
 									? "Command ended without an exit code"
 									: `Command exited with code ${exitCode}`,
 						};
-					}
 				} catch (error) {
-					snapshot = controller.signal.aborted
-						? { ...snapshot, status: "stopped" }
-						: { ...snapshot, status: "error", errorMessage: boundedError(error) };
+					settled = controller.signal.aborted
+						? { status: "stopped" }
+						: { status: "error", errorMessage: boundedError(error) };
 				}
 				output.finish();
-				snapshot = { ...snapshot, finishedAt: Date.now() };
+				const terminal = { ...snapshot, ...settled, finishedAt: Date.now() };
+				snapshot = terminal;
+				record.terminal = terminal;
 				record.pending = !disposed;
 				finished.push(id);
 				while (finished.length > 20) {

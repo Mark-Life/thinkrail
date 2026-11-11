@@ -8,50 +8,45 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import type { Blockquote, Nodes, Root } from "mdast";
 import type { ReactNode } from "react";
-import type { Components } from "react-markdown";
+import type { ExtraProps } from "react-markdown";
 
-export type AlertVariant = "note" | "tip" | "important" | "warning" | "caution";
+const ALERT_VARIANTS = ["note", "tip", "important", "warning", "caution"] as const;
+export type AlertVariant = (typeof ALERT_VARIANTS)[number];
 
 const MARKER = /^\[!(note|tip|important|warning|caution)\]/i;
 
 export function parseAlertMarker(text: string): { variant: AlertVariant; rest: string } | null {
 	const m = MARKER.exec(text);
 	const marker = m?.[0];
-	const variant = m?.[1];
+	const variant = alertVariant(m?.[1]?.toLowerCase());
 	if (!marker || !variant) return null;
 	const rest = text.slice(marker.length).replace(/^[^\S\n]*\n?/, "");
-	return { variant: variant.toLowerCase() as AlertVariant, rest };
-}
-
-interface MdNode {
-	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hName?: string; hProperties?: Record<string, unknown> };
+	return { variant, rest };
 }
 
 export function remarkGithubAlerts() {
-	return (tree: MdNode): void => walk(tree);
+	return (tree: Root): void => walk(tree);
 }
 
-function walk(node: MdNode): void {
-	if (!node.children) return;
+function walk(node: Nodes): void {
+	if (!("children" in node)) return;
 	for (const child of node.children) {
 		if (child.type === "blockquote") transformBlockquote(child);
 		walk(child);
 	}
 }
 
-function transformBlockquote(bq: MdNode): void {
-	const firstPara = bq.children?.[0];
+function transformBlockquote(bq: Blockquote): void {
+	const firstPara = bq.children[0];
 	if (firstPara?.type !== "paragraph") return;
-	const firstText = firstPara.children?.[0];
-	if (firstText?.type !== "text" || typeof firstText.value !== "string") return;
+	const firstText = firstPara.children[0];
+	if (firstText?.type !== "text") return;
 	const parsed = parseAlertMarker(firstText.value);
 	if (!parsed) return;
 	firstText.value = parsed.rest;
-	if (parsed.rest === "" && firstPara.children?.length === 1) bq.children?.shift();
+	if (parsed.rest === "" && firstPara.children.length === 1) bq.children.shift();
 	bq.data = {
 		...bq.data,
 		hName: "mdalert",
@@ -106,25 +101,19 @@ const ALERTS: Record<
 	},
 };
 
-function isVariant(v: unknown): v is AlertVariant {
-	return v === "note" || v === "tip" || v === "important" || v === "warning" || v === "caution";
+function alertVariant(value: unknown): AlertVariant | undefined {
+	return ALERT_VARIANTS.find((variant) => variant === value);
 }
 
-function AlertCallout({
-	node,
-	children,
-}: {
-	node?: { properties?: Record<string, unknown> };
-	children?: ReactNode;
-}) {
+function AlertCallout({ node, children }: ExtraProps & { children?: ReactNode }) {
 	const t = useT();
-	const raw = node?.properties?.variant;
-	const cfg = ALERTS[isVariant(raw) ? raw : "note"];
+	const variant = alertVariant(node?.properties?.variant) ?? "note";
+	const cfg = ALERTS[variant];
 	const Icon = cfg.icon;
 	return (
 		<div
 			data-testid="md-alert"
-			data-variant={isVariant(raw) ? raw : "note"}
+			data-variant={variant}
 			className={`my-12 rounded-r-sm border-l-2 py-8 pr-12 pl-12 text-text-default ${cfg.border} ${cfg.bg} [&>*:last-child]:mb-0 [&_p]:my-4`}
 		>
 			<p className={`tr-title-card mb-4 flex items-center gap-4 ${cfg.text}`}>
@@ -136,4 +125,4 @@ function AlertCallout({
 	);
 }
 
-export const alertComponents = { mdalert: AlertCallout } as Components;
+export const alertComponents = { mdalert: AlertCallout };

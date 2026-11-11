@@ -1,3 +1,4 @@
+import { compile, map, unknown } from "@earendil-works/pi-schema";
 export const AUTO_E2E_SHARD_CAP = 8;
 export const MAX_E2E_SHARDS = 16;
 
@@ -109,10 +110,10 @@ export interface ListedTest {
 
 const TEST_LIST_DELIMITER = "\u203A";
 
-type JsonRecord = Record<string, unknown>;
+const jsonRecord = compile(map(unknown()));
 
-function record(value: unknown): JsonRecord | null {
-	return value !== null && typeof value === "object" ? (value as JsonRecord) : null;
+function record(value: unknown): Record<string, unknown> | null {
+	return jsonRecord.check(value) ? value : null;
 }
 
 function collectSuiteTests(value: unknown, file: string, parents: string[], tests: ListedTest[]) {

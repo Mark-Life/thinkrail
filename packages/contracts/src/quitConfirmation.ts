@@ -1,4 +1,4 @@
-import type { NativeQuitHint } from "./nativeClient";
+import type { NativeQuitHint } from "./schema";
 
 export const QUIT_CONFIRMATION = { holdMs: 1200, doublePressMs: 500, pollMs: 40 } as const;
 

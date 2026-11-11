@@ -20,9 +20,12 @@ None edit prose.
 - **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache and the
   `spec_create` scaffold headings (`shared.ts`).
 - **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
-  (`../index.ts`) is the only caller.
+  (`../index.ts`) is the only caller. Each tool's arguments are a `pi-schema` schema in `core/wire.ts`
+  (`SpecGrepInput`, `SpecGetInput`, `SpecGraphInput`, `SpecCreateInput`, `SpecUpdateInput`, `SpecDeleteInput`);
+  `toolParameters` hands one to pi through `Type.Unsafe` typed as its `Static`, because pi types `parameters`
+  as TypeBox and checks them as plain JSON Schema.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types and public
-  truncation helpers), `typebox`, Node built-ins. Project writes remain confined to write tools; any tool may capture oversized responses
+  truncation helpers), `typebox`, `@earendil-works/pi-schema` (types), Node built-ins. Project writes remain confined to write tools; any tool may capture oversized responses
   in private OS temporary files, never in the project.
 - **Forbidden:** reaching into `core/` leaf files (import only the barrel); any `@thinkrail/*` package.
 

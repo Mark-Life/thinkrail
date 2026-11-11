@@ -31,6 +31,12 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
+  `@thinkrail/shared/newIds` → `newProjectId()` + `newWorkspaceId()`, the host's id generators: each parses
+  contracts' `randomUuid()` with the id's parser and throws a `HOST_ERROR` `CodedError` if it fails;
+  `@thinkrail/shared/errnoCode` → `errnoCode(cause)`, the one read of a string `code` off a caught value. It reads
+  inherited properties too, so it stays a hand check: an own-properties schema would miss them.
+  `hasErrno(cause, ...codes)` is the compare: `ErrnoCode` is the key set of Node's `os.constants.errno`, so a
+  misspelled code fails typecheck;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
   overrides that would reach outside it — the single list every hermetic host spawner (e2e, workflow

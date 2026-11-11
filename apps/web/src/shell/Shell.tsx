@@ -4,6 +4,7 @@ import {
 	RiSearchLine,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
+import type { ProjectId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
@@ -103,7 +104,7 @@ export function Shell() {
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
 	const [newWorkspace, setNewWorkspace] = useState<{
-		projectId: string;
+		projectId: ProjectId;
 		initialPrompt?: string;
 	} | null>(null);
 	const activeCreation = useAppStore((s) =>

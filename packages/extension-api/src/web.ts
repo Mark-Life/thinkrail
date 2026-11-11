@@ -1,7 +1,15 @@
 import type { Translator } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 
-export { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
+export {
+	boolArg,
+	languageFromPath,
+	listArg,
+	numArg,
+	resultText,
+	strArg,
+	strListArg,
+} from "./toolHelpers";
 export {
 	type ParsedToolResultContent,
 	parseToolResultContent,

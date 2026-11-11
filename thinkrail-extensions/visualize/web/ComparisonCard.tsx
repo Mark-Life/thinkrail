@@ -1,13 +1,14 @@
 import { RiCheckLine as Check, RiCloseLine as X } from "@remixicon/react";
-import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { listArg, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import type { VisualizeParams } from "@thinkrail/pi-visualize/schema";
 import { parseComparisonOptions } from "./args";
 import { MermaidView } from "./MermaidView";
 
 export function ComparisonCard({ args }: ToolRenderProps) {
 	const t = useT();
-	const title = strArg(args, "title");
-	const options = parseComparisonOptions(args.options);
+	const title = strArg<VisualizeParams>(args, "title");
+	const options = parseComparisonOptions(listArg<VisualizeParams>(args, "options"));
 
 	if (options.length === 0) {
 		return (

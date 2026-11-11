@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
 import { closeRequestTarget } from "./closeRequest";
 import { toolTab } from "./model";
-import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
+import type { LayoutTerminalTab } from "./schema";
+import type { LayoutCenterTab, WorkspaceLayoutDocument } from "./types";
 
 function file(id: string): LayoutCenterTab {
 	return { kind: "file", id, name: id, path: id };

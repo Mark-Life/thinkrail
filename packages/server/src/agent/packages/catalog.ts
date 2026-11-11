@@ -1,15 +1,20 @@
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
-import type {
-	PiBuiltinExtension,
-	PiLooseExtension,
-	PiPackageResource,
-	PiPackageResourceType,
-	PiPackageScope,
-	PiPackageSummary,
-	PiPackagesCatalog,
+import { compile, obj, opt, unknown } from "@earendil-works/pi-schema";
+import {
+	PI_PACKAGE_RESOURCE_TYPES,
+	type PiBuiltinExtension,
+	type PiLooseExtension,
+	type PiPackageResource,
+	type PiPackageResourceType,
+	type PiPackageScope,
+	type PiPackageSummary,
+	type PiPackagesCatalog,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode, hasErrno } from "@thinkrail/shared/errnoCode";
+import { logger } from "../../log";
 import { knownExtensionInfo } from "./extensionInfo";
 import {
 	BUILTIN_PREFIX,
@@ -21,7 +26,7 @@ import {
 } from "./identity";
 import { createPiSettings } from "./settingsView";
 
-const RESOURCE_TYPES: readonly PiPackageResourceType[] = ["extensions", "skills", "prompts"];
+const log = logger("packages");
 /** Every change path invalidates explicitly; the TTL only bounds a change the host did not see. */
 const CATALOG_TTL_MS = 5 * 60_000;
 
@@ -149,7 +154,7 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 
 	const loose: PiLooseExtension[] = [];
 	const builtins: PiBuiltinExtension[] = [];
-	for (const type of RESOURCE_TYPES) {
+	for (const type of PI_PACKAGE_RESOURCE_TYPES) {
 		for (const resource of resolved[type]) {
 			if (type === "extensions" && isExcluded(resource.path)) continue;
 			const { metadata } = resource;
@@ -231,9 +236,8 @@ export async function listPiPackageRevealTargets(options: {
 	});
 	const packageRoots = packageManager
 		.listConfiguredPackages()
-		.filter((entry) => entry.installedPath !== undefined)
 		.filter((entry) => !(entry.scope === "project" && !options.projectTrusted))
-		.map((entry) => entry.installedPath as string);
+		.flatMap((entry) => (entry.installedPath === undefined ? [] : [entry.installedPath]));
 	const resolved = await packageManager.resolve(async () => "skip");
 	const looseFiles = resolved.extensions
 		.filter((r) => r.metadata.origin !== "package" && r.metadata.source !== "builtin")
@@ -249,26 +253,44 @@ function resourceDisplayName(path: string, type: PiPackageResourceType): string 
 	return fileName;
 }
 
+const PackageManifest = compile(
+	obj(
+		{ name: opt(unknown()), version: opt(unknown()), description: opt(unknown()) },
+		{ open: true },
+	),
+);
+
 function readPackageMetadata(
 	installedPath: string,
 	source: string,
 ): { name: string; version?: string; description?: string } {
 	const fallback = { name: fallbackName(installedPath, source) };
+	let manifest: unknown;
 	try {
 		if (!statSync(installedPath).isDirectory()) return fallback;
-		const parsed: unknown = JSON.parse(readFileSync(join(installedPath, "package.json"), "utf8"));
-		if (!parsed || typeof parsed !== "object") return fallback;
-		const manifest = parsed as Record<string, unknown>;
-		return {
-			name: typeof manifest.name === "string" && manifest.name ? manifest.name : fallback.name,
-			...(typeof manifest.version === "string" ? { version: manifest.version } : {}),
-			...(typeof manifest.description === "string" && manifest.description
-				? { description: manifest.description }
-				: {}),
-		};
-	} catch {
+		manifest = JSON.parse(readFileSync(join(installedPath, "package.json"), "utf8"));
+	} catch (error) {
+		if (!hasErrno(error, "ENOENT")) warnManifest(`not read (${errnoCode(error) ?? "not JSON"})`);
 		return fallback;
 	}
+	if (!PackageManifest.check(manifest)) {
+		warnManifest("not an object");
+		return fallback;
+	}
+	return {
+		name: typeof manifest.name === "string" && manifest.name ? manifest.name : fallback.name,
+		...(typeof manifest.version === "string" ? { version: manifest.version } : {}),
+		...(typeof manifest.description === "string" && manifest.description
+			? { description: manifest.description }
+			: {}),
+	};
+}
+
+function warnManifest(reason: string): void {
+	log.warn(
+		"a pi package's package.json was skipped",
+		new CodedError("RESOURCE_UNAVAILABLE", `package.json ${reason}`),
+	);
 }
 
 function fallbackName(installedPath: string, source: string): string {

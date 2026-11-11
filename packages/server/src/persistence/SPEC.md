@@ -20,14 +20,15 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
   re-creates the folder. The owners keep their parsing and their own file rules.
 - **Public surface (barrel):** `dataDir`, the data-folder helpers above, project/workspace/config and terminal-catalog load-save operations, session receipt load-save operations, `ensureInstallation()` returning only `{ id }`, narrow install/browser claim operations, and strict acquisition read/save. Initial ID creation publishes a complete sibling temp via atomic no-overwrite hard link and rereads a concurrent winner; malformed existing records are preserved. An exclusive install-claim marker elects one packaged host across processes. The complete installation JSON is atomically replaced; caught replacement failures remove the marker and temp for retry, while a crash after claiming may consume the event without emission. Legacy installed records remain claimed.
 - **Browser attempt:** `attribution.json` exclusively creates its first `{ browserClaimAttempted: true }` marker with `wx`. Redeem atomically replaces it with strict first/last touch fields (bounded UTM values, referrer class, timestamp, and policy version); failed network or replacement work leaves the attempt terminal. Retention is 30 days after `last_touch`: expired or invalid records become terminal. The persisted schema rejects claim/verifier/challenge/URL, journey/bridge IDs, IP, and user agent. Other state has no cross-process lock.
-- **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `HostEnvironment`, `LayoutPreset`, `DEFAULT_CONFIG`,
-  `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
-- **Forbidden:** importing feature siblings or `host`; deriving session state; storing transcript content, cached running/input state, or local activation; combining lifecycle metadata with read receipts; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
+- **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `PartialAppConfig`, `HostEnvironment`, `LayoutPreset`, `DEFAULT_CONFIG`,
+  `isLocalePreference`, `keepValidFields`, the wire schemas of the files that hold wire shapes); `pi-schema`; `@thinkrail/shared/codedError`, `errnoCode`;
+  Node `fs`/`os`/`path`/`crypto`.
+- **Forbidden:** importing feature siblings or `host`; deriving session state; storing transcript content, cached running/input state, or local activation; combining lifecycle metadata with read receipts; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys; importing `log`; or reading, rewriting, or deleting old host layout snapshots.
 
 Project and workspace loads return `Project.path` / `Workspace.worktreePath` in the host's resolved spelling
 (architecture Decision 22). A record stored in another spelling — git's `C:/…`, an unresolved segment, a
-file an older host wrote — heals on read and is persisted by the next save of that file; loads never write,
-and a value that is not absolute on this host stays as stored. Saves do not normalize: the producers resolve
+file an older host wrote — heals on read and is persisted by the next save of that file; a load never rewrites
+the file, and a value that is not absolute on this host stays as stored. Saves do not normalize: the producers resolve
 at their own doors, so an object a create call returns never differs from what it stored.
 
 Session metadata writes are complete-copy temp-file replacements. Lifecycle persists only facts a transcript
@@ -41,6 +42,36 @@ deliberate: a v0.2.0-nightly.16 host refused to start on a bad `session-receipts
 it. Write failures stay conservative: they may resurface or retain attention but never record unseen work as
 read.
 
+## Reading a state file
+
+Each file is parsed once, at the load. A file that holds a wire shape reuses the contracts schema; the others have a private
+schema in this directory. The rest of the host trusts the type. A file any released version wrote must keep loading whole, so a
+new required wire field on `Project`, `Workspace` or a model needs a default at the load. Ids in a file load through the stored
+id schemas, which are lenient on purpose ([[submodule-contracts-schema]]): a strict check here would drop a project from the list.
+
+`stateFile.ts` owns the failure rules for `projects`, `workspaces`, `workspace-creations`, `terminals`, `config`,
+`environment`, and, through the barrel (`readStateFile`, `parseEntryRecord`, `assertOverwriteAllowed`, `stateFileWriteFailure`, and
+`isConfigOverwriteRefused` and `setConfigAside` for `settings`), the `todos` sidecars and `feedback.json`:
+
+- **One bad entry costs one entry.** `parseEntries` and, for a keyed map, `parseEntryRecord` keep what passes and drops the rest. A record that passes also passes
+  the web's reply check, so a bad entry never refuses the whole `project.list`. `parseFields` does the same for the top-level
+  fields of one object, such as `config.json`. An entry nested deeper than 64 levels drops before any recursive check runs.
+- **Nothing is lost silently.** Before a drop or a whole-file failure can reach a save, the raw bytes go to
+  `<file>.corrupt-<content hash>`, mode `0600` because `environment.json` holds secrets. The hash makes this once per content
+  across loads and restarts; the problem is reported as `STATE_FILE_SET_ASIDE` only when the copy is made, with entry indexes and schema paths, never values.
+  Each file keeps its newest 10 copies; a failed removal of older ones reports `STATE_FILE_PRUNE_FAILED`. An entry that holds `1e999` drops like any other: JSON has no such number, and it would reach the wire as `null`.
+- **What cannot be read or copied cannot be replaced.** An I/O failure other than `ENOENT`, or a failed copy, loads empty and
+  a later save of that file throws `STATE_FILE_UNREADABLE`, until a read succeeds. The file stays in place. `settings` reads again before each save, so a config that recovered saves on top of the stored values. This keeps a transient
+  `EMFILE` from replacing projects with an empty list. `StateFile.failed` tells a file that exists but gave no JSON from a missing one; `didLastConfigReadFail` is what `settings` uses to learn that its config is defaults.
+- **A best-effort write that fails is logged, not swallowed.** Its owner logs `stateFileWriteFailure(path, error)`:
+  `STATE_FILE_WRITE_FAILED` with the errno code, or the refusal's own `STATE_FILE_UNREADABLE`.
+- **Reporting goes through an observer.** `observeStateFileProblems` carries a `CodedError`, because `log` depends on this module.
+  `host` wires it to `logger("persistence")` at boot, so the report reaches PostHog as a code only.
+
+Session metadata and `attribution.json` keep their own rules above: rename aside, and the terminal marker. A model with its
+`{provider, id}` but a partial catalog snapshot gets defaults for the rest, so a kept entry passes the reply check.
+In `config`, `extensionSettings` keeps each boolean flag and drops the rest, with the same copy.
+
 Analytics config preserves a saved boolean preference and a valid `analyticsConsentConfirmed` boolean
 independently; absent/malformed values default false. A preference-only write never implies completion.
 Settings owns initial preference priming and preference-plus-confirmation writes.
@@ -50,10 +81,11 @@ from before the switch writes one (it loaded other agents' skills, #1210), and `
 Every config this host saves carries the field, so the default never flips later; an old install that never
 saved a config gets the new default.
 
-Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
-composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
-`DEFAULT_CONFIG.terminalWindowsShell`), chat/file line widths plus their pane-bound switches, and the
-JetBrains quota boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
-`customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
-chat message order are not config fields; retired config shapes are stripped rather than upgraded or
-preserved as extensions. Historical `layouts/` files remain untouched and inert.
+`loadConfig` checks each field with its `PartialAppConfig` schema through `parseFields`, over `DEFAULT_CONFIG`; unknown
+top-level fields pass through as extensions. A list field that is not a list, a list entry, a model, a preset or a scalar
+that fails its schema each fall back with the same copy. Two rules a schema cannot hold also fall back with a copy: a
+locale that is not a canonical tag, and a `system` theme mode without its pair. Each stored preset passes the
+`LayoutPreset` schema after its retired `changes` tool becomes `files`; the catalog rules are [[submodule-server-settings]]'s,
+and it calls `setConfigAside` before it drops a preset. Current/default preset ids, group limits, and chat message order are
+not config fields; retired config shapes are stripped rather than upgraded or preserved as extensions. Historical `layouts/`
+files remain untouched and inert.

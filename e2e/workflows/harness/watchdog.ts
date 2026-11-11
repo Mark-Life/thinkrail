@@ -1,4 +1,5 @@
 import "./env";
+import { bool, compile, obj, opt, unknown } from "@earendil-works/pi-schema";
 import { completeOnce } from "@thinkrail/server/agent";
 import type { EventLog } from "./events";
 
@@ -32,12 +33,14 @@ export function checkBudget(
 	return null;
 }
 
+const watchdogReply = compile(obj({ onTrack: bool(), reason: opt(unknown()) }, { open: true }));
+
 export function parseOnTrackReply(reply: string): { onTrack: boolean; reason: string } {
 	const jsonMatch = reply.match(/\{[\s\S]*\}/);
 	if (!jsonMatch) return { onTrack: true, reason: "unparseable watchdog reply — assumed on track" };
 	try {
-		const parsed = JSON.parse(jsonMatch[0]) as { onTrack?: boolean; reason?: string };
-		if (typeof parsed.onTrack !== "boolean")
+		const parsed: unknown = JSON.parse(jsonMatch[0]);
+		if (!watchdogReply.check(parsed))
 			return { onTrack: true, reason: "unparseable watchdog reply — assumed on track" };
 		return { onTrack: parsed.onTrack, reason: String(parsed.reason ?? "") };
 	} catch {

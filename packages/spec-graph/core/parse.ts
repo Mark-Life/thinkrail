@@ -1,43 +1,23 @@
 import { Document, isMap, isScalar, isSeq, parseDocument, parse as parseYaml } from "yaml";
+import {
+	FIELDS,
+	LIST_LINK_FIELDS,
+	SINGLE_LINK_FIELDS,
+	type SPEC_STATUSES,
+	type SPEC_TYPES,
+} from "./wire.ts";
 
 export type FrontmatterValue = string | string[];
 
 export type Frontmatter = Record<string, FrontmatterValue>;
 
-export const FIELDS = {
-	id: "id",
-	type: "type",
-	status: "status",
-	title: "title",
-	parent: "parent",
-	dependsOn: "depends-on",
-	references: "references",
-	implements: "implements",
-	covers: "covers",
-	tags: "tags",
-} as const;
-
 export const REQUIRED_FIELDS = [FIELDS.id, FIELDS.type, FIELDS.title] as const;
 
 export const IDENTITY_FIELDS = [FIELDS.id, FIELDS.type] as const;
 
-export const SPEC_TYPES = [
-	"goal-and-requirements",
-	"architecture-design",
-	"module-design",
-	"submodule-design",
-	"task-spec",
-] as const;
-
 export type SpecType = (typeof SPEC_TYPES)[number];
 
-export const SPEC_STATUSES = ["draft", "active", "stale", "done", "deprecated"] as const;
-
 export type SpecStatus = (typeof SPEC_STATUSES)[number];
-
-export const SINGLE_LINK_FIELDS = [FIELDS.parent] as const;
-
-export const LIST_LINK_FIELDS = [FIELDS.dependsOn, FIELDS.references, FIELDS.implements] as const;
 
 export const LIST_FIELDS = [...LIST_LINK_FIELDS, FIELDS.covers, FIELDS.tags] as const;
 

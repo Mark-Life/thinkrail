@@ -6,11 +6,14 @@ import {
 	type MatchTerm,
 	matchContent,
 	matchFields,
+	type ProjectId,
+	parseSessionId,
 	prepareContent,
 	type SearchGroup,
 	type SearchHit,
 	type SearchKind,
 	searchHitFields,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import type { PaletteItem, PaletteMatch } from "./model";
@@ -33,8 +36,8 @@ export function hostOverflow(groups: readonly SearchGroup[]): Record<string, num
 export interface HostItemContext {
 	readonly t: Translator;
 	readonly openHit: (hit: SearchHit) => void;
-	readonly projectName: (projectId: string) => string | undefined;
-	readonly workspaceName: (workspaceId: string) => string | undefined;
+	readonly projectName: (projectId: ProjectId) => string | undefined;
+	readonly workspaceName: (workspaceId: WorkspaceId) => string | undefined;
 	readonly late: ReadonlyMap<string, number>;
 	readonly staleTerms: readonly MatchTerm[] | null;
 	readonly disabledReason?: string;
@@ -153,7 +156,8 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem {
 				icon: RiListCheck3,
 				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
 			};
-		case "transcript":
+		case "transcript": {
+			const sessionId = parseSessionId(hit.sessionId);
 			return {
 				...base,
 				kind: "transcript",
@@ -163,13 +167,18 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem {
 				scope: "work",
 				icon: RiChatHistoryLine,
 				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
-				previewTarget: {
-					kind: "chat",
-					sessionId: hit.sessionId,
-					messageIndex: hit.messageIndex,
-					anchorText: hit.anchorText,
-				},
+				...(sessionId
+					? {
+							previewTarget: {
+								kind: "chat",
+								sessionId,
+								messageIndex: hit.messageIndex,
+								anchorText: hit.anchorText,
+							},
+						}
+					: {}),
 			};
+		}
 	}
 }
 

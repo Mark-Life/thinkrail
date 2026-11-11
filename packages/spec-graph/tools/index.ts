@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
 import { registerSpecCreate } from "./create.ts";
 import { registerSpecDelete } from "./delete.ts";
 import { registerSpecGet } from "./get.ts";

@@ -12,6 +12,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@earendil-works/pi-schema": "catalog:",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/server": "workspace:*",

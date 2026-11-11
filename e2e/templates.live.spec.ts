@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { activeWorktreeRow, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 import { E2eWire } from "./fixtures/wire";
 
@@ -59,7 +60,10 @@ test("a typed-through /name command is expanded by pi itself, not the composer's
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	const wire = await E2eWire.connect();
 	const transcript = await wire
-		.request("session.getMessages", { sessionId, workspaceId: workspace.id })
+		.request("session.getMessages", {
+			sessionId: testSessionId(sessionId),
+			workspaceId: workspace.id,
+		})
 		.finally(() => wire.close());
 	const restoredUser = transcript.messages.find((message) => message.role === "user");
 	if (restoredUser?.role !== "user") {

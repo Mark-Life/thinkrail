@@ -5,7 +5,14 @@ import {
 	RiHome4Line,
 	RiLoader4Line,
 } from "@remixicon/react";
-import type { BranchReviewState, Workspace } from "@thinkrail/contracts";
+import {
+	type BranchReviewState,
+	type ProjectId,
+	parseSessionId,
+	type SessionId,
+	type Workspace,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import { chatLabel } from "../lib";
@@ -34,11 +41,14 @@ export type WorkItemsState = Pick<
 export interface WorkItemsInput {
 	t: Translator;
 	state: WorkItemsState;
-	contextProjectId: string | null;
+	contextProjectId: ProjectId | null;
 	firstPrompts: Readonly<Record<string, string>>;
 	transcriptPreviews: boolean;
-	navigateToProject: (projectId: string) => void;
-	navigateToWorkspace: (workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) => void;
+	navigateToProject: (projectId: ProjectId) => void;
+	navigateToWorkspace: (
+		workspace: Pick<Workspace, "id" | "projectId">,
+		sessionId?: SessionId,
+	) => void;
 }
 
 const CONTEXT_PROJECT_BOOST = 30;
@@ -61,8 +71,8 @@ function strongest(
 }
 
 function contextBoost(
-	projectId: string,
-	workspaceId: string | null,
+	projectId: ProjectId,
+	workspaceId: WorkspaceId | null,
 	input: WorkItemsInput,
 ): number {
 	return (
@@ -103,27 +113,35 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			}),
 		});
 	}
-	const workspaceById = new Map<string, Workspace>();
+	const workspaceById = new Map<WorkspaceId, Workspace>();
 	for (const project of state.projects) {
 		for (const workspace of state.workspaces[project.id] ?? []) {
 			workspaceById.set(workspace.id, workspace);
 		}
 	}
-	const attentionByWorkspace = new Map<string, SessionAttention>();
+	const attentionByWorkspace = new Map<WorkspaceId, SessionAttention>();
 	const projectOrder = new Map(state.projects.map((project, index) => [project.id, index]));
-	const orderOf = (records: Readonly<Record<string, { projectId: string }>>) =>
-		projectOrder.get(Object.values(records)[0]?.projectId ?? "") ?? state.projects.length;
-	const byProject = Object.entries(state.sessionStateByWorkspace).sort(
-		([, a], [, b]) => orderOf(a) - orderOf(b),
+	const orderOf = (records: Readonly<Record<string, { projectId: ProjectId }>>) => {
+		const projectId = Object.values(records)[0]?.projectId;
+		return (
+			(projectId === undefined ? undefined : projectOrder.get(projectId)) ?? state.projects.length
+		);
+	};
+	const byProject = Object.values(state.sessionStateByWorkspace).sort(
+		(a, b) => orderOf(a) - orderOf(b),
 	);
-	for (const [workspaceId, records] of byProject) {
+	for (const records of byProject) {
+		const workspaceId = Object.values(records)[0]?.workspaceId;
+		if (workspaceId === undefined) continue;
 		const workspace = workspaceById.get(workspaceId);
 		let attention: SessionAttention | undefined;
 		for (const record of Object.values(records)) {
 			const recordAttention = getSessionAttention(record.state);
 			attention = strongest(attention, recordAttention);
-			const knownTitle = selectKnownChatTitle(state, workspaceId, record.sessionId);
-			const firstPrompt = input.firstPrompts[record.sessionId];
+			const sessionId = parseSessionId(record.sessionId);
+			if (sessionId === null) continue;
+			const knownTitle = selectKnownChatTitle(state, workspaceId, sessionId);
+			const firstPrompt = input.firstPrompts[sessionId];
 			if (!knownTitle && !firstPrompt && !recordAttention) continue;
 			const projectName = projectNames.get(record.projectId);
 			if (projectName === undefined) continue;
@@ -136,7 +154,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 					})
 				: projectName;
 			items.push({
-				id: `chat:${record.sessionId}`,
+				id: `chat:${sessionId}`,
 				kind: "chat",
 				title,
 				titleSource: label.source,
@@ -148,14 +166,9 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 				running: recordAttention === "running",
 				...(recordAttention ? { attention: recordAttention } : {}),
 				contextBoost: contextBoost(record.projectId, workspaceId, input),
-				...(input.transcriptPreviews
-					? { previewTarget: { kind: "chat", sessionId: record.sessionId } }
-					: {}),
+				...(input.transcriptPreviews ? { previewTarget: { kind: "chat", sessionId } } : {}),
 				run: () =>
-					input.navigateToWorkspace(
-						{ id: workspaceId, projectId: record.projectId },
-						record.sessionId,
-					),
+					input.navigateToWorkspace({ id: workspaceId, projectId: record.projectId }, sessionId),
 				preview: () => ({
 					title,
 					subtitle: where,

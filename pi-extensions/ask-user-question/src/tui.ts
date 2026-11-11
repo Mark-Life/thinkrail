@@ -18,9 +18,9 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import type { AskRequest } from "./asker.ts";
 import {
 	type AskOutcome,
-	type AskRequest,
 	type AskUserQuestionArgs,
 	type AskUserQuestionItem,
 	type AskUserQuestionOption,
@@ -642,18 +642,24 @@ export async function askInTerminal(request: AskRequest): Promise<AskOutcome> {
 	return outcome;
 }
 
-function partialQuestions(args: unknown): Partial<AskUserQuestionItem>[] {
-	const questions = (args as { questions?: unknown } | undefined)?.questions;
-	return Array.isArray(questions)
-		? questions.filter((q): q is Partial<AskUserQuestionItem> => !!q && typeof q === "object")
-		: [];
+/** The headers of possibly partial, still-streaming args: one entry per question, absent when not a string. */
+function partialHeaders(args: unknown): Pick<AskUserQuestionItem, "header">[] {
+	const questions =
+		typeof args === "object" && args !== null && "questions" in args ? args.questions : undefined;
+	if (!Array.isArray(questions)) return [];
+	const items: readonly unknown[] = questions;
+	return items.flatMap((question) => {
+		if (typeof question !== "object" || question === null) return [];
+		const header = "header" in question ? question.header : undefined;
+		return [{ header: typeof header === "string" ? header : "" }];
+	});
 }
 
 export function renderAskCall(args: unknown, theme: Theme): Component {
-	const questions = partialQuestions(args);
+	const questions = partialHeaders(args);
 	const headers = questions
-		.map((question) => question.header?.trim())
-		.filter((header): header is string => !!header)
+		.map((question) => question.header.trim())
+		.filter((header) => header !== "")
 		.join(", ");
 	const count = `${questions.length} question${questions.length === 1 ? "" : "s"}`;
 	return new Text(
@@ -683,7 +689,7 @@ export function renderAskResult(
 		const text = resultText(result);
 		return new Text(theme.fg("warning", text === DECLINE_MESSAGE ? "Skipped" : text), 0, 0);
 	}
-	const questions = partialQuestions(context.args);
+	const questions = partialHeaders(context.args);
 	const count = Math.max(questions.length, ...details.answers.map((a) => a.questionIndex + 1));
 	const lines: string[] = [];
 	for (let index = 0; index < count; index++) {

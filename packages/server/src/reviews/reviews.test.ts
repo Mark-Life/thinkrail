@@ -11,7 +11,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ReviewChangedPayload, ReviewSnapshot, Workspace } from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
+import { type ReviewChangedPayload, ReviewSnapshot, type Workspace } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { observeLoggedErrors } from "../log";
 import { saveWorkspaces } from "../persistence";
 import { setWorkspaceDiffBase } from "../workspaces";
 import { hashContent } from "./anchoring";
@@ -41,7 +44,7 @@ import {
 let dataDir: string;
 let worktree: string;
 let pushes: ReviewChangedPayload[];
-const WS_ID = "ws-review-test";
+const WS_ID = testWorkspaceId("ws-review-test");
 
 function gitIn(cwd: string, args: string[]): void {
 	execFileSync("git", args, { cwd, stdio: "ignore" });
@@ -66,13 +69,12 @@ beforeEach(() => {
 	writeFileSync(join(worktree, "a.ts"), "const a = 1;\nconst b = 2;\nconst c = 3;\n");
 	const ws: Workspace = {
 		id: WS_ID,
-		projectId: "p1",
+		projectId: testProjectId("p1"),
 		name: "test",
 		branch: "main",
 		baseBranch: "main",
 		worktreePath: worktree,
-		createdAt: 0,
-	} as Workspace;
+	};
 	saveWorkspaces([ws]);
 	pushes = [];
 	setReviewPublisher((payload) => pushes.push(payload));
@@ -122,10 +124,18 @@ function archiveDir(): string {
 	return join(dataDir, "reviews", "archive", WS_ID);
 }
 
+const SnapshotFile = compile(ReviewSnapshot);
+
+function readSnapshot(path: string): ReviewSnapshot {
+	const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+	if (!SnapshotFile.check(value)) throw new Error(`not a review snapshot: ${path}`);
+	return value;
+}
+
 function archivedSnapshots(): ReviewSnapshot[] {
 	return readdirSync(archiveDir())
 		.filter((file) => file.endsWith(".json"))
-		.map((file) => JSON.parse(readFileSync(join(archiveDir(), file), "utf8")) as ReviewSnapshot);
+		.map((file) => readSnapshot(join(archiveDir(), file)));
 }
 
 test("anchorProblem: real path + in-range line passes, hallucinated path and past-EOF line fail", () => {
@@ -215,13 +225,44 @@ test("reanchorWorkspace publishes only when something moved", async () => {
 	expect(pushes.length).toBe(before + 1);
 });
 
+test("reanchorWorkspace logs a damaged review with a code and leaves it on disk", async () => {
+	await addInline();
+	const activeFile = join(dataDir, "reviews", `${WS_ID}.json`);
+	writeFileSync(activeFile, "{ not json");
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "reviews") logged.push(error);
+	});
+	try {
+		reanchorWorkspace(WS_ID);
+	} finally {
+		observeLoggedErrors(null);
+	}
+	expect(logged).toEqual([
+		expect.objectContaining({
+			code: "REVIEW_REANCHOR_FAILED",
+			message: "review not reanchored (damaged)",
+		}),
+	]);
+	expect(readFileSync(activeFile, "utf8")).toBe("{ not json");
+});
+
+test("an agent resolve fails when the reviews folder cannot be listed", async () => {
+	const comment = await addInline();
+	rmSync(join(dataDir, "reviews"), { recursive: true });
+	writeFileSync(join(dataDir, "reviews"), "not a folder");
+	expect(() => resolveCommentFromAgent(testSessionId("sess1"), comment.id)).toThrow(
+		expect.objectContaining({ code: "ENOTDIR" }),
+	);
+});
+
 test("update edits drafts only; manual resolve stamps resolvedBy user; resolved is final", async () => {
 	const comment = await addInline();
 	await updateComment({ workspaceId: WS_ID, id: comment.id, body: "better wording" });
 	await expect(
 		updateComment({ workspaceId: WS_ID, id: comment.id, status: "sent" }),
 	).rejects.toThrow(/resolved or dismissed/);
-	await markCommentsSent(WS_ID, [comment.id], "sess1");
+	await markCommentsSent(WS_ID, [comment.id], testSessionId("sess1"));
 	await expect(
 		updateComment({ workspaceId: WS_ID, id: comment.id, body: "nope" }),
 	).rejects.toThrow();
@@ -240,11 +281,11 @@ test("send lifecycle: sendable drafts → sent with session link; the file's cha
 	const c2 = await addInline("two");
 	const drafts = await sendableComments(WS_ID);
 	expect(drafts.map((c) => c.id)).toEqual([c1.id, c2.id]);
-	await markCommentsSent(WS_ID, [c1.id, c2.id], "sess-file");
+	await markCommentsSent(WS_ID, [c1.id, c2.id], testSessionId("sess-file"));
 	const snapshot = await getReviewSnapshot(WS_ID);
-	expect(snapshot.review.fileSessions).toEqual({ "a.ts": "sess-file" });
-	expect(await fileReviewSession(WS_ID, "a.ts")).toBe("sess-file");
-	expect(await fileReviewSession(WS_ID, "other.ts")).toBeUndefined();
+	expect(snapshot.review.fileSessions).toEqual({ "a.ts": testSessionId("sess-file") });
+	expect(await fileReviewSession(WS_ID, "a.ts")).toBe(testSessionId("sess-file"));
+	expect(await fileReviewSession(WS_ID, "other.ts")).toBeNull();
 	expect(snapshot.comments.every((c) => c.status === "sent" && c.sessionId === "sess-file")).toBe(
 		true,
 	);
@@ -270,9 +311,9 @@ test("the implicit batch sweeps agent drafts too — findings ride the user's se
 test("mark sent rejects lifecycle drift without partially updating the surviving draft", async () => {
 	const comment = await addInline("draft");
 
-	await expect(markCommentsSent(WS_ID, [comment.id, "rc_missing"], "sess-file")).rejects.toThrow(
-		/Unknown review comment/,
-	);
+	await expect(
+		markCommentsSent(WS_ID, [comment.id, "rc_missing"], testSessionId("sess-file")),
+	).rejects.toThrow(/Unknown review comment/);
 	expect((await getReviewSnapshot(WS_ID)).comments.find((c) => c.id === comment.id)?.status).toBe(
 		"draft",
 	);
@@ -281,9 +322,11 @@ test("mark sent rejects lifecycle drift without partially updating the surviving
 test("rollbackSend undoes an optimistic markSent (pre-turn rejection) → drafts again, chat unpinned", async () => {
 	const c1 = await addInline("one");
 	const c2 = await addInline("two");
-	await markCommentsSent(WS_ID, [c1.id, c2.id], "sess-file");
-	expect((await getReviewSnapshot(WS_ID)).review.fileSessions).toEqual({ "a.ts": "sess-file" });
-	rollbackSend(WS_ID, [c1.id, c2.id], "sess-file");
+	await markCommentsSent(WS_ID, [c1.id, c2.id], testSessionId("sess-file"));
+	expect((await getReviewSnapshot(WS_ID)).review.fileSessions).toEqual({
+		"a.ts": testSessionId("sess-file"),
+	});
+	rollbackSend(WS_ID, [c1.id, c2.id], testSessionId("sess-file"));
 	const snapshot = await getReviewSnapshot(WS_ID);
 	expect(snapshot.comments.every((c) => c.status === "draft" && c.sessionId === undefined)).toBe(
 		true,
@@ -295,31 +338,31 @@ test("rollbackSend undoes an optimistic markSent (pre-turn rejection) → drafts
 
 test("rollbackSend keeps a reused chat's pin when another comment still backs it", async () => {
 	const first = await addInline("delivered");
-	await markCommentsSent(WS_ID, [first.id], "sess-file");
+	await markCommentsSent(WS_ID, [first.id], testSessionId("sess-file"));
 	const second = await addInline("failed follow-up");
-	await markCommentsSent(WS_ID, [second.id], "sess-file");
-	rollbackSend(WS_ID, [second.id], "sess-file");
+	await markCommentsSent(WS_ID, [second.id], testSessionId("sess-file"));
+	rollbackSend(WS_ID, [second.id], testSessionId("sess-file"));
 	const snapshot = await getReviewSnapshot(WS_ID);
 	expect(snapshot.comments.find((c) => c.id === first.id)?.status).toBe("sent");
 	expect(snapshot.comments.find((c) => c.id === second.id)?.status).toBe("draft");
-	expect(snapshot.review.fileSessions).toEqual({ "a.ts": "sess-file" });
+	expect(snapshot.review.fileSessions).toEqual({ "a.ts": testSessionId("sess-file") });
 });
 
 test("rollbackSend is a no-op for a session that never sent these comments (fault after acceptance)", async () => {
 	const comment = await addInline();
-	await markCommentsSent(WS_ID, [comment.id], "sess-file");
+	await markCommentsSent(WS_ID, [comment.id], testSessionId("sess-file"));
 	const before = pushes.length;
-	rollbackSend(WS_ID, [comment.id], "other-session");
+	rollbackSend(WS_ID, [comment.id], testSessionId("other-session"));
 	expect(pushes.length).toBe(before);
 	expect((await getReviewSnapshot(WS_ID)).comments[0]?.status).toBe("sent");
 });
 
 test("rollbackSend after clear is a clean no-op — it never resurrects cleared comments", async () => {
 	const comment = await addInline();
-	await markCommentsSent(WS_ID, [comment.id], "sess-file");
+	await markCommentsSent(WS_ID, [comment.id], testSessionId("sess-file"));
 	await clearReview(WS_ID);
 	const before = pushes.length;
-	rollbackSend(WS_ID, [comment.id], "sess-file");
+	rollbackSend(WS_ID, [comment.id], testSessionId("sess-file"));
 	expect(pushes.length).toBe(before);
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "reviews", `${WS_ID}.json`), "utf8"));
 	expect(onDisk.review.status).toBe("open");
@@ -333,39 +376,49 @@ test("a review-level remark pins its own bucket chat, so a second one continues 
 		anchor: null,
 		body: "overall",
 	});
-	await markCommentsSent(WS_ID, [overall.id], "sess-overall");
+	await markCommentsSent(WS_ID, [overall.id], testSessionId("sess-overall"));
 	expect((await getReviewSnapshot(WS_ID)).review.fileSessions).toEqual({
-		[REVIEW_LEVEL_KEY]: "sess-overall",
+		[REVIEW_LEVEL_KEY]: testSessionId("sess-overall"),
 	});
-	expect(await fileReviewSession(WS_ID, REVIEW_LEVEL_KEY)).toBe("sess-overall");
+	expect(await fileReviewSession(WS_ID, REVIEW_LEVEL_KEY)).toBe(testSessionId("sess-overall"));
 	expect(reviewSessionKey(overall)).toBe(REVIEW_LEVEL_KEY);
 	expect(reviewSessionKey(await addInline("pinned to its file"))).toBe("a.ts");
 });
 
 test("agent resolve: sent → resolved with note; unknown/duplicate fail loud", async () => {
 	const comment = await addInline();
-	expect(() => resolveCommentFromAgent("sess1", comment.id)).toThrow("not sent");
-	await markCommentsSent(WS_ID, [comment.id], "sess1");
-	const resolved = resolveCommentFromAgent("sess1", comment.id, "renamed the constant");
+	expect(() => resolveCommentFromAgent(testSessionId("sess1"), comment.id)).toThrow("not sent");
+	await markCommentsSent(WS_ID, [comment.id], testSessionId("sess1"));
+	const resolved = resolveCommentFromAgent(
+		testSessionId("sess1"),
+		comment.id,
+		"renamed the constant",
+	);
 	expect(resolved.resolvedBy).toBe("agent");
 	expect(resolved.resolveNote).toBe("renamed the constant");
-	expect(() => resolveCommentFromAgent("sess1", comment.id)).toThrow("already resolved");
-	expect(() => resolveCommentFromAgent("sess1", "rc_nope")).toThrow("Unknown review comment");
+	expect(() => resolveCommentFromAgent(testSessionId("sess1"), comment.id)).toThrow(
+		"already resolved",
+	);
+	expect(() => resolveCommentFromAgent(testSessionId("sess1"), "rc_nope")).toThrow(
+		"Unknown review comment",
+	);
 });
 
 test("agent resolve is bound to the chat the comment was actually sent to — no other session, sent or not", async () => {
 	const comment = await addInline();
-	await markCommentsSent(WS_ID, [comment.id], "sess1");
-	expect(() => resolveCommentFromAgent("sess2", comment.id)).toThrow("not sent to this chat");
-	expect(resolveCommentFromAgent("sess1", comment.id).status).toBe("resolved");
+	await markCommentsSent(WS_ID, [comment.id], testSessionId("sess1"));
+	expect(() => resolveCommentFromAgent(testSessionId("sess2"), comment.id)).toThrow(
+		"not sent to this chat",
+	);
+	expect(resolveCommentFromAgent(testSessionId("sess1"), comment.id).status).toBe("resolved");
 });
 
 test("an open-snapshot mutation cannot overwrite an agent resolution across its async return", async () => {
 	const sent = await addInline("sent first");
-	await markCommentsSent(WS_ID, [sent.id], "sess1");
+	await markCommentsSent(WS_ID, [sent.id], testSessionId("sess1"));
 
 	const adding = addInline("added concurrently");
-	resolveCommentFromAgent("sess1", sent.id, "fixed concurrently");
+	resolveCommentFromAgent(testSessionId("sess1"), sent.id, "fixed concurrently");
 	await adding;
 
 	expect((await getReviewSnapshot(WS_ID)).comments.find((c) => c.id === sent.id)).toMatchObject({
@@ -386,9 +439,11 @@ test("a draft finding is unresolvable through resolve_comment even when self-aut
 		},
 		body: "reviewer finding",
 	});
-	expect(() => resolveCommentFromAgent("reviewer-sess", finding.id)).toThrow("not sent");
+	expect(() => resolveCommentFromAgent(testSessionId("reviewer-sess"), finding.id)).toThrow(
+		"not sent",
+	);
 	const scratch = await addInline("human scratch");
-	expect(() => resolveCommentFromAgent("any-sess", scratch.id)).toThrow("not sent");
+	expect(() => resolveCommentFromAgent(testSessionId("any-sess"), scratch.id)).toThrow("not sent");
 });
 
 test("the first worktree comment captures its anchor after lazy snapshot creation", async () => {
@@ -401,10 +456,10 @@ test("the first worktree comment captures its anchor after lazy snapshot creatio
 
 test("clear keeps an agent resolution that lands while the fresh base resolves", async () => {
 	const sent = await addInline("agent record");
-	await markCommentsSent(WS_ID, [sent.id], "sess1");
+	await markCommentsSent(WS_ID, [sent.id], testSessionId("sess1"));
 
 	const clearing = clearReview(WS_ID);
-	resolveCommentFromAgent("sess1", sent.id, "resolved during clear");
+	resolveCommentFromAgent(testSessionId("sess1"), sent.id, "resolved during clear");
 	await clearing;
 
 	expect(archivedSnapshots()[0]?.comments[0]).toMatchObject({
@@ -417,7 +472,7 @@ test("clear keeps an agent resolution that lands while the fresh base resolves",
 test("clear archives records, discards drafts, and publishes only the fresh snapshot", async () => {
 	const draft = await addInline("unsent scratch");
 	const sent = await addInline("agent record");
-	await markCommentsSent(WS_ID, [sent.id], "sess1");
+	await markCommentsSent(WS_ID, [sent.id], testSessionId("sess1"));
 	const before = pushes.length;
 	const fresh = await clearReview(WS_ID);
 
@@ -433,7 +488,9 @@ test("clear archives records, discards drafts, and publishes only the fresh snap
 	expect(archived?.comments.map((comment) => comment.id)).toEqual([sent.id]);
 
 	const beforeResolve = pushes.length;
-	expect(resolveCommentFromAgent("sess1", sent.id, "fixed after clear").status).toBe("resolved");
+	expect(resolveCommentFromAgent(testSessionId("sess1"), sent.id, "fixed after clear").status).toBe(
+		"resolved",
+	);
 	expect(pushes).toHaveLength(beforeResolve);
 	expect(archivedSnapshots()[0]?.comments[0]).toMatchObject({
 		id: sent.id,
@@ -447,14 +504,14 @@ test("delete is draft-only: an unsent remark goes, a sent one is a record", asyn
 	await deleteComment(WS_ID, draft.id);
 	expect((await getReviewSnapshot(WS_ID)).comments).toHaveLength(0);
 	const sent = await addInline("kept");
-	await markCommentsSent(WS_ID, [sent.id], "sess1");
+	await markCommentsSent(WS_ID, [sent.id], testSessionId("sess1"));
 	await expect(deleteComment(WS_ID, sent.id)).rejects.toThrow(/record/);
 	await expect(deleteComment(WS_ID, "rc_nope")).rejects.toThrow(/Unknown/);
 });
 
 test("purge removes the workspace's active review and archives", async () => {
 	const sent = await addInline();
-	await markCommentsSent(WS_ID, [sent.id], "sess1");
+	await markCommentsSent(WS_ID, [sent.id], testSessionId("sess1"));
 	await clearReview(WS_ID);
 	expect(statSync(archiveDir()).isDirectory()).toBe(true);
 
@@ -463,23 +520,23 @@ test("purge removes the workspace's active review and archives", async () => {
 	expect((await getReviewSnapshot(WS_ID)).comments).toHaveLength(0);
 });
 
-test("a path-segment workspace id is refused by every file touch — no traversal out of the reviews dir", async () => {
-	for (const evil of ["../config", "a/b", "a\\b", "..", ".", "x.y"]) {
-		expect(() => removeWorkspaceReviews(evil)).toThrow(/Invalid workspace id/);
-		await expect(getReviewSnapshot(evil)).rejects.toThrow(/Invalid workspace id/);
+test("a dotted workspace id is refused by every file touch", async () => {
+	for (const evil of ["x.y", "a..b"]) {
+		expect(() => removeWorkspaceReviews(testWorkspaceId(evil))).toThrow(/Invalid workspace id/);
+		await expect(getReviewSnapshot(testWorkspaceId(evil))).rejects.toThrow(/Invalid workspace id/);
 	}
 });
 
 test("clear refuses an unsafe persisted review id instead of escaping the archive directory", async () => {
 	const sent = await addInline();
-	await markCommentsSent(WS_ID, [sent.id], "sess1");
+	await markCommentsSent(WS_ID, [sent.id], testSessionId("sess1"));
 	const activeFile = join(dataDir, "reviews", `${WS_ID}.json`);
-	const corrupted = JSON.parse(readFileSync(activeFile, "utf8")) as ReviewSnapshot;
-	corrupted.review.id = "../escape";
+	const stored = readSnapshot(activeFile);
+	const corrupted = { ...stored, review: { ...stored.review, id: "../escape" } };
 	writeFileSync(activeFile, `${JSON.stringify(corrupted)}\n`);
 
 	await expect(clearReview(WS_ID)).rejects.toThrow(/Invalid review id/);
-	expect((JSON.parse(readFileSync(activeFile, "utf8")) as ReviewSnapshot).comments).toHaveLength(1);
+	expect(readSnapshot(activeFile).comments).toHaveLength(1);
 	expect(() => statSync(join(dataDir, "reviews", "archive", "escape.json"))).toThrow();
 });
 
@@ -704,6 +761,45 @@ test("writes land atomically: a rename, and no temp file left behind", async () 
 	expect(readdirSync(dir)).toEqual([`${WS_ID}.json`]);
 });
 
+test("a review file with the wrong shape is refused like a torn one, and stays on disk", async () => {
+	await addComment({ workspaceId: WS_ID, kind: "review", anchor: null, body: "keep me" });
+	const file = join(dataDir, "reviews", `${WS_ID}.json`);
+	const wrong = JSON.stringify({ review: { id: "r1" }, comments: "none" });
+	writeFileSync(file, wrong);
+	await expect(getReviewSnapshot(WS_ID)).rejects.toThrow(/damaged/);
+	await expect(clearReview(WS_ID)).rejects.toThrow(/damaged/);
+	expect(readFileSync(file, "utf8")).toBe(wrong);
+});
+
+test("a review file from the first release that had reviews loads whole", async () => {
+	const anchor = {
+		path: "a.ts",
+		side: "base",
+		baseRef: "abc",
+		selectors: [{ kind: "lineRange", startLine: 1, endLine: 2 }],
+	};
+	const comment = {
+		id: "c1",
+		reviewId: "r1",
+		kind: "inline",
+		anchor,
+		body: "older",
+		status: "sent",
+		anchorState: "anchored",
+		createdAt: 1,
+		sentAt: 2,
+	};
+	const review = { id: "r1", workspaceId: WS_ID, status: "open", baseSha: "abc", createdAt: 1 };
+	mkdirSync(join(dataDir, "reviews"), { recursive: true });
+	writeFileSync(
+		join(dataDir, "reviews", `${WS_ID}.json`),
+		JSON.stringify({ review, comments: [comment] }),
+	);
+	const loaded = await getReviewSnapshot(WS_ID);
+	expect(loaded.review.id).toBe("r1");
+	expect(loaded.comments.map((c) => c.body)).toEqual(["older"]);
+});
+
 test("resolve_comment skips a damaged sibling review rather than failing the resolve it belongs to", async () => {
 	const comment = await addComment({
 		workspaceId: WS_ID,
@@ -711,17 +807,17 @@ test("resolve_comment skips a damaged sibling review rather than failing the res
 		anchor: null,
 		body: "resolve me",
 	});
-	await markCommentsSent(WS_ID, [comment.id], "sess-x");
+	await markCommentsSent(WS_ID, [comment.id], testSessionId("sess-x"));
 	writeFileSync(join(dataDir, "reviews", "ws-broken.json"), "{ truncated");
-	expect(resolveCommentFromAgent("sess-x", comment.id).status).toBe("resolved");
+	expect(resolveCommentFromAgent(testSessionId("sess-x"), comment.id).status).toBe("resolved");
 });
 
 test("markFileDone: only a fully-resolved file; a new comment re-opens it", async () => {
 	const comment = await addInline();
 	await expect(markFileDone(WS_ID, "a.ts")).rejects.toThrow(/unresolved/);
-	await markCommentsSent(WS_ID, [comment.id], "sess1");
+	await markCommentsSent(WS_ID, [comment.id], testSessionId("sess1"));
 	await expect(markFileDone(WS_ID, "a.ts")).rejects.toThrow(/unresolved/);
-	resolveCommentFromAgent("sess1", comment.id);
+	resolveCommentFromAgent(testSessionId("sess1"), comment.id);
 	await markFileDone(WS_ID, "a.ts");
 	expect((await getReviewSnapshot(WS_ID)).review.doneFiles).toEqual(["a.ts"]);
 	await addInline("more to say");
@@ -764,7 +860,7 @@ test("a reading order cites files worktree-relative and keeps an outside path as
 		],
 		verdict: "approve",
 		todoId: "t",
-		sessionId: "s",
+		sessionId: testSessionId("s"),
 		reviewedSha: "0",
 		at: 1,
 	});

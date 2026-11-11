@@ -1,11 +1,14 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { FakeGhScenario } from "./fakeGh";
+import { arr, compile, str } from "@earendil-works/pi-schema";
+import { type FakeGhScenario, readFakeGhScenario } from "./fakeGh";
 import { gitAs } from "./git";
 import { E2E_FAKE_BIN_DIR, E2E_GH_LOG, E2E_GH_SCENARIO } from "./paths";
 
 export type { FakeGhScenario, FakePr } from "./fakeGh";
+
+const GhCall = compile(arr(str()));
 
 function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -33,7 +36,7 @@ export function writeGhScenario(scenario: FakeGhScenario): void {
 }
 
 export function readGhScenario(): FakeGhScenario {
-	return JSON.parse(readFileSync(E2E_GH_SCENARIO, "utf8")) as FakeGhScenario;
+	return readFakeGhScenario(E2E_GH_SCENARIO);
 }
 
 export function ghCalls(): string[][] {
@@ -41,7 +44,11 @@ export function ghCalls(): string[][] {
 	return readFileSync(E2E_GH_LOG, "utf8")
 		.split("\n")
 		.filter(Boolean)
-		.map((line) => JSON.parse(line) as string[]);
+		.map((line) => {
+			const argv: unknown = JSON.parse(line);
+			if (!GhCall.check(argv)) throw new Error(`${E2E_GH_LOG} holds a line that is not a gh argv`);
+			return argv;
+		});
 }
 
 export function ghMutations(): string[][] {

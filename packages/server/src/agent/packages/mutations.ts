@@ -6,6 +6,8 @@ import {
 	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import {
+	PI_PACKAGE_RESOURCE_TYPES,
+	PI_PACKAGE_SCOPES,
 	type PiPackageResourceType,
 	type PiPackageScope,
 	parsePiPackageInput,
@@ -23,8 +25,8 @@ import {
 import { createPiSettings } from "./settingsView";
 
 const UPDATE_CHECK_TTL_MS = 5 * 60_000;
-const RESOURCE_TYPES: ReadonlySet<string> = new Set(["extensions", "skills", "prompts"]);
-const SCOPES: ReadonlySet<string> = new Set(["user", "project"]);
+const RESOURCE_TYPES: ReadonlySet<string> = new Set(PI_PACKAGE_RESOURCE_TYPES);
+const SCOPES: ReadonlySet<string> = new Set(PI_PACKAGE_SCOPES);
 
 export interface PiPackageHostContext {
 	/** The workspace path; absent → user scope only. */

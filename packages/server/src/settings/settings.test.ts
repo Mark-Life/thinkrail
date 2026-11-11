@@ -1,15 +1,27 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compile } from "@earendil-works/pi-schema";
 import {
 	type AppConfig,
-	type AppConfigUpdate,
+	AppConfigUpdate,
 	DEFAULT_CONFIG,
 	type LayoutPreset,
 } from "@thinkrail/contracts";
+import { loadConfig, observeStateFileProblems } from "../persistence";
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import {
+	configReadFailed,
 	getConfig,
 	noteRecentModel,
 	resetConfigCache,
@@ -20,6 +32,22 @@ import {
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const WireUpdate = compile(AppConfigUpdate);
+
+/** A `settings.update` payload as the wire delivers it: unknown keys ride along. */
+function wireUpdate(raw: unknown): AppConfigUpdate {
+	if (!WireUpdate.check(raw)) throw new Error("not a settings update");
+	return raw;
+}
+
+const wireModel = (id: string, provider = "p") => ({
+	id,
+	name: id.toUpperCase(),
+	provider,
+	contextWindow: 1,
+	reasoning: false,
+	thinkingLevels: [],
+});
 
 function preset(id = "custom"): LayoutPreset {
 	return {
@@ -112,32 +140,42 @@ test("preference-only updates cannot infer expanded consent", () => {
 
 test("a legacy preference-only write cannot re-enable additional data after a declined decision", () => {
 	updateConfig({ analyticsEnabled: false, analyticsConsentConfirmed: true });
-	expect(() => updateConfig({ analyticsEnabled: true })).toThrow("explicit confirmation");
+	expect(() => updateConfig({ analyticsEnabled: true })).toThrow(
+		expect.objectContaining({ code: "ANALYTICS_CONSENT_REQUIRED" }),
+	);
 	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: true });
 	updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
 	updateConfig({ analyticsEnabled: false });
 	expect(() => updateConfig({ analyticsEnabled: true })).toThrow("explicit confirmation");
 });
 
-test("invalid or incomplete consent updates leave disk, cache and broadcasts unchanged", () => {
-	updateConfig({ analyticsEnabled: false, analyticsConsentConfirmed: false });
-	const before = readFileSync(join(dataDir, "config.json"), "utf8");
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const invalidPreference: AppConfigUpdate = { theme: "light" };
-	Reflect.set(invalidPreference, "analyticsEnabled", "yes");
-	const invalidConfirmation: AppConfigUpdate = { analyticsEnabled: true };
-	Reflect.set(invalidConfirmation, "analyticsConsentConfirmed", "yes");
+test.each([
+	["a consent confirmation without the sharing preference", { analyticsConsentConfirmed: true }],
+	["an unknown key", { futureSetting: true }],
+	["an unknown key beside a known one", { theme: "acme.dark", futureSetting: 1 }],
+	["a prototype key", JSON.parse('{"__proto__":{"theme":"x"}}')],
+	["an inherited key", { toString: "x" }],
+	["a blank disabled-extensions name", { disabledExtensions: [""] }],
+	["a whitespace disabled-extensions name", { disabledExtensions: ["  "] }],
+	["a blank disabled-packages identity", { disabledPackages: [""] }],
+	["a blank extension name", { extensionSettings: { "": { flag: true } } }],
+	["a blank extension setting key", { extensionSettings: { x: { " ": true } } }],
+	["a defaultModel with no provider", { defaultModel: { ...wireModel("m"), provider: "" } }],
+	["a reviewModel with no id", { reviewModel: { ...wireModel("m"), id: "" } }],
+	["a favorite with no id", { favoriteModels: [{ ...wireModel("x"), id: "" }] }],
+])("the settings.update params schema refuses %s", (_label, update) => {
+	expect(WireUpdate.check(update)).toBe(false);
+});
+
+test("the settings.update params schema passes the keys an older client still sends", () => {
 	for (const update of [
-		invalidPreference,
-		invalidConfirmation,
-		{ analyticsConsentConfirmed: true },
+		{ chatMessageOrder: "newest-first" },
+		{ layout: { left: 1 } },
+		{ recentModels: "junk" },
+		{ analyticsEnabled: false, analyticsConsentConfirmed: true },
 	]) {
-		expect(() => updateConfig(update)).toThrow();
+		expect(WireUpdate.check(update)).toBe(true);
 	}
-	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(before);
-	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
-	expect(published).toEqual([]);
 });
 
 test("failed consent persistence never updates the cached choice or publishes it", () => {
@@ -200,7 +238,10 @@ test("system mode requires a complete pair and replaces it atomically", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
 	expect(() => updateConfig({ themeMode: "system" })).toThrow(
-		"system theme mode requires a complete pair",
+		expect.objectContaining({
+			code: "THEME_PAIR_REQUIRED",
+			message: "system theme mode requires a complete pair",
+		}),
 	);
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
@@ -214,21 +255,9 @@ test("system mode requires a complete pair and replaces it atomically", () => {
 	expect(updateConfig({ systemThemePair: second }).systemThemePair).toEqual(second);
 });
 
-test("invalid theme updates are rejected and a legacy theme choice exits system mode", () => {
+test("a legacy theme choice exits system mode", () => {
 	const pair = { light: "light", dark: "dark" };
 	updateConfig({ themeMode: "system", systemThemePair: pair });
-	const before = getConfig();
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-
-	expect(() => updateConfig({ themeMode: "automatic" } as unknown as AppConfigUpdate)).toThrow(
-		"themeMode must be fixed or system",
-	);
-	expect(() =>
-		updateConfig({ systemThemePair: { light: "light" } } as unknown as AppConfigUpdate),
-	).toThrow("systemThemePair must contain light and dark theme ids");
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
 
 	const fixed = updateConfig({ theme: "acme.fixed" });
 	expect(fixed.theme).toBe("acme.fixed");
@@ -265,46 +294,6 @@ test("an older host preserves unknown top-level config extensions when updating 
 	updateConfig({ theme: "acme.changed" });
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
 	expect(onDisk.futureSetting).toEqual({ mode: "new" });
-});
-
-test("an unknown update key rejects the whole update before persistence or broadcast", () => {
-	writeFileSync(join(dataDir, "config.json"), JSON.stringify(DEFAULT_CONFIG));
-	resetConfigCache();
-	const before = getConfig();
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-
-	expect(() => updateConfig({ futureSetting: true } as unknown as AppConfigUpdate)).toThrow(
-		"Unknown setting: futureSetting",
-	);
-	expect(() =>
-		updateConfig({ theme: "acme.dark", futureSetting: 1 } as unknown as AppConfigUpdate),
-	).toThrow("Unknown setting: futureSetting");
-	expect(() => updateConfig(JSON.parse('{"__proto__":{"theme":"x"}}') as AppConfigUpdate)).toThrow(
-		"Unknown setting: __proto__",
-	);
-	expect(() => updateConfig({ toString: "x" } as unknown as AppConfigUpdate)).toThrow(
-		"Unknown setting: toString",
-	);
-
-	expect(getConfig()).toEqual(before);
-	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toEqual(before);
-	expect(published).toEqual([]);
-});
-
-test.each([
-	["a string", "theme"],
-	["an array", ["theme"]],
-	["null", null],
-	["undefined", undefined],
-])("a non-object update (%s) is rejected", (_label, update) => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow(
-		"settings update must be an object",
-	);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-	expect(published).toEqual([]);
 });
 
 test("empty and multi-key valid updates persist and publish", () => {
@@ -348,7 +337,7 @@ test("retired chat message order is stripped from disk and stale updates", () =>
 
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
-	const staleUpdate = { chatMessageOrder: "newest-first" } as AppConfigUpdate;
+	const staleUpdate = wireUpdate({ chatMessageOrder: "newest-first" });
 	const next = updateConfig(staleUpdate);
 	expect(next).not.toHaveProperty("chatMessageOrder");
 	expect(published).toHaveLength(1);
@@ -368,7 +357,7 @@ test("reviewAutoFix defaults off; an old config without it loads the default; to
 	expect(getConfig().reviewAutoFix).toBe(true);
 });
 
-test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips; non-boolean rejected", () => {
+test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips", () => {
 	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
@@ -377,8 +366,6 @@ test("agentReviewEnabled defaults off; an old config loads the default; toggling
 	expect(next.agentReviewEnabled).toBe(true);
 	resetConfigCache();
 	expect(getConfig().agentReviewEnabled).toBe(true);
-	const invalid = { agentReviewEnabled: "nope" } as unknown as AppConfigUpdate;
-	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
 });
 
 test("otherAgentSkills is off for a new install, and every config it writes keeps it off", () => {
@@ -390,26 +377,22 @@ test("otherAgentSkills is off for a new install, and every config it writes keep
 	expect(getConfig().otherAgentSkills).toBe(false);
 });
 
-test("otherAgentSkills stays on for a config that predates it; opting out round-trips; non-boolean rejected", () => {
+test("otherAgentSkills stays on for a config that predates it; opting out round-trips", () => {
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
 	expect(getConfig().otherAgentSkills).toBe(true);
 	expect(updateConfig({ otherAgentSkills: false }).otherAgentSkills).toBe(false);
 	resetConfigCache();
 	expect(getConfig().otherAgentSkills).toBe(false);
-	const invalid = { otherAgentSkills: 1 } as unknown as AppConfigUpdate;
-	expect(() => updateConfig(invalid)).toThrow("otherAgentSkills must be a boolean");
 });
 
-test("onboardingDismissed defaults off; an old config loads the default; dismissing round-trips; non-boolean rejected", () => {
+test("onboardingDismissed defaults off; an old config loads the default; dismissing round-trips", () => {
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
 	expect(getConfig().onboardingDismissed).toBe(false);
 	expect(updateConfig({ onboardingDismissed: true }).onboardingDismissed).toBe(true);
 	resetConfigCache();
 	expect(getConfig().onboardingDismissed).toBe(true);
-	const invalid = { onboardingDismissed: "yes" } as unknown as AppConfigUpdate;
-	expect(() => updateConfig(invalid)).toThrow("onboardingDismissed must be a boolean");
 });
 
 test("subagents default on; an old config inherits that default; toggling off round-trips", () => {
@@ -446,20 +429,7 @@ test("disabled extensions default empty, round-trip deduped, and keep unknown na
 	expect(updateConfig({ disabledExtensions: [] }).disabledExtensions).toEqual([]);
 });
 
-test("a malformed disabled-extensions update is rejected; a malformed stored list keeps valid names", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const value of ["visualize", [""], ["  "], [1], null]) {
-		const invalid = { disabledExtensions: value } as unknown as AppConfigUpdate;
-		expect(() => updateConfig(invalid)).toThrow(
-			"disabledExtensions must be a list of extension names",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-
+test("a malformed stored disabled-extensions list keeps valid names", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({ disabledExtensions: ["visualize", 3, "", "visualize"] }),
@@ -494,13 +464,6 @@ test("extension settings merge per extension and key, persist, and drop non-bool
 		other: true,
 	});
 
-	for (const value of [null, [], { x: true }, { x: { flag: "yes" } }, { "": { flag: true } }]) {
-		const invalid = { extensionSettings: value } as unknown as AppConfigUpdate;
-		expect(() => updateConfig(invalid)).toThrow(
-			"extensionSettings must map extension names to boolean settings",
-		);
-	}
-
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({ extensionSettings: { a: { on: true, bad: "x" }, b: "nope", c: { bad: 1 } } }),
@@ -509,7 +472,7 @@ test("extension settings merge per extension and key, persist, and drop non-bool
 	expect(getConfig().extensionSettings).toEqual({ a: { on: true } });
 });
 
-test("disabled packages default empty, round-trip deduped, and reject a malformed list", () => {
+test("disabled packages default empty and round-trip deduped", () => {
 	expect(DEFAULT_CONFIG.disabledPackages).toEqual([]);
 	expect(getConfig().disabledPackages).toEqual([]);
 	const next = updateConfig({
@@ -518,12 +481,6 @@ test("disabled packages default empty, round-trip deduped, and reject a malforme
 	expect(next.disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
 	resetConfigCache();
 	expect(getConfig().disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
-	for (const value of ["npm:x", [""], [1]]) {
-		const invalid = { disabledPackages: value } as unknown as AppConfigUpdate;
-		expect(() => updateConfig(invalid)).toThrow(
-			"disabledPackages must be a list of package identities",
-		);
-	}
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({ disabledPackages: ["npm:x", 3, ""] }),
@@ -532,32 +489,9 @@ test("disabled packages default empty, round-trip deduped, and reject a malforme
 	expect(getConfig().disabledPackages).toEqual(["npm:x"]);
 });
 
-test("an out-of-range subagent limit is rejected before persistence or broadcast", () => {
+test("a Windows shell update persists and publishes", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const value of [0, 17, 2.5, "4"]) {
-		const invalid = { subagentMaxConcurrent: value } as unknown as AppConfigUpdate;
-		expect(() => updateConfig(invalid)).toThrow(
-			"subagentMaxConcurrent must be a whole number from 1 to 16",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-});
-
-test("Windows shell updates reject unknown values before persistence or broadcast", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-
-	expect(() =>
-		updateConfig({ terminalWindowsShell: "future-shell" } as unknown as AppConfigUpdate),
-	).toThrow("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 
 	expect(updateConfig({ terminalWindowsShell: "cmd" }).terminalWindowsShell).toBe("cmd");
 	expect(published).toHaveLength(1);
@@ -567,25 +501,9 @@ test("Windows shell updates reject unknown values before persistence or broadcas
 	);
 });
 
-test("replay budget and composer growth updates reject malformed values before persistence or broadcast", () => {
+test("a replay budget update persists and publishes", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-
-	for (const terminalReplayKb of ["64", Number.NaN, Number.POSITIVE_INFINITY, null, true]) {
-		expect(() => updateConfig({ terminalReplayKb } as unknown as AppConfigUpdate)).toThrow(
-			"terminalReplayKb must be a finite number",
-		);
-	}
-	for (const composerGrowthLimit of ["enormous", 3, { kind: "roomy" }, null]) {
-		expect(() => updateConfig({ composerGrowthLimit } as unknown as AppConfigUpdate)).toThrow(
-			"composerGrowthLimit must be one of compact, roomy, half-chat",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-
 	const next = updateConfig({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
 	expect(next).toMatchObject({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
 	expect(published).toEqual([next]);
@@ -636,24 +554,6 @@ test("stored invalid JetBrains quota preferences fall back fieldwise", () => {
 	});
 });
 
-test("invalid JetBrains quota updates are rejected before persistence or broadcast", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const update of [
-		{ jbcentralQuotaEnabled: "true" },
-		{ jbcentralQuotaRefreshSeconds: 0 },
-		{ jbcentralQuotaRefreshSeconds: 3601 },
-		{ jbcentralQuotaRefreshSeconds: 1.5 },
-		{ jbcentralQuotaRefreshSeconds: "30" },
-	]) {
-		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow();
-		expect(getConfig()).toEqual(before);
-	}
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-});
-
 test("line-width fields default independently when an older or malformed config is loaded", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
@@ -677,43 +577,6 @@ test("line-width fields default independently when an older or malformed config 
 	});
 });
 
-test("invalid line-width updates are rejected before persistence or broadcast", () => {
-	const invalidUpdates = [
-		{ chatLineWidth: 39 },
-		{ fileLineWidth: 241 },
-		{ chatLineWidth: 80.5 },
-		{ fileLineWidth: Number.POSITIVE_INFINITY },
-		{ chatLineWidthBounded: "true" },
-		{ fileLineWidthBounded: 1 },
-		{ voiceInputEnabled: "off" },
-	];
-
-	for (const update of invalidUpdates) {
-		rmSync(join(dataDir, "config.json"), { force: true });
-		resetConfigCache();
-		const published: AppConfig[] = [];
-		setSettingsPublisher((config) => published.push(config));
-		const before = getConfig();
-
-		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow();
-		expect(getConfig()).toEqual(before);
-		expect(published).toEqual([]);
-		expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-	}
-});
-
-test("a non-boolean subagents update is rejected before persistence or broadcast", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	const invalid = { subagentsEnabled: "false" } as unknown as AppConfigUpdate;
-
-	expect(() => updateConfig(invalid)).toThrow("subagentsEnabled must be a boolean");
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-});
-
 test("a failed config write leaves the live cache and publisher unchanged", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
@@ -723,6 +586,71 @@ test("a failed config write leaves the live cache and publisher unchanged", () =
 	expect(() => updateConfig({ subagentsEnabled: false })).toThrow();
 	expect(getConfig().subagentsEnabled).toBe(true);
 	expect(published).toEqual([]);
+});
+
+test.each([
+	["a directory at the path", () => mkdirSync(join(dataDir, "config.json"))],
+	["text that is not JSON", () => writeFileSync(join(dataDir, "config.json"), "{ nope")],
+	["JSON that is not an object", () => writeFileSync(join(dataDir, "config.json"), "[]")],
+])("configReadFailed is true for %s", (_name, seed) => {
+	seed();
+	resetConfigCache();
+	expect(configReadFailed()).toBe(true);
+	expect(getConfig().subagentsEnabled).toBe(DEFAULT_CONFIG.subagentsEnabled);
+});
+
+test.each([
+	["a missing file", () => {}],
+	[
+		"one bad field in a stored object",
+		() => writeFileSync(join(dataDir, "config.json"), JSON.stringify({ chatLineWidth: "wide" })),
+	],
+])("configReadFailed is false for %s", (_name, seed) => {
+	seed();
+	resetConfigCache();
+	expect(configReadFailed()).toBe(false);
+});
+
+test("a read that fails after a good load keeps the real values and raises no failure", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ subagentsEnabled: false }));
+	resetConfigCache();
+	expect(getConfig().subagentsEnabled).toBe(false);
+	rmSync(join(dataDir, "config.json"));
+	mkdirSync(join(dataDir, "config.json"));
+	loadConfig();
+	expect(configReadFailed()).toBe(false);
+	expect(getConfig().subagentsEnabled).toBe(false);
+});
+
+test("a fixed file clears the failure on the next check and publishes the stored values once", () => {
+	const path = join(dataDir, "config.json");
+	mkdirSync(path);
+	resetConfigCache();
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(configReadFailed()).toBe(true);
+	expect(published).toEqual([]);
+
+	rmSync(path, { recursive: true });
+	writeFileSync(path, JSON.stringify({ subagentsEnabled: false }));
+	expect(configReadFailed()).toBe(false);
+	expect(getConfig().subagentsEnabled).toBe(false);
+	expect(published.map((config) => config.subagentsEnabled)).toEqual([false]);
+
+	expect(configReadFailed()).toBe(false);
+	expect(published).toHaveLength(1);
+});
+
+test("a save over text that is not JSON clears the failure, with no second publish", () => {
+	writeFileSync(join(dataDir, "config.json"), "{ nope");
+	resetConfigCache();
+	expect(configReadFailed()).toBe(true);
+
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	updateConfig({ subagentsEnabled: false });
+	expect(configReadFailed()).toBe(false);
+	expect(published).toHaveLength(1);
 });
 
 test("defaultModel/defaultEffort persist through the top-level partial merge", () => {
@@ -794,23 +722,6 @@ test("a null reviewModel/reviewEffort clears the override back to unset, and it 
 	expect(getConfig().reviewEffort).toBeUndefined();
 });
 
-test("a malformed defaultModel or reviewModel rejects the whole update before persistence or broadcast", () => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const model of ["p/m", { provider: "p" }, { provider: "p", id: "m" }, [], 1]) {
-		expect(() => updateConfig({ defaultModel: model } as unknown as AppConfigUpdate)).toThrow(
-			"defaultModel must be a model or null",
-		);
-		expect(() => updateConfig({ reviewModel: model } as unknown as AppConfigUpdate)).toThrow(
-			"reviewModel must be a model or null",
-		);
-	}
-	expect(getConfig()).toEqual(before);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
-});
-
 test("loadConfig ignores the old layout settings object", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
@@ -862,7 +773,10 @@ test("custom preset updates validate the complete catalog and permit empty struc
 		}),
 	).toThrow("cannot be visible while empty");
 	expect(() => validateCustomLayoutPresets([preset("same"), preset("same")])).toThrow(
-		"ids must be unique",
+		expect.objectContaining({
+			code: "INVALID_PARAMS",
+			message: "Custom layout preset ids must be unique",
+		}),
 	);
 });
 
@@ -895,13 +809,54 @@ test("stored custom presets keep only complete current-schema entries", () => {
 	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
 });
 
-const wireModel = (id: string, provider = "p") => ({
-	id,
-	name: id.toUpperCase(),
-	provider,
-	contextWindow: 1,
-	reasoning: false,
-	thinkingLevels: [],
+test("a stored preset that breaks a catalog rule drops with a copy of the file", () => {
+	const tooWide = { ...preset("wide"), right: { visible: false, width: 0.9, groups: [] } };
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ customLayoutPresets: [preset("a"), preset("a"), tooWide] }),
+	);
+	resetConfigCache();
+	const reports: string[] = [];
+	observeStateFileProblems((problem) => reports.push(problem.message));
+	try {
+		expect(getConfig().customLayoutPresets).toEqual([preset("a")]);
+	} finally {
+		observeStateFileProblems(null);
+	}
+	expect(readdirSync(dataDir).filter((name) => name.includes(".corrupt-"))).toHaveLength(1);
+	expect(reports).toHaveLength(1);
+	expect(reports[0]).toContain(
+		"1 repeats a preset id, 2 breaks a preset rule: Preset side widths leave no center region",
+	);
+});
+
+test("a stored preset from before Changes joined Files keeps its layout", () => {
+	const withTools = (name: string, left: string[], right: string[]) => {
+		const base = preset(name);
+		const group = (id: string, tools: string[]) => ({ id, weight: 1, folded: false, tools });
+		return {
+			...base,
+			left: { visible: true, width: 0.2, groups: [group(`${name}-l`, left)] },
+			right: { visible: true, width: 0.2, groups: [group(`${name}-r`, right)] },
+		};
+	};
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			customLayoutPresets: [
+				withTools("alone", ["projects", "changes"], ["review"]),
+				withTools("both", ["changes"], ["files", "review"]),
+			],
+		}),
+	);
+	resetConfigCache();
+	const [alone, both] = getConfig().customLayoutPresets;
+	expect(alone?.left.groups[0]?.tools).toEqual(["projects", "files"]);
+	expect(both?.left.groups[0]?.tools).toEqual([]);
+	expect(both?.right.groups[0]?.tools).toEqual(["files", "review"]);
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk.customLayoutPresets).toHaveLength(2);
 });
 
 test("favoriteModels persist as a whole list, deduped by provider/id", () => {
@@ -916,16 +871,8 @@ test("favoriteModels persist as a whole list, deduped by provider/id", () => {
 	expect(published).toHaveLength(1);
 });
 
-test("a malformed favoriteModels list rejects the whole update before persisting", () => {
-	expect(() => updateConfig({ favoriteModels: [{ id: "x" }] as never })).toThrow(
-		"favoriteModels must be a list of models",
-	);
-	expect(() => updateConfig({ favoriteModels: "nope" as never })).toThrow();
-	expect(getConfig().favoriteModels).toEqual([]);
-});
-
 test("recentModels is host-owned: client writes are ignored, noteRecentModel caps and dedupes", () => {
-	updateConfig({ recentModels: [wireModel("client")] } as AppConfigUpdate);
+	updateConfig(wireUpdate({ recentModels: [wireModel("client")] }));
 	expect(getConfig().recentModels).toEqual([]);
 	for (const id of ["a", "b", "c", "d", "e", "f"]) noteRecentModel(wireModel(id));
 	expect(getConfig().recentModels.map((m) => m.id)).toEqual(["f", "e", "d", "c", "b"]);
@@ -961,18 +908,11 @@ test("stored favorites and recents survive reload while malformed ones fall back
 	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["ok"]);
 });
 
-test("the settle idle window defaults to 7 days, accepts null for never, and rejects fractions", () => {
+test("the settle idle window defaults to 7 days and accepts null for never", () => {
 	expect(DEFAULT_CONFIG.settleIdleDays).toBe(7);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ settleIdleDays: "soon" }));
 	resetConfigCache();
 	expect(getConfig().settleIdleDays).toBe(7);
-
-	const before = getConfig();
-	expect(() => updateConfig({ settleIdleDays: 0 })).toThrow(
-		"settleIdleDays must be a whole number of days from 1 to 365, or null",
-	);
-	expect(() => updateConfig({ settleIdleDays: 2.5 })).toThrow("settleIdleDays must be");
-	expect(getConfig()).toEqual(before);
 
 	expect(updateConfig({ settleIdleDays: 14 }).settleIdleDays).toBe(14);
 	expect(updateConfig({ settleIdleDays: null }).settleIdleDays).toBeNull();
@@ -987,8 +927,11 @@ test("locale defaults to system, keeps an unavailable tag, and rejects non-canon
 	expect(getConfig().locale).toBe("system");
 
 	const before = getConfig();
-	expect(() => updateConfig({ locale: "pt-br" })).toThrow("locale must be");
-	expect(() => updateConfig({ locale: "not a tag" })).toThrow("locale must be");
+	for (const locale of ["pt-br", "not a tag"]) {
+		expect(() => updateConfig({ locale })).toThrow(
+			expect.objectContaining({ code: "INVALID_PARAMS" }),
+		);
+	}
 	expect(getConfig()).toEqual(before);
 
 	expect(updateConfig({ locale: "pt-BR" }).locale).toBe("pt-BR");
@@ -1043,23 +986,103 @@ test("font settings default to the bundled faces, round-trip, and normalize a ma
 	});
 });
 
-test("invalid font updates are rejected before persistence or broadcast", () => {
+function makeConfigUnreadable() {
+	mkdirSync(join(dataDir, "config.json"));
+}
+
+function restoreConfig(config: Partial<AppConfig>) {
+	rmSync(join(dataDir, "config.json"), { recursive: true });
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(config));
+}
+
+function storedConfig() {
+	return JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+}
+
+test("a config unreadable at load refuses saves, then saves onto the stored values once it reads again", () => {
+	makeConfigUnreadable();
+	expect(getConfig()).toEqual(DEFAULT_CONFIG);
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+
+	restoreConfig({ locale: "de" });
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ locale: "de", codeFontSize: 15 });
+	expect(getConfig().locale).toBe("de");
+});
+
+test("another read of a recovered config cannot make a save write the defaults from the failed load", () => {
+	makeConfigUnreadable();
+	getConfig();
+	restoreConfig({ locale: "de", defaultModel: wireModel("m", "p") });
+	expect(loadConfig().locale).toBe("de");
+
+	updateConfig({ codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({
+		locale: "de",
+		defaultModel: wireModel("m", "p"),
+		codeFontSize: 15,
+	});
+});
+
+test("one failed read beside a good cache does not refuse the next save", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ locale: "de" }));
+	expect(getConfig().locale).toBe("de");
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+	restoreConfig({ locale: "de" });
+
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ locale: "de", codeFontSize: 15 });
+});
+
+test("a refused save keeps a good cache while the file stays unreadable", () => {
+	const stored = { locale: "de", analyticsEnabled: true, disabledExtensions: ["x"] };
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify(stored));
+	expect(getConfig()).toMatchObject(stored);
+	rmSync(join(dataDir, "config.json"));
+	makeConfigUnreadable();
+	loadConfig();
+
+	expect(() => updateConfig({ codeFontSize: 15 })).toThrow("was not replaced");
+	expect(getConfig()).toMatchObject(stored);
+	noteRecentModel(wireModel("m", "p"));
+	expect(getConfig()).toMatchObject({ ...stored, recentModels: [] });
+
+	restoreConfig(stored);
+	expect(updateConfig({ codeFontSize: 15 })).toMatchObject({ ...stored, codeFontSize: 15 });
+	expect(storedConfig()).toMatchObject({ ...stored, codeFontSize: 15 });
+});
+
+test("noteRecentModel does not throw when the save fails, and keeps the last good list", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
-	const before = getConfig();
-	for (const [update, message] of [
-		[
-			{ codeFont: { family: { name: 'Fira"; x' }, fallbacks: [] } },
-			"codeFont must be a font family",
-		],
-		[{ interfaceFont: { family: null } }, "interfaceFont must be a font family"],
-		[{ codeFontSize: 9 }, "codeFontSize must be a whole number from 10 to 24"],
-		[{ fontWeightOffset: 25 }, "fontWeightOffset must be a multiple of 10 from -70 to 130"],
-		[{ codeLigatures: "on" }, "codeLigatures must be a boolean"],
-	] as const) {
-		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow(message);
-	}
-	expect(getConfig()).toEqual(before);
+	makeConfigUnreadable();
+	getConfig();
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(getConfig().recentModels).toEqual([]);
 	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	restoreConfig({ locale: "de" });
+	noteRecentModel(wireModel("m", "p"));
+	expect(storedConfig()).toMatchObject({ locale: "de", recentModels: [wireModel("m", "p")] });
+});
+
+test("noteRecentModel does not throw when the first load cannot save its repair", () => {
+	const path = join(dataDir, "config.json");
+	writeFileSync(path, JSON.stringify({ customLayoutPresets: [{ id: "broken" }] }));
+	chmodSync(path, 0o444);
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toBeUndefined();
+});
+
+test("noteRecentModel does not throw when publishing fails, and keeps the saved list", () => {
+	setSettingsPublisher(() => {
+		throw new Error("publish failed");
+	});
+
+	expect(() => noteRecentModel(wireModel("m", "p"))).not.toThrow();
+	expect(storedConfig().recentModels).toEqual([wireModel("m", "p")]);
+	expect(getConfig().recentModels).toEqual([wireModel("m", "p")]);
 });

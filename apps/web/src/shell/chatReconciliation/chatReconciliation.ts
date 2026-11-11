@@ -1,3 +1,5 @@
+import type { SessionId, SessionSummary, StoredSessionId, WorkspaceId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
 import { messagesToRuntime } from "../../chat/hydrate";
@@ -9,6 +11,7 @@ import {
 	type EditorTab,
 	isConnectedGeneration,
 	layoutOpenOptionsForNavigation,
+	type OpenedSessionSummary,
 	selectAttentionCenterTab,
 	selectComposerFocusRequestStale,
 	selectCurrentRouteChatTarget,
@@ -17,12 +20,18 @@ import {
 	toast,
 	useAppStore,
 } from "../../store";
-import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../../transport";
+import {
+	errorText,
+	getSessionMessagesWithSkillBaseline,
+	getTransport,
+	reportHandledFailure,
+} from "../../transport";
 import {
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
+	type LayoutTab,
 	removeSessionLayoutTabs,
 	selectTab,
 	type WorkspaceLayoutDocument,
@@ -32,10 +41,20 @@ import { commitWorkspaceLayout } from "../layoutState";
 const sessionHydration = new Map<string, Promise<boolean>>();
 const AUTO_OPEN_CHAT_LIMIT = 4;
 
-let autoOpenAttemptGeneration = 0;
-const autoOpenAttemptedWorkspaceIds = new Set<string>();
+function placedSessionId(tab: LayoutTab): SessionId | null {
+	if (tab.kind === "chat") return tab.sessionId;
+	return tab.kind === "document" && tab.documentKind === "todo-plan" ? tab.sourceId : null;
+}
 
-function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number): boolean {
+function openable(summary: SessionSummary | undefined): OpenedSessionSummary | null {
+	const sessionId = summary ? parseSessionId(summary.sessionId) : null;
+	return summary && sessionId ? { ...summary, sessionId } : null;
+}
+
+let autoOpenAttemptGeneration = 0;
+const autoOpenAttemptedWorkspaceIds = new Set<WorkspaceId>();
+
+function claimAutoOpenAttempt(workspaceId: WorkspaceId, connectionGeneration: number): boolean {
 	if (connectionGeneration !== autoOpenAttemptGeneration) {
 		autoOpenAttemptGeneration = connectionGeneration;
 		autoOpenAttemptedWorkspaceIds.clear();
@@ -45,7 +64,10 @@ function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number)
 	return true;
 }
 
-export function hydrateChatResource(workspaceId: string, sessionId: string): Promise<boolean> {
+export function hydrateChatResource(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+): Promise<boolean> {
 	const state = useAppStore.getState();
 	if (
 		state.removedWorkspaceIds[workspaceId] ||
@@ -108,7 +130,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 }
 
 export function currentChatDestination(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>,
 	navigation: CenterNavigationStamp | null | undefined,
 ) {
@@ -127,7 +149,7 @@ export function currentChatDestination(
 	};
 }
 
-export function useDeletedChatPlacementReconciliation(workspaceId: string): void {
+export function useDeletedChatPlacementReconciliation(workspaceId: WorkspaceId): void {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
@@ -142,16 +164,11 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 		if (!document || !deletedSessions || tombstonePruneAttempts.current.has(document)) return;
 		if (useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] !== document) return;
 		const deletedPlacedSessions = [
-			...new Set(
+			...new Set<StoredSessionId>(
 				collectAllGroups(document)
 					.flatMap((group) => group.tabs)
 					.flatMap((tab) => {
-						const sessionId =
-							tab.kind === "chat"
-								? tab.sessionId
-								: tab.kind === "document" && tab.documentKind === "todo-plan"
-									? tab.sourceId
-									: null;
+						const sessionId = placedSessionId(tab);
 						return sessionId && Object.hasOwn(deletedSessions, sessionId) ? [sessionId] : [];
 					}),
 			),
@@ -176,7 +193,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 	}, [connectionGeneration, deletedSessions, document, workspaceId]);
 }
 
-export function useComposerFocusExpiry(workspaceId: string): void {
+export function useComposerFocusExpiry(workspaceId: WorkspaceId): void {
 	const stale = useAppStore((state) => selectComposerFocusRequestStale(state, workspaceId));
 	useEffect(() => {
 		if (stale) useAppStore.getState().clearComposerFocusRequest();
@@ -184,7 +201,7 @@ export function useComposerFocusExpiry(workspaceId: string): void {
 }
 
 export function useWorkspaceChatCatalogReconciliation(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commit: (document: WorkspaceLayoutDocument) => void,
 ): void {
 	const status = useAppStore((state) => state.status);
@@ -219,13 +236,10 @@ export function useWorkspaceChatCatalogReconciliation(
 		const baselinePlacedSessionIds = baselineDocument
 			? collectAllGroups(baselineDocument)
 					.flatMap((group) => group.tabs)
-					.flatMap((tab) =>
-						tab.kind === "chat"
-							? [tab.sessionId]
-							: tab.kind === "document" && tab.documentKind === "todo-plan"
-								? [tab.sourceId]
-								: [],
-					)
+					.flatMap((tab) => {
+						const sessionId = placedSessionId(tab);
+						return sessionId === null ? [] : [sessionId];
+					})
 			: [];
 		const baselineSessionIds = [
 			...new Set([
@@ -243,7 +257,7 @@ export function useWorkspaceChatCatalogReconciliation(
 				!state.removedWorkspaceIds[workspaceId]
 			);
 		};
-		const fetchMessages = (sessionId: string) =>
+		const fetchMessages = (sessionId: SessionId) =>
 			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId }).catch((error: unknown) => {
 				if (live()) toast.error(errorText(error), t("workbench.chat.loadFailed"));
 				return null;
@@ -272,7 +286,7 @@ export function useWorkspaceChatCatalogReconciliation(
 						commit(pruned);
 					}
 				}
-				const placed = new Set(
+				const placed = new Set<StoredSessionId>(
 					latestDocument
 						? collectAllGroups(latestDocument)
 								.flatMap((group) => group.tabs)
@@ -280,7 +294,7 @@ export function useWorkspaceChatCatalogReconciliation(
 								.map((tab) => tab.sessionId)
 						: [],
 				);
-				let handledRouteSessionId: string | null = null;
+				let handledRouteSessionId: SessionId | null = null;
 				const target = selectCurrentRouteChatTarget(useAppStore.getState());
 				if (target?.workspaceId === workspaceId) {
 					const targetSummary = summaries.find((summary) => summary.sessionId === target.sessionId);
@@ -332,18 +346,20 @@ export function useWorkspaceChatCatalogReconciliation(
 					}
 				}
 				const autoOpenAlreadyAttempted = !claimAutoOpenAttempt(workspaceId, connectionGeneration);
-				const toOpen: typeof summaries = [];
+				const toOpen: OpenedSessionSummary[] = [];
 				const toHistory: typeof summaries = [];
 				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
 					if (summary.sessionId === handledRouteSessionId || placed.has(summary.sessionId))
 						continue;
+					const opened = openable(summary);
 					if (
+						opened !== null &&
 						handledRouteSessionId === null &&
 						!autoOpenAlreadyAttempted &&
 						(summary.live || (summary.openTodos ?? 0) > 0) &&
 						toOpen.length < AUTO_OPEN_CHAT_LIMIT
 					) {
-						toOpen.push(summary);
+						toOpen.push(opened);
 					} else {
 						toHistory.push(summary);
 					}
@@ -354,7 +370,8 @@ export function useWorkspaceChatCatalogReconciliation(
 					placed.size === 0 &&
 					toOpen.length === 0
 				) {
-					const fallback = toHistory.shift();
+					const index = toHistory.findIndex((summary) => openable(summary) !== null);
+					const fallback = index < 0 ? null : openable(toHistory.splice(index, 1)[0]);
 					if (fallback) toOpen.push(fallback);
 				}
 				const navigation =
@@ -472,7 +489,9 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (state.sessions[currentPlacement.sessionId]) continue;
 				try {
 					await hydrateChatResource(workspaceId, currentPlacement.sessionId);
-				} catch {}
+				} catch (error) {
+					reportHandledFailure("chat-hydrate", error, "HOST_ERROR");
+				}
 			}
 		})();
 		return () => {
@@ -482,7 +501,7 @@ export function useWorkspaceChatCatalogReconciliation(
 }
 
 export function useChatLocationReconciliation(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	changeAttention: (next: LayoutAttention) => void,
 ): void {
 	const status = useAppStore((state) => state.status);

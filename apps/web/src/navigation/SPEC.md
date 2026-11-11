@@ -36,7 +36,7 @@ The versioned browser fragment represents exactly one of:
 - `#/v1/projects/<projectId>/workspaces/<workspaceId>` — workspace;
 - `#/v1/projects/<projectId>/workspaces/<workspaceId>/chats/<sessionId>` — exact chat.
 
-Each id is one encoded path segment. Empty ids, extra segments, malformed encoding, and unknown versions are invalid and canonicalize to main. The route is backend-relative: same-origin web gets backend identity from its origin; independently hosted/native clients pair it with a selected backend profile. No credential belongs in it.
+Each id is one encoded path segment and passes `parseProjectId`, `parseWorkspaceId` or `parseSessionId` once decoded. A refused id, extra segments, malformed encoding, and unknown versions are invalid and canonicalize to main. A well-formed id that names nothing is not invalid: restore handles it. The route is backend-relative: same-origin web gets backend identity from its origin; independently hosted/native clients pair it with a selected backend profile. No credential belongs in it.
 
 Store-driven navigation writes the fragment through the history contract below: user-intent location changes push a browser history entry, passive ones replace in place. Directly opened fragments and later incoming fragment changes still run through validation. The driver compares the derived location before writing, so non-navigation store churn — especially streaming Pi events — causes no History API calls.
 

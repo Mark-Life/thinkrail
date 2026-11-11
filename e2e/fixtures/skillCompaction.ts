@@ -1,46 +1,41 @@
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
+import {
+	type CompactionEntry,
+	type CustomMessageEntry,
+	type SessionEntry,
+	SessionManager,
+	type SessionMessageEntry,
+} from "@earendil-works/pi-coding-agent";
 import { expect, type Page } from "@playwright/test";
 import { defaultSessionDirFor } from "@thinkrail/server/history-test-fixtures";
 import { waitForAgentSettled } from "./app";
 import { E2E_PI_AGENT_DIR } from "./paths";
 
-export interface ToolCall {
-	name: string;
-	arguments: Record<string, unknown>;
+export type { SessionEntry };
+
+type MessageContent =
+	| CustomMessageEntry["content"]
+	| Extract<SessionMessageEntry["message"], { role: "assistant" }>["content"];
+
+export function toolCalls(entry: SessionEntry) {
+	if (entry.type !== "message" || entry.message.role !== "assistant") return [];
+	return entry.message.content.filter((block) => block.type === "toolCall");
 }
 
-export interface SessionEntry {
-	type: string;
-	id: string;
-	firstKeptEntryId?: string;
-	summary?: string;
-	customType?: string;
-	content?: unknown;
-	message?: { role: string; content?: unknown };
-}
-
-export function toolCalls(entry: SessionEntry): ToolCall[] {
-	if (entry.type !== "message" || entry.message?.role !== "assistant") return [];
-	const content = entry.message.content;
-	if (!Array.isArray(content)) return [];
-	return content.filter((part): part is ToolCall & { type: string } => part?.type === "toolCall");
-}
-
-function texts(content: unknown): string[] {
+function texts(content: MessageContent): string[] {
 	if (typeof content === "string") return [content];
-	if (!Array.isArray(content)) return [];
-	return content.map((part) => String(part?.text ?? ""));
+	return content.flatMap((block) => (block.type === "text" ? [block.text] : []));
 }
 
 export function assistantText(entry: SessionEntry): string {
-	if (entry.type !== "message" || entry.message?.role !== "assistant") return "";
+	if (entry.type !== "message" || entry.message.role !== "assistant") return "";
 	return texts(entry.message.content).join("");
 }
 
 export function isSkillLoad(entry: SessionEntry, skill: string): boolean {
 	const block = `<skill name="${skill}"`;
-	if (entry.type === "message" && entry.message?.role === "user")
+	if (entry.type === "message" && entry.message.role === "user")
 		return texts(entry.message.content).some((text) => text.startsWith(block));
 	if (entry.type === "custom_message") return texts(entry.content).some((t) => t.includes(block));
 	const path = new RegExp(`${skill}[/\\\\]SKILL\\.md$`);
@@ -53,7 +48,7 @@ export function readSession(worktreePath: string): SessionEntry[] {
 	const dirs = [worktreePath, realpathSync(worktreePath)].map((cwd) =>
 		defaultSessionDirFor(E2E_PI_AGENT_DIR, cwd),
 	);
-	const files = dirs
+	const [newest] = dirs
 		.filter((dir) => existsSync(dir))
 		.flatMap((dir) =>
 			readdirSync(dir)
@@ -61,25 +56,22 @@ export function readSession(worktreePath: string): SessionEntry[] {
 				.map((name) => join(dir, name)),
 		)
 		.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-	if (files.length === 0) throw new Error(`No pi session file under ${dirs.join(" or ")}`);
-	return readFileSync(files[0] as string, "utf8")
-		.split("\n")
-		.filter(Boolean)
-		.map((line) => JSON.parse(line) as SessionEntry);
+	if (newest === undefined) throw new Error(`No pi session file under ${dirs.join(" or ")}`);
+	return SessionManager.open(newest).getEntries();
 }
 
 export interface CompactionSplit {
 	before: SessionEntry[];
 	after: SessionEntry[];
-	compaction: SessionEntry;
+	compaction: CompactionEntry;
 	skillLoadsKept: number;
 	skillLoadsCompactedAway: number;
 }
 
 export function splitAtCompaction(entries: SessionEntry[], skill: string): CompactionSplit {
 	const index = entries.findLastIndex((e) => e.type === "compaction");
-	if (index < 0) throw new Error("The session recorded no compaction");
-	const compaction = entries[index] as SessionEntry;
+	const compaction = entries[index];
+	if (compaction?.type !== "compaction") throw new Error("The session recorded no compaction");
 	const kept = entries.findIndex((e) => e.id === compaction.firstKeptEntryId);
 	const loads = entries.flatMap((e, i) => (i < index && isSkillLoad(e, skill) ? [i] : []));
 	return {

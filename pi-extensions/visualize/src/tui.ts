@@ -51,13 +51,21 @@ function resultText(result: AgentToolResult<unknown>): string {
 	return result.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 }
 
-function diagramDetails(details: unknown): { title?: string; mermaid: string } | undefined {
-	if (typeof details !== "object" || details === null) return undefined;
-	const value = details as Partial<VisualizeParams>;
-	if (value.type !== "diagram" || typeof value.mermaid !== "string") return undefined;
-	return value.title === undefined
-		? { mermaid: value.mermaid }
-		: { title: value.title, mermaid: value.mermaid };
+function diagramDetails(
+	details: unknown,
+): (Pick<VisualizeParams, "title"> & Required<Pick<VisualizeParams, "mermaid">>) | undefined {
+	if (
+		typeof details !== "object" ||
+		details === null ||
+		!("type" in details) ||
+		details.type !== "diagram" ||
+		!("mermaid" in details) ||
+		typeof details.mermaid !== "string"
+	)
+		return undefined;
+	return "title" in details && typeof details.title === "string"
+		? { title: details.title, mermaid: details.mermaid }
+		: { mermaid: details.mermaid };
 }
 
 function markdown(text: string): Markdown {

@@ -21,7 +21,17 @@ test("getNativeWindowControlsBridge rejects anything that is not a full bridge s
 	expect(getNativeWindowControlsBridge([])).toBeNull();
 	expect(getNativeWindowControlsBridge({})).toBeNull();
 	expect(getNativeWindowControlsBridge({ minimize: true })).toBeNull();
-	expect(getNativeWindowControlsBridge(FAKE_BRIDGE)).toBe(FAKE_BRIDGE);
+	expect(getNativeWindowControlsBridge(FAKE_BRIDGE)).not.toBeNull();
+});
+
+test("the window state the bridge resolves is checked before the web reads it", async () => {
+	const bridge = getNativeWindowControlsBridge({
+		...FAKE_BRIDGE,
+		getState: () => Promise.resolve({ maximized: "yes" }),
+	});
+	await expect(bridge?.getState() ?? Promise.resolve()).rejects.toThrow(
+		"desktop bridge value refused: window state",
+	);
 });
 
 test("renders three window control buttons with labels and testids, wrapped in window-no-drag", () => {

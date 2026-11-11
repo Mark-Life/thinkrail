@@ -1,5 +1,6 @@
-import { LINK_KINDS, linkTargets, type SpecGraph } from "./graph.ts";
-import { FIELDS, type LinkKind, scalar } from "./parse.ts";
+import { linkTargets, type SpecGraph } from "./graph.ts";
+import { type LinkKind, scalar } from "./parse.ts";
+import { FIELDS, LINK_KINDS } from "./wire.ts";
 
 export interface DanglingLink {
 	from: string;

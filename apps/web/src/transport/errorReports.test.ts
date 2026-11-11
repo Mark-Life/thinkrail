@@ -6,31 +6,76 @@ import {
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,
+	reportDroppedFrame,
+	reportHandledFailure,
+	reportInvalidReply,
 	resetClientErrorReportsForTests,
 	supportsClientErrorReports,
 } from "./errorReports";
-import type { WsTransport } from "./transport";
+import { RequestError } from "./requestError";
+import { type FakeRequest, fakeTransport } from "./transportFixtures.test";
 import * as wireTransport from "./wireTransport";
 
-const requests: Array<{ method: string; params: unknown }> = [];
+const requests: FakeRequest[] = [];
 let spy: ReturnType<typeof spyOn> | null = null;
 
 beforeEach(() => {
 	requests.length = 0;
 	resetClientErrorReportsForTests();
 	useAppStore.setState({ protocolVersion: null });
-	spy = spyOn(wireTransport, "getTransport").mockReturnValue({
-		request: (method: string, params: unknown) => {
-			requests.push({ method, params });
-			return Promise.resolve({ ok: true });
-		},
-	} as unknown as WsTransport);
+	spy = spyOn(wireTransport, "getTransport").mockReturnValue(
+		fakeTransport(() => ({ ok: true }), requests),
+	);
 });
 
 afterEach(() => {
 	spy?.mockRestore();
 	resetClientErrorReportsForTests();
 	useAppStore.setState({ protocolVersion: null });
+});
+
+test("an invalid reply reports its method and code only, and a report's own reply never reports", () => {
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	reportInvalidReply("client.reportError");
+	expect(requests).toEqual([]);
+	reportInvalidReply("project.list");
+	expect(requests).toEqual([
+		{
+			method: "client.reportError",
+			params: {
+				kind: "rejection",
+				type: "RequestError",
+				boundary: "INVALID_REPLY:project.list",
+			},
+		},
+	]);
+});
+
+test("a dropped frame reports its code and channel only", () => {
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	reportDroppedFrame({ code: "INVALID_PUSH", channel: "pi.event" });
+	reportDroppedFrame({ code: "UNKNOWN_PUSH" });
+	expect(requests.map((request) => request.params)).toEqual([
+		{ kind: "window", type: "WireError", boundary: "INVALID_PUSH:pi.event" },
+		{ kind: "window", type: "WireError", boundary: "UNKNOWN_PUSH" },
+	]);
+});
+
+test("a handled failure reports its own code or the fallback, once per place, never its message", () => {
+	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
+	reportHandledFailure(
+		"chat-hydrate",
+		new RequestError("SESSION_UNKNOWN", "secret text"),
+		"HOST_ERROR",
+	);
+	reportHandledFailure("chat-hydrate", new RequestError("SESSION_UNKNOWN", "again"), "HOST_ERROR");
+	reportHandledFailure("prefs-write", new Error("quota"), "STATE_FILE_WRITE_FAILED");
+	const reports = requests.map((request) => request.params);
+	expect(reports).toMatchObject([
+		{ kind: "rejection", type: "RequestError", boundary: "SESSION_UNKNOWN:chat-hydrate" },
+		{ kind: "rejection", type: "Error", boundary: "STATE_FILE_WRITE_FAILED:prefs-write" },
+	]);
+	expect(JSON.stringify(reports)).not.toContain("secret text");
 });
 
 test("reports are offered only to a host at or beyond the v90 capability", () => {
@@ -44,7 +89,7 @@ test("a report carries the error's class, stack and boundary, never its message"
 	expect(clientErrorReport("render", error, "chat")).toEqual({
 		kind: "render",
 		type: "TypeError",
-		stack: (error.stack as string).replace("bad", ""),
+		stack: (error.stack ?? "").replace("bad", ""),
 		boundary: "chat",
 	});
 	expect(clientErrorReport("rejection", { secret: true })).toEqual({
@@ -73,6 +118,11 @@ test("the message is cut out of the stack, even when its lines look like frames"
 	);
 });
 
+test("an error with a non-string name still reports a string type", () => {
+	const error = Object.assign(new Error("odd"), { name: 42 });
+	expect(clientErrorReport("window", error).type).toBe("Error");
+});
+
 test("reports before the welcome wait for the protocol and are dropped by older hosts", () => {
 	reportClientError(clientErrorReport("window", new Error("early")));
 	expect(requests).toEqual([]);
@@ -93,7 +143,7 @@ test("a page sends at most 50 reports", () => {
 
 test("window errors and unhandled rejections are forwarded until uninstalled", () => {
 	useAppStore.setState({ protocolVersion: CLIENT_ERROR_REPORT_PROTOCOL_VERSION });
-	const target = new EventTarget() as unknown as Window;
+	const target = new EventTarget();
 	const uninstall = installClientErrorReporting(target);
 	const error = Object.assign(new Event("error"), {
 		error: new RangeError("boom"),

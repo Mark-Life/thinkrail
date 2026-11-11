@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SessionId } from "@thinkrail/contracts";
 import {
 	type BackgroundCommandSummary,
 	type ResourceRecord,
@@ -17,21 +18,22 @@ import {
 	type SubagentResourceSummary,
 	tallyResources,
 } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	archivedCommandOutput,
 	finishedResources,
 	pageResources,
 	recordResource,
 	removeWorkspaceResourceHistory,
+	resetResourceHistoryForTests,
 	resourceHistoryRoot,
 } from "./resourceHistory";
 
 type Archive = typeof import("./resourceHistory");
 
 let dataDir: string;
-let restarts = 0;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const scope = { workspaceId: "w1", sessionId: "chat-1" };
+const scope = { workspaceId: testWorkspaceId("w1"), sessionId: testSessionId("chat-1") };
 const none = new Set<string>();
 
 beforeEach(() => {
@@ -46,7 +48,8 @@ afterEach(() => {
 });
 
 async function restartedArchive(): Promise<Archive> {
-	return (await import(`${"./resourceHistory.ts"}?restart=${++restarts}`)) as Archive;
+	resetResourceHistoryForTests();
+	return import("./resourceHistory");
 }
 
 function command(
@@ -82,7 +85,7 @@ function inFlight(id: string, patch: Partial<BackgroundCommandSummary> = {}) {
 }
 
 function subagent(
-	childSessionId: string,
+	childSessionId: SessionId,
 	patch: Partial<SubagentResourceSummary> = {},
 ): Extract<ResourceRecord, { kind: "subagent" }> {
 	return {
@@ -111,12 +114,14 @@ test("records upsert by id and survive a host restart", async () => {
 	recordResource(scope, inFlight("c1"));
 	recordResource(scope, command("c1"));
 	recordResource(scope, command("c1"));
-	recordResource(scope, subagent("child-1"));
+	recordResource(scope, subagent(testSessionId("child-1")));
 	expect(indexLines()).toHaveLength(3);
 
 	const restarted = await restartedArchive();
 	expect(restarted.finishedResources(scope, "command", none)).toEqual([command("c1")]);
-	expect(restarted.finishedResources(scope, "subagent", none)).toEqual([subagent("child-1")]);
+	expect(restarted.finishedResources(scope, "subagent", none)).toEqual([
+		subagent(testSessionId("child-1")),
+	]);
 });
 
 test("a run still in flight that no live owner reports reads as interrupted with a terminal status; a live one is left to its owner", async () => {
@@ -126,7 +131,7 @@ test("a run still in flight that no live owner reports reads as interrupted with
 		finishedAt: _finishedAt,
 		durationMs: _durationMs,
 		...child
-	} = subagent("child-1", {
+	} = subagent(testSessionId("child-1"), {
 		status: "running",
 	}).summary;
 	recordResource(scope, { kind: "subagent", summary: child });
@@ -223,23 +228,51 @@ test("pages walk newest first from a cursor and tallies count every outcome", ()
 	expect(tallyResources(finished)).toEqual({ done: 5, failed: 1, stopped: 1, interrupted: 1 });
 });
 
-test("unsafe ids never touch the filesystem", () => {
-	recordResource({ workspaceId: "..", sessionId: "chat-1" }, command("c1"));
-	recordResource({ workspaceId: "w1", sessionId: "../escape" }, command("c1"));
+test("an unsafe record id never touches the filesystem", () => {
 	recordResource(scope, command("../../escape"));
 	expect(existsSync(resourceHistoryRoot())).toBe(false);
-	expect(finishedResources({ workspaceId: "w1", sessionId: "a/b" }, "command", none)).toEqual([]);
+	expect(archivedCommandOutput(scope, "../../escape")).toBeUndefined();
 });
 
 test("removing a workspace drops its history on disk and in memory", () => {
 	recordResource(scope, command("c1"), { text: "log", truncated: false });
-	recordResource({ workspaceId: "w2", sessionId: "chat-2" }, command("c2"));
-	removeWorkspaceResourceHistory("w1");
+	recordResource(
+		{ workspaceId: testWorkspaceId("w2"), sessionId: testSessionId("chat-2") },
+		command("c2"),
+	);
+	removeWorkspaceResourceHistory(testWorkspaceId("w1"));
 
 	expect(existsSync(join(resourceHistoryRoot(), "w1"))).toBe(false);
 	expect(finishedResources(scope, "command", none)).toEqual([]);
 	expect(archivedCommandOutput(scope, "c1")).toBeUndefined();
 	expect(
-		finishedResources({ workspaceId: "w2", sessionId: "chat-2" }, "command", none),
+		finishedResources(
+			{ workspaceId: testWorkspaceId("w2"), sessionId: testSessionId("chat-2") },
+			"command",
+			none,
+		),
 	).toHaveLength(1);
+});
+
+test("a line with one wrong field is skipped, the rest load, and the file keeps its bytes", async () => {
+	const dir = join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId);
+	mkdirSync(dir, { recursive: true });
+	const good = JSON.stringify(command("good"));
+	const bad = JSON.stringify({
+		kind: "command",
+		summary: { ...command("bad").summary, finishedAt: "soon" },
+	});
+	const raw = `${good}\n${bad}\n`;
+	writeFileSync(join(dir, "index.jsonl"), raw);
+	const archive = await restartedArchive();
+	expect(archive.finishedResources(scope, "command", none).map(resourceRecordId)).toEqual(["good"]);
+	archive.recordResource(scope, command("next"));
+	expect(readFileSync(join(dir, "index.jsonl"), "utf8").startsWith(raw)).toBe(true);
+});
+
+test("an archived log of the wrong shape reads as no output", () => {
+	const dir = join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId, "logs");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "c1.json"), JSON.stringify({ text: 1, truncated: false }));
+	expect(archivedCommandOutput(scope, "c1")).toBeUndefined();
 });

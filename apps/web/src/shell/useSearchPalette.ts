@@ -1,3 +1,4 @@
+import type { ProjectId, WorkspaceId } from "@thinkrail/contracts";
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -93,7 +94,7 @@ const hostHitTargets: HostHitTargets = {
 };
 
 export interface SearchPaletteOptions {
-	readonly openNewWorkspace: (projectId: string, initialPrompt?: string) => boolean;
+	readonly openNewWorkspace: (projectId: ProjectId, initialPrompt?: string) => boolean;
 	readonly toggleProjectsHome: () => void;
 	readonly pickAndOpenProject: () => Promise<void>;
 	readonly enterHostPath: () => void;
@@ -142,7 +143,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const host = useMemo<PaletteHost | undefined>(() => {
 		if (!hostSearch) return undefined;
 		const names = new Map(projects.map((project) => [project.id, project.name]));
-		const workspaceNames = new Map<string, string>();
+		const workspaceNames = new Map<WorkspaceId, string>();
 		for (const list of Object.values(workspaces)) {
 			for (const workspace of list) workspaceNames.set(workspace.id, workspaceName(t, workspace));
 		}

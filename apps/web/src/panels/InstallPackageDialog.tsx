@@ -1,4 +1,5 @@
 import { RiInformationLine } from "@remixicon/react";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import {
 	type PiPackageScope,
 	type PiPackageSummary,
@@ -119,7 +120,7 @@ export interface InstallPackageBodyProps {
 	source: string;
 	scope: PiPackageScope;
 	catalog: PiPackagesCatalog | null;
-	workspaceId: string | null;
+	workspaceId: WorkspaceId | null;
 	onSourceChange: (source: string) => void;
 	onScopeChange: (scope: PiPackageScope) => void;
 	onSubmit: () => void;
@@ -358,7 +359,7 @@ export interface InstallPackageDialogProps {
 	onOpenChange: (open: boolean) => void;
 	catalog: PiPackagesCatalog | null;
 	/** `null` when no workspace is active: the repository scope is then unavailable. */
-	workspaceId: string | null;
+	workspaceId: WorkspaceId | null;
 	install: (request: { source: string; scope: PiPackageScope }) => Promise<PiPackageSummary>;
 }
 

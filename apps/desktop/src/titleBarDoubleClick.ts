@@ -57,7 +57,13 @@ export function installTitleBarDoubleClick(
 	readComputedStyle?: ComputedStyleReader,
 ): void {
 	target.addEventListener("dblclick", (event) => {
-		if (isTitleBarDoubleClick(event as MouseEvent, readComputedStyle)) send();
+		if (!("button" in event) || typeof event.button !== "number") return;
+		const click = {
+			button: event.button,
+			defaultPrevented: event.defaultPrevented,
+			target: event.target,
+		};
+		if (isTitleBarDoubleClick(click, readComputedStyle)) send();
 	});
 }
 

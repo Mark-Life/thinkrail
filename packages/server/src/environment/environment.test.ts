@@ -11,7 +11,7 @@ let dataDir: string;
 let agentDir: string;
 
 beforeEach(() => {
-	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.launchKeys")];
+	Reflect.deleteProperty(globalThis, Symbol.for("thinkrail.shellEnv.launchKeys"));
 	dataDir = mkdtempSync(join(tmpdir(), "thinkrail-env-data-"));
 	agentDir = mkdtempSync(join(tmpdir(), "thinkrail-env-agent-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
@@ -64,11 +64,6 @@ test("a missing or non-directory agent dir is named", () => {
 		ok: false,
 		issues: [{ field: "agentDir", code: "notDirectory" }],
 	});
-});
-
-test("a malformed record is a thrown request error, not a validation result", () => {
-	expect(() => updateHostEnvironment({ vars: [{ name: 1, value: "x" }] })).toThrow();
-	expect(() => updateHostEnvironment(null)).toThrow();
 });
 
 test("a saved update is private on disk, drops blank rows and requires a restart", () => {

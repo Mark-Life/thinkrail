@@ -92,8 +92,7 @@ bootstrap it into one so it can be opened.
   changed; `revokeProjectMcpTool` drops one and removes the server, then the field, once empty. Both store
   server names as own properties, so a server named `__proto__` is just a name. `setProjectMcpOverride` synchronously merges only supplied fields into the
   latest stored override, so overlapping enablement and exposure patches do not lose each other. An empty
-  patch is a no-op; `null` clears the override. It rejects non-boolean enablement and exposure outside
-  `deferred`, `direct`, `hidden` before persistence. `setProjectTrust(id, trusted, acknowledged?,
+  patch is a no-op; `null` clears the override. `setProjectTrust(id, trusted, acknowledged?,
   { resources? })` keeps the two grants separate because they consent to different things: pi-level
   resources include code (extensions, settings packages), so only a surface that names them asks for them.
   `trusted: true` sets the alias grant and sets `piResourceTrust: "granted"` only with `resources: true`,
@@ -128,7 +127,7 @@ and truncating first can separate a secret suffix from the URL prefix needed to 
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,
   `setPiTrustSeed`.
-- **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
+- **Allowed deps:** `persistence`; `@thinkrail/shared/errnoCode`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
   `shared/codedError` (the two named open failures); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the

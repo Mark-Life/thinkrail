@@ -1,15 +1,18 @@
-import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
 	Project,
+	ProjectId,
+	SessionId,
 	Workspace,
 	WorkspaceCreation,
+	WorkspaceId,
 	WorkspaceKickoff,
 	WsErrorCode,
 } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
+import { newWorkspaceId } from "@thinkrail/shared/newIds";
 import {
 	git,
 	gitAsync,
@@ -51,7 +54,7 @@ const PROGRESS_LINE = /(?:Updating files|Filtering content):\s+(\d+)%\s+\((\d+)\
 export type CreationHandoff = (
 	workspace: Workspace,
 	kickoff: WorkspaceKickoff | undefined,
-) => Promise<{ sessionId?: string; kickoffError?: string }>;
+) => Promise<{ sessionId?: SessionId; kickoffError?: string }>;
 
 let handoff: CreationHandoff | null = null;
 let stallMs = CHECKOUT_STALL_MS;
@@ -64,8 +67,8 @@ export function setCheckoutStallForTests(ms: number | undefined): void {
 	stallMs = ms ?? CHECKOUT_STALL_MS;
 }
 
-const running = new Map<string, { abort: AbortController; done: Promise<Workspace> }>();
-const discarding = new Set<string>();
+const running = new Map<WorkspaceId, { abort: AbortController; done: Promise<Workspace> }>();
+const discarding = new Set<WorkspaceId>();
 
 class CreationAborted extends Error {}
 
@@ -98,7 +101,7 @@ export function checkoutFailureText(stderr: string): string {
 	return lines.slice(-6).join("\n");
 }
 
-function progressFeed(id: string) {
+function progressFeed(id: WorkspaceId) {
 	let pending = "";
 	let last: { done: number; total: number } | undefined;
 	let lastPercent = -1;
@@ -242,7 +245,7 @@ function branchStillExists(projectPath: string, ref: string): boolean {
 	return git(projectPath, ["show-ref", "--verify", "--quiet", ref], { onTimeout: "return" }).ok;
 }
 
-async function prepare(id: string, project: Project, signal: AbortSignal): Promise<void> {
+async function prepare(id: WorkspaceId, project: Project, signal: AbortSignal): Promise<void> {
 	let record = findCreation(id);
 	if (!record) throw new CreationAborted();
 	assertManagedPathFree(record.worktreePath);
@@ -332,7 +335,7 @@ function checkoutConfig(projectPath: string): string[] {
 	return config;
 }
 
-async function checkOut(id: string, projectPath: string, signal: AbortSignal): Promise<void> {
+async function checkOut(id: WorkspaceId, projectPath: string, signal: AbortSignal): Promise<void> {
 	const record = findCreation(id);
 	if (!record?.baseOid) throw new CreationAborted();
 	assertManagedPathFree(record.worktreePath);
@@ -387,7 +390,7 @@ async function checkOut(id: string, projectPath: string, signal: AbortSignal): P
 		);
 }
 
-async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
+async function execute(id: WorkspaceId, signal: AbortSignal): Promise<Workspace> {
 	const initial = findCreation(id);
 	if (!initial) throw new Error(`Unknown workspace creation: ${id}`);
 	let project: Project | undefined;
@@ -447,7 +450,7 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 }
 
 async function handOff(workspace: Workspace, kickoff: WorkspaceKickoff | undefined) {
-	let outcome: { sessionId?: string; kickoffError?: string } = {};
+	let outcome: { sessionId?: SessionId; kickoffError?: string } = {};
 	if (handoff) {
 		try {
 			outcome = await handoff(workspace, kickoff);
@@ -464,7 +467,7 @@ async function handOff(workspace: Workspace, kickoff: WorkspaceKickoff | undefin
 	return latest;
 }
 
-function run(id: string): void {
+function run(id: WorkspaceId): void {
 	const abort = new AbortController();
 	const done = execute(id, abort.signal).finally(() => running.delete(id));
 	done.catch(() => {});
@@ -472,12 +475,12 @@ function run(id: string): void {
 }
 
 export function startWorkspaceCreation(
-	projectId: string,
+	projectId: ProjectId,
 	opts: { name?: string; baseRef?: string; kickoff?: WorkspaceKickoff } = {},
 ): WorkspaceCreation {
 	const plan = planManagedWorkspace(projectId, opts.name, opts.baseRef);
 	const record: WorkspaceCreationRecord = {
-		id: randomUUID(),
+		id: newWorkspaceId(),
 		projectId,
 		name: plan.name,
 		branch: plan.branch,
@@ -494,14 +497,14 @@ export function startWorkspaceCreation(
 	return creationView(record);
 }
 
-export function awaitWorkspaceCreation(id: string): Promise<Workspace> {
+export function awaitWorkspaceCreation(id: WorkspaceId): Promise<Workspace> {
 	const job = running.get(id);
 	if (!job) throw new Error(`Workspace creation ${id} is not running`);
 	return job.done;
 }
 
 export async function createWorkspace(
-	projectId: string,
+	projectId: ProjectId,
 	name?: string,
 	baseRef?: string,
 ): Promise<Workspace> {
@@ -522,7 +525,7 @@ export function listWorkspaceCreations(): WorkspaceCreation[] {
 	return creationRecords().map(creationView);
 }
 
-export function retryWorkspaceCreation(id: string): WorkspaceCreation {
+export function retryWorkspaceCreation(id: WorkspaceId): WorkspaceCreation {
 	const record = findCreation(id);
 	if (!record) throw new Error(`Unknown workspace creation: ${id}`);
 	if (record.state === "running") return creationView(record);
@@ -540,7 +543,7 @@ export function retryWorkspaceCreation(id: string): WorkspaceCreation {
 }
 
 export async function dismissWorkspaceCreation(
-	id: string,
+	id: WorkspaceId,
 ): Promise<{ kickoff?: WorkspaceKickoff }> {
 	const record = findCreation(id);
 	if (!record) return {};

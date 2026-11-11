@@ -28,12 +28,9 @@ let bundled: BundledFaces | null = null;
 export function bundledFaces(): BundledFaces {
 	if (bundled) return bundled;
 	const style = getComputedStyle(document.documentElement);
-	const faces = Object.fromEntries(
-		FONT_ROLES.map((role) => [
-			role,
-			familiesOf(style.getPropertyValue(`${FAMILY_TOKEN[role]}-default`))[0] ?? "",
-		]),
-	) as Record<FontRole, string>;
+	const face = (role: FontRole) =>
+		familiesOf(style.getPropertyValue(`${FAMILY_TOKEN[role]}-default`))[0] ?? "";
+	const faces: BundledFaces = { interface: face("interface"), code: face("code") };
 	if (FONT_ROLES.every((role) => faces[role])) bundled = faces;
 	return faces;
 }

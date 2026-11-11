@@ -1,14 +1,12 @@
 import type { JbcentralQuotaSnapshot } from "@thinkrail/contracts";
 
-export type TimerHandle = ReturnType<typeof setTimeout> | number;
-
 export interface JbcentralQuotaPollingOptions {
 	intervalMs: number;
 	request: (force: boolean) => Promise<JbcentralQuotaSnapshot>;
 	onSnapshot: (snapshot: JbcentralQuotaSnapshot) => void;
 	onError: () => void;
-	schedule?: (callback: () => void, delay: number) => TimerHandle;
-	cancel?: (handle: TimerHandle) => void;
+	/** Runs `callback` after `delay` ms and returns what cancels it. */
+	schedule?: (callback: () => void, delay: number) => () => void;
 }
 
 export interface JbcentralQuotaPolling {
@@ -26,18 +24,19 @@ export function startJbcentralQuotaPolling({
 	request,
 	onSnapshot,
 	onError,
-	schedule = (callback, delay) => setTimeout(callback, delay),
-	cancel = (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+	schedule = (callback, delay) => {
+		const handle = setTimeout(callback, delay);
+		return () => clearTimeout(handle);
+	},
 }: JbcentralQuotaPollingOptions): JbcentralQuotaPolling {
 	let stopped = false;
 	let running = false;
 	let queuedForce = false;
-	let timer: TimerHandle | null = null;
+	let cancelTimer: (() => void) | null = null;
 
 	const clearTimer = () => {
-		if (timer === null) return;
-		cancel(timer);
-		timer = null;
+		cancelTimer?.();
+		cancelTimer = null;
 	};
 
 	const run = async (force: boolean): Promise<void> => {
@@ -63,7 +62,7 @@ export function startJbcentralQuotaPolling({
 					queuedForce = false;
 					void run(true);
 				} else if (continuePolling) {
-					timer = schedule(() => void run(false), intervalMs);
+					cancelTimer = schedule(() => void run(false), intervalMs);
 				}
 			}
 		}

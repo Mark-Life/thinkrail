@@ -2,9 +2,15 @@ import "./env";
 import { cpSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { type SessionHeader, SessionManager } from "@earendil-works/pi-coding-agent";
+import { compile, obj, type Static, str } from "@earendil-works/pi-schema";
+import type { Same } from "@thinkrail/contracts";
 import { setSessionManagerFactory } from "@thinkrail/server/agent";
 import { E2E_DATA_DIR } from "../../fixtures/paths";
+
+const SessionHeaderCwd = obj({ cwd: str() }, { open: true });
+export type SessionHeaderCwdTie = Same<Static<typeof SessionHeaderCwd>, Pick<SessionHeader, "cwd">>;
+const sessionHeaderCwd = compile(SessionHeaderCwd);
 
 const FIXTURES_DIR = fileURLToPath(new URL("../fixtures", import.meta.url));
 
@@ -52,8 +58,8 @@ export function useTranscriptFixture(name: string, cwd: string): () => void {
 	}
 	cpSync(join(fixtureDir, "workspace"), cwd, { recursive: true, force: true });
 	unmaskFixtureMarkdown(cwd);
-	const header = JSON.parse(raw.slice(0, raw.indexOf("\n"))) as { cwd?: string };
-	const recordedCwd = header.cwd;
+	const header: unknown = JSON.parse(raw.slice(0, raw.indexOf("\n")));
+	const recordedCwd = sessionHeaderCwd.check(header) ? header.cwd : undefined;
 	const rewritten = recordedCwd ? raw.split(recordedCwd).join(cwd) : raw;
 	const tmp = join(E2E_DATA_DIR, `workflow-fixture-${++fixtureCounter}.jsonl`);
 	writeFileSync(tmp, rewritten);

@@ -1,7 +1,9 @@
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { arr, compile, obj, oneOf, opt, str, union, unknown } from "@earendil-works/pi-schema";
 import type { DetectedAccount, DetectedAccountSource } from "@thinkrail/contracts";
+import { JsonObject } from "@thinkrail/contracts";
 import { usePiRuntime } from "../agent";
 
 export interface DetectAccountsOptions {
@@ -25,7 +27,7 @@ const SOURCE_TIMEOUT_MS = 1500;
 
 const KNOWN_PLANS = new Set(["plus", "pro", "max", "team", "business", "enterprise", "edu"]);
 
-const CLAUDE_SUBSCRIPTION_BILLING = new Set([
+const CLAUDE_SUBSCRIPTION_BILLING = [
 	"stripe_subscription",
 	"stripe_subscription_contracted",
 	"stripe_subscription_enterprise_self_serve",
@@ -33,16 +35,38 @@ const CLAUDE_SUBSCRIPTION_BILLING = new Set([
 	"c4e_consumption_trial",
 	"apple_subscription",
 	"google_play_subscription",
-]);
+] as const;
 
 const GROK_API_KEY_SCOPE = "xai::api_key";
 
+const Filled = str({ pattern: "\\S" });
+const FilledText = compile(Filled);
+const ClaudeOauth = compile(
+	obj(
+		{ refreshToken: Filled, scopes: arr(unknown()), subscriptionType: opt(unknown()) },
+		{ open: true },
+	),
+);
+const ClaudeSubscriber = compile(
+	obj({ accountUuid: Filled, billingType: oneOf(CLAUDE_SUBSCRIPTION_BILLING) }, { open: true }),
+);
+const CodexTokens = compile(
+	obj({ refresh_token: Filled, id_token: opt(unknown()) }, { open: true }),
+);
+const OpenAiClaims = compile(obj({ chatgpt_plan_type: opt(unknown()) }, { open: true }));
+const CopilotHost = compile(
+	union([obj({ user: Filled }, { open: true }), obj({ oauth_token: Filled }, { open: true })]),
+);
+const CopilotCliConfig = compile(obj({ loggedInUsers: arr(unknown()) }, { open: true }));
+const CopilotCliUser = compile(obj({ login: Filled }, { open: true }));
+const KimiToken = compile(obj({ refresh_token: Filled }, { open: true }));
+
 function isObject(value: unknown): value is Json {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+	return JsonObject.check(value);
 }
 
 function filled(value: unknown): value is string {
-	return typeof value === "string" && value.trim() !== "";
+	return FilledText.check(value);
 }
 
 function envPath(env: NodeJS.ProcessEnv, name: string): string | undefined {
@@ -141,18 +165,12 @@ async function detectClaudeCode(
 	]);
 	const oauth = credentials?.claudeAiOauth;
 	if (isObject(oauth)) {
-		const scopes = Array.isArray(oauth.scopes) ? oauth.scopes : [];
-		return filled(oauth.refreshToken) && scopes.includes("user:inference")
+		return ClaudeOauth.check(oauth) && oauth.scopes.includes("user:inference")
 			? signal(plan(oauth.subscriptionType))
 			: null;
 	}
 	const config = legacy && Object.keys(legacy).length > 0 ? legacy : global;
-	const account = config?.oauthAccount;
-	if (!isObject(account) || !filled(account.accountUuid)) return null;
-	return typeof account.billingType === "string" &&
-		CLAUDE_SUBSCRIPTION_BILLING.has(account.billingType)
-		? signal()
-		: null;
+	return ClaudeSubscriber.check(config?.oauthAccount) ? signal() : null;
 }
 
 function codexMode(auth: Json): unknown {
@@ -174,12 +192,12 @@ async function detectCodex(env: NodeJS.ProcessEnv, home: string): Promise<Accoun
 	);
 	if (!auth || codexMode(auth) !== "chatgpt") return null;
 	const tokens = auth.tokens;
-	if (!isObject(tokens) || !filled(tokens.refresh_token)) return null;
+	if (!CodexTokens.check(tokens)) return null;
 	const openai = jwtClaims(tokens.id_token)?.["https://api.openai.com/auth"];
 	return {
 		source: "codex",
 		providerIds: ["openai", "openai-codex"],
-		...plan(isObject(openai) ? openai.chatgpt_plan_type : undefined),
+		...plan(OpenAiClaims.check(openai) ? openai.chatgpt_plan_type : undefined),
 	};
 }
 
@@ -204,11 +222,7 @@ async function detectCopilotEditor(
 		readJson(join(dir, "hosts.json")),
 	]);
 	const signedIn = files.some(
-		(file) =>
-			file !== null &&
-			Object.values(file).some(
-				(entry) => isObject(entry) && (filled(entry.user) || filled(entry.oauth_token)),
-			),
+		(file) => file !== null && Object.values(file).some(CopilotHost.check),
 	);
 	return signedIn ? { source: "github-copilot", providerIds: ["github-copilot"] } : null;
 }
@@ -220,18 +234,15 @@ async function detectCopilotCli(
 	const config = await readJson(
 		join(envPath(env, "COPILOT_HOME") ?? join(home, ".copilot"), "config.json"),
 	);
-	const users = config?.loggedInUsers;
 	const signedIn =
-		Array.isArray(users) && users.some((user) => isObject(user) && filled(user.login));
+		CopilotCliConfig.check(config) && config.loggedInUsers.some(CopilotCliUser.check);
 	return signedIn ? { source: "copilot-cli", providerIds: ["github-copilot"] } : null;
 }
 
 async function detectKimiCli(env: NodeJS.ProcessEnv, home: string): Promise<AccountSignal | null> {
 	const share = envPath(env, "KIMI_SHARE_DIR") ?? join(home, ".kimi");
 	const token = await readJson(join(share, "credentials", "kimi-code.json"));
-	return token && filled(token.refresh_token)
-		? { source: "kimi-cli", providerIds: ["kimi-coding"] }
-		: null;
+	return KimiToken.check(token) ? { source: "kimi-cli", providerIds: ["kimi-coding"] } : null;
 }
 
 async function detectGrokBuild(

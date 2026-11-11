@@ -6,6 +6,7 @@
 	"exports": {
 		".": "./index.ts",
 		"./index.ts": "./index.ts",
+		"./wire": "./src/wire.ts",
 		"./package.json": "./package.json"
 	},
 	"description": "Explicit, session-owned background commands for Pi with bounded logs and per-command cancellation.",
@@ -19,6 +20,9 @@
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
+	},
+	"dependencies": {
+		"@earendil-works/pi-schema": "catalog:"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",

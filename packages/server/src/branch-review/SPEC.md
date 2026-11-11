@@ -59,8 +59,16 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
   is the cacheable bit surfaced, so a host that *persists* the answer can tell "the provider says there is
   no review" from "the provider did not answer" and keep its last-known snapshot through a `gh` outage;
   `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses —
-  `providerFromRemoteUrl`, `githubSlug` (owner/repo of a GitHub remote URL, shared with `pr`), `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner;
-  it returns stderr as `err` so a refused mutation can say why).
+  `providerFromRemoteUrl`, `githubSlug` (owner/repo of a GitHub remote URL, shared with `pr`), `reviewNumber`, `runProviderCommand` (the bounded prompt-disabled CLI runner;
+  it returns stderr as `err` so a refused mutation can say why), and from `providerReply.ts` `parseProviderJson`,
+  `PR_HEAD_FIELDS` and `headRepositorySlug` for the `pr` module's own `gh` reads. Test code only:
+  `testFixtures.ts`, the server package's `./gh-test-fixtures` export, re-exports the `ProviderRow`,
+  `LatestReview` and `RepoSettings` types so e2e's fake `gh` is typed against what the host reads.
+- **`gh` and `glab` JSON is parsed once, by private schemas in `providerReply.ts`.** Objects are open, so a field a
+  newer CLI adds at any depth changes nothing. Every field the host reads, except the review's number, is optional
+  and nullable: a later reader treats absent and `null` as not reported. A field of the wrong type refuses the
+  whole list, which reads as "the provider did not answer" and is not cached. Check rollup and review entries are
+  checked one by one, because one unreadable entry should not hide the rest.
 - **Successful answers are cached per `(worktree, branch)` for 60 seconds from settlement and lookups are
   single-flighted.** A syntactically valid empty provider response is a successful `null` and is cached —
   "no PR" is the common case and the expensive one to re-derive. A provider-CLI failure, failed mandatory
@@ -73,7 +81,7 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
 - `forgetOpenBranchReview(cwd)` invalidates every branch generation for that worktree. A lookup superseded
   while in flight must resolve through the current generation rather than return or re-cache its stale
   answer; this is what makes invalidation safe against a concurrent read.
-- **Allowed deps:** `contracts` for the result type; the server `git` barrel for local remote inspection and for `nonInteractiveGitEnv()`, the one definition of the environment a subprocess runs under — `process.env` plus `GIT_TERMINAL_PROMPT=0` (this module layers its own `GH_PROMPT_DISABLED`/`GLAB_PROMPT_DISABLED` on top); the `subprocess` barrel, which runs the lookup under this module's `LOOKUP_TIMEOUT_MS`.
+- **Allowed deps:** `contracts` for the result type; `pi-schema` for the reply schemas; the server `git` barrel for local remote inspection and for `nonInteractiveGitEnv()`, the one definition of the environment a subprocess runs under — `process.env` plus `GIT_TERMINAL_PROMPT=0` (this module layers its own `GH_PROMPT_DISABLED`/`GLAB_PROMPT_DISABLED` on top); the `subprocess` barrel, which runs the lookup under this module's `LOOKUP_TIMEOUT_MS`; `shared/codedError` and `log`, to warn `GH_REPLY_INVALID` when `gh` answers in a shape the host does not read.
 - **Forbidden:** `host`, `workspaces`, browser code, persistence, or any PR/review action beyond this read (actions live in `pr`).
 - Missing CLI/authentication, unsupported remotes, timeouts, malformed output, and no open review all degrade to `null`.
 - **The bound has to be the *call's*, not the child's.** Killing `gh`/`glab` and then awaiting its stdout to

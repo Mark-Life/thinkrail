@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { moduleBoundaryViolations } from "./check-module-boundaries";
+import { bareImportClosure, moduleBoundaryViolations } from "./check-module-boundaries";
 
 const roots: string[] = [];
 
@@ -10,6 +10,8 @@ const modules = {
 	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/shared": "@thinkrail/shared",
+	"packages/type-tie": "type-tie",
+	"packages/pi-todos": "pi-todos",
 	"packages/pi-delegation": "pi-delegation",
 	"packages/pi-background-commands": "pi-background-commands",
 	"packages/pi-subagents": "pi-subagents",
@@ -20,6 +22,14 @@ const modules = {
 	"apps/cli": "@thinkrail/cli",
 	"apps/desktop": "@thinkrail/desktop",
 } as const;
+
+const leafExports: Partial<Record<string, Record<string, string>>> = {
+	"packages/pi-todos": { "./core": "./core/index.ts", "./wire": "./core/wire.ts" },
+	"packages/pi-delegation": { ".": "./index.ts", "./wire": "./src/wire.ts" },
+	"packages/pi-background-commands": { ".": "./index.ts", "./wire": "./src/wire.ts" },
+	"packages/pi-subagents": { ".": "./index.ts", "./wire": "./src/wire.ts" },
+	"pi-extensions/visualize": { ".": "./index.ts", "./schema": "./src/schema.ts" },
+};
 
 afterEach(() => {
 	for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -64,7 +74,11 @@ function fixture(): string {
 		write(
 			root,
 			`${moduleRoot}/package.json`,
-			JSON.stringify({ name, dependencies: dependencies[moduleRoot] ?? {} }),
+			JSON.stringify({
+				name,
+				exports: leafExports[moduleRoot] ?? {},
+				dependencies: dependencies[moduleRoot] ?? {},
+			}),
 		);
 	}
 	return root;
@@ -97,6 +111,38 @@ test("accepts the declared package rings and thin launcher edges", () => {
 	);
 
 	expect(moduleBoundaryViolations(root)).toEqual([]);
+});
+
+test("keeps the test-only id makers out of production sources", () => {
+	const root = fixture();
+	const testImport = 'import "@thinkrail/contracts/test-ids";';
+	for (const file of [
+		"apps/web/src/a.test.ts",
+		"apps/web/src/a.spec.tsx",
+		"packages/server/src/history/testFixtures.ts",
+		"packages/server/src/agent/mcp/fixtures/server.ts",
+		"packages/server/src/a.fixture.ts",
+		"packages/artifact-tests/src/probes.ts",
+	]) {
+		write(root, file, testImport);
+	}
+	write(root, "packages/contracts/src/schema/ids.test.ts", 'import "../testIds"; import "./ids";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(root, "apps/web/src/latest.ts", testImport);
+	write(root, "packages/server/src/contest.ts", 'import "../../contracts/src/testIds";');
+	write(root, "packages/shared/src/deep.ts", 'import "@thinkrail/contracts/src/schema/ids";');
+	write(
+		root,
+		"apps/web/src/deep.test.ts",
+		'import "../../../packages/contracts/src/schema/ids.ts";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/deep.test.ts: import "../../../packages/contracts/src/schema/ids.ts" reaches contracts\' id source past its public entries',
+		'apps/web/src/latest.ts: import "@thinkrail/contracts/test-ids" uses the test-only id makers outside test sources',
+		'packages/server/src/contest.ts: import "../../contracts/src/testIds" uses the test-only id makers outside test sources',
+		'packages/shared/src/deep.ts: import "@thinkrail/contracts/src/schema/ids" reaches contracts\' id source past its public entries',
+	]);
 });
 
 test("keeps DAG orchestration portable and out of delegation and the unbundled host", () => {
@@ -342,8 +388,9 @@ test("discovers new pi and ThinkRail extensions and rejects host and sibling dep
 	);
 	write(root, "thinkrail-extensions/future/server/sibling.ts", 'import "@thinkrail/pi-visualize";');
 	const violations = moduleBoundaryViolations(root);
-	expect(violations).toHaveLength(5);
+	expect(violations).toHaveLength(6);
 	expect(violations.filter((violation) => violation.includes("web/pi.ts"))).toEqual([
+		expect.stringContaining("pi import in browser-safe sources"),
 		expect.stringContaining("pi value import"),
 	]);
 });
@@ -434,6 +481,16 @@ const runtimePiImports = [
 	'import "@mariozechner/pi-ai";',
 	'import "pi-web-access";',
 ];
+
+test("browser-safe sources may value-import pi-schema, which has no dependencies", () => {
+	const root = sdkFixture();
+	write(
+		root,
+		"packages/contracts/src/schema.ts",
+		'import { obj } from "@earendil-works/pi-schema";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+});
 
 test.each([
 	"apps/web/src/leak.ts",
@@ -593,4 +650,162 @@ test("locales is a leaf every UI surface and the host may import", () => {
 	expect(moduleBoundaryViolations(root)).toEqual([
 		'packages/locales/src/b.ts: import "@thinkrail/contracts" creates forbidden packages/locales -> packages/contracts edge',
 	]);
+});
+
+test("contracts reaches the in-repo pi packages, and pi-subagents reaches background commands, only through wire", () => {
+	const root = fixture();
+	write(
+		root,
+		"packages/contracts/package.json",
+		JSON.stringify({
+			name: "@thinkrail/contracts",
+			dependencies: {
+				"pi-todos": "workspace:*",
+				"pi-delegation": "workspace:*",
+				"pi-background-commands": "workspace:*",
+				"pi-subagents": "workspace:*",
+				"type-tie": "workspace:*",
+			},
+		}),
+	);
+	write(
+		root,
+		"packages/contracts/src/schema/owners.ts",
+		[
+			'import { TODO_FIELDS } from "pi-todos/wire";',
+			'import { DELEGATION_RUN_FIELDS } from "pi-delegation/wire";',
+			'import { CompletionDelivery } from "pi-background-commands/wire";',
+			'import { SUBAGENT_COMPLETION_FIELDS } from "pi-subagents/wire";',
+			'import type { Same } from "type-tie";',
+		].join("\n"),
+	);
+	write(root, "packages/pi-subagents/src/wire.ts", 'import "pi-background-commands/wire";');
+	write(root, "packages/pi-delegation/src/types.ts", 'import type { Same } from "type-tie";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(root, "packages/contracts/src/leak.ts", 'import type { Todo } from "pi-todos/core";');
+	write(root, "packages/contracts/src/deep.ts", 'import "../../pi-delegation/src/wire";');
+	write(root, "packages/pi-subagents/src/leak.ts", 'import "pi-background-commands";');
+	write(root, "packages/pi-todos/core/leak.ts", 'import "@thinkrail/contracts";');
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'packages/contracts/src/deep.ts: import "../../pi-delegation/src/wire" may use only public pi-delegation/wire',
+		'packages/contracts/src/leak.ts: import "pi-todos/core" may use only public pi-todos/wire',
+		'packages/pi-subagents/src/leak.ts: import "pi-background-commands" may use only public pi-background-commands/wire',
+		'packages/pi-todos/core/leak.ts: import "@thinkrail/contracts" creates forbidden packages/pi-todos -> packages/contracts edge',
+	]);
+});
+
+test("browser-safe sources may value-import pi-ai's model-schema entry but not the pi-ai root", () => {
+	const root = fixture();
+	write(
+		root,
+		"packages/contracts/src/model.ts",
+		'import { ModelThinkingLevelSchema } from "@earendil-works/pi-ai/providers/model-schema";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+	write(
+		root,
+		"packages/contracts/src/root.ts",
+		'import { getModel } from "@earendil-works/pi-ai";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'packages/contracts/src/root.ts: import "@earendil-works/pi-ai" creates forbidden pi value import in browser-safe sources',
+	]);
+});
+
+test("a leaf entry is a browser-safe source that loads only pi-schema, model-schema and other leaves", () => {
+	const root = fixture();
+	write(
+		root,
+		"packages/pi-delegation/src/wire.ts",
+		[
+			'import { ModelThinkingLevelSchema } from "@earendil-works/pi-ai/providers/model-schema";',
+			'import { obj } from "@earendil-works/pi-schema";',
+			'import type { ThinkingLevel } from "@earendil-works/pi-agent-core";',
+			'import type { Local } from "./types";',
+		].join("\n"),
+	);
+	write(root, "packages/pi-subagents/src/wire.ts", 'export * from "pi-delegation/wire";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(
+		root,
+		"packages/pi-delegation/src/wire.ts",
+		[
+			'import { readFileSync } from "node:fs";',
+			'import { local } from "./types";',
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			'import { Agent } from "@earendil-works/pi-agent-core";',
+		].join("\n"),
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'packages/pi-delegation/src/wire.ts: import "./types" value-imports a relative file from leaf pi-delegation/wire',
+		'packages/pi-delegation/src/wire.ts: import "@earendil-works/pi-agent-core" creates forbidden pi value import in browser-safe sources',
+		'packages/pi-delegation/src/wire.ts: import "@earendil-works/pi-coding-agent" creates forbidden pi import in browser-safe sources: types come only from the pi-ai and pi-agent-core roots or a leaf entry',
+		'packages/pi-delegation/src/wire.ts: import "node:fs" is loaded by leaf pi-delegation/wire, which may value-import only pi-schema, pi-ai\'s model-schema and value leaves',
+	]);
+});
+
+test("a leaf entry its package does not export fails the check", () => {
+	const root = fixture();
+	write(root, "packages/pi-todos/package.json", JSON.stringify({ name: "pi-todos" }));
+	expect(moduleBoundaryViolations(root)).toEqual([
+		"packages/pi-todos/package.json: leaf entry pi-todos/wire is not exported",
+	]);
+});
+
+test("an extension web half reaches its pi package only through the leaf, in the leaf's mode", () => {
+	const root = sdkFixture();
+	for (const [moduleRoot, name, exports] of [
+		[
+			"pi-extensions/ask-user-question",
+			"@thinkrail/pi-ask-user-question",
+			{ ".": "./index.ts", "./core": "./src/core.ts" },
+		],
+		["thinkrail-extensions/ask-user-question", "@thinkrail/ext-ask", {}],
+		["thinkrail-extensions/visualize", "@thinkrail/ext-visualize", {}],
+	] as const) {
+		write(root, `${moduleRoot}/package.json`, JSON.stringify({ name, exports }));
+	}
+	write(root, "pi-extensions/visualize/src/schema.ts", 'import { Type } from "typebox";');
+	write(
+		root,
+		"thinkrail-extensions/ask-user-question/web/card.tsx",
+		'import { ASK } from "@thinkrail/pi-ask-user-question/core"; import type { Item } from "@thinkrail/pi-ask-user-question/core";',
+	);
+	write(
+		root,
+		"thinkrail-extensions/visualize/web/card.tsx",
+		'import type { VisualizeParams } from "@thinkrail/pi-visualize/schema";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(
+		root,
+		"thinkrail-extensions/ask-user-question/web/leak.tsx",
+		'import type { Tool } from "@thinkrail/pi-ask-user-question";',
+	);
+	write(
+		root,
+		"thinkrail-extensions/visualize/web/leak.tsx",
+		'import { Visualize } from "@thinkrail/pi-visualize/schema";',
+	);
+	write(
+		root,
+		"thinkrail-extensions/ask-user-question/web/other.tsx",
+		'import type { VisualizeParams } from "@thinkrail/pi-visualize/schema";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'thinkrail-extensions/ask-user-question/web/leak.tsx: import "@thinkrail/pi-ask-user-question" creates forbidden pi import in browser-safe sources: types come only from the pi-ai and pi-agent-core roots or a leaf entry',
+		'thinkrail-extensions/ask-user-question/web/other.tsx: import "@thinkrail/pi-visualize/schema" creates forbidden thinkrail-extensions/ask-user-question -> pi-extensions/visualize edge',
+		'thinkrail-extensions/visualize/web/leak.tsx: import "@thinkrail/pi-visualize/schema" creates forbidden pi value import in browser-safe sources',
+	]);
+});
+
+test("pi-ai's model-schema entry loads nothing but pi-schema", () => {
+	const entry = Bun.resolveSync(
+		"@earendil-works/pi-ai/providers/model-schema",
+		join(import.meta.dir, "../packages/contracts"),
+	);
+	expect(bareImportClosure(entry)).toEqual(["@earendil-works/pi-schema"]);
 });

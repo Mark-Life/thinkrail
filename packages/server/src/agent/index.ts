@@ -110,7 +110,7 @@ export {
 	requestReviewExtension,
 	setRequestReviewHandler,
 } from "./requestReviewTool";
-export { isHostResourceId, isPiSessionId } from "./resourceIdentity";
+export { isHostResourceId } from "./resourceIdentity";
 export {
 	RESOLVE_COMMENT_TOOL_NAME,
 	type ResolveCommentOutcome,

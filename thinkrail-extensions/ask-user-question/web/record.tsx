@@ -14,7 +14,7 @@ import type { ToolInteraction } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type {
 	AskUserQuestionAnswer,
-	AskUserQuestionItem,
+	AskUserQuestionItemView,
 	AskUserQuestionResult,
 } from "@thinkrail/pi-ask-user-question/core";
 import { cn } from "@thinkrail/ui/utils";
@@ -152,7 +152,7 @@ export function AnsweredReceipt({
 	prepareLayoutChange,
 }: {
 	toolCallId: string;
-	questions: AskUserQuestionItem[];
+	questions: AskUserQuestionItemView[];
 	result: AskUserQuestionResult;
 	rawText: string;
 	prepareLayoutChange: PrepareLayoutChange;
@@ -301,7 +301,7 @@ function ReceiptPair({
 	toolCallId: string;
 	index: number;
 	last: boolean;
-	question: AskUserQuestionItem;
+	question: AskUserQuestionItemView;
 	answer: AskUserQuestionAnswer | undefined;
 	prepareLayoutChange: PrepareLayoutChange;
 }) {

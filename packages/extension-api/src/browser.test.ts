@@ -4,6 +4,16 @@ import * as root from "@thinkrail/extension-api";
 import * as web from "@thinkrail/extension-api/web";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const ALLOWED_RUNTIME_IMPORTS = [
+	"@earendil-works/pi-ai/providers/model-schema",
+	"@earendil-works/pi-schema",
+	"@thinkrail/contracts",
+	"@thinkrail/pi-ask-user-question/core",
+	"pi-background-commands/wire",
+	"pi-delegation/wire",
+	"pi-subagents/wire",
+	"pi-todos/wire",
+];
 
 function assertBrowserSource(path: string, repoRoot = REPO_ROOT): void {
 	const source = relative(repoRoot, path).split(sep).join("/");
@@ -63,7 +73,7 @@ describe("browser-safe public surface", () => {
 							builder.onResolve({ filter: /^[^./]/ }, ({ path }) => {
 								if (isAbsolute(path)) return undefined;
 								imports.push(path);
-								if (path !== "@thinkrail/contracts") {
+								if (!ALLOWED_RUNTIME_IMPORTS.includes(path)) {
 									throw new Error(`Unexpected runtime dependency: ${path}`);
 								}
 								return undefined;
@@ -79,7 +89,7 @@ describe("browser-safe public surface", () => {
 
 			expect(build.logs).toEqual([]);
 			expect(build.success).toBe(true);
-			expect(imports).toEqual(["@thinkrail/contracts"]);
+			expect([...new Set(imports)].sort()).toEqual(ALLOWED_RUNTIME_IMPORTS);
 			expect(await build.outputs[0]?.text()).not.toContain("defineServerExtension");
 		},
 	);

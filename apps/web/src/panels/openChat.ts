@@ -1,3 +1,4 @@
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { messagesToRuntime } from "../chat/hydrate";
 import {
@@ -14,7 +15,7 @@ import {
 	getTransport,
 } from "../transport";
 
-function sendPrompt(sessionId: string, text: string): void {
+function sendPrompt(sessionId: SessionId, text: string): void {
 	useAppStore.getState().appendUserMessage(sessionId, text);
 	void getTransport()
 		.request("session.prompt", { sessionId, text })
@@ -22,7 +23,7 @@ function sendPrompt(sessionId: string, text: string): void {
 }
 
 export async function startChatInTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	{
 		preferredGroupId,
 		prompt,
@@ -61,8 +62,8 @@ export async function startChatInTab(
 }
 
 export async function openChatInTab(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	requestedNavigation?: CenterNavigationStamp | null,
 	background = false,
 ): Promise<void> {
@@ -151,8 +152,8 @@ export async function openChatInTab(
 }
 
 export async function promptWorkspaceChat(
-	workspaceId: string,
-	sessionId: string | null,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId | null,
 	text: string,
 ): Promise<void> {
 	if (!sessionId) return startChatInTab(workspaceId, { prompt: text });

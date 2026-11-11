@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import {
+	type NativeCommand,
+	NativeNotificationInput,
+	type NativeQuitHint,
+	type NativeWindowState,
+} from "@thinkrail/contracts";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
@@ -30,18 +35,23 @@ import {
 	writeNativeLabels,
 } from "./nativeLabels";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
-import {
-	injectInitialDesktopPreferences,
-	readDesktopPreferenceRemove,
-	readDesktopPreferenceWrite,
-} from "./preferenceAdapter";
+import { injectInitialDesktopPreferences } from "./preferenceAdapter";
 import { PreferenceStore } from "./preferenceStore";
 import { createQuitShortcut } from "./quitShortcut";
 import { createRepeatGate } from "./repeatGate";
 import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
+import {
+	checked,
+	MenuLabelsChange,
+	PageZoomGesture,
+	PageZoomRequest,
+	PreferenceRemove,
+	PreferenceWrite,
+	RouteChange,
+} from "./rpcSchemas";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
-import type { DesktopServerRuntime } from "./serverRuntime";
+import { startServerRuntime } from "./serverRuntime";
 import {
 	handOffStartupSplash,
 	openStartupSplash,
@@ -295,11 +305,11 @@ async function start(): Promise<void> {
 			splashMessage(dialogLabels, pendingInstallVersion),
 		);
 	}
-	const serverRuntime = (await import(
+	const serverRuntime: unknown = await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
-	)) as DesktopServerRuntime;
+	);
 	await shellEnv;
-	const host = await serverRuntime.startDesktopHost({
+	const host = await startServerRuntime(serverRuntime, {
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
 		appVersion: version,
@@ -311,7 +321,7 @@ async function start(): Promise<void> {
 	});
 	setDesktopErrorReporter(host.reportError);
 	const quitCoordinator = createElectrobunQuitCoordinator(
-		() => host.server.shutdown(),
+		() => host.shutdown(),
 		() => dialogLabels,
 	);
 	startupQuitCoordinator = quitCoordinator;
@@ -388,14 +398,14 @@ async function start(): Promise<void> {
 					await updateController.dismissInstallResult();
 					return undefined;
 				},
-				showNotification: (input): undefined => {
+				showNotification: checked("showNotification", NativeNotificationInput, (input) => {
 					Utils.showNotification({
 						title: input.title,
-						body: input.body,
+						...(input.body === undefined ? {} : { body: input.body }),
 						...(input.subtitle === undefined ? {} : { subtitle: input.subtitle }),
 						...(input.silent === undefined ? {} : { silent: input.silent }),
 					});
-				},
+				}),
 			},
 			messages: {
 				titleBarDoubleClick: () => {
@@ -405,38 +415,37 @@ async function start(): Promise<void> {
 					}
 					void handleTitleBarDoubleClick();
 				},
-				pageZoomRequested: ({ action }) => {
+				pageZoomRequested: checked("pageZoomRequested", PageZoomRequest, ({ action }) => {
 					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
-				},
-				pageZoomGestureRequested: handlePageZoomGesture,
-				menuLabelsChanged: ({ labels }) => {
+				}),
+				pageZoomGestureRequested: checked(
+					"pageZoomGestureRequested",
+					PageZoomGesture,
+					handlePageZoomGesture,
+				),
+				menuLabelsChanged: checked("menuLabelsChanged", MenuLabelsChange, ({ labels }) => {
 					const menuLabels = readMenuLabels(labels);
 					dialogLabels = readDialogLabels(labels);
 					if (!neutral) writeNativeLabels(nativeLabelsPath(), { ...menuLabels, ...dialogLabels });
 					if (applicationMenuInstalled) {
 						installDesktopApplicationMenu(ApplicationMenu, process.platform, menuLabels);
 					}
-				},
-				routeChanged: ({ hash }) => {
+				}),
+				routeChanged: checked("routeChanged", RouteChange, ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
-				},
-				preferenceWrite: (payload) => {
+				}),
+				preferenceWrite: checked("preferenceWrite", PreferenceWrite, ({ key, value }) => {
 					if (neutral) return;
-					const preference = readDesktopPreferenceWrite(payload);
-					if (
-						preference &&
-						!preferences.write(BACKEND_PROFILE_ID, WINDOW_ID, preference.key, preference.value)
-					) {
+					if (!preferences.write(BACKEND_PROFILE_ID, WINDOW_ID, key, value)) {
 						console.error("[desktop] could not save a local preference");
 					}
-				},
-				preferenceRemove: (payload) => {
+				}),
+				preferenceRemove: checked("preferenceRemove", PreferenceRemove, ({ key }) => {
 					if (neutral) return;
-					const preference = readDesktopPreferenceRemove(payload);
-					if (preference && !preferences.remove(BACKEND_PROFILE_ID, WINDOW_ID, preference.key)) {
+					if (!preferences.remove(BACKEND_PROFILE_ID, WINDOW_ID, key)) {
 						console.error("[desktop] could not remove a local preference");
 					}
-				},
+				}),
 			},
 		},
 	});
@@ -518,10 +527,10 @@ async function start(): Promise<void> {
 	const navigationProbeOrigin = navigationProbePath
 		? process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_ORIGIN
 		: undefined;
-	const navigationProbe = {
-		opened: [] as string[],
-		verdicts: [] as string[],
-		commits: [] as string[],
+	const navigationProbe: Record<"opened" | "verdicts" | "commits", string[]> = {
+		opened: [],
+		verdicts: [],
+		commits: [],
 	};
 	const removeNavigationListeners = installExternalNavigation(
 		Electrobun.events,
@@ -565,7 +574,7 @@ async function start(): Promise<void> {
 
 	let ready = false;
 	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>
-		host.server.startAttributionClaim(),
+		host.startAttributionClaim(),
 	);
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;

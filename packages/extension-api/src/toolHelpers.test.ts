@@ -1,5 +1,19 @@
 import { expect, test } from "bun:test";
-import { languageFromPath, numArg, resultText, strArg } from "@thinkrail/extension-api/web";
+import {
+	boolArg,
+	languageFromPath,
+	numArg,
+	resultText,
+	strArg,
+	strListArg,
+} from "@thinkrail/extension-api/web";
+
+interface Input {
+	command: string;
+	offset?: number;
+	background?: boolean;
+	urls?: string[];
+}
 
 test("resultText joins the text blocks of an AgentToolResult-shaped value", () => {
 	expect(
@@ -43,17 +57,33 @@ test("resultText pretty-prints when `content` is present but not an array", () =
 });
 
 test("strArg returns the string value, or '' when missing / wrong-typed", () => {
-	expect(strArg({ command: "ls" }, "command")).toBe("ls");
-	expect(strArg({}, "command")).toBe("");
-	expect(strArg({ command: 42 }, "command")).toBe("");
-	expect(strArg({ command: null }, "command")).toBe("");
+	expect(strArg<Input>({ command: "ls" }, "command")).toBe("ls");
+	expect(strArg<Input>({}, "command")).toBe("");
+	expect(strArg<Input>({ command: 42 }, "command")).toBe("");
+	expect(strArg<Input>({ command: null }, "command")).toBe("");
 });
 
 test("numArg returns the number value, or null when missing / wrong-typed", () => {
-	expect(numArg({ offset: 10 }, "offset")).toBe(10);
-	expect(numArg({ offset: 0 }, "offset")).toBe(0);
-	expect(numArg({}, "offset")).toBeNull();
-	expect(numArg({ offset: "10" }, "offset")).toBeNull();
+	expect(numArg<Input>({ offset: 10 }, "offset")).toBe(10);
+	expect(numArg<Input>({ offset: 0 }, "offset")).toBe(0);
+	expect(numArg<Input>({}, "offset")).toBeNull();
+	expect(numArg<Input>({ offset: "10" }, "offset")).toBeNull();
+});
+
+test("boolArg and strListArg read only values of their type", () => {
+	expect(boolArg<Input>({ background: true }, "background")).toBe(true);
+	expect(boolArg<Input>({ background: "true" }, "background")).toBeNull();
+	expect(strListArg<Input>({ urls: ["a", 1, "b"] }, "urls")).toEqual(["a", "b"]);
+	expect(strListArg<Input>({ urls: "a" }, "urls")).toEqual([]);
+});
+
+test("a key must be a field of the named input type with the read type", () => {
+	// @ts-expect-error: no input type named, so no key is accepted
+	strArg({ command: "ls" }, "command");
+	// @ts-expect-error: `offset` is a number field
+	strArg<Input>({ offset: 1 }, "offset");
+	// @ts-expect-error: `cmd` is not a field of the input
+	strArg<Input>({ cmd: "ls" }, "cmd");
 });
 
 test("languageFromPath maps known extensions and falls back to ''", () => {

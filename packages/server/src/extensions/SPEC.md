@@ -54,7 +54,8 @@ list for registry extensions.
   `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per process, never from a live session, and a factory that throws against the stub
   keeps the tools it recorded before throwing), and `resolveExtensionSkillRoots(entry)` (the owner-scoped skill resolver: the extension's
   entry file from `specifier`, then each `skillPackages` manifest via `createRequire(extensionEntry)`,
-  returning its `pi.skills` directories; a named package with no skills fails loudly),
+  returning its `pi.skills` directories, read with a schema tied to pi's `PiManifest["skills"]`, which pi's root
+  does not export (`pi-compatibility.md`); a named package with no skills fails loudly),
   `STAGED_HOST_SKILLS_ROUTE` (`host`) and `stagedExtensionSkillRoute(name)` (`extensions/<name>`) — the
   folders of a staged skills root the host's and an extension's roots are staged under, shared by build
   support and the runtime so a disabled extension's folder can be left out of pi's skill inputs and `extensionSkillRoots(entry,
@@ -78,7 +79,7 @@ list for registry extensions.
   extension outside `registry.ts`. The one tool name the host knows is `web_search`, in `agent`'s
   headless-search policy: it compensates for the host's UI for any copy of `pi-web-access`, so it is not
   the extension's to own.
-- **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
+- **Allowed deps:** `pi-schema`, `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
   Node `module`/`fs`/`path`.
 - **Forbidden:** `host`; `settings` (the disabled set arrives as a parameter); sibling features; resolving extension-owned packages from the host's own

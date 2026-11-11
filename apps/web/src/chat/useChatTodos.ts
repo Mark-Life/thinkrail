@@ -1,10 +1,4 @@
-import type {
-	PiEvent,
-	ReviewChangedPayload,
-	ReviewFailedPayload,
-	SessionEventPayload,
-	TodoPlan,
-} from "@thinkrail/contracts";
+import type { PiEvent, SessionId, TodoPlan, WorkspaceId } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { t as translate } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
@@ -67,7 +61,7 @@ export function planIsCompleteWithoutSummary(
 	return items.length > 0 && items.every((todo) => todo.status === "done");
 }
 
-export function useAutoPlanSummary(workspaceId: string, sessionId: string): void {
+export function useAutoPlanSummary(workspaceId: WorkspaceId, sessionId: SessionId): void {
 	const triedRef = useRef(false);
 	const identity = tupleKey("chat-todos", workspaceId, sessionId);
 	useEffect(() => {
@@ -94,8 +88,7 @@ export function useAutoPlanSummary(workspaceId: string, sessionId: string): void
 			if (cancelled || !res?.summary) return;
 			signalTodoRefetch(identity);
 		};
-		const unsub = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
-			const event = payload as SessionEventPayload;
+		const unsub = getTransport().subscribe(WS_CHANNELS.piEvent, (event) => {
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) void check();
 		});
@@ -118,7 +111,7 @@ export interface ChatTodos {
 	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
 }
 
-export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos {
+export function useChatTodos(workspaceId: WorkspaceId, sessionId: SessionId): ChatTodos {
 	const [data, setData] = useState<TodoPlan | null>(null);
 	const [failed, setFailed] = useState(false);
 	const status = useAppStore((state) => state.status);
@@ -186,8 +179,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (refetch) clearTimeout(refetch);
 			refetch = setTimeout(() => load(false), 250);
 		};
-		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
-			const event = payload as SessionEventPayload;
+		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (event) => {
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
@@ -198,14 +190,13 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		// The same broadcast fires for any review edit (a finding deleted/resolved can clear a step's
 		// host-derived changes_requested decoration), so this one subscription covers those too.
 		const unsubscribeReview = getTransport().subscribe(WS_CHANNELS.reviewChanged, (payload) => {
-			if ((payload as ReviewChangedPayload).workspaceId === workspaceId) scheduleRefetch();
+			if (payload.workspaceId === workspaceId) scheduleRefetch();
 		});
 		// A detached review has no chat to carry a failure; the owning plan raises it as a toast (routed by
 		// sessionId, deduped across split views by the toast body). See panels/SPEC.md.
 		const unsubscribeReviewFailed = getTransport().subscribe(
 			WS_CHANNELS.reviewFailed,
-			(payload) => {
-				const failure = payload as ReviewFailedPayload;
+			(failure) => {
 				if (failure.workspaceId !== workspaceId || failure.sessionId !== sessionId) return;
 				toast.error(
 					failure.message,
@@ -353,7 +344,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 
 const runtimeHydration = new Map<string, Promise<void>>();
 
-export function hydrateSessionRuntime(workspaceId: string, sessionId: string): Promise<void> {
+export function hydrateSessionRuntime(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+): Promise<void> {
 	const state = useAppStore.getState();
 	if (
 		state.sessions[sessionId] ||
@@ -389,7 +383,11 @@ export function hydrateSessionRuntime(workspaceId: string, sessionId: string): P
 	return request;
 }
 
-async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
+async function nudgeAgent(
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
+	title: string,
+): Promise<void> {
 	const state = useAppStore.getState();
 	if (
 		state.removedWorkspaceIds[workspaceId] ||
@@ -410,8 +408,8 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 }
 
 async function legacyNudgeAgent(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	text: string,
 ): Promise<void> {
 	const initial = useAppStore.getState();

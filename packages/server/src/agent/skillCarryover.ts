@@ -2,15 +2,29 @@ import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Api, Model, UserMessage } from "@earendil-works/pi-ai";
 import {
 	type ExtensionAPI,
 	parseSkillBlock,
+	type ReadToolDetails,
+	type ReadToolInput,
 	type SessionEntry,
 	type Skill,
 	stripFrontmatter,
+	type TruncationResult,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentMessage } from "@thinkrail/contracts";
+import {
+	bool,
+	compile,
+	num,
+	obj,
+	opt,
+	type Static,
+	str,
+	type Validator,
+} from "@earendil-works/pi-schema";
+import type { Same } from "@thinkrail/contracts";
+import type { AgentMessage } from "./piTypes";
 
 export const SKILL_CARRYOVER_CUSTOM_TYPE = "thinkrail/skill-carryover";
 const SKILL_CARRYOVER_SKILL_TOKENS = 5_000;
@@ -30,7 +44,9 @@ export interface CarryoverBudget {
 	totalChars: number;
 }
 
-export function carryoverBudget(model: Model<Api> | undefined): CarryoverBudget | undefined {
+export function carryoverBudget(
+	model: Pick<Model<Api>, "api" | "contextWindow"> | undefined,
+): CarryoverBudget | undefined {
 	if (!model || model.api === PI_VIRTUAL_MODEL_API || !(model.contextWindow > 0)) return undefined;
 	const totalTokens = Math.min(
 		SKILL_CARRYOVER_TOTAL_TOKENS,
@@ -42,12 +58,9 @@ export function carryoverBudget(model: Model<Api> | undefined): CarryoverBudget 
 	};
 }
 
-function texts(content: unknown): string[] {
+function texts(content: UserMessage["content"]): string[] {
 	if (typeof content === "string") return [content];
-	if (!Array.isArray(content)) return [];
-	return content.flatMap((part) =>
-		part?.type === "text" && typeof part.text === "string" ? [part.text] : [],
-	);
+	return content.flatMap((part) => (part.type === "text" ? [part.text] : []));
 }
 
 function canonicalPath(path: string): string {
@@ -70,6 +83,30 @@ function readTarget(path: string, cwd: string): string | undefined {
 	}
 }
 
+const ReadArgsShape = obj(
+	{ path: opt(str()), offset: opt(num()), limit: opt(num()) },
+	{ open: true },
+);
+const ReadArgs: Validator<
+	Same<Static<typeof ReadArgsShape>, Partial<Pick<ReadToolInput, "path" | "offset" | "limit">>>
+> = compile(ReadArgsShape);
+
+const ReadDetailsShape = obj(
+	{ truncation: opt(obj({ truncated: bool(), outputLines: num() }, { open: true })) },
+	{ open: true },
+);
+const ReadDetails: Validator<
+	Same<
+		Static<typeof ReadDetailsShape>,
+		{
+			[K in "truncation" & keyof ReadToolDetails]?: Pick<
+				TruncationResult,
+				"truncated" | "outputLines"
+			>;
+		}
+	>
+> = compile(ReadDetailsShape);
+
 interface LineRange {
 	start: number;
 	end: number;
@@ -89,13 +126,16 @@ interface SkillLoad {
 
 const WHOLE_FILE: LineRange = { start: 0, end: Number.POSITIVE_INFINITY };
 
+/** The lines a truncated read showed; a refused details shape counts as none shown. */
+function truncatedLines(details: unknown): number | undefined {
+	if (details === undefined) return undefined;
+	if (!ReadDetails.check(details)) return 0;
+	return details.truncation?.truncated === true ? details.truncation.outputLines : undefined;
+}
+
 function readLines(read: ReadLoad, details: unknown): LineRange {
-	const truncation = (details as { truncation?: { truncated?: unknown; outputLines?: unknown } })
-		?.truncation;
-	if (truncation?.truncated === true) {
-		const shown = typeof truncation.outputLines === "number" ? truncation.outputLines : 0;
-		return { start: read.start, end: read.start + shown };
-	}
+	const shown = truncatedLines(details);
+	if (shown !== undefined) return { start: read.start, end: read.start + shown };
 	const end = read.limit === undefined ? Number.POSITIVE_INFINITY : read.start + read.limit;
 	return { start: read.start, end };
 }
@@ -130,15 +170,15 @@ function skillLoads(
 		} else if (message.role === "assistant") {
 			for (const part of message.content) {
 				if (part.type !== "toolCall" || part.name !== "read") continue;
-				const args = part.arguments as { path?: unknown; offset?: unknown; limit?: unknown };
-				if (typeof args.path !== "string") continue;
+				const args: unknown = part.arguments;
+				if (!ReadArgs.check(args) || args.path === undefined) continue;
 				const target = readTarget(args.path, cwd);
 				const skill = target && byPath.get(target);
 				if (skill)
 					reads.set(part.id, {
 						skill,
-						start: typeof args.offset === "number" ? Math.max(0, args.offset - 1) : 0,
-						limit: typeof args.limit === "number" ? args.limit : undefined,
+						start: args.offset === undefined ? 0 : Math.max(0, args.offset - 1),
+						limit: args.limit,
 					});
 			}
 		} else if (message.role === "toolResult" && !message.isError) {

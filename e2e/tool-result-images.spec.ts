@@ -1,5 +1,13 @@
-import { appendFileSync, realpathSync, utimesSync } from "node:fs";
+import { realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import type { SessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
+import {
+	appendFixtureEntries,
+	fixtureAssistant,
+	fixtureMessageEntry,
+	fixtureToolResult,
+} from "@thinkrail/server/history-test-fixtures";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -16,29 +24,24 @@ const IMAGE_DATA =
 
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
 
-function appendToolImageResult(path: string, sessionId: string): void {
+function appendToolImageResult(path: string, sessionId: SessionId): void {
 	const toolCallId = `${sessionId}-read-image`;
-	const entries = [
-		{
-			type: "message",
-			id: `${sessionId}-m1`,
-			parentId: `${sessionId}-m0`,
-			timestamp: new Date(BASE_TS + 1_000).toISOString(),
-			message: {
-				role: "assistant",
+	appendFixtureEntries(path, [
+		fixtureMessageEntry(
+			`${sessionId}-m1`,
+			`${sessionId}-m0`,
+			fixtureAssistant({
 				content: [
 					{ type: "toolCall", id: toolCallId, name: "read", arguments: { path: IMAGE_PATH } },
 				],
+				stopReason: "toolUse",
 				timestamp: BASE_TS + 1_000,
-			},
-		},
-		{
-			type: "message",
-			id: `${sessionId}-m2`,
-			parentId: `${sessionId}-m1`,
-			timestamp: new Date(BASE_TS + 2_000).toISOString(),
-			message: {
-				role: "toolResult",
+			}),
+		),
+		fixtureMessageEntry(
+			`${sessionId}-m2`,
+			`${sessionId}-m1`,
+			fixtureToolResult({
 				toolCallId,
 				toolName: "read",
 				content: [
@@ -47,10 +50,9 @@ function appendToolImageResult(path: string, sessionId: string): void {
 				],
 				isError: false,
 				timestamp: BASE_TS + 2_000,
-			},
-		},
-	];
-	appendFileSync(path, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+			}),
+		),
+	]);
 	utimesSync(path, new Date(BASE_TS), new Date(BASE_TS));
 }
 
@@ -60,7 +62,7 @@ test("an image tool result previews inline and opens full screen", async ({ page
 		name: "image result",
 		messages: [{ role: "user", text: "read the mockup image", timestamp: BASE_TS }],
 	});
-	appendToolImageResult(chat.path, chat.id);
+	appendToolImageResult(chat.path, testSessionId(chat.id));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);

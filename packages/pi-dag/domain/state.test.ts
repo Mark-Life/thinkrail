@@ -114,6 +114,19 @@ test.each(["off", "minimal", "low", "medium", "high", "xhigh", "max", undefined]
 	},
 );
 
+test("stored outcome keeps every field delegation reports", () => {
+	const { state, activation } = fixture();
+	if (!activation.outcome) throw new Error("Missing outcome");
+	activation.outcome.status = "aborted";
+	activation.outcome.stopReason = "deferred";
+	activation.outcome.details.status = "aborted";
+	activation.outcome.details.abortReason = "user";
+	const restored = decodeState(JSON.parse(JSON.stringify(state)));
+	expect(restored.nodes.worker?.attempts[0]?.activations[0]?.outcome).toEqual(activation.outcome);
+	Object.assign(activation.outcome, { stopReason: "paused" });
+	expect(() => decodeState(state)).toThrow("snapshot");
+});
+
 test.each([
 	{ thinkingLevel: "ultra" },
 	{ thinkingLevel: "HIGH" },

@@ -1,9 +1,10 @@
 import {
-	isUserFontFile,
+	parseUserFontFile,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
 	type UserFontFile,
 } from "@thinkrail/contracts";
+import { RequestError } from "./requestError";
 import { getTransport } from "./wireTransport";
 
 export function hostUrl(path: string): string {
@@ -16,7 +17,18 @@ export async function uploadUserFont(file: File): Promise<UserFontFile> {
 		headers: { [USER_FONT_UPLOAD_HEADER.name]: USER_FONT_UPLOAD_HEADER.value },
 		body: file,
 	});
-	const entry: unknown = await response.json().catch(() => null);
-	if (isUserFontFile(entry)) return entry;
-	throw new Error(`font upload failed with HTTP ${response.status}`);
+	const failure = new RequestError(
+		"FONT_UPLOAD_FAILED",
+		`font upload failed with HTTP ${response.status}`,
+	);
+	const text = await response.text();
+	let body: unknown;
+	try {
+		body = JSON.parse(text);
+	} catch {
+		throw failure;
+	}
+	const entry = parseUserFontFile(body);
+	if (entry) return entry;
+	throw failure;
 }

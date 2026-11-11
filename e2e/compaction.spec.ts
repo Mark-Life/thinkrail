@@ -1,5 +1,6 @@
-import { appendFileSync, realpathSync, utimesSync } from "node:fs";
+import { realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { appendFixtureEntries } from "@thinkrail/server/history-test-fixtures";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -20,9 +21,8 @@ test("a compacted transcript marks where the summarized messages were", async ({
 			{ role: "assistant", text: "kept answer", timestamp: BASE_TS + 3_000 },
 		],
 	});
-	appendFileSync(
-		chat.path,
-		`${JSON.stringify({
+	appendFixtureEntries(chat.path, [
+		{
 			type: "compaction",
 			id: `${chat.id}-c0`,
 			parentId: `${chat.id}-m3`,
@@ -30,8 +30,8 @@ test("a compacted transcript marks where the summarized messages were", async ({
 			summary: "## Earlier work\nRenamed the widget factory.",
 			tokensBefore: 148_000,
 			timestamp: new Date(BASE_TS + 4_000).toISOString(),
-		})}\n`,
-	);
+		},
+	]);
 	utimesSync(chat.path, new Date(BASE_TS), new Date(BASE_TS));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();

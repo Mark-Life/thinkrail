@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { RiChat2Line } from "@remixicon/react";
 import { MATCH_TIER, type MatchTier, type SearchGroup } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { type Arrivals, NO_ARRIVALS, noteArrivals } from "./arrivals";
 import { hostItems } from "./hostItems";
@@ -66,8 +67,8 @@ describe("selection stability across host replies", () => {
 			path: name,
 			tier,
 			score: 1,
-			projectId: "p1",
-			workspaceId: "w1",
+			projectId: testProjectId("p1"),
+			workspaceId: testWorkspaceId("w1"),
 		})),
 	});
 	const rowsOf = (groups: readonly SearchGroup[], arrivals: Arrivals) => {
@@ -193,9 +194,9 @@ describe("selection stability across host replies", () => {
 				title,
 				tier: MATCH_TIER.prefix,
 				score: 1,
-				projectId: "p1",
-				workspaceId: "w1",
-				sessionId: `s${index}`,
+				projectId: testProjectId("p1"),
+				workspaceId: testWorkspaceId("w1"),
+				sessionId: testSessionId(`s${index}`),
 				messageIndex: 0,
 				anchorText: title,
 			})),

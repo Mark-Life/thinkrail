@@ -4,9 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { bool, compile, obj, opt, type Static, str, unknown } from "@earendil-works/pi-schema";
 import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS, wsPushValidator } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { isPortFree } from "@thinkrail/shared/freePort";
+import { fakeFetch } from "../../test/fakeFetch";
 import {
 	configurePiRuntime,
 	configurePiRuntimeFactory,
@@ -22,7 +25,7 @@ import { resetJbcentralStateForTests } from "../auth";
 import { logger } from "../log";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
-import { handleRequest } from "./handlers";
+import { handleTypedRequest } from "./handlers";
 
 const TEST_KEY = "phc_test";
 
@@ -39,11 +42,24 @@ interface Deferred<T> {
 	reject(error: unknown): void;
 }
 
-interface SocketFrame {
-	channel?: string;
-	data?: unknown;
-	id?: string;
-	ok?: boolean;
+const SocketFrame = obj(
+	{ channel: opt(str()), data: opt(unknown()), id: opt(str()), ok: opt(bool()) },
+	{ open: true },
+);
+type SocketFrame = Static<typeof SocketFrame>;
+const SocketFrameShape = compile(SocketFrame);
+
+function welcomeOf(frame: SocketFrame): ServerWelcome {
+	const welcome = wsPushValidator(WS_CHANNELS.serverWelcome);
+	if (!welcome.check(frame.data)) throw new Error("not a server welcome");
+	return frame.data;
+}
+
+function noticeOf(frame: SocketFrame): HostUpdateNotice | undefined {
+	if (frame.channel !== WS_CHANNELS.hostUpdateAvailable) return undefined;
+	const notice = wsPushValidator(WS_CHANNELS.hostUpdateAvailable);
+	if (!notice.check(frame.data)) throw new Error("not a host update notice");
+	return frame.data;
 }
 
 interface SocketCollector {
@@ -98,7 +114,9 @@ async function collectSocket(port: number, client: string): Promise<SocketCollec
 		resolve(frame: SocketFrame): void;
 	}>();
 	socket.addEventListener("message", (event) => {
-		const frame = JSON.parse(String(event.data)) as SocketFrame;
+		const frame: unknown = JSON.parse(String(event.data));
+		if (!SocketFrameShape.check(frame))
+			throw new Error(`not a socket frame: ${String(event.data)}`);
 		frames.push(frame);
 		for (const waiter of waiters) {
 			if (!waiter.matches(frame)) continue;
@@ -151,7 +169,7 @@ afterEach(async () => {
 	while (booted.length) await booted.pop()?.server.shutdown();
 	resetAnalyticsForTests();
 	resetConfigCache();
-	while (tmpDirs.length) rmSync(tmpDirs.pop() as string, { recursive: true, force: true });
+	for (const dir of tmpDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 	if (originalDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
 	await resetJbcentralStateForTests();
@@ -189,10 +207,10 @@ test("confirming consent observes current setup without another client read or p
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
-		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		fetchImpl: fakeFetch(async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			events.push(...JSON.parse(String(init?.body)).batch);
 			return new Response("{}");
-		}) as typeof fetch,
+		}),
 	});
 	const refresh = spyOn(testRuntime, "refresh");
 	try {
@@ -226,11 +244,11 @@ test("the dialog prime enables ordinary additional events but schedules attribut
 			posthogApiKey: TEST_KEY,
 			build: "binary",
 			env: {},
-			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			fetchImpl: fakeFetch(async () => new Response("{}")),
 			attributionEndpoint: "http://127.0.0.1:4567",
-			attributionFetch: (async () => {
+			attributionFetch: fakeFetch(async () => {
 				throw new Error("scheduled attribution must not run in this host test");
-			}) as unknown as typeof fetch,
+			}),
 			openExternal: () => {},
 			attributionSchedule: (run) => scheduled.push(run),
 		},
@@ -263,11 +281,11 @@ test("a saved confirmed-on choice waits beyond one second for explicit launcher 
 			posthogApiKey: TEST_KEY,
 			build: "desktop",
 			env: {},
-			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			fetchImpl: fakeFetch(async () => new Response("{}")),
 			attributionEndpoint: "http://127.0.0.1:4567",
-			attributionFetch: (async () => {
+			attributionFetch: fakeFetch(async () => {
 				throw new Error("scheduled attribution must not run in this host test");
-			}) as unknown as typeof fetch,
+			}),
 			openExternal: () => {
 				opens++;
 			},
@@ -300,11 +318,11 @@ test("launcher readiness cannot start attribution before an unconfirmed prime is
 			posthogApiKey: TEST_KEY,
 			build: "desktop",
 			env: {},
-			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			fetchImpl: fakeFetch(async () => new Response("{}")),
 			attributionEndpoint: "http://127.0.0.1:4567",
-			attributionFetch: (async () => {
+			attributionFetch: fakeFetch(async () => {
 				throw new Error("scheduled attribution must not run in this host test");
-			}) as unknown as typeof fetch,
+			}),
 			openExternal: () => {},
 			attributionSchedule: (run) => scheduled.push(run),
 		},
@@ -323,10 +341,10 @@ test("the host forwards successful login generation metadata into the basic even
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
-		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		fetchImpl: fakeFetch(async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			events.push(...JSON.parse(String(init?.body)).batch);
 			return new Response("{}");
-		}) as typeof fetch,
+		}),
 	});
 	const login = spyOn(testRuntime, "login").mockResolvedValue({
 		type: "oauth",
@@ -335,7 +353,7 @@ test("the host forwards successful login generation metadata into the basic even
 		expires: Date.now() + 60_000,
 	});
 	try {
-		await handleRequest(
+		await handleTypedRequest(
 			"provider.loginStart",
 			{ providerId: "anthropic", type: "oauth" },
 			{ clientKey: "client" },
@@ -363,10 +381,10 @@ test("failed wire requests and logged host errors become sanitized exception rep
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
-		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		fetchImpl: fakeFetch(async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			events.push(...JSON.parse(String(init?.body)).batch);
 			return new Response("{}");
-		}) as typeof fetch,
+		}),
 	});
 	const missing = join(process.env.THINKRAIL_DATA_DIR ?? tmpdir(), "private-client-project");
 	const collector = await collectSocket(b.port, "error-reports");
@@ -404,7 +422,7 @@ test("boot applies the stored environment before serving, and launch variables w
 	tmpDirs.push(agentDir);
 	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	delete process.env.PI_CODING_AGENT_DIR;
-	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.launchKeys")];
+	Reflect.deleteProperty(globalThis, Symbol.for("thinkrail.shellEnv.launchKeys"));
 	process.env.TR_BOOT_LAUNCH = "launch";
 	writeFileSync(
 		join(dir, "environment.json"),
@@ -423,7 +441,7 @@ test("boot applies the stored environment before serving, and launch variables w
 		expect(process.env.TR_BOOT_STORED).toBe("stored");
 		expect(process.env.TR_BOOT_LAUNCH).toBe("launch");
 		expect(process.env.THINKRAIL_PORT).toBeUndefined();
-		const status = await handleRequest("environment.get", {}, { clientKey: "client" });
+		const status = await handleTypedRequest("environment.get", {}, { clientKey: "client" });
 		expect(status).toMatchObject({
 			restartRequired: false,
 			launchOverridden: ["TR_BOOT_LAUNCH"],
@@ -451,7 +469,8 @@ test('portMode "exact" binds the requested port', async () => {
 
 test('portMode "free" scans upward past a taken port', async () => {
 	const holder = Bun.serve({ port: 0, hostname: "localhost", fetch: () => new Response("x") });
-	const taken = holder.port as number;
+	const taken = holder.port;
+	if (taken === undefined) throw new Error("the holder server has no port");
 	try {
 		const b = await boot({ port: taken, host: "localhost", portMode: "free" });
 		expect(b.requested).toBe(taken);
@@ -497,7 +516,7 @@ test("stop() returns the resolvers createServer installed to their defaults", as
 	if (!dir) throw new Error("missing fixture data directory");
 	writeFileSync(join(dir, "config.json"), JSON.stringify({ subagentMaxConcurrent: 16 }));
 	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
-	const workspaceId = "boot-stopped-limit";
+	const workspaceId = testWorkspaceId("boot-stopped-limit");
 	try {
 		const service = delegationServiceFor(workspaceId);
 		const resized: number[] = [];
@@ -549,9 +568,12 @@ test("welcome omits closed projects whose folders are gone", async () => {
 		(candidate) => candidate.channel === WS_CHANNELS.serverWelcome,
 	);
 
-	const welcome = frame.data as ServerWelcome;
-	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
-	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
+	const welcome = welcomeOf(frame);
+	expect(welcome.projects.map((project) => project.id)).toEqual([testProjectId("open")]);
+	expect(welcome.recentProjects?.map((project) => project.id)).toEqual([
+		testProjectId("open"),
+		testProjectId("kept"),
+	]);
 });
 
 test("shutdown is idempotent and releases the port", async () => {
@@ -576,7 +598,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	const welcomeFrame = await collector.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((welcomeFrame.data as ServerWelcome).hostUpdate).toBeUndefined();
+	expect(welcomeOf(welcomeFrame).hostUpdate).toBeUndefined();
 	expect(checks.checks).toHaveLength(1);
 
 	const firstNotice: HostUpdateNotice = {
@@ -589,7 +611,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	const firstPush = await collector.waitForFrame(
 		(frame) =>
 			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-			(frame.data as HostUpdateNotice).availableVersion === "1.1.0",
+			noticeOf(frame)?.availableVersion === "1.1.0",
 	);
 	expect(firstPush.data).toEqual(availableFirstNotice);
 
@@ -597,7 +619,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	const retainedWelcome = await retained.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((retainedWelcome.data as ServerWelcome).hostUpdate).toEqual(availableFirstNotice);
+	expect(welcomeOf(retainedWelcome).hostUpdate).toEqual(availableFirstNotice);
 	retained.socket.close();
 
 	const secondCheck = await checks.waitForCheck(1);
@@ -610,7 +632,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	await collector.waitForFrame(
 		(frame) =>
 			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-			(frame.data as HostUpdateNotice).availableVersion === "1.2.0",
+			noticeOf(frame)?.availableVersion === "1.2.0",
 	);
 
 	const duplicateCheck = await checks.waitForCheck(2);
@@ -638,7 +660,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	const latestWelcome = await afterSilentChecks.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((latestWelcome.data as ServerWelcome).hostUpdate).toEqual({
+	expect(welcomeOf(latestWelcome).hostUpdate).toEqual({
 		...newerNotice,
 		status: "available",
 	});
@@ -673,7 +695,7 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 			client.waitForFrame(
 				(frame) =>
 					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-					(frame.data as HostUpdateNotice).status === "available",
+					noticeOf(frame)?.status === "available",
 			),
 		),
 	);
@@ -682,13 +704,13 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 	const firstRun = await runs.waitForCheck(0);
 	const [runAck] = await Promise.all([
 		firstClient.waitForFrame((frame) => frame.id === "run-first"),
-		...([firstClient, secondClient].map((client) =>
+		...[firstClient, secondClient].map((client) =>
 			client.waitForFrame(
 				(frame) =>
 					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-					(frame.data as HostUpdateNotice).status === "running",
+					noticeOf(frame)?.status === "running",
 			),
-		) as [Promise<SocketFrame>, Promise<SocketFrame>]),
+		),
 	]);
 	expect(runAck.ok).toBe(true);
 	secondClient.socket.send(
@@ -704,8 +726,7 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 		[firstClient, secondClient].map((client) =>
 			client.waitForFrame(
 				(frame) =>
-					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-					(frame.data as HostUpdateNotice).status === "failed",
+					frame.channel === WS_CHANNELS.hostUpdateAvailable && noticeOf(frame)?.status === "failed",
 			),
 		),
 	);
@@ -722,7 +743,7 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 	const failedWelcome = await afterSameRelease.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((failedWelcome.data as ServerWelcome).hostUpdate?.status).toBe("failed");
+	expect(welcomeOf(failedWelcome).hostUpdate?.status).toBe("failed");
 	afterSameRelease.socket.close();
 
 	const newerReleaseCheck = await checks.waitForCheck(2);
@@ -734,8 +755,8 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 	await firstClient.waitForFrame(
 		(frame) =>
 			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-			(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
-			(frame.data as HostUpdateNotice).status === "available",
+			noticeOf(frame)?.availableVersion === "1.2.0" &&
+			noticeOf(frame)?.status === "available",
 	);
 
 	firstClient.socket.send(JSON.stringify({ id: "run-retry", method: "host.update", params: {} }));
@@ -743,8 +764,8 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 	await firstClient.waitForFrame(
 		(frame) =>
 			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-			(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
-			(frame.data as HostUpdateNotice).status === "running",
+			noticeOf(frame)?.availableVersion === "1.2.0" &&
+			noticeOf(frame)?.status === "running",
 	);
 	expect((await firstClient.waitForFrame((frame) => frame.id === "run-retry")).ok).toBe(true);
 	retryRun.resolve(undefined);
@@ -753,8 +774,8 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 			client.waitForFrame(
 				(frame) =>
 					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-					(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
-					(frame.data as HostUpdateNotice).status === "succeeded",
+					noticeOf(frame)?.availableVersion === "1.2.0" &&
+					noticeOf(frame)?.status === "succeeded",
 			),
 		),
 	);
@@ -792,8 +813,7 @@ test("shutdown makes a late host update run result inert", async () => {
 	});
 	await collector.waitForFrame(
 		(frame) =>
-			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-			(frame.data as HostUpdateNotice).status === "available",
+			frame.channel === WS_CHANNELS.hostUpdateAvailable && noticeOf(frame)?.status === "available",
 	);
 	collector.socket.send(
 		JSON.stringify({ id: "run-before-stop", method: "host.update", params: {} }),
@@ -801,8 +821,7 @@ test("shutdown makes a late host update run result inert", async () => {
 	const run = await runs.waitForCheck(0);
 	await collector.waitForFrame(
 		(frame) =>
-			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-			(frame.data as HostUpdateNotice).status === "running",
+			frame.channel === WS_CHANNELS.hostUpdateAvailable && noticeOf(frame)?.status === "running",
 	);
 
 	await b.server.shutdown();
@@ -814,7 +833,7 @@ test("shutdown makes a late host update run result inert", async () => {
 		collector.frames.filter(
 			(frame) =>
 				frame.channel === WS_CHANNELS.hostUpdateAvailable &&
-				(frame.data as HostUpdateNotice).status === "succeeded",
+				noticeOf(frame)?.status === "succeeded",
 		),
 	).toHaveLength(0);
 });
@@ -859,7 +878,7 @@ async function withFakeLoginShell(run: () => Promise<void>): Promise<void> {
 	process.env.SHELL = shell;
 	delete process.env.TERM;
 	delete process.env.BOOT_LOGIN_CANARY;
-	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.pending")];
+	Reflect.deleteProperty(globalThis, Symbol.for("thinkrail.shellEnv.pending"));
 	try {
 		await run();
 	} finally {
@@ -879,3 +898,17 @@ test.skipIf(process.platform === "win32")(
 		});
 	},
 );
+
+test("a request with bad params gets an INVALID_PARAMS reply over the socket", async () => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "invalid-params");
+	try {
+		collector.socket.send(
+			JSON.stringify({ id: "bad", method: "project.open", params: { path: 1 } }),
+		);
+		const frame = await collector.waitForFrame((candidate) => candidate.id === "bad");
+		expect(frame).toMatchObject({ ok: false, errorCode: "INVALID_PARAMS" });
+	} finally {
+		collector.socket.close();
+	}
+});

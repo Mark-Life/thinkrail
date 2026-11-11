@@ -1,17 +1,37 @@
-import type { NativeWindowControlsBridge, NativeWindowState } from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
+import { type NativeWindowControlsBridge, NativeWindowState } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import {
+	bridgeCall,
+	checkedListener,
+	nativeGlobal,
+	settled,
+	settledAs,
+	unsubscriber,
+} from "../nativeBridge";
 
 const NATIVE_WINDOW_CONTROLS_GLOBAL = "__THINKRAIL_NATIVE_WINDOW_CONTROLS__";
+const isNativeWindowState = compile(NativeWindowState).check;
 
+/** The window-controls bridge at `value`, checking every value it hands back, or null without one. */
 export function getNativeWindowControlsBridge(value: unknown): NativeWindowControlsBridge | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	return typeof Reflect.get(value, "getState") === "function" &&
-		typeof Reflect.get(value, "minimize") === "function" &&
-		typeof Reflect.get(value, "toggleMaximize") === "function" &&
-		typeof Reflect.get(value, "close") === "function" &&
-		typeof Reflect.get(value, "subscribe") === "function"
-		? (value as NativeWindowControlsBridge)
-		: null;
+	const getState = bridgeCall(value, "getState");
+	const minimize = bridgeCall(value, "minimize");
+	const toggleMaximize = bridgeCall(value, "toggleMaximize");
+	const close = bridgeCall(value, "close");
+	const subscribe = bridgeCall(value, "subscribe");
+	if (!getState || !minimize || !toggleMaximize || !close || !subscribe) return null;
+	return {
+		getState: () => settledAs(isNativeWindowState, getState(), "window state"),
+		minimize: () => settled(minimize()),
+		toggleMaximize: () => settled(toggleMaximize()),
+		close: () => settled(close()),
+		subscribe: (listener) =>
+			unsubscriber(
+				subscribe(checkedListener(isNativeWindowState, listener, "window state")),
+				"window state unsubscribe",
+			),
+	};
 }
 
 export type NativeWindowControlsController = {
@@ -58,7 +78,7 @@ export function subscribeToNativeWindowState(
 
 export function useNativeWindowControls(): NativeWindowControlsController | null {
 	const [bridge] = useState(() =>
-		getNativeWindowControlsBridge(Reflect.get(globalThis, NATIVE_WINDOW_CONTROLS_GLOBAL)),
+		getNativeWindowControlsBridge(nativeGlobal(NATIVE_WINDOW_CONTROLS_GLOBAL)),
 	);
 	const [state, setState] = useState<NativeWindowState | null>(null);
 

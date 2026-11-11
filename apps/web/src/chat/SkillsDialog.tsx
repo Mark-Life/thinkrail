@@ -8,9 +8,12 @@ import {
 	isSkillGroupEnabled,
 	OTHER_AGENT_SKILL_GROUPS,
 	type Project,
+	type ProjectId,
+	type SessionId,
 	SKILL_LISTING_MAX_TOKENS,
 	type SkillCatalogEntry,
 	type Workspace,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, type Translator, t as translate, useT } from "@thinkrail/locales/react";
@@ -76,8 +79,8 @@ function isWorkspace(result: Project | Workspace): result is Workspace {
 }
 
 export interface SkillsWorkspaceContext {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	streaming: boolean;
 	stale?: boolean;
 	onReloaded?: (syncedTick: number) => void;
@@ -89,7 +92,7 @@ export function SkillsDialog({
 	open,
 	onOpenChange,
 }: {
-	projectId: string;
+	projectId: ProjectId;
 	workspace?: SkillsWorkspaceContext;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;

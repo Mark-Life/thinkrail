@@ -8,7 +8,12 @@ import {
 	RiSendPlaneLine as Send,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import type { ReviewComment } from "@thinkrail/contracts";
+import {
+	parseSessionId,
+	type ReviewComment,
+	type SessionId,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { outdatedReason } from "@thinkrail/resource-renderers";
 import { IconButton } from "@thinkrail/ui/button";
@@ -40,7 +45,13 @@ import {
 import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 
-export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
+export function ReviewPanel({
+	workspaceId,
+	failed,
+}: {
+	workspaceId: WorkspaceId;
+	failed: boolean;
+}) {
 	const t = useT();
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
 	const activeReviewedPath = useAppStore((s) => selectActiveReviewedPath(s, workspaceId));
@@ -57,7 +68,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			setExpanded(new Set(expanded).add(activeReviewedPath));
 	}
 
-	const openChat = (sessionId: string) => openChatInTab(workspaceId, sessionId);
+	const openChat = (sessionId: SessionId) => openChatInTab(workspaceId, sessionId);
 
 	const focusSurface = (surface: ReviewSurface): ReviewFocusSurface =>
 		surface.kind === "file"
@@ -245,12 +256,12 @@ function FileSection({
 	onOpenChat,
 	onNavigate,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string | null;
 	comments: ReviewComment[];
 	sending: boolean;
 	onSend: (comment: ReviewComment) => Promise<void>;
-	onOpenChat: (sessionId: string) => void;
+	onOpenChat: (sessionId: SessionId) => void;
 	onNavigate: (comment: ReviewComment) => void;
 }) {
 	const t = useT();
@@ -312,7 +323,7 @@ function FileSection({
 
 export function selectActiveReviewedPath(
 	s: {
-		activeWorkspaceId: string | null;
+		activeWorkspaceId: WorkspaceId | null;
 		tabsByWorkspace: Record<
 			string,
 			{ id: string; kind: string; path?: string; before?: string | undefined }[]
@@ -320,7 +331,7 @@ export function selectActiveReviewedPath(
 		activeTabByWorkspace: Record<string, string | null>;
 		reviewsByWorkspace: Record<string, { comments: ReviewComment[] }>;
 	},
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): string | null {
 	const activeId = s.activeTabByWorkspace[workspaceId];
 	const tab = (s.tabsByWorkspace[workspaceId] ?? []).find((t) => t.id === activeId);
@@ -344,16 +355,17 @@ function CommentRow({
 	onOpenChat,
 	onNavigate,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	comment: ReviewComment;
 	ordinal?: number;
 	sending: boolean;
 	onSend: () => void;
-	onOpenChat: (sessionId: string) => void;
+	onOpenChat: (sessionId: SessionId) => void;
 	onNavigate: () => void;
 }) {
 	const t = useT();
 	const isDraft = comment.status === "draft";
+	const chatId = linkedChat(comment);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
 	const glance = useAppStore((s) => {
@@ -391,8 +403,8 @@ function CommentRow({
 			<button
 				type="button"
 				data-testid="review-comment-open"
-				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
-				title={comment.sessionId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
+				onClick={() => (chatId ? onOpenChat(chatId) : onNavigate())}
+				title={chatId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
 				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
@@ -476,7 +488,7 @@ function CommentRow({
 						</ConfirmPopover>
 					</>
 				)}
-				{comment.sessionId && (
+				{chatId && (
 					<IconButton
 						variant="ghost"
 						size="s"
@@ -504,14 +516,19 @@ function CommentRow({
 	);
 }
 
+function linkedChat(comment: ReviewComment) {
+	return comment.sessionId === undefined ? null : parseSessionId(comment.sessionId);
+}
+
 function ResolvedRow({
 	comment,
 	onOpenChat,
 }: {
 	comment: ReviewComment;
-	onOpenChat: (sessionId: string) => void;
+	onOpenChat: (sessionId: SessionId) => void;
 }) {
 	const t = useT();
+	const chatId = linkedChat(comment);
 	return (
 		<div
 			data-testid="review-comment-resolved"
@@ -525,14 +542,14 @@ function ResolvedRow({
 				{comment.body}
 			</span>
 			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-				{comment.sessionId && (
+				{chatId && (
 					<IconButton
 						variant="ghost"
 						size="s"
 						icon={MessageSquare}
 						label={t("review.panel.openLinkedChat")}
 						data-testid="review-comment-chat"
-						onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
+						onClick={() => onOpenChat(chatId)}
 					/>
 				)}
 			</span>

@@ -1,6 +1,15 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
+import { arr, compile, obj, str } from "@earendil-works/pi-schema";
 import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
 import { holdE2eIdleSleep } from "./idleSleep";
 import {
@@ -49,20 +58,25 @@ interface LastRun {
 	failedTests: string[];
 }
 
+const shardLastRun = compile(obj({ failedTests: arr(str()) }, { open: true }));
+
 function mergeLastRunFiles(reportDir: string, shardCount: number, failed: boolean): void {
 	const failedTests = new Set<string>();
 	for (let shard = 1; shard <= shardCount; shard += 1) {
+		const file = join(reportDir, `artifacts-${shard}`, ".last-run.json");
+		if (!existsSync(file)) continue;
+		let parsed: unknown;
 		try {
-			const parsed = JSON.parse(
-				readFileSync(join(reportDir, `artifacts-${shard}`, ".last-run.json"), "utf8"),
-			) as unknown;
-			if (parsed !== null && typeof parsed === "object" && "failedTests" in parsed) {
-				const ids = parsed.failedTests;
-				if (Array.isArray(ids)) {
-					for (const id of ids) if (typeof id === "string") failedTests.add(id);
-				}
-			}
-		} catch {}
+			parsed = JSON.parse(readFileSync(file, "utf8"));
+		} catch (error) {
+			console.warn(`e2e: could not read ${file}; its failures are not merged`, error);
+			continue;
+		}
+		if (!shardLastRun.check(parsed)) {
+			console.warn(`e2e: ${file} has no failedTests list; its failures are not merged`);
+			continue;
+		}
+		for (const id of parsed.failedTests) failedTests.add(id);
 	}
 	const lastRun: LastRun = {
 		status: failed ? "failed" : "passed",

@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compile, map, str } from "@earendil-works/pi-schema";
+import { fakeFetch } from "../../test/fakeFetch";
 import { ATTRIBUTION_MAX_POLLS, ATTRIBUTION_POLL_INTERVAL_MS } from "../persistence";
 import { ATTRIBUTION_DEADLINE_MS, runAttributionClaim } from "./attribution";
 import {
@@ -16,6 +18,7 @@ import {
 } from "./service";
 
 const TEST_KEY = "phc_test";
+const StringFields = compile(map(str()));
 
 const claimId = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const bridgeId = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA";
@@ -75,10 +78,10 @@ afterEach(async () => {
 });
 
 function analyticsFetch(events: CapturedEvent[]): typeof fetch {
-	return (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+	return fakeFetch(async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 		events.push(...JSON.parse(String(init?.body)).batch);
 		return json({});
-	}) as typeof fetch;
+	});
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -94,32 +97,33 @@ test("a packaged confirmed grant claims once, links once, and persists only norm
 	const requests: Array<{ path: string; body: Record<string, string> }> = [];
 	let expectedChallenge = "";
 	const now = Date.now();
-	const attributionFetch: typeof fetch = (async (
-		url: Parameters<typeof fetch>[0],
-		init?: RequestInit,
-	) => {
-		const parsed = new URL(String(url));
-		const body = JSON.parse(String(init?.body)) as Record<string, string>;
-		requests.push({ path: parsed.pathname, body });
-		if (parsed.pathname === "/api/attribution/claims") {
-			expectedChallenge = body.challenge ?? "";
-			return json(
-				{
-					claim_id: claimId,
-					claim_url: `/attribution/claim/?id=${claimId}`,
-					expires_at: now + 60_000,
-				},
-				201,
-			);
-		}
-		const challenge = createHash("sha256")
-			.update(body.verifier ?? "", "utf8")
-			.digest("base64url");
-		expect(challenge).toBe(expectedChallenge);
-		if (parsed.pathname.endsWith("/status")) return json({ status: "bound" });
-		if (parsed.pathname.endsWith("/redeem")) return json(redeemed(now));
-		throw new Error("unexpected attribution request");
-	}) as typeof fetch;
+	const attributionFetch: typeof fetch = fakeFetch(
+		async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			const parsed = new URL(String(url));
+			const body: unknown = JSON.parse(String(init?.body));
+			if (!StringFields.check(body))
+				throw new Error("attribution request body is not string fields");
+			requests.push({ path: parsed.pathname, body });
+			if (parsed.pathname === "/api/attribution/claims") {
+				expectedChallenge = body.challenge ?? "";
+				return json(
+					{
+						claim_id: claimId,
+						claim_url: `/attribution/claim/?id=${claimId}`,
+						expires_at: now + 60_000,
+					},
+					201,
+				);
+			}
+			const challenge = createHash("sha256")
+				.update(body.verifier ?? "", "utf8")
+				.digest("base64url");
+			expect(challenge).toBe(expectedChallenge);
+			if (parsed.pathname.endsWith("/status")) return json({ status: "bound" });
+			if (parsed.pathname.endsWith("/redeem")) return json(redeemed(now));
+			throw new Error("unexpected attribution request");
+		},
+	);
 
 	initializeAnalytics({
 		posthogApiKey: TEST_KEY,
@@ -229,10 +233,10 @@ test("a never-settling request is aborted by its finite timeout", async () => {
 	const started = Date.now();
 	await runAttributionClaim({
 		endpoint: "http://127.0.0.1:4567",
-		fetchImpl: ((_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
-			requestSignal = init?.signal as AbortSignal;
+		fetchImpl: fakeFetch((_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			requestSignal = init?.signal ?? undefined;
 			return new Promise<Response>(() => {});
-		}) as typeof fetch,
+		}),
 		openExternal: () => {},
 		active: () => true,
 		persist: () => {},
@@ -256,8 +260,7 @@ test.each([
 	});
 	await runAttributionClaim({
 		endpoint: "http://127.0.0.1:4567",
-		fetchImpl: (async () =>
-			new Response(body, { status: 201, headers })) as unknown as typeof fetch,
+		fetchImpl: fakeFetch(async () => new Response(body, { status: 201, headers })),
 		openExternal: () => {},
 		active: () => true,
 		persist: () => {},
@@ -280,11 +283,11 @@ test("revocation aborts a never-settling generation and the consumed attempt nev
 		env: {},
 		fetchImpl: analyticsFetch([]),
 		attributionEndpoint: "http://127.0.0.1:4567",
-		attributionFetch: ((_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		attributionFetch: fakeFetch((_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			requests++;
-			requestSignal = init?.signal as AbortSignal;
+			requestSignal = init?.signal ?? undefined;
 			return new Promise<Response>(() => {});
-		}) as typeof fetch,
+		}),
 		attributionSchedule: (run) => scheduled.push(run),
 		openExternal: () => {
 			opens++;
@@ -308,7 +311,7 @@ test("redeem activates memory and emits linked when terminal persistence replace
 	const events: CapturedEvent[] = [];
 	const scheduled: Array<() => void> = [];
 	const now = Date.now();
-	const attributionFetch: typeof fetch = (async (url: Parameters<typeof fetch>[0]) => {
+	const attributionFetch: typeof fetch = fakeFetch(async (url: Parameters<typeof fetch>[0]) => {
 		const path = new URL(String(url)).pathname;
 		if (path === "/api/attribution/claims") {
 			return json(
@@ -323,7 +326,7 @@ test("redeem activates memory and emits linked when terminal persistence replace
 		if (path.endsWith("/status")) return json({ status: "bound" });
 		if (path.endsWith("/redeem")) return json(redeemed(now));
 		throw new Error("unexpected attribution request");
-	}) as typeof fetch;
+	});
 	initializeAnalytics({
 		posthogApiKey: TEST_KEY,
 		build: "binary",
@@ -365,7 +368,7 @@ test("revocation aborts a pending poll wait before another status request", asyn
 	const now = Date.now();
 	const running = runAttributionClaim({
 		endpoint: "http://127.0.0.1:4567",
-		fetchImpl: (async (url: Parameters<typeof fetch>[0]) => {
+		fetchImpl: fakeFetch(async (url: Parameters<typeof fetch>[0]) => {
 			const path = new URL(String(url)).pathname;
 			if (path === "/api/attribution/claims") {
 				return json(
@@ -379,7 +382,7 @@ test("revocation aborts a pending poll wait before another status request", asyn
 			}
 			statuses++;
 			throw new Error("status polling was aborted");
-		}) as typeof fetch,
+		}),
 		openExternal: () => {},
 		sleep: () => {
 			waiting = true;
@@ -405,7 +408,7 @@ test("revocation cancels the default poll delay before its ten-second timer fire
 	const now = Date.now();
 	const running = runAttributionClaim({
 		endpoint: "http://127.0.0.1:4567",
-		fetchImpl: (async (url: Parameters<typeof fetch>[0]) => {
+		fetchImpl: fakeFetch(async (url: Parameters<typeof fetch>[0]) => {
 			if (new URL(String(url)).pathname === "/api/attribution/claims") {
 				return json(
 					{
@@ -418,7 +421,7 @@ test("revocation cancels the default poll delay before its ten-second timer fire
 			}
 			statuses++;
 			return json({ error: "pending" }, 409);
-		}) as typeof fetch,
+		}),
 		openExternal: () => {
 			opened = true;
 		},
@@ -442,7 +445,7 @@ test("the overall deadline interrupts a stalled poll wait", async () => {
 	let statuses = 0;
 	await runAttributionClaim({
 		endpoint: "http://127.0.0.1:4567",
-		fetchImpl: (async (url: Parameters<typeof fetch>[0]) => {
+		fetchImpl: fakeFetch(async (url: Parameters<typeof fetch>[0]) => {
 			const path = new URL(String(url)).pathname;
 			if (path === "/api/attribution/claims") {
 				return json(
@@ -456,7 +459,7 @@ test("the overall deadline interrupts a stalled poll wait", async () => {
 			}
 			statuses++;
 			throw new Error("the deadline should end polling first");
-		}) as typeof fetch,
+		}),
 		openExternal: () => {},
 		sleep: () => new Promise<void>(() => {}),
 		active: () => true,
@@ -474,7 +477,7 @@ test("default polling allows a human-scale confirmation window within the claim 
 	let opens = 0;
 	let statuses = 0;
 	const waits: number[] = [];
-	const attributionFetch: typeof fetch = (async (url: Parameters<typeof fetch>[0]) => {
+	const attributionFetch: typeof fetch = fakeFetch(async (url: Parameters<typeof fetch>[0]) => {
 		const path = new URL(String(url)).pathname;
 		if (path === "/api/attribution/claims") {
 			return json(
@@ -491,7 +494,7 @@ test("default polling allows a human-scale confirmation window within the claim 
 			return json({ error: "pending" }, 409);
 		}
 		throw new Error("redeem must not run");
-	}) as typeof fetch;
+	});
 	initializeAnalytics({
 		posthogApiKey: TEST_KEY,
 		build: "desktop",

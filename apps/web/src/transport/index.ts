@@ -2,6 +2,9 @@ export {
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,
+	reportDroppedFrame,
+	reportHandledFailure,
+	reportInvalidReply,
 } from "./errorReports";
 export { errorText } from "./errorText";
 export { hostUrl, uploadUserFont } from "./fonts";

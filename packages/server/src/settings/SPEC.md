@@ -19,7 +19,7 @@ select the defaults every new chat receives (unset model means pi's `settings.js
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
-order — a whole-list client write, validated as model-shaped entries and deduped by `sameModel`;
+order — a whole-list client write, checked as `WireModel` by dispatch, refused with no `provider` or `id`, and deduped by `sameModel`;
 **`recentModels`** is host-owned: `noteRecentModel(model)` (called by `host` on an explicit `session.create`
 model and every `session.setModel`) puts the model first, dedupes, caps at `RECENT_MODELS_LIMIT`, persists and
 publishes, while a client-supplied `recentModels` in `settings.update` is dropped before validation so no
@@ -29,36 +29,39 @@ across frontends.
 
 Current workbench frame, workspace resource placement, current/default preset selection, side/bottom group limits, selection, and focus are explicitly absent. Those are frontend-surface-local view state under [[submodule-web-shell-layout-state]]. Built-in layout presets remain web-owned.
 
-A numeric setting is bounded by its consumer when that domain owns the safety cap—for example `terminal`
-clamps `terminalReplayKb`, so a hand-edited config cannot exhaust memory. Settings validates the shared
-40–240 line-width contract and custom layout presets because it owns their cross-frontend storage contract.
-It also validates the global `jbcentralQuotaEnabled` boolean and whole `jbcentralQuotaRefreshSeconds`
-interval (`1–3600`, default 30), because those values govern host process cadence across every frontend.
+A numeric setting's range is part of its `AppConfig` schema ([[submodule-contracts-schema]]): the line widths,
+`terminalReplayKb`, `subagentMaxConcurrent`, `jbcentralQuotaRefreshSeconds`, `settleIdleDays` and the font
+sizes. `settings.update` params fail the schema at dispatch, so `updateConfig` never checks a range, and the
+load drops a stored value outside it. Settings keeps the rules a schema cannot hold: the locale tag, the
+system theme pair, the confirmation to turn analytics back on, and the custom layout preset catalog. A
+stored preset's retired `changes` tool becomes `files` at the load; `updateConfig` still refuses it.
 
 ## Boundary
 
-- `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
-  `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
-  back to the default rather than disabling settling.
-- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
-- **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
-  `isTerminalWindowsShell`).
+- `settleIdleDays` — the Settled-shelf idle window: a whole number of days from 1 to 365, or `null` for
+  never; default `7`. A hand-edited value outside that falls back to the default rather than disabling settling.
+- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → apply the rules above → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); which family a font choice names, and whether it renders, is the client's; the custom layout preset catalog rules (`validateLayoutPreset` narrows through the `LayoutPreset` schema after its own depth guard, then checks ids, weights, widths and closed keys); custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
+- **Stored presets:** `loadConfig` parses each stored preset with the `LayoutPreset` schema. `getConfig` then applies the catalog rules through `keepValidStoredPresets` and drops a preset that breaks one, after `setConfigAside` keeps a copy of `config.json`. The drop is never saved on read; the next save writes the kept catalog.
+- **Public surface (barrel):** `getConfig`, `configReadFailed`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus the pure preset rules `validateLayoutPreset`, `validateCustomLayoutPresets` and `keepValidStoredPresets`.
+- **Allowed deps:** `pi-schema`; `log`; `persistence` (`loadConfig`/`saveConfig`/`setConfigAside`/`isConfigOverwriteRefused`/`didLastConfigReadFail`); `contracts` (`AppConfig`, `LayoutPreset`,
+  `isLocalePreference`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
 
+- **A save never writes defaults over a file it could not read.** When the first load failed, or any later read did, `updateConfig` and `noteRecentModel` read again first: the save merges onto the real values, or throws `STATE_FILE_UNREADABLE` if the read still fails. `noteRecentModel` is best effort, because the session has its new model by then: any failure in it, read, save or publish, logs and does not fail `session.create` or `session.setModel`.
+- **A failed read is told, not hidden.** `configReadFailed()` is true while the live config holds defaults because `config.json` could not be read or held no JSON object. A bad field in a good object, a missing file, and a failed read after a good load (the live values are still real) do not count. It reads again first, so a file fixed by hand takes effect at the next welcome: the stored values go out through the publisher, and that `settings.changed` is what clears a connected client's notice. No separate push exists because every publish follows a good read or a save.
 - **Converge on broadcast, no client optimism.** `updateConfig` persists before replacing the live cache or publishing; a failed write changes neither runtime reads nor frontends. The publisher receives the full merged config for broadcast and the applied partial update so host consumers can distinguish an explicit field write from an unrelated merge. Every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
-- `terminalWindowsShell` defaults to `"auto"`; persisted values fall back through persistence's shared
-  `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
-  update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
+- `terminalWindowsShell` defaults to `"auto"`; a persisted value outside the closed shell union falls back
+  at the load, while a wire mutation outside it fails the params schema before cache, persistence, or
+  broadcast changes. Settings owns validation and synchronization;
   `terminal` owns executable resolution and spawning.
-- `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
-- `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
-- `onboardingDismissed` defaults to `false` when absent or malformed on disk; a present non-boolean update is rejected like the other boolean fields. Only the web onboarding wizard reads it.
-- `subagentMaxConcurrent` (per-chat concurrent subagents) defaults to 4 when absent or malformed on disk; a wire update outside `isSubagentMaxConcurrent` (whole 1–16) rejects the complete mutation — never clamped. Like `subagentsEnabled`, settings owns only the global value.
+- `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field fails the params schema before cache, persistence, or broadcast changes.
+- `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
+- `onboardingDismissed` defaults to `false` when absent or malformed on disk. Only the web onboarding wizard reads it.
+- `subagentMaxConcurrent` (per-chat concurrent subagents) defaults to 4 when absent or malformed on disk; a wire update outside whole 1–16 fails the params schema — never clamped. Like `subagentsEnabled`, settings owns only the global value.
 - `disabledExtensions` lists host-registry extension `name`s the user switched off; absent means `[]` (every
-  extension on). A wire update must be a list of non-blank strings or the whole mutation is rejected;
+  extension on). A blank name in a wire update rejects the whole mutation;
   duplicates are deduped, and **unknown names are kept** — the registry, not settings, decides what a name
   means, so a stale entry for a removed extension never breaks boot or a later update. A malformed stored
   list keeps its valid names. Settings owns only the list; `host` turns it into the agent's resolver and the
@@ -77,12 +80,12 @@ interval (`1–3600`, default 30), because those values govern host process cade
   and local files to [[submodule-server-locales]] — so a tag whose file was deleted persists and returns
   with the file. A malformed stored value falls back to `"system"`; a malformed update rejects the whole
   mutation.
-- JetBrains quota display defaults on and its interval defaults to 30 seconds when either stored field is absent/invalid. Wire updates reject a non-boolean flag or a non-integer/out-of-range interval atomically; they never clamp a caller's value into a different persisted choice.
+- JetBrains quota display defaults on and its interval defaults to 30 seconds when either stored field is absent/invalid. Wire updates reject a non-integer/out-of-range interval atomically; they never clamp a caller's value into a different persisted choice.
 - Theme availability/labels/palettes, operating-system appearance, and the effective theme are not server concerns. `theme` remains the opaque fixed choice; `themeMode` defaults to `"fixed"`, and `systemThemePair` remains absent until first use. A persisted pair is retained only when both slots are strings; malformed pairs are dropped, and system mode without a retained pair normalizes to fixed without replacing a valid fixed id. A missing/invalid mode also normalizes to fixed while an independently valid dormant pair may survive. Entering system mode requires a complete valid-shaped existing-or-incoming pair; a pair mutation replaces both slots atomically. Unknown ids remain persisted for each independently shipped frontend to resolve by required appearance.
 - A `settings.update` carrying `theme` without explicit `themeMode` is a legacy-compatible fixed-theme action and sets mode to `"fixed"`. Thus an old client connected to a system-configured host can never appear to change only itself: its deliberate theme choice exits system mode through the ordinary persist-before-broadcast path.
 - Retired host-layout and chat-message-order fields, and the host-owned `recentModels`, are dropped from an update without error rather than persisted or broadcast, so older clients that still send them keep working. Layout instantiation and transcript order are frontend-local preferences.
-- **Update keys are a closed set; stored keys are not.** `updateConfig` rejects a non-object payload and any key outside `AppConfigUpdate` plus the retired keys, before cache, persistence, or broadcast changes. The accepted set is compile-checked against `AppConfigUpdate`, so a contract change that adds or removes a key fails the build until the set matches. Unknown keys already on disk still load and survive later valid updates, so an older host keeps a newer host's settings. A newer client must gate any new key on the host protocol version, as `THEME_SYSTEM_PROTOCOL_VERSION` gates appearance settings; an older host rejects the whole update rather than persisting an unknown key.
-- **An accepted key is value-checked before it reaches the merge; only the effort levels are trusted.** `terminalReplayKb` must be a finite number (its range stays with `terminal`, which clamps on read), `composerGrowthLimit` one of the closed growth presets, and `defaultModel` / `reviewModel` `null` or model-shaped like a `favoriteModels` entry, alongside the typed checks the other fields already have. A malformed value rejects the whole update before cache, persistence, or broadcast changes, exactly like an unknown key. `defaultEffort` / `reviewEffort` carry pi's `ThinkingLevel`, for which `contracts` has no runtime list, so they pass on the wire type alone and the new-chat resolver clamps an unknown level through pi; adding a level list to `contracts` is the way to close that, not a settings-local copy.
+- **Update keys are a closed set; stored keys are not.** The `AppConfigUpdate` params schema refuses any key outside its fields plus `chatMessageOrder`, `layout` and `recentModels`, which an older client may send and `updateConfig` drops. The closed set is built from the same field table as the type. Unknown keys already on disk still load and survive later valid updates, so an older host keeps a newer host's settings. A newer client must gate any new key on the host protocol version, as `THEME_SYSTEM_PROTOCOL_VERSION` gates appearance settings; an older host rejects the whole update rather than persisting an unknown key.
+- **Dispatch checks every rule that looks only at the request.** `settings.update` params match `AppConfigUpdate` before this module runs ([[submodule-contracts-schema]]): a wrong type, a value outside a union or range, an unknown key, a blank name or key, a model with an empty `provider` or `id`, and a confirmation without the preference get `INVALID_PARAMS`. `updateConfig` keeps the request rules a schema cannot express, the locale tag and the preset rules, and also answers them with `INVALID_PARAMS`. The rules that need the stored config get their own code: `ANALYTICS_CONSENT_REQUIRED` when turning analytics back on lacks the confirmation, and `THEME_PAIR_REQUIRED` when system mode has no pair, incoming or stored. A failure rejects the whole update before cache, persistence, or broadcast changes.
 - Custom layout presets are a complete top-level catalog replacement, not a nested per-item patch. Each value is bounded, resource-free, uniquely identified, uses only the current preset schema, and contains no workspace/tab/session/terminal identity. A malformed persisted member is isolated during config validation; a wire mutation with any malformed member is rejected as a whole. No alternate config key or old preset schema is read or upgraded.
 - Deleting or editing a custom preset changes only the shared definition. It cannot mutate any frontend's instantiated frame or local default selection.
 - Analytics preference and first-run dialog completion are validated booleans. The dialog may persist the

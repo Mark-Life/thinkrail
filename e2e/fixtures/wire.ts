@@ -1,13 +1,76 @@
-import type { WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
+import { compile, type Validator } from "@earendil-works/pi-schema";
+import {
+	parseWsPush,
+	parseWsResult,
+	type WsChannel,
+	WsEnvelope,
+	type WsMethodName,
+	type WsParams,
+	WsRequestFrame,
+	WsResponse,
+	type WsResult,
+} from "@thinkrail/contracts";
 import { E2E_PORT } from "./paths";
 
 export class E2eWireTransientError extends Error {}
 
-function readResponse(data: unknown, id: string): { ok: boolean; result?: unknown } | null {
-	if (typeof data !== "object" || data === null) return null;
-	const frame = data as Record<string, unknown>;
-	if (frame.id !== id || typeof frame.ok !== "boolean") return null;
-	return frame.ok ? { ok: true, result: frame.result } : { ok: false };
+const envelope = compile(WsEnvelope);
+const response = compile(WsResponse);
+const requestFrame = compile(WsRequestFrame);
+
+function parseJson(message: unknown): unknown {
+	if (typeof message !== "string") return undefined;
+	try {
+		return JSON.parse(message);
+	} catch {
+		return undefined;
+	}
+}
+
+export function parseFrame(message: unknown): WsEnvelope | null {
+	const frame = parseJson(message);
+	return envelope.check(frame) ? frame : null;
+}
+
+export function readReply(message: unknown, id: string): WsResponse | null {
+	const frame = parseJson(message);
+	return response.check(frame) && frame.id === id ? frame : null;
+}
+
+export function parseReply(message: unknown): WsResponse | null {
+	const frame = parseJson(message);
+	return response.check(frame) ? frame : null;
+}
+
+/** A client request frame of any method, before its params are checked. */
+export function parseRequest(message: unknown): WsRequestFrame | null {
+	const frame = parseJson(message);
+	return requestFrame.check(frame) ? frame : null;
+}
+
+/**
+ * A client request for `method`, with params `validator` accepts. Compile it once per spec from
+ * `WS_METHOD_SCHEMAS[method].params`. @throws when the client sent params the schema refuses.
+ */
+export function readRequest<M extends WsMethodName>(
+	message: unknown,
+	method: M,
+	validator: Validator<WsParams<M>>,
+) {
+	const frame = parseRequest(message);
+	if (frame?.method !== method) return null;
+	if (!validator.check(frame.params)) {
+		throw new Error(`the client sent ${method} params its schema refuses`);
+	}
+	return { id: frame.id, params: frame.params };
+}
+
+/** A push on `channel` whose payload its schema accepts, else null. */
+export function readPush<C extends WsChannel>(message: unknown, channel: C) {
+	const frame = parseFrame(message);
+	if (!frame || !("channel" in frame) || frame.channel !== channel) return null;
+	const payload = parseWsPush(channel, frame.data);
+	return payload.ok ? payload.value : null;
 }
 
 export class E2eWire {
@@ -42,13 +105,21 @@ export class E2eWire {
 		return new E2eWire(socket);
 	}
 
-	request<M extends WsMethodName>(
+	request<M extends WsMethodName>(method: M, params: WsParams<M>, timeoutMs = 10_000) {
+		return this.send(method, params, timeoutMs);
+	}
+
+	requestUntyped<M extends WsMethodName>(method: M, params: unknown, timeoutMs = 10_000) {
+		return this.send(method, params, timeoutMs);
+	}
+
+	private send<M extends WsMethodName>(
 		method: M,
-		params: WsParams<M>,
-		timeoutMs = 10_000,
+		params: unknown,
+		timeoutMs: number,
 	): Promise<WsResult<M>> {
 		const id = `e2e_setup_${++this.sequence}`;
-		const request: WsRequest<M> = { id, method, params };
+		const request = { id, method, params };
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				cleanup();
@@ -61,18 +132,16 @@ export class E2eWire {
 				this.socket.removeEventListener("error", onError);
 			};
 			const onMessage = (event: MessageEvent) => {
-				if (typeof event.data !== "string") return;
-				let parsed: unknown;
-				try {
-					parsed = JSON.parse(event.data);
-				} catch {
+				const reply = readReply(event.data, id);
+				if (!reply) return;
+				cleanup();
+				if (!reply.ok) {
+					reject(new Error(`${method} failed on the isolated host wire`));
 					return;
 				}
-				const response = readResponse(parsed, id);
-				if (!response) return;
-				cleanup();
-				if (response.ok) resolve(response.result as WsResult<M>);
-				else reject(new Error(`${method} failed on the isolated host wire`));
+				const parsed = parseWsResult(method, reply.result);
+				if (parsed.ok) resolve(parsed.value);
+				else reject(new Error(parsed.problem));
 			};
 			const onClose = () => {
 				cleanup();

@@ -10,9 +10,9 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import type { BundledExtensions } from "@thinkrail/server";
-import type { BuildRuntimeSources } from "@thinkrail/server/build-support";
-import { injectChunkId, type SourceMapJson } from "./src/runtimeSourceMap";
+import { compile } from "@earendil-works/pi-schema";
+import { BuildRuntimeSources } from "@thinkrail/server/build-support/schema";
+import { injectChunkId, parseSourceMap } from "./src/runtimeSourceMap";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -20,11 +20,6 @@ const repoRoot = resolve(desktopDir, "..", "..");
 const stageDir = join(desktopDir, ".stage");
 const runtimeDir = join(stageDir, "runtime");
 const generatedEntry = join(stageDir, "server-entry.ts");
-const bundledRuntimeKeys = {
-	factories: "factories",
-	skillsDir: "skillsDir",
-	trashHelpers: "trashHelpers",
-} as const satisfies { [Key in keyof BundledExtensions]-?: Key };
 
 function runBun(args: string[]): void {
 	const result = spawnSync("bun", args, { cwd: repoRoot, stdio: "inherit" });
@@ -34,7 +29,9 @@ function runBun(args: string[]): void {
 	}
 }
 
-function resolveRuntimeSources(): BuildRuntimeSources {
+const isBuildRuntimeSources = compile(BuildRuntimeSources).check;
+
+function resolveRuntimeSources() {
 	const result = spawnSync(
 		"bun",
 		[
@@ -47,7 +44,10 @@ function resolveRuntimeSources(): BuildRuntimeSources {
 	if (result.status !== 0) {
 		throw new Error(`build-support manifest exited ${result.status ?? result.signal}`);
 	}
-	return JSON.parse(result.stdout) as BuildRuntimeSources;
+	const sources: unknown = JSON.parse(result.stdout);
+	if (!isBuildRuntimeSources(sources))
+		throw new Error("build-support manifest has the wrong shape");
+	return sources;
 }
 
 function sourceMapRelease(): string | null {
@@ -65,7 +65,7 @@ function uploadRuntimeSourceMap(runtimeFile: string, release: string): void {
 	const mapFile = `${runtimeFile}.map`;
 	const injected = injectChunkId(
 		readFileSync(runtimeFile, "utf8"),
-		JSON.parse(readFileSync(mapFile, "utf8")) as SourceMapJson,
+		parseSourceMap(readFileSync(mapFile, "utf8")),
 		release,
 	);
 	writeFileSync(runtimeFile, injected.code);
@@ -137,34 +137,9 @@ try {
 	writeFileSync(
 		generatedEntry,
 		`${sources.extensions.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`).join("\n")}
-import { bootHost, registerBundledRuntime, reportDesktopError } from "@thinkrail/server";
+import { desktopHostStarter } from ${JSON.stringify(join(desktopDir, "runtimeEntry.ts"))};
 
-export async function startDesktopHost(options) {
-  await registerBundledRuntime({
-    ${bundledRuntimeKeys.factories}: [${sources.extensions.map((_, index) => `factory${index}`).join(", ")}],
-    ${bundledRuntimeKeys.skillsDir}: options.runtimeDir + "/skills",
-    ${bundledRuntimeKeys.trashHelpers}: {
-      macos: options.runtimeDir + "/macos-trash",
-      windows: options.runtimeDir + "/windows-trash.exe",
-    },
-  });
-  const host = await bootHost({
-    port: 0,
-    host: "127.0.0.1",
-    portMode: "exact",
-    resolveShellEnv: true,
-    staticDir: options.staticDir,
-    appVersion: options.appVersion,
-    analytics: {
-      posthogApiKey: options.posthogProjectKey,
-      channel: options.channel,
-      build: "desktop",
-      appRoot: options.runtimeDir + "/..",
-      ...(options.openExternal ? { openExternal: options.openExternal } : {}),
-    },
-  });
-  return { ...host, reportError: reportDesktopError };
-}
+export const startDesktopHost = desktopHostStarter([${sources.extensions.map((_, index) => `factory${index}`).join(", ")}]);
 `,
 	);
 	const runtimeFile = join(runtimeDir, "server-runtime.ts");

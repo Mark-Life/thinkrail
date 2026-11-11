@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
@@ -11,6 +12,8 @@ import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { holdPierreWorkers, pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { readPersistedWorkspaces } from "./fixtures/storedState";
+import { parseReply, parseRequest } from "./fixtures/wire";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
 const diffTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="diff"]');
@@ -18,6 +21,12 @@ const sections = (page: Page) => page.getByTestId("changes-section");
 const section = (page: Page, path: string) =>
 	page.locator(`[data-testid="changes-section"][data-path="${path}"]`);
 const row = (page: Page, name: string) => page.getByTestId("change-item").filter({ hasText: name });
+
+function worktreeWorkspaceId(worktree: string) {
+	const workspace = readPersistedWorkspaces().find((w) => w.worktreePath === worktree);
+	if (!workspace) throw new Error(`no persisted workspace for ${worktree}`);
+	return workspace.id;
+}
 
 async function seedThreeChanges(page: Page): Promise<string> {
 	await openFixtureProject(page);
@@ -401,9 +410,7 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 		join(worktree, "script.ts"),
 		Array.from({ length: 100 }, (_, i) => `export const value${i + 1} = true;`).join("\n"),
 	);
-	const workspaceId = JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")).find(
-		(w: { worktreePath: string }) => w.worktreePath === worktree,
-	).id as string;
+	const workspaceId = worktreeWorkspaceId(worktree);
 	const baseSha = gitAs(worktree, "rev-parse", "HEAD");
 	mkdirSync(join(E2E_DATA_DIR, "reviews"), { recursive: true });
 	writeFileSync(
@@ -423,7 +430,7 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 					],
 					verdict: "request_changes",
 					todoId: "t1",
-					sessionId: "seeded",
+					sessionId: testSessionId("seeded"),
 					reviewedSha: baseSha,
 					at: 1,
 				},
@@ -442,7 +449,7 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 					status: "draft",
 					anchorState: "anchored",
 					author: "agent",
-					origin: { todoId: "t1", reviewedSha: baseSha, sessionId: "seeded" },
+					origin: { todoId: "t1", reviewedSha: baseSha, sessionId: testSessionId("seeded") },
 					createdAt: 1,
 				},
 			],
@@ -497,9 +504,7 @@ test("the guide reveals a finding deep inside a bounded (virtualized) section", 
 		`${Array.from({ length: 1600 }, (_, i) => `export const value${i + 1} = true;`).join("\n")}\n`,
 	);
 	await revealWorkbenchTool(page, "changes");
-	const workspaceId = JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")).find(
-		(w: { worktreePath: string }) => w.worktreePath === worktree,
-	).id as string;
+	const workspaceId = worktreeWorkspaceId(worktree);
 	const baseSha = gitAs(worktree, "rev-parse", "HEAD");
 	mkdirSync(join(E2E_DATA_DIR, "reviews"), { recursive: true });
 	writeFileSync(
@@ -516,7 +521,7 @@ test("the guide reveals a finding deep inside a bounded (virtualized) section", 
 					readingOrder: [{ path: "script.ts", why: "The actual change." }],
 					verdict: "request_changes",
 					todoId: "t1",
-					sessionId: "seeded",
+					sessionId: testSessionId("seeded"),
 					reviewedSha: baseSha,
 					at: 1,
 				},
@@ -535,7 +540,7 @@ test("the guide reveals a finding deep inside a bounded (virtualized) section", 
 					status: "draft",
 					anchorState: "anchored",
 					author: "agent",
-					origin: { todoId: "t1", reviewedSha: baseSha, sessionId: "seeded" },
+					origin: { todoId: "t1", reviewedSha: baseSha, sessionId: testSessionId("seeded") },
 					createdAt: 1,
 				},
 			],
@@ -569,13 +574,13 @@ test("revealing a file stays anchored while slow diffs determine the virtual lis
 		const server = browser.connectToServer();
 		const delayed = new Set<string>();
 		browser.onMessage((message) => {
-			const frame = JSON.parse(String(message));
-			if (frame.method === "git.diffFile") delayed.add(frame.id);
+			const frame = parseRequest(String(message));
+			if (frame?.method === "git.diffFile") delayed.add(frame.id);
 			server.send(message);
 		});
 		server.onMessage((message) => {
-			const frame = JSON.parse(String(message));
-			if (delayed.delete(frame.id)) {
+			const reply = parseReply(String(message));
+			if (reply && delayed.delete(reply.id)) {
 				setTimeout(() => browser.send(message), 2_500);
 			} else browser.send(message);
 		});

@@ -31,9 +31,13 @@ to that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCa
 
 ## Get right
 
-- **Render defensively.** `pi-web-access`'s `details` shape is not a stable public API, so read `result`
-  best-effort (provider name via optional chaining) and otherwise render the tool's **text content**
-  (`resultText`) — never hard-depend on a `details` field. Args drive headers/summaries: first query for
+- **Render defensively.** `pi-web-access` builds `details` as inline literals and exports no type for
+  them, so no compile-time tie is possible. These are accepted partial reads, each through an open
+  pi-schema check: `details.provider` and `details.results[0].provider` (search), `details.query` and
+  `details.url` (stored content). A renamed field only drops that header text; the card still renders
+  the tool's **text content** (`resultText`) and never hard-depends on a `details` field. The extension's
+  SPEC lists these fields for review on a version bump. The arguments the cards read are typed by
+  `inputs.ts`, untied for the same reason. Args drive headers/summaries: first query for
   search; first URL/local path for fetch; selected query/URL then response id for stored content.
 - Successful text content is folded and rendered as Markdown, so synthesized citations and fetched links
   are real safe new-tab links rather than highlighted Markdown source. Error text remains plain.

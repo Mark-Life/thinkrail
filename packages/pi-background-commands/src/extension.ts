@@ -3,20 +3,24 @@ import type {
 	ExtensionFactory,
 	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
+import type { Schema, Static } from "@earendil-works/pi-schema";
 import { Type } from "typebox";
 import { tail } from "./output";
 import { createBackgroundCommands } from "./service";
 import { standaloneContext } from "./shell-context";
 import type {
 	BackgroundCommandCompletion,
+	BackgroundCommandCompletionDetails,
 	BackgroundCommandFlush,
+	BackgroundCommandOutputDetails,
 	BackgroundCommandSnapshot,
 	BackgroundCommands,
 } from "./types";
-
-export const BACKGROUND_COMMAND_COMPLETION_MESSAGE = "background-command-completion";
-
-export type CompletionDelivery = "wake" | "run" | "appended";
+import {
+	BACKGROUND_COMMAND_COMPLETION_MESSAGE,
+	BackgroundCommandToolArgs,
+	type CompletionDelivery,
+} from "./wire";
 
 type DeliveryMode = { idle: true } | { idle: false; runContinues: boolean; viaHost: boolean };
 
@@ -30,32 +34,8 @@ export type BackgroundCommandInput =
 	| { action: "list" }
 	| { action: "output" | "stop"; id: string };
 
-const parameters = Type.Object(
-	{
-		action: Type.Enum(["start", "list", "output", "stop"], { type: "string" }),
-		command: Type.Optional(
-			Type.String({
-				description: "Foreground shell command, for start only",
-				minLength: 1,
-				maxLength: 65536,
-			}),
-		),
-		name: Type.Optional(
-			Type.String({ description: "Display name, for start only", maxLength: 200 }),
-		),
-		timeout: Type.Optional(
-			Type.Number({
-				description: "Timeout in seconds, for start only; no default",
-				exclusiveMinimum: 0,
-				maximum: 2147483.647,
-			}),
-		),
-		id: Type.Optional(
-			Type.String({ description: "Opaque command id returned by start, for output or stop only" }),
-		),
-	},
-	{ additionalProperties: false },
-);
+const toolParameters = <S extends Schema>(schema: S) => Type.Unsafe<Static<S>>(schema);
+const parameters = toolParameters(BackgroundCommandToolArgs);
 
 function assertInput(input: unknown): asserts input is BackgroundCommandInput {
 	if (!input || typeof input !== "object" || !("action" in input))
@@ -87,7 +67,7 @@ function assertInput(input: unknown): asserts input is BackgroundCommandInput {
 		throw new Error("Unsupported inputs for this background command action");
 }
 
-function summary(snapshot: BackgroundCommandSnapshot) {
+function summary<S extends BackgroundCommandSnapshot>(snapshot: S) {
 	const { command: _command, ...result } = snapshot;
 	return result;
 }
@@ -298,7 +278,7 @@ export function createBackgroundCommandsExtension(
 								text: `${finished ? terminalText(snapshot) : statusText(snapshot)}\n\n${output.truncated ? "[Output truncated; retained tail only.]\n" : ""}${output.text || "(no output)"}`,
 							},
 						],
-						details: { snapshot, output },
+						details: { snapshot, output } satisfies BackgroundCommandOutputDetails,
 					};
 				},
 			});
@@ -332,7 +312,7 @@ export function createBackgroundCommandsExtension(
 										...summary(snapshot),
 										output: { text: excerpt.text, truncated },
 										delivery: deliveryOf(mode, batchWakes, index),
-									},
+									} satisfies BackgroundCommandCompletionDetails,
 								},
 								{ triggerTurn: completion === carrier },
 							);

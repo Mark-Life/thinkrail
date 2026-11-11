@@ -1,59 +1,20 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { isPreviewCompatibleTabKind, layoutResourceIdentity, nullProto } from "../../lib";
 import type {
+	LayoutTerminalTab,
+	LayoutToolTab,
+	WorkbenchAuxiliaryGroup,
+	WorkbenchCenterGroup,
+	WorkbenchCenterNode,
+	WorkbenchFrame,
+	WorkbenchSideFrame,
+} from "./schema";
+import type {
 	LayoutAuxiliaryRegion,
-	LayoutBottomAlignment,
 	LayoutCenterNode,
 	LayoutCenterTab,
-	LayoutTerminalTab,
-	LayoutToolId,
-	LayoutToolRestoreTarget,
-	LayoutToolTab,
 	WorkspaceLayoutDocument,
 } from "./types";
-
-export interface WorkbenchCenterGroup {
-	kind: "group";
-	id: string;
-}
-
-export interface WorkbenchCenterSplit {
-	kind: "split";
-	id: string;
-	direction: "horizontal" | "vertical";
-	weights: [number, number];
-	children: [WorkbenchCenterNode, WorkbenchCenterNode];
-}
-
-export type WorkbenchCenterNode = WorkbenchCenterGroup | WorkbenchCenterSplit;
-
-export interface WorkbenchAuxiliaryGroup {
-	id: string;
-	weight: number;
-	folded: boolean;
-	tools: LayoutToolTab[];
-}
-
-export interface WorkbenchSideFrame {
-	visible: boolean;
-	width: number;
-	groups: WorkbenchAuxiliaryGroup[];
-}
-
-export interface WorkbenchBottomFrame {
-	visible: boolean;
-	height: number;
-	alignment: LayoutBottomAlignment;
-	groups: WorkbenchAuxiliaryGroup[];
-}
-
-export interface WorkbenchFrame {
-	version: 1;
-	center: WorkbenchCenterNode;
-	left: WorkbenchSideFrame;
-	right: WorkbenchSideFrame;
-	bottom: WorkbenchBottomFrame;
-	toolRestoreTargets: Partial<Record<LayoutToolId, LayoutToolRestoreTarget>>;
-}
 
 export interface WorkspaceGroupView {
 	tabs: LayoutCenterTab[];
@@ -335,7 +296,7 @@ export function normalizeWorkspaceView(
 
 export function applyProjectedLayoutDocument(
 	state: NormalizedLayoutState,
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	document: WorkspaceLayoutDocument,
 ): NormalizedLayoutState {
 	const candidateFrame = workbenchFrameFromDocument(document);

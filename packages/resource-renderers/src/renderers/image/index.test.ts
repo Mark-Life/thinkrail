@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import type { ResourceRenderer, ReviewThread } from "../../registry";
 import { registerResourceRenderer, resolveRenderers } from "../../registry";
@@ -49,9 +50,13 @@ test("image extensions match when MIME metadata is absent", () => {
 	const disposers = [fallback, imageRenderer].map(registerResourceRenderer);
 	try {
 		expect(
-			resolveRenderers({ workspaceId: "ws", path: "photo.avif", text: false }, "view", {
-				mobile: false,
-			}).map((renderer) => renderer.id),
+			resolveRenderers(
+				{ workspaceId: testWorkspaceId("ws"), path: "photo.avif", text: false },
+				"view",
+				{
+					mobile: false,
+				},
+			).map((renderer) => renderer.id),
 		).toEqual(["thinkrail/image", "thinkrail/binary"]);
 	} finally {
 		for (const dispose of disposers.reverse()) dispose();

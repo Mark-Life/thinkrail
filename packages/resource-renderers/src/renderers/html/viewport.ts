@@ -37,8 +37,8 @@ export function htmlFrameGeometry(
 
 export function htmlViewport(viewState: unknown): HtmlViewport {
 	const value =
-		typeof viewState === "object" && viewState !== null
-			? (viewState as { viewport?: unknown }).viewport
+		typeof viewState === "object" && viewState !== null && "viewport" in viewState
+			? viewState.viewport
 			: undefined;
 	return HTML_VIEWPORTS.find((candidate) => candidate === value) ?? "desktop";
 }

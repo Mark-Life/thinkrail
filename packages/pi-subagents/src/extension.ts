@@ -5,6 +5,8 @@ import type {
 	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { Schema, Static } from "@earendil-works/pi-schema";
+import type { CompletionDelivery } from "pi-background-commands/wire";
 import {
 	type ChildHandle,
 	createDelegationService,
@@ -21,14 +23,18 @@ import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
 import { RECURSION_GUARD_TOOLS, toSpawnMapping } from "./mapping";
 import { THINKING_LEVELS } from "./thinking";
-
-export const SUBAGENT_COMPLETION_MESSAGE = "subagent-completion";
-
-export type CompletionDelivery = "wake" | "run" | "appended";
-
-export type SubagentCompletionDetails = DelegationRunDetails & { delivery?: CompletionDelivery };
+import {
+	AgentToolInput,
+	GetSubagentResultInput,
+	SUBAGENT_COMPLETION_MESSAGE,
+	type SubagentCompletionDetails,
+} from "./wire";
 
 const MAX_RESULT_CHARS = 50_000;
+
+const toolParameters = <S extends Schema>(schema: S) => Type.Unsafe<Static<S>>(schema);
+const agentParameters = toolParameters(AgentToolInput);
+const getResultParameters = toolParameters(GetSubagentResultInput);
 
 export interface SubagentsExtensionOptions {
 	service?: DelegationService;
@@ -302,25 +308,7 @@ subagent needs in the task.
 
 Available subagent types:
 ${known}`,
-				parameters: Type.Object({
-					subagent_type: Type.String({
-						description: 'The agent definition to run, e.g. "scout"',
-					}),
-					task: Type.String({
-						description: "The complete, self-contained task for the subagent",
-					}),
-					model: Type.Optional(
-						Type.String({
-							description:
-								'Available model for an unpinned agent: "provider/id" or "provider/id:thinking". Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
-						}),
-					),
-					run_in_background: Type.Optional(
-						Type.Boolean({
-							description: "Do not wait: return the child session id immediately",
-						}),
-					),
-				}),
+				parameters: agentParameters,
 				async execute(toolCallId, params, signal, onUpdate, ctx) {
 					if (!isEnabled()) throw new Error("Subagents are disabled in this session.");
 					const definition = definitions.find((d) => d.name === params.subagent_type);
@@ -417,9 +405,7 @@ ${known}`,
 				label: "Get subagent result",
 				description:
 					"Collect the result or current status of a subagent started with Agent (typically one started with run_in_background).",
-				parameters: Type.Object({
-					session_id: Type.String({ description: "The child session id returned by Agent" }),
-				}),
+				parameters: getResultParameters,
 				async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 					const service = serviceFor(ctx);
 					const found = service.findChild(params.session_id);

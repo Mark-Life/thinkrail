@@ -1,10 +1,16 @@
 import { realpathSync } from "node:fs";
+import { compile } from "@earendil-works/pi-schema";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import type { ExtUiRequest, SessionStateRecord } from "@thinkrail/contracts";
+import { WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { readPush, readRequest } from "./fixtures/wire";
+
+const SESSION_EXTUIREPLY_PARAMS = compile(WS_METHOD_SCHEMAS["session.extUiReply"].params);
 
 const BASE_TS = 1_700_950_000_000;
 const MCP_CALL = "call-linear";
@@ -43,31 +49,26 @@ async function routeWire(page: Page): Promise<Wire> {
 		browser = route;
 		const server = route.connectToServer();
 		route.onMessage((message) => {
-			try {
-				const frame = JSON.parse(message.toString()) as {
-					method?: string;
-					params?: { response?: { id: string; value: unknown } };
-				};
-				const response = frame.params?.response;
-				if (frame.method === "session.extUiReply" && response) {
-					replies.push(response);
-					for (const [sessionId, request] of asking) {
-						if (request.id === response.id) asking.delete(sessionId);
-					}
+			const reply = readRequest(
+				message.toString(),
+				"session.extUiReply",
+				SESSION_EXTUIREPLY_PARAMS,
+			);
+			if (reply) {
+				const { response } = reply.params;
+				replies.push(response);
+				for (const [sessionId, request] of asking) {
+					if (request.id === response.id) asking.delete(sessionId);
 				}
-			} catch {}
+			}
 			server.send(message);
 		});
 		server.onMessage((message) => {
-			try {
-				const frame = JSON.parse(message.toString()) as { channel?: string; data?: unknown };
-				if (frame.channel === "session.state" && frame.data) {
-					route.send(
-						JSON.stringify({ ...frame, data: withDialog(frame.data as SessionStateRecord) }),
-					);
-					return;
-				}
-			} catch {}
+			const record = readPush(message.toString(), "session.state");
+			if (record) {
+				route.send(JSON.stringify({ channel: "session.state", data: withDialog(record) }));
+				return;
+			}
 			route.send(message);
 		});
 	});
@@ -131,13 +132,13 @@ test("an extension dialog about a tool call asks on that tool's card, out of a c
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = await openSeededChat(page, "Dialog on a tool card");
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog on a tool card"));
 	const group = page.getByTestId("activity-group").first();
 	await expect(group).toHaveAttribute("data-expanded", "false");
 
 	wire.ask({
 		id: "extui-mcp",
-		sessionId,
+		sessionId: sessionId,
 		kind: "select",
 		title: "Allow linear/create_issue? It may change data.",
 		options: ["Deny", "Allow once", "Allow in this chat", "Always allow"],
@@ -179,13 +180,13 @@ test("an approval lists the call's whole input inside the prompt, anchored or do
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = await openSeededChat(page, "Approval lists the input");
+	const sessionId = testSessionId(await openSeededChat(page, "Approval lists the input"));
 	const group = page.getByTestId("activity-group").first();
 	const topic = "A very long research topic, written out in full detail. ".repeat(60).trim();
 
 	wire.ask({
 		id: "extui-anchored",
-		sessionId,
+		sessionId: sessionId,
 		kind: "select",
 		title: "Allow linear/create_issue? It may change data.",
 		options: ["Deny", "Allow once"],
@@ -213,7 +214,7 @@ test("an approval lists the call's whole input inside the prompt, anchored or do
 
 	wire.ask({
 		id: "extui-docked",
-		sessionId,
+		sessionId: sessionId,
 		kind: "select",
 		title: "Allow linear/create_issue? It may change data.",
 		options: ["Deny", "Allow once"],
@@ -232,11 +233,11 @@ test("a draft typed into an anchored prompt survives folding its Activity group 
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = await openSeededChat(page, "Dialog draft across folds");
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog draft across folds"));
 	const group = page.getByTestId("activity-group").first();
 	wire.ask({
 		id: "extui-edit",
-		sessionId,
+		sessionId: sessionId,
 		kind: "editor",
 		title: "Edit the issue body",
 		prefill: "original prefill",
@@ -262,11 +263,11 @@ test("a dialog tied to no tool call docks above the composer, and a host dismiss
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = await openSeededChat(page, "Dialog docked above the composer");
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog docked above the composer"));
 
 	wire.ask({
 		id: "extui-paste",
-		sessionId,
+		sessionId: sessionId,
 		kind: "input",
 		title: "Paste the code from the browser",
 	});
@@ -290,7 +291,7 @@ test("a dialog tied to no tool call docks above the composer, and a host dismiss
 
 	const gone: DialogRequest = {
 		id: "extui-gone",
-		sessionId,
+		sessionId: sessionId,
 		kind: "confirm",
 		title: "Run it?",
 		message: "Sure?",
@@ -306,12 +307,12 @@ test("options stack in one column in a narrow prompt, and a tall docked prompt s
 	page,
 }) => {
 	const wire = await routeWire(page);
-	const sessionId = await openSeededChat(page, "Dialog layout limits");
+	const sessionId = testSessionId(await openSeededChat(page, "Dialog layout limits"));
 	const chat = page.getByTestId("chat-scroll");
 
 	wire.ask({
 		id: "extui-many",
-		sessionId,
+		sessionId: sessionId,
 		kind: "select",
 		title: "Which branch should the agent rebase onto?",
 		options: Array.from({ length: 25 }, (_, index) => `release/2026.${index + 1}`),
@@ -330,7 +331,7 @@ test("options stack in one column in a narrow prompt, and a tall docked prompt s
 	await page.setViewportSize({ width: 390, height: 844 });
 	wire.ask({
 		id: "extui-narrow",
-		sessionId,
+		sessionId: sessionId,
 		kind: "select",
 		title: "Allow linear/create_issue? It may change data.",
 		options: ["Deny", "Allow once", "Allow in this chat", "Always allow"],

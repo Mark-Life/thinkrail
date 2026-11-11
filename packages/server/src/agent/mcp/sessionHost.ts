@@ -10,9 +10,11 @@ import {
 	type ToolCallEvent,
 	type ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
+import type { SessionId } from "@thinkrail/contracts";
 import { grantedMcpTools, loadHostMcpConfig, type McpProjectPolicy, mcpTargetOf } from "./config";
 import { createMcpEngine } from "./engine";
 import { isMcpResultTool, summarizeMcpResult } from "./results";
+import { isJsonObject } from "./schemas";
 
 const MCP_TOOL_PREFIX = "mcp__";
 
@@ -44,7 +46,7 @@ export type GrantMcpTool = (server: string, target: string, tool: string) => voi
 
 export interface McpSessionHostOptions {
 	policy: () => McpProjectPolicy;
-	onCommandSettled?: (sessionId: string) => void;
+	onCommandSettled?: (sessionId: SessionId) => void;
 	askForToolCall: AskForToolCall;
 	grantTool: GrantMcpTool;
 }
@@ -127,7 +129,7 @@ export function createMcpSessionHost({
 			if (!isMcpResultTool(event.toolName)) return undefined;
 			const summary = summarizeMcpResult(event.toolName, event.structuredContent, event.isError);
 			if (!summary) return undefined;
-			const details = event.details && typeof event.details === "object" ? event.details : {};
+			const details = isJsonObject(event.details) ? event.details : {};
 			return { details: { ...details, thinkrail: summary } };
 		});
 	};

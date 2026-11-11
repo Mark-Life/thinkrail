@@ -1,4 +1,5 @@
-import type { ReviewComment, ReviewSnapshot } from "@thinkrail/contracts";
+import type { ReviewComment, ReviewSnapshot, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { getProjects } from "../projects";
 import { getReviewSnapshot } from "../reviews";
 import {
@@ -11,44 +12,50 @@ import { listWorkspaceRecords } from "../workspaces";
 import { itemReviewActive } from "./planReviewQueue";
 
 interface ItemRef {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	id: string;
 }
 
+export function findingItem(
+	workspaceId: WorkspaceId,
+	origin: NonNullable<ReviewComment["origin"]>,
+): ItemRef | null {
+	const sessionId = parseSessionId(origin.sessionId);
+	return sessionId === null ? null : { workspaceId, sessionId, id: origin.todoId };
+}
+
 const activeFixItems = new Set<string>();
-const activeFixKey = (sessionId: string, todoId: string): string =>
+const activeFixKey = (sessionId: SessionId, todoId: string): string =>
 	JSON.stringify([sessionId, todoId]);
 
-export function claimItemFix(sessionId: string, todoId: string): boolean {
+export function claimItemFix(sessionId: SessionId, todoId: string): boolean {
 	const key = activeFixKey(sessionId, todoId);
 	if (activeFixItems.has(key)) return false;
 	activeFixItems.add(key);
 	return true;
 }
 
-export function releaseItemFix(sessionId: string, todoId: string): void {
+export function releaseItemFix(sessionId: SessionId, todoId: string): void {
 	activeFixItems.delete(activeFixKey(sessionId, todoId));
 }
 
 /** See host/SPEC.md for the active-review contract. */
-export function isItemUnderActiveReview(sessionId: string, id: string): boolean {
+export function isItemUnderActiveReview(sessionId: SessionId, id: string): boolean {
 	return activeFixItems.has(activeFixKey(sessionId, id)) || itemReviewActive(sessionId, id);
 }
 
-function isFindingStale(workspaceId: string, comment: ReviewComment): boolean {
-	const origin = comment.origin;
-	return (
-		comment.anchorState === "outdated" &&
-		origin !== undefined &&
-		reviewedShaSuperseded(
-			{ workspaceId, sessionId: origin.sessionId, id: origin.todoId },
-			origin.reviewedSha,
-		)
-	);
+function isFindingStale(workspaceId: WorkspaceId, comment: ReviewComment): boolean {
+	const { origin } = comment;
+	if (comment.anchorState !== "outdated" || origin === undefined) return false;
+	const item = findingItem(workspaceId, origin);
+	return item !== null && reviewedShaSuperseded(item, origin.reviewedSha);
 }
 
-export function markClientStale<T extends ReviewSnapshot>(snapshot: T, workspaceId: string): T {
+export function markClientStale<T extends ReviewSnapshot>(
+	snapshot: T,
+	workspaceId: WorkspaceId,
+): T {
 	return {
 		...snapshot,
 		comments: snapshot.comments.map((c) =>

@@ -1,5 +1,6 @@
 import type { SpecEdge, SpecGraph, SpecNode } from "./graph.ts";
-import { FIELDS, type Frontmatter, type LinkKind, list, scalar } from "./parse.ts";
+import { type Frontmatter, type LinkKind, list, scalar } from "./parse.ts";
+import { DEFAULT_GREP_LIMIT, FIELDS, type SLICE_DIRECTIONS } from "./wire.ts";
 
 export interface SpecContentEntry {
 	path: string;
@@ -38,8 +39,6 @@ export interface GrepResult {
 export function formatGrepMatch(match: GrepMatch): string {
 	return `${match.path}:${match.line}: ${match.snippet}`;
 }
-
-export const DEFAULT_GREP_LIMIT = 200;
 
 function matchesFilters(fm: Frontmatter, filters: SpecFilters): boolean {
 	if (filters.type !== undefined && scalar(fm, FIELDS.type) !== filters.type) return false;
@@ -99,8 +98,6 @@ export function grepSpecs(entries: SpecContentEntry[], opts: GrepOptions): GrepR
 	}
 	return { matches, truncated: false };
 }
-
-export const SLICE_DIRECTIONS = ["subtree", "ancestors", "neighbors"] as const;
 
 export type SliceDirection = (typeof SLICE_DIRECTIONS)[number];
 

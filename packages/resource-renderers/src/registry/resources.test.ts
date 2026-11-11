@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	anchorLabel,
 	describeResource,
@@ -65,7 +66,7 @@ function registerFallbacks(): void {
 }
 
 const markdown: ResourceDescriptor = {
-	workspaceId: "ws",
+	workspaceId: testWorkspaceId("ws"),
 	path: "docs/README.md",
 	mime: "text/markdown",
 	language: "markdown",
@@ -156,9 +157,13 @@ test("text and byte resources always resolve to their registered fallback", () =
 	registerFallbacks();
 	expect(resolveRenderers(markdown, "diff", { mobile: false }).at(-1)?.id).toBe("thinkrail/code");
 	expect(
-		resolveRenderers({ workspaceId: "ws", path: "asset.bin", text: false, byteLength: 4 }, "view", {
-			mobile: false,
-		}).map((item) => item.id),
+		resolveRenderers(
+			{ workspaceId: testWorkspaceId("ws"), path: "asset.bin", text: false, byteLength: 4 },
+			"view",
+			{
+				mobile: false,
+			},
+		).map((item) => item.id),
 	).toEqual(["thinkrail/binary"]);
 });
 
@@ -214,13 +219,13 @@ test("anchor labels cover line ranges, structural references, regions, and whole
 test("resource descriptions derive language and mime without overriding host metadata", () => {
 	expect(
 		describeResource(
-			"ws",
+			testWorkspaceId("ws"),
 			"src/view.TSX",
 			{ hash: "hash", byteLength: 42, text: true },
 			{ kind: "uncommitted" },
 		),
 	).toEqual({
-		workspaceId: "ws",
+		workspaceId: testWorkspaceId("ws"),
 		path: "src/view.TSX",
 		mime: "text/typescript",
 		language: "tsx",
@@ -229,7 +234,7 @@ test("resource descriptions derive language and mime without overriding host met
 		scope: { kind: "uncommitted" },
 	});
 	expect(
-		describeResource("ws", "asset.png", {
+		describeResource(testWorkspaceId("ws"), "asset.png", {
 			hash: "hash",
 			byteLength: 10,
 			text: false,
@@ -237,7 +242,11 @@ test("resource descriptions derive language and mime without overriding host met
 		}),
 	).toMatchObject({ mime: "application/custom", text: false });
 	expect(
-		describeResource("ws", "docs/page.mdx", { hash: "hash", byteLength: 5, text: true }),
+		describeResource(testWorkspaceId("ws"), "docs/page.mdx", {
+			hash: "hash",
+			byteLength: 5,
+			text: true,
+		}),
 	).toMatchObject({ mime: "text/markdown", language: "mdx" });
 });
 

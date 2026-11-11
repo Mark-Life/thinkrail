@@ -1,5 +1,9 @@
-import type {
-	McpContentBlockSummary,
+import { arr, compile, map, obj, str, unknown } from "@earendil-works/pi-schema";
+import {
+	isMcpContentBlockSummary,
+	isTextContent,
+	JsonObject,
+	keepValidFields,
 	McpResultSummary,
 	McpToolDetails,
 } from "@thinkrail/contracts";
@@ -7,17 +11,18 @@ import { resultText } from "@thinkrail/extension-api/web";
 
 export const MCP_TOOL_PREFIX = "mcp__";
 
-type JsonRecord = Record<string, unknown>;
-
-export function isRecord(value: unknown): value is JsonRecord {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const ResultDetails = compile(obj({ details: map(unknown()) }, { open: true }));
+const ResultContent = compile(obj({ content: arr(unknown()) }, { open: true }));
+const SummaryBlocks = compile(obj({ blocks: arr(unknown()) }, { open: true }));
+const FullOutputPath = compile(obj({ fullOutputPath: str({ minLength: 1 }) }, { open: true }));
+const ToolDetails = compile(McpToolDetails);
+const ResultSummary = compile(McpResultSummary);
 
 const stringOf = (value: unknown): string | undefined =>
 	typeof value === "string" ? value : undefined;
 
-function detailsOf(result: unknown): JsonRecord | null {
-	return isRecord(result) && isRecord(result.details) ? result.details : null;
+function detailsOf(result: unknown) {
+	return ResultDetails.check(result) ? result.details : null;
 }
 
 export interface McpCallTitle {
@@ -35,14 +40,10 @@ export function parseMcpToolName(toolName: string): McpCallTitle | null {
 }
 
 export function readMcpToolDetails(result: unknown): McpToolDetails | null {
-	const details = detailsOf(result);
-	if (typeof details?.server !== "string" || typeof details.tool !== "string") return null;
-	const fullOutputPath = stringOf(details.fullOutputPath);
-	return {
-		server: details.server,
-		tool: details.tool,
-		...(fullOutputPath ? { fullOutputPath } : {}),
-	};
+	const kept = keepValidFields(detailsOf(result), ToolDetails);
+	if (!kept) return null;
+	const { server, tool, fullOutputPath } = kept.fields;
+	return { server, tool, ...(fullOutputPath ? { fullOutputPath } : {}) };
 }
 
 export function mcpCallTitle(toolName: string, result: unknown): McpCallTitle {
@@ -52,60 +53,21 @@ export function mcpCallTitle(toolName: string, result: unknown): McpCallTitle {
 }
 
 export function mcpFullOutputPath(result: unknown): string | null {
-	return stringOf(detailsOf(result)?.fullOutputPath) || null;
+	const details = detailsOf(result);
+	return FullOutputPath.check(details) ? details.fullOutputPath : null;
 }
 
-const optionalString = (value: unknown): boolean =>
-	value === undefined || typeof value === "string";
-
-function isBlockSummary(value: unknown): value is McpContentBlockSummary {
-	if (!isRecord(value)) return false;
-	switch (value.kind) {
-		case "text":
-			return typeof value.chars === "number";
-		case "image":
-		case "audio":
-			return typeof value.mimeType === "string";
-		case "resource_link":
-			return (
-				typeof value.uri === "string" &&
-				optionalString(value.name) &&
-				optionalString(value.mimeType)
-			);
-		case "resource":
-			return (
-				typeof value.uri === "string" &&
-				optionalString(value.mimeType) &&
-				(value.chars === undefined || typeof value.chars === "number")
-			);
-		default:
-			return false;
-	}
-}
-
+/** The host summary; a malformed block or field drops alone, and a summary with no block list is absent. */
 export function readMcpResultSummary(result: unknown): McpResultSummary | null {
 	const summary = detailsOf(result)?.thinkrail;
-	if (!isRecord(summary) || !Array.isArray(summary.blocks)) return null;
-	return {
-		blocks: summary.blocks.filter(isBlockSummary),
-		...(summary.structuredContent !== undefined
-			? { structuredContent: summary.structuredContent }
-			: {}),
-		...(summary.structuredContentTruncated === true ? { structuredContentTruncated: true } : {}),
-		...(summary.isError === true ? { isError: true } : {}),
-	};
+	if (!SummaryBlocks.check(summary)) return null;
+	const blocks = summary.blocks.filter(isMcpContentBlockSummary);
+	return keepValidFields({ ...summary, blocks }, ResultSummary)?.fields ?? null;
 }
 
 export function mcpText(result: unknown): string {
-	const content = isRecord(result) ? result.content : undefined;
-	if (!Array.isArray(content)) return resultText(result);
-	return content
-		.flatMap((block) =>
-			isRecord(block) && block.type === "text" && typeof block.text === "string"
-				? [block.text]
-				: [],
-		)
-		.join("\n");
+	if (!ResultContent.check(result)) return resultText(result);
+	return result.content.flatMap((block) => (isTextContent(block) ? [block.text] : [])).join("\n");
 }
 
 const ARGS_SUMMARY_CHARS = 100;
@@ -167,7 +129,7 @@ const LISTING_FIELDS: Readonly<Record<string, { items: string; uri: string }>> =
 };
 
 function listedItem(value: unknown, uriField: string, fallbackServer: string): McpListedItem[] {
-	if (!isRecord(value)) return [];
+	if (!JsonObject.check(value)) return [];
 	const uri = stringOf(value[uriField]);
 	if (!uri) return [];
 	const title = stringOf(value.title);
@@ -186,14 +148,14 @@ function listedItem(value: unknown, uriField: string, fallbackServer: string): M
 }
 
 function listingError(value: unknown): McpListingError[] {
-	if (!isRecord(value)) return [];
+	if (!JsonObject.check(value)) return [];
 	const error = stringOf(value.error);
 	return error ? [{ server: stringOf(value.server) ?? "", error }] : [];
 }
 
 export function parseMcpListing(toolName: string, payload: unknown): McpListing | null {
 	const fields = LISTING_FIELDS[toolName];
-	if (!fields || !isRecord(payload)) return null;
+	if (!fields || !JsonObject.check(payload)) return null;
 	const items = payload[fields.items];
 	if (!Array.isArray(items)) return null;
 	const server = stringOf(payload.server) ?? "";

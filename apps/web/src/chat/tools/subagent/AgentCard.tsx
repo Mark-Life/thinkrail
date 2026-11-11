@@ -5,7 +5,8 @@ import {
 	RiLoader4Line as Loader2,
 	RiFileList3Line as ScrollText,
 } from "@remixicon/react";
-import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { parseSessionId, type ToolInputs } from "@thinkrail/contracts";
+import { boolArg, resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
@@ -18,10 +19,14 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 	const t = useT();
 	const actions = useChatActions();
 	const details = readRunDetails(result);
-	const role = details?.roleName ?? strArg(args, "subagent_type");
-	const task = details?.task || strArg(args, "task");
+	const childSessionId = parseSessionId(details?.childSessionId);
+	const role = details?.roleName ?? strArg<ToolInputs["Agent"]>(args, "subagent_type");
+	const task = details?.task || strArg<ToolInputs["Agent"]>(args, "task");
 	const terminal = details !== undefined && isTerminalRunStatus(details.status);
-	const backgroundAck = args.run_in_background === true && details !== undefined && !terminal;
+	const backgroundAck =
+		boolArg<ToolInputs["Agent"]>(args, "run_in_background") === true &&
+		details !== undefined &&
+		!terminal;
 	const counters = details ? runCounters(t, details, "split") : [];
 	const output = resultText(result);
 	const [reportOpen, toggleReport, reportToggleRef] = useFold(`${toolCallId}:report`, false);
@@ -102,11 +107,11 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 					) : null}
 				</div>
 			) : null}
-			{actions && details?.childSessionId ? (
+			{actions && childSessionId ? (
 				<button
 					type="button"
 					data-testid="agent-open-transcript"
-					onClick={() => actions.openSubagentTranscript(details.childSessionId)}
+					onClick={() => actions.openSubagentTranscript(childSessionId)}
 					className="flex items-center gap-4 self-start text-primary tr-text-metadata hover:underline"
 				>
 					<ScrollText className="size-12 shrink-0" />

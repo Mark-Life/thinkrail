@@ -1,6 +1,7 @@
 import {
 	type BackgroundCommandCompletionDetails,
-	completionDelivery,
+	type CompletionDelivery,
+	parseSessionId,
 	type SubagentCompletionDetails,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
@@ -11,8 +12,7 @@ import { RunModelLabel } from "./ModelEffortLabel";
 import { type ResultReceipt, ResultRow } from "./resources";
 import { completionReport, reportTeaser, usageCounters } from "./tools/subagent/runDetails";
 
-function receiptOf(details: { delivery?: unknown }): ResultReceipt | undefined {
-	const delivery = completionDelivery(details);
+function receiptOf({ delivery }: { delivery?: CompletionDelivery }): ResultReceipt | undefined {
 	if (delivery === undefined) return undefined;
 	return delivery === "appended" ? "awaitingReply" : "received";
 }
@@ -87,9 +87,10 @@ export function SubagentResult({
 	const t = useT();
 	const actions = useChatActions();
 	const [expanded, fold, toggleRef] = useFold(`${id}:result`, false);
+	const childSessionId = parseSessionId(details.childSessionId);
 	const toggle: typeof fold = (event) => {
-		if (!expanded)
-			actions?.markResultSeen?.({ kind: "subagent", childSessionId: details.childSessionId });
+		if (!expanded && childSessionId !== null)
+			actions?.markResultSeen?.({ kind: "subagent", childSessionId });
 		fold(event);
 	};
 	const report = completionReport(text);
@@ -110,7 +111,11 @@ export function SubagentResult({
 				metaLead={<RunModelLabel model={details.model} thinkingLevel={details.thinkingLevel} />}
 				meta={usageCounters(t, details).join(" · ")}
 				teaser={reportTeaser(report)}
-				onOpen={actions?.resultOpener({ kind: "subagent", childSessionId: details.childSessionId })}
+				onOpen={
+					childSessionId === null
+						? undefined
+						: actions?.resultOpener({ kind: "subagent", childSessionId })
+				}
 			>
 				{report ? (
 					<div className="tr-text-reading text-text-default">

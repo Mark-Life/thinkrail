@@ -1,7 +1,10 @@
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { compile } from "@earendil-works/pi-schema";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import type { ToolCall } from "@thinkrail/contracts";
+import type { SessionId, ToolCall } from "@thinkrail/contracts";
+import { WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	enterDefaultWorkspace,
 	expandDisclosure,
@@ -12,6 +15,10 @@ import { clickTranscriptControl, waitForScrollStability } from "./fixtures/chatS
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { pierreLines } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { readRequest } from "./fixtures/wire";
+
+const REVIEW_SEND_BATCH_PARAMS = compile(WS_METHOD_SCHEMAS["review.sendBatch"].params);
+const REVIEW_SEND_COMMENT_PARAMS = compile(WS_METHOD_SCHEMAS["review.sendComment"].params);
 
 const BASE_TS = 1_700_920_000_000;
 const MALFORMED_SOURCE = "flowchart TD; Start --> --> broken";
@@ -30,7 +37,7 @@ async function openVisualizationSession(
 	name: string,
 	args: ToolCall["arguments"],
 	assistantText?: string,
-): Promise<{ card: Locator; sessionId: string }> {
+): Promise<{ card: Locator; sessionId: SessionId }> {
 	await openFixtureProject(page);
 	const messages: Parameters<typeof seedWorkspaceSession>[1]["messages"] = [
 		{ role: "user", text: "Show the visualization.", timestamp: BASE_TS },
@@ -70,7 +77,7 @@ async function openVisualizationSession(
 	await expect(card).toHaveAttribute("data-status", "done");
 	await expect(card).toHaveAttribute("data-expanded", "true");
 	await expect(card.getByTestId("tool-visualize")).toHaveAttribute("data-status", "done");
-	return { card, sessionId };
+	return { card, sessionId: testSessionId(sessionId) };
 }
 
 const MOCKUP_DIR = ".thinkrail/context/mockups";
@@ -375,18 +382,17 @@ test("a file visualization with a before path shows the renderer's before/after 
 test("review comments on a visualized file are sent into the chat that shows it", async ({
 	page,
 }) => {
-	const sends: { method: string; sessionId?: string }[] = [];
+	const sends: { method: string; sessionId?: SessionId }[] = [];
 	page.on("websocket", (socket) =>
 		socket.on("framesent", ({ payload }) => {
-			const frame = JSON.parse(String(payload)) as {
-				method?: string;
-				params?: { sessionId?: string };
-			};
-			if (frame.method === "review.sendBatch" || frame.method === "review.sendComment") {
-				sends.push({
-					method: frame.method,
-					...(frame.params?.sessionId ? { sessionId: frame.params.sessionId } : {}),
-				});
+			const raw = String(payload);
+			const batch = readRequest(raw, "review.sendBatch", REVIEW_SEND_BATCH_PARAMS);
+			const comment = readRequest(raw, "review.sendComment", REVIEW_SEND_COMMENT_PARAMS);
+			const sent = batch ?? comment;
+			if (sent) {
+				const method = batch ? "review.sendBatch" : "review.sendComment";
+				const { sessionId } = sent.params;
+				sends.push({ method, ...(sessionId ? { sessionId } : {}) });
 			}
 		}),
 	);

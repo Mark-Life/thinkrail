@@ -1,9 +1,22 @@
 import { createHash } from "node:crypto";
+import { compile, lit, obj, opt, type Static, str } from "@earendil-works/pi-schema";
 
-export interface SourceMapJson {
-	mappings: string;
-	chunk_id?: string;
-	[key: string]: unknown;
+const SourceMapJson = obj(
+	{ version: lit(3), mappings: str(), chunk_id: opt(str()) },
+	{ open: true },
+);
+/**
+ * A v3 source map, typed by the fields chunk-id injection reads. Other fields pass the open check
+ * unread and `injectChunkId` copies them into the new map.
+ */
+export type SourceMapJson = Static<typeof SourceMapJson>;
+const isSourceMapJson = compile(SourceMapJson).check;
+
+/** The source map in `text`; throws when it is not one. */
+export function parseSourceMap(text: string): SourceMapJson {
+	const map: unknown = JSON.parse(text);
+	if (!isSourceMapJson(map)) throw new Error("not a v3 source map with string `mappings`");
+	return map;
 }
 
 export function chunkIdFor(code: string, map: SourceMapJson, release: string): string {

@@ -1,21 +1,7 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://thinkrail.dev/schemas/theme-manifest-v1.json",
-	"title": "ThinkRail theme manifest",
-	"description": "A complete, declarative ThinkRail UI, terminal, and syntax palette. Selected-text foreground overrides may be null to retain native behavior.",
 	"type": "object",
-	"additionalProperties": false,
-	"required": [
-		"schemaVersion",
-		"id",
-		"label",
-		"order",
-		"appearance",
-		"contrast",
-		"colors",
-		"ansi",
-		"syntax"
-	],
 	"properties": {
 		"$schema": {
 			"type": "string"
@@ -29,7 +15,7 @@
 		},
 		"label": {
 			"type": "string",
-			"minLength": 1
+			"pattern": "\\S"
 		},
 		"order": {
 			"type": "integer"
@@ -41,23 +27,133 @@
 			"enum": ["normal", "high"]
 		},
 		"colors": {
-			"$ref": "#/$defs/colors"
-		},
-		"ansi": {
-			"$ref": "#/$defs/ansi"
-		},
-		"syntax": {
-			"$ref": "#/$defs/syntax"
-		}
-	},
-	"$defs": {
-		"hexColor": {
-			"type": "string",
-			"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
-		},
-		"colors": {
 			"type": "object",
-			"additionalProperties": false,
+			"properties": {
+				"accent": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"accentHover": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"accentSolid": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"onAccent": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"bubbleAccent": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"background": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"header": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"content": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"sidebar": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"input": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"elevated": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"hover": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"border": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"borderStrong": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"text": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"muted": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"hint": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"selection": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"selectionForeground": {
+					"anyOf": [
+						{
+							"type": "string",
+							"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"editorSelection": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"editorSelectionForeground": {
+					"anyOf": [
+						{
+							"type": "string",
+							"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"info": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"success": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"danger": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"dangerHover": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$",
+					"description": "Destructive button hover fill. Optional: defaults to danger darkened 12% toward black."
+				},
+				"onDanger": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$",
+					"description": "Label on the destructive fills. Optional: defaults to the palette's text or background colour, whichever reads better on danger and dangerHover."
+				},
+				"warning": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				}
+			},
 			"required": [
 				"accent",
 				"accentHover",
@@ -85,49 +181,76 @@
 				"danger",
 				"warning"
 			],
-			"properties": {
-				"accent": { "$ref": "#/$defs/hexColor" },
-				"accentHover": { "$ref": "#/$defs/hexColor" },
-				"accentSolid": { "$ref": "#/$defs/hexColor" },
-				"onAccent": { "$ref": "#/$defs/hexColor" },
-				"bubbleAccent": { "$ref": "#/$defs/hexColor" },
-				"background": { "$ref": "#/$defs/hexColor" },
-				"header": { "$ref": "#/$defs/hexColor" },
-				"content": { "$ref": "#/$defs/hexColor" },
-				"sidebar": { "$ref": "#/$defs/hexColor" },
-				"input": { "$ref": "#/$defs/hexColor" },
-				"elevated": { "$ref": "#/$defs/hexColor" },
-				"hover": { "$ref": "#/$defs/hexColor" },
-				"border": { "$ref": "#/$defs/hexColor" },
-				"borderStrong": { "$ref": "#/$defs/hexColor" },
-				"text": { "$ref": "#/$defs/hexColor" },
-				"muted": { "$ref": "#/$defs/hexColor" },
-				"hint": { "$ref": "#/$defs/hexColor" },
-				"selection": { "$ref": "#/$defs/hexColor" },
-				"selectionForeground": {
-					"oneOf": [{ "$ref": "#/$defs/hexColor" }, { "type": "null" }]
-				},
-				"editorSelection": { "$ref": "#/$defs/hexColor" },
-				"editorSelectionForeground": {
-					"oneOf": [{ "$ref": "#/$defs/hexColor" }, { "type": "null" }]
-				},
-				"info": { "$ref": "#/$defs/hexColor" },
-				"success": { "$ref": "#/$defs/hexColor" },
-				"danger": { "$ref": "#/$defs/hexColor" },
-				"dangerHover": {
-					"$ref": "#/$defs/hexColor",
-					"description": "Destructive button hover fill. Optional: defaults to danger darkened 12% toward black."
-				},
-				"onDanger": {
-					"$ref": "#/$defs/hexColor",
-					"description": "Label on the destructive fills. Optional: defaults to the palette's text or background colour, whichever reads better on danger and dangerHover."
-				},
-				"warning": { "$ref": "#/$defs/hexColor" }
-			}
+			"additionalProperties": false
 		},
 		"ansi": {
 			"type": "object",
-			"additionalProperties": false,
+			"properties": {
+				"black": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"red": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"green": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"yellow": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"blue": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"magenta": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"cyan": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"white": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightBlack": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightRed": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightGreen": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightYellow": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightBlue": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightMagenta": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightCyan": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"brightWhite": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				}
+			},
 			"required": [
 				"black",
 				"red",
@@ -146,28 +269,96 @@
 				"brightCyan",
 				"brightWhite"
 			],
-			"properties": {
-				"black": { "$ref": "#/$defs/hexColor" },
-				"red": { "$ref": "#/$defs/hexColor" },
-				"green": { "$ref": "#/$defs/hexColor" },
-				"yellow": { "$ref": "#/$defs/hexColor" },
-				"blue": { "$ref": "#/$defs/hexColor" },
-				"magenta": { "$ref": "#/$defs/hexColor" },
-				"cyan": { "$ref": "#/$defs/hexColor" },
-				"white": { "$ref": "#/$defs/hexColor" },
-				"brightBlack": { "$ref": "#/$defs/hexColor" },
-				"brightRed": { "$ref": "#/$defs/hexColor" },
-				"brightGreen": { "$ref": "#/$defs/hexColor" },
-				"brightYellow": { "$ref": "#/$defs/hexColor" },
-				"brightBlue": { "$ref": "#/$defs/hexColor" },
-				"brightMagenta": { "$ref": "#/$defs/hexColor" },
-				"brightCyan": { "$ref": "#/$defs/hexColor" },
-				"brightWhite": { "$ref": "#/$defs/hexColor" }
-			}
+			"additionalProperties": false
 		},
 		"syntax": {
 			"type": "object",
-			"additionalProperties": false,
+			"properties": {
+				"foreground": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"comment": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"commentDoc": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"keyword": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"string": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"number": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"regexp": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"annotation": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"tag": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"attributeName": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"attributeValue": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"property": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"function": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"type": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"variable": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"constant": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"operator": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"punctuation": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"inserted": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"deleted": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				},
+				"changed": {
+					"type": "string",
+					"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+				}
+			},
 			"required": [
 				"foreground",
 				"comment",
@@ -191,29 +382,21 @@
 				"deleted",
 				"changed"
 			],
-			"properties": {
-				"foreground": { "$ref": "#/$defs/hexColor" },
-				"comment": { "$ref": "#/$defs/hexColor" },
-				"commentDoc": { "$ref": "#/$defs/hexColor" },
-				"keyword": { "$ref": "#/$defs/hexColor" },
-				"string": { "$ref": "#/$defs/hexColor" },
-				"number": { "$ref": "#/$defs/hexColor" },
-				"regexp": { "$ref": "#/$defs/hexColor" },
-				"annotation": { "$ref": "#/$defs/hexColor" },
-				"tag": { "$ref": "#/$defs/hexColor" },
-				"attributeName": { "$ref": "#/$defs/hexColor" },
-				"attributeValue": { "$ref": "#/$defs/hexColor" },
-				"property": { "$ref": "#/$defs/hexColor" },
-				"function": { "$ref": "#/$defs/hexColor" },
-				"type": { "$ref": "#/$defs/hexColor" },
-				"variable": { "$ref": "#/$defs/hexColor" },
-				"constant": { "$ref": "#/$defs/hexColor" },
-				"operator": { "$ref": "#/$defs/hexColor" },
-				"punctuation": { "$ref": "#/$defs/hexColor" },
-				"inserted": { "$ref": "#/$defs/hexColor" },
-				"deleted": { "$ref": "#/$defs/hexColor" },
-				"changed": { "$ref": "#/$defs/hexColor" }
-			}
+			"additionalProperties": false
 		}
-	}
+	},
+	"required": [
+		"schemaVersion",
+		"id",
+		"label",
+		"order",
+		"appearance",
+		"contrast",
+		"colors",
+		"ansi",
+		"syntax"
+	],
+	"additionalProperties": false,
+	"title": "ThinkRail theme manifest",
+	"description": "A complete, declarative ThinkRail UI, terminal, and syntax palette. Selected-text foreground overrides may be null to retain native behavior."
 }

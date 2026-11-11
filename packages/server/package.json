@@ -7,7 +7,9 @@
 		".": "./src/index.ts",
 		"./agent": "./src/agent/index.ts",
 		"./build-support": "./src/buildSupport.ts",
-		"./history-test-fixtures": "./src/history/testFixtures.ts"
+		"./build-support/schema": "./src/buildSupportSchema.ts",
+		"./history-test-fixtures": "./src/history/testFixtures.ts",
+		"./gh-test-fixtures": "./src/branch-review/testFixtures.ts"
 	},
 	"scripts": {
 		"dev": "bun run --watch src/dev.ts",
@@ -16,7 +18,9 @@
 	},
 	"dependencies": {
 		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-schema": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
+		"@earendil-works/pi-mcp": "catalog:",
 		"@posthog/core": "1.60.1",
 		"@stroncium/procfs": "1.2.1",
 		"@thinkrail/contracts": "workspace:*",

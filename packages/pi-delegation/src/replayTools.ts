@@ -1,9 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { ToolResultMessage } from "@earendil-works/pi-ai";
 
-export interface ReplayToolCall {
-	toolCallId: string;
-	toolName: string;
-}
+export type ReplayToolCall = Pick<ToolResultMessage, "toolCallId" | "toolName">;
 
 export function scanReplayTools(messages: readonly AgentMessage[]): {
 	issues: string[];

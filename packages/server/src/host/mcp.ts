@@ -8,7 +8,10 @@ import type {
 	McpServerLog,
 	McpServerScope,
 	Project,
+	SessionId,
 	Workspace,
+	WorkspaceId,
+	WsParams,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -44,7 +47,7 @@ const log = logger("host");
 const LIST_WAIT_MS = 1500;
 const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
 
-function target(workspaceId: string): { workspace: Workspace; project: Project } {
+function target(workspaceId: WorkspaceId): { workspace: Workspace; project: Project } {
 	const workspace = getWorkspace(workspaceId);
 	const project = getProjects().find((candidate) => candidate.id === workspace.projectId);
 	if (!project) throw new Error(`Unknown project: ${workspace.projectId}`);
@@ -79,7 +82,7 @@ function assertRepositoryWritable(project: Project): void {
 type Target = { workspace: Workspace; project: Project };
 
 async function admitManaged<T>(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	admit: (found: Target) => T | Promise<T>,
 ): Promise<T> {
 	const before = target(workspaceId);
@@ -105,8 +108,8 @@ async function admitManaged<T>(
 }
 
 function mutateManaged(
-	workspaceId: string,
-	mutation: (found: Target) => readonly string[],
+	workspaceId: WorkspaceId,
+	mutation: (found: Target) => readonly WorkspaceId[],
 ): Promise<McpListResult> {
 	return admitManaged(workspaceId, (found) => {
 		reloadLiveSessions(mutation(found));
@@ -114,58 +117,32 @@ function mutateManaged(
 	});
 }
 
-function serverName(name: unknown): string {
-	if (typeof name !== "string" || !SERVER_NAME.test(name)) {
+function serverName(name: string): string {
+	if (!SERVER_NAME.test(name)) {
 		throw new CodedError("MCP_CONFIG_INVALID", "MCP server names use letters, digits, - and _");
 	}
 	return name;
 }
 
-function serverEnabled(enabled: unknown): boolean {
-	if (typeof enabled !== "boolean") {
-		throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
-	}
-	return enabled;
-}
-
-function serverScope(scope: unknown): McpServerScope {
-	if (scope !== "user" && scope !== "project") throw new Error("Invalid MCP server scope");
-	return scope;
-}
-
-function renderedTarget(params: unknown): McpRenderedTarget {
-	const scope = serverScope(isRecord(params) ? params.scope : undefined);
-	const expectedFingerprint = isRecord(params) ? params.expectedFingerprint : undefined;
-	if (typeof expectedFingerprint !== "string") {
-		throw new CodedError(
-			"MCP_CONFIG_INVALID",
-			"An entry is rewritten or removed only with the fingerprint it was rendered with.",
-		);
-	}
-	return { scope, expectedFingerprint };
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
-function ownedSession(workspaceId: string, sessionId: string): void {
+function ownedSession(workspaceId: WorkspaceId, sessionId: SessionId): void {
 	if (getSessionWorkspaceId(sessionId) !== workspaceId) {
 		throw new CodedError("RESOURCE_UNAVAILABLE", "Session resources unavailable");
 	}
 }
 
-function reloadLiveSessions(workspaceIds: readonly string[]): void {
+function reloadLiveSessions(workspaceIds: readonly WorkspaceId[]): void {
 	const sessionIds = workspaceIds.flatMap((workspaceId) => liveSessionIdsOf(workspaceId));
 	void reconcileMcpSessions(sessionIds).catch((error) => {
 		log.warn("MCP config change was not applied to the open chats", error);
 	});
 }
 
-const projectWorkspaces = (project: Project): string[] =>
+const projectWorkspaces = (project: Project): WorkspaceId[] =>
 	listWorkspaceRecords(project.id).map((workspace) => workspace.id);
-const allWorkspaces = (): string[] => listAllWorkspaceRecords().map((workspace) => workspace.id);
+const allWorkspaces = (): WorkspaceId[] =>
+	listAllWorkspaceRecords().map((workspace) => workspace.id);
 
-export function mcpList(params: { workspaceId: string }): Promise<McpListResult> {
+export function mcpList(params: { workspaceId: WorkspaceId }): Promise<McpListResult> {
 	const { workspace, project } = target(params.workspaceId);
 	return listMcpServers({
 		workspaceId: workspace.id,
@@ -176,12 +153,12 @@ export function mcpList(params: { workspaceId: string }): Promise<McpListResult>
 }
 
 export function mcpAdd(params: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	scope: McpServerScope;
 	name: string;
 	entry: McpServerEntryInput;
 }): Promise<McpListResult> {
-	const scope = serverScope(params.scope);
+	const { scope } = params;
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
 		if (scope === "project") assertRepositoryWritable(project);
@@ -199,29 +176,25 @@ export function mcpAdd(params: {
 
 /** A rewrite or removal runs only against the entry the client rendered, at either scope. */
 function renderedEntry(
-	params: { workspaceId: string; name: string },
+	params: { workspaceId: WorkspaceId; name: string } & McpRenderedTarget,
 	write: (
 		options: { scope: McpServerScope; worktree: string; name: string },
 		onDisk: string | undefined,
 		project: Project,
 	) => void,
 ): Promise<McpListResult> {
-	const target = renderedTarget(params);
+	const { scope, expectedFingerprint } = params;
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
-		if (target.scope === "project") assertRepositoryWritable(project);
-		const onDisk = mcpEntryFingerprint(target.scope, workspace.worktreePath, name);
-		assertRenderedEntry(name, onDisk, target.expectedFingerprint);
-		write({ scope: target.scope, worktree: workspace.worktreePath, name }, onDisk, project);
-		return target.scope === "user" ? allWorkspaces() : projectWorkspaces(project);
+		if (scope === "project") assertRepositoryWritable(project);
+		const onDisk = mcpEntryFingerprint(scope, workspace.worktreePath, name);
+		assertRenderedEntry(name, onDisk, expectedFingerprint);
+		write({ scope, worktree: workspace.worktreePath, name }, onDisk, project);
+		return scope === "user" ? allWorkspaces() : projectWorkspaces(project);
 	});
 }
 
-export function mcpUpdate(params: {
-	workspaceId: string;
-	name: string;
-	entry: McpServerEntryInput;
-}): Promise<McpListResult> {
+export function mcpUpdate(params: WsParams<"mcp.update">): Promise<McpListResult> {
 	return renderedEntry(params, (options, onDisk, project) => {
 		const fingerprint = writeMcpServerEntry({ ...options, entry: params.entry, mode: "update" });
 		if (
@@ -233,12 +206,12 @@ export function mcpUpdate(params: {
 	});
 }
 
-export function mcpRemove(params: { workspaceId: string; name: string }): Promise<McpListResult> {
+export function mcpRemove(params: WsParams<"mcp.remove">): Promise<McpListResult> {
 	return renderedEntry(params, (options) => removeMcpServerEntry(options));
 }
 
 export function mcpSetProjectOverride(params: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	name: string;
 	enabled?: boolean;
 	exposure?: Exclude<McpExposure, "codemode">;
@@ -254,12 +227,12 @@ export function mcpSetProjectOverride(params: {
 }
 
 export function mcpRevokeToolGrant(params: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	name: string;
 	tool: string;
 }): Promise<McpListResult> {
 	const name = serverName(params.name);
-	if (typeof params.tool !== "string" || params.tool.length === 0) {
+	if (params.tool.length === 0) {
 		throw new CodedError("MCP_CONFIG_INVALID", "Name the MCP tool to stop always allowing.");
 	}
 	const { tool } = params;
@@ -270,7 +243,7 @@ export function mcpRevokeToolGrant(params: {
 }
 
 export function mcpApprove(params: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	name: string;
 	fingerprint: string;
 }): Promise<McpListResult> {
@@ -289,7 +262,7 @@ export function mcpApprove(params: {
 }
 
 export function mcpShareWithRepo(params: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	name: string;
 }): Promise<McpListResult> {
 	const name = serverName(params.name);
@@ -313,20 +286,19 @@ export function mcpShareWithRepo(params: {
 }
 
 export async function mcpSetSessionOverride(params: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	name: string;
 	enabled: boolean;
 }): Promise<{ ok: true }> {
-	const enabled = serverEnabled(params.enabled);
 	ownedSession(params.workspaceId, params.sessionId);
-	await setSessionMcpServerEnabled(params.sessionId, serverName(params.name), enabled);
+	await setSessionMcpServerEnabled(params.sessionId, serverName(params.name), params.enabled);
 	return { ok: true };
 }
 
 export async function mcpReconnect(params: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	name: string;
 }): Promise<{ ok: true }> {
 	ownedSession(params.workspaceId, params.sessionId);
@@ -341,7 +313,7 @@ export async function mcpReconnect(params: {
 
 async function probe(
 	action: McpProbeAction,
-	params: { workspaceId: string; name: string },
+	params: { workspaceId: WorkspaceId; name: string },
 	clientKey: string,
 ): Promise<{ loginId: string; done: Promise<LoginFrame> }> {
 	const name = serverName(params.name);
@@ -376,7 +348,7 @@ async function probe(
 }
 
 export async function mcpLogin(
-	params: { workspaceId: string; name: string },
+	params: { workspaceId: WorkspaceId; name: string },
 	clientKey: string,
 ): Promise<{ loginId: string }> {
 	const { loginId } = await probe("login", params, clientKey);
@@ -384,7 +356,7 @@ export async function mcpLogin(
 }
 
 export async function mcpTestConnection(
-	params: { workspaceId: string; name: string },
+	params: { workspaceId: WorkspaceId; name: string },
 	clientKey: string,
 ): Promise<{ loginId: string }> {
 	const { loginId } = await probe("test", params, clientKey);
@@ -392,7 +364,7 @@ export async function mcpTestConnection(
 }
 
 export async function mcpLogout(
-	params: { workspaceId: string; name: string },
+	params: { workspaceId: WorkspaceId; name: string },
 	clientKey: string,
 ): Promise<{ ok: true }> {
 	const last = await (await probe("logout", params, clientKey)).done;
@@ -400,14 +372,17 @@ export async function mcpLogout(
 	return { ok: true };
 }
 
-export function mcpReadLog(params: { workspaceId: string; name: string }): Promise<McpServerLog> {
+export function mcpReadLog(params: {
+	workspaceId: WorkspaceId;
+	name: string;
+}): Promise<McpServerLog> {
 	target(params.workspaceId);
 	return readMcpServerLog(serverName(params.name));
 }
 
 export function mcpReadOutput(params: {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 	toolCallId: string;
 }): Promise<McpReadOutputResult> {
 	ownedSession(params.workspaceId, params.sessionId);

@@ -82,6 +82,19 @@ without bypassing approvals or treating an occupied name as absent.
   latest 200 lines; both files are read (the last 8 MiB each, a missing one is empty) and the result goes
   through `redactMcpText`. The format is pinned by a test against pi's own formatter; re-check it on every
   pi bump.
+- `schemas.ts` — compiled `pi-schema` checks for `mcp.json`. `mcpServers` is a map of `unknown`: an entry stays
+  unchecked until `validateMcpServerConfig`, so one bad entry does not refuse the file, and the fingerprint reads the
+  entry as written, never a parsed copy. The field records (`MCP_COMMON_FIELDS`, `MCP_HTTP_FIELDS`, `MCP_STDIO_FIELDS`),
+  `McpOAuthConfig` and the two server-config schemas live in contracts `mcp.ts`, so Settings checks a pasted entry with
+  the same schemas. `validateMcpServerConfig` compiles them, maps the first refused path to pi's message for that
+  field, applies the rules a schema cannot hold (URL schemes, loopback callbacks, the port pair, `cimd`), then parses
+  the whole entry to get `McpServerConfig`. The parse reads the `streamable-http` alias as `"http"`, the type pi declares
+  and treats it as, so the loaded config holds what its type says; this is the one place the load differs from pi's,
+  which keeps the alias. This file ties the exposure, `oauth`, HTTP and stdio schemas with `Same` to pi's `McpExposure`
+  and the members of its `McpServerConfig` (the HTTP `type` list minus the alias included), so a pi bump that changes a
+  server field fails `tsc`. It also ties contracts' `McpToolDetails` to pi's, which pi's root does not export, so the
+  type is read by a relative path into `node_modules` (`pi-compatibility.md`); that copy is an approved exception
+  ([[submodule-contracts-schema]]) until pi exports the type. `summarizeMcpServers` and `maskMcpEndpoint` read fields of an entry that may be invalid, so they keep their field reads.
 - `results.ts` — `summarizeMcpResult()`: the `McpResultSummary` the session host's `tool_result` handler
   writes into `details.thinkrail` for `mcp__*` and the three resource tools, built from pi's
   machine-readable result (`structuredContent` = the server's raw `CallToolResult`, or the resource
@@ -91,7 +104,11 @@ without bypassing approvals or treating an occupied name as absent.
   resource links with long URIs), and `structuredContent` is kept only if it fits what remains (else
   `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops
   `structuredContent` from finalized messages, so this is what lets a card render the same live, after
-  reload and on another client.
+  reload and on another client. A content block with a wrong-type field is left out, like one of an unknown type, and is
+  counted in `omittedBlocks`; an absent field keeps its default. A wrong-type `content` or `contents` reads as empty.
+  The block schemas are tied with `Same` to `pi-mcp`'s `ContentBlock` and `TextResourceContents`, with each
+  field the summary reads made optional, and their tags and the summary kinds to `ContentBlock`'s tags, so a `pi-mcp`
+  bump that adds a block type or renames or retypes a field fails `tsc`.
 - `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
   used by sessions, so probes never infer it from a presentation row. The host composes
   `writeMcpServerEntry` (pi validation plus the project `auth` ban, add vs update, project containment;
@@ -210,6 +227,8 @@ without bypassing approvals or treating an occupied name as absent.
   atomic rename keeps a concurrent `pi mcp add` from ever reading a torn file (a lost update between two
   processes is accepted). `add` creates a missing file and reports whether it replaced a same-name entry,
   `remove` whether the file defined the server, and `update` with `override` adds a missing override entry.
+  `update` of a name the file does not define (and no `override`) fails with `MCP_CONFIG_INVALID`, a write
+  precondition.
 
 ## Boundary
 
@@ -224,9 +243,10 @@ without bypassing approvals or treating an occupied name as absent.
   `removeMcpServerEntry`, `mcpEntryFingerprint`, `shareMcpOverrideWithRepo`),
   `summarizeMcpConfigErrors`, the status parsers (`parseMcpStatusText`, `parseMcpAttentionNotice`,
   `MCP_ATTENTION_PREFIX`, `deriveMcpServerStatuses`, `ParsedMcpStatus`), `summarizeMcpResult` /
-  `isMcpResultTool` / `MCP_SUMMARY_BYTES`, and the types `LoadedMcpFiles`,
+  `isMcpResultTool` / `mcpFullOutputPath` / `MCP_SUMMARY_BYTES`, and the types `LoadedMcpFiles`,
   `McpConfigFileEntry`, `McpConfigScope`, `McpServerConfigPatch`.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (types, `CONFIG_DIR_NAME`, `getAgentDir`, and the
-  engine factories `createMcpExtension` / `createToolSearchExtension`); `@thinkrail/contracts` (types);
-  `@thinkrail/shared/codedError`; Node `fs`/`path`/`crypto`.
+  engine factories `createMcpExtension` / `createToolSearchExtension`); `@thinkrail/contracts` (types, `JsonObject` and the MCP enum and server-config schemas);
+  `@thinkrail/shared/codedError`, `errnoCode`; `@earendil-works/pi-schema`; `@earendil-works/pi-mcp` (types
+  only, for `results.ts`); Node `fs`/`path`/`crypto`.
 - **Forbidden:** `host`, `projects`, the web; no connection, OAuth or transport code — those stay in pi.

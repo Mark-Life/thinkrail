@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Wire contracts
 parent: architecture
-depends-on: []
+depends-on: [module-pi-todos, module-pi-background-commands, module-pi-delegation, module-pi-subagents, module-pi-ask-user-question, module-type-tie]
 references: [central-integration, module-pi-background-commands]
 tags: [wire]
 ---
@@ -12,8 +12,8 @@ tags: [wire]
 ## Responsibility
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
-dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
+runtime: the wire schemas ([[submodule-contracts-schema]]), the WS method/channel constants, protocol/feature
+versions, the small config default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
 the palette ranks with — kept here so host-side search can rank with the same copy. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
@@ -21,7 +21,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
-  names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
+  names*, listed once in `WS_ERROR_CODES` (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
+  `GH_REPLY_INVALID` (`gh` answered a PR read in a shape the host does not read),
   `NOT_GIT` and `ALREADY_OPEN` (the two `project.open` refusals: a folder that is not a repository, and a
   folder already owned by a workspace),
   `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
@@ -41,24 +42,37 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
   `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
-  either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
-  differently), so a client can react to one specific failure
+  either; the four state-file codes `STATE_FILE_SET_ASIDE` (a read lost data and the bytes were copied aside),
+  `STATE_FILE_UNREADABLE`, `STATE_FILE_PRUNE_FAILED` and `STATE_FILE_WRITE_FAILED`
+  ([[submodule-server-persistence]]); and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice
+  state the UI words differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
+  for it or Error Tracking must tell it apart (it never sees `message`). Codes that exist for the latter include:
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
-  ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
+  ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
-  code, so it needs no protocol bump.
+  code, so it needs no protocol bump — **`INVALID_PARAMS`** — dispatch refused params that do not match
+  the method's schema or a check the schema cannot express, which only a client bug or a version mismatch produces, and
+  **`PI_SESSION_ID_INVALID`** — pi named a live session with an id that is not path-safe ([[submodule-contracts-schema]]). **`INVALID_REPLY`** is the reverse, and
+  only the client mints it: a successful reply failed its result schema ([[submodule-web-transport]]).
+  **`WS_RESULT_INVALID`** is the host's side of it: in a host that checks its replies and pushes (tests, e2e), one
+  failed its schema ([[submodule-server-host]]).
+  **`SESSION_MODEL_UNAVAILABLE`** — a chat's saved model reference is malformed, so the chat does not open.
+  **`HOST_ERROR`** — a request-path failure the host has no more specific code for, so Error Tracking still
+  gets a code and never the message. **`FONT_UPLOAD_FAILED`** — a font upload could not be stored.
+  **`SESSION_RELOAD_FAILED`** — a session reload did not finish. **`SESSION_DISPOSE_FAILED`** — a session that
+  failed to start could not be disposed. **`WORKSPACE_UNKNOWN`** is client-minted,
+  like `INVALID_REPLY`: the client named a workspace it no longer knows.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
-  (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
-  `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
-  `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
-  labels), the optional shell-local desktop capabilities);
+  (`NativeUpdateBridge`, `NativeWindowControlsBridge`, `NativeShortcutsBridge`, `NativeNotificationBridge` and
+  `NativeMenuBridge` (translated native menu labels), the optional shell-local desktop capabilities, whose values
+  `NativeUpdateState`, `NativeWindowState`, `NativeQuitHint`, `NativeCommand` and `NativeNotificationInput` are
+  schemas in `schema/native.ts`);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
-  `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
+  `match` (`MatchTier` is the `search.*` schema's, which `MATCH_TIER` names) (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
   bounded subsequence of at least three characters > `content` for a body or message match, every term
   required, a quoted `MatchTerm` (`literal`) matched contiguously only, the ranges always indexing the
   original text, a secondary field never above substring and, at an equal tier, never chosen over a primary
@@ -90,11 +104,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   theme schema is owned by [[submodule-web-themes]]),
   the font settings — `FONT_ROLES`, `FontFamilyRef` (a bundled face named by its role, or a family name),
   `FontChoice` (family or `null` for the role's default, plus ≤ `FONT_FALLBACKS_MAX` distinct fallbacks),
-  `CODE_FONT_SIZE` (with the editor's `editorDelta`), `FONT_WEIGHT_OFFSET`, and the guards `isFontFamilyName`
-  (no CSS delimiters or control characters, ≤ `FONT_FAMILY_NAME_MAX_LENGTH`), `isFontFamilyRef`, `isFontRole`,
-  `isFontChoice`, `isCodeFontSize`, `isFontWeightOffset`, `fontFamilyRefKey`, `FontSettings` +
+  `CODE_FONT_SIZE` (with the editor's `editorDelta`), `FONT_WEIGHT_OFFSET`, and the checks `isFontFamilyName`
+  (no CSS delimiters or control characters, ≤ `FONT_FAMILY_NAME_MAX_LENGTH`), `isFontFamilyRef`,
+  `isFontChoice`, `isCodeFontSize`, `isFontWeightOffset` — each the compiled check of its `schema/` schema,
+  which holds the bounds — `fontFamilyRefKey`, `FontSettings` +
   `normalizeFontSettings`, and `hasControlCharacter` (shared with the host's font file-name rule) — and user font files as
-  `UserFontsSnapshot` / `UserFontFile` (closed error codes, guarded by `isUserFontFile`) plus
+  `UserFontsSnapshot` / `UserFontFile` (closed error codes; `parseUserFontFile` also refuses a weight range out of order) plus
   `InstalledFontsResult`, served by `fonts.list` /
   `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
@@ -112,7 +127,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   its head; only the first 800 units of a line are normalized —
   host and client call the same functions over their user texts so the label never jumps),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
-  chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  chat/file wrap columns, from the `LineWidth` schema), **`parseAppConfigFields(value)`** (the fields of a stored or
+  received config that pass their `PartialAppConfig` schema one by one, over **`keepValidFields`** from `fieldwise`: one
+  bad field costs one field, and the dropped names come back for the caller to report), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
@@ -122,10 +139,20 @@ the palette ranks with — kept here so host-side search can rank with the same 
   and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
-  would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
-- **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
-  `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
+  would silently shift every later jump anchor); `export *` (value) of `schema` (the wire schemas with the type of each, and `WS_METHOD_SCHEMAS`) and of `wsProtocol`
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions);
+  from `wireChecks`, `describeFailure`, `wsResultValidator`, `wsPushValidator`, `parseWsResult`, `parseWsPush`,
+  `wsChannelOf`, `Parsed`, `WsClientChannelMap` and `WsClientPayload`.
+- **`@thinkrail/contracts/test-ids`:** the one other entry: `testProjectId`, `testWorkspaceId`, `testSessionId` and
+  `testStoredSessionId` parse a string into an id and throw on a refusal, for test sources only ([[submodule-contracts-schema]]).
+- **Allowed deps** (runtime, all browser-safe): `@earendil-works/pi-schema`; pi-ai's
+  `@earendil-works/pi-ai/providers/model-schema` entry, which loads only `pi-schema` (`ThinkingLevel` and
+  `ModelInputModality` are its `ModelThinkingLevelSchema` and `ModelInputModalitySchema`); and the `wire` leaf
+  entries of the shape owners `pi-todos`, `pi-background-commands`, `pi-delegation` and `pi-subagents`, plus the
+  `core` leaf of the published `@thinkrail/pi-ask-user-question` (the owner of `NON_EXECUTABLE_STOP_REASONS`, which
+  imports nothing from the repository), each of which loads only `pi-schema`, `model-schema` and other leaves. `check:boundaries` refuses any other entry of
+  those packages. **Type-only:** `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core` from their
+  **package roots** (erased at build), and `type-tie` for `Same`, which `schema/` re-exports.
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
   or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
@@ -141,18 +168,36 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
   channel, version, URL, restart, or feed authority.
-- **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
-  `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
-  (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
-  importing `server` / `shared` / `web`.
+- **Forbidden:** any other *value* import of a `pi` package; **any** import (even `type`) of
+  `@earendil-works/pi-coding-agent` (pulls `node:fs`, and in the web program its type load turns on its
+  `AgentMessage` augmentation); every other pi-ai **provider / API subpath** (`/providers/*` except
+  `model-schema`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); a pi
+  package entry other than its `wire` leaf (the ask extension: its `core` leaf); and importing `server` / `shared` / `web`.
+- **One source per shape** ([[submodule-contracts-schema]] holds the full rule). An in-repo pi package owns its
+  shapes and exports them from its `wire` leaf; `contracts` value-imports the leaf and only extends it. A pi-ai
+  shape uses pi-ai's schema where one exists and is otherwise `Same`-tied. A pi-coding-agent shape is declared
+  here once and tied both ways in the server program.
 
 ## Contents
 
+- **schema/** — wire schemas and the types derived from them ([[submodule-contracts-schema]]): `Project`,
+  `McpToolGrant`, `McpProjectOverride`, `ProjectPathStatus`, `ProjectResourceKind`, `ProjectTrustSummary`,
+  `SkillCatalogEntry`, `SkillDecision`, `SlashCommandSourceInfo`, `Ack`, the `model.*`, `customEndpoints.*`,
+  `provider.*`, `session.*`, `subagent.*`, `backgroundCommand.*`, `workspace.*`, `editor.*`, `terminal.*`, `git.*`,
+  `change.*`, `fs.*`, `spec.*`, `github.*`, `pr.*`, `todo.*`, `review.*`, `template.*`, `mcp.*`, `packages.*`, `fonts.*`,
+  `speech.*`, `feedback.*`, `themes.*`, `locales.*`, `environment.*`, `settings.*`, `history.*`, `search.*`, `extension.*`
+  and `client.*` entities,
+  and every WS method. The entries below describe these
+  types where they sit in their feature. `ToolInputs` names, by tool, the arguments chat cards read: a `Pick` of
+  the owner's schema type (`pi-spec-graph/wire`, `pi-subagents/wire`, `pi-background-commands/wire`, and
+  `ResolveCommentInput`, which the host's `resolve_comment` tool registers), or for pi's built-in tools a copy
+  the server ties to pi.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
-    `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ImageContent`, `ToolCall`,
-    `AssistantMessageEvent`, `Usage`, `StopReason`;
-  - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
+    `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ToolCall`,
+    `AssistantMessageEvent`, `Usage`, `StopReason`; `ImageContent` and `TextContent` are listed in `schema/transcript.ts`,
+    pinned to pi's types, with their compiled checks `isImageContent` and `isTextContent`;
+  - **`WireModel`** (in `schema/`) = `id`, `name`, `provider`, `contextWindow`, `reasoning` of pi's `Model` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
     client→host params carry it inert) **+ three optional picker-metadata projections** — `cost`
     (`{input, output}` list prices per Mtok, a subset of pi's `ModelCost`), `input` (accepted modalities) and
@@ -168,17 +213,21 @@ the palette ranks with — kept here so host-side search can rank with the same 
     can neither read the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC).
     **`sameModel(a, b)`** is the one identity test — `{provider, id}` — every ring uses; no other field is
     identity, since name, context, prices and levels are catalog snapshots that may lag a refresh;
-  - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
-    `off`-inclusive one);
-  - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
-    `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `agent_settled` /
-    `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
-    `session_info_changed` / `thinking_level_changed` / host-projected `entry_appended { entryType }`
-    members, plus `bash_execution_update` — mirrored
-    for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
+  - `@earendil-works/pi-agent-core`: nothing. `contracts` does not re-export `AgentEvent` or `AgentMessage`: in
+    the web program `AgentMessage` lacks pi-coding-agent's roles, so it would mean a different union on each side.
+    The server keeps one `AgentMessage` alias (`SessionMessageEntry["message"]`). `ThinkingLevel` (the
+    `off`-inclusive one) is pi-ai's `ModelThinkingLevelSchema` in `schema/model.ts`;
+  - `isTranscriptMessageRole` is the role guard the transcript and history share; `SessionInputKind` is gone.
+    `TextContent` lives in `schema/transcript.ts`, which also re-exports `NON_EXECUTABLE_STOP_REASONS` from the ask
+    extension's `core` leaf, and `SessionEntryType` in
+    `schema/piEvent.ts`, tied to pi-coding-agent's `SessionEntry["type"]` by the host;
+  - the render union **`PiEvent`** (in `schema/piEvent.ts`) — pi-agent-core's `AgentEvent` plus the session events of
+    the Node-only `pi-coding-agent`, declared there and tied to its `AgentSessionEvent` by the host
+    ([[submodule-contracts-schema]]). `bash_execution_update` is in the union for fidelity only; the host never calls
+    `executeBash`, so the UI never receives it.
     Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
-    **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
-    mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
+    **`WireAgentMessage`** — pi-ai's `Message` plus the `WireCustomMessage` / `WireCompactionSummary` /
+    `WireBranchSummary` / `WireBashExecution` mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
     `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
     custom roles only in Node builds, and pi-agent-core itself no longer adds them, so the same
     `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
@@ -191,7 +240,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     (`tokensBefore` + optional `estimatedTokensAfter`); the host constructs this projection rather than
     casting pi's richer object wholesale, and wire data remains untrusted, so the reducer guards the field
     shapes rather than assuming them;
-  - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
+  - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame, in `schema/piEvent.ts`.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
@@ -225,14 +274,15 @@ the palette ranks with — kept here so host-side search can rank with the same 
     **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
     once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
-    **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
-    type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
+    **`TranscriptMessage[]`** — pi-ai's `UserMessage`, `AssistantMessage` and `ToolResultMessage` widened with
+    **`WireCustomMessage`**, a type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
     compaction — pi places it before the kept tail and drops the summarized messages, so forwarding it is
     what makes the compaction boundary survive reload/reopen instead of rendering a transcript that begins
     mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
-    host may send is pinned by the runtime **`isTranscriptMessageRole(role)`** guard: the single source for
+    host may send is pinned by `TRANSCRIPT_MESSAGE_ROLES`, which the runtime **`isTranscriptMessageRole(role)`**
+    guard reads: the single source for
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
     silently shift every later jump anchor.
@@ -268,14 +318,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
     client's `session.extUiReply` or a host `dismiss` frame; the host dismisses it on abort, dispose, or
     when it accepts a user message for that chat (a message an extension handles or preflight rejects
     leaves it pending), so a client never treats its own message send as an answer.
-  - the **interactive-tool** wire shapes — **`ToolResponsePendingDetails`** `{ kind: "ack" }` + the
-    **`isToolResponsePending`** guard (a tool result's `details` meaning "the person's response is still
+  - the **interactive-tool** wire shapes — the **`ToolResponsePendingDetails`** schema `{ kind: "ack" }`
+    (in `schema/transcript.ts`) + the **`isToolResponsePending`** guard compiled from it (a tool result's `details` meaning "the person's response is still
     pending": written by restart repair, returned by a tool that defers), the **`TOOL_RESPONSE_CUSTOM_TYPE`**
     constant, **`ToolResponseMessage`** / **`ToolResponseDetails`** `{ toolCallId, response: unknown }`
     (the late response the host appends when no live tool awaits it) and **`readToolResponseMessage`**
     (the shared reader; it also reads the retired `ask-user-answers` shape — `details.result` — so answered
-    questions in existing transcripts stay answered; the legacy literal is private to the reader). All in
-    `wsProtocol`. The shapes name **no tool**: which tools are interactive is declared by the server
+    questions in existing transcripts stay answered; the legacy literal is private to the reader). All but
+    the schema in `wsProtocol`. The shapes name **no tool**: which tools are interactive is declared by the server
     extension descriptor and the web renderer registration ([[module-extension-api]]); the tool's own
     argument/result types live in its pi package (`@thinkrail/pi-ask-user-question/core`), not here.
     `WireCustomMessage.customType` itself stays
@@ -294,33 +344,27 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `needsInput.kind: "question"` / `question:<toolCallId>` as the awaiting call, because the UI ships
     independently of the host (Decision 3). Both go when the window closes.
   - the **todo plan-review fix** wire types — the **`TODO_REVIEW_FIX_CUSTOM_TYPE`** constant,
-    **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** guard (in
-    `wsProtocol`), and **`ReviewFixDetails`** / **`ReviewFixComment`** (in `domain`): a plan-review
+    **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** check (in
+    `wsProtocol`, compiled from the message schema), and **`ReviewFixDetails`** / **`ReviewFixComment`** (schemas in
+    `schema/review.ts`): a plan-review
     verdict's fix request reaches the worker as a **structured custom message** (customType
     `todo-review-fix`) instead of a synthetic user turn (#363). The message `content` stays the rendered
     package text the agent reads; `details` (the item id/title, optional note, and slim path/line-resolved
     findings) is what the chat card renders — the host resolves each finding's `path`/lines from its
     anchor at send time so the client re-parses nothing. See [[submodule-server-todos]] +
     [[submodule-web-chat]].
-- **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
-  persisted open-rail membership bit; absence means open for backward compatibility, and closing never
-  changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
-  (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
-  **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
-  plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
-  default), which gate what its skills contribute. **`isSkillGroupEnabled`** is the one group rule shared by
-  the host gate and the Skills dialog: a project's explicit choice (on wins over off) beats
-  `AppConfig.otherAgentSkills`, which governs only **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`).
-  **`SKILL_LISTING_MIN_TOKENS`** / **`SKILL_LISTING_MAX_TOKENS`** (4K / 8K) bound the host's per-request skill
-  listing budget, so the Skills dialog's size line names the same limits; a workspace layers
-  **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
-  **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
-  force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
-  optional **`Workspace.subagentMaxConcurrentOverride`** likewise overrides `AppConfig.subagentMaxConcurrent`;
-  "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
-  walk), **`ProjectPathStatus`** (a
-  candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
-  `git init`, or shows an error), `Workspace` (git worktree; its
+- **domain.ts** — the rules and constants over the app entities; each entity's shape is its schema in `schema/`
+  ([[submodule-contracts-schema]]). **`isSkillGroupEnabled`** is the one group rule shared by the host gate and the
+  Skills dialog: a project's explicit choice (on wins over off) beats `AppConfig.otherAgentSkills`, which governs only
+  **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`). **`SKILL_LISTING_MIN_TOKENS`** / **`SKILL_LISTING_MAX_TOKENS`**
+  (4K / 8K) bound the host's per-request skill listing budget, so the Skills dialog's size line names the same limits.
+  What the entity fields mean beyond their types: a `Project` is a git repository with a unique `slug`. Without
+  `closed` it is open, and closing never changes its id or deletes its workspace associations. Its skill trust is `trusted` (the grant), `acknowledgedSkills`
+  (re-confirm-new) and the per-skill and per-group baseline (a group is a plugin, a source tier, or the special
+  `@plugins`); a workspace layers `skillOverrides` over it. A workspace without `subagentsOverride` or
+  `subagentMaxConcurrentOverride` inherits the host's `AppConfig` default. "Does it have specs?" is not a field but
+  the lazy `project.hasSpecs` query, since it walks the whole tree. `ProjectPathStatus` tells the UI to open a path,
+  offer `git init`, or show an error. `Workspace` (a git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet named** (a fresh `workspace-N`, or a
   record an older host's provisional pass left unlocked), so the agent's `set_title` may still name it; `true` = named (automatically or by the user), never auto-touched
   again, except that optional **`branchNamePending`** (the naming chat's session id) marks a `set_title` that
@@ -525,11 +569,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
-  Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
+  Specs-viewer read DTOs, host projections written here rather than taken from `pi-spec-graph`'s graph
+  types (only the tool inputs come from `pi-spec-graph/wire`, through `ToolInputs`) — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`/`TodoArtifact`** + the **`TodoStatus`/`TodoOrigin`/
   `TodoArtifactKind`** unions — the in-chat plan
-  DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
+  DTOs, built from the `pi-todos/wire` leaf: the enum schemas are its own, and each object spreads its field record
+  (`TODO_FIELDS`, `TODO_ARTIFACT_FIELDS`, `TODO_GROUP_FIELDS`, `TODO_PLAN_FIELDS`) and adds only the wire's fields.
+  `todo.add` and `todo.update` take `title`, `note` and `status` from `TODO_FIELDS`. It carries the chat's per-session TODO list.
   `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
   (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
   stored: shipping it means the truth table has one home and no client re-derives it. A `commit`
@@ -541,7 +588,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate).
   `TodoItem.commitSubject` is the third stored done-time field: the git subject the host commits the
   item's delta under (the `title` is the plan step for the panel, this is the line that lands in the
-  repository's history — see [[submodule-server-todos]]). It is on the wire because the DTO mirrors the
+  repository's history — see [[submodule-server-todos]]). It is on the wire because the DTO is the
   stored item, not because any client renders it today; **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
   review decoration, present only on reviewable items (those with a host change set): `state`
   (`unreviewed`/`reviewed`/`changes_requested` — `unreviewed` = no stored record), `revision` (commit
@@ -555,23 +602,26 @@ the palette ranks with — kept here so host-side search can rank with the same 
   decoration and present only when non-empty: the `base..HEAD` commits owned by no item, surfaced as
   **wire-only `done` items** (`origin: "adopted"`, `id: "commit:<sha>"`, one `commit` artifact) so a
   chat that committed without planning still shows — and can review — that work. They are never stored;
-  the **`"adopted"`** member of `TodoOrigin` exists only on the wire (derivation: [[submodule-server-todos]]).
+  the **`"adopted"`** member of `TodoOrigin` (`pi-todos`' `TODO_ORIGINS` plus `"adopted"`)
+  exists only on the wire (derivation: [[submodule-server-todos]]).
   **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
-  **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
+  built from `pi-delegation/wire`'s `DELEGATION_RUN_FIELDS` and `RUN_LIFECYCLE_STATUSES`: rides `tool_execution_update.partialResult`
   (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the
   child transcript itself is read via `subagent.getTranscript`, keyed
   `(workspaceId, parentSessionId, childSessionId)` — its result also carries the run's current
   registry `status` (absent once the host no longer knows the run), the client's poll-while-live
   signal. The completion message's tag + pairing live in
   `wsProtocol` (the value-bearing half), mirroring the tool-response posture exactly: the
-  **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
-  never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
-  shape, its details **`SubagentCompletionDetails`**: the run details plus the optional
-  **`CompletionDelivery`** marker mirrored from `pi-subagents`) and the shared
-  **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
-  details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
+  **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (`pi-subagents/wire`'s `SUBAGENT_COMPLETION_MESSAGE`,
+  re-exported), **`SubagentCompletionMessage`** (the compile-held tag↔details
+  shape, its details **`SubagentCompletionDetails`**: `pi-subagents/wire`'s `SUBAGENT_COMPLETION_FIELDS`, the run
+  details plus the optional **`CompletionDelivery`** marker owned by `pi-background-commands/wire`) and the shared
+  **`isSubagentCompletionMessage`** check — wire data is untrusted, so each completion, review-fix and
+  command-completion check is compiled from a message schema in `wsProtocol` (the custom-message fields plus
+  the tag and the details schema), and **`isDelegationRunDetails`** (domain) is the compiled
+  `DelegationRunDetails` schema in `schema/subagent.ts`: the **closed status union**, every
   required **numeric usage field**, `durationMs`, every present optional display field as a string, and a
-  present `thinkingLevel` as one of pi's closed levels, never just "an object is present" (PR #303 review finding). That validator is the one home for the
+  present `thinkingLevel` as one of pi's closed levels, never just "an object is present". That schema is the one home for the
   shape check — the web's Agent-card reader
   narrows through it too — plus **`customMessageText`** — the one text extraction over
   `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
@@ -585,7 +635,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`transcript` / `file` /
   `spec` / `plan` — chats and workspaces are the palette's own rows), **`SearchContext`** (the active workspace + context project the
-  host turns into its one file/spec root), **`SearchHit`** (a union per kind over **`SearchHitBase`** — a stable
+  host turns into its one file/spec root), **`SearchHit`** (a union per kind over shared base fields — a stable
   `kind:id[:locator]` id, title / subtitle, the shared matcher's `MatchTier` + `score` and highlight `ranges`
   so the browser merges host hits with its local ones by the same rule, and the `projectId` / `workspaceId`
   every hit opens in — with each kind's own required target: a file's root-relative `path` and byte `size`
@@ -641,7 +691,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
-- **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
+- **nativeClient.ts** — type-only optional native-client capabilities outside the host wire: the bridge
+  interfaces. The desktop's native shapes (webview RPC frames, the files it stores, and the update state, window
+  state, quit hint and command values the bridges hand the web) are schemas in `schema/native.ts`, owned here
+  because they are host-owned shapes; the desktop compiles them at its edge, and the web checks bridge values with them. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
   ready, and installing are distinct states. While installing, the snapshot carries a coarse install step
@@ -669,7 +722,22 @@ the palette ranks with — kept here so host-side search can rank with the same 
   v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
   `host.update`; no output, arbitrary diagnostic, feed URL, artifact, platform path, or shell command crosses
   the wire.
-- **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
+- **wireChecks.ts** — the checks every side runs on wire values. `describeFailure(validator, value, root)` is the one
+  wording of a schema refusal: up to five `path message` pairs, with `root` naming the value itself.
+  `wsResultValidator(method)` is the result schema of a method, compiled on first use and typed `Validator<WsResult<M>>`
+  through a table with one row per method, so no caller casts what it checked.
+  `wsPushValidator(channel)` does the same per push channel. `pi.event` types more than it checks through its schema's
+  trust point ([[submodule-contracts-schema]]).
+  `parseWsResult(method, value)` and `parseWsPush(channel, data)` return `Parsed<T>`: the typed value, or the problem
+  naming the method or channel and the failing fields. A client reads `server.welcome` through `WsClientChannelMap`, where
+  it is the `AnyHostWelcome` floor, so it can start against a host of any version. `wsChannelOf(name)` names a channel
+  this client knows, never an inherited object key.
+- **wsProtocol.ts** — the name records `WS_METHODS` and `WS_CHANNELS`, `PROTOCOL_VERSION` and the feature versions,
+  the typed maps `WsMethodMap` and `WsChannelMap` with the `WsParams` / `WsResult` / `WsChannelPayload` helpers, and
+  the custom-message tags and checks. Each method's params and result and each channel's payload are its schema in
+  `schema/<namespace>.ts`, collected in `WS_METHOD_SCHEMAS` and `WS_CHANNEL_SCHEMAS`. A private type check ties each
+  name record to its map in both directions, so a name in one and not the other fails to compile.
+- **Methods and channels** — what each promises beyond its schema. Methods: `project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
   `PROJECT_RENAME_PROTOCOL_VERSION` pins its v85 introduction so a newer client omits the action against
@@ -874,7 +942,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers, others? }` → ack;
   `language` echoes `AppSurvey.language`; `answers` hold only picked choices (as shown), ratings and open text,
   while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
-  one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
+  one call when the user presses Send, whatever the analytics setting; dispatch refuses a wrong shape with `INVALID_PARAMS`; a value rule fails with `SURVEY_INVALID`, and it also fails with
   `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
   and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
   invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
@@ -908,13 +976,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
   — plus
   **`template.*`** — prompt-template CRUD
   (**`template.list`**, **`template.get`** — reads accept one optional location, `workspaceId` or
-  `projectId`, and reject both; no location is global-only, while either located form merges project over
+  `projectId`, and reject both (`TemplateReadLocation`); no location is global-only, while either located form merges project over
   global; **`template.save`**, **`template.delete`**) — all
-  read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
-  `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
+  read/write pi's prompt dirs (global + project), so templates stay CLI-portable.
+  Channels: `server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed, minus closed records whose
   folder is definitively gone), plus optional
-  **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
+  **`hostUpdate: HostUpdateNotice`**, **`configReadFailed: true`** (v108: the host's `config` is defaults because
+  its `config.json` could not be read; absent otherwise and from an older host, so it needs no gate) and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
   the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
@@ -967,9 +1036,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
-  The `WsMethodMap` typed request/result map +
-  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
-  in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:
+  Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
   `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close
   that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names
@@ -987,12 +1054,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 The current-chat resource view is a projection of two existing capability owners, not a generic
 process API. `CHAT_RESOURCES_PROTOCOL_VERSION` (71) gates its methods and affordances; hosts through
-v70 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs mirror [[module-pi-background-commands]]
-without importing that package. Subagents retain their Pi child session ids and delegation statuses.
+v70 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs are built
+from the `pi-background-commands/wire` field records ([[module-pi-background-commands]]) plus the host's
+`sessionId: StoredSessionId` and `interrupted`; `BACKGROUND_COMMAND_TERMINAL_STATUSES` and
+`BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE` are the owner's, re-exported. Subagents retain their Pi child session ids and delegation statuses.
 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
   every live record plus the newest twenty finished ones per kind. The snapshot echoes workspace
-  and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
+  and session identity. Commands carry the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
   effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
   `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
@@ -1032,7 +1101,7 @@ without importing that package. Subagents retain their Pi child session ids and 
   lifecycle changes. Clients reread the snapshot; output bytes do not ride a broadcast or transcript
   tool update after the start acknowledgement. Existing `subagent.getTranscript` remains unchanged.
 
-`DelegationRunDetails.abortReason` mirrors the optional string owned by [[module-pi-delegation]].
+`DelegationRunDetails.abortReason` is the optional string owned by [[module-pi-delegation]].
 Historical details without this field stay valid; non-string values are rejected by its guard. User
 Stop uses `"user"` so the portable completion owner can suppress idle-parent wake-up without a
 wire-owned cancellation registry.
@@ -1041,9 +1110,9 @@ wire-owned cancellation registry.
 wire details contain terminal snapshot metadata without the full command, plus the owner's bounded
 plain-text diagnostic excerpt and truncation flag, and the same optional `delivery` marker as a
 subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
-transcripts written before it, which keep the old round rules). The guards do not validate it; the
-shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
-reads as absent everywhere. The conversation may render that historical notice,
+transcripts written before it, which keep the old round rules). The message schemas check it as the
+closed `CompletionDelivery` union, so a reader takes `details.delivery` as typed. A
+`background_command` `output` result reads through `isBackgroundCommandOutputDetails`. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -1081,6 +1150,12 @@ the pi-level resource grant. A client talking to an older host sends neither.
 missing list as "no MCP". The engine is pi's built-in MCP ([[submodule-server-agent]]); these DTOs mirror
 what the host reads from pi and from the two `mcp.json` files, never pi's own types — the web depends on
 contracts only.
+
+- `schema/mcp.ts` holds the server-entry schemas: `McpStdioServerConfig` and `McpHttpServerConfig` (built from
+  `MCP_COMMON_FIELDS`, `MCP_STDIO_FIELDS` and `MCP_HTTP_FIELDS`), `McpOAuthConfig`, `McpEntryType`,
+  `McpTransportKind`, `McpExposure` and `McpActiveExposure`. Settings checks a pasted entry and the host parses
+  `mcp.json` with the same schemas, and the host ties them to pi's `McpServerConfig` and `McpExposure`
+  ([[submodule-server-agent]]).
 
 - The project record carries the per-project policy the host applies when a chat loads its servers:
   `Project.mcpApprovals` maps a repo-defined server name to the fingerprint of its whole `.pi/mcp.json`
@@ -1125,7 +1200,7 @@ contracts only.
   `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it
   carries into the latest stored override atomically (a client sends only what changed, so concurrent
   clients do not overwrite each other's setting). Enablement must be boolean and exposure one of
-  `deferred`, `direct`, `hidden`; malformed runtime values fail with `MCP_CONFIG_INVALID`. `setSessionOverride` is the chat-resources
+  `deferred`, `direct`, `hidden`; dispatch refuses other values with `INVALID_PARAMS`. `setSessionOverride` is the chat-resources
   "Disable in this chat": it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
   `registered: true` is a server an extension registered (its `transport` is that registration's), and
   disabling it fails with `MCP_CONFIG_INVALID`; where MCP is handled elsewhere it fails with
@@ -1144,8 +1219,9 @@ contracts only.
   longer has it — so a stale Edit or Remove never rewrites or deletes content the user has not seen,
   whether a checkout changed the repository entry or another client or editor replaced the user entry
   under an open dialog. The field is required rather than optional on the wire: the MCP surface ships
-  whole at `MCP_PROTOCOL_VERSION`, so there is no older host or client to tolerate. The
-  host validates `scope` itself; anything but `user` / `project` is rejected before any path is chosen. `shareWithRepo` refuses when the project file already defines that name or
+  whole at `MCP_PROTOCOL_VERSION`, so there is no older host or client to tolerate. Dispatch refuses a
+  missing fingerprint, and a `scope` other than `user` / `project`, before any path is chosen. Fields a method
+  does not declare are never written: only `entry` is free-form, and it reaches the file as given. `shareWithRepo` refuses when the project file already defines that name or
   holds an override that is not approved at its current fingerprint.
 - `mcp.login` / `mcp.testConnection` check MCP ownership in the same synchronous step that starts the
   probe, like the mutations; they return a `loginId` and reuse the `provider.login` frame family
@@ -1158,8 +1234,10 @@ contracts only.
   `mcp.testConnection` judges the transport of the actual admitted configuration, not an approved but
   invalid project row that the loader skipped. Mutations and probes reject if workspace identity, cwd or
   project trust changed during async ownership resolution; no stale project grant admits a new operation.
-- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools;
-  `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
+- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools. pi-coding-agent's
+  type sits behind its exports map, so the server type-imports it by path and ties the copy (`pi-compatibility.md`);
+  `McpResultSummary` (schema in `schema/mcp.ts`, each block checked by `isMcpContentBlockSummary`) is the
+  host-written, bounded, base64-free presentation summary under
   `details.thinkrail` that lets cards render identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
   file is gone.
@@ -1269,7 +1347,8 @@ and what it loaded, never pi's own types.
   Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
   (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
   `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
-  `AppConfig` key.
+  `AppConfig` key. `SpeechModel`, `SpeechStatus`, `SpeechErrorCode`, the socket frame schemas, the method schemas and the channel schema live in
+  `schema/speech.ts`, with the `SPEECH_MODELS` and `SPEECH_ERROR_CODES` tuples their schemas are built from.
 - **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
   dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
   request, which cannot absorb 20 ms audio frames.
@@ -1278,8 +1357,9 @@ and what it loaded, never pi's own types.
     **`SPEECH_SAMPLE_RATE`** (16 kHz) in between.
   - Host to client: `SpeechServerMessage` JSON (`ready`, `partial` replacing the previous partial,
     `final` committing it, `error {code}`, `ended`).
-  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Both reject anything
-    outside these closed shapes.
+  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Each checks a frame
+    against its `schema/speech.ts` schema, as the `/ws` transport checks its frames: an unknown `type`,
+    a missing field, or an unknown error code is rejected; extra fields pass.
 - Transcripts never enter the main wire, persistence, or error reports.
 
 ## Normalized session state

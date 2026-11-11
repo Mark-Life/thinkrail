@@ -1,3 +1,10 @@
+import { obj, type Schema as PiSchema, type Static as PiStatic } from "@earendil-works/pi-schema";
+import {
+	DELEGATION_RUN_FIELDS,
+	ResourceChildBirth,
+	RunStatus,
+	StopReason,
+} from "pi-delegation/wire";
 import { type Static, Type } from "typebox";
 import { Check } from "typebox/value";
 import { canonicalJson, fail } from "./errors.ts";
@@ -9,7 +16,6 @@ import {
 	gateAllowsCallerKind,
 	IdSchema,
 	LIMITS,
-	SessionSchema,
 } from "./schemas.ts";
 
 const closed = { additionalProperties: false };
@@ -46,71 +52,19 @@ const value = Type.Object(
 	},
 	closed,
 );
-const birth = Type.Object(
-	{
-		sessionId: text,
-		resourceId: text,
-		scope: text,
-		originKind: Type.Union([Type.Literal("fresh"), Type.Literal("fork")]),
-		entryId: Type.Optional(text),
-		info: Type.Object(
-			{ createdBy: text, roleName: Type.Optional(text), roleSource: Type.Optional(text) },
-			closed,
-		),
-		interactive: Type.Literal(false),
-		visibility: Type.Literal("hidden"),
-		createdAt: text,
-	},
-	closed,
-);
-const runStatus = Type.Union([
-	Type.Literal("completed"),
-	Type.Literal("error"),
-	Type.Literal("aborted"),
-]);
-const details = Type.Object(
-	{
-		childSessionId: text,
-		roleName: Type.Optional(text),
-		roleSource: Type.Optional(text),
-		status: Type.Union([runStatus, Type.Literal("queued"), Type.Literal("running")]),
-		model: Type.Optional(text),
-		thinkingLevel: SessionSchema.properties.thinkingLevel,
-		activity: Type.Optional(text),
-		durationMs: Type.Number(),
-		usage: Type.Object(
-			{
-				input: Type.Number(),
-				output: Type.Number(),
-				cacheRead: Type.Number(),
-				cacheWrite: Type.Number(),
-				cost: Type.Number(),
-				turns: Type.Number(),
-				contextTokens: Type.Number(),
-			},
-			closed,
-		),
-	},
-	closed,
-);
+/** pi-delegation's own schema: TypeBox checks it as plain JSON Schema, typed as pi-schema types it. */
+const owned = <S extends PiSchema>(schema: S) => Type.Unsafe<PiStatic<S>>(schema);
+const birth = owned(ResourceChildBirth);
+const runStatus = owned(RunStatus);
+const { task: _task, ...RUN_DETAIL_FIELDS } = DELEGATION_RUN_FIELDS;
 const outcome = Type.Object(
 	{
 		status: runStatus,
-		details,
+		details: owned(obj(RUN_DETAIL_FIELDS)),
 		finalText: Type.Optional(file),
 		errorMessage: Type.Optional(file),
 		historyEntryId: nullableId,
-		stopReason: Type.Optional(
-			Type.Union([
-				Type.Literal("stop"),
-				Type.Literal("toolUse"),
-				Type.Literal("length"),
-				Type.Literal("error"),
-				Type.Literal("aborted"),
-				Type.Literal("pending"),
-				Type.Literal("deferred"),
-			]),
-		),
+		stopReason: Type.Optional(owned(StopReason)),
 	},
 	closed,
 );
@@ -238,7 +192,7 @@ const capture = Type.Object(
 	},
 	closed,
 );
-const receipt = Type.Object(
+export const DagReceiptSchema = Type.Object(
 	{ commandId: IdSchema, dagId: IdSchema, version: positive, graphRevision: positive },
 	closed,
 );
@@ -317,7 +271,7 @@ const StateSchema = Type.Object(
 		receipts: Type.Record(
 			IdSchema,
 			Type.Object(
-				{ authority: Type.Optional(AuthoritySchema), fingerprint: hash, receipt },
+				{ authority: Type.Optional(AuthoritySchema), fingerprint: hash, receipt: DagReceiptSchema },
 				closed,
 			),
 			closed,
@@ -334,7 +288,7 @@ export type StoredFile = Static<typeof file>;
 export type StoredValue = Static<typeof value>;
 export type DagCaller = Static<typeof actor>;
 export type DecisionRecord = Static<typeof decision>;
-export type DagReceipt = Static<typeof receipt>;
+export type DagReceipt = Static<typeof DagReceiptSchema>;
 export type DagNotice = Static<typeof notice>;
 export type StoredOutcome = Static<typeof outcome>;
 export type Activation = Static<typeof activation>;
@@ -356,15 +310,13 @@ function storageSegment(value: string): boolean {
 }
 
 export function decodeBirth(value: unknown): Static<typeof birth> {
-	if (!Check(birth, value)) fail("corrupt-state", "Invalid worker birth metadata");
 	if (
+		!Check(birth, value) ||
 		!storageSegment(value.sessionId) ||
 		!storageSegment(value.resourceId) ||
 		!storageSegment(value.scope) ||
-		!value.info.createdBy ||
 		!Number.isFinite(Date.parse(value.createdAt)) ||
-		(value.originKind === "fresh" && value.entryId !== undefined) ||
-		(value.entryId !== undefined && value.entryId.length === 0)
+		(value.originKind === "fresh" && value.entryId !== undefined)
 	)
 		fail("corrupt-state", "Invalid worker birth metadata");
 	return value;

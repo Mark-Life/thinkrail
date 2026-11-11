@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { compile, obj, oneOf, type Static, str } from "@earendil-works/pi-schema";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { readMarkerLines } from "../../test/markerLines";
 import {
 	createSession,
 	disposeAllSessions,
@@ -19,7 +22,7 @@ const model = {
 	id: "shutdown",
 	name: "shutdown",
 	reasoning: false,
-	input: ["text"] as ("text" | "image")[],
+	input: ["text"] satisfies ("text" | "image")[],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 100_000,
 	maxTokens: 4096,
@@ -96,17 +99,12 @@ afterAll(async () => {
 	rmSync(root, { recursive: true, force: true });
 });
 
-type ShutdownEvent = { reason: string; ctx: "live" | "stale" };
+const ShutdownEvent = obj({ reason: str(), ctx: oneOf(["live", "stale"]) });
+type ShutdownEvent = Static<typeof ShutdownEvent>;
+const ShutdownEventLine = compile(ShutdownEvent);
 
 function shutdownEvents(): ShutdownEvent[] {
-	try {
-		return readFileSync(marker, "utf8")
-			.split("\n")
-			.filter(Boolean)
-			.map((line) => JSON.parse(line) as ShutdownEvent);
-	} catch {
-		return [];
-	}
+	return readMarkerLines(marker, ShutdownEventLine);
 }
 
 async function eventuallyShutdownEvents(from: number, count: number): Promise<ShutdownEvent[]> {
@@ -118,7 +116,7 @@ async function eventuallyShutdownEvents(from: number, count: number): Promise<Sh
 }
 
 async function parent() {
-	const workspaceId = `shutdown-${++sequence}`;
+	const workspaceId = testWorkspaceId(`shutdown-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,
@@ -148,7 +146,7 @@ test("an immediate host stop disposes the pi session only after its shutdown han
 
 test("a session abandoned while attaching emits session_shutdown before its pi session is disposed", async () => {
 	const before = shutdownEvents().length;
-	const workspaceId = `shutdown-${++sequence}`;
+	const workspaceId = testWorkspaceId(`shutdown-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const creating = createSession({
 		workspaceId,

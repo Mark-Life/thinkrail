@@ -1,3 +1,4 @@
+import type { ToolInputs } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "@/lib";
 import { registerToolRenderer } from "../toolRegistry";
@@ -12,15 +13,20 @@ import "./subagent/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";
 
-registerToolRenderer("bash", BashCard, { summary: ({ args }) => strArg(args, "command") });
+registerToolRenderer("bash", BashCard, {
+	summary: ({ args }) => strArg<ToolInputs["bash"]>(args, "command"),
+});
 registerToolRenderer("read", ReadCard, {
-	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	summary: ({ args, workspaceRoot }) =>
+		projectRelativePath(strArg<ToolInputs["read"]>(args, "path"), workspaceRoot),
 });
 registerToolRenderer("edit", EditCard, {
-	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	summary: ({ args, workspaceRoot }) =>
+		projectRelativePath(strArg<ToolInputs["edit"]>(args, "path"), workspaceRoot),
 });
 registerToolRenderer("write", WriteCard, {
-	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	summary: ({ args, workspaceRoot }) =>
+		projectRelativePath(strArg<ToolInputs["write"]>(args, "path"), workspaceRoot),
 });
 
 for (const toolName of [
@@ -36,7 +42,7 @@ for (const toolName of [
 }
 
 registerToolRenderer("resolve_comment", ResolveCommentCard, {
-	summary: ({ args }) => strArg(args, "commentId"),
+	summary: ({ args }) => strArg<ToolInputs["resolve_comment"]>(args, "commentId"),
 });
 
 registerToolRenderer("request_review", RequestReviewCard, {

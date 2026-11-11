@@ -1,16 +1,20 @@
-import type {
-	WorkspaceFsChangedPayload,
-	WorkspaceWatchReadyResult,
-	WsParams,
-	WsResult,
+import {
+	parseSessionId,
+	type WorkspaceFsChangedPayload,
+	type WorkspaceId,
+	type WorkspaceWatchReadyResult,
+	type WsParams,
+	type WsResult,
 } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { selectWorkspaceTick, useAppStore } from "../store";
+import { RequestError } from "./requestError";
 import { getTransport } from "./wireTransport";
 
 export interface SkillLoadDependencies {
-	watchReady: (workspaceId: string, prewarm: boolean) => Promise<WorkspaceWatchReadyResult>;
+	watchReady: (workspaceId: WorkspaceId, prewarm: boolean) => Promise<WorkspaceWatchReadyResult>;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
-	workspaceTick: (workspaceId: string) => number;
+	workspaceTick: (workspaceId: WorkspaceId) => number;
 	createSession: (params: WsParams<"session.create">) => Promise<WsResult<"session.create">>;
 	getSessionMessages: (
 		params: WsParams<"session.getMessages">,
@@ -23,7 +27,7 @@ export interface SkillLoadDependencies {
 export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 	const pending = new Map<string, { preparation: Promise<number>; prewarm: boolean }>();
 
-	const prepare = (workspaceId: string, prewarm: boolean): Promise<number> => {
+	const prepare = (workspaceId: WorkspaceId, prewarm: boolean): Promise<number> => {
 		const existing = pending.get(workspaceId);
 		if (existing && (prewarm || !existing.prewarm)) return existing.preparation;
 
@@ -46,13 +50,19 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 	};
 
 	return {
-		async prewarmWorkspaceSkillLoad(workspaceId: string): Promise<void> {
+		async prewarmWorkspaceSkillLoad(workspaceId: WorkspaceId): Promise<void> {
 			await prepare(workspaceId, true);
 		},
 		async createSession(params: WsParams<"session.create">) {
 			const syncedTick = await prepare(params.workspaceId, false);
-			const result = await deps.createSession(params);
-			return { result, syncedTick };
+			const created = await deps.createSession(params);
+			const sessionId = parseSessionId(created.sessionId);
+			if (sessionId === null)
+				throw new RequestError(
+					"INVALID_REPLY",
+					t("app.transport.invalidReply", { method: "session.create" }),
+				);
+			return { result: { ...created, sessionId }, syncedTick };
 		},
 		async getSessionMessages(params: WsParams<"session.getMessages">) {
 			const syncedTick = deps.workspaceTick(params.workspaceId);
@@ -64,9 +74,15 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			) {
 				throw new Error("Session response did not match the requested workspace and session");
 			}
-			return { result, syncedTick };
+			return {
+				result: { ...result, summary: { ...result.summary, sessionId: params.sessionId } },
+				syncedTick,
+			};
 		},
-		async reloadSessionResources(workspaceId: string, params: WsParams<"session.reloadResources">) {
+		async reloadSessionResources(
+			workspaceId: WorkspaceId,
+			params: WsParams<"session.reloadResources">,
+		) {
 			const syncedTick = await prepare(workspaceId, false);
 			const result = await deps.reloadSessionResources(params);
 			return { result, syncedTick };

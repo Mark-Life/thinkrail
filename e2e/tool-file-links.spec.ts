@@ -1,6 +1,15 @@
-import { appendFileSync, realpathSync, utimesSync } from "node:fs";
+import { realpathSync, utimesSync } from "node:fs";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import type { AssistantMessage, SessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
+import {
+	appendFixtureEntries,
+	fixtureAssistant,
+	fixtureMessageEntry,
+	fixtureToolResult,
+} from "@thinkrail/server/history-test-fixtures";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { clickTranscriptControl } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -9,10 +18,12 @@ import { seedWorkspaceSession } from "./fixtures/sessions";
 const BASE_TS = 1_700_800_000_000;
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
 
+type ToolCall = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
+
 type ToolFixture = {
 	id: string;
 	name: string;
-	args: Record<string, unknown>;
+	args: ToolCall["arguments"];
 	text: string;
 	details?: unknown;
 };
@@ -92,16 +103,13 @@ const TOOLS: ToolFixture[] = [
 	},
 ];
 
-function appendToolResults(path: string, sessionId: string): void {
+function appendToolResults(path: string, sessionId: SessionId): void {
 	const assistantId = `${sessionId}-tools`;
-	const entries: object[] = [
-		{
-			type: "message",
-			id: assistantId,
-			parentId: `${sessionId}-m0`,
-			timestamp: new Date(BASE_TS + 1_000).toISOString(),
-			message: {
-				role: "assistant",
+	const entries: SessionEntry[] = [
+		fixtureMessageEntry(
+			assistantId,
+			`${sessionId}-m0`,
+			fixtureAssistant({
 				content: TOOLS.map((tool) => ({
 					type: "toolCall",
 					id: tool.id,
@@ -110,42 +118,39 @@ function appendToolResults(path: string, sessionId: string): void {
 				})),
 				stopReason: "toolUse",
 				timestamp: BASE_TS + 1_000,
-			},
-		},
+			}),
+		),
 	];
 	let parentId = assistantId;
 	for (const [index, tool] of TOOLS.entries()) {
 		const id = `${sessionId}-result-${index}`;
-		entries.push({
-			type: "message",
-			id,
-			parentId,
-			timestamp: new Date(BASE_TS + 2_000 + index).toISOString(),
-			message: {
-				role: "toolResult",
-				toolCallId: tool.id,
-				toolName: tool.name,
-				content: [{ type: "text", text: tool.text }],
-				details: tool.details,
-				isError: false,
-				timestamp: BASE_TS + 2_000 + index,
-			},
-		});
+		entries.push(
+			fixtureMessageEntry(
+				id,
+				parentId,
+				fixtureToolResult({
+					toolCallId: tool.id,
+					toolName: tool.name,
+					content: [{ type: "text", text: tool.text }],
+					details: tool.details,
+					isError: false,
+					timestamp: BASE_TS + 2_000 + index,
+				}),
+			),
+		);
 		parentId = id;
 	}
-	entries.push({
-		type: "message",
-		id: `${sessionId}-done`,
-		parentId,
-		timestamp: new Date(BASE_TS + 3_000).toISOString(),
-		message: {
-			role: "assistant",
-			content: [{ type: "text", text: "Finished inspecting the tool outputs." }],
-			stopReason: "stop",
-			timestamp: BASE_TS + 3_000,
-		},
-	});
-	appendFileSync(path, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+	entries.push(
+		fixtureMessageEntry(
+			`${sessionId}-done`,
+			parentId,
+			fixtureAssistant({
+				text: "Finished inspecting the tool outputs.",
+				timestamp: BASE_TS + 3_000,
+			}),
+		),
+	);
+	appendFixtureEntries(path, entries);
 	utimesSync(path, new Date(BASE_TS), new Date(BASE_TS));
 }
 
@@ -225,7 +230,7 @@ test("structured tool paths reuse the preview tab while rich tool results stay i
 		name: "tool file links",
 		messages: [{ role: "user", text: "inspect structured tool outputs", timestamp: BASE_TS }],
 	});
-	appendToolResults(chat.path, chat.id);
+	appendToolResults(chat.path, testSessionId(chat.id));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);

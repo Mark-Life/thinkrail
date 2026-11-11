@@ -1,3 +1,6 @@
+import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
+import type { SessionOptions } from "pi-delegation";
+import type { Same } from "type-tie";
 import { type Static, Type } from "typebox";
 
 export const LIMITS = {
@@ -61,17 +64,7 @@ export const SessionSchema = Type.Object(
 				closed,
 			),
 		),
-		thinkingLevel: Type.Optional(
-			Type.Union([
-				Type.Literal("off"),
-				Type.Literal("minimal"),
-				Type.Literal("low"),
-				Type.Literal("medium"),
-				Type.Literal("high"),
-				Type.Literal("xhigh"),
-				Type.Literal("max"),
-			]),
-		),
+		thinkingLevel: Type.Optional(Type.Enum(MODEL_THINKING_LEVELS)),
 		tools: Type.Array(IdSchema, { maxItems: 64, uniqueItems: true }),
 		systemPrompt: Type.Optional(TextSchema),
 		contextFiles: Type.Optional(Type.Boolean()),
@@ -84,6 +77,12 @@ export const SessionSchema = Type.Object(
 	},
 	closed,
 );
+/** A node's session shaping is the part of delegation's `SessionOptions` a definition may set, with `tools` required. */
+export type SessionTie = Same<
+	Static<typeof SessionSchema>,
+	Pick<SessionOptions, "model" | "thinkingLevel" | "systemPrompt" | "contextFiles" | "skills"> &
+		Required<Pick<SessionOptions, "tools">>
+>;
 export const NodeSchema = Type.Object(
 	{
 		id: IdSchema,
@@ -299,7 +298,24 @@ export const ReadQuerySchema = Type.Union([
 	Type.Object({ kind: Type.Literal("history"), dagId: IdSchema, ...PageSchema.properties }, closed),
 ]);
 
+/** A process's claim on a DAG directory: one immutable record per ownership generation. */
+export const OwnerSchema = Type.Object(
+	{
+		schemaVersion: Type.Literal(1),
+		host: Type.String({ minLength: 1 }),
+		pid: Type.Integer({ minimum: 1, maximum: 2147483647 }),
+		token: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+	},
+	closed,
+);
+/** The marker that releases one ownership generation, matched by its owner's token. */
+export const OwnerReleaseSchema = Type.Object(
+	{ schemaVersion: OwnerSchema.properties.schemaVersion, token: OwnerSchema.properties.token },
+	closed,
+);
+
 export type DagDefinition = Static<typeof DefinitionSchema>;
+export type DagOwner = Static<typeof OwnerSchema>;
 export type DagNodeSpec = Static<typeof NodeSchema>;
 export type DagConnection = Static<typeof ConnectionSchema>;
 export type DagSessionOptions = Static<typeof SessionSchema>;

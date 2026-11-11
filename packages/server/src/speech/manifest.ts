@@ -1,34 +1,45 @@
 import { readFileSync } from "node:fs";
-import { isSpeechModel, type SpeechModel } from "@thinkrail/contracts";
+import { compile, int, obj, opt, type Schema, type Static, str } from "@earendil-works/pi-schema";
+import { describeFailure, type SpeechModel } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 
-export type SpeechTarget =
-	| "darwin-arm64"
-	| "darwin-x64"
-	| "linux-x64"
-	| "linux-arm64"
-	| "win32-x64";
+const SafeName = str({ pattern: "^[A-Za-z0-9_-][A-Za-z0-9._-]*$" });
 
-export interface SpeechArtifact {
-	url: string;
-	sha256: string;
-	bytes: number;
-}
+const Artifact = {
+	url: str(),
+	sha256: str({ pattern: "^[0-9a-f]{64}$" }),
+	bytes: int({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+};
+const RuntimePin = obj({ ...Artifact, root: SafeName, backend: str() }, { open: true });
+export type RuntimePin = Static<typeof RuntimePin>;
 
-export interface RuntimePin extends SpeechArtifact {
-	root: string;
-	backend: string;
-}
+const ModelPin = obj({ ...Artifact, fileName: SafeName, language: str() }, { open: true });
+export type ModelPin = Static<typeof ModelPin>;
 
-export interface ModelPin extends SpeechArtifact {
-	fileName: string;
-	language: string;
-}
+const ModelPins = obj({
+	multilingual: ModelPin,
+	english: ModelPin,
+}) satisfies Schema<Record<SpeechModel, ModelPin>>;
 
-export interface SpeechManifest {
-	runtimeVersion: string;
-	runtimes: Partial<Record<SpeechTarget, RuntimePin>>;
-	models: Record<SpeechModel, ModelPin>;
-}
+export type SpeechArtifact = Pick<RuntimePin, keyof typeof Artifact>;
+
+const Manifest = obj(
+	{
+		runtimeVersion: SafeName,
+		runtimes: obj({
+			"darwin-arm64": opt(RuntimePin),
+			"darwin-x64": opt(RuntimePin),
+			"linux-x64": opt(RuntimePin),
+			"linux-arm64": opt(RuntimePin),
+			"win32-x64": opt(RuntimePin),
+		}),
+		models: ModelPins,
+	},
+	{ open: true },
+);
+export type SpeechManifest = Static<typeof Manifest>;
+export type SpeechTarget = keyof SpeechManifest["runtimes"];
+const ManifestFile = compile(Manifest);
 
 /** Test seam: a JSON file replacing the pinned manifest (e2e serves tiny fixtures from it). */
 export const SPEECH_MANIFEST_ENV = "THINKRAIL_SPEECH_MANIFEST";
@@ -113,86 +124,14 @@ export function hostTarget(
 	return null;
 }
 
-function isArtifact(value: unknown): value is SpeechArtifact {
-	if (typeof value !== "object" || value === null) return false;
-	const sha256 = Reflect.get(value, "sha256");
-	const bytes = Reflect.get(value, "bytes");
-	return (
-		typeof Reflect.get(value, "url") === "string" &&
-		typeof sha256 === "string" &&
-		/^[0-9a-f]{64}$/.test(sha256) &&
-		typeof bytes === "number" &&
-		Number.isSafeInteger(bytes) &&
-		bytes > 0
-	);
-}
-
-function isSafeName(value: unknown): value is string {
-	return typeof value === "string" && /^[A-Za-z0-9._-]+$/.test(value) && !value.startsWith(".");
-}
-
-function isRuntimePin(value: unknown): value is RuntimePin {
-	return (
-		isArtifact(value) &&
-		isSafeName(Reflect.get(value, "root")) &&
-		typeof Reflect.get(value, "backend") === "string"
-	);
-}
-
-function isModelPin(value: unknown): value is ModelPin {
-	return (
-		isArtifact(value) &&
-		isSafeName(Reflect.get(value, "fileName")) &&
-		typeof Reflect.get(value, "language") === "string"
-	);
-}
-
-const SPEECH_TARGETS: readonly SpeechTarget[] = [
-	"darwin-arm64",
-	"darwin-x64",
-	"linux-x64",
-	"linux-arm64",
-	"win32-x64",
-];
-
-function isSpeechTarget(value: string): value is SpeechTarget {
-	return SPEECH_TARGETS.some((target) => target === value);
-}
-
-function modelPin(models: object, model: SpeechModel): ModelPin {
-	const pin = Reflect.get(models, model);
-	if (!isModelPin(pin)) throw new Error(`speech manifest: bad model ${model}`);
-	return pin;
+/** A manifest override names where to download from, so a bad one fails the download. */
+function manifestFailed(message: string, cause?: unknown) {
+	return new CodedError("SPEECH_DOWNLOAD_FAILED", `speech manifest: ${message}`, { cause });
 }
 
 export function parseManifest(value: unknown): SpeechManifest {
-	if (typeof value !== "object" || value === null)
-		throw new Error("speech manifest: not an object");
-	const runtimeVersion = Reflect.get(value, "runtimeVersion");
-	const runtimes = Reflect.get(value, "runtimes");
-	const models = Reflect.get(value, "models");
-	if (!isSafeName(runtimeVersion)) throw new Error("speech manifest: bad runtimeVersion");
-	if (typeof runtimes !== "object" || runtimes === null)
-		throw new Error("speech manifest: runtimes");
-	if (typeof models !== "object" || models === null) throw new Error("speech manifest: models");
-	const parsedRuntimes: Partial<Record<SpeechTarget, RuntimePin>> = {};
-	for (const [target, pin] of Object.entries(runtimes)) {
-		if (!isSpeechTarget(target) || !isRuntimePin(pin)) {
-			throw new Error(`speech manifest: bad runtime ${target}`);
-		}
-		parsedRuntimes[target] = pin;
-	}
-	for (const key of Object.keys(models)) {
-		if (!isSpeechModel(key)) throw new Error(`speech manifest: unknown model ${key}`);
-	}
-	return {
-		runtimeVersion,
-		runtimes: parsedRuntimes,
-		models: {
-			multilingual: modelPin(models, "multilingual"),
-			english: modelPin(models, "english"),
-		},
-	};
+	if (ManifestFile.check(value)) return value;
+	throw manifestFailed(describeFailure(ManifestFile, value, "manifest"));
 }
 
 export function loadManifest(
@@ -200,5 +139,11 @@ export function loadManifest(
 ): SpeechManifest {
 	const override = env[SPEECH_MANIFEST_ENV];
 	if (!override) return PINNED;
-	return parseManifest(JSON.parse(readFileSync(override, "utf8")));
+	let value: unknown;
+	try {
+		value = JSON.parse(readFileSync(override, "utf8"));
+	} catch (error) {
+		throw manifestFailed(`cannot read ${SPEECH_MANIFEST_ENV}`, error);
+	}
+	return parseManifest(value);
 }

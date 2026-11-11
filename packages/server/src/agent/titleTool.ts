@@ -1,5 +1,8 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { SessionId } from "@thinkrail/contracts";
+import { parseSessionId } from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
+import { requireSessionId } from "./requireSessionId";
 
 export const SET_TITLE_TOOL_NAME = "set_title";
 
@@ -33,8 +36,8 @@ const PROMPT_GUIDELINES = [
 ];
 
 export interface TitleToolHost {
-	apply: (sessionId: string, params: SetTitleParams) => Promise<string>;
-	workspaceNeedsName: (sessionId: string) => boolean;
+	apply: (sessionId: SessionId, params: SetTitleParams) => Promise<string>;
+	workspaceNeedsName: (sessionId: SessionId) => boolean;
 }
 
 const unavailableHost: TitleToolHost = {
@@ -76,7 +79,7 @@ export function createSetTitleTool(): ToolDefinition<typeof SetTitleSchema, SetT
 		promptGuidelines: PROMPT_GUIDELINES,
 		parameters: SetTitleSchema,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const text = await host.apply(ctx.sessionManager.getSessionId(), params);
+			const text = await host.apply(requireSessionId(ctx.sessionManager.getSessionId()), params);
 			return { content: [{ type: "text", text }], details: params };
 		},
 	};
@@ -85,10 +88,10 @@ export function createSetTitleTool(): ToolDefinition<typeof SetTitleSchema, SetT
 export function setTitleExtension(pi: ExtensionAPI): void {
 	pi.registerTool(createSetTitleTool());
 	pi.on("before_agent_start", (event, ctx) => {
-		const sessionId = ctx.sessionManager.getSessionId();
+		const sessionId = parseSessionId(ctx.sessionManager.getSessionId());
 		const rule = pendingNamingRule(
 			ctx.sessionManager.getSessionName() === undefined,
-			host.workspaceNeedsName(sessionId),
+			sessionId !== null && host.workspaceNeedsName(sessionId),
 		);
 		if (rule) event.systemPromptOptions.sections[TITLE_SECTION] = rule;
 		else delete event.systemPromptOptions.sections[TITLE_SECTION];

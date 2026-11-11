@@ -64,16 +64,9 @@ export function validateHostEnvironment(environment: HostEnvironment): HostEnvir
 	return issues;
 }
 
-function parseHostEnvironment(value: unknown): HostEnvironment | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	const { agentDir, vars } = value as Record<string, unknown>;
-	if (agentDir !== undefined && typeof agentDir !== "string") return null;
-	if (!Array.isArray(vars)) return null;
+function trimHostEnvironment({ agentDir, vars }: HostEnvironment): HostEnvironment {
 	const parsed: HostEnvironment["vars"] = [];
-	for (const entry of vars) {
-		if (typeof entry !== "object" || entry === null) return null;
-		const { name, value: varValue } = entry as Record<string, unknown>;
-		if (typeof name !== "string" || typeof varValue !== "string") return null;
+	for (const { name, value: varValue } of vars) {
 		const trimmed = name.trim();
 		if (trimmed.length === 0 && varValue.length === 0) continue;
 		parsed.push({ name: trimmed, value: varValue });
@@ -137,9 +130,8 @@ export function hostEnvironmentStatus(): HostEnvironmentStatus {
 	};
 }
 
-export function updateHostEnvironment(value: unknown): HostEnvironmentUpdateResult {
-	const environment = parseHostEnvironment(value);
-	if (!environment) throw new Error("Invalid environment record");
+export function updateHostEnvironment(value: HostEnvironment): HostEnvironmentUpdateResult {
+	const environment = trimHostEnvironment(value);
 	const issues = validateHostEnvironment(environment);
 	if (issues.length > 0) return { ok: false, issues };
 	saveHostEnvironment(environment);

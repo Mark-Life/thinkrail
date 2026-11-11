@@ -8,6 +8,7 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
@@ -35,6 +36,7 @@ import {
 	createLayoutId,
 	findAuxiliaryGroup,
 	findCenterGroup,
+	findLayoutTab,
 	findPlacedResource,
 	findTabLocation,
 	hideBottom,
@@ -67,16 +69,13 @@ import {
 } from "./workbenchBottom";
 import { CenterNodeView } from "./workbenchCenter";
 import { AuxiliaryRegionRail } from "./workbenchRails";
-import type {
-	DragData,
-	DropTarget,
-	LayoutTabFocusRequest,
-	SharedGroupProps,
-	WorkbenchProps,
-} from "./workbenchShared";
 import {
 	findLayoutGroupTabs,
 	groupDomId,
+	type LayoutTabFocusRequest,
+	readDragTabId,
+	readDropTarget,
+	type SharedGroupProps,
 	tabDomId,
 	useCommittedSizes,
 	useElementSize,
@@ -85,6 +84,7 @@ import {
 	useSideResizeBinder,
 	useTopologySettled,
 	visibleFocusableGroups,
+	type WorkbenchProps,
 	workbenchCollisionDetection,
 } from "./workbenchShared";
 import { SideStack } from "./workbenchSide";
@@ -129,7 +129,7 @@ export function Workbench({
 	const gestureContext = tupleKey(workspaceId, String(projectionEpoch));
 	const workspaceRef = useRef(workspaceId);
 	const [focusAfterClose, setFocusAfterClose] = useState<{
-		workspaceId: string;
+		workspaceId: WorkspaceId;
 		closedTab: LayoutTab;
 		fallbackDomId: string;
 	} | null>(null);
@@ -380,12 +380,13 @@ export function Workbench({
 	}, [document, focusAfterClose, workspaceId]);
 
 	const handleDragStart = (event: DragStartEvent) => {
-		const data = event.active.data.current as DragData | undefined;
-		if (!data?.tab) return;
+		const tabId = readDragTabId(event.active.data.current);
+		const tab = tabId === undefined ? null : findLayoutTab(document, tabId);
+		if (!tab) return;
 		tabSelectionEpoch.current += 1;
 		dragStartEpoch.current = gestureContext;
 		canceled.current = false;
-		setDraggingTab(data.tab);
+		setDraggingTab(tab);
 	};
 	const handleDragEnd = (event: DragEndEvent) => {
 		const tab = draggingTab;
@@ -397,7 +398,7 @@ export function Workbench({
 			findTabLocation(document, tab.id) === null
 		)
 			return;
-		const target = event.over?.data.current?.target as DropTarget | undefined;
+		const target = readDropTarget(event.over?.data.current);
 		if (!target) return;
 		let result: LayoutOperationResult;
 		switch (target.kind) {

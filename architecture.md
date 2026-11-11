@@ -34,7 +34,8 @@ apps/desktop    Electrobun local-host launcher                     ── depend
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
-packages/contracts  the wire (types plus tiny pure runtime)
+packages/contracts  the wire (types plus tiny pure runtime) ── depends on ─▶ packages/pi-todos/wire, packages/pi-background-commands/wire, packages/pi-delegation/wire, packages/pi-subagents/wire, packages/spec-graph/wire, @thinkrail/pi-ask-user-question/core, packages/type-tie (type-only)
+packages/type-tie   `Same`, the type-only exact-type tie ── depends on ─▶ nothing
 packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
@@ -62,7 +63,7 @@ packages/resource-renderers  file/diff renderers, registry + review surfaces beh
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
-CLI build metadata, server test fixtures, and shared teardown; root tools and browser E2E consume it.
+CLI build metadata, contracts' wire schemas, server test fixtures, and shared teardown; root tools and browser E2E consume it.
 No product package imports the test workspace, and it has no application build step or Electrobun SDK
 dependency. This keeps test process drivers outside both launchers and the server library.
 
@@ -86,10 +87,17 @@ dependency. This keeps test process drivers outside both launchers and the serve
    adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
    then transformed by each packager. The same behavior and artifact suites run through every launcher, so
    reuse is enforced by boundaries and conformance rather than parallel implementations.
-3. **The wire is versioned.** `contracts` is types plus a small dependency-free runtime: wire constants,
-   versions, the config default, and guards. Any other runtime is a named exception in its spec, today
-   the quit-confirmation rule and the search matcher (the palette's ranking, kept in `contracts` so host-side
-   search can rank with the same copy); adding one updates this decision. `server.welcome` carries a
+3. **The wire is versioned.** `contracts` is types plus a small runtime: wire schemas, wire constants,
+   versions, the config default, and guards. Its runtime loads only `@earendil-works/pi-schema`, pi-ai's
+   `providers/model-schema` entry (which loads only `pi-schema`), and the `wire` leaf entries of
+   `pi-todos`, `pi-background-commands`, `pi-delegation`, `pi-subagents` and `pi-spec-graph`, plus the ask
+   extension's `core` leaf. Each shape has one source: the
+   package that owns it defines a `pi-schema` schema, its type is `Static` of that schema, and `contracts`
+   imports it and only extends it (branded ids, host fields). A converted
+   wire type derives from its schema, and the host checks its params at dispatch. Any other runtime
+   is a named exception in its spec, today the quit-confirmation rule and the search matcher (the palette's
+   ranking, kept in `contracts` so host-side search can rank with the same copy); adding one updates this
+   decision. `server.welcome` carries a
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
@@ -492,9 +500,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
 
 ## Invariants
 
-- Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
-  `pi-agent-core` package roots (type-only imports are erased at build, keeping the bundle provider-free).
-  `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`.
+- Browser-bundled code imports pi only through `@earendil-works/pi-schema`, pi-ai's `providers/model-schema`,
+  the `pi-ai` / `pi-agent-core` roots type-only (erased at build, keeping the bundle provider-free), and the
+  leaf entries AGENTS.md lists. `@earendil-works/pi-coding-agent` is server-only, even type-only: in the web
+  program its type load turns on its `AgentMessage` augmentation. `check:boundaries` enforces it.
 - TypeScript stays type-strippable: `erasableSyntaxOnly` in `tsconfig.base.json` plus Biome
   `noParameterProperties`/`noEnum`/`noNamespace` (which also cover files outside any tsconfig) ban enums,
   namespaces, and constructor parameter properties, so sources contain only erasable TS syntax and

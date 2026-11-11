@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	DEFAULT_CONFIG,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
-	type ReviewFixDetails,
-	SETTLE_IDLE_DAYS,
-	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
+import { type ReviewFixDetails, SETTLE_IDLE_DAYS, SUBAGENT_MAX_CONCURRENT } from "./schema";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
@@ -19,7 +18,6 @@ import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
-	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
@@ -256,6 +254,10 @@ test("voice input is pinned to v107", () => {
 	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
 });
 
+test("the welcome's config read notice advances the protocol to v108", () => {
+	expect(PROTOCOL_VERSION).toBe(108);
+});
+
 test("user-selectable fonts are pinned to v102", () => {
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
@@ -477,7 +479,7 @@ describe("customMessageText", () => {
 test("command completion guards accept displayed terminal notices, not malformed or hidden details", () => {
 	const details = {
 		id: "command",
-		sessionId: "parent",
+		sessionId: testSessionId("parent"),
 		name: "build",
 		status: "completed",
 		startedAt: 1,
@@ -491,6 +493,7 @@ test("command completion guards accept displayed terminal notices, not malformed
 		display: true,
 		content: "Finished",
 		details,
+		timestamp: 3,
 	};
 	expect(isBackgroundCommandCompletionMessage(message)).toBe(true);
 	for (const status of ["stopped", "error"]) {
@@ -533,16 +536,6 @@ test("resource history pages a chat's finished records from v96", () => {
 	expect(RESOURCE_HISTORY_PROTOCOL_VERSION).toBe(96);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(RESOURCE_HISTORY_PROTOCOL_VERSION);
 	expect(WS_METHODS.sessionResourceHistory).toBe("session.resourceHistory");
-});
-
-describe("completionDelivery", () => {
-	test("reads the delivery marker and treats a missing or unknown value as absent", () => {
-		expect(completionDelivery({ delivery: "wake" })).toBe("wake");
-		expect(completionDelivery({ delivery: "run" })).toBe("run");
-		expect(completionDelivery({ delivery: "appended" })).toBe("appended");
-		expect(completionDelivery({})).toBeUndefined();
-		expect(completionDelivery({ delivery: "later" })).toBeUndefined();
-	});
 });
 
 describe("tool response guards", () => {

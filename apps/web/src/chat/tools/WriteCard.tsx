@@ -1,4 +1,5 @@
 import { RiFileAddLine as FilePlus } from "@remixicon/react";
+import type { ToolInputs } from "@thinkrail/contracts";
 import {
 	languageFromPath,
 	resultText,
@@ -10,6 +11,8 @@ import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
 
+type Input = ToolInputs["write"];
+
 export function WriteCard({
 	toolCallId,
 	args,
@@ -19,8 +22,8 @@ export function WriteCard({
 	onOpenFile,
 }: ToolRenderProps) {
 	const t = useT();
-	const path = strArg(args, "path");
-	const content = strArg(args, "content");
+	const path = strArg<Input>(args, "path");
+	const content = strArg<Input>(args, "content");
 	const lang = languageFromPath(path);
 	const message = resultText(result);
 

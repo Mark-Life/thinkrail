@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fsChangedPaths, selectWorkspaceTick, useAppStore } from "../store";
 import { createLatestOperation, type LatestOperation } from "./latestOperation";
@@ -66,7 +67,7 @@ export type ReadSequencer = LatestOperation;
 export const createReadSequencer = createLatestOperation;
 
 interface LiveTab {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 	loadedTick?: number;
 }

@@ -1,4 +1,4 @@
-import type { Workspace } from "@thinkrail/contracts";
+import type { SessionId, Workspace, WorkspaceId } from "@thinkrail/contracts";
 import { SESSION_TITLE_MAX_LENGTH } from "@thinkrail/contracts";
 import {
 	getSessionWorkspaceId,
@@ -22,7 +22,7 @@ const KEPT_BRANCH_REASON = {
 } satisfies Record<NonNullable<ReturnType<typeof renameWorkspace>["branchKept"]>, string>;
 
 export interface AgentTitleDeps {
-	workspaceOf: (sessionId: string) => string | undefined;
+	workspaceOf: (sessionId: SessionId) => WorkspaceId | undefined;
 	writeChatTitle: typeof renameSession;
 }
 
@@ -36,7 +36,7 @@ export const titleToolHost: TitleToolHost = {
 	workspaceNeedsName,
 };
 
-export function workspaceNeedsName(sessionId: string): boolean {
+export function workspaceNeedsName(sessionId: SessionId): boolean {
 	const workspaceId = getSessionWorkspaceId(sessionId);
 	return workspaceId !== undefined && workspaceStillNameable(workspaceId);
 }
@@ -46,7 +46,7 @@ function isNameable(workspace: Workspace): boolean {
 }
 
 export async function applyAgentTitle(
-	sessionId: string,
+	sessionId: SessionId,
 	params: SetTitleParams,
 	deps: AgentTitleDeps = liveDeps,
 ): Promise<string> {
@@ -71,7 +71,7 @@ export async function applyAgentTitle(
 	return lines.join("\n");
 }
 
-function workspaceStillNameable(workspaceId: string): boolean {
+function workspaceStillNameable(workspaceId: WorkspaceId): boolean {
 	try {
 		return isNameable(getWorkspace(workspaceId));
 	} catch {
@@ -81,8 +81,8 @@ function workspaceStillNameable(workspaceId: string): boolean {
 
 async function applyChatTitle(
 	deps: AgentTitleDeps,
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	title: string,
 ) {
 	try {
@@ -100,8 +100,8 @@ async function applyChatTitle(
 }
 
 function applyWorkspaceName(
-	sessionId: string,
-	workspaceId: string,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
 	name: string,
 	branch: string | undefined,
 ) {

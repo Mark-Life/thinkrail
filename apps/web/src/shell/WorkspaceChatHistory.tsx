@@ -5,6 +5,7 @@ import {
 	RiArrowGoBackLine as RotateCcw,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import { parseSessionId, type SessionId, type WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton, withIconClass } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
@@ -26,9 +27,9 @@ export function WorkspaceChatHistory({
 	targetGroupId,
 	onRenameChat,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	targetGroupId: string;
-	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	onRenameChat?: (sessionId: SessionId, titleInput: string, currentTitle: string) => void;
 }) {
 	const t = useT();
 	const closed = useAppStore((state) => state.closedChatsByWorkspace[workspaceId] ?? EMPTY_CHATS);
@@ -90,10 +91,10 @@ function ClosedChatRow({
 	onRenameChat,
 }: {
 	chat: ClosedChat;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	targetGroupId: string;
 	onDismiss: () => void;
-	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	onRenameChat?: (sessionId: SessionId, titleInput: string, currentTitle: string) => void;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -101,6 +102,7 @@ function ClosedChatRow({
 		selectChatFirstPrompt(state, workspaceId, chat.sessionId),
 	);
 	const label = chatLabel(t, chat.title, firstPrompt);
+	const chatId = parseSessionId(chat.sessionId);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const reopenButtonRef = useRef<HTMLButtonElement>(null);
 	const editStartTitleRef = useRef(chat.title);
@@ -132,7 +134,7 @@ function ClosedChatRow({
 		}
 		const titleInput = inputRef.current?.value ?? "";
 		closeNameEditor();
-		onRenameChat?.(chat.sessionId, titleInput, editStartTitleRef.current);
+		if (chatId) onRenameChat?.(chatId, titleInput, editStartTitleRef.current);
 	};
 
 	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -178,11 +180,13 @@ function ClosedChatRow({
 					type="button"
 					data-testid="closed-chat-item"
 					data-session-id={chat.sessionId}
+					disabled={!chatId}
 					onClick={() => {
+						if (!chatId) return;
 						onDismiss();
 						const store = useAppStore.getState();
 						const navigation = store.beginCenterNavigation(workspaceId, targetGroupId);
-						void openChatInTab(workspaceId, chat.sessionId, navigation);
+						void openChatInTab(workspaceId, chatId, navigation);
 					}}
 					className={cn(menuItemClass, "min-w-0 flex-1")}
 				>
@@ -195,7 +199,7 @@ function ClosedChatRow({
 					<RotateCcw className="size-14 shrink-0 text-text-muted" />
 				</button>
 			)}
-			{onRenameChat ? (
+			{onRenameChat && chatId ? (
 				editing ? (
 					<span aria-hidden className="w-24 shrink-0" />
 				) : (
@@ -216,31 +220,33 @@ function ClosedChatRow({
 					/>
 				)
 			) : null}
-			<IconTooltip label={t("shell.chatHistory.trashChat")}>
-				<button
-					type="button"
-					data-testid="closed-chat-delete"
-					aria-label={t("shell.chatHistory.trashNamed", { title: label.text })}
-					onClick={() => {
-						onDismiss();
-						void getTransport()
-							.request("session.delete", { workspaceId, sessionId: chat.sessionId })
-							.then(() => useAppStore.getState().deleteChat(workspaceId, chat.sessionId))
-							.catch((error) => {
-								const state = useAppStore.getState();
-								if (
-									!state.removedWorkspaceIds[workspaceId] &&
-									!state.deletedSessionsByWorkspace[workspaceId]?.[chat.sessionId]
-								) {
-									toast.error(errorText(error), t("shell.chatHistory.deleteFailed"));
-								}
-							});
-					}}
-					className={cn(menuItemClass, "shrink-0 px-4 text-text-muted focus:text-feedback-error")}
-				>
-					<Trash2 className="size-14" />
-				</button>
-			</IconTooltip>
+			{chatId ? (
+				<IconTooltip label={t("shell.chatHistory.trashChat")}>
+					<button
+						type="button"
+						data-testid="closed-chat-delete"
+						aria-label={t("shell.chatHistory.trashNamed", { title: label.text })}
+						onClick={() => {
+							onDismiss();
+							void getTransport()
+								.request("session.delete", { workspaceId, sessionId: chatId })
+								.then(() => useAppStore.getState().deleteChat(workspaceId, chatId))
+								.catch((error) => {
+									const state = useAppStore.getState();
+									if (
+										!state.removedWorkspaceIds[workspaceId] &&
+										!state.deletedSessionsByWorkspace[workspaceId]?.[chat.sessionId]
+									) {
+										toast.error(errorText(error), t("shell.chatHistory.deleteFailed"));
+									}
+								});
+						}}
+						className={cn(menuItemClass, "shrink-0 px-4 text-text-muted focus:text-feedback-error")}
+					>
+						<Trash2 className="size-14" />
+					</button>
+				</IconTooltip>
+			) : null}
 		</div>
 	);
 }

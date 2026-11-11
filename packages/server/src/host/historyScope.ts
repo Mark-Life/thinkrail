@@ -1,16 +1,23 @@
-import type { HistoryScope, Project, Workspace } from "@thinkrail/contracts";
+import type {
+	HistoryScope,
+	Project,
+	ProjectId,
+	StoredSessionId,
+	Workspace,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 
 export function buildHistoryScope(
 	scope: HistoryScope,
 	projects: Project[],
 	workspacesByProject: (
-		projectId: string,
+		projectId: ProjectId,
 	) => Array<Pick<Workspace, "id" | "projectId" | "worktreePath">>,
 ): {
-	filter: (cwd: string, sessionId: string) => boolean;
-	labels: (cwd: string) => { workspaceId?: string; projectId?: string };
+	filter: (cwd: string, sessionId: StoredSessionId) => boolean;
+	labels: (cwd: string) => { workspaceId?: WorkspaceId; projectId?: ProjectId };
 } {
-	const pathMap = new Map<string, { workspaceId: string; projectId: string }>();
+	const pathMap = new Map<string, { workspaceId: WorkspaceId; projectId: ProjectId }>();
 	const workspaceIdMap = new Map<string, string>();
 	const projectIdMap = new Map<string, Set<string>>();
 
@@ -28,12 +35,12 @@ export function buildHistoryScope(
 		projectIdMap.set(project.id, pathSet);
 	}
 
-	let filter: (cwd: string, sessionId: string) => boolean;
+	let filter: (cwd: string, sessionId: StoredSessionId) => boolean;
 
 	if (scope.kind === "all") {
 		filter = () => true;
 	} else if (scope.kind === "chat") {
-		filter = (_cwd: string, sessionId: string) => sessionId === scope.sessionId;
+		filter = (_cwd: string, sessionId: StoredSessionId) => sessionId === scope.sessionId;
 	} else if (scope.kind === "workspace") {
 		const targetPath = workspaceIdMap.get(scope.workspaceId);
 		if (targetPath === undefined) {

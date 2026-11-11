@@ -2,9 +2,9 @@ import { hasLayer, isTextEntryTarget, layoutResourceIdentity, MODAL_LAYER_SELECT
 import { type ChangesTab, selectAttentionCenterTab, useAppStore } from "../store";
 
 export function ownsReviewShortcut(
-	event: KeyboardEvent,
+	event: Pick<KeyboardEvent, "defaultPrevented"> & { readonly target: unknown },
 	tab: ChangesTab,
-	doc: Pick<Document, "querySelector"> = document,
+	doc: Parameters<typeof hasLayer>[0] = document,
 ): boolean {
 	if (
 		event.defaultPrevented ||

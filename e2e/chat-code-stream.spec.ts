@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -15,14 +16,21 @@ const ANSI_LINES = Array.from({ length: 40 }, (_, line) => `step ${line} red ok`
 const ANSI_SOURCE = ANSI_LINES.map((line) => line.replace("red", "\x1b[31mred\x1b[0m")).join("\n");
 const ANSI_TEXT = ANSI_LINES.join("\n");
 
-interface CodeWindow {
-	__codeSamples: { torn: string[]; seen: number };
+interface CodeSamples {
+	torn: string[];
+	seen: number;
+}
+
+declare global {
+	interface Window {
+		__codeSamples?: CodeSamples;
+	}
 }
 
 const installSampler = (page: Page, source: string) =>
 	page.evaluate((expected) => {
-		const samples: CodeWindow["__codeSamples"] = { torn: [], seen: 0 };
-		(window as unknown as CodeWindow).__codeSamples = samples;
+		const samples: CodeSamples = { torn: [], seen: 0 };
+		window.__codeSamples = samples;
 		const chat = [...document.querySelectorAll<HTMLElement>('[data-testid="chat-scroll"]')].find(
 			(element) => element.offsetParent !== null,
 		);
@@ -55,7 +63,11 @@ test("a streamed code block grows without losing or repeating a line, and ansi k
 	await installSampler(page, TS_SOURCE);
 
 	const text = `Here it is.\n\n\`\`\`ts\n${TS_SOURCE}\n\`\`\`\n\n\`\`\`ansi\n${ANSI_SOURCE}\n\`\`\`\n\nDone.`;
-	await playStreamReplay(wire(), textStreamReplay(seeded.id, text, BASE_TS + 1_000), FRAME_GAP_MS);
+	await playStreamReplay(
+		wire(),
+		textStreamReplay(testSessionId(seeded.id), text, BASE_TS + 1_000),
+		FRAME_GAP_MS,
+	);
 	await expect(chat).toHaveAttribute("data-streaming", "false");
 
 	const ts = chat.locator("pre.highlights").filter({ hasText: "value0" });
@@ -63,7 +75,10 @@ test("a streamed code block grows without losing or repeating a line, and ansi k
 	await expect(
 		ts.locator('span[style*="var(--code-"]').filter({ hasText: "value79" }),
 	).not.toHaveCount(0);
-	const samples = await page.evaluate(() => (window as unknown as CodeWindow).__codeSamples);
+	const samples = await page.evaluate(() => {
+		if (!window.__codeSamples) throw new Error("The code sampler is not installed");
+		return window.__codeSamples;
+	});
 	expect(samples.seen, "observed the block while it streamed").toBeGreaterThan(10);
 	expect(samples.torn, "texts that were not a prefix of the source").toEqual([]);
 

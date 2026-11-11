@@ -58,7 +58,10 @@ validation call through that composition is pinned in `packages/server` (dev) an
 
 ## Rendering contract (web)
 
-Diagrams, comparison options and recommended choices preserve the existing chat presentation. A
+Diagrams, comparison options and recommended choices preserve the existing chat presentation.
+`web/args.ts` reads streaming, possibly partial `options` leniently into `ComparisonOptionView`, which is
+derived type-only from `@thinkrail/pi-visualize/schema`'s `ComparisonOption`; its field reader is keyed
+by `keyof ComparisonOption`, so a field the schema adds fails `tsc` until the card reads it. A
 completed `type: "file"` call renders `FileCard`: the title, the `before → path` links (through
 `onOpenFile`), and [[module-resource-renderers]]' `FramedResourcePreview` for the path and `before` — the
 same renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and

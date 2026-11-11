@@ -4,7 +4,15 @@ import {
 	RiSaveLine as Save,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
+import {
+	type HistoryScope,
+	type MessageHit,
+	type PromptHit,
+	parseSessionId,
+	type SessionId,
+	type StoredSessionId,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
@@ -91,13 +99,14 @@ function DeleteChatButton({
 	isSelected,
 	onDeleteChat,
 }: {
-	workspaceId: string | undefined;
-	sessionId: string;
+	workspaceId: WorkspaceId | undefined;
+	sessionId: StoredSessionId;
 	isSelected: boolean;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 }) {
 	const t = useT();
-	if (!workspaceId) return null;
+	const chatId = parseSessionId(sessionId);
+	if (!workspaceId || chatId === null) return null;
 	return (
 		<IconTooltip label={t("chat.history.deleteChat")}>
 			<button
@@ -106,7 +115,7 @@ function DeleteChatButton({
 				aria-label={t("chat.history.deleteChat")}
 				onClick={(event) => {
 					event.stopPropagation();
-					onDeleteChat(workspaceId, sessionId);
+					onDeleteChat(workspaceId, chatId);
 				}}
 				className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""
@@ -121,7 +130,7 @@ function DeleteChatButton({
 function PromptRow({
 	hit,
 	highlight,
-	scope,
+	scopeKind,
 	workspaceName,
 	isSelected,
 	onPick,
@@ -131,18 +140,18 @@ function PromptRow({
 }: {
 	hit: PromptHit;
 	highlight: HighlightTerms;
-	scope: HistoryScope;
+	scopeKind: HistoryScope["kind"];
 	workspaceName: string | undefined;
 	isSelected: boolean;
 	onPick: () => void;
 	onSaveAsTemplate: () => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 }) {
 	const t = useT();
 	const now = useNow();
 	const firstLine = firstNonBlankLine(hit.text) ?? "";
-	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
+	const showChip = (scopeKind === "project" || scopeKind === "all") && !!hit.workspaceId;
 	const target = jumpTarget(hit);
 	return (
 		<div
@@ -238,7 +247,7 @@ function MessageRow({
 	highlight: HighlightTerms;
 	isSelected: boolean;
 	onPick: () => void;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -356,7 +365,7 @@ export interface HistoryOverlayProps {
 	onInsertAndSend: (hit: PromptHit) => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
 	onSaveAsTemplate: (hit: PromptHit) => void;
-	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onDeleteChat: (workspaceId: WorkspaceId, sessionId: SessionId) => void;
 	onSetScope: (kind: HistoryScope["kind"]) => void;
 }
 
@@ -380,7 +389,7 @@ function HistoryPicker({
 	onSetScope,
 }: HistoryOverlayProps) {
 	const t = useT();
-	const { stage, query, scope, result, selected, error } = state;
+	const { stage, query, scopeKind, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 	const rootRef = useRef<HTMLDivElement>(null);
@@ -409,8 +418,8 @@ function HistoryPicker({
 	useEffect(() => {
 		if (scopeMenuOpen) return;
 		const onWindowPointerDown = (e: PointerEvent) => {
-			const target = e.target as Element | null;
-			if (!target) return;
+			const target = e.target;
+			if (!(target instanceof Element)) return;
 			if (rootRef.current?.contains(target)) return;
 			if (target.closest("[data-history-trigger]")) return;
 			onOutsidePress();
@@ -511,7 +520,7 @@ function HistoryPicker({
 									key={`${hit.sessionId}:${hit.timestamp}`}
 									hit={hit}
 									highlight={highlight}
-									scope={scope}
+									scopeKind={scopeKind}
 									workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
 									isSelected={i === selected}
 									onPick={() => onInsert(hit)}
@@ -574,10 +583,10 @@ function HistoryPicker({
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="history-scope"
-						data-scope={scope.kind}
+						data-scope={scopeKind}
 						className="flex shrink-0 items-center gap-4 rounded-full border border-border-default bg-container-workspace-bg px-8 py-2 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
 					>
-						<span>{t(SCOPE_LABELS[scope.kind])}</span>
+						<span>{t(SCOPE_LABELS[scopeKind])}</span>
 						<span className="text-text-muted">⌃R</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
@@ -594,7 +603,7 @@ function HistoryPicker({
 								data-scope={kind}
 								onSelect={() => onSetScope(kind)}
 							>
-								<Check className={kind === scope.kind ? "size-14" : "size-14 invisible"} />
+								<Check className={kind === scopeKind ? "size-14" : "size-14 invisible"} />
 								<span>{t(SCOPE_MENU_LABELS[kind])}</span>
 							</DropdownMenuItem>
 						))}

@@ -14,6 +14,7 @@ import {
 	RiNetworkFill,
 	RiStackFill,
 } from "@remixicon/react";
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
@@ -35,7 +36,7 @@ export function SpecsPanel({
 	failed = false,
 	onRetry,
 }: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	failed?: boolean;
 	onRetry: () => void;
 }) {
@@ -129,7 +130,7 @@ function SpecNodeRow({
 	depth,
 }: {
 	tree: SpecTreeNode;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	activeFilePath: string | null;
 	depth: number;
 }) {

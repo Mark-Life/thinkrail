@@ -24,7 +24,7 @@ never grants control: nothing here is live authority.
 - **Public surface (barrel):** `recordResource`, `finishedResources`, `pageResources`,
   `archivedCommandOutput`, `removeWorkspaceResourceHistory`, `resourceHistoryRoot`, and the
   `ResourceHistoryScope` / `ArchivedOutput` types.
-- **Allowed deps:** `contracts` (the resource record vocabulary and ordering), `persistence` (`dataDir`),
+- **Allowed deps:** `pi-schema`, `@thinkrail/shared/errnoCode`, `@thinkrail/shared/codedError`, `contracts` (the resource record vocabulary and ordering), `persistence` (`dataDir`, `stateFileWriteFailure`),
   `log`; Node `fs`/`path`/`crypto`.
 - **Forbidden:** `agent` or any live owner, pi, sessions or transcripts; deciding liveness itself (the caller
   passes the ids its owners still report); stopping or reading live work.
@@ -32,21 +32,24 @@ never grants control: nothing here is live authority.
 ## Format and invariants
 
 - The index is append-only JSON lines `{ kind, summary }`; the last line per `kind:id` wins and an identical
-  summary is never appended twice, so a record costs one line per reported status. Lines that do not parse
-  or fail the shape guard are skipped — a torn last line from a crash is one such line, and the next append
-  starts on a fresh line so it cannot swallow it.
+  summary is never appended twice, so a record costs one line per reported status. A line that is not JSON
+  or fails the `ResourceRecord` schema is skipped and counted in one `STATE_FILE_UNREADABLE` warning, because the web refuses a whole page
+  with a bad record. The index is never rewritten, so the line's bytes stay. A torn last line from a crash is one
+  such line, and the next append starts on a fresh line so it cannot swallow it. A log file that cannot be read or
+  fails its schema reads as absent, with a `STATE_FILE_UNREADABLE` warning; the file stays.
 - Writes are synchronous: a graceful shutdown's terminal edges arrive right before the process exits, and an
   awaited write could be lost. A finished command's log is written atomically before its index line, so a crash
-  between the two leaves an unclaimed log rather than a claimed missing one. Write failures are logged, never
-  thrown into the owners' lifecycle; after a failed append the next one starts on a fresh line, in case the
+  between the two leaves an unclaimed log rather than a claimed missing one. Write failures are logged as
+  `STATE_FILE_WRITE_FAILED`, never thrown into the owners' lifecycle; after a failed append the next one starts on a fresh line, in case the
   failure left a partial one.
 - **Interrupted is derived, never stored by a reader:** an archived record still in flight whose id no live
   owner reports was cut off — the host died or the chat was torn down — and reads in the wire form
   `interruptedResource` defines (terminal status plus `interrupted: true`; no finish time, ordered by its
   start). A crash-interrupted command therefore has no log; one cut off by a graceful teardown was already
   recorded, with its log, by `agent`, which alone decides when a teardown cut a run off.
-- Storage ids are validated before any path is built; an unsafe workspace, session or command id is
-  ignored, never escaped.
+- A path takes a `WorkspaceId` and a `SessionId`, which are path-safe by type ([[submodule-contracts-schema]]).
+  A record or command id is a plain string, so it is checked before it joins a path; an unsafe one is ignored,
+  never escaped.
 - History is unbounded per chat by decision (user-settled, 2026-10): every record and every log tail lives as
   long as the workspace. Chat deletion leaves it in place — a chat restored from the OS trash gets its history
   back, as its subagent transcripts do — and workspace archive removes the workspace's directory.
@@ -57,6 +60,6 @@ never grants control: nothing here is live authority.
 
 ## Verification obligations
 
-Upsert/dedupe, survival across a fresh module instance (the restart), derived interruption against a live
+Upsert/dedupe, survival across a dropped in-memory cache (the restart), derived interruption against a live
 set, log round-trip and its absence for a crash, torn/foreign line tolerance and recovery after a failed append, newest-first paging from a
-cursor, unsafe-id refusal, and workspace removal on disk and in cache.
+cursor, unsafe record-id refusal, and workspace removal on disk and in cache.

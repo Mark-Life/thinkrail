@@ -1,9 +1,10 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { parseSessionId, type SessionId } from "@thinkrail/contracts";
 import { STORE_DIR, type TodoPlan as StoredPlan, TodoStore } from "pi-todos/core";
 
 export interface StoredPlanFile {
-	readonly sessionId: string;
+	readonly sessionId: SessionId;
 	readonly path: string;
 	readonly read: () => StoredPlan;
 }
@@ -42,8 +43,9 @@ export function listStoredPlans(root: string): StoredPlanFile[] {
 	}
 	const plans: StoredPlanFile[] = [];
 	for (const name of names) {
-		const sessionId = PLAN_FILE.exec(name)?.[1];
-		if (!sessionId) continue;
+		const stem = PLAN_FILE.exec(name)?.[1];
+		const sessionId = stem ? parseSessionId(stem) : null;
+		if (sessionId === null) continue;
 		const store = new TodoStore(root, sessionId);
 		plans.push({ sessionId, path: store.file, read: () => readPlan(store) });
 	}

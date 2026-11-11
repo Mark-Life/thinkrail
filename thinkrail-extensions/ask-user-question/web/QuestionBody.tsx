@@ -1,7 +1,7 @@
 import { RiQuestionnaireLine as MessageCircleQuestion } from "@remixicon/react";
 import type {
 	AskUserQuestionDiscussReason,
-	AskUserQuestionItem,
+	AskUserQuestionItemView,
 } from "@thinkrail/pi-ask-user-question/core";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useRef } from "react";
@@ -18,7 +18,7 @@ import {
 } from "./state";
 
 export interface QuestionBodyProps {
-	question: AskUserQuestionItem;
+	question: AskUserQuestionItemView;
 	state: QState;
 	pageKeys: boolean;
 	discussAvailable: boolean;

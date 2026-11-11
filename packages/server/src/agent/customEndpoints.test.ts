@@ -195,7 +195,8 @@ test("probes fill facts from Ollama, llama.cpp and LM Studio without a server ki
 		"GET /v1/models": () => ({ data: [{ id: "qwen3:14b" }, { id: "nomic-embed" }] }),
 		"GET /api/version": () => ({ version: "0.12.0" }),
 		"POST /api/show": async (request) => {
-			const { model: id } = (await request.json()) as { model: string };
+			const body: unknown = await request.json();
+			const id = typeof body === "object" && body !== null && "model" in body ? body.model : null;
 			return id === "nomic-embed"
 				? { capabilities: ["embedding"] }
 				: { capabilities: ["completion", "tools", "thinking"], parameters: "num_ctx 40960" };
@@ -653,6 +654,7 @@ test("invalid drafts are refused before models.json is touched", async () => {
 		{ name: "a", baseUrl: "http://a/v1", models: [model("m"), model("m")] },
 		{ name: "a", baseUrl: "http://a/v1", models: [model("m", { contextWindow: -1 })] },
 	];
-	for (const draft of bad) await expect(saveCustomEndpoint(draft)).rejects.toThrow();
+	for (const draft of bad)
+		await expect(saveCustomEndpoint(draft)).rejects.toMatchObject({ code: "INVALID_PARAMS" });
 	expect(() => readFileSync(path)).toThrow();
 });

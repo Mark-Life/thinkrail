@@ -1,12 +1,15 @@
 import { RiCheckboxCircleLine as CheckCircle2 } from "@remixicon/react";
+import type { ToolInputs } from "@thinkrail/contracts";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 
+type Input = ToolInputs["resolve_comment"];
+
 export function ResolveCommentCard({ args, status }: ToolRenderProps): ReactNode {
 	const t = useT();
-	const commentId = strArg(args, "commentId");
-	const note = strArg(args, "note");
+	const commentId = strArg<Input>(args, "commentId");
+	const note = strArg<Input>(args, "note");
 	return (
 		<div className="flex items-start gap-4 tr-text-ui">
 			<CheckCircle2

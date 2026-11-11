@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { compile, obj, str } from "@earendil-works/pi-schema";
 import { runE2eProcess } from "./processRunner";
 import {
 	interleavedTestList,
@@ -10,9 +11,13 @@ import {
 	SERIAL_SPEC_SOURCE,
 } from "./shardPlan";
 
+const OPEN = { open: true };
+const listingRoot = compile(obj({ config: obj({ rootDir: str() }, OPEN) }, OPEN));
+
 function serialSpecFiles(output: string, tests: readonly ListedTest[]): Set<string> {
-	const rootDir = (JSON.parse(output) as { config?: { rootDir?: unknown } }).config?.rootDir;
-	if (typeof rootDir !== "string") throw new Error("Playwright shard listing reported no rootDir");
+	const listing: unknown = JSON.parse(output);
+	if (!listingRoot.check(listing)) throw new Error("Playwright shard listing reported no rootDir");
+	const { rootDir } = listing.config;
 	const files = new Set(tests.map((test) => test.file));
 	return new Set(
 		[...files].filter((file) => SERIAL_SPEC_SOURCE.test(readFileSync(join(rootDir, file), "utf8"))),

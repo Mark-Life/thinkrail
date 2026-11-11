@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	MCP_PROTOCOL_VERSION,
 	type McpListResult,
@@ -20,6 +21,7 @@ import {
 	type Project,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { hasErrno } from "@thinkrail/shared/errnoCode";
 import { logger } from "../log";
 import {
 	dispatchSessionMcpCommand,
@@ -29,6 +31,7 @@ import {
 	mcpSessionView,
 	requestSessionReload,
 	type SessionReloadDisposition,
+	sessionReloadFailure,
 } from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
 import { isBuiltinExtensionEnabled } from "./extensions";
@@ -36,6 +39,7 @@ import {
 	deriveMcpServerStatuses,
 	isMcpResultTool,
 	loadHostMcpConfig,
+	mcpFullOutputPath,
 	mcpPolicyOf,
 	type ParsedMcpStatus,
 	parseMcpAttentionNotice,
@@ -65,14 +69,14 @@ interface Tracked {
 	stopAttention: () => void;
 }
 
-const tracked = new Map<string, Tracked>();
+const tracked = new Map<SessionId, Tracked>();
 
 let publish: (snapshot: McpStatusSnapshot) => void = () => {};
 export function setMcpStatusPublisher(fn: (snapshot: McpStatusSnapshot) => void): void {
 	publish = fn;
 }
 
-function snapshotOf(sessionId: string): McpStatusSnapshot | null {
+function snapshotOf(sessionId: SessionId): McpStatusSnapshot | null {
 	const view = mcpSessionView(sessionId);
 	const state = tracked.get(sessionId);
 	if (!view || !state || state.generation === 0) return null;
@@ -113,7 +117,7 @@ function configuredServers(view: McpSessionView) {
 	}).servers;
 }
 
-export function pendingMcpReload(sessionId: string): Set<string> {
+export function pendingMcpReload(sessionId: SessionId): Set<string> {
 	const view = mcpSessionView(sessionId);
 	const failed = tracked.get(sessionId)?.reloadFailed === true;
 	if (!ownsMcp(view) || (!view.loaded && !failed)) return new Set();
@@ -135,14 +139,14 @@ function registeredTransports(view: McpSessionView): Map<string, McpTransportKin
 	);
 }
 
-function publishResources(sessionId: string, workspaceId: string, state: Tracked): void {
+function publishResources(sessionId: SessionId, workspaceId: WorkspaceId, state: Tracked): void {
 	const resourcesKey = JSON.stringify(mcpResourceSummaries(sessionId));
 	if (resourcesKey === state.resourcesKey) return;
 	state.resourcesKey = resourcesKey;
 	publishSessionResourcesChanged(workspaceId, sessionId);
 }
 
-function apply(sessionId: string, reported: ParsedMcpStatus | null, partial: boolean): void {
+function apply(sessionId: SessionId, reported: ParsedMcpStatus | null, partial: boolean): void {
 	const view = mcpSessionView(sessionId);
 	const state = tracked.get(sessionId);
 	if (!ownsMcp(view) || !state) return;
@@ -179,7 +183,7 @@ function apply(sessionId: string, reported: ParsedMcpStatus | null, partial: boo
 	publishResources(sessionId, view.workspaceId, state);
 }
 
-function retire(sessionId: string, view: McpSessionView): void {
+function retire(sessionId: SessionId, view: McpSessionView): void {
 	const state = tracked.get(sessionId);
 	if (!state || state.servers.length === 0) return;
 	state.servers = [];
@@ -188,7 +192,7 @@ function retire(sessionId: string, view: McpSessionView): void {
 	publishResources(sessionId, view.workspaceId, state);
 }
 
-export function showPendingMcpReload(sessionId: string): void {
+export function showPendingMcpReload(sessionId: SessionId): void {
 	apply(sessionId, null, true);
 }
 
@@ -205,7 +209,7 @@ function startingReport(view: McpSessionView): ParsedMcpStatus {
 	return { servers, configErrors: [] };
 }
 
-export function restartMcpStatus(sessionId: string): void {
+export function restartMcpStatus(sessionId: SessionId): void {
 	const view = mcpSessionView(sessionId);
 	if (!view) return;
 	const state = trackedOf(sessionId);
@@ -216,7 +220,7 @@ export function restartMcpStatus(sessionId: string): void {
 	scheduleMcpStatusRefresh(sessionId);
 }
 
-export function assertMcpServerDisablableInChat(sessionId: string, name: string): void {
+export function assertMcpServerDisablableInChat(sessionId: SessionId, name: string): void {
 	const view = mcpSessionView(sessionId);
 	if (!ownsMcp(view)) {
 		throw new CodedError("MCP_HANDLED_ELSEWHERE", "MCP is not managed by ThinkRail here.");
@@ -236,7 +240,7 @@ export function assertMcpServerDisablableInChat(sessionId: string, name: string)
 	);
 }
 
-export function mcpResourceSummaries(sessionId: string): McpServerResourceSummary[] {
+export function mcpResourceSummaries(sessionId: SessionId): McpServerResourceSummary[] {
 	const state = tracked.get(sessionId);
 	if (!state) return [];
 	return state.servers.map((status) => ({
@@ -248,12 +252,12 @@ export function mcpResourceSummaries(sessionId: string): McpServerResourceSummar
 	}));
 }
 
-export function hasFailedMcpReload(sessionId: string): boolean {
+export function hasFailedMcpReload(sessionId: SessionId): boolean {
 	return tracked.get(sessionId)?.reloadFailed === true;
 }
 
 export function recordMcpReloadFailure(
-	sessionId: string,
+	sessionId: SessionId,
 	error: unknown,
 	wasLoaded: boolean,
 ): void {
@@ -272,7 +276,7 @@ export function recordMcpReloadFailure(
 }
 
 export async function reconcileMcpSessions(
-	sessionIds: readonly string[],
+	sessionIds: readonly SessionId[],
 ): Promise<Record<string, SessionReloadDisposition>> {
 	const dispositions: Record<string, SessionReloadDisposition> = {};
 	for (const sessionId of sessionIds) {
@@ -281,7 +285,11 @@ export async function reconcileMcpSessions(
 			const disposition = await requestSessionReload(sessionId);
 			dispositions[sessionId] = disposition;
 			if (disposition === "deferred") showPendingMcpReload(sessionId);
-		} catch {}
+		} catch (error) {
+			if (!hasFailedMcpReload(sessionId)) {
+				log.warn(`MCP reload not requested for ${sessionId}`, sessionReloadFailure(error));
+			}
+		}
 	}
 	return dispositions;
 }
@@ -347,11 +355,11 @@ export function watchUserMcpConfig(
 	};
 }
 
-export function watchMcpStatus(sessionId: string): void {
+export function watchMcpStatus(sessionId: SessionId): void {
 	trackedOf(sessionId);
 }
 
-function trackedOf(sessionId: string): Tracked {
+function trackedOf(sessionId: SessionId): Tracked {
 	const existing = tracked.get(sessionId);
 	if (existing) return existing;
 	const state: Tracked = {
@@ -377,19 +385,30 @@ function trackedOf(sessionId: string): Tracked {
 	return state;
 }
 
-async function capture(sessionId: string, state: Tracked): Promise<void> {
+async function capture(sessionId: SessionId, state: Tracked): Promise<void> {
 	const load = state.load;
 	const notices: string[] = [];
+	let failure: unknown;
 	try {
 		await dispatchSessionMcpCommand(sessionId, "", (message) => notices.push(message));
-	} catch {}
+	} catch (error) {
+		failure = error;
+	}
 	if (tracked.get(sessionId) !== state || state.load !== load) return;
+	if (failure !== undefined) {
+		log.warn(
+			`MCP status not read for ${sessionId}`,
+			failure instanceof CodedError
+				? failure
+				: new CodedError("RESOURCE_UNAVAILABLE", "the MCP status command failed"),
+		);
+	}
 	const parsed = notices.map(parseMcpStatusText).findLast((status) => status !== null);
 	if (parsed) apply(sessionId, parsed, false);
 }
 
 export async function refreshMcpStatus(
-	sessionId: string,
+	sessionId: SessionId,
 	waitMs: number,
 ): Promise<McpStatusSnapshot | null> {
 	const view = mcpSessionView(sessionId);
@@ -416,7 +435,7 @@ export async function refreshMcpStatus(
 	return snapshotOf(sessionId);
 }
 
-export async function reconnectMcpServer(sessionId: string, name: string): Promise<void> {
+export async function reconnectMcpServer(sessionId: SessionId, name: string): Promise<void> {
 	const failures: string[] = [];
 	const reconnect = ownsMcp(mcpSessionView(sessionId))
 		? dispatchSessionMcpCommand(sessionId, `reconnect ${name}`, (message, level) => {
@@ -431,11 +450,11 @@ export async function reconnectMcpServer(sessionId: string, name: string): Promi
 	if (failure !== undefined) throw new Error(redactMcpText(failure));
 }
 
-export function scheduleMcpStatusRefresh(sessionId: string): void {
+export function scheduleMcpStatusRefresh(sessionId: SessionId): void {
 	void refreshMcpStatus(sessionId, 0);
 }
 
-export function forgetMcpStatus(sessionId: string): void {
+export function forgetMcpStatus(sessionId: SessionId): void {
 	tracked.get(sessionId)?.stopAttention();
 	tracked.delete(sessionId);
 }
@@ -456,7 +475,7 @@ function mcpOwnerElsewhere(
  * caller can check and mutate in one call stack.
  */
 export async function mcpOwnershipGuard(options: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	cwd: string;
 	projectTrusted: boolean;
 }): Promise<() => string | undefined> {
@@ -475,7 +494,7 @@ export async function mcpOwnershipGuard(options: {
 }
 
 export async function listMcpServers(options: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	cwd: string;
 	project: Pick<Project, "piResourceTrust" | "mcpApprovals" | "mcpOverrides"> | undefined;
 	waitMs: number;
@@ -510,8 +529,8 @@ function readBounded(path: string): { text: string; truncated: boolean } {
 }
 
 export async function readMcpToolOutput(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	toolCallId: string,
 	cwd: string,
 ): Promise<McpReadOutputResult> {
@@ -522,13 +541,14 @@ export async function readMcpToolOutput(
 	if (result?.role !== "toolResult" || !isMcpResultTool(result.toolName)) {
 		return { available: false, reason: "unavailable" };
 	}
-	const details = result.details as { fullOutputPath?: unknown } | undefined;
-	const path = details?.fullOutputPath;
-	if (typeof path !== "string" || !isAbsolute(path))
-		return { available: false, reason: "unavailable" };
+	const path = mcpFullOutputPath(result.details);
+	if (path === undefined || !isAbsolute(path)) return { available: false, reason: "unavailable" };
 	try {
 		return { available: true, ...readBounded(path) };
-	} catch {
-		return { available: false, reason: "expired" };
+	} catch (error) {
+		if (hasErrno(error, "ENOENT", "ENOTDIR")) return { available: false, reason: "expired" };
+		throw new CodedError("STATE_FILE_UNREADABLE", "Couldn't read the stored MCP output.", {
+			cause: error,
+		});
 	}
 }

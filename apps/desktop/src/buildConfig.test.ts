@@ -44,14 +44,14 @@ test("selects real Bun and preserves the physical runtime resources without reti
 	expect(config.build).not.toHaveProperty("useAsar");
 });
 
-test("generated server runtime threads the opener and desktop proxies explicit readiness", () => {
-	const source = readFileSync(resolve(desktopDir, "preBuild.ts"), "utf8");
-	expect(source).toContain("options.openExternal ? { openExternal: options.openExternal } : {}");
-	const runtimeContract = readFileSync(resolve(desktopDir, "src/serverRuntime.ts"), "utf8");
-	expect(runtimeContract).toContain("startAttributionClaim(): void");
+test("the server runtime threads the opener and desktop proxies explicit readiness", () => {
+	const runtime = readFileSync(resolve(desktopDir, "runtimeEntry.ts"), "utf8");
+	expect(runtime).toContain("options.openExternal ? { openExternal: options.openExternal } : {}");
+	const generator = readFileSync(resolve(desktopDir, "preBuild.ts"), "utf8");
+	expect(generator).toContain('join(desktopDir, "runtimeEntry.ts")');
 	const launcher = readFileSync(resolve(desktopDir, "src/index.ts"), "utf8");
 	expect(launcher).toContain('mainWindow.webview.on("dom-ready"');
-	expect(launcher).toContain("host.server.startAttributionClaim()");
+	expect(launcher).toContain("host.startAttributionClaim()");
 });
 
 test("uses the exact npm bootstrap pin while Bun owns the workspace dependency graph", () => {

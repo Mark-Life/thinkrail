@@ -1,7 +1,7 @@
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
+import type { AskRequest } from "./asker.ts";
 import {
 	type AskOutcome,
-	type AskRequest,
 	type AskUserQuestionAnswer,
 	type AskUserQuestionItem,
 	type AskUserQuestionOption,

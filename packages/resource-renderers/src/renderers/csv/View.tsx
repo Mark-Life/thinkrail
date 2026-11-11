@@ -4,7 +4,7 @@ import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
-import { contentStamp, useStampedComposer } from "../reviewComposerState";
+import { contentStamp, stampedComposerDraft, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import {
 	type CsvCell,
@@ -18,6 +18,8 @@ import {
 } from "./csvModel";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
+
+const CSV_SELECTION_DRAFT = stampedComposerDraft<CsvSelection>();
 
 function selected(selection: CsvSelection | null, row: number, col: number): boolean {
 	if (!selection) return false;
@@ -40,7 +42,7 @@ export default function CsvView({
 		() => parseCsv(text, sniffDelimiter(resource.path, text)),
 		[text, resource.path],
 	);
-	const composer = useStampedComposer<CsvSelection>(contentStamp(content));
+	const composer = useStampedComposer(CSV_SELECTION_DRAFT, contentStamp(content));
 	const selection = composer.selection;
 	const virtuosoRef = useRef<TableVirtuosoHandle>(null);
 	const cardRefs = useRef(new Map<string, HTMLDivElement>());

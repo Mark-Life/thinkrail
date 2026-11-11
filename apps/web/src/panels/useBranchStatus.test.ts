@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import type { ReviewDetails } from "@thinkrail/contracts";
+import type { ReviewDetails, WorkspaceId } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	type BranchAnswer,
 	type BranchFacts,
@@ -71,10 +72,10 @@ test("only an open review (or a pre-v78 one without state) is an open review for
 test("activation opts into cache reuse while focus performs a fresh read", async () => {
 	const state = createBranchStatusState();
 	const focusTarget = new EventTarget();
-	const calls: Array<{ workspaceId: string; allowCached?: true }> = [];
+	const calls: Array<{ workspaceId: WorkspaceId; allowCached?: true }> = [];
 	const releases: Array<(answer: BranchAnswer) => void> = [];
 	const controller = startBranchStatusSync({
-		workspaceId: "w1",
+		workspaceId: testWorkspaceId("w1"),
 		key: "w1\0feature",
 		state,
 		focusTarget,
@@ -85,9 +86,12 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 		},
 	});
 
-	expect(calls).toEqual([{ workspaceId: "w1", allowCached: true }]);
+	expect(calls).toEqual([{ workspaceId: testWorkspaceId("w1"), allowCached: true }]);
 	focusTarget.dispatchEvent(new Event("focus"));
-	expect(calls).toEqual([{ workspaceId: "w1", allowCached: true }, { workspaceId: "w1" }]);
+	expect(calls).toEqual([
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1") },
+	]);
 	releases[0]?.({ review: { kind: "pull-request", number: 1 }, status: null });
 	releases[1]?.({ review: { kind: "pull-request", number: 2 }, status: null });
 	await Promise.resolve();
@@ -102,9 +106,9 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 	expect(calls).toHaveLength(2);
 	controller.setConnected(true);
 	expect(calls).toEqual([
-		{ workspaceId: "w1", allowCached: true },
-		{ workspaceId: "w1" },
-		{ workspaceId: "w1" },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1") },
+		{ workspaceId: testWorkspaceId("w1") },
 	]);
 
 	controller.stop();
@@ -146,7 +150,7 @@ function startScripted(connected = true) {
 	const state = createBranchStatusState();
 	const focusTarget = new EventTarget();
 	const controller = startBranchStatusSync({
-		workspaceId: "w1",
+		workspaceId: testWorkspaceId("w1"),
 		key: KEY,
 		state,
 		focusTarget,
@@ -289,7 +293,7 @@ test("a v87 branch status folds its counts onto the review and keeps the facts r
 test("a CI poll reads the review fresh but skips the fetch, and only while connected", () => {
 	const calls: unknown[] = [];
 	const controller = startBranchStatusSync({
-		workspaceId: "w1",
+		workspaceId: testWorkspaceId("w1"),
 		key: "w1\0poll",
 		state: createBranchStatusState(),
 		focusTarget: new EventTarget(),
@@ -304,8 +308,8 @@ test("a CI poll reads the review fresh but skips the fetch, and only while conne
 	controller.setConnected(true);
 	controller.poll();
 	expect(calls).toEqual([
-		{ workspaceId: "w1", allowCached: true },
-		{ workspaceId: "w1", skipFetch: true },
+		{ workspaceId: testWorkspaceId("w1"), allowCached: true },
+		{ workspaceId: testWorkspaceId("w1"), skipFetch: true },
 	]);
 	controller.stop();
 });

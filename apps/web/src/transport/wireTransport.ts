@@ -1,24 +1,10 @@
 import type {
 	Ack,
-	AppConfig,
-	ExtUiRequest,
-	HostUpdateNotice,
-	LoginPush,
-	McpStatusPayload,
-	Project,
-	ReviewChangedPayload,
-	ServerWelcome,
-	SessionCreatedPayload,
-	SessionDeletedPayload,
-	SessionEventPayload,
+	ProjectId,
+	SessionId,
 	SessionStateRecord,
-	SpeechStatus,
-	TurnChangeSet,
 	Workspace,
-	WorkspaceCreation,
-	WorkspaceCreationRemoved,
-	WorkspaceFsChangedPayload,
-	WorkspaceRemoved,
+	WorkspaceId,
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
@@ -45,7 +31,8 @@ import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
-import { WsTransport } from "./transport";
+import { type TransportDispatchHooks, WsTransport } from "./transport";
+import { parseWelcome } from "./welcome";
 
 let transport: WsTransport | null = null;
 
@@ -78,7 +65,7 @@ export function supportsToolResponses(protocolVersion: number | null): boolean {
 }
 
 export function respondToTool(
-	sessionId: string,
+	sessionId: SessionId,
 	toolCallId: string,
 	response: unknown,
 ): Promise<void> {
@@ -243,8 +230,9 @@ function refreshUserFonts(connectionGeneration: number): void {
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
-	for (const [projectId, held] of Object.entries(snapshot.workspaces)) {
-		if (!openProjectIds.has(projectId)) continue;
+	for (const projectId of openProjectIds) {
+		const held = snapshot.workspaces[projectId];
+		if (!held) continue;
 		const heldAtRequest = held.map((workspace) => workspace.id);
 		void getTransport()
 			.request("workspace.list", { projectId, includeDiffStats: false })
@@ -258,8 +246,8 @@ function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 }
 
 export function applyWorkspaceListRefresh(
-	projectId: string,
-	heldAtRequest: readonly string[],
+	projectId: ProjectId,
+	heldAtRequest: readonly WorkspaceId[],
 	workspaces: readonly Workspace[],
 ): void {
 	const store = useAppStore.getState();
@@ -275,7 +263,7 @@ export function applyWorkspaceListRefresh(
 	}
 }
 
-export function retireWorkspace(projectId: string, workspaceId: string): void {
+export function retireWorkspace(projectId: ProjectId, workspaceId: WorkspaceId): void {
 	const state = useAppStore.getState();
 	const login = state.activeLogin;
 	state.applyWorkspaceRemoved(projectId, workspaceId);
@@ -309,7 +297,9 @@ function refreshWorkspaceCreations(connectionGeneration: number): void {
 	void loadWorkspaceCreations(connectionGeneration).catch(() => {});
 }
 
-export function initTransport(): WsTransport {
+export function initTransport(
+	reports: Pick<TransportDispatchHooks, "onInvalidReply" | "onDroppedFrame"> = {},
+): WsTransport {
 	if (transport) return transport;
 	const piEvents = createPiEventBatcher((payloads) =>
 		useAppStore.getState().handlePiEvents(payloads),
@@ -326,29 +316,30 @@ export function initTransport(): WsTransport {
 			beforeDispatch: (message) => {
 				if (shouldFlushPiEventsBefore(message)) piEvents.flush();
 			},
+			...reports,
 		},
 	);
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
-		const welcome = data as Partial<ServerWelcome>;
-		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
+		const welcome = parseWelcome(data);
+		if (welcome.dropped.length > 0) {
+			console.warn("dropped welcome entries this client cannot read:", welcome.dropped.join(", "));
+			reports.onDroppedFrame?.({ code: "INVALID_PUSH", channel: WS_CHANNELS.serverWelcome });
+		}
 		useAppStore.getState().hideSurveyInvitation();
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(
 				welcome.protocolVersion,
 				welcome.projects,
-				Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
+				welcome.recentProjects,
 				welcome.config,
-				welcome.hostPlatform === "darwin" ||
-					welcome.hostPlatform === "linux" ||
-					welcome.hostPlatform === "win32"
-					? welcome.hostPlatform
-					: undefined,
+				welcome.hostPlatform,
 				welcome.hostUpdate,
-				typeof welcome.appVersion === "string" ? welcome.appVersion : undefined,
+				welcome.appVersion,
 				welcome.speech,
 			);
+		useAppStore.getState().syncConfigReadNotice(welcome.configReadFailed);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);
@@ -367,23 +358,22 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
-		useAppStore.getState().applyHostUpdate(data as HostUpdateNotice);
+		useAppStore.getState().applyHostUpdate(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {
-		useAppStore.getState().applyProjectUpdated(data as Project);
+		useAppStore.getState().applyProjectUpdated(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
-		piEvents.enqueue(data as SessionEventPayload);
+		piEvents.enqueue(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
-		useAppStore.getState().applyExtUi(data as ExtUiRequest);
+		useAppStore.getState().applyExtUi(data);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
-		const summary = data as SessionCreatedPayload;
+	transport.subscribe(WS_CHANNELS.sessionCreated, (summary) => {
 		useAppStore.getState().noteClosedChats(summary.workspaceId, [
 			{
 				sessionId: summary.sessionId,
@@ -394,13 +384,11 @@ export function initTransport(): WsTransport {
 		]);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
-		const { workspaceId, sessionId } = data as SessionDeletedPayload;
+	transport.subscribe(WS_CHANNELS.sessionDeleted, ({ workspaceId, sessionId }) => {
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionState, (data) => {
-		const record = data as SessionStateRecord;
+	transport.subscribe(WS_CHANNELS.sessionState, (record) => {
 		const hydration = sessionStateHydration;
 		const current = useAppStore.getState();
 		if (hydration && hydration.generation !== current.connectionGeneration) return;
@@ -416,8 +404,7 @@ export function initTransport(): WsTransport {
 		applySessionStateRecord(record);
 	});
 
-	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
-		const push = data as LoginPush;
+	transport.subscribe(WS_CHANNELS.providerLogin, (push) => {
 		const state = useAppStore.getState();
 		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
 			void getTransport()
@@ -429,7 +416,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.mcpStatus, (data) => {
-		useAppStore.getState().applyMcpStatus(data as McpStatusPayload);
+		useAppStore.getState().applyMcpStatus(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerChanged, () => {
@@ -458,7 +445,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.speechChanged, (data) => {
-		useAppStore.getState().installSpeechStatus(data as SpeechStatus);
+		useAppStore.getState().installSpeechStatus(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
@@ -473,7 +460,7 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
 		const store = useAppStore.getState();
-		store.addWorkspace(data as Workspace);
+		store.addWorkspace(data);
 		if (
 			store.protocolVersion !== null &&
 			store.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION &&
@@ -484,37 +471,36 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreationChanged, (data) => {
-		useAppStore.getState().applyWorkspaceCreation(data as WorkspaceCreation);
+		useAppStore.getState().applyWorkspaceCreation(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreationRemoved, (data) => {
-		useAppStore.getState().applyWorkspaceCreationRemoved(data as WorkspaceCreationRemoved);
+		useAppStore.getState().applyWorkspaceCreationRemoved(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {
-		useAppStore.getState().updateWorkspace(data as Workspace);
+		useAppStore.getState().updateWorkspace(data);
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
-		const { projectId, id } = data as WorkspaceRemoved;
+	transport.subscribe(WS_CHANNELS.workspaceRemoved, ({ projectId, id }) => {
 		retireWorkspace(projectId, id);
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
-		const payload = data as ReviewChangedPayload;
-		useAppStore.getState().applyReviewChanged(payload);
+		useAppStore.getState().applyReviewChanged(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
-		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+		useAppStore.getState().noteFsChanged(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {
-		useAppStore.getState().applyTurnChanged(data as TurnChangeSet);
+		useAppStore.getState().applyTurnChanged(data);
 	});
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
-		useAppStore.getState().applyConfig(data as AppConfig);
+		useAppStore.getState().applyConfig(data);
+		useAppStore.getState().syncConfigReadNotice(false);
 	});
 
 	transport.connect();

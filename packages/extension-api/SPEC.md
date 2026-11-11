@@ -19,7 +19,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 - `./web` exposes `ToolStatus`, `ToolRenderProps`, `ToolRenderer`, `ToolSummary`, `ToolChrome`,
   `ToolProminence`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
   `ToolRevealOptions`, `WebExtension`, `defineWebExtension`, and the pure argument/result readers from
-  `toolHelpers` and `toolResultContent`.
+  `toolHelpers` and `toolResultContent`. The argument readers (`strArg`, `numArg`, `boolArg`, `listArg`,
+  `strListArg`) take the tool's input type as a type argument and accept only a key of that type holding the
+  read value type, so a renamed parameter fails `tsc`; without the type argument no key is accepted.
+  The value itself is still checked at run time, because a model may send anything or be mid-stream.
 - **Interactive tools.** A tool whose `execute` waits for the person's response is *interactive*. The
   contract is tool-agnostic on both sides and keyed by `toolCallId`; the host learns a tool's name only
   from the two declarations below:
@@ -81,7 +84,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
 - Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,
-  host imports, or pi runtime values.
+  host imports, or pi runtime values beyond the `pi-schema` that `contracts` depends on.
 - `ToolSummary` is `(props, t) => string`: the host passes the render-time `Translator` from `useT()`
   (`getToolSummary(t, name, props)`), so a collapsed card or routine row recomputes its summary on a
   language change; a summary translates only through that `t`, never the global translator
@@ -89,7 +92,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 
 Canonical tool-result parsing remains shared by renderer text extraction and the host's common image
 layer: accept only well-formed supported image blocks, preserve text-block order, and fall back to
-readable values for noncanonical results. Props-driven renderers receive optional file navigation from
+readable values for noncanonical results. Blocks are read with contracts' compiled `isTextContent` and
+`isImageContent`, the checks of the schemas tied to pi-ai's block types, never a cast. Props-driven renderers receive optional file navigation from
 the host, never acquire it from a store or transport. Extension composition rules live in
 [[module-thinkrail-extensions]].
 

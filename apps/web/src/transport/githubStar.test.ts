@@ -8,7 +8,7 @@ test("star counts read like the website's", () => {
 
 test("the button shows the host's star count, or plain text without one", () => {
 	expect(githubStarToast({ stars: 7124 }).action?.label).toBe("View on GitHub | ☆ 7.1k");
-	for (const data of [{ stars: null }, { stars: -1 }, { stars: "7k" }, {}, null]) {
+	for (const data of [{ stars: null }, { stars: -1 }, { stars: 1.5 }]) {
 		expect(githubStarToast(data).action?.label).toBe("View on GitHub");
 	}
 });

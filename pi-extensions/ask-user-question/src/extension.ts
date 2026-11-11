@@ -1,9 +1,9 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { AskUserQuestionAsker } from "./asker.ts";
 import {
 	ASK_UNAVAILABLE_TEXT,
 	ASK_USER_QUESTION_TOOL_NAME,
 	type AskUserQuestionArgs,
-	type AskUserQuestionAsker,
 	executableAskCallIds,
 	isolateAskUserQuestionBatch,
 	outcomeResult,
@@ -90,6 +90,7 @@ export function createAskUserQuestionExtension(
 	const filePreviews = options.filePreviews === true;
 	return (pi: ExtensionAPI): void => {
 		pi.on("message_end", (event) => {
+			if (event.message.role !== "assistant") return undefined;
 			const message = isolateAskUserQuestionBatch(event.message);
 			if (options.announce) {
 				for (const toolCallId of executableAskCallIds(message ?? event.message))

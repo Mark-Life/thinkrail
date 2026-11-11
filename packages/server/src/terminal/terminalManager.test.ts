@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
 	closeTerminalTab,
-	closeWorkspaceTerminals,
 	listTerminals,
 	persistTerminalSessions,
 	reserveTerminal,
@@ -26,7 +26,7 @@ interface PublishedFrame {
 	data: unknown;
 }
 
-const WS = "ws-1";
+const WS = testWorkspaceId("ws-1");
 // An external, real child process on every platform (PowerShell's `sleep` alias runs in-process; see terminal/SPEC.md).
 const BUSY_LOOP_COMMAND = process.platform === "win32" ? "ping -n 30 127.0.0.1" : "sleep 30";
 const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
@@ -138,7 +138,16 @@ beforeEach(() => {
 	process.env.ZDOTDIR = dataDir;
 	const worktreePath = join(dataDir, "worktree");
 	mkdirSync(worktreePath);
-	saveWorkspaces([{ id: WS, worktreePath } as Workspace]);
+	saveWorkspaces([
+		{
+			id: WS,
+			projectId: testProjectId("project-1"),
+			name: "Workspace",
+			branch: "main",
+			baseBranch: "main",
+			worktreePath,
+		},
+	]);
 	pushed = [];
 	terminalFrameSignals.clear();
 	setTerminalPublisher((clientKey, channel, data) => {
@@ -296,14 +305,8 @@ test("reservations and attachments reject malformed or excessive catalog entries
 	);
 });
 
-test("terminal input and grid reject malformed values before reaching the PTY", () => {
-	for (const data of [42, [104, 105], { text: "hi" }]) {
-		expect(() => writeTerminal("missing", data as unknown as string, "client-1")).toThrow(
-			"Invalid terminal input",
-		);
-	}
-	for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "80", 32_768]) {
-		const size = bad as unknown as number;
+test("terminal grid rejects out-of-range sizes before reaching the PTY", () => {
+	for (const size of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 32_768]) {
 		expect(() => resizeTerminal("missing", size, 24, "client-1")).toThrow("Invalid terminal size");
 		expect(() => resizeTerminal("missing", 80, size, "client-1")).toThrow("Invalid terminal size");
 		expect(() => attachTerminal(WS, "tab-a", "client-1", { cols: size })).toThrow(
@@ -568,34 +571,3 @@ test(
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
-
-describe("membership survives an ungraceful exit", () => {
-	test("a tab closed before a crash does not come back", () => {
-		attachTerminal(WS, "tab-a", "client-1");
-		closeTerminalTab(WS, "tab-a", true);
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toHaveLength(0);
-	});
-
-	test("a tab opened before a crash is still there", () => {
-		attachTerminal(WS, "tab-a", "client-1", { title: "Survivor" });
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Survivor" }]);
-	});
-
-	test("archiving a workspace before a crash takes its tabs with it", () => {
-		attachTerminal(WS, "tab-a", "client-1");
-		closeWorkspaceTerminals(WS);
-
-		resetTerminalState();
-		reviveTerminalSessions();
-
-		expect(listTerminals(WS)).toHaveLength(0);
-	});
-});

@@ -6,11 +6,7 @@ import {
 	JbcentralQuotaIndicator,
 	type JbcentralQuotaViewSnapshot,
 } from "./JbcentralQuotaIndicator";
-import {
-	formatJbcentralQuota,
-	startJbcentralQuotaPolling,
-	type TimerHandle,
-} from "./jbcentralQuota";
+import { formatJbcentralQuota, startJbcentralQuotaPolling } from "./jbcentralQuota";
 
 function deferred<T>() {
 	let resolve: (value: T) => void = () => {};
@@ -25,13 +21,10 @@ function scheduler() {
 	const timers = new Map<number, { callback: () => void; delay: number }>();
 	return {
 		timers,
-		schedule(callback: () => void, delay: number): TimerHandle {
+		schedule(callback: () => void, delay: number) {
 			const id = nextId++;
 			timers.set(id, { callback, delay });
-			return id;
-		},
-		cancel(handle: TimerHandle) {
-			timers.delete(handle as number);
+			return () => timers.delete(id);
 		},
 		runOnly() {
 			expect(timers.size).toBe(1);
@@ -84,7 +77,6 @@ test("quota polling starts immediately, never overlaps, and stops after a hidden
 			throw new Error("unexpected request error");
 		},
 		schedule: clock.schedule,
-		cancel: clock.cancel,
 	});
 
 	expect(forces).toEqual([false]);
@@ -121,7 +113,6 @@ test("Retry cancels the pending timer and forces one immediate read", async () =
 		onSnapshot: () => {},
 		onError: () => {},
 		schedule: clock.schedule,
-		cancel: clock.cancel,
 	});
 	await flush();
 	expect(clock.timers.size).toBe(1);
@@ -142,7 +133,6 @@ test("stopping polling discards a late response and schedules nothing", async ()
 		onSnapshot: (snapshot) => snapshots.push(snapshot),
 		onError: () => {},
 		schedule: clock.schedule,
-		cancel: clock.cancel,
 	});
 	polling.stop();
 	read.resolve(AVAILABLE);

@@ -41,15 +41,18 @@ e2e).
   (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
   variable-specifier dynamic imports (see the agent SPEC). Build-only
   **`@thinkrail/server/build-support`** is the single manifest of bundled extension entries, skill roots,
-  per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Artifact
+  per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Its shape is the
+  `BuildRuntimeSources` schema on **`@thinkrail/server/build-support/schema`**, which loads only `pi-schema`,
+  so the desktop build hook checks the manifest it reads from a child Bun process without loading the server. Artifact
   fixture/assertion runners live in [[module-artifact-tests]], not in this library. The package also exposes the
   **`@thinkrail/server/agent` subpath export** (the `agent` barrel): the
   server-side session surface for the **headless workflow-test harness** (`e2e/workflows/`), which
   drives real in-process sessions through the production wiring without booting the HTTP host — a
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
-- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` and the Central adapter), `bun-pty`,
-  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types)
+- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`, `errnoCode` and the Central adapter), `bun-pty`,
+  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `@earendil-works/pi-mcp` (types, pinned with pi),
+  `extension-api` (`./server` types)
   + every `thinkrail-extensions/*` **server subpath only** (the registry's composition edge; the host no
   longer depends directly on a pi package an extension owns), `pino` + its pretty/rolling
   destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.
@@ -114,7 +117,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report; `observeStateFileProblems`)
 - `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself (files and specs preview client-side over `fs.readFile`)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
@@ -131,7 +134,7 @@ the host from env via `bootHost` for dev/e2e.
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
   `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`, `fonts`, `speech`, `search`). `persistence` never imports
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
-- `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
+- `todos` → `workspaces` (worktree path lookup), `persistence` (state-file rules for its sidecars) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
   resolve, plus the diff range + blob read behind a base-side anchor), `fs` (the shared byte
   classification + sha-256 an anchor's `contentHash` is). The `review.send*` flows are
@@ -216,6 +219,8 @@ and calls `refreshExtensionTools()` after an applied update that contains `disab
   `GEMINI_CLI_HOME` / `PI_CODING_AGENT_DIR` (turbo passes the last one through). Portable
   skill aliases and pi's `~/.agents/skills` otherwise imported the machine's real libraries, so the skill
   catalog budget and its hint made results depend on whoever ran the suite.
+- **Test fakes carry their real type** — a test hands a fake `fetch` over through `test/fakeFetch.ts`, which
+  adds Bun's `fetch.preconnect`, never through a `typeof fetch` cast.
 
 ## Later
 

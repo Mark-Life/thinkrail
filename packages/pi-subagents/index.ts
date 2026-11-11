@@ -1,5 +1,6 @@
 import { createSubagentsExtension } from "./src/extension";
 
+export type { CompletionDelivery } from "pi-background-commands/wire";
 export { BUILTIN_AGENTS } from "./src/builtins";
 export {
 	type AgentDefinition,
@@ -8,11 +9,8 @@ export {
 	parseAgentDefinition,
 } from "./src/definitions";
 export {
-	type CompletionDelivery,
 	createSubagents,
 	createSubagentsExtension,
-	SUBAGENT_COMPLETION_MESSAGE,
-	type SubagentCompletionDetails,
 	type Subagents,
 	type SubagentsExtensionOptions,
 } from "./src/extension";
@@ -23,5 +21,11 @@ export {
 	type SpawnMapping,
 	toSpawnMapping,
 } from "./src/mapping";
+export {
+	type AgentToolInput,
+	type GetSubagentResultInput,
+	SUBAGENT_COMPLETION_MESSAGE,
+	type SubagentCompletionDetails,
+} from "./src/wire";
 
 export default createSubagentsExtension();

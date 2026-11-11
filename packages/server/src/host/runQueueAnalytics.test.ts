@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { fakeFetch } from "../../test/fakeFetch";
 import {
 	configurePiRuntime,
 	createSession,
@@ -22,7 +24,7 @@ import {
 } from "../analytics";
 import { saveWorkspaces } from "../persistence";
 import { resetConfigCache } from "../settings";
-import { handleRequest } from "./handlers";
+import { handleTypedRequest } from "./handlers";
 import { runObservation } from "./runAnalytics";
 
 const TEST_KEY = "phc_test";
@@ -68,7 +70,7 @@ test.each(["clear", "remove", "restore-on-abort"] as const)(
 			id: "queue-analytics",
 			name: "Queue analytics",
 			reasoning: false,
-			input: ["text"] as ("text" | "image")[],
+			input: ["text"] satisfies ("text" | "image")[],
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: 100_000,
 			maxTokens: 4096,
@@ -95,8 +97,8 @@ test.each(["clear", "remove", "restore-on-abort"] as const)(
 		configurePiRuntime(runtime);
 		saveWorkspaces([
 			{
-				id: "workspace",
-				projectId: "project",
+				id: testWorkspaceId("workspace"),
+				projectId: testProjectId("project"),
 				kind: "default",
 				name: "Test",
 				branch: "main",
@@ -109,35 +111,35 @@ test.each(["clear", "remove", "restore-on-abort"] as const)(
 			posthogApiKey: TEST_KEY,
 			additionalEnabled: false,
 			env: {},
-			fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			fetchImpl: fakeFetch(async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 				events.push(...JSON.parse(String(init?.body)).batch);
 				return new Response("{}");
-			}) as typeof fetch,
+			}),
 		});
 		const session = await createSession({
 			cwd: directory,
-			workspaceId: "workspace",
+			workspaceId: testWorkspaceId("workspace"),
 			model: toWireModel(provider.getModel()),
 		});
 		const { sessionId } = session;
 		const context = { clientKey: "client" };
-		await handleRequest(
+		await handleTypedRequest(
 			"session.steer",
 			{ sessionId, text: "discard this private input" },
 			context,
 		);
-		if (method === "clear") await handleRequest("session.clearQueue", { sessionId }, context);
+		if (method === "clear") await handleTypedRequest("session.clearQueue", { sessionId }, context);
 		else if (method === "remove") {
-			await handleRequest(
+			await handleTypedRequest(
 				"session.removeQueued",
 				{ sessionId, kind: "steering", index: 0 },
 				context,
 			);
 		} else {
-			await handleRequest("session.abort", { sessionId, restoreQueue: true }, context);
+			await handleTypedRequest("session.abort", { sessionId, restoreQueue: true }, context);
 		}
 		setAdditionalAnalyticsEnabled(true);
-		await handleRequest("session.prompt", { sessionId, text: "fresh private input" }, context);
+		await handleTypedRequest("session.prompt", { sessionId, text: "fresh private input" }, context);
 		await shutdownAnalytics();
 		const runs = events.filter((event) => event.event.startsWith("agent_run_"));
 		expect(runs.map((event) => event.event)).toEqual(["agent_run_started", "agent_run_settled"]);

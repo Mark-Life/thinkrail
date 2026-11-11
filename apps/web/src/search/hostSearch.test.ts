@@ -6,6 +6,7 @@ import {
 	type SearchQueryResult,
 	type WsParams,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createHostPreviewLoader,
 	createHostSearchController,
@@ -46,7 +47,11 @@ function harness() {
 		for (const timer of pending) timer.run();
 	};
 	const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-	const last = () => emitted.at(-1) as HostSearchState;
+	const last = (): HostSearchState => {
+		const state = emitted.at(-1);
+		if (!state) throw new Error("no search state emitted yet");
+		return state;
+	};
 	const shown = () => last().groups?.map((group) => [group.kind, group.hits.map((hit) => hit.id)]);
 	return { controller, requests, emitted, timers, fire, settle, last, shown };
 }
@@ -55,7 +60,7 @@ const input = (text: string, kinds: SearchGroup["kind"][] = ["file"]) => ({
 	enabled: true,
 	text,
 	kinds,
-	context: { projectId: "p1" },
+	context: { projectId: testProjectId("p1") },
 });
 
 const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
@@ -64,8 +69,8 @@ const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
 		title: id,
 		tier: MATCH_TIER.prefix,
 		score: 1,
-		projectId: "p1",
-		workspaceId: "w1",
+		projectId: testProjectId("p1"),
+		workspaceId: testWorkspaceId("w1"),
 	};
 	switch (kind) {
 		case "file":
@@ -73,9 +78,9 @@ const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
 		case "spec":
 			return { ...base, kind, path: id, specId: id, size: 1 };
 		case "plan":
-			return { ...base, kind, sessionId: id };
+			return { ...base, kind, sessionId: testSessionId(id) };
 		case "transcript":
-			return { ...base, kind, sessionId: id, messageIndex: 0, anchorText: id };
+			return { ...base, kind, sessionId: testSessionId(id), messageIndex: 0, anchorText: id };
 	}
 };
 
@@ -381,7 +386,12 @@ describe("host previews", () => {
 			() => generation,
 			() => ready,
 		);
-		const target = { kind: "chat" as const, sessionId: "s1", messageIndex: 2, anchorText: "the" };
+		const target = {
+			kind: "chat" as const,
+			sessionId: testSessionId("s1"),
+			messageIndex: 2,
+			anchorText: "the",
+		};
 		expect(await loader.load(target)).toEqual({ kind: "unavailable" });
 		answer = "missing";
 		expect(await loader.load(target)).toEqual({ kind: "unavailable" });

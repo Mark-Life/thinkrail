@@ -1,4 +1,13 @@
-import type { LayoutPreset, LayoutToolId } from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
+import {
+	JsonObject,
+	LayoutPreset,
+	type LayoutPresetBottomRegion,
+	type LayoutPresetSideGroup,
+	type LayoutPresetSideRegion,
+	type LayoutToolId,
+} from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 
 const MAX_PRESETS = 32;
 const MAX_LAYOUT_BYTES = 512 * 1024;
@@ -7,12 +16,19 @@ const MAX_GROUPS = 32;
 const MAX_DEPTH = 8;
 const MAX_NAME_LENGTH = 200;
 const MAX_BOTTOM_HEIGHT = 0.7;
-const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "review", "plan"]);
+const LayoutPresetShape = compile(LayoutPreset);
+
+class LayoutPresetRuleError extends CodedError {
+	readonly rule: string;
+
+	constructor(rule: string, detail?: string) {
+		super("INVALID_PARAMS", detail === undefined ? rule : `${rule}: ${detail}`);
+		this.rule = rule;
+	}
+}
 
 function record(value: unknown): Record<string, unknown> | null {
-	return value !== null && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: null;
+	return JsonObject.check(value) ? value : null;
 }
 
 function nonEmptyString(value: unknown, max = MAX_NAME_LENGTH): value is string {
@@ -30,7 +46,7 @@ function assertKeys(
 ): void {
 	const known = new Set(allowed);
 	const extra = Object.keys(value).find((key) => !known.has(key));
-	if (extra) throw new Error(`${label} has unknown field: ${extra}`);
+	if (extra) throw new LayoutPresetRuleError(`${label} has an unknown field`, extra);
 }
 
 function exceedsBudget(value: unknown): boolean {
@@ -44,20 +60,16 @@ function exceedsBudget(value: unknown): boolean {
 function validateCenter(value: unknown, depth: number, ids: Set<string>): number {
 	const node = record(value);
 	if (!node || !nonEmptyString(node.id) || (node.kind !== "group" && node.kind !== "split")) {
-		throw new Error("Malformed layout preset center");
+		throw new LayoutPresetRuleError("Malformed layout preset center");
 	}
-	if (ids.has(node.id)) throw new Error(`Duplicate preset node id: ${node.id}`);
+	if (ids.has(node.id)) throw new LayoutPresetRuleError("Duplicate preset node id", node.id);
 	ids.add(node.id);
-	if (depth > MAX_DEPTH) throw new Error("Layout preset center is too deep");
+	if (depth > MAX_DEPTH) throw new LayoutPresetRuleError("Layout preset center is too deep");
 	if (node.kind === "group") {
-		assertKeys(node, ["kind", "id"], `Preset center group ${node.id}`);
+		assertKeys(node, ["kind", "id"], "Preset center group");
 		return 1;
 	}
-	assertKeys(
-		node,
-		["kind", "id", "direction", "weights", "children"],
-		`Preset center split ${node.id}`,
-	);
+	assertKeys(node, ["kind", "id", "direction", "weights", "children"], "Preset center split");
 	if (
 		(node.direction !== "horizontal" && node.direction !== "vertical") ||
 		!Array.isArray(node.weights) ||
@@ -68,7 +80,7 @@ function validateCenter(value: unknown, depth: number, ids: Set<string>): number
 		!Array.isArray(node.children) ||
 		node.children.length !== 2
 	) {
-		throw new Error("Malformed layout preset split");
+		throw new LayoutPresetRuleError("Malformed layout preset split");
 	}
 	return (
 		validateCenter(node.children[0], depth + 1, ids) +
@@ -76,119 +88,117 @@ function validateCenter(value: unknown, depth: number, ids: Set<string>): number
 	);
 }
 
-function validateGroups(value: unknown, ids: Set<string>, tools: Set<string>, label: string): void {
-	if (!Array.isArray(value) || value.length > MAX_GROUPS) {
-		throw new Error(`Malformed preset ${label} groups`);
-	}
+function validateGroups(
+	groups: readonly LayoutPresetSideGroup[],
+	ids: Set<string>,
+	tools: Set<LayoutToolId>,
+	label: string,
+): void {
+	if (groups.length > MAX_GROUPS)
+		throw new LayoutPresetRuleError(`Malformed preset ${label} groups`);
 	let total = 0;
-	for (const candidate of value) {
-		const group = record(candidate);
-		if (
-			!group ||
-			!nonEmptyString(group.id) ||
-			!positive(group.weight) ||
-			typeof group.folded !== "boolean" ||
-			!Array.isArray(group.tools) ||
-			!group.tools.every((tool) => typeof tool === "string" && TOOL_IDS.has(tool as LayoutToolId))
-		) {
-			throw new Error(`Malformed preset ${label} group`);
+	for (const group of groups) {
+		if (!nonEmptyString(group.id) || !positive(group.weight)) {
+			throw new LayoutPresetRuleError(`Malformed preset ${label} group`);
 		}
 		assertKeys(group, ["id", "weight", "folded", "tools"], `Preset ${label} group`);
-		if (ids.has(group.id)) throw new Error(`Duplicate preset node id: ${group.id}`);
+		if (ids.has(group.id)) throw new LayoutPresetRuleError("Duplicate preset node id", group.id);
 		ids.add(group.id);
 		total += group.weight;
 		for (const tool of group.tools) {
-			if (tools.has(String(tool))) throw new Error(`Duplicate preset singleton tool: ${tool}`);
-			tools.add(String(tool));
+			if (tools.has(tool)) throw new LayoutPresetRuleError("Duplicate preset singleton tool", tool);
+			tools.add(tool);
 		}
 	}
-	if (value.length > 0 && Math.abs(total - 1) > 1e-6) {
-		throw new Error(`Preset ${label} group weights are not normalized`);
+	if (groups.length > 0 && Math.abs(total - 1) > 1e-6) {
+		throw new LayoutPresetRuleError(`Preset ${label} group weights are not normalized`);
 	}
 }
 
+function validateSide(
+	region: LayoutPresetSideRegion | LayoutPresetBottomRegion,
+	label: string,
+	ids: Set<string>,
+	tools: Set<LayoutToolId>,
+): void {
+	if (region.visible && region.groups.length === 0) {
+		throw new LayoutPresetRuleError(`Preset ${label} cannot be visible while empty`);
+	}
+	validateGroups(region.groups, ids, tools, label);
+}
+
 export function validateLayoutPreset(value: unknown): LayoutPreset {
-	if (exceedsBudget(value)) throw new Error("Layout preset is too large");
+	if (exceedsBudget(value)) throw new LayoutPresetRuleError("Layout preset is too large");
 	const preset = record(value);
 	if (!preset || !nonEmptyString(preset.id) || !nonEmptyString(preset.name)) {
-		throw new Error("Malformed layout preset");
+		throw new LayoutPresetRuleError("Malformed layout preset");
 	}
 	assertKeys(preset, ["id", "name", "center", "left", "right", "bottom"], "Layout preset");
 	const ids = new Set<string>();
 	if (validateCenter(preset.center, 1, ids) > MAX_CENTER_GROUPS) {
-		throw new Error("Layout preset has too many center groups");
+		throw new LayoutPresetRuleError("Layout preset has too many center groups");
 	}
-	const tools = new Set<string>();
-	for (const side of ["left", "right"] as const) {
-		const region = record(preset[side]);
-		if (
-			!region ||
-			typeof region.visible !== "boolean" ||
-			!positive(region.width) ||
-			Number(region.width) >= 1 ||
-			!Array.isArray(region.groups)
-		) {
-			throw new Error(`Malformed preset ${side} side`);
-		}
+	if (!LayoutPresetShape.check(value)) {
+		throw new LayoutPresetRuleError(
+			`Malformed layout preset at ${LayoutPresetShape.errors(value)[0]?.path}`,
+		);
+	}
+	const { left, right, bottom } = value;
+	const tools = new Set<LayoutToolId>();
+	for (const [side, region] of [
+		["left", left],
+		["right", right],
+	] as const) {
 		assertKeys(region, ["visible", "width", "groups"], `Preset ${side} side`);
-		if (region.visible && region.groups.length === 0) {
-			throw new Error(`Preset ${side} side cannot be visible while empty`);
+		if (!positive(region.width) || region.width >= 1) {
+			throw new LayoutPresetRuleError(`Malformed preset ${side} side`);
 		}
-		validateGroups(region.groups, ids, tools, `${side} side`);
-	}
-	const bottom = record(preset.bottom);
-	if (
-		!bottom ||
-		typeof bottom.visible !== "boolean" ||
-		!positive(bottom.height) ||
-		Number(bottom.height) > MAX_BOTTOM_HEIGHT ||
-		(bottom.alignment !== "center" &&
-			bottom.alignment !== "center-left" &&
-			bottom.alignment !== "center-right" &&
-			bottom.alignment !== "full") ||
-		!Array.isArray(bottom.groups)
-	) {
-		throw new Error("Malformed preset bottom region");
+		validateSide(region, `${side} side`, ids, tools);
 	}
 	assertKeys(bottom, ["visible", "height", "alignment", "groups"], "Preset bottom region");
-	if (bottom.visible && bottom.groups.length === 0) {
-		throw new Error("Preset bottom region cannot be visible without a group");
+	if (!positive(bottom.height) || bottom.height > MAX_BOTTOM_HEIGHT) {
+		throw new LayoutPresetRuleError("Malformed preset bottom region");
 	}
-	validateGroups(bottom.groups, ids, tools, "bottom");
-	const left = record(preset.left);
-	const right = record(preset.right);
-	if (
-		typeof left?.width === "number" &&
-		typeof right?.width === "number" &&
-		left.width + right.width >= 1
-	) {
-		throw new Error("Preset side widths leave no center region");
-	}
-	return value as LayoutPreset;
+	validateSide(bottom, "bottom region", ids, tools);
+	if (left.width + right.width >= 1)
+		throw new LayoutPresetRuleError("Preset side widths leave no center region");
+	return value;
 }
 
 export function validateCustomLayoutPresets(value: unknown): LayoutPreset[] {
 	if (exceedsBudget(value) || !Array.isArray(value) || value.length > MAX_PRESETS) {
-		throw new Error("Invalid custom layout presets");
+		throw new LayoutPresetRuleError("Invalid custom layout presets");
 	}
 	const presets = value.map(validateLayoutPreset);
 	if (new Set(presets.map((preset) => preset.id)).size !== presets.length) {
-		throw new Error("Custom layout preset ids must be unique");
+		throw new LayoutPresetRuleError("Custom layout preset ids must be unique");
 	}
 	return presets;
 }
 
-export function normalizeStoredCustomLayoutPresets(value: unknown): LayoutPreset[] {
-	if (!Array.isArray(value)) return [];
-	const presets: LayoutPreset[] = [];
-	const ids = new Set<string>();
-	for (const candidate of value.slice(0, MAX_PRESETS)) {
-		try {
-			const preset = validateLayoutPreset(candidate);
-			if (ids.has(preset.id)) continue;
-			ids.add(preset.id);
-			presets.push(preset);
-		} catch {}
+function storedPresetProblem(
+	candidate: LayoutPreset,
+	kept: readonly LayoutPreset[],
+): string | null {
+	if (kept.length >= MAX_PRESETS) return "is past the preset limit";
+	if (kept.some((preset) => preset.id === candidate.id)) return "repeats a preset id";
+	try {
+		validateLayoutPreset(candidate);
+		return null;
+	} catch (error) {
+		if (!(error instanceof LayoutPresetRuleError)) throw error;
+		return `breaks a preset rule: ${error.rule}`;
 	}
-	return presets;
+}
+
+/** Stored presets passed the schema at the read; this applies the catalog rules and names each drop. */
+export function keepValidStoredPresets(stored: readonly LayoutPreset[]) {
+	const presets: LayoutPreset[] = [];
+	const dropped: string[] = [];
+	for (const [index, candidate] of stored.entries()) {
+		const problem = storedPresetProblem(candidate, presets);
+		if (problem) dropped.push(`${index} ${problem}`);
+		else presets.push(candidate);
+	}
+	return { presets, dropped };
 }

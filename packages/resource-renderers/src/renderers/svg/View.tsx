@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
-import { type CSSProperties, useEffect, useMemo } from "react";
+import type {} from "@thinkrail/ui/css-custom-properties";
+import { useEffect, useMemo } from "react";
 import type { ResourceViewProps } from "../../registry";
 import { useElementSize } from "../../support/useElementSize";
 import { RegionReviewSurface } from "../RegionReviewSurface";
@@ -62,7 +63,7 @@ export default function SvgView({
 								style: {
 									"--svg-fit-width": `${fitted.width}px`,
 									"--svg-fit-height": `${fitted.height}px`,
-								} as CSSProperties,
+								},
 							}
 						: {})}
 				>

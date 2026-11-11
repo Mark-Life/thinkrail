@@ -1,9 +1,10 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "@playwright/test";
-import type {
-	AskUserQuestionItem,
-	AskUserQuestionResult,
+import {
+	type AskUserQuestionItemView,
+	type AskUserQuestionResult,
+	isAskUserQuestionArgsView,
 } from "@thinkrail/pi-ask-user-question/core";
 import {
 	type CheckContext,
@@ -100,7 +101,7 @@ const pathArg = (args: Record<string, unknown>): string =>
 function offerMentions(ctx: CheckContext, pattern: RegExp): boolean {
 	return ctx.log
 		.toolCalls("ask_user_question")
-		.flatMap((call) => (call.args.questions ?? []) as AskUserQuestionItem[])
+		.flatMap((call) => (isAskUserQuestionArgsView(call.args) ? call.args.questions : []))
 		.some((q) => pattern.test(JSON.stringify(q.options)));
 }
 
@@ -184,9 +185,9 @@ const answerFirstOption = {
 };
 
 const acceptAllCandidates = {
-	match: (questions: AskUserQuestionItem[]) =>
+	match: (questions: AskUserQuestionItemView[]) =>
 		questions.some((q) => /architecture/i.test(JSON.stringify(q.options))),
-	answer: (questions: AskUserQuestionItem[]): AskUserQuestionResult => ({
+	answer: (questions: AskUserQuestionItemView[]): AskUserQuestionResult => ({
 		answers: questions.map((q, i) =>
 			/architecture/i.test(JSON.stringify(q.options))
 				? {

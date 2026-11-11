@@ -6,7 +6,11 @@ import {
 	RiRobot2Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import type {
+	BackgroundCommandSummary,
+	StoredSessionId,
+	SubagentResourceSummary,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
@@ -48,7 +52,7 @@ export function ResourcesDock({
 	onInspect: (resourceId: string) => void;
 	onOpenFinished: () => void;
 	onStopCommand: (commandId: string) => void;
-	onStopSubagent: (childSessionId: string) => void;
+	onStopSubagent: (childSessionId: StoredSessionId) => void;
 }) {
 	const t = useT();
 	const stop = (resource: Resource) =>

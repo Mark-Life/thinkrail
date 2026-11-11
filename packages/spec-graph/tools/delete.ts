@@ -1,11 +1,9 @@
 import { rmSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
-import { errorResult, getIndex, textResult } from "./shared.ts";
+import { SpecDeleteInput } from "../core/index.ts";
+import { errorResult, errorText, getIndex, textResult, toolParameters } from "./shared.ts";
 
-const parameters = Type.Object({
-	id: Type.String({ description: "Id of the spec to delete." }),
-});
+const parameters = toolParameters(SpecDeleteInput);
 
 export function registerSpecDelete(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, { id: string; path: string } | { error: string }>({
@@ -22,7 +20,7 @@ export function registerSpecDelete(pi: ExtensionAPI): void {
 			try {
 				rmSync(index.absPath(path));
 			} catch (err) {
-				return errorResult(`Failed to delete ${path}: ${(err as Error).message}`);
+				return errorResult(`Failed to delete ${path}: ${errorText(err)}`);
 			}
 			return textResult(`Deleted ${path} (id: ${params.id}).`, { id: params.id, path });
 		},

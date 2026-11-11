@@ -388,7 +388,10 @@ side-effect registrations (`tools/register`, loaded with `ChatView`).
 Render contracts (`ToolRenderProps`, `ToolStatus`, registration metadata) and pure argument/result
 helpers come from `@thinkrail/extension-api/web`, not chat internals. `Markdown` imports the named
 `MermaidView` from `@thinkrail/ext-visualize/web` for fenced mermaid; highlighted fences and `CodeBlock`
-remain app-local. A registration is:
+remain app-local. A card reads `result.details` only through a small compiled `pi-schema` check (or
+`contracts`' `JsonObject`) of the fields it renders, never a cast. `web_search` and `get_search_content` come
+from an external tool with no published details shape, so each field is checked on its own and a missing or
+odd field renders as absent. A registration is:
 
 - a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
   `status`/`workspaceRoot`/`streaming` plus an optional shell-injected `onOpenFile` callback — enough to
@@ -420,8 +423,7 @@ two routes:
   `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
   is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. Its `state.accepting` is
   true only while the host's `needsInput` names this call (`awaitingToolCallIdOf`, carried in the
-  interaction context; a pre-v93 host's `kind: "question"` / `question:<id>` is read the same way for one
-  compatibility window) or no host state has arrived yet, so a call the host is not waiting on (another
+  interaction context) or no host state has arrived yet, so a call the host is not waiting on (another
   package's same-name tool, a call to the switched-off tool) cannot submit a response. `respond(value)`
   forwards the value as is through the transport's `respondToTool` (`session.respondToTool`, or the
   retired `session.answerQuestion` below `TOOL_RESPONSE_PROTOCOL_VERSION`); the tool validates its
@@ -1642,7 +1644,8 @@ Unknown custom messages retain their existing behavior.
   `markSkillsSynced` to clear only this chat).
   **No `index.ts` barrel** — chat pulls the **highlight client**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling it.
-- **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); the lifecycle-neutral
+- **Allowed deps:** `contracts` (pi message/content-block types **type-only**; shared constants and checks such
+  as `JsonObject` by value), `pi-schema` (small compiled checks of tool details); the lifecycle-neutral
   `prompt` module; `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll

@@ -1,6 +1,8 @@
-import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
+import { NativeCommand, NativeQuitHint, type NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { platformShortcutLabel } from "../lib";
+import { bridgeCall, checkedListener, nativeGlobal, settled, unsubscriber } from "../nativeBridge";
 import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
@@ -13,21 +15,32 @@ import {
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
+const isNativeQuitHint = compile(NativeQuitHint).check;
+const isNativeCommand = compile(NativeCommand).check;
+
+/** The shortcuts bridge at `value`, checking every value it hands back, or null without one. */
 export function getNativeShortcutsBridge(value: unknown): NativeShortcutsBridge | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	try {
-		return typeof Reflect.get(value, "subscribeQuitHint") === "function" &&
-			typeof Reflect.get(value, "subscribeCommand") === "function" &&
-			typeof Reflect.get(value, "quit") === "function"
-			? (value as NativeShortcutsBridge)
-			: null;
-	} catch {
-		return null;
-	}
+	const subscribeQuitHint = bridgeCall(value, "subscribeQuitHint");
+	const subscribeCommand = bridgeCall(value, "subscribeCommand");
+	const quit = bridgeCall(value, "quit");
+	if (!subscribeQuitHint || !subscribeCommand || !quit) return null;
+	return {
+		subscribeQuitHint: (listener) =>
+			unsubscriber(
+				subscribeQuitHint(checkedListener(isNativeQuitHint, listener, "quit hint")),
+				"quit hint unsubscribe",
+			),
+		subscribeCommand: (listener) =>
+			unsubscriber(
+				subscribeCommand(checkedListener(isNativeCommand, listener, "native command")),
+				"native command unsubscribe",
+			),
+		quit: () => settled(quit()),
+	};
 }
 
 function readNativeShortcutsBridge() {
-	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
+	return getNativeShortcutsBridge(nativeGlobal(NATIVE_SHORTCUTS_GLOBAL));
 }
 
 export function readSettingsShortcutLabel(): string | null {

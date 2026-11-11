@@ -1,3 +1,4 @@
+import type { StoredSessionId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, type Translator, t } from "@thinkrail/locales/react";
 import {
@@ -14,6 +15,7 @@ import {
 	readLayoutSelection,
 	terminalName,
 } from "../../lib";
+import type { LayoutToolTab } from "./schema";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -27,7 +29,6 @@ import type {
 	LayoutSideTab,
 	LayoutTab,
 	LayoutToolId,
-	LayoutToolTab,
 	WorkspaceLayoutDocument,
 } from "./types";
 
@@ -617,6 +618,17 @@ export function canJoinAuxiliaryGroup(
 	return false;
 }
 
+function reorderedTabs<T extends LayoutTab>(
+	current: readonly T[],
+	moving: T,
+	index: number | undefined,
+): T[] | null {
+	const tabs = current.filter((candidate) => candidate.id !== moving.id);
+	const insertion = Math.max(0, Math.min(index ?? tabs.length, tabs.length));
+	tabs.splice(insertion, 0, moving);
+	return current.every((candidate, position) => candidate.id === tabs[position]?.id) ? null : tabs;
+}
+
 export function moveTabToGroup(
 	document: WorkspaceLayoutDocument,
 	tab: LayoutTab,
@@ -630,38 +642,36 @@ export function moveTabToGroup(
 		return { reason: t("workbench.layout.tabTypeRegion") };
 	const source = findTabLocation(document, movingTab.id);
 	if (source?.area === target.area && source.groupId === target.groupId) {
-		const current =
-			target.area === "center"
-				? findCenterGroup(document.center, target.groupId)
-				: findAuxiliaryGroup(document, target.area, target.groupId);
-		if (!current) return { reason: t("workbench.layout.destinationGroupMissing") };
-		const tabs = current.tabs.filter((candidate) => candidate.id !== movingTab.id);
-		const insertion = Math.max(0, Math.min(index ?? tabs.length, tabs.length));
-		tabs.splice(insertion, 0, movingTab);
-		if (current.tabs.every((candidate, position) => candidate.id === tabs[position]?.id)) {
-			return { reason: t("workbench.layout.tabAlreadyThere") };
-		}
 		if (target.area === "center") {
+			const current = findCenterGroup(document.center, target.groupId);
+			if (!current || movingTab.kind === "tool")
+				return { reason: t("workbench.layout.destinationGroupMissing") };
+			const tabs = reorderedTabs(current.tabs, movingTab, index);
+			if (!tabs) return { reason: t("workbench.layout.tabAlreadyThere") };
 			return {
 				document: {
 					...document,
-					center: updateCenterGroup(
-						document.center,
-						target.groupId,
-						(group) => ({ ...group, tabs }) as LayoutCenterGroup,
-					),
+					center: updateCenterGroup(document.center, target.groupId, (group) => ({
+						...group,
+						tabs,
+					})),
 				},
 				focusGroupId: target.groupId,
 				focusTabId: movingTab.id,
 			};
 		}
+		const current = findAuxiliaryGroup(document, target.area, target.groupId);
+		if (!current || (movingTab.kind !== "tool" && movingTab.kind !== "terminal"))
+			return { reason: t("workbench.layout.destinationGroupMissing") };
+		const tabs = reorderedTabs(current.tabs, movingTab, index);
+		if (!tabs) return { reason: t("workbench.layout.tabAlreadyThere") };
 		return {
 			document: {
 				...document,
 				[target.area]: {
 					...document[target.area],
 					groups: document[target.area].groups.map((group) =>
-						group.id === target.groupId ? { ...group, tabs: tabs as LayoutSideTab[] } : group,
+						group.id === target.groupId ? { ...group, tabs } : group,
 					),
 				},
 			},
@@ -1216,7 +1226,7 @@ export function closePlacedResource(
 
 export function removeSessionLayoutTabs(
 	document: WorkspaceLayoutDocument,
-	sessionId: string,
+	sessionId: StoredSessionId,
 ): WorkspaceLayoutDocument {
 	const ids = collectAllGroups(document)
 		.flatMap((group) => group.tabs)

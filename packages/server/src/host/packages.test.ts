@@ -3,12 +3,16 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
-import type { PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
+import type { WorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { setPiPackagesPublisher } from "../agent";
 import { writeFixturePiPackage } from "../agent/packages/testFixtures";
 import { getConfig, resetConfigCache, updateConfig } from "../settings";
-import { handleRequest } from "./handlers";
+import { handleTypedRequest } from "./handlers";
+
+const PROJECT_ID = testProjectId("00000000-0000-4000-8000-0000000000a1");
+const WORKSPACE_ID = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
 
 const CTX = { clientKey: "test-client" };
 const saved = {
@@ -38,7 +42,7 @@ beforeEach(() => {
 		join(root, "data", "projects.json"),
 		JSON.stringify([
 			{
-				id: "p1",
+				id: PROJECT_ID,
 				name: "repo",
 				path: repo,
 				slug: "repo",
@@ -51,8 +55,8 @@ beforeEach(() => {
 		join(root, "data", "workspaces.json"),
 		JSON.stringify([
 			{
-				id: "w1",
-				projectId: "p1",
+				id: WORKSPACE_ID,
+				projectId: PROJECT_ID,
 				kind: "default",
 				name: "Default",
 				branch: "main",
@@ -82,12 +86,8 @@ afterEach(() => {
 	resetConfigCache();
 });
 
-const list = (workspaceId?: string) =>
-	handleRequest(
-		"packages.list",
-		workspaceId ? { workspaceId } : {},
-		CTX,
-	) as Promise<PiPackagesCatalog>;
+const list = (workspaceId?: WorkspaceId) =>
+	handleTypedRequest("packages.list", workspaceId ? { workspaceId } : {}, CTX);
 
 test("lists user scope without a workspace and repository scope with a trusted one", async () => {
 	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
@@ -99,7 +99,7 @@ test("lists user scope without a workspace and repository scope with a trusted o
 	expect(userOnly.packages.map((p) => [p.name, p.scope])).toEqual([["@fixture/pi-tools", "user"]]);
 	expect(userOnly.builtins.map((b) => b.name)).toEqual(["mcp", "tool-search"]);
 
-	const withWorkspace = await list("w1");
+	const withWorkspace = await list(WORKSPACE_ID);
 	expect(withWorkspace.projectTrusted).toBe(true);
 	expect(withWorkspace.projectSettingsPath).toBe(join(repo, ".pi", "settings.json"));
 	expect(withWorkspace.packages.map((p) => [p.scope, p.shadowed ?? false])).toEqual([
@@ -111,11 +111,11 @@ test("lists user scope without a workspace and repository scope with a trusted o
 test("installing for me a package the repository already declares returns a row instead of failing", async () => {
 	mkdirSync(join(repo, ".pi"), { recursive: true });
 	writeFileSync(join(repo, ".pi", "settings.json"), JSON.stringify({ packages: [pkg] }));
-	const summary = (await handleRequest(
+	const summary = await handleTypedRequest(
 		"packages.install",
-		{ source: pkg, scope: "user", workspaceId: "w1" },
+		{ source: pkg, scope: "user", workspaceId: WORKSPACE_ID },
 		CTX,
-	)) as PiPackageSummary;
+	);
 	expect(summary).toMatchObject({ scope: "user", shadowed: true, enabled: true });
 });
 
@@ -129,24 +129,20 @@ test("reveal opens a single-file package's folder, not the file, and a forced ch
 		revealed.push(path);
 	});
 	try {
-		await handleRequest("packages.reveal", { path: single }, CTX);
+		await handleTypedRequest("packages.reveal", { path: single }, CTX);
 		expect(revealed).toEqual([join(root, "pkgs")]);
 	} finally {
 		reveal.mockRestore();
 	}
-	const first = await handleRequest("packages.checkUpdates", {}, CTX);
-	const forced = await handleRequest("packages.checkUpdates", { force: true }, CTX);
+	const first = await handleTypedRequest("packages.checkUpdates", {}, CTX);
+	const forced = await handleTypedRequest("packages.checkUpdates", { force: true }, CTX);
 	expect(first).toEqual([]);
 	expect(forced).toEqual([]);
 });
 
 test("install returns the new row, turns the package on, and publishes a change", async () => {
 	updateConfig({ disabledPackages: [`local:${pkg}`] });
-	const summary = (await handleRequest(
-		"packages.install",
-		{ source: pkg, scope: "user" },
-		CTX,
-	)) as PiPackageSummary;
+	const summary = await handleTypedRequest("packages.install", { source: pkg, scope: "user" }, CTX);
 	expect(summary).toMatchObject({ name: "@fixture/pi-tools", scope: "user", enabled: true });
 	expect(summary.resources.find((r) => r.displayName === "hello.ts")?.tools).toEqual([
 		"fixture_hello",
@@ -157,18 +153,22 @@ test("install returns the new row, turns the package on, and publishes a change"
 	]);
 	expect(published).toBeGreaterThan(0);
 
-	await handleRequest("packages.remove", { source: relative(agentDir, pkg), scope: "user" }, CTX);
+	await handleTypedRequest(
+		"packages.remove",
+		{ source: relative(agentDir, pkg), scope: "user" },
+		CTX,
+	);
 	expect((await list()).packages).toHaveLength(0);
 });
 
 test("a remove whose uninstall fails still reconciles chats and pages with the persisted declaration", async () => {
-	await handleRequest("packages.install", { source: pkg, scope: "user" }, CTX);
+	await handleTypedRequest("packages.install", { source: pkg, scope: "user" }, CTX);
 	published = 0;
 	const remove = spyOn(DefaultPackageManager.prototype, "remove").mockRejectedValue(
 		new Error("EACCES"),
 	);
 	try {
-		const error = await handleRequest(
+		const error = await handleTypedRequest(
 			"packages.remove",
 			{ source: relative(agentDir, pkg), scope: "user" },
 			CTX,
@@ -187,13 +187,13 @@ test("a file:// source lists, removes and installs like the path it names", asyn
 	const listed = (await list()).packages;
 	expect(listed).toHaveLength(1);
 	expect(listed[0]).toMatchObject({ identity: `local:${pkg}`, source: `file://${pkg}` });
-	await handleRequest("packages.remove", { source: `file://${pkg}`, scope: "user" }, CTX);
+	await handleTypedRequest("packages.remove", { source: `file://${pkg}`, scope: "user" }, CTX);
 	expect((await list()).packages).toHaveLength(0);
-	const summary = (await handleRequest(
+	const summary = await handleTypedRequest(
 		"packages.install",
 		{ source: `file://${pkg}`, scope: "user" },
 		CTX,
-	)) as PiPackageSummary;
+	);
 	expect(summary.identity).toBe(`local:${pkg}`);
 	expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toEqual([
 		relative(agentDir, pkg),
@@ -206,20 +206,20 @@ test("installing for the repository a folder the user already declares returns t
 	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [tools] }));
 	const projectKey = `local:project:${repo}:tools`;
 	updateConfig({ disabledPackages: [projectKey] });
-	expect((await list("w1")).packages[0]).toMatchObject({
+	expect((await list(WORKSPACE_ID)).packages[0]).toMatchObject({
 		scope: "user",
 		enabled: true,
 		switchKeys: [`local:${tools}`],
 	});
-	const summary = (await handleRequest(
+	const summary = await handleTypedRequest(
 		"packages.install",
-		{ source: "./tools", scope: "project", workspaceId: "w1" },
+		{ source: "./tools", scope: "project", workspaceId: WORKSPACE_ID },
 		CTX,
-	)) as PiPackageSummary;
+	);
 	expect(summary).toMatchObject({ scope: "project", enabled: true });
 	expect(summary.switchKeys.sort()).toEqual([`local:${tools}`, projectKey].sort());
 	expect(getConfig().disabledPackages).toEqual([]);
-	const rows = (await list("w1")).packages;
+	const rows = (await list(WORKSPACE_ID)).packages;
 	expect(rows.map((row) => [row.scope, row.enabled, row.shadowed ?? false])).toEqual([
 		["user", true, true],
 		["project", true, false],
@@ -234,7 +234,7 @@ test("a failure after the declaration was written is not reported as an install 
 		throw new Error("catalog exploded");
 	});
 	try {
-		const error = await handleRequest(
+		const error = await handleTypedRequest(
 			"packages.install",
 			{ source: pkg, scope: "user" },
 			CTX,
@@ -253,12 +253,19 @@ test("a repository install needs a trusted project", async () => {
 	writeFileSync(
 		join(root, "data", "projects.json"),
 		JSON.stringify([
-			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1, piResourceTrust: "unset" },
+			{
+				id: PROJECT_ID,
+				name: "repo",
+				path: repo,
+				slug: "repo",
+				lastOpened: 1,
+				piResourceTrust: "unset",
+			},
 		]),
 	);
-	const error = await handleRequest(
+	const error = await handleTypedRequest(
 		"packages.install",
-		{ source: pkg, scope: "project", workspaceId: "w1" },
+		{ source: pkg, scope: "project", workspaceId: WORKSPACE_ID },
 		CTX,
 	).catch((e) => e);
 	expect(errorCodeOf(error)).toBe("PACKAGE_UNTRUSTED");
@@ -266,7 +273,7 @@ test("a repository install needs a trusted project", async () => {
 
 test("built-in toggles write pi's format, in-package ones are refused, and reveal validates its target", async () => {
 	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
-	await handleRequest(
+	await handleTypedRequest(
 		"packages.setResourceEnabled",
 		{ path: "builtin:tool-search", type: "extensions", scope: "user", enabled: false },
 		CTX,
@@ -274,7 +281,7 @@ test("built-in toggles write pi's format, in-package ones are refused, and revea
 	expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).extensions).toEqual([
 		"-builtin:tool-search",
 	]);
-	const refused = await handleRequest(
+	const refused = await handleTypedRequest(
 		"packages.setResourceEnabled",
 		{
 			path: join(pkg, "extensions", "hello.ts"),
@@ -286,7 +293,7 @@ test("built-in toggles write pi's format, in-package ones are refused, and revea
 	).catch((e) => e);
 	expect(errorCodeOf(refused)).toBe("PACKAGE_SOURCE_INVALID");
 	expect((await list()).builtins.find((b) => b.name === "tool-search")?.enabled).toBe(false);
-	const error = await handleRequest(
+	const error = await handleTypedRequest(
 		"packages.reveal",
 		{ path: join(root, "elsewhere") },
 		CTX,

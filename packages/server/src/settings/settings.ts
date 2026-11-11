@@ -1,128 +1,34 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
-	CODE_FONT_SIZE,
-	COMPOSER_GROWTH_LIMITS,
+	DROPPED_UPDATE_KEYS,
 	type ExtensionSettingValues,
-	FONT_WEIGHT_OFFSET,
-	isCodeFontSize,
-	isComposerGrowthLimit,
-	isFontChoice,
-	isFontWeightOffset,
-	isJbcentralQuotaRefreshSeconds,
-	isLineWidth,
 	isLocalePreference,
-	isSettleIdleDays,
-	isSubagentMaxConcurrent,
-	isSystemThemePair,
-	isTerminalWindowsShell,
-	isThemeMode,
-	LINE_WIDTH_COLUMNS,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import { loadConfig, saveConfig } from "../persistence";
-import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
+import { CodedError } from "@thinkrail/shared/codedError";
+import { logger } from "../log";
+import {
+	didLastConfigReadFail,
+	isConfigOverwriteRefused,
+	loadConfig,
+	saveConfig,
+	setConfigAside,
+	stateFileWriteFailure,
+} from "../persistence";
+import { keepValidStoredPresets, validateCustomLayoutPresets } from "./layoutPresets";
+
+const log = logger("settings");
+const CONFIG_FILE = "config.json";
 
 export type SettingsPublisher = (config: AppConfig, appliedUpdate: AppConfigUpdate) => void;
-type RuntimeAppConfigUpdate = AppConfigUpdate & {
-	chatMessageOrder?: unknown;
-	layout?: unknown;
-	recentModels?: unknown;
-};
+type RuntimeAppConfigUpdate = AppConfigUpdate &
+	Partial<Record<(typeof DROPPED_UPDATE_KEYS)[number], unknown>>;
 
-const ACCEPTED_UPDATE_KEYS = {
-	theme: true,
-	themeMode: true,
-	systemThemePair: true,
-	analyticsEnabled: true,
-	analyticsConsentConfirmed: true,
-	notificationsEnabled: true,
-	terminalReplayKb: true,
-	terminalWindowsShell: true,
-	composerGrowthLimit: true,
-	chatLineWidth: true,
-	fileLineWidth: true,
-	chatLineWidthBounded: true,
-	fileLineWidthBounded: true,
-	voiceInputEnabled: true,
-	customLayoutPresets: true,
-	favoriteModels: true,
-	defaultModel: true,
-	defaultEffort: true,
-	reviewModel: true,
-	reviewEffort: true,
-	reviewAutoFix: true,
-	agentReviewEnabled: true,
-	subagentsEnabled: true,
-	subagentMaxConcurrent: true,
-	jbcentralQuotaEnabled: true,
-	jbcentralQuotaRefreshSeconds: true,
-	settleIdleDays: true,
-	disabledExtensions: true,
-	extensionSettings: true,
-	otherAgentSkills: true,
-	disabledPackages: true,
-	locale: true,
-	onboardingDismissed: true,
-	interfaceFont: true,
-	codeFont: true,
-	codeFontSize: true,
-	codeLigatures: true,
-	fontWeightOffset: true,
-	chatMessageOrder: true,
-	layout: true,
-	recentModels: true,
-} satisfies Record<keyof RuntimeAppConfigUpdate, true>;
-
-function assertUpdateShape(update: unknown): void {
-	if (typeof update !== "object" || update === null || Array.isArray(update)) {
-		throw new Error("settings update must be an object");
-	}
-	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
-	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
-}
-
-function isWireModelRef(value: unknown): value is WireModel {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-	const record = value as Record<string, unknown>;
-	return (
-		typeof record.provider === "string" &&
-		record.provider.length > 0 &&
-		typeof record.id === "string" &&
-		record.id.length > 0 &&
-		typeof record.name === "string" &&
-		Array.isArray(record.thinkingLevels)
-	);
-}
-
-function validateFavoriteModels(value: unknown): WireModel[] {
-	if (!Array.isArray(value) || !value.every(isWireModelRef)) {
-		throw new Error("favoriteModels must be a list of models");
-	}
-	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function validateExtensionSettings(value: unknown): ExtensionSettingValues {
-	const invalid = () => new Error("extensionSettings must map extension names to boolean settings");
-	if (!isPlainObject(value)) throw invalid();
-	const result: ExtensionSettingValues = {};
-	for (const [name, settings] of Object.entries(value)) {
-		if (name.trim().length === 0 || !isPlainObject(settings)) throw invalid();
-		const entries = Object.entries(settings);
-		const flags = entries.filter(
-			(entry): entry is [string, boolean] =>
-				entry[0].trim().length > 0 && typeof entry[1] === "boolean",
-		);
-		if (flags.length !== entries.length) throw invalid();
-		result[name] = Object.fromEntries(flags);
-	}
-	return result;
+function withoutRepeats(models: WireModel[]): WireModel[] {
+	return models.filter((model, index) => models.findIndex((m) => sameModel(m, model)) === index);
 }
 
 function mergeExtensionSettings(
@@ -136,16 +42,6 @@ function mergeExtensionSettings(
 	return next;
 }
 
-function validateNameList(value: unknown, setting: string, noun: string): string[] {
-	if (
-		!Array.isArray(value) ||
-		!value.every((name) => typeof name === "string" && name.trim().length > 0)
-	) {
-		throw new Error(`${setting} must be a list of ${noun}`);
-	}
-	return [...new Set(value as string[])];
-}
-
 let publishSettings: SettingsPublisher | null = null;
 
 export function setSettingsPublisher(fn: SettingsPublisher | null): void {
@@ -153,77 +49,49 @@ export function setSettingsPublisher(fn: SettingsPublisher | null): void {
 }
 
 let cached: AppConfig | null = null;
+let cacheHoldsDefaultsFromFailedRead = false;
 
 export function getConfig(): AppConfig {
 	if (cached) return cached;
 	const loaded = loadConfig();
-	const customLayoutPresets = normalizeStoredCustomLayoutPresets(loaded.customLayoutPresets);
-	cached = { ...loaded, customLayoutPresets };
-	if (JSON.stringify(customLayoutPresets) !== JSON.stringify(loaded.customLayoutPresets)) {
-		saveConfig(cached);
-	}
+	cacheHoldsDefaultsFromFailedRead = didLastConfigReadFail();
+	const { presets, dropped } = keepValidStoredPresets(loaded.customLayoutPresets);
+	if (dropped.length > 0) setConfigAside(`dropped customLayoutPresets ${dropped.join(", ")}`);
+	cached = { ...loaded, customLayoutPresets: presets };
 	return cached;
 }
 
+function configToOverwrite(): AppConfig {
+	if (cacheHoldsDefaultsFromFailedRead) cached = null;
+	else if (cached && isConfigOverwriteRefused()) loadConfig();
+	return getConfig();
+}
+
+function saveOverCache(next: AppConfig): void {
+	saveConfig(next);
+	cached = next;
+	cacheHoldsDefaultsFromFailedRead = false;
+}
+
+/** Whether the live config is defaults from a failed read. Reads again first, so a fixed file reaches every client. */
+export function configReadFailed(): boolean {
+	getConfig();
+	if (!cacheHoldsDefaultsFromFailedRead) return false;
+	cached = null;
+	const config = getConfig();
+	if (cacheHoldsDefaultsFromFailedRead) return true;
+	try {
+		publishSettings?.(config, {});
+	} catch (error) {
+		log.warn("recovered config not published", stateFileWriteFailure(CONFIG_FILE, error));
+	}
+	return false;
+}
+
+/** `partial` passed the `AppConfigUpdate` params schema at dispatch. */
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
-	assertUpdateShape(partial);
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
-	delete runtimeUpdate.chatMessageOrder;
-	delete runtimeUpdate.layout;
-	for (const [name, value] of [
-		["chatLineWidth", runtimeUpdate.chatLineWidth],
-		["fileLineWidth", runtimeUpdate.fileLineWidth],
-	] as const) {
-		if (value !== undefined && !isLineWidth(value)) {
-			throw new Error(
-				`${name} must be a whole number from ${LINE_WIDTH_COLUMNS.min} to ${LINE_WIDTH_COLUMNS.max}`,
-			);
-		}
-	}
-	for (const [name, value] of [
-		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],
-		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
-		["voiceInputEnabled", runtimeUpdate.voiceInputEnabled],
-		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
-		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
-		["notificationsEnabled", runtimeUpdate.notificationsEnabled],
-		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
-		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
-		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
-		["codeLigatures", runtimeUpdate.codeLigatures],
-		["otherAgentSkills", runtimeUpdate.otherAgentSkills],
-	] as const) {
-		if (value !== undefined && typeof value !== "boolean") {
-			throw new Error(`${name} must be a boolean`);
-		}
-	}
-	for (const [name, value] of [
-		["interfaceFont", runtimeUpdate.interfaceFont],
-		["codeFont", runtimeUpdate.codeFont],
-	] as const) {
-		if (value !== undefined && !isFontChoice(value)) {
-			throw new Error(`${name} must be a font family or null plus up to 8 distinct fallbacks`);
-		}
-	}
-	if (runtimeUpdate.codeFontSize !== undefined && !isCodeFontSize(runtimeUpdate.codeFontSize)) {
-		throw new Error(
-			`codeFontSize must be a whole number from ${CODE_FONT_SIZE.min} to ${CODE_FONT_SIZE.max}`,
-		);
-	}
-	if (
-		runtimeUpdate.fontWeightOffset !== undefined &&
-		!isFontWeightOffset(runtimeUpdate.fontWeightOffset)
-	) {
-		throw new Error(
-			`fontWeightOffset must be a multiple of ${FONT_WEIGHT_OFFSET.step} from ${FONT_WEIGHT_OFFSET.min} to ${FONT_WEIGHT_OFFSET.max}`,
-		);
-	}
-	if (
-		runtimeUpdate.analyticsConsentConfirmed !== undefined &&
-		runtimeUpdate.analyticsEnabled === undefined
-	) {
-		throw new Error("analytics consent must include the sharing preference");
-	}
+	for (const key of DROPPED_UPDATE_KEYS) delete runtimeUpdate[key];
 	const {
 		defaultModel,
 		defaultEffort,
@@ -243,83 +111,23 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		disabledPackages,
 		...rest
 	} = runtimeUpdate;
-	const extensionSettingsUpdate =
-		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
-	const nextDisabledExtensions =
-		disabledExtensions === undefined
-			? undefined
-			: validateNameList(disabledExtensions, "disabledExtensions", "extension names");
-	const nextDisabledPackages =
-		disabledPackages === undefined
-			? undefined
-			: validateNameList(disabledPackages, "disabledPackages", "package identities");
-	for (const [name, value] of [
-		["defaultModel", defaultModel],
-		["reviewModel", reviewModel],
-	] as const) {
-		if (value !== undefined && value !== null && !isWireModelRef(value)) {
-			throw new Error(`${name} must be a model or null`);
-		}
-	}
-	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
-		throw new Error("subagentsEnabled must be a boolean");
-	}
-	if (
-		runtimeUpdate.subagentMaxConcurrent !== undefined &&
-		!isSubagentMaxConcurrent(runtimeUpdate.subagentMaxConcurrent)
-	) {
-		throw new Error("subagentMaxConcurrent must be a whole number from 1 to 16");
-	}
-	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
-		throw new Error("jbcentralQuotaEnabled must be a boolean");
-	}
-	if (
-		runtimeUpdate.terminalWindowsShell !== undefined &&
-		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
-	) {
-		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
-	}
-	if (
-		runtimeUpdate.terminalReplayKb !== undefined &&
-		!Number.isFinite(runtimeUpdate.terminalReplayKb)
-	) {
-		throw new Error("terminalReplayKb must be a finite number");
-	}
-	if (
-		runtimeUpdate.composerGrowthLimit !== undefined &&
-		!isComposerGrowthLimit(runtimeUpdate.composerGrowthLimit)
-	) {
-		throw new Error(`composerGrowthLimit must be one of ${COMPOSER_GROWTH_LIMITS.join(", ")}`);
-	}
-	if (
-		jbcentralQuotaRefreshSeconds !== undefined &&
-		!isJbcentralQuotaRefreshSeconds(jbcentralQuotaRefreshSeconds)
-	) {
-		throw new Error("jbcentralQuotaRefreshSeconds must be a whole number from 1 to 3600");
-	}
-	if (
-		runtimeUpdate.settleIdleDays !== undefined &&
-		!isSettleIdleDays(runtimeUpdate.settleIdleDays)
-	) {
-		throw new Error("settleIdleDays must be a whole number of days from 1 to 365, or null");
-	}
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
-		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
+		throw new CodedError(
+			"INVALID_PARAMS",
+			'locale must be "system" or a canonical BCP-47 language tag',
+		);
 	}
-	if (themeMode !== undefined && !isThemeMode(themeMode)) {
-		throw new Error("themeMode must be fixed or system");
-	}
-	if (systemThemePair !== undefined && !isSystemThemePair(systemThemePair)) {
-		throw new Error("systemThemePair must contain light and dark theme ids");
-	}
-	const current = getConfig();
+	const current = configToOverwrite();
 	if (
 		runtimeUpdate.analyticsEnabled === true &&
 		!current.analyticsEnabled &&
 		current.analyticsConsentConfirmed &&
 		runtimeUpdate.analyticsConsentConfirmed === undefined
 	) {
-		throw new Error("enabling additional analytics requires an explicit confirmation");
+		throw new CodedError(
+			"ANALYTICS_CONSENT_REQUIRED",
+			"enabling additional analytics requires an explicit confirmation",
+		);
 	}
 	const nextThemeMode = themeMode ?? (theme !== undefined ? "fixed" : current.themeMode);
 	const nextSystemThemePair =
@@ -327,7 +135,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			? current.systemThemePair
 			: { light: systemThemePair.light, dark: systemThemePair.dark };
 	if (nextThemeMode === "system" && !nextSystemThemePair) {
-		throw new Error("system theme mode requires a complete pair");
+		throw new CodedError("THEME_PAIR_REQUIRED", "system theme mode requires a complete pair");
 	}
 	const next: AppConfig = {
 		...current,
@@ -341,19 +149,19 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),
-		...(favoriteModels === undefined
+		...(favoriteModels === undefined ? {} : { favoriteModels: withoutRepeats(favoriteModels) }),
+		...(disabledExtensions === undefined
 			? {}
-			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
-		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
-		...(extensionSettingsUpdate === undefined
+			: { disabledExtensions: [...new Set(disabledExtensions)] }),
+		...(extensionSettings === undefined
 			? {}
 			: {
 					extensionSettings: mergeExtensionSettings(
 						current.extensionSettings ?? {},
-						extensionSettingsUpdate,
+						extensionSettings,
 					),
 				}),
-		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
+		...(disabledPackages === undefined ? {} : { disabledPackages: [...new Set(disabledPackages)] }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;
@@ -371,26 +179,28 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		if (reviewEffort === null) delete next.reviewEffort;
 		else next.reviewEffort = reviewEffort;
 	}
-	saveConfig(next);
-	cached = next;
+	saveOverCache(next);
 	publishSettings?.(next, runtimeUpdate);
 	return next;
 }
 
-/** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. */
-export function noteRecentModel(model: WireModel): AppConfig {
-	const current = getConfig();
-	const recentModels = [
-		model,
-		...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
-	].slice(0, RECENT_MODELS_LIMIT);
-	const next: AppConfig = { ...current, recentModels };
-	saveConfig(next);
-	cached = next;
-	publishSettings?.(next, {});
-	return next;
+/** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. Best effort: the choice has already applied. */
+export function noteRecentModel(model: WireModel): void {
+	try {
+		const current = configToOverwrite();
+		const recentModels = [
+			model,
+			...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
+		].slice(0, RECENT_MODELS_LIMIT);
+		const next: AppConfig = { ...current, recentModels };
+		saveOverCache(next);
+		publishSettings?.(next, {});
+	} catch (error) {
+		log.warn("recent model not noted", stateFileWriteFailure(CONFIG_FILE, error));
+	}
 }
 
 export function resetConfigCache(): void {
 	cached = null;
+	cacheHoldsDefaultsFromFailedRead = false;
 }

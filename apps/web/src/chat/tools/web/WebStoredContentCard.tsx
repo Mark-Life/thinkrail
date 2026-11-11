@@ -1,39 +1,41 @@
+import { compile, obj, str } from "@earendil-works/pi-schema";
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
 import { numArg, resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import type { GetSearchContentInput } from "./inputs";
 import { WebResultBody } from "./WebResultBody";
 
-function detailString(result: unknown, key: string): string {
-	if (typeof result !== "object" || result === null || !("details" in result)) return "";
-	const details = result.details;
-	if (typeof details !== "object" || details === null) return "";
-	const value = (details as Record<string, unknown>)[key];
-	return typeof value === "string" ? value : "";
-}
+const OPEN = { open: true };
+const detailsQuery = compile(obj({ details: obj({ query: str() }, OPEN) }, OPEN));
+const detailsUrl = compile(obj({ details: obj({ url: str() }, OPEN) }, OPEN));
 
 export function storedContentTarget(
 	t: Translator,
 	args: Record<string, unknown>,
 	result: unknown,
 ): string {
-	const query = strArg(args, "query") || detailString(result, "query");
+	const query =
+		strArg<GetSearchContentInput>(args, "query") ||
+		(detailsQuery.check(result) ? result.details.query : "");
 	if (query) return query;
-	const url = strArg(args, "url") || detailString(result, "url");
+	const url =
+		strArg<GetSearchContentInput>(args, "url") ||
+		(detailsUrl.check(result) ? result.details.url : "");
 	if (url) return url;
-	const queryIndex = numArg(args, "queryIndex");
+	const queryIndex = numArg<GetSearchContentInput>(args, "queryIndex");
 	if (queryIndex !== null) return t("tools.webStored.queryIndex", { index: queryIndex });
-	const urlIndex = numArg(args, "urlIndex");
+	const urlIndex = numArg<GetSearchContentInput>(args, "urlIndex");
 	if (urlIndex !== null) return t("tools.webStored.urlIndex", { index: urlIndex });
 	return "";
 }
 
 export function storedContentSummary({ args, result }: ToolRenderProps, t: Translator): string {
-	return storedContentTarget(t, args, result) || strArg(args, "responseId");
+	return storedContentTarget(t, args, result) || strArg<GetSearchContentInput>(args, "responseId");
 }
 
 export function WebStoredContentCard({ toolCallId, args, result, status }: ToolRenderProps) {
 	const t = useT();
-	const responseId = strArg(args, "responseId");
+	const responseId = strArg<GetSearchContentInput>(args, "responseId");
 	const target = storedContentTarget(t, args, result);
 	const output = resultText(result);
 	return (

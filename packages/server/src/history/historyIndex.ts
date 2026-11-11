@@ -1,12 +1,23 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { HistorySearchResult, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { MAX_HISTORY_LIMIT, MAX_HISTORY_QUERY_LENGTH } from "@thinkrail/contracts";
+import type {
+	HistorySearchResult,
+	MessageHit,
+	ProjectId,
+	PromptHit,
+	StoredSessionId,
+	WorkspaceId,
+} from "@thinkrail/contracts";
+import {
+	MAX_HISTORY_LIMIT,
+	MAX_HISTORY_QUERY_LENGTH,
+	parseStoredSessionId,
+} from "@thinkrail/contracts";
 import { extractSession, type HistoryEntry } from "./extract";
 
 interface SessionRecord {
-	sessionId: string;
+	sessionId: StoredSessionId;
 	cwd: string;
 	title?: string;
 	path: string;
@@ -18,7 +29,7 @@ interface SessionRecord {
 export type HistoryState = "cold" | "refreshing" | "ready";
 
 export interface HistorySession {
-	readonly sessionId: string;
+	readonly sessionId: StoredSessionId;
 	readonly cwd: string;
 	readonly title?: string;
 	readonly entries: readonly HistoryEntry[];
@@ -29,7 +40,7 @@ const COLD_BUILD_BUDGET_MS = 150;
 const SNIPPET_RADIUS = 60;
 
 export function clampLimit(limit: number | undefined): number {
-	if (typeof limit !== "number" || !Number.isFinite(limit)) return 50;
+	if (limit === undefined || !Number.isFinite(limit)) return 50;
 	return Math.max(0, Math.min(MAX_HISTORY_LIMIT, Math.floor(limit)));
 }
 
@@ -86,12 +97,13 @@ export class HistoryIndex {
 	private async loadRecord(path: string, mtimeMs: number, size: number): Promise<void> {
 		try {
 			const session = extractSession(await readFile(path, "utf8"));
-			if (!session) {
+			const sessionId = session ? parseStoredSessionId(session.id) : null;
+			if (!session || sessionId === null) {
 				this.records.delete(path);
 				return;
 			}
 			this.records.set(path, {
-				sessionId: session.id,
+				sessionId,
 				cwd: session.cwd,
 				path,
 				mtimeMs,
@@ -154,8 +166,8 @@ export class HistoryIndex {
 	async search(input: {
 		query: string;
 		limit?: number;
-		filter: (cwd: string, sessionId: string) => boolean;
-		labels: (cwd: string) => { workspaceId?: string; projectId?: string };
+		filter: (cwd: string, sessionId: StoredSessionId) => boolean;
+		labels: (cwd: string) => { workspaceId?: WorkspaceId; projectId?: ProjectId };
 	}): Promise<HistorySearchResult> {
 		const indexing = await this.freshen();
 

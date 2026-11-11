@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import type { LayoutAttention } from "../../lib";
 import {
@@ -44,12 +45,8 @@ import {
 	withAvailablePlacementId,
 } from "./model";
 import { BUILTIN_LAYOUT_PRESETS } from "./presets";
-import type {
-	LayoutCenterTab,
-	LayoutFileTab,
-	LayoutTerminalTab,
-	WorkspaceLayoutDocument,
-} from "./types";
+import type { LayoutFileTab, LayoutTerminalTab } from "./schema";
+import type { LayoutCenterTab, WorkspaceLayoutDocument } from "./types";
 
 const file = (id: string): LayoutFileTab => ({
 	kind: "file",
@@ -174,7 +171,8 @@ describe("workspace layout model", () => {
 		});
 		try {
 			const t = currentTranslator();
-			const chat = (name: string) => ({ kind: "chat", id: "c", name, sessionId: "s" }) as const;
+			const chat = (name: string) =>
+				({ kind: "chat", id: "c", name, sessionId: testSessionId("s") }) as const;
 			expect(layoutTabName(t, chat(""))).toBe("Unterhaltung");
 			expect(layoutTabName(t, chat("Fix login"))).toBe("Fix login");
 			const prompts = { s: "Please refactor the authentication module so that tokens refresh" };
@@ -191,7 +189,7 @@ describe("workspace layout model", () => {
 				id: "d",
 				name: "",
 				documentKind: "todo-plan",
-				sourceId: "s",
+				sourceId: testSessionId("s"),
 				docPath: "TODO.md",
 			} as const;
 			expect(layoutTabName(t, plan)).toBe("Plan: Unterhaltung");
@@ -219,7 +217,7 @@ describe("workspace layout model", () => {
 					id: "p",
 					name: "",
 					documentKind: "todo-plan",
-					sourceId: "s",
+					sourceId: testSessionId("s"),
 					docPath: "TODO.md",
 				}),
 			).toBe("Plan: Unterhaltung");
@@ -259,7 +257,7 @@ describe("workspace layout model", () => {
 			kind: "chat",
 			id: "chat:one",
 			name: "Chat",
-			sessionId: "one",
+			sessionId: testSessionId("one"),
 		};
 		document = mutation(openCenterTab(document, chat, "center-a", "preview")).document;
 		if (document.center.kind !== "group") throw new Error("expected one center group");
@@ -939,17 +937,17 @@ describe("workspace layout model", () => {
 	test("session pruning removes both chat and registered TODO references without touching neighbors", () => {
 		const document = baseDocument([
 			file("one"),
-			{ kind: "chat", id: "chat", name: "Chat", sessionId: "session" },
+			{ kind: "chat", id: "chat", name: "Chat", sessionId: testSessionId("session") },
 			{
 				kind: "document",
 				id: "todo",
 				name: "TODO",
 				documentKind: "todo-plan",
-				sourceId: "session",
+				sourceId: testSessionId("session"),
 				docPath: "TODO.md",
 			},
 		]);
-		const pruned = removeSessionLayoutTabs(document, "session");
+		const pruned = removeSessionLayoutTabs(document, testSessionId("session"));
 		expect(collectCenterGroups(pruned.center).flatMap((group) => group.tabs)).toEqual([
 			file("one"),
 		]);

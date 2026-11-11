@@ -69,22 +69,11 @@ export interface AnalyticsRunProperties {
 	model: string;
 }
 
-export type AcquisitionCampaignProperties = {
-	first_touch_source?: string;
-	first_touch_medium?: string;
-	first_touch_campaign?: string;
-	first_touch_content?: string;
-	first_touch_referrer_class: AttributionTouch["referrer_class"];
-	first_touch_touched_at: number;
-	first_touch_policy_version: 1;
-	last_touch_source?: string;
-	last_touch_medium?: string;
-	last_touch_campaign?: string;
-	last_touch_content?: string;
-	last_touch_referrer_class: AttributionTouch["referrer_class"];
-	last_touch_touched_at: number;
-	last_touch_policy_version: 1;
+type TouchProperties<P extends string> = {
+	[K in keyof AttributionTouch as `${P}_${K}`]: AttributionTouch[K];
 };
+export type AcquisitionCampaignProperties = TouchProperties<"first_touch"> &
+	TouchProperties<"last_touch">;
 
 export type AdditionalAnalyticsEvent =
 	| {
@@ -155,25 +144,26 @@ export type AdditionalAnalyticsEvent =
 export type AnalyticsEvent = BasicAnalyticsEvent | AdditionalAnalyticsEvent;
 export type AdditionalAnalyticsCapture = (event: AdditionalAnalyticsEvent) => void;
 
-function touchProperties(prefix: "first_touch" | "last_touch", touch: AttributionTouch) {
+export function acquisitionCampaignProperties({
+	first_touch: first,
+	last_touch: last,
+}: AcquisitionRecord): AcquisitionCampaignProperties {
 	return {
-		...(touch.source === undefined ? {} : { [`${prefix}_source`]: touch.source }),
-		...(touch.medium === undefined ? {} : { [`${prefix}_medium`]: touch.medium }),
-		...(touch.campaign === undefined ? {} : { [`${prefix}_campaign`]: touch.campaign }),
-		...(touch.content === undefined ? {} : { [`${prefix}_content`]: touch.content }),
-		[`${prefix}_referrer_class`]: touch.referrer_class,
-		[`${prefix}_touched_at`]: touch.touched_at,
-		[`${prefix}_policy_version`]: touch.policy_version,
+		...(first.source === undefined ? {} : { first_touch_source: first.source }),
+		...(first.medium === undefined ? {} : { first_touch_medium: first.medium }),
+		...(first.campaign === undefined ? {} : { first_touch_campaign: first.campaign }),
+		...(first.content === undefined ? {} : { first_touch_content: first.content }),
+		first_touch_referrer_class: first.referrer_class,
+		first_touch_touched_at: first.touched_at,
+		first_touch_policy_version: first.policy_version,
+		...(last.source === undefined ? {} : { last_touch_source: last.source }),
+		...(last.medium === undefined ? {} : { last_touch_medium: last.medium }),
+		...(last.campaign === undefined ? {} : { last_touch_campaign: last.campaign }),
+		...(last.content === undefined ? {} : { last_touch_content: last.content }),
+		last_touch_referrer_class: last.referrer_class,
+		last_touch_touched_at: last.touched_at,
+		last_touch_policy_version: last.policy_version,
 	};
-}
-
-export function acquisitionCampaignProperties(
-	record: AcquisitionRecord,
-): AcquisitionCampaignProperties {
-	return {
-		...touchProperties("first_touch", record.first_touch),
-		...touchProperties("last_touch", record.last_touch),
-	} as AcquisitionCampaignProperties;
 }
 
 export function bucketDuration(durationMs: number): AnalyticsDurationBucket {

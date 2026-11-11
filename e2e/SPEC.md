@@ -111,6 +111,12 @@ wire reply to prove that an ack does not unlock the form before cleanup complete
 and cleanup are exercised separately by the projects and subprocess unit tests. No production Git
 credentials or remote repositories are used.
 
+Seeded transcripts are pi-typed. Specs seed through `writeFixtureSession` and append later entries with
+the `@thinkrail/server/history-test-fixtures` builders (`fixtureAssistant`, `fixtureToolResult`,
+`fixtureMessageEntry`, `appendFixtureEntries`); no spec writes a raw JSON entry. Specs that read a live
+transcript open it with pi's `SessionManager`. Fake event streams build their assistant message with the
+same `fixtureAssistant`, so the host never sees a reply shape pi cannot produce.
+
 ## Chat resource controls
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative
@@ -424,7 +430,9 @@ receive-pack from a local bare repo, so pushes, fetches, and remote-branch delet
 local path and never find a PR. The lane's fake **`gh`** (`fixtures/fakeGh.ts`, launched by a generated
 fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view` and `repo view`
 from a test-written scenario file, applies `pr ready|merge|reopen` to it, and logs every argv so a spec
-asserts the exact mutations. Without a scenario it fails like an unauthenticated gh, so every other spec
+asserts the exact mutations. The rows it prints `satisfies` the host's own `gh` reply types (`ProviderRow`,
+`LatestReview`, `RepoSettings` from the type-only `@thinkrail/server/gh-test-fixtures` export), so a reply shape
+the host stops reading fails typecheck. Without a scenario it fails like an unauthenticated gh, so every other spec
 keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
@@ -505,6 +513,18 @@ artifact and live-restart hosts, the workflow harness, and the artifact probes â
 `@thinkrail/shared/toolHomes`' `toolHomeEnv`, so each agent tool's config home (what account detection reads)
 lands in the sandbox and a new detection source is pinned everywhere at once.
 
+## Failed config read
+
+`config-read-notice.spec.ts` boots a private host, reusing the restart port and data directory, with a directory at
+`config.json`, because the shared host has already read its config. It proves the notice appears once, stays out of the way,
+and goes when the file is fixed: on the open page through `settings.changed`, and on a new page through the welcome.
+
+## Reply and push checks
+
+The host of `playwright.config.ts` runs with `THINKRAIL_CHECK_WS_RESULTS=1`: a reply that breaks its result schema
+fails that request, a push that breaks its channel schema throws at its publisher, and both land in `E2E_WS_RESULT_LOG`. `globalTeardown` fails the run on any line there, so a spec that
+tolerates an error reply still cannot hide a mismatch. Artifact hosts do not set it: they test the shipped build.
+
 ## Boundary
 
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,
@@ -524,9 +544,11 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `e2e/no-webassembly.spec.ts` launches Chromium with `--js-flags=--jitless`, which removes
   `WebAssembly` from the page and its workers alike, and pins that a diff, a phone-class code file, Monaco
   and a chat fence still show their source as plain text.
-- **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
+- **Consumes:** the built web artifact, the host's public boot/wire behavior, contracts' wire schemas through
+  `pi-schema` (`fixtures/wire.ts` parses frames, request params and results with them, and `fixtures/storedState.ts` the
+  host's stored project and workspace lists, so a fixture cannot drift from the wire), sanctioned server test-fixture
   exports, CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
-  retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
+  retrying teardown and `errnoCode` helpers, git, Chromium, and Playwright. Standalone native/installer smoke and shared
   artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond

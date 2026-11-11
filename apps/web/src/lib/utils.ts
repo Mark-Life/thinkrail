@@ -1,6 +1,8 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { SessionId, UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
+
+export { randomUuid } from "@thinkrail/contracts";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -36,7 +38,7 @@ type LayoutResourceIdentityInput =
 	| { kind: "diff"; path: string; before?: undefined; scope: LayoutDiffScopeInput }
 	| { kind: "diff"; path: string; before: string }
 	| { kind: "changes"; scope: LayoutDiffScopeInput }
-	| { kind: "chat"; sessionId: string }
+	| { kind: "chat"; sessionId: SessionId }
 	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
 	| { kind: "tool"; tool: string };
@@ -115,14 +117,6 @@ export function randomId(prefix = "id"): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(16));
 	const value = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 	return `${prefix}-${value}`;
-}
-
-export function randomUuid(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(16));
-	bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-	bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-	const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 export function userText(content: UserMessage["content"]): string {
@@ -337,22 +331,29 @@ export const MODAL_LAYER_SELECTOR = [
 	'[role="alertdialog"][data-state="open"]',
 ].join(", ");
 
-export function hasLayer(root: Pick<Document, "querySelector">, selector: string): boolean {
+export function hasLayer(
+	root: { querySelector(selector: string): unknown },
+	selector: string,
+): boolean {
 	return root.querySelector(selector) !== null;
 }
 
 const TEXT_ENTRY_ROOT_SELECTOR = ".monaco-editor, .xterm";
 
-export function isTextEntryTarget(target: EventTarget | null): boolean {
-	const element = target as {
-		isContentEditable?: boolean;
-		tagName?: string;
-		closest?: (selector: string) => Element | null;
-	} | null;
+const TEXT_ENTRY_TAGS = /^(INPUT|TEXTAREA|SELECT)$/;
+
+export function isTextEntryTarget(target: unknown): boolean {
+	if (typeof target !== "object" || target === null) return false;
+	if ("isContentEditable" in target && target.isContentEditable === true) return true;
+	if (
+		"tagName" in target &&
+		typeof target.tagName === "string" &&
+		TEXT_ENTRY_TAGS.test(target.tagName)
+	)
+		return true;
 	return (
-		element !== null &&
-		(element.isContentEditable === true ||
-			/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
-			(typeof element.closest === "function" && element.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null))
+		"closest" in target &&
+		target instanceof Element &&
+		target.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null
 	);
 }

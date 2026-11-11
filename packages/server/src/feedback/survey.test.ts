@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
+import type { SurveyAnswerValue, SurveySubmitParams } from "@thinkrail/contracts";
+import { fakeFetch } from "../../test/fakeFetch";
 import {
 	configureSurveySource,
 	confirmInAppSurvey,
@@ -10,6 +12,7 @@ import {
 	selectInAppSurvey,
 	setSurveyClockForTests,
 	surveyResponse,
+	surveyWaitPeriodMs,
 } from "./survey";
 
 afterEach(() => {
@@ -232,7 +235,10 @@ test("a missing iteration is a single run and emoji ratings stay emoji on short 
 
 const SUBMISSION_ID = "00000000-0000-4000-8000-000000000001";
 
-function submission(answers: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
+function submission(
+	answers: Record<string, SurveyAnswerValue>,
+	overrides: Partial<SurveySubmitParams> = {},
+) {
 	return parseSurveySubmission({
 		submissionId: SUBMISSION_ID,
 		surveyId: "01a17d9c-e8d7-0000-dbbb-79aad51d2281",
@@ -264,14 +270,13 @@ test("a submission must name its survey version and a v4 submission id", () => {
 	for (const overrides of [
 		{ submissionId: "nope" },
 		{ surveyId: "" },
-		{ surveyId: 7 },
 		{ iteration: -1 },
 		{ iteration: 1.5 },
-		{ iteration: "2" },
 	]) {
-		expect(() => submission({}, overrides)).toThrow("Invalid survey submission");
+		expect(() => submission({}, overrides)).toThrow(
+			expect.objectContaining({ code: "SURVEY_INVALID", message: "Invalid survey submission" }),
+		);
 	}
-	expect(() => submission({ q: 3 })).toThrow("Invalid survey submission");
 });
 
 test("choice and rating answers keep PostHog's value shapes", () => {
@@ -318,13 +323,13 @@ test("choice and rating answers keep PostHog's value shapes", () => {
 test("a failed refresh keeps the last survey and a fresh one waits out the interval", async () => {
 	let calls = 0;
 	let status = 200;
-	const fetchImpl = (() => {
+	const fetchImpl = fakeFetch(() => {
 		calls += 1;
 		if (status !== 200) return Promise.resolve(new Response("nope", { status }));
 		return Promise.resolve(
 			new Response(JSON.stringify({ surveys: [launched()] }), { status: 200 }),
 		);
-	}) as unknown as typeof fetch;
+	});
 	let at = 1_000;
 	setSurveyClockForTests(() => at);
 	configureSurveySource({ apiKey: "phc_test", host: "https://eu.i.posthog.com", fetchImpl });
@@ -348,7 +353,7 @@ test("a failed refresh drops a copy older than the stale lifetime, and confirm a
 	let calls = 0;
 	let status = 200;
 	let iteration = 2;
-	const fetchImpl = (() => {
+	const fetchImpl = fakeFetch(() => {
 		calls += 1;
 		if (status !== 200) return Promise.resolve(new Response("nope", { status }));
 		return Promise.resolve(
@@ -356,7 +361,7 @@ test("a failed refresh drops a copy older than the stale lifetime, and confirm a
 				status: 200,
 			}),
 		);
-	}) as unknown as typeof fetch;
+	});
 	let at = 1_000;
 	setSurveyClockForTests(() => at);
 	configureSurveySource({ apiKey: "phc_test", fetchImpl });
@@ -379,12 +384,13 @@ test("a failed refresh drops a copy older than the stale lifetime, and confirm a
 
 test("a cached copy expires an hour after its last successful read, even between retries", async () => {
 	let status = 200;
-	const fetchImpl = (() =>
+	const fetchImpl = fakeFetch(() =>
 		Promise.resolve(
 			status === 200
 				? new Response(JSON.stringify({ surveys: [launched()] }), { status: 200 })
 				: new Response("nope", { status }),
-		)) as unknown as typeof fetch;
+		),
+	);
 	let at = 1_000;
 	setSurveyClockForTests(() => at);
 	configureSurveySource({ apiKey: "phc_test", fetchImpl });
@@ -459,7 +465,7 @@ test("a survey is localized by exact tag, then base language, else left as writt
 test("a translated answer is sent as the original choice with the language it was shown in", () => {
 	const survey = translatedSurvey();
 	if (!survey) throw new Error("expected a survey");
-	const french = (answers: Record<string, unknown>, language = "fr") =>
+	const french = (answers: Record<string, SurveyAnswerValue>, language = "fr") =>
 		parseSurveySubmission({
 			submissionId: SUBMISSION_ID,
 			surveyId: survey.id,
@@ -524,7 +530,7 @@ test("Other text is never mistaken for a choice, and a choice never for Other te
 		}),
 	]);
 	if (!survey) throw new Error("expected a survey");
-	const send = (fields: Record<string, unknown>) =>
+	const send = (fields: Pick<SurveySubmitParams, "answers" | "others">) =>
 		surveyResponse(
 			survey,
 			parseSurveySubmission({ ...submissionShape(survey), language: "fr", others: {}, ...fields }),
@@ -542,9 +548,6 @@ test("Other text is never mistaken for a choice, and a choice never for Other te
 	);
 	expect(() => send({ answers: { multi: ["Super"], one: "A" }, others: { one: "A" } })).toThrow(
 		"Invalid survey answer",
-	);
-	expect(() => send({ answers: { multi: ["Super"], one: "A" }, others: 3 })).toThrow(
-		"Invalid survey submission",
 	);
 });
 
@@ -571,7 +574,7 @@ test("a pre-v98 client's inline Other text is still told apart from its picked c
 		}),
 	]);
 	if (!survey) throw new Error("expected a survey");
-	const legacy = (answers: Record<string, unknown>) =>
+	const legacy = (answers: Record<string, SurveyAnswerValue>) =>
 		surveyResponse(survey, parseSurveySubmission({ ...submissionShape(survey), answers }));
 	expect(legacy({ m: ["Great", " keep this typed answer "], s: "B" })).toMatchObject({
 		$survey_response_m: ["Great", "keep this typed answer"],
@@ -616,4 +619,61 @@ test("a translated list loses its open choice the same way, so its fixed choices
 		}),
 	);
 	expect(sent.$survey_response_pick).toBe("No");
+});
+
+test("a wrong-type part of a PostHog survey loses only that part", () => {
+	const selected = selectInAppSurvey({
+		surveys: [
+			launched({
+				appearance: { placeholder: 5, thankYouMessageHeader: "Thanks" },
+				conditions: "soon",
+				translations: { fr: { thankYouMessageHeader: 5 } },
+				questions: [
+					openQuestion,
+					{ ...openQuestion, id: "bad-description", description: 5 },
+					{
+						...openQuestion,
+						id: "bad-translation",
+						translations: { fr: { question: 5 }, de: { question: "Frage" } },
+					},
+				],
+			}),
+		],
+	});
+	expect(selected?.questions.map((question) => question.id)).toEqual([
+		openQuestion.id,
+		"bad-translation",
+	]);
+	expect(selected?.placeholder).toBeUndefined();
+	expect(selected?.thankYou).toBe("");
+	if (!selected) throw new Error("expected a survey");
+	expect(surveyWaitPeriodMs(selected)).toBe(0);
+	expect(localizeSurvey(selected, "fr").language).toBeUndefined();
+	expect(localizeSurvey(selected, "de").questions[1]?.question).toBe("Frage");
+});
+
+test("a survey with a wrong-type iteration, end date or archived flag stays hidden", () => {
+	for (const overrides of [
+		{ current_iteration: 1.5 },
+		{ current_iteration: "2" },
+		{ end_date: 5 },
+		{ archived: "no" },
+		{ id: 5 },
+		{ start_date: 5 },
+		{ questions: "none" },
+	]) {
+		expect(selectInAppSurvey({ surveys: [launched(overrides)] })).toBeNull();
+	}
+	expect(selectInAppSurvey({ surveys: [launched({ end_date: 5 }), launched()] })?.id).toBe(
+		launched().id,
+	);
+});
+
+test("a refresh that reads an unusable PostHog reply resolves quietly", async () => {
+	for (const body of ["not json", "5", '{"surveys":5}', '[{"name":5}]']) {
+		resetSurveyForTests();
+		const fetchImpl = fakeFetch(() => Promise.resolve(new Response(body, { status: 200 })));
+		configureSurveySource({ apiKey: "phc_test", fetchImpl });
+		expect(await refreshInAppSurvey()).toBeNull();
+	}
 });

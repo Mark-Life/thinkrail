@@ -71,7 +71,8 @@ re-anchoring, and package rendering.
   dismissed); **`author`** — the human (default, absent) or `"agent"`: the plan's reviewer agent files
   findings through the same `addComment` (worktree-side anchors), badged in the panel and picked up by
   the same send machinery (the TODO fix package rides `buildSendPackage`, see [[submodule-server-todos]]
-  §agent reviewer). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
+  §agent reviewer). `review.commentAdd` passes named fields only, so a wire comment is always the human's: `author`
+  and `origin` come from the host. The wire (`review.commentUpdate`) may only land the terminal manual outcomes
   (resolved/dismissed, from draft or sent); `draft`↔`sent` moves are owned exclusively by the send
   path (`markCommentsSent`/`rollbackSend`) — a client that could un-send a comment could rewrite or
   delete a remark whose id an agent chat already quotes;
@@ -91,12 +92,11 @@ re-anchoring, and package rendering.
   resource, not the comment: a **text** side (`fs.classifyBytes` — no recognized binary magic number, no
   NUL byte in the first 8 KiB, and a strict UTF-8 decode; a BOM is text, an SVG is text)
   derives `textQuote` from `lineRange` as before, while a **byte-only** side hashes the bytes and keeps
-  the renderer's selectors **as given**, never a derived quote — there is no text to quote. `addComment`
-  **narrows the wire's selectors** before either capture — every element an object of a known `kind`
-  with every declared field type-checked (`region` components finite and in `[0, 1]`, `page` a positive
-  integer; `structural.ref` a non-empty string and `scheme` matching `/^[a-z][a-z0-9-]*$/`; `lineRange`
-  integral, 1-based, non-inverted) — and stores *that* narrowed value, so an undeclared field cannot ride
-  the wire into the store. It checks nothing beyond shape: an unknown structural scheme belongs to a
+  the renderer's selectors **as given**, never a derived quote — there is no text to quote. Dispatch checks the selectors' shape. `addComment`
+  then **narrows them** before either capture (`region` components finite and in `[0, 1]`, `page` a positive
+  integer; `structural.ref` non-empty and `scheme` matching `/^[a-z][a-z0-9-]*$/`; `lineRange`
+  integral, 1-based, non-inverted) and stores *that* narrowed value, so an undeclared field cannot ride
+  the wire into the store. An unknown structural scheme belongs to a
   renderer this host has never heard of and is preserved, not refused.
 - **The two diff sides are two anchor spaces.** A `side: "worktree"` anchor is captured from the
   worktree file; a `side: "base"` anchor is captured from the blob the diff's ORIGINAL editor is
@@ -214,7 +214,7 @@ lands can still finish its record; archived updates persist without publishing a
   without a second read; written by `host`'s verdict recorder, never by a client) (+ the pure
   anchoring/render helpers: `reanchor`, `buildTextQuote`, `hashContent`, `lineRangeOf`, `textQuoteOf`,
   `renderPackage`).
-- **Allowed deps:** `contracts` (types), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
+- **Allowed deps:** `pi-schema`, `@thinkrail/shared/errnoCode`, `@thinkrail/shared/codedError`, `contracts` (types and `ReviewSnapshot`), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
   `git` (the review's `baseSha` resolve, the diff range behind a base anchor's `baseRef`, and blob
   reads for the base side), `fs` (`classifyBytes`/`decodeText`/`hashBytes` — textness and the sha-256
   an anchor's `contentHash` *is* are decided once, there, so a comment's hash and a revert's expectation
@@ -238,11 +238,13 @@ lands can still finish its record; archived updates persist without publishing a
   that remark's own surface by (see `panels/SPEC.md`).
 - **Persistence never loses a review to a damaged file.** Writes are **atomic** (temp file + rename, so
   a host killed mid-write can't leave a truncated review), and the read treats **only `ENOENT`** as "no
-  review": a file that doesn't parse — or that can't be read at all — **throws** and is left on disk,
+  review": a file that doesn't parse, fails the `ReviewSnapshot` schema, or can't be read at all **throws** and is left on disk,
   because the one caller acting on "absent" (`ensureSnapshot`) responds by writing a fresh empty review
   over it. The failure surfaces on `review.get` (the panel says so) instead of silently discarding every
   comment. The one exception is the cross-workspace scan behind an agent resolve: a damaged *sibling*
-  is logged and skipped, never allowed to fail a resolve belonging to a healthy review.
+  is logged and skipped, never allowed to fail a resolve belonging to a healthy review. A reviews folder that
+  exists but cannot be listed fails the resolve. The re-anchor that follows a worktree change is best effort:
+  a failure is logged as `REVIEW_REANCHOR_FAILED` with the read failure's kind, and the next read retries.
 - An **unknown/duplicate agent resolve fails loud** (error text back to the model), never silently. A
   resolve that arrives after Clear updates the archived record in place and emits no active-review push.
   An agent resolve accepts `sent` comments AND **agent-authored `draft`s**: with auto-fix off, a

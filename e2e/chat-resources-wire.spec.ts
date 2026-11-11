@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -33,7 +34,7 @@ test("resource reads require the current chat's workspace and never recover hand
 		await enterDefaultWorkspace(page);
 		await openPersistedChat(page, "Resource history");
 		await expect(page.getByTestId("chat-toolbar")).toBeVisible();
-		const scope = { workspaceId: workspace.id, sessionId: parent.id };
+		const scope = { workspaceId: workspace.id, sessionId: testSessionId(parent.id) };
 		const none = { done: 0, failed: 0, stopped: 0, interrupted: 0 };
 		const empty = {
 			...scope,
@@ -55,15 +56,18 @@ test("resource reads require the current chat's workspace and never recover hand
 		await expect(
 			wire.request("subagent.stop", {
 				workspaceId: workspace.id,
-				parentSessionId: parent.id,
-				childSessionId: "missing-child",
+				parentSessionId: testSessionId(parent.id),
+				childSessionId: testSessionId("missing-child"),
 			}),
 		).rejects.toThrow();
 		await expect(
-			wire.request("subagent.stopAll", { workspaceId: workspace.id, parentSessionId: parent.id }),
+			wire.request("subagent.stopAll", {
+				workspaceId: workspace.id,
+				parentSessionId: testSessionId(parent.id),
+			}),
 		).resolves.toEqual({ ok: true, targeted: 0 });
 		await expect(
-			wire.request("session.resources", { ...scope, sessionId: "missing-parent" }),
+			wire.request("session.resources", { ...scope, sessionId: testSessionId("missing-parent") }),
 		).rejects.toThrow();
 		const foreign = await wire.request("workspace.create", { projectId: workspace.projectId });
 		await expect(
@@ -77,7 +81,10 @@ test("resource reads require the current chat's workspace and never recover hand
 			}),
 		).rejects.toThrow();
 		await expect(
-			wire.request("subagent.stopAll", { workspaceId: foreign.id, parentSessionId: parent.id }),
+			wire.request("subagent.stopAll", {
+				workspaceId: foreign.id,
+				parentSessionId: testSessionId(parent.id),
+			}),
 		).rejects.toThrow();
 		await expect(
 			wire.request("session.resourceHistory", {

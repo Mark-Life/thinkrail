@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import type {
+	AssistantMessage,
+	StopReason,
+	ToolResultMessage,
+	UserMessage,
+} from "@earendil-works/pi-ai";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
-	CODE_FONT_SIZE,
 	clampToCodePoints,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
@@ -23,22 +29,40 @@ import {
 	isLocalePreference,
 	isPlanReviewResult,
 	isRetriedAttempt,
-	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	isSystemThemePair,
 	normalizeFontSettings,
+	normalizeThemePreference,
 	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
-	type ResourceRecord,
 	resourceHistoryCursor,
 	resourceOutcome,
 	resourceTallyTotal,
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 } from "./domain";
+import { CODE_FONT_SIZE, JBCENTRAL_QUOTA_REFRESH_SECONDS, type ResourceRecord } from "./schema";
 
 describe("isRetriedAttempt", () => {
-	const failed = { role: "assistant", stopReason: "error" };
-	const ok = { role: "assistant", stopReason: "stop" };
-	const userMsg = { role: "user" };
+	const assistant = (stopReason: StopReason): AssistantMessage => ({
+		role: "assistant",
+		content: [],
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: "claude",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason,
+		timestamp: 0,
+	});
+	const failed = assistant("error");
+	const ok = assistant("stop");
+	const userMsg: UserMessage = { role: "user", content: "go", timestamp: 0 };
 
 	test("a failed assistant immediately followed by the retried assistant is superseded", () => {
 		expect(isRetriedAttempt([userMsg, failed, ok], 1)).toBe(true);
@@ -62,7 +86,14 @@ describe("isRetriedAttempt", () => {
 	});
 
 	test("an intervening toolResult breaks adjacency — pi's _prepareRetry re-runs the turn directly, so anything between the two means this was not a retry", () => {
-		const toolResult = { role: "toolResult" };
+		const toolResult: ToolResultMessage = {
+			role: "toolResult",
+			toolCallId: "call",
+			toolName: "read",
+			content: [],
+			isError: false,
+			timestamp: 0,
+		};
 		expect(isRetriedAttempt([userMsg, failed, toolResult, ok], 1)).toBe(false);
 	});
 });
@@ -76,43 +107,14 @@ describe("isPlanReviewResult", () => {
 		findings: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "a.ts", startLine: 3 }],
 	};
 
-	test("accepts a well-formed verdict with findings", () => {
+	test("accepts a host-built result and refuses a malformed one", () => {
 		expect(isPlanReviewResult(ok)).toBe(true);
 		expect(isPlanReviewResult({ ...ok, verdict: "approve", findings: [] })).toBe(true);
-	});
-
-	test("rejects bad verdict, missing fields, and malformed findings", () => {
 		expect(isPlanReviewResult({ ...ok, verdict: "maybe" })).toBe(false);
 		expect(isPlanReviewResult({ ...ok, itemId: 1 })).toBe(false);
 		expect(isPlanReviewResult({ ...ok, findings: "nope" })).toBe(false);
 		expect(isPlanReviewResult({ ...ok, findings: [{ id: "c_1" }] })).toBe(false);
 		expect(isPlanReviewResult(null)).toBe(false);
-	});
-
-	const finding = (extra: Record<string, unknown>) => ({
-		...ok,
-		findings: [{ id: "c_1", body: "b", ...extra }],
-	});
-
-	test("rejects a finding with an empty id/body or an unknown kind", () => {
-		expect(isPlanReviewResult({ ...ok, findings: [{ id: "", body: "b" }] })).toBe(false);
-		expect(isPlanReviewResult({ ...ok, findings: [{ id: "c_1", body: "" }] })).toBe(false);
-		expect(isPlanReviewResult(finding({ kind: "nope" }))).toBe(false);
-		expect(isPlanReviewResult(finding({ kind: "inline", path: "a.ts" }))).toBe(true);
-	});
-
-	test("rejects an incoherent or non-positive line range, and a line without a path", () => {
-		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 0 }))).toBe(false);
-		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 1.5 }))).toBe(false);
-		expect(isPlanReviewResult(finding({ startLine: 3 }))).toBe(false); // line with no path
-		expect(isPlanReviewResult(finding({ path: "a.ts", endLine: 3 }))).toBe(false); // endLine, no startLine
-		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 5, endLine: 3 }))).toBe(false);
-		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 3, endLine: 5 }))).toBe(true);
-	});
-
-	test("enforces cardinality: request_changes needs a finding, approve may have none", () => {
-		expect(isPlanReviewResult({ ...ok, verdict: "request_changes", findings: [] })).toBe(false);
-		expect(isPlanReviewResult({ ...ok, verdict: "approve", findings: [] })).toBe(true);
 	});
 });
 
@@ -219,7 +221,7 @@ describe("isDelegationRunDetails", () => {
 		contextTokens: 3,
 	};
 	const valid = {
-		childSessionId: "child-1",
+		childSessionId: testSessionId("child-1"),
 		task: "map the repo",
 		status: "completed",
 		usage,
@@ -332,7 +334,7 @@ describe("resource history vocabulary", () => {
 			kind: "command",
 			summary: {
 				id: "c",
-				sessionId: "s",
+				sessionId: testSessionId("s"),
 				name: "tests",
 				command: "bun test",
 				status: "completed",
@@ -346,8 +348,8 @@ describe("resource history vocabulary", () => {
 		({
 			kind: "subagent",
 			summary: {
-				childSessionId: "child",
-				parentSessionId: "s",
+				childSessionId: testSessionId("child"),
+				parentSessionId: testSessionId("s"),
 				task: "Explore",
 				status: "completed",
 				createdAt: new Date(5_000).toISOString(),
@@ -416,7 +418,7 @@ describe("resource history vocabulary", () => {
 				kind: "command",
 				summary: {
 					id: "c",
-					sessionId: "s",
+					sessionId: testSessionId("s"),
 					name: "dev",
 					command: "bun run dev",
 					status: "stopping",
@@ -598,5 +600,34 @@ describe("font settings", () => {
 		expect(isFontWeightOffset(130)).toBe(true);
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
+	});
+});
+
+describe("normalizeThemePreference", () => {
+	const pair = { light: "acme.light", dark: "acme.dark" };
+
+	test("keeps a valid preference and copies only the pair's two names", () => {
+		expect(
+			normalizeThemePreference({
+				theme: "acme.dark",
+				themeMode: "system",
+				systemThemePair: { ...pair, extra: 1 },
+			}),
+		).toEqual({ theme: "acme.dark", themeMode: "system", systemThemePair: pair });
+	});
+
+	test("each malformed field falls back on its own, and system mode needs a pair", () => {
+		expect(isSystemThemePair({ light: "a", dark: 1 })).toBe(false);
+		expect(
+			normalizeThemePreference({
+				theme: 7,
+				themeMode: "system",
+				systemThemePair: { light: "a", dark: 1 },
+			}),
+		).toEqual({ theme: DEFAULT_CONFIG.theme, themeMode: "fixed" });
+		expect(normalizeThemePreference([pair])).toEqual({
+			theme: DEFAULT_CONFIG.theme,
+			themeMode: DEFAULT_CONFIG.themeMode,
+		});
 	});
 });

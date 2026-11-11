@@ -37,7 +37,7 @@ const SECRET_PATHS = [
 ];
 
 export function isLogLevel(value: string): value is LogLevel {
-	return (LOG_LEVELS as readonly string[]).includes(value);
+	return LOG_LEVELS.some((level) => level === value);
 }
 
 export function shouldLog(level: LogLevel, threshold: LogLevel): boolean {

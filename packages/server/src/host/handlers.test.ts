@@ -14,29 +14,18 @@ import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type {
-	AppConfig,
-	Project,
-	Template,
-	TemplateInfo,
-	WireModel,
-	Workspace,
-	WorkspaceCreation,
-	WorkspaceCreationRemoved,
-	WorkspaceWatchReadyResult,
-} from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
+import type { WorkspaceCreationRemoved } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHOD_SCHEMAS,
 	WS_METHODS,
 } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
-import {
-	type CreateSessionResult,
-	configurePiRuntime,
-	disposeAllSessions,
-	setSessionManagerFactory,
-} from "../agent";
+import { fakeFetch } from "../../test/fakeFetch";
+import { configurePiRuntime, disposeAllSessions, setSessionManagerFactory } from "../agent";
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import {
 	configureSurveySource,
@@ -46,6 +35,7 @@ import {
 	setFeedbackPublisher,
 } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import { observeLoggedErrors } from "../log";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
@@ -59,11 +49,15 @@ import {
 } from "../workspaces";
 import {
 	handleRequest,
+	handleTypedRequest,
 	openReviewForClient,
 	requestMethodDiagnostic,
 	shouldRefreshOpenReview,
 	workspaceCreationHandoff,
 } from "./handlers";
+
+const PROJECT_ID = testProjectId("00000000-0000-4000-8000-0000000000a1");
+const WORKSPACE_ID = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
 
 const CTX = { clientKey: "test-client" };
 
@@ -89,7 +83,7 @@ async function setupDefaultModelRuntime(): Promise<() => void> {
 		name: "Handler model",
 		api: "faux",
 		reasoning: false,
-		input: ["text"] as ("text" | "image")[],
+		input: ["text" as const],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: 100_000,
 		maxTokens: 4_096,
@@ -140,7 +134,7 @@ beforeEach(() => {
 	git(repo, "commit", "-m", "init");
 	writeFileSync(
 		join(dataDir, "projects.json"),
-		JSON.stringify([{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
+		JSON.stringify([{ id: PROJECT_ID, name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
 	);
 });
 
@@ -169,14 +163,13 @@ test("clone handlers resolve the destination and return an opened local project"
 		parentPath: dataDir,
 		name: "cloned",
 	};
-	const destination = (await handleRequest("project.cloneDestination", input, CTX)) as {
-		path: string;
-	};
-	const project = (await handleRequest("project.clone", input, CTX)) as Project;
+	const destination = await handleTypedRequest("project.cloneDestination", input, CTX);
+	const project = await handleTypedRequest("project.clone", input, CTX);
+	if (!project) throw new Error("expected a cloned project");
 	expect(project.path).toBe(destination.path);
 	expect(gitText(project.path, "rev-parse", "HEAD")).toBe(gitText(repo, "rev-parse", "HEAD"));
 	expect(
-		await handleRequest("project.cancelClone", { operationId: input.operationId }, CTX),
+		await handleTypedRequest("project.cancelClone", { operationId: input.operationId }, CTX),
 	).toEqual({ ok: true });
 });
 
@@ -199,34 +192,42 @@ test("a client older than the settled protocol never hears about a merged or clo
 });
 
 test("starting a PR mutation reactivates a parked workspace before any network await", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "PR work" },
+		{ projectId: PROJECT_ID, name: "PR work" },
 		CTX,
-	)) as Workspace;
-	await handleRequest("workspace.settle", { id: workspace.id }, CTX);
+	);
+	await handleTypedRequest("workspace.settle", { id: workspace.id }, CTX);
 
 	await expect(
-		handleRequest("pr.open", { workspaceId: workspace.id, sessionId: "missing" }, CTX),
+		handleTypedRequest(
+			"pr.open",
+			{ workspaceId: workspace.id, sessionId: testSessionId("missing") },
+			CTX,
+		),
 	).rejects.toThrow("no 'origin' remote");
-	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 	const after = rows.find((row) => row.id === workspace.id);
 	expect(after?.settledOverride).toBeUndefined();
 	expect(after?.lastActiveAt ?? 0).toBeGreaterThanOrEqual(workspace.lastActiveAt ?? 0);
 });
 
 test("branch status reports a review-free branch, and workspace.push publishes it", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "Ship segment" },
+		{ projectId: PROJECT_ID, name: "Ship segment" },
 		CTX,
-	)) as Workspace;
+	);
 	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
 	git(workspace.worktreePath, "add", "-A");
 	git(workspace.worktreePath, "commit", "-m", "ship");
 	writeFileSync(join(workspace.worktreePath, "dirty.txt"), "dirty\n");
 
-	const local = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	const local = await handleTypedRequest(
+		"workspace.branchStatus",
+		{ workspaceId: workspace.id },
+		CTX,
+	);
 	expect(local).toEqual({
 		hasOrigin: false,
 		provider: null,
@@ -242,7 +243,7 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 	git(remote, "init", "--bare");
 	git(repo, "remote", "add", "origin", remote);
 	expect(
-		await handleRequest(
+		await handleTypedRequest(
 			"workspace.push",
 			{ workspaceId: workspace.id, branch: workspace.branch },
 			CTX,
@@ -250,7 +251,7 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 	).toEqual({
 		dirtyFiles: 1,
 	});
-	const published = await handleRequest(
+	const published = await handleTypedRequest(
 		"workspace.branchStatus",
 		{ workspaceId: workspace.id },
 		CTX,
@@ -267,41 +268,41 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 });
 
 test("branch status measures the branch a managed workspace's terminal switched to", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "Switched" },
+		{ projectId: PROJECT_ID, name: "Switched" },
 		CTX,
-	)) as Workspace;
+	);
 	const remote = join(dataDir, "switched.git");
 	mkdirSync(remote);
 	git(remote, "init", "--bare");
 	git(repo, "remote", "add", "origin", remote);
-	await handleRequest(
+	await handleTypedRequest(
 		"workspace.push",
 		{ workspaceId: workspace.id, branch: workspace.branch },
 		CTX,
 	);
 	git(workspace.worktreePath, "switch", "-c", "feature/terminal");
 
-	const rows = (await handleRequest(
+	const rows = await handleTypedRequest(
 		"workspace.list",
-		{ projectId: "p1", includeDiffStats: false },
+		{ projectId: PROJECT_ID, includeDiffStats: false },
 		CTX,
-	)) as Workspace[];
+	);
 	expect(rows.find((row) => row.id === workspace.id)).toMatchObject({
 		branch: "feature/terminal",
 	});
 	expect(
-		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+		await handleTypedRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
 	).toMatchObject({ published: false, review: null });
 });
 
 test("a workspace on its base branch gets no review lookup and drops a stored foreign review", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "On base" },
+		{ projectId: PROJECT_ID, name: "On base" },
 		CTX,
-	)) as Workspace;
+	);
 	git(repo, "remote", "add", "origin", "https://github.com/fake-owner/fake-repo.git");
 	const bin = join(dataDir, "bin");
 	const ghCalls = join(dataDir, "gh-calls");
@@ -315,7 +316,11 @@ test("a workspace on its base branch gets no review lookup and drops a stored fo
 	});
 	git(repo, "switch", "-c", "elsewhere");
 	git(workspace.worktreePath, "switch", "main");
-	await handleRequest("workspace.list", { projectId: "p1", includeDiffStats: false }, CTX);
+	await handleTypedRequest(
+		"workspace.list",
+		{ projectId: PROJECT_ID, includeDiffStats: false },
+		CTX,
+	);
 	setWorkspaceReview(
 		workspace.id,
 		{ kind: "pull-request", number: 501, state: "merged", url: "https://example.test/501" },
@@ -323,7 +328,7 @@ test("a workspace on its base branch gets no review lookup and drops a stored fo
 	);
 
 	expect(
-		await handleRequest(
+		await handleTypedRequest(
 			"workspace.branchStatus",
 			{ workspaceId: workspace.id, skipFetch: true },
 			CTX,
@@ -334,7 +339,7 @@ test("a workspace on its base branch gets no review lookup and drops a stored fo
 
 	setWorkspaceReview(workspace.id, { kind: "pull-request", number: 501, state: "open" }, "main");
 	expect(
-		await handleRequest(
+		await handleTypedRequest(
 			"workspace.openReview",
 			{ workspaceId: workspace.id, allowCached: true },
 			CTX,
@@ -345,16 +350,16 @@ test("a workspace on its base branch gets no review lookup and drops a stored fo
 });
 
 test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "Poll" },
+		{ projectId: PROJECT_ID, name: "Poll" },
 		CTX,
-	)) as Workspace;
+	);
 	const remote = join(dataDir, "poll.git");
 	mkdirSync(remote);
 	git(remote, "init", "--bare");
 	git(repo, "remote", "add", "origin", remote);
-	await handleRequest(
+	await handleTypedRequest(
 		"workspace.push",
 		{ workspaceId: workspace.id, branch: workspace.branch },
 		CTX,
@@ -369,23 +374,23 @@ test("a CI poll re-reads the review without fetching origin; a focus read still 
 	git(other, "push", "origin", workspace.branch);
 
 	expect(
-		await handleRequest(
+		await handleTypedRequest(
 			"workspace.branchStatus",
 			{ workspaceId: workspace.id, skipFetch: true },
 			CTX,
 		),
 	).toMatchObject({ published: true, behind: 0 });
 	expect(
-		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+		await handleTypedRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
 	).toMatchObject({ published: true, behind: 1 });
 });
 
 test("a split origin measures the branch against where it is pushed, not where it is fetched", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "Split origin" },
+		{ projectId: PROJECT_ID, name: "Split origin" },
 		CTX,
-	)) as Workspace;
+	);
 	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
 	git(workspace.worktreePath, "add", "-A");
 	git(workspace.worktreePath, "commit", "-m", "ship");
@@ -398,7 +403,7 @@ test("a split origin measures the branch against where it is pushed, not where i
 	git(repo, "remote", "add", "origin", fetchRepo);
 	git(repo, "remote", "set-url", "--push", "origin", pushRepo);
 	git(repo, "push", fetchRepo, "main");
-	await handleRequest(
+	await handleTypedRequest(
 		"workspace.push",
 		{ workspaceId: workspace.id, branch: workspace.branch },
 		CTX,
@@ -417,7 +422,7 @@ test("a split origin measures the branch against where it is pushed, not where i
 	git(other, "push", "origin", "--delete", workspace.branch);
 
 	expect(
-		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+		await handleTypedRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
 	).toMatchObject({ published: true, pushesElsewhere: true, ahead: 0, behind: 0 });
 
 	const pushed = join(dataDir, "pushed");
@@ -432,7 +437,7 @@ test("a split origin measures the branch against where it is pushed, not where i
 	git(workspace.worktreePath, "fetch", "--prune", "origin");
 
 	expect(
-		await handleRequest(
+		await handleTypedRequest(
 			"workspace.branchStatus",
 			{ workspaceId: workspace.id, allowCached: true },
 			CTX,
@@ -441,11 +446,11 @@ test("a split origin measures the branch against where it is pushed, not where i
 });
 
 test("a split origin whose push repository can't be read reports publication as unknown", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "Unreachable push" },
+		{ projectId: PROJECT_ID, name: "Unreachable push" },
 		CTX,
-	)) as Workspace;
+	);
 	const fetchRepo = join(dataDir, "fetch-only.git");
 	mkdirSync(fetchRepo);
 	git(fetchRepo, "init", "--bare");
@@ -454,31 +459,32 @@ test("a split origin whose push repository can't be read reports publication as 
 	git(workspace.worktreePath, "fetch", "origin");
 	git(repo, "remote", "set-url", "--push", "origin", join(dataDir, "missing.git"));
 
-	const status = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	const status = await handleTypedRequest(
+		"workspace.branchStatus",
+		{ workspaceId: workspace.id },
+		CTX,
+	);
 	expect(status).toMatchObject({ hasOrigin: true, pushesElsewhere: true, published: null });
 	expect(status).not.toHaveProperty("ahead");
 });
 
 test("a pre-v87 client's source-less PR preview keeps the session's plan body", async () => {
-	const workspace = (await handleRequest(
+	const workspace = await handleTypedRequest(
 		"workspace.create",
-		{ projectId: "p1", name: "Legacy preview" },
+		{ projectId: PROJECT_ID, name: "Legacy preview" },
 		CTX,
-	)) as Workspace;
+	);
 	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
 	git(workspace.worktreePath, "add", "-A");
 	git(workspace.worktreePath, "commit", "-m", "ship it");
-	const params = { workspaceId: workspace.id, sessionId: "legacy-session" };
+	const params = { workspaceId: workspace.id, sessionId: testSessionId("legacy-session") };
 
-	const legacy = (await handleRequest("pr.preview", params, {
+	const legacy = await handleTypedRequest("pr.preview", params, {
 		...CTX,
 		protocolVersion: BRANCH_STATUS_PROTOCOL_VERSION - 1,
-	})) as { body: string };
+	});
 	expect(legacy.body).toContain("## Committed outside the plan");
-	const current = (await handleRequest("pr.preview", params, CTX)) as {
-		body: string;
-		source: string;
-	};
+	const current = await handleTypedRequest("pr.preview", params, CTX);
 	expect(current).toMatchObject({ source: "commits", body: "- ship it" });
 });
 
@@ -500,30 +506,30 @@ test("host.update invokes only the context-injected parameterless operation", as
 		),
 	).toEqual({ ok: true });
 	expect(runs).toBe(1);
-	await expect(handleRequest("host.update", {}, CTX)).rejects.toThrow(
+	await expect(handleTypedRequest("host.update", {}, CTX)).rejects.toThrow(
 		"Host update is unavailable.",
 	);
 });
 
 test("retired session activity returns the empty compatibility snapshot", async () => {
-	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
+	expect(await handleTypedRequest("session.activityList", {}, CTX)).toEqual([]);
 });
 
 test("the retired ask answer method and respondToTool both refuse an unknown session the same way", async () => {
 	await expect(
-		handleRequest(
+		handleTypedRequest(
 			"session.answerQuestion",
-			{ sessionId: "nope", toolCallId: "tc", result: {} },
+			{ sessionId: testSessionId("nope"), toolCallId: "tc", result: {} },
 			CTX,
 		),
 	).rejects.toThrow("Unknown session: nope");
 	await expect(
-		handleRequest(
+		handleTypedRequest(
 			"session.respondToTool",
-			{ sessionId: "nope", toolCallId: "tc", response: {} },
+			{ sessionId: testSessionId("nope"), toolCallId: "tc", response: {} },
 			CTX,
 		),
-	).rejects.toThrow("Unknown session: nope");
+	).rejects.toMatchObject({ code: "SESSION_UNKNOWN", message: "Unknown session: nope" });
 });
 
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
@@ -538,23 +544,47 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 		writeFileSync(join(globalDir, "kickoff.md"), "global body");
 		writeFileSync(join(projectDir, "kickoff.md"), "project body");
 
-		const listed = (await handleRequest("template.list", { projectId: "p1" }, CTX)) as {
-			templates: TemplateInfo[];
-		};
+		const listed = await handleTypedRequest("template.list", { projectId: PROJECT_ID }, CTX);
 		expect(listed.templates).toContainEqual(
 			expect.objectContaining({ name: "kickoff", scope: "project" }),
 		);
 
-		const template = (await handleRequest(
+		const template = await handleTypedRequest(
 			"template.get",
-			{ projectId: "p1", name: "kickoff" },
+			{ projectId: PROJECT_ID, name: "kickoff" },
 			CTX,
-		)) as Template;
+		);
 		expect(template).toMatchObject({ scope: "project", content: "project body" });
 
 		await expect(
-			handleRequest("template.list", { workspaceId: "unused", projectId: "p1" }, CTX),
-		).rejects.toThrow("either workspaceId or projectId");
+			handleRequest(
+				"template.list",
+				{
+					workspaceId: testWorkspaceId("00000000-0000-4000-8000-fd94c6a26d6b"),
+					projectId: PROJECT_ID,
+				},
+				CTX,
+			),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+		await expect(
+			handleRequest(
+				"template.get",
+				{
+					workspaceId: testWorkspaceId("00000000-0000-4000-8000-fd94c6a26d6b"),
+					projectId: PROJECT_ID,
+					name: "kickoff",
+				},
+				CTX,
+			),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+		await expect(
+			handleRequest("template.get", { projectId: PROJECT_ID }, CTX),
+		).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
+		await expect(handleRequest("template.list", { projectId: 7 }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
 	} finally {
 		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
@@ -570,7 +600,7 @@ test("a background create hands the finished workspace a terminal and the held c
 	});
 	setWorkspaceCreationHandoff(workspaceCreationHandoff);
 	try {
-		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const models = await handleTypedRequest("model.list", {}, CTX);
 		const selected = models.find((model) => model.provider === "handler");
 		if (!selected) throw new Error("handler test model was not available");
 		handlerFaux?.setResponses([
@@ -580,11 +610,11 @@ test("a background create hands the finished workspace a terminal and the held c
 			},
 		]);
 		const started = Date.now();
-		const creation = (await handleRequest(
+		const creation = await handleTypedRequest(
 			"workspace.startCreate",
-			{ projectId: "p1", kickoff: { text: "Start here", model: selected } },
+			{ projectId: PROJECT_ID, kickoff: { text: "Start here", model: selected } },
 			CTX,
-		)) as WorkspaceCreation;
+		);
 		expect(creation).toMatchObject({ state: "running", kickoff: { text: "Start here" } });
 		const workspace = await awaitWorkspaceCreation(creation.id);
 		expect(Date.now() - started).toBeLessThan(3_000);
@@ -593,7 +623,7 @@ test("a background create hands the finished workspace a terminal and the held c
 		expect(removed).toHaveLength(1);
 		expect(removed[0]).toMatchObject({ id: creation.id, workspace: { id: creation.id } });
 		expect(removed[0]?.sessionId).toEqual(expect.any(String));
-		expect(await handleRequest("workspace.listCreations", {}, CTX)).toEqual([]);
+		expect(await handleTypedRequest("workspace.listCreations", {}, CTX)).toEqual([]);
 	} finally {
 		setWorkspaceCreationHandoff(null);
 		setWorkspaceCreationPublisher(null);
@@ -608,30 +638,19 @@ test("model.default and new session creation share the AppConfig default resolut
 	const cleanup = await setupDefaultModelRuntime();
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "default-resolution" }));
 	try {
-		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const models = await handleTypedRequest("model.list", {}, CTX);
 		const selected = models.find((model) => model.provider === "handler");
 		if (!selected) throw new Error("handler test model was not available");
-		await handleRequest(
+		await handleTypedRequest(
 			"settings.update",
 			{ config: { defaultModel: selected, defaultEffort: "high" } },
 			CTX,
 		);
-		const resolved = (await handleRequest("model.default", {}, CTX)) as {
-			model: WireModel | null;
-			thinkingLevel: string;
-		};
+		const resolved = await handleTypedRequest("model.default", {}, CTX);
 		expect(resolved).toEqual({ model: selected, thinkingLevel: "off" });
 
-		const workspace = (await handleRequest(
-			"workspace.create",
-			{ projectId: "p1" },
-			CTX,
-		)) as Workspace;
-		const created = (await handleRequest(
-			"session.create",
-			{ workspaceId: workspace.id },
-			CTX,
-		)) as CreateSessionResult;
+		const workspace = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
+		const created = await handleTypedRequest("session.create", { workspaceId: workspace.id }, CTX);
 		expect(created).toMatchObject({ model: selected, thinkingLevel: "off" });
 	} finally {
 		disposeAllSessions();
@@ -642,16 +661,16 @@ test("model.default and new session creation share the AppConfig default resolut
 });
 
 test("settings.update merges extension settings per key and rejects a malformed value", async () => {
-	await handleRequest(
+	await handleTypedRequest(
 		"settings.update",
 		{ config: { extensionSettings: { "ask-user-question": { richPreviews: false } } } },
 		CTX,
 	);
-	const config = (await handleRequest(
+	const config = await handleTypedRequest(
 		"settings.update",
 		{ config: { extensionSettings: { "ask-user-question": { other: true } } } },
 		CTX,
-	)) as AppConfig;
+	);
 	expect(config.extensionSettings["ask-user-question"]).toEqual({
 		richPreviews: false,
 		other: true,
@@ -659,14 +678,47 @@ test("settings.update merges extension settings per key and rejects a malformed 
 	await expect(
 		handleRequest(
 			"settings.update",
-			{ config: { extensionSettings: { "ask-user-question": { richPreviews: "no" } } } } as never,
+			{ config: { extensionSettings: { "ask-user-question": { richPreviews: "no" } } } },
 			CTX,
 		),
-	).rejects.toThrow("extensionSettings must map extension names to boolean settings");
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+});
+
+test("session.create and session.setModel answer ok when the recent model cannot be saved", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "recent-model-refused" }));
+	try {
+		const models = await handleTypedRequest("model.list", {}, CTX);
+		const selected = models.find((model) => model.provider === "handler");
+		if (!selected) throw new Error("handler test model was not available");
+		const workspace = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
+
+		mkdirSync(join(dataDir, "config.json"));
+		resetConfigCache();
+		const created = await handleTypedRequest(
+			"session.create",
+			{ workspaceId: workspace.id, model: selected },
+			CTX,
+		);
+		expect(created.model).toEqual(selected);
+		expect(
+			await handleTypedRequest(
+				"session.setModel",
+				{ sessionId: testSessionId(created.sessionId), model: selected },
+				CTX,
+			),
+		).toEqual({ ok: true });
+		rmSync(join(dataDir, "config.json"), { recursive: true });
+	} finally {
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
+	}
 });
 
 test("extension.list reflects disabledExtensions written through settings.update", async () => {
-	expect(await handleRequest("extension.list", {}, CTX)).toEqual([
+	expect(await handleTypedRequest("extension.list", {}, CTX)).toEqual([
 		{
 			name: "visualize",
 			title: "Visualize",
@@ -693,18 +745,18 @@ test("extension.list reflects disabledExtensions written through settings.update
 			hasChildExtensions: true,
 		},
 	]);
-	await handleRequest(
+	await handleTypedRequest(
 		"settings.update",
 		{ config: { disabledExtensions: ["visualize", "web-access", "retired"] } },
 		CTX,
 	);
-	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
+	expect(await handleTypedRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: false },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: false },
 	]);
-	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
-	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
+	await handleTypedRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
+	expect(await handleTypedRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: true },
@@ -712,8 +764,8 @@ test("extension.list reflects disabledExtensions written through settings.update
 });
 
 test("disabled JetBrains quota returns hidden through its handler", async () => {
-	await handleRequest("settings.update", { config: { jbcentralQuotaEnabled: false } }, CTX);
-	expect(await handleRequest("provider.jbcentralQuota", { force: true }, CTX)).toEqual({
+	await handleTypedRequest("settings.update", { config: { jbcentralQuotaEnabled: false } }, CTX);
+	expect(await handleTypedRequest("provider.jbcentralQuota", { force: true }, CTX)).toEqual({
 		state: "hidden",
 	});
 });
@@ -722,7 +774,7 @@ test("feedback.respond persists a popup action through the handler", async () =>
 	setFeedbackPublisher(() => true);
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage(CTX.clientKey);
 
-	expect(await handleRequest("feedback.respond", { action: "postpone" }, CTX)).toEqual({
+	expect(await handleTypedRequest("feedback.respond", { action: "postpone" }, CTX)).toEqual({
 		ok: true,
 	});
 	expect(JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8"))).toEqual({
@@ -745,7 +797,7 @@ function launchSurvey(iteration = 0): void {
 	remoteSurvey.status = 200;
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (() => {
+		fetchImpl: fakeFetch(() => {
 			if (remoteSurvey.status !== 200) {
 				return Promise.resolve(new Response("down", { status: remoteSurvey.status }));
 			}
@@ -762,7 +814,7 @@ function launchSurvey(iteration = 0): void {
 							},
 						];
 			return Promise.resolve(new Response(JSON.stringify({ surveys }), { status: 200 }));
-		}) as unknown as typeof fetch,
+		}),
 	});
 }
 
@@ -775,15 +827,15 @@ function bootSurveyAnalytics(sent: string[], overrides: { mute?: boolean } = {})
 		additionalEnabled: false,
 		env: {},
 		...overrides,
-		fetchImpl: ((_url: string, init?: RequestInit) => {
+		fetchImpl: fakeFetch((_url, init) => {
 			if (typeof init?.body === "string") sent.push(init.body);
 			return Promise.resolve(new Response("{}", { status: 200 }));
-		}) as unknown as typeof fetch,
+		}),
 	});
 }
 
 function submitSurvey(overrides: Record<string, unknown> = {}) {
-	return handleRequest(
+	return handleTypedRequest(
 		"feedback.survey.submit",
 		{
 			submissionId: SURVEY_SUBMISSION_ID,
@@ -796,25 +848,25 @@ function submitSurvey(overrides: Record<string, unknown> = {}) {
 	);
 }
 
-function storedFeedback(): Record<string, unknown> {
-	return JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8")) as Record<
-		string,
-		unknown
-	>;
+function storedFeedback() {
+	const stored: unknown = JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8"));
+	if (typeof stored !== "object" || stored === null)
+		throw new Error("feedback.json is not an object");
+	return stored;
 }
 
 test("feedback.survey stays hidden until a launched survey exists and a sent answer hides it", async () => {
-	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
 	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
 
 	const sent: string[] = [];
 	bootSurveyAnalytics(sent, { mute: true });
 	launchSurvey();
-	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).toMatchObject({
 		survey: { id: "survey-1", iteration: 0 },
 	});
 	expect(await submitSurvey()).toEqual({ ok: true });
-	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
 	expect(storedFeedback()).toMatchObject({ submittedSurveyId: "survey-1", submittedIteration: 0 });
 	await shutdownAnalytics();
 	expect(sent.some((body) => body.includes('"survey sent"') && body.includes('"Good"'))).toBe(true);
@@ -834,18 +886,30 @@ test("feedback.survey.submit refuses a different survey version without completi
 	await expect(submitSurvey({ submissionId: "nope" })).rejects.toMatchObject({
 		code: "SURVEY_INVALID",
 	});
-	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).toMatchObject({
 		survey: { id: "survey-1", iteration: 1 },
 	});
 	await shutdownAnalytics();
 	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
 });
 
+test("feedback.survey.submit refuses a wrong shape at dispatch, before reading the survey", async () => {
+	for (const overrides of [
+		{ surveyId: 7 },
+		{ iteration: "0" },
+		{ answers: { q1: 3 } },
+		{ others: 3 },
+		{ answers: undefined },
+	]) {
+		await expect(submitSurvey(overrides)).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	}
+});
+
 test("feedback.survey.submit re-reads PostHog instead of trusting the displayed copy", async () => {
 	const sent: string[] = [];
 	bootSurveyAnalytics(sent);
 	launchSurvey(0);
-	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).toMatchObject({
 		survey: { iteration: 0 },
 	});
 
@@ -867,7 +931,7 @@ test("a completion that cannot be saved still counts as sent and never sends the
 	const sent: string[] = [];
 	bootSurveyAnalytics(sent);
 	launchSurvey();
-	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).toMatchObject({
 		survey: { id: "survey-1" },
 	});
 	const blocked = join(dataDir, "blocked");
@@ -876,7 +940,7 @@ test("a completion that cannot be saved still counts as sent and never sends the
 	try {
 		expect(await submitSurvey()).toEqual({ ok: true });
 		await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
-		expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+		expect(await handleTypedRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
 	} finally {
 		process.env.THINKRAIL_DATA_DIR = dataDir;
 	}
@@ -890,7 +954,7 @@ test("feedback.survey speaks the app language and a vanished translation restart
 	let translations: Record<string, unknown> = { es: { question: "¿Qué tal?" } };
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (() =>
+		fetchImpl: fakeFetch(() =>
 			Promise.resolve(
 				new Response(
 					JSON.stringify({
@@ -904,12 +968,13 @@ test("feedback.survey speaks the app language and a vanished translation restart
 						],
 					}),
 				),
-			)) as unknown as typeof fetch,
+			),
+		),
 	});
-	expect(await handleRequest("feedback.survey", { language: "es-MX" }, CTX)).toMatchObject({
+	expect(await handleTypedRequest("feedback.survey", { language: "es-MX" }, CTX)).toMatchObject({
 		survey: { language: "es", questions: [{ question: "¿Qué tal?" }] },
 	});
-	expect(await handleRequest("feedback.survey", {}, CTX)).not.toMatchObject({
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).not.toMatchObject({
 		survey: { language: "es" },
 	});
 
@@ -924,17 +989,18 @@ test("feedback.survey speaks the app language and a vanished translation restart
 test("feedback.survey.submit does not complete a survey whose answers were not sent", async () => {
 	launchSurvey();
 	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });
-	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+	expect(await handleTypedRequest("feedback.survey", {}, CTX)).toMatchObject({
 		survey: { id: "survey-1" },
 	});
 });
 
 test("feedback.respond rejects an action outside the wire union", async () => {
 	for (const action of ["later", "book"]) {
-		await expect(handleRequest("feedback.respond", { action }, CTX)).rejects.toThrow(
-			"Invalid invitation response",
-		);
+		await expect(handleRequest("feedback.respond", { action }, CTX)).rejects.toMatchObject({
+			code: "INVALID_PARAMS",
+		});
 	}
+	expect(existsSync(join(dataDir, "feedback.json"))).toBe(false);
 });
 
 test("project.setTrust grants pi-level resource trust only when the request asks for resources", async () => {
@@ -942,7 +1008,7 @@ test("project.setTrust grants pi-level resource trust only when the request asks
 		join(dataDir, "projects.json"),
 		JSON.stringify([
 			{
-				id: "p1",
+				id: PROJECT_ID,
 				name: "repo",
 				path: repo,
 				slug: "repo",
@@ -952,7 +1018,7 @@ test("project.setTrust grants pi-level resource trust only when the request asks
 		]),
 	);
 	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
-		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
+		await handleTypedRequest("project.setTrust", { id: PROJECT_ID, ...params }, CTX);
 
 	expect(await setTrust({ trusted: true })).toMatchObject({
 		trusted: true,
@@ -978,7 +1044,7 @@ test("project.setTrust acknowledges the present aliases only when it grants alia
 		);
 	};
 	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
-		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
+		await handleTypedRequest("project.setTrust", { id: PROJECT_ID, ...params }, CTX);
 	writeAlias("first-alias");
 	expect((await setTrust({ trusted: true })).acknowledgedSkills).toEqual(["first-alias"]);
 
@@ -996,13 +1062,13 @@ test("project.setTrust acknowledges the present aliases only when it grants alia
 });
 
 test("workspace.rename locks the display name without changing Git or the worktree path", async () => {
-	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
+	const created = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
 
-	const renamed = (await handleRequest(
+	const renamed = await handleTypedRequest(
 		"workspace.rename",
 		{ id: created.id, name: "Manual Workspace Name" },
 		CTX,
-	)) as Workspace;
+	);
 
 	expect(renamed).toMatchObject({
 		id: created.id,
@@ -1012,8 +1078,37 @@ test("workspace.rename locks the display name without changing Git or the worktr
 		worktreePath: created.worktreePath,
 	});
 	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(created.branch);
-	const listed = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const listed = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 	expect(listed.find((workspace) => workspace.id === created.id)).toMatchObject(renamed);
+});
+
+test("session.list logs a chat whose open todos cannot be counted, and still lists it", async () => {
+	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const agentDir = join(dataDir, "todo-count-agent");
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "host") logged.push(error);
+	});
+	try {
+		const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
+		const workspace = rows[0];
+		if (!workspace) throw new Error("expected a workspace");
+		const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, workspace.worktreePath), {
+			id: "dotted.session",
+			cwd: workspace.worktreePath,
+			messages: [{ role: "user", text: "hello", timestamp: Date.now() }],
+		});
+		const listed = await handleTypedRequest("session.list", { workspaceId: workspace.id }, CTX);
+		expect(listed.find((summary) => summary.sessionId === fixture.id)).not.toHaveProperty(
+			"openTodos",
+		);
+		expect(logged).toEqual([expect.objectContaining({ code: "TODO_COUNT_FAILED" })]);
+	} finally {
+		observeLoggedErrors(null);
+		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
 });
 
 test("session.rename persists a bounded title into a closed Pi transcript", async () => {
@@ -1021,7 +1116,7 @@ test("session.rename persists a bounded title into a closed Pi transcript", asyn
 	const agentDir = join(dataDir, "rename-agent");
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	try {
-		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 		const workspace = rows[0];
 		if (!workspace) throw new Error("expected a workspace");
 		const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, workspace.worktreePath), {
@@ -1031,24 +1126,28 @@ test("session.rename persists a bounded title into a closed Pi transcript", asyn
 		});
 
 		expect(
-			await handleRequest(
+			await handleTypedRequest(
 				"session.rename",
-				{ workspaceId: workspace.id, sessionId: fixture.id, title: "  After\r\nrename  " },
+				{
+					workspaceId: workspace.id,
+					sessionId: testSessionId(fixture.id),
+					title: "  After\r\nrename  ",
+				},
 				CTX,
 			),
 		).toEqual({ ok: true });
 		expect(SessionManager.open(fixture.path).getSessionName()).toBe("After rename");
 		await expect(
-			handleRequest(
+			handleTypedRequest(
 				"session.rename",
-				{ workspaceId: workspace.id, sessionId: fixture.id, title: " \n " },
+				{ workspaceId: workspace.id, sessionId: testSessionId(fixture.id), title: " \n " },
 				CTX,
 			),
 		).rejects.toThrow("Invalid session title");
 		await expect(
-			handleRequest(
+			handleTypedRequest(
 				"session.rename",
-				{ workspaceId: workspace.id, sessionId: fixture.id, title: "x".repeat(81) },
+				{ workspaceId: workspace.id, sessionId: testSessionId(fixture.id), title: "x".repeat(81) },
 				CTX,
 			),
 		).rejects.toThrow("Invalid session title");
@@ -1059,73 +1158,73 @@ test("session.rename persists a bounded title into a closed Pi transcript", asyn
 });
 
 test("workspace.setSubagentsOverride persists on/off and null restores the global default", async () => {
-	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
+	const created = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
 
-	const enabled = (await handleRequest(
+	const enabled = await handleTypedRequest(
 		"workspace.setSubagentsOverride",
 		{ id: created.id, override: "on" },
 		CTX,
-	)) as Workspace;
+	);
 	expect(enabled.subagentsOverride).toBe("on");
 
-	const disabled = (await handleRequest(
+	const disabled = await handleTypedRequest(
 		"workspace.setSubagentsOverride",
 		{ id: created.id, override: "off" },
 		CTX,
-	)) as Workspace;
+	);
 	expect(disabled.subagentsOverride).toBe("off");
 
-	const inherited = (await handleRequest(
+	const inherited = await handleTypedRequest(
 		"workspace.setSubagentsOverride",
 		{ id: created.id, override: null },
 		CTX,
-	)) as Workspace;
+	);
 	expect(inherited.subagentsOverride).toBeUndefined();
 });
 
 test("workspace.setSubagentMaxConcurrent persists a limit and null restores the global one", async () => {
-	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
-	const limited = (await handleRequest(
+	const created = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
+	const limited = await handleTypedRequest(
 		"workspace.setSubagentMaxConcurrent",
 		{ id: created.id, value: 2 },
 		CTX,
-	)) as Workspace;
+	);
 	expect(limited.subagentMaxConcurrentOverride).toBe(2);
-	const inherited = (await handleRequest(
+	const inherited = await handleTypedRequest(
 		"workspace.setSubagentMaxConcurrent",
 		{ id: created.id, value: null },
 		CTX,
-	)) as Workspace;
+	);
 	expect(inherited.subagentMaxConcurrentOverride).toBeUndefined();
 	await expect(
-		handleRequest("workspace.setSubagentMaxConcurrent", { id: created.id, value: 0 }, CTX),
+		handleTypedRequest("workspace.setSubagentMaxConcurrent", { id: created.id, value: 0 }, CTX),
 	).rejects.toThrow("Subagent limit must be a whole number from 1 to 16");
 });
 
 test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {
-	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 	const workspace = rows[0];
 	if (!workspace) throw new Error("expected a workspace");
 
-	const first = (await handleRequest(
+	const first = await handleTypedRequest(
 		"workspace.watchReady",
 		{ workspaceId: workspace.id },
 		CTX,
-	)) as WorkspaceWatchReadyResult;
+	);
 	expect(first).toEqual({ startupNudge: true });
-	const second = (await handleRequest(
+	const second = await handleTypedRequest(
 		"workspace.watchReady",
 		{ workspaceId: workspace.id },
 		CTX,
-	)) as WorkspaceWatchReadyResult;
+	);
 	expect(second).toEqual({ startupNudge: false });
 });
 
 test("todo.requestFix on a chat that isn't on disk rolls the record back and never marks findings sent", async () => {
-	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 	const workspace = rows[0];
 	if (!workspace) throw new Error("expected a workspace");
-	const sessionId = "sess-fix";
+	const sessionId = testSessionId("sess-fix");
 	const todo = new TodoStore(workspace.worktreePath, sessionId).add({
 		title: "t",
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
@@ -1145,7 +1244,7 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 	});
 
 	await expect(
-		handleRequest(
+		handleTypedRequest(
 			"todo.requestFix",
 			{ workspaceId: workspace.id, sessionId, id: todo.id, feedback: "please fix" },
 			CTX,
@@ -1166,15 +1265,11 @@ test("a review send that names its chat lands every file's drafts there as one p
 		return SessionManager.inMemory(cwd, { id: `review-send-${sessions}` });
 	});
 	try {
-		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 		const workspace = rows[0];
 		if (!workspace) throw new Error("expected a workspace");
 		writeFileSync(join(repo, "NOTES.md"), "notes\n");
-		const chat = (await handleRequest(
-			"session.create",
-			{ workspaceId: workspace.id },
-			CTX,
-		)) as CreateSessionResult;
+		const chat = await handleTypedRequest("session.create", { workspaceId: workspace.id }, CTX);
 		const draft = (path: string) =>
 			addComment({
 				workspaceId: workspace.id,
@@ -1189,11 +1284,11 @@ test("a review send that names its chat lands every file's drafts there as one p
 			});
 		const ids = [(await draft("README.md")).id, (await draft("NOTES.md")).id];
 
-		const sent = (await handleRequest(
+		const sent = await handleTypedRequest(
 			"review.sendBatch",
-			{ workspaceId: workspace.id, sessionId: chat.sessionId },
+			{ workspaceId: workspace.id, sessionId: testSessionId(chat.sessionId) },
 			CTX,
-		)) as { sessions: { sessionId: string }[] };
+		);
 
 		expect(sent.sessions.map((session) => session.sessionId)).toEqual([chat.sessionId]);
 		const comments = (await getReviewSnapshot(workspace.id)).comments.filter((comment) =>
@@ -1212,19 +1307,19 @@ test("a review send that names its chat lands every file's drafts there as one p
 });
 
 test("workspace mutation handlers reject the Default before any side effect", async () => {
-	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 	const def = rows[0];
 	if (def?.kind !== "default")
 		throw new Error("expected the ensured Default workspace pinned first");
 
-	await expect(handleRequest("workspace.remove", { id: def.id }, CTX)).rejects.toThrow(
+	await expect(handleTypedRequest("workspace.remove", { id: def.id }, CTX)).rejects.toThrow(
 		"The Default workspace cannot be removed",
 	);
 	await expect(
-		handleRequest("workspace.rename", { id: def.id, name: "Not Default" }, CTX),
+		handleTypedRequest("workspace.rename", { id: def.id, name: "Not Default" }, CTX),
 	).rejects.toThrow("The Default workspace cannot be renamed");
 
-	const after = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const after = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
 	expect(after.filter((w) => w.kind === "default")).toHaveLength(1);
 	expect(after[0]?.id).toBe(def.id);
 });
@@ -1243,20 +1338,12 @@ test("resource handlers scope every read/control to a registered workspace and a
 	);
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "release.1" }));
 	try {
-		const workspace = (await handleRequest(
-			"workspace.create",
-			{ projectId: "p1" },
-			CTX,
-		)) as Workspace;
-		const other = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
-		const parent = (await handleRequest(
-			"session.create",
-			{ workspaceId: workspace.id },
-			CTX,
-		)) as CreateSessionResult;
-		const scope = { workspaceId: workspace.id, sessionId: parent.sessionId };
+		const workspace = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
+		const other = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
+		const parent = await handleTypedRequest("session.create", { workspaceId: workspace.id }, CTX);
+		const scope = { workspaceId: workspace.id, sessionId: testSessionId(parent.sessionId) };
 		const none = { done: 0, failed: 0, stopped: 0, interrupted: 0 };
-		expect(await handleRequest("session.resources", scope, CTX)).toEqual({
+		expect(await handleTypedRequest("session.resources", scope, CTX)).toEqual({
 			...scope,
 			commands: [],
 			subagents: [],
@@ -1264,33 +1351,37 @@ test("resource handlers scope every read/control to a registered workspace and a
 			history: { commands: none, subagents: none },
 		});
 		expect(
-			await handleRequest(
+			await handleTypedRequest(
 				"session.resourceHistory",
 				{ ...scope, kind: "command", before: { at: 1, id: "older" }, limit: 5 },
 				CTX,
 			),
 		).toEqual({ kind: "command", items: [], hasMore: false });
 		expect(
-			await handleRequest("backgroundCommand.output", { ...scope, commandId: "missing" }, CTX),
+			await handleTypedRequest("backgroundCommand.output", { ...scope, commandId: "missing" }, CTX),
 		).toEqual({ available: false });
 		await expect(
-			handleRequest("backgroundCommand.stop", { ...scope, commandId: "missing" }, CTX),
+			handleTypedRequest("backgroundCommand.stop", { ...scope, commandId: "missing" }, CTX),
 		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
-		const children = { workspaceId: workspace.id, parentSessionId: parent.sessionId };
-		expect(await handleRequest("subagent.stopAll", children, CTX)).toEqual({
+		const children = { workspaceId: workspace.id, parentSessionId: scope.sessionId };
+		expect(await handleTypedRequest("subagent.stopAll", children, CTX)).toEqual({
 			ok: true,
 			targeted: 0,
 		});
 		await expect(
-			handleRequest("subagent.stop", { ...children, childSessionId: "missing" }, CTX),
+			handleTypedRequest(
+				"subagent.stop",
+				{ ...children, childSessionId: testSessionId("missing") },
+				CTX,
+			),
 		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
-		for (const workspaceId of [other.id, "missing-workspace"]) {
+		for (const workspaceId of [other.id, "00000000-0000-4000-8000-0000000000bf"]) {
 			const calls = [
 				["session.resources", { ...scope, workspaceId }],
 				["session.resourceHistory", { ...scope, workspaceId, kind: "subagent" }],
 				["backgroundCommand.output", { ...scope, workspaceId, commandId: "missing" }],
 				["backgroundCommand.stop", { ...scope, workspaceId, commandId: "missing" }],
-				["subagent.stop", { ...children, workspaceId, childSessionId: "missing" }],
+				["subagent.stop", { ...children, workspaceId, childSessionId: testSessionId("missing") }],
 				["subagent.stopAll", { ...children, workspaceId }],
 			] as const;
 			for (const [method, params] of calls)
@@ -1299,41 +1390,51 @@ test("resource handlers scope every read/control to a registered workspace and a
 				});
 		}
 		await expect(
-			handleRequest("session.resources", { ...scope, sessionId: "unknown-parent" }, CTX),
+			handleTypedRequest(
+				"session.resources",
+				{ ...scope, sessionId: testSessionId("unknown-parent") },
+				CTX,
+			),
 		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
-		for (const params of [
-			undefined,
-			null,
-			{},
-			{ ...scope, sessionId: "../secret" },
-			{ ...scope, sessionId: 123 },
-			{ ...scope, path: "/tmp/secret" },
-			{ ...scope, pid: 123 },
-		]) {
-			await expect(handleRequest("session.resources", params, CTX)).rejects.toThrow(
-				"Invalid resource ids",
-			);
+		for (const params of [undefined, null, {}, { ...scope, sessionId: 123 }]) {
+			await expect(handleRequest("session.resources", params, CTX)).rejects.toMatchObject({
+				code: "INVALID_PARAMS",
+			});
 		}
+		await expect(
+			handleRequest("session.resources", { ...scope, sessionId: "../secret" }, CTX),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+		expect(
+			await handleRequest("session.resources", { ...scope, path: "/tmp/secret" }, CTX),
+		).toEqual(await handleTypedRequest("session.resources", scope, CTX));
 		for (const params of [
 			{ ...scope, kind: "terminal" },
 			{ ...scope, kind: "command", limit: 0 },
 			{ ...scope, kind: "command", limit: 1.5 },
-			{ ...scope, kind: "command", before: { at: 1, id: "../secret" } },
 			{ ...scope, kind: "command", before: { at: "1", id: "older" } },
-			{ ...scope, kind: "command", before: { at: 1, id: "older", path: "/tmp" } },
-			{ ...scope, kind: "subagent", path: "/tmp/secret" },
 		]) {
-			await expect(handleRequest("session.resourceHistory", params, CTX)).rejects.toThrow(
-				/Invalid resource (?:history|ids)/,
-			);
+			await expect(handleRequest("session.resourceHistory", params, CTX)).rejects.toMatchObject({
+				code: "INVALID_PARAMS",
+			});
+		}
+		for (const before of [
+			{ at: 1, id: "../secret" },
+			{ at: Number.POSITIVE_INFINITY, id: "older" },
+		]) {
+			await expect(
+				handleRequest("session.resourceHistory", { ...scope, kind: "command", before }, CTX),
+			).rejects.toMatchObject({
+				code: "INVALID_PARAMS",
+				message: "Invalid resource history cursor",
+			});
 		}
 		for (const commandId of ["/tmp/output", "..", "C:\\output", "bad\u0000id"]) {
 			await expect(
 				handleRequest("backgroundCommand.output", { ...scope, commandId }, CTX),
-			).rejects.toThrow("Invalid resource ids");
+			).rejects.toMatchObject({ code: "INVALID_PARAMS", message: "Invalid resource ids" });
 			await expect(
 				handleRequest("backgroundCommand.stop", { ...scope, commandId }, CTX),
-			).rejects.toThrow("Invalid resource ids");
+			).rejects.toMatchObject({ code: "INVALID_PARAMS", message: "Invalid resource ids" });
 		}
 	} finally {
 		disposeAllSessions();
@@ -1344,4 +1445,233 @@ test("resource handlers scope every read/control to a registered workspace and a
 		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 		else process.env.PI_OFFLINE = priorOffline;
 	}
+});
+
+test("a request with bad params reaches no handler and names the field, not the value", async () => {
+	const secret = "sk-not-for-the-reply";
+	const rejection = handleRequest("project.setTrust", { id: PROJECT_ID, trusted: secret }, CTX);
+	await expect(rejection).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	const message = await rejection.catch((err: Error) => err.message);
+	expect(message).toContain("/trusted");
+	expect(message).not.toContain(secret);
+});
+
+test("a refusal reports only the first few bad fields, so its size stays bounded", async () => {
+	const names = Array.from({ length: 1_000 }, (_, index) => index);
+	const message = await handleRequest(
+		"project.acknowledgeSkills",
+		{ id: PROJECT_ID, names },
+		CTX,
+	).catch((err: Error) => err.message);
+	expect(String(message).split("; ")).toHaveLength(5);
+});
+
+test("terminal input that is not a string is refused before it reaches a PTY", async () => {
+	for (const data of [42, [104, 105], { text: "hi" }]) {
+		await expect(
+			handleRequest("terminal.write", { id: "00000000-0000-4000-8000-ea21841da70e", data }, CTX),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	}
+});
+
+test("a subagent override outside the wire union is refused and nothing is stored", async () => {
+	const created = await handleTypedRequest("workspace.create", { projectId: PROJECT_ID }, CTX);
+	await expect(
+		handleRequest("workspace.setSubagentsOverride", { id: created.id, override: "sometimes" }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
+	expect(rows.find((row) => row.id === created.id)?.subagentsOverride).toBeUndefined();
+});
+
+test("a workspace kickoff whose text is not a string is refused before a creation starts", async () => {
+	await expect(
+		handleRequest("workspace.startCreate", { projectId: PROJECT_ID, kickoff: { text: 42 } }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	expect(await handleTypedRequest("workspace.listCreations", {}, CTX)).toEqual([]);
+});
+
+test("a file read cap that is not a whole byte count is refused", async () => {
+	for (const maxBytes of [-1, 1.5, "1024"]) {
+		await expect(
+			handleRequest("fs.readFile", { workspaceId: "missing", path: "a.txt", maxBytes }, CTX),
+		).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	}
+});
+
+test("a request with no params object is refused", async () => {
+	await expect(handleRequest("project.list", undefined, CTX)).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+	});
+});
+
+test("a newer client's unknown param does not fail the request", async () => {
+	const project = await handleRequest("project.open", { path: repo, sentByNewerClient: 1 }, CTX);
+	expect(project).toHaveProperty("id");
+});
+
+test("a context window of the wrong shape is refused, and a number out of range keeps its own message", async () => {
+	await expect(
+		handleRequest("model.setContextWindow", { target: "some", contextWindow: null }, CTX),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	await expect(
+		handleTypedRequest("model.setContextWindow", { target: "available", contextWindow: 1 }, CTX),
+	).rejects.toThrow("Context window must be a whole number");
+});
+
+test("a tool response without a value is refused, and null is a value", async () => {
+	const target = { sessionId: testSessionId("no-such-session"), toolCallId: "call" };
+	await expect(handleRequest("session.respondToTool", target, CTX)).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+	});
+	await expect(
+		handleTypedRequest("session.respondToTool", { ...target, response: null }, CTX),
+	).rejects.toThrow("Unknown session");
+});
+
+test("a prompt image that is not an image is refused before it reaches pi", async () => {
+	await expect(
+		handleRequest(
+			"session.prompt",
+			{ sessionId: testSessionId("s"), text: "hi", images: [{ type: "text", text: "x" }] },
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+});
+
+test("a custom endpoint draft of the wrong shape is refused, and a blank name keeps its own message", async () => {
+	const draft = { name: "Local", baseUrl: "http://localhost:1234/v1", models: [{ id: "m" }] };
+	await expect(handleRequest("customEndpoints.save", draft, CTX)).rejects.toMatchObject({
+		code: "INVALID_PARAMS",
+	});
+	const model = { id: "m", contextWindow: null, maxTokens: null, reasoning: null, vision: null };
+	await expect(
+		handleTypedRequest(
+			"customEndpoints.save",
+			{ ...draft, name: " ", models: [{ ...model, tools: null }] },
+			CTX,
+		),
+	).rejects.toThrow("Name the server.");
+});
+
+test("project replies match their wire schemas", async () => {
+	const { "project.open": open, "project.list": list } = WS_METHOD_SCHEMAS;
+	const opened = await handleTypedRequest("project.open", { path: repo }, CTX);
+	expect(compile(open.result).errors(opened)).toEqual([]);
+	const listed = await handleTypedRequest("project.list", {}, CTX);
+	expect(compile(list.result).errors(listed)).toEqual([]);
+});
+
+test.skipIf(process.platform === "win32")(
+	"workspace creation retry and dismiss replies match their wire schemas",
+	async () => {
+		const hook = join(repo, ".git", "hooks", "post-checkout");
+		writeFileSync(hook, "#!/bin/sh\nexit 1\n");
+		chmodSync(hook, 0o755);
+		const { "workspace.retryCreation": retry, "workspace.dismissCreation": dismiss } =
+			WS_METHOD_SCHEMAS;
+		const started = await handleTypedRequest(
+			"workspace.startCreate",
+			{ projectId: PROJECT_ID, kickoff: { text: "keep me" } },
+			CTX,
+		);
+		await awaitWorkspaceCreation(started.id).catch(() => {});
+		const retried = await handleTypedRequest("workspace.retryCreation", { id: started.id }, CTX);
+		expect(compile(retry.result).errors(retried)).toEqual([]);
+		await awaitWorkspaceCreation(started.id).catch(() => {});
+		const dismissed = await handleTypedRequest(
+			"workspace.dismissCreation",
+			{ id: started.id },
+			CTX,
+		);
+		expect(compile(dismiss.result).errors(dismissed)).toEqual([]);
+		expect(dismissed).toEqual({ kickoff: { text: "keep me" } });
+	},
+);
+
+test("search replies match their wire schemas", async () => {
+	const { "search.query": query, "search.preview": preview } = WS_METHOD_SCHEMAS;
+	const found = await handleTypedRequest(
+		"search.query",
+		{ query: "readme", context: { projectId: PROJECT_ID } },
+		CTX,
+	);
+	expect(compile(query.result).errors(found)).toEqual([]);
+	const shown = await handleTypedRequest(
+		"search.preview",
+		{ kind: "chat", sessionId: testSessionId("gone") },
+		CTX,
+	);
+	expect(compile(preview.result).errors(shown)).toEqual([]);
+});
+
+test("speech cancel and remove replies match their wire schemas", async () => {
+	const { "speech.cancelInstall": cancel, "speech.remove": remove } = WS_METHOD_SCHEMAS;
+	expect(
+		compile(cancel.result).errors(await handleTypedRequest("speech.cancelInstall", {}, CTX)),
+	).toEqual([]);
+	expect(compile(remove.result).errors(await handleTypedRequest("speech.remove", {}, CTX))).toEqual(
+		[],
+	);
+});
+
+test("an unknown diff scope or revert target is refused before a handler runs", async () => {
+	const base = {
+		workspaceId: testWorkspaceId("00000000-0000-4000-8000-ea21841da70e"),
+		path: "a.txt",
+	};
+	await expect(
+		handleRequest(
+			"git.status",
+			{
+				workspaceId: testWorkspaceId("00000000-0000-4000-8000-ea21841da70e"),
+				scope: { kind: "typo" },
+			},
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+	await expect(
+		handleRequest(
+			"change.revert",
+			{
+				...base,
+				scope: { kind: "branch" },
+				target: { kind: "typo" },
+				expect: { originalHash: null, modifiedHash: null },
+			},
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+});
+
+test("review.commentAdd refuses a selector of an unknown kind before its handler runs", async () => {
+	await expect(
+		handleRequest(
+			"review.commentAdd",
+			{
+				workspaceId: WORKSPACE_ID,
+				kind: "inline",
+				anchor: { path: "a.ts", side: "worktree", selectors: [{ kind: "squiggle", at: 3 }] },
+				body: "note",
+			},
+			CTX,
+		),
+	).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+});
+
+test("review.commentAdd stores a wire comment as the user's, whatever provenance it claims", async () => {
+	const rows = await handleTypedRequest("workspace.list", { projectId: PROJECT_ID }, CTX);
+	const workspace = rows[0];
+	if (!workspace) throw new Error("expected a workspace");
+	const claimed = {
+		workspaceId: workspace.id,
+		kind: "review",
+		anchor: null,
+		body: "a claimed finding",
+		author: "agent",
+		origin: { todoId: "t", sessionId: testSessionId("s"), reviewedSha: "sha1" },
+	} as const;
+	const comment = await handleTypedRequest("review.commentAdd", claimed, CTX);
+	expect(comment).toMatchObject({ body: "a claimed finding" });
+	expect(comment).not.toHaveProperty("author");
+	expect(comment).not.toHaveProperty("origin");
 });

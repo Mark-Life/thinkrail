@@ -1,14 +1,5 @@
-import {
-	FIELDS,
-	type Frontmatter,
-	LIST_LINK_FIELDS,
-	type LinkKind,
-	list,
-	SINGLE_LINK_FIELDS,
-	scalar,
-} from "./parse.ts";
-
-export const LINK_KINDS = [...SINGLE_LINK_FIELDS, ...LIST_LINK_FIELDS] as const;
+import { type Frontmatter, type LinkKind, list, scalar } from "./parse.ts";
+import { FIELDS, LINK_KINDS, SINGLE_LINK_FIELDS } from "./wire.ts";
 
 export interface SpecNode {
 	id: string;

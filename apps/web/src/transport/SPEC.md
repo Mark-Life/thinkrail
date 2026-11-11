@@ -33,13 +33,13 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   Receipts are deliberately best-effort and never retransmitted — one can die in a socket buffer exactly like a
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
-  `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
+  `subscribe`, typed by `WsChannelPayload<C>`, with last-value replay for snapshots; append-only terminal data and the one-shot terminal
   exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview` and `feedback.githubStar`
   channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
   subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. Reconnect/backoff;
   `inferUrl` defaults to
-  same-origin; **`httpBase()`** derives the host's HTTP origin
+  same-origin; `wireChecks.ts` and `welcome.ts` (see **Wire checks** under Get right); **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `piEventBatcher.ts`
   (the browser-side bounded queue for consecutive `pi.event` frames: exact arrival order, no dropped events,
@@ -63,6 +63,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
   re-listing the watched creation's project when the creation is gone, so a create that finished while
   disconnected lands on its workspace instead of racing the list refresh;
+  the welcome's `configReadFailed` and every `settings.changed` (a good read) via `syncConfigReadNotice`,
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
@@ -109,10 +110,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
-  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, a request that outlives its
+  `WsResponse.errorCode`. A response whose code is in `WS_ERROR_CODES` rejects with a `RequestError`, a request that outlives its
   `timeoutMs` with a **`RequestTimeoutError`** (the host may still finish it — a long install dialog says
-  "check the list" rather than "nothing happened"), and an unnamed host error with a plain `Error`, so *having*
-  a code is exactly how a caller tells "this specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
+  "check the list" rather than "nothing happened"), and an unnamed host error, or one whose code a newer host
+  added, with a `RequestError` coded **`HOST_ERROR`**, so error tracking always gets a code. A caller tells
+  "this specific failure" from "the read failed" by comparing to the code it handles, never by the mere
+  presence of a code); `skillLoad.ts` (the one app-integration coordinator for session
   resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
   ready, fold the conservative `skillChange: "unknown"` wildcard locally as a replay-safe fallback; capture
   the store tick only afterward. Its narrow `prewarmWorkspaceSkillLoad` entry lets a workspace navigator start
@@ -164,6 +167,9 @@ page sends at most 50. Each report carries the PostHog chunk ids (≤ 20) that t
 injected `_posthogChunkIds` registry assigns to URLs in its own stack, so uploaded maps resolve its frames.
 The browser never scrubs or holds a vendor client: the host is the only sanitizer.
 `main.tsx` installs the listeners and injects the forwarder into `components`' error-boundary seam.
+**`reportHandledFailure(place, error, fallback)`** is for a failure the UI recovers from (a chat that did
+not hydrate, a `localStorage` write that failed): it reports once per page and place, with
+`boundary` = the error's `RequestError` code, else `fallback`, then `:place`. The UI keeps its fallback.
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
@@ -172,7 +178,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
-  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
+  `installClientErrorReporting`, `reportClientError`, `reportHandledFailure`, `reportInvalidReply`, `reportDroppedFrame`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
   (`supportsToolResponses`), for one compatibility window — [[module-contracts]]. `runHostUpdate` is the typed empty host action
@@ -181,7 +187,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   serve theme files has welcomed it; `supportsFonts` (v102) gates the same way for the font settings and the
   custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
-  header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
+  header, answered by that file's `UserFontFile` entry; any other answer, a plain-text refusal or a body
+  that is not JSON, rejects with a `RequestError` coded **`FONT_UPLOAD_FAILED`** — while `hostUrl` resolves a host-relative path
   (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
   offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
@@ -204,9 +211,10 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
   and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
   client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.
-- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
+- **Allowed deps:** `@earendil-works/pi-schema` (`compile` only, in `wireChecks.ts` and `welcome.ts`); `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
-  `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
+  `WorkspaceRemoved` for `workspace.removed`, `parseWsResult` + `parseWsPush` + `wsChannelOf` + `WsClientPayload` + `WsEnvelope` for the wire checks,
+  `AnyHostWelcome` + `PartialAppConfig` + `HostPlatform` + `SpeechStatus` for the welcome parse,
   `SessionDeletedPayload` for `session.deleted`,
   `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
   `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
@@ -219,10 +227,31 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); `@thinkrail/locales` (user-visible request-failure messages); the browser `WebSocket`.
-- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
+- **Forbidden:** `server`/`shared`/any `pi` package other than `pi-schema`; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
 
 ## Get right
 
+- **Wire checks live in one place.** `handleMessage` parses the envelope, then each push by its channel and each
+  successful reply by its method, through contracts' `parseWsPush` and `parseWsResult`. Each returns the typed value, so
+  nothing casts what it checked: a pending request keeps a closure that parses and resolves, and subscribers sit in one
+  slot per channel typed by `WsClientPayload`. Everything past it trusts the type. Checks run in production: measured against the bare
+  transport, they add about 81 KB raw and 24 KB gzip of initial JS and about 0.1 µs per `pi.event`. Each schema compiles on
+  first use, and `pi-schema` generates no code, so a CSP without `unsafe-eval` does not refuse it.
+  - A push that fails, or names an unknown channel, is dropped. It does not flush the Pi event barrier or enter the
+    replay cache. A new channel or a bad event must not stop the UI.
+  - A reply that fails rejects that request with `INVALID_REPLY` and calls `onInvalidReply`. `main.tsx` wires that hook to
+    `reportInvalidReply`, whose report carries the method and code in `boundary`, never the reply. Its receipt is still sent.
+  - A frame that is no valid envelope but names a pending request id fails that request the same way, at once, not at
+    its timeout. Any other bad frame is dropped.
+  - Each dropped frame calls `onDroppedFrame` once per page for its kind: `INVALID_PUSH` once per channel, `UNKNOWN_PUSH`
+    and `INVALID_ENVELOPE` once each. `main.tsx` wires it to `reportDroppedFrame`, which sends each code once per page and
+    whose report carries only the code and channel in `boundary`, so a host that drifts from a channel schema shows in error tracking. The console names the
+    failing fields for a developer.
+  - Objects are open, so extra fields from a newer host pass. A required field that an older host lacks fails. Only
+    `server.welcome` has a floor ([[submodule-contracts-schema]]): `welcome.ts` parses each entry against this client's
+    schema and each config field against `PartialAppConfig`. An entry or field that fails is left out, warned with its
+    field name, and reported through `onDroppedFrame` as `INVALID_PUSH:server.welcome`, never with
+    its value. The rest of the welcome installs, and an absent config field takes its default.
 - **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**
   The server bounds network `git` at 55s precisely so its own error — naming the ref, carrying git's
   stderr — wins the race against the causeless `request "…" timed out` this side raises at 60s (issue #209;

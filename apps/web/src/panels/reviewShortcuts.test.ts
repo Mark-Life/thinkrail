@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import type { WorkspaceLayoutDocument } from "../shell/layout/types";
 import { createChangesTab, useAppStore } from "../store";
 import { ownsReviewShortcut } from "./reviewShortcuts";
@@ -7,14 +8,21 @@ const initial = useAppStore.getState();
 afterEach(() => useAppStore.setState(initial, true));
 
 const quiet = { querySelector: () => null };
-const modal = { querySelector: () => ({}) as Element };
-const key = (target: EventTarget | null = null) => ({ target }) as KeyboardEvent;
+const modal = { querySelector: () => ({}) };
+const key = (target: unknown = null) => ({ defaultPrevented: false, target });
 
 test("a review tab answers its shortcuts only while it is the tab the center is looking at", () => {
-	const branch = createChangesTab("ws1", "ws1:changes:branch", "Changes", { kind: "branch" });
-	const uncommitted = createChangesTab("ws1", "ws1:changes:uncommitted", "Changes · uncommitted", {
-		kind: "uncommitted",
+	const branch = createChangesTab(testWorkspaceId("ws1"), "ws1:changes:branch", "Changes", {
+		kind: "branch",
 	});
+	const uncommitted = createChangesTab(
+		testWorkspaceId("ws1"),
+		"ws1:changes:uncommitted",
+		"Changes · uncommitted",
+		{
+			kind: "uncommitted",
+		},
+	);
 	const layout: WorkspaceLayoutDocument = {
 		version: 2,
 		center: {
@@ -48,7 +56,7 @@ test("a review tab answers its shortcuts only while it is the tab the center is 
 		toolRestoreTargets: {},
 	};
 	useAppStore.setState({
-		activeWorkspaceId: "ws1",
+		activeWorkspaceId: testWorkspaceId("ws1"),
 		tabsByWorkspace: { ws1: [branch, uncommitted] },
 		layoutDocumentsByWorkspace: { ws1: layout },
 		layoutAttentionByWorkspace: {
@@ -64,9 +72,9 @@ test("a review tab answers its shortcuts only while it is the tab the center is 
 	expect(ownsReviewShortcut(key(), uncommitted, quiet)).toBe(true);
 	expect(ownsReviewShortcut(key(), branch, quiet)).toBe(false);
 	expect(ownsReviewShortcut(key(), uncommitted, modal)).toBe(false);
-	const textarea = { isContentEditable: false, tagName: "TEXTAREA" } as unknown as EventTarget;
-	const editable = { isContentEditable: true, tagName: "DIV" } as unknown as EventTarget;
-	const button = { isContentEditable: false, tagName: "BUTTON" } as unknown as EventTarget;
+	const textarea = { isContentEditable: false, tagName: "TEXTAREA" };
+	const editable = { isContentEditable: true, tagName: "DIV" };
+	const button = { isContentEditable: false, tagName: "BUTTON" };
 	expect(ownsReviewShortcut(key(textarea), uncommitted, quiet)).toBe(false);
 	expect(ownsReviewShortcut(key(editable), uncommitted, quiet)).toBe(false);
 	expect(ownsReviewShortcut(key(button), uncommitted, quiet)).toBe(true);

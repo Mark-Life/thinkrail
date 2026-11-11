@@ -27,7 +27,10 @@ fonts as JS options), `fontsLoaded` (resolves once the faces for that family, si
 loaded), and `watchFont(className, fields, onChange)` — how such a surface follows the class: the latest
 change wins once its faces load, a change to none of the listed fields is skipped, and a new face set (the
 `data-font-faces` signal) re-applies an unchanged font. It knows nothing about the settings or the runtime
-that publishes them.
+that publishes them. `./css-custom-properties` is type-only: it widens React's `CSSProperties` with `--*` keys,
+so an inline style can set a custom property without a cast. A file that sets one imports it as
+`import type {} from "@thinkrail/ui/css-custom-properties"`, which also puts the widening into every `tsc`
+program that compiles that file.
 
 Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
 primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,

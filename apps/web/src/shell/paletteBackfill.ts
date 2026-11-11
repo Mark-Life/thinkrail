@@ -1,14 +1,14 @@
-import type { Workspace } from "@thinkrail/contracts";
+import type { ProjectId, Workspace } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createBackfillQueue } from "./backfillQueue";
 
 type AppState = ReturnType<typeof useAppStore.getState>;
 
-export function projectNeedsWorkspaceList(state: AppState, projectId: string): boolean {
+export function projectNeedsWorkspaceList(state: AppState, projectId: ProjectId): boolean {
 	if (!state.projects.some((project) => project.id === projectId)) return false;
 	const list = state.workspaces[projectId];
 	if (list === undefined) return true;
-	const known = new Set(list.map((workspace) => workspace.id));
+	const known = new Set<string>(list.map((workspace) => workspace.id));
 	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
 		if (known.has(workspaceId) || state.removedWorkspaceIds[workspaceId]) continue;
 		if (Object.values(records).some((record) => record.projectId === projectId)) return true;
@@ -16,13 +16,13 @@ export function projectNeedsWorkspaceList(state: AppState, projectId: string): b
 	return false;
 }
 
-export function projectsNeedingWorkspaceLists(state: AppState): string[] {
+export function projectsNeedingWorkspaceLists(state: AppState): ProjectId[] {
 	return state.projects
 		.filter((project) => projectNeedsWorkspaceList(state, project.id))
 		.map((project) => project.id);
 }
 
-export function mergeProjectWorkspaces(projectId: string, rows: readonly Workspace[]): void {
+export function mergeProjectWorkspaces(projectId: ProjectId, rows: readonly Workspace[]): void {
 	const store = useAppStore.getState();
 	if (!store.projects.some((project) => project.id === projectId)) return;
 	const list = store.workspaces[projectId];
@@ -42,7 +42,7 @@ export function mergeProjectWorkspaces(projectId: string, rows: readonly Workspa
 }
 
 export interface PaletteBackfillSources {
-	readonly listWorkspaces: (projectId: string) => Promise<readonly Workspace[]>;
+	readonly listWorkspaces: (projectId: ProjectId) => Promise<readonly Workspace[]>;
 	readonly concurrency: number;
 }
 
@@ -64,8 +64,9 @@ function scheduleKey(state: AppState): string {
 export function createPaletteBackfill(sources: PaletteBackfillSources): PaletteBackfill {
 	const projects = createBackfillQueue({
 		concurrency: sources.concurrency,
-		isWanted: (projectId) => projectNeedsWorkspaceList(useAppStore.getState(), projectId),
-		run: async (projectId) => {
+		isWanted: (projectId: ProjectId) =>
+			projectNeedsWorkspaceList(useAppStore.getState(), projectId),
+		run: async (projectId: ProjectId) => {
 			const generation = useAppStore.getState().connectionGeneration;
 			const rows = await sources.listWorkspaces(projectId);
 			if (isConnectedGeneration(useAppStore.getState(), generation)) {

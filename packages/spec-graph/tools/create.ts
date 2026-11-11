@@ -1,42 +1,25 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import {
 	FIELDS,
 	type Frontmatter,
 	isSpec,
 	parseFile,
 	resolveSpecPath,
-	SPEC_STATUSES,
-	SPEC_TYPES,
+	SpecCreateInput,
 	serializeFrontmatter,
 } from "../core/index.ts";
-import { errorResult, getIndex, scaffoldBody, stringEnum, textResult } from "./shared.ts";
+import {
+	errorResult,
+	errorText,
+	getIndex,
+	scaffoldBody,
+	textResult,
+	toolParameters,
+} from "./shared.ts";
 
-const parameters = Type.Object({
-	path: Type.String({
-		description:
-			"Root-relative path for the new spec file, ending in .md (e.g. src/foo/SPEC.md). Must stay inside the project root.",
-	}),
-	id: Type.String({ description: "Unique spec id." }),
-	type: stringEnum(SPEC_TYPES, {
-		description:
-			"Spec type: goal-and-requirements | architecture-design | module-design | submodule-design | task-spec.",
-	}),
-	title: Type.String({ description: "Human-readable title." }),
-	status: Type.Optional(
-		stringEnum(SPEC_STATUSES, {
-			description: "Lifecycle status: draft | active | stale | done | deprecated.",
-		}),
-	),
-	parent: Type.Optional(Type.String({ description: "Parent id (the tree edge)." })),
-	dependsOn: Type.Optional(Type.Array(Type.String(), { description: "depends-on link ids." })),
-	references: Type.Optional(Type.Array(Type.String(), { description: "references link ids." })),
-	implements: Type.Optional(Type.Array(Type.String(), { description: "implements link ids." })),
-	covers: Type.Optional(Type.Array(Type.String(), { description: "covers ids." })),
-	tags: Type.Optional(Type.Array(Type.String(), { description: "tags." })),
-});
+const parameters = toolParameters(SpecCreateInput);
 
 export function registerSpecCreate(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, { path: string; id: string } | { error: string }>({
@@ -78,7 +61,7 @@ export function registerSpecCreate(pi: ExtensionAPI): void {
 				mkdirSync(dirname(abs), { recursive: true });
 				writeFileSync(abs, content, { encoding: "utf8", flag: "wx" });
 			} catch (err) {
-				return errorResult(`Failed to write ${rel}: ${(err as Error).message}`);
+				return errorResult(`Failed to write ${rel}: ${errorText(err)}`);
 			}
 			return textResult(`Created ${rel} (id: ${params.id}).`, { path: rel, id: params.id });
 		},

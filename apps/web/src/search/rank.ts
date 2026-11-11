@@ -1,12 +1,16 @@
+import { compile } from "@earendil-works/pi-schema";
 import {
 	MATCH_TIER,
 	type MatchField,
 	type MatchResult,
 	type MatchTerm,
+	MatchTier,
 	matchFields,
 } from "@thinkrail/contracts";
 import { adaptiveCounts, frecencyScore, type LearningSnapshot } from "./learning";
 import type { PaletteItem, PaletteRow } from "./model";
+
+const matchTier = compile(MatchTier);
 
 export interface RankedItem {
 	readonly item: PaletteItem;
@@ -59,13 +63,15 @@ export function rankItems(
 	const ranked: RankedItem[] = [];
 	const adaptive = adaptiveCounts(learning, query, nowMs);
 	for (const item of items) {
-		const match = item.match
-			? {
-					tier: item.match.tier as MatchResult["tier"],
-					score: item.match.score,
-					fields: Object.entries(item.match.ranges).map(([key, ranges]) => ({ key, ranges })),
-				}
-			: matchFields(terms, itemFields(item));
+		const tier = item.match?.tier;
+		const match =
+			item.match && matchTier.check(tier)
+				? {
+						tier,
+						score: item.match.score,
+						fields: Object.entries(item.match.ranges).map(([key, ranges]) => ({ key, ranges })),
+					}
+				: matchFields(terms, itemFields(item));
 		if (!match) continue;
 		const { boost, latched } = itemBoost(item, learning, adaptive, nowMs);
 		ranked.push({ item, match, total: match.score * 100 + boost, latched });

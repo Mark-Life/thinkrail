@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { JsonObject, type SessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	enterDefaultWorkspace,
 	openAppFresh,
@@ -15,7 +17,8 @@ const SETTINGS = join(E2E_PI_AGENT_DIR, "settings.json");
 
 function settingsWarnings(): unknown {
 	try {
-		return JSON.parse(readFileSync(SETTINGS, "utf8")).warnings;
+		const settings: unknown = JSON.parse(readFileSync(SETTINGS, "utf8"));
+		return JsonObject.check(settings) ? settings.warnings : undefined;
 	} catch (error) {
 		if (error instanceof SyntaxError) return undefined;
 		throw error;
@@ -46,7 +49,7 @@ async function openAnthropicSignIn(page: Page) {
 }
 
 interface NoticeWire {
-	notice(sessionId: string): void;
+	notice(sessionId: SessionId): void;
 	disableRequests: () => number;
 }
 
@@ -111,7 +114,7 @@ test("the chat banner dismisses per chat, and Don't warn again turns pi's warnin
 		page.locator('[data-testid="editor-tab"][data-kind="chat"][data-active="true"]'),
 	).toHaveAttribute("data-session-id", id);
 
-	wire.notice(id);
+	wire.notice(testSessionId(id));
 	const banner = page.getByTestId("extra-usage-notice");
 	await expect(banner).toHaveAttribute("data-context", "chat");
 	await expect(banner).toContainText(
@@ -123,7 +126,7 @@ test("the chat banner dismisses per chat, and Don't warn again turns pi's warnin
 	await expect(banner).toHaveCount(0);
 	expect(wire.disableRequests()).toBe(0);
 
-	wire.notice(id);
+	wire.notice(testSessionId(id));
 	await expect(banner).toBeVisible();
 	await banner.getByTestId("extra-usage-disable").click();
 	await expect(banner).toHaveCount(0);

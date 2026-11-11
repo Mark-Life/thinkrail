@@ -26,7 +26,7 @@ import type {
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
 import { useScrollViewState } from "../../support/useScrollViewState";
-import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
+import { diffContentStamp, stampedComposerDraft, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
 import {
@@ -61,6 +61,11 @@ const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 const NO_BLOCKS: ChangeBlock[] = [];
 const parsedDiffs = createDiffCache<FileDiffMetadata>();
 const actionBlocks = createDiffCache<ChangeBlock[]>();
+
+const PENDING_COMPOSER_DRAFT = stampedComposerDraft<{
+	composer: OpenComposer | BlockedSelection;
+	selectedLines: SelectedLineRange | null;
+}>();
 
 function textSide(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
@@ -300,10 +305,7 @@ function PierreDiffSurface({
 		() => (hunkActions ? blocks.map(actionAnnotation) : []),
 		[blocks, hunkActions],
 	);
-	const pending = useStampedComposer<{
-		composer: OpenComposer | BlockedSelection;
-		selectedLines: SelectedLineRange | null;
-	}>(diffContentStamp(original, modified));
+	const pending = useStampedComposer(PENDING_COMPOSER_DRAFT, diffContentStamp(original, modified));
 	const composer = pending.selection?.composer ?? null;
 	const selectedLines = pending.selection?.selectedLines ?? null;
 	const { select, close: closeComposer } = pending;

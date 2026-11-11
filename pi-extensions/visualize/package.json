@@ -31,6 +31,7 @@
 	"exports": {
 		".": "./index.ts",
 		"./index.ts": "./index.ts",
+		"./schema": "./src/schema.ts",
 		"./package.json": "./package.json"
 	},
 	"publishConfig": {

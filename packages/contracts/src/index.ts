@@ -2,48 +2,38 @@ export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
-	CODE_FONT_SIZE,
-	COMPOSER_GROWTH_LIMITS,
 	clampToCodePoints,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
 	FIRST_PROMPT_MAX_LENGTH,
-	FONT_FALLBACKS_MAX,
-	FONT_FAMILY_NAME_MAX_LENGTH,
-	FONT_ROLES,
-	FONT_WEIGHT_OFFSET,
 	firstPromptHead,
 	firstPromptOfTexts,
 	fontFamilyRefKey,
 	hasControlCharacter,
 	IMAGE_MAX_BASE64_BYTES,
 	interruptedResource,
+	isBackgroundCommandOutputDetails,
 	isCodeFontSize,
-	isComposerGrowthLimit,
 	isControlMessage,
 	isDelegationRunDetails,
 	isFontChoice,
 	isFontFamilyName,
 	isFontFamilyRef,
-	isFontRole,
 	isFontWeightOffset,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLiveResource,
 	isLocalePreference,
+	isMcpContentBlockSummary,
 	isPlanReviewResult,
 	isRetriedAttempt,
 	isSettleIdleDays,
 	isSkillGroupEnabled,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
-	isTerminalWindowsShell,
 	isThemeMode,
-	isUserFontFile,
-	JBCENTRAL_QUOTA_REFRESH_SECONDS,
-	LINE_WIDTH_COLUMNS,
 	MAX_HISTORY_LIMIT,
 	MAX_HISTORY_QUERY_LENGTH,
 	MAX_SEARCH_GROUP_LIMIT,
@@ -52,8 +42,9 @@ export {
 	normalizeFontSettings,
 	normalizeThemePreference,
 	OTHER_AGENT_SKILL_GROUPS,
-	PLAN_REVIEW_VERDICTS,
+	parseAppConfigFields,
 	parsePiPackageInput,
+	parseUserFontFile,
 	RECENT_MODELS_LIMIT,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	RESOURCE_HISTORY_MAX_PAGE_LIMIT,
@@ -63,23 +54,18 @@ export {
 	resourceOutcome,
 	resourceRecordId,
 	resourceTallyTotal,
-	SEARCH_KINDS,
-	SETTLE_IDLE_DAYS,
 	SKILL_LISTING_MAX_TOKENS,
 	SKILL_LISTING_MIN_TOKENS,
-	SUBAGENT_MAX_CONCURRENT,
 	SURVEY_OPEN_TEXT_LIMIT,
 	SYSTEM_LOCALE_PREFERENCE,
 	surveyRatingValues,
-	TERMINAL_REPLAY_KB,
-	TERMINAL_WINDOWS_SHELLS,
-	THEME_MODES,
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 	USER_FONT_EXTENSIONS,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
 } from "./domain";
+export { keepValidFields } from "./fieldwise";
 export type {
 	ContentMatch,
 	FieldMatch,
@@ -87,7 +73,6 @@ export type {
 	MatchRange,
 	MatchResult,
 	MatchTerm,
-	MatchTier,
 	PreparedContent,
 } from "./match";
 export {
@@ -110,17 +95,24 @@ export {
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
+export * from "./schema";
 export type { SearchFieldSource } from "./searchFields";
 export { searchHitFields } from "./searchFields";
-export type * from "./speech";
 export {
 	isSpeechErrorCode,
 	isSpeechModel,
 	parseSpeechClientMessage,
 	parseSpeechServerMessage,
-	SPEECH_ERROR_CODES,
-	SPEECH_MODELS,
 	SPEECH_SAMPLE_RATE,
 	SPEECH_SOCKET_ROUTE,
 } from "./speech";
+export type { Parsed, WsClientChannelMap, WsClientPayload } from "./wireChecks";
+export {
+	describeFailure,
+	parseWsPush,
+	parseWsResult,
+	wsChannelOf,
+	wsPushValidator,
+	wsResultValidator,
+} from "./wireChecks";
 export * from "./wsProtocol";

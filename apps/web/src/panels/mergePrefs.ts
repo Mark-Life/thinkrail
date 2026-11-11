@@ -1,6 +1,7 @@
-import type { MergeMethod } from "@thinkrail/contracts";
+import { compile } from "@earendil-works/pi-schema";
+import { JsonObject, MergeMethod, type ProjectId } from "@thinkrail/contracts";
 import { STORAGE_PREFIX } from "../constants/branding";
-import { getTransport } from "../transport";
+import { getTransport, reportHandledFailure } from "../transport";
 
 export interface MergePrefs {
 	method?: MergeMethod;
@@ -8,21 +9,19 @@ export interface MergePrefs {
 }
 
 const FALLBACK_ORDER: MergeMethod[] = ["squash", "merge", "rebase"];
-const METHODS = new Set<string>(FALLBACK_ORDER);
+const isMergeMethod = compile(MergeMethod).check;
 
-function storageKey(projectId: string): string {
+function storageKey(projectId: ProjectId): string {
 	return `${STORAGE_PREFIX}merge-pr:${getTransport().httpBase()}:${projectId}`;
 }
 
-export function loadMergePrefs(projectId: string): MergePrefs {
+export function loadMergePrefs(projectId: ProjectId): MergePrefs {
 	try {
 		const raw: unknown = JSON.parse(localStorage.getItem(storageKey(projectId)) ?? "null");
-		if (typeof raw !== "object" || raw === null) return {};
-		const { method, deleteBranch } = raw as Record<string, unknown>;
+		if (!JsonObject.check(raw)) return {};
+		const { method, deleteBranch } = raw;
 		return {
-			...(typeof method === "string" && METHODS.has(method)
-				? { method: method as MergeMethod }
-				: {}),
+			...(isMergeMethod(method) ? { method } : {}),
 			...(typeof deleteBranch === "boolean" ? { deleteBranch } : {}),
 		};
 	} catch {
@@ -30,10 +29,12 @@ export function loadMergePrefs(projectId: string): MergePrefs {
 	}
 }
 
-export function saveMergePrefs(projectId: string, prefs: Required<MergePrefs>): void {
+export function saveMergePrefs(projectId: ProjectId, prefs: Required<MergePrefs>): void {
 	try {
 		localStorage.setItem(storageKey(projectId), JSON.stringify(prefs));
-	} catch {}
+	} catch (error) {
+		reportHandledFailure("merge-prefs-write", error, "STATE_FILE_WRITE_FAILED");
+	}
 }
 
 export function allowedMergeMethods(reported: MergeMethod[] | undefined): MergeMethod[] {

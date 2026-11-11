@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
 import { reconcileChangeArtifacts } from "./artifacts";
+import { renderFixPackage } from "./reviewPackage";
 import {
 	clearAllPendingReviews,
 	dropReviewRecord,
@@ -18,7 +20,6 @@ import {
 	approveTodoReview,
 	listTodos,
 	removeTodo,
-	renderFixPackage,
 	requestTodoFix,
 	reviewedShaSuperseded,
 	rollbackTodoFix,
@@ -32,7 +33,7 @@ import {
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const SESSION = "sess-review";
+const SESSION = testSessionId("sess-review");
 
 function sh(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -59,8 +60,8 @@ beforeEach(() => {
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
 			{
-				id: "w1",
-				projectId: "p1",
+				id: testWorkspaceId("w1"),
+				projectId: testProjectId("p1"),
 				name: "w1",
 				branch: "main",
 				worktreePath: repo,
@@ -80,7 +81,7 @@ afterEach(() => {
 /** A committed done item the way artifacts.ts leaves one, returning its id + sha. */
 function committedItem(store: TodoStore, title: string, file: string): { id: string; sha: string } {
 	writeFileSync(join(repo, file), "export {};\n");
-	const committed = gitCommitPaths("w1", title, [file]);
+	const committed = gitCommitPaths(testWorkspaceId("w1"), title, [file]);
 	if (!committed) throw new Error("commit failed");
 	const todo = store.add({
 		title,
@@ -99,11 +100,29 @@ test("reviewedShaSuperseded: true when an older sha lost the newest slot, else f
 			{ kind: "commit", sha: "sha2", label: "b" },
 		],
 	});
-	const ref = { workspaceId: "w1", sessionId: SESSION, id: todo.id };
+	const ref = { workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id: todo.id };
 	expect(reviewedShaSuperseded(ref, "sha1")).toBe(true);
 	expect(reviewedShaSuperseded(ref, "sha2")).toBe(false);
 	expect(reviewedShaSuperseded(ref, "")).toBe(false);
 	expect(reviewedShaSuperseded({ ...ref, id: "t_nope" }, "sha1")).toBe(false);
+});
+
+test("a bad section of a review sidecar costs that section: a spent auto cycle stays spent", () => {
+	const file = join(repo, ".thinkrail/context/todos", `${SESSION}.reviews.json`);
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, JSON.stringify({ version: 1, pending: [], autoCycles: { t_1: 1 } }));
+
+	expect(readAutoCycles(repo, SESSION, "t_1")).toBe(1);
+	expect(readdirSync(dirname(file)).some((name) => name.includes(".corrupt-"))).toBe(true);
+});
+
+test("a hand-edited auto-cycle count outside the JSON range drops with a copy", () => {
+	const file = join(repo, ".thinkrail/context/todos", `${SESSION}.reviews.json`);
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, '{"version":1,"autoCycles":{"t_1":1e999,"t_2":1}}');
+
+	expect(readAutoCycles(repo, SESSION, "t_1")).toBeUndefined();
+	expect(readAutoCycles(repo, SESSION, "t_2")).toBe(1);
 });
 
 test("review sidecar: put/read round-trip, rollback restore, corrupt file reads as none", () => {
@@ -137,7 +156,7 @@ test("listTodos decorates reviewable items (unreviewed, revision) and leaves dif
 	const research = store.add({ title: "research step" });
 	store.update(research.id, { status: "done" });
 
-	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	const wire = plan.todos.find((t) => t.id === id);
 	expect(wire?.review).toEqual({ state: "unreviewed", revision: 1 });
 	// No change set → not reviewable → no review decoration, ever.
@@ -148,8 +167,8 @@ test("approve records the watermark; a later revision commit reads as the unrevi
 	const store = new TodoStore(repo, SESSION);
 	const { id, sha } = committedItem(store, "step", "impl.ts");
 
-	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
-	let plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
+	let plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	let review = plan.todos.find((t) => t.id === id)?.review;
 	expect(review?.state).toBe("reviewed");
 	expect(review?.unreviewedShas).toBeUndefined();
@@ -157,7 +176,7 @@ test("approve records the watermark; a later revision commit reads as the unrevi
 
 	// A fix cycle appends a second commit — only IT is the unreviewed delta.
 	writeFileSync(join(repo, "impl2.ts"), "export {};\n");
-	const second = gitCommitPaths("w1", "feat: step", ["impl2.ts"]);
+	const second = gitCommitPaths(testWorkspaceId("w1"), "feat: step", ["impl2.ts"]);
 	if (!second) throw new Error("commit failed");
 	store.update(id, {
 		artifacts: [
@@ -165,7 +184,7 @@ test("approve records the watermark; a later revision commit reads as the unrevi
 			{ kind: "commit", sha: second.sha, label: "step" },
 		],
 	});
-	plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	review = plan.todos.find((t) => t.id === id)?.review;
 	expect(review?.revision).toBe(2);
 	expect(review?.unreviewedShas).toEqual([second.sha]);
@@ -176,11 +195,11 @@ test("an agent verdict watermarks the START-time shas — a commit landed mid-re
 	const { id, sha } = committedItem(store, "step", "impl.ts");
 
 	// The agent review starts: the pending mark captures the sha set the reviewer will actually read.
-	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+	startTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 
 	// The worker lands another commit WHILE the reviewer's turn is streaming.
 	writeFileSync(join(repo, "impl2.ts"), "export {};\n");
-	const second = gitCommitPaths("w1", "feat: step", ["impl2.ts"]);
+	const second = gitCommitPaths(testWorkspaceId("w1"), "feat: step", ["impl2.ts"]);
 	if (!second) throw new Error("commit failed");
 	store.update(id, {
 		artifacts: [
@@ -189,8 +208,8 @@ test("an agent verdict watermarks the START-time shas — a commit landed mid-re
 		],
 	});
 
-	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id }, "agent");
-	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id }, "agent");
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	const review = plan.todos.find((t) => t.id === id)?.review;
 	expect(review?.state).toBe("reviewed");
 	expect(review?.reviewing).toBeUndefined();
@@ -204,7 +223,7 @@ test("requestTodoFix records changes_requested + feedback and renders the contex
 	store.update(id, { summary: "Added throttling and fallback for failed batch sends." });
 
 	const { pkg, previous, requested } = requestTodoFix({
-		workspaceId: "w1",
+		workspaceId: testWorkspaceId("w1"),
 		sessionId: SESSION,
 		id,
 		feedback: "Don't retry RetryAfter here. Propagate it.",
@@ -217,14 +236,18 @@ test("requestTodoFix records changes_requested + feedback and renders the contex
 	expect(pkg).toContain("Don't retry RetryAfter here. Propagate it.");
 	expect(pkg).toContain("Do not create a new item");
 
-	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	const review = plan.todos.find((t) => t.id === id)?.review;
 	expect(review?.state).toBe("changes_requested");
 	expect(review?.feedback).toBe("Don't retry RetryAfter here. Propagate it.");
 
 	// A pre-turn send rejection rolls the record back to what it replaced (here: none).
-	rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous, requested);
-	const after = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	rollbackTodoFix(
+		{ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id },
+		previous,
+		requested,
+	);
+	const after = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(after.todos.find((t) => t.id === id)?.review?.state).toBe("unreviewed");
 });
 
@@ -232,16 +255,20 @@ test("a failed fix request cannot roll back a newer review decision", () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
 	const { previous, requested } = requestTodoFix({
-		workspaceId: "w1",
+		workspaceId: testWorkspaceId("w1"),
 		sessionId: SESSION,
 		id,
 		feedback: "change it",
 	});
-	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+	approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 
-	expect(rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous, requested)).toBe(
-		false,
-	);
+	expect(
+		rollbackTodoFix(
+			{ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id },
+			previous,
+			requested,
+		),
+	).toBe(false);
 	expect(readReviewRecords(repo, SESSION)[id]?.state).toBe("reviewed");
 });
 
@@ -249,14 +276,14 @@ test("review ops reject diff-less or unknown items; empty feedback is refused", 
 	const store = new TodoStore(repo, SESSION);
 	const research = store.add({ title: "research" });
 	expect(() =>
-		approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id: research.id }),
+		approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id: research.id }),
 	).toThrow(/no change set/);
 	expect(() =>
-		approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id: "t_missing" }),
+		approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id: "t_missing" }),
 	).toThrow(/No TODO/);
 	const { id } = committedItem(store, "step", "impl.ts");
 	expect(() =>
-		requestTodoFix({ workspaceId: "w1", sessionId: SESSION, id, feedback: "  " }),
+		requestTodoFix({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id, feedback: "  " }),
 	).toThrow(/must not be empty/);
 });
 
@@ -288,8 +315,8 @@ test("removeTodo drops a pending/in_progress item plus its baseline + review rec
 	store.update(active.id, { status: "in_progress" });
 	setAutoCycles(repo, SESSION, active.id, 1);
 
-	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: pending.id });
-	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: active.id });
+	await removeTodo({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id: pending.id });
+	await removeTodo({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id: active.id });
 
 	const plan = new TodoStore(repo, SESSION).read();
 	expect(plan.todos.find((t) => t.id === pending.id)).toBeUndefined();
@@ -301,15 +328,15 @@ test("removeTodo refuses a done item \u2014 completed steps are the plan's histo
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
 
-	await expect(removeTodo({ workspaceId: "w1", sessionId: SESSION, id })).rejects.toThrow(
-		/already done/,
-	);
+	await expect(
+		removeTodo({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id }),
+	).rejects.toThrow(/already done/);
 	expect(new TodoStore(repo, SESSION).get(id)).toBeDefined();
 });
 
 test("removeTodo on an unknown id is a no-op (idempotent)", async () => {
 	await expect(
-		removeTodo({ workspaceId: "w1", sessionId: SESSION, id: "t_nope" }),
+		removeTodo({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id: "t_nope" }),
 	).resolves.toEqual({ ok: true });
 });
 
@@ -337,16 +364,16 @@ test("review sidecar meta: pending marks; decoration ships reviewing/reviewedBy"
 
 	// Start review marks the item in flight (the `reviewing` decoration) and renders the package: a
 	// change-set REFERENCE only — the reviewer role and output contract belong to host/reviewerRole.
-	const { pkg } = startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+	const { pkg } = startTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 	expect(pkg).toContain(`Plan step ${id}`);
 	expect(pkg).not.toContain("review_verdict");
 	expect(pkg).not.toContain("add_review_comment");
-	let plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	let plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBe(true);
 
 	// An agent approve settles it, labeled, and clears the mark.
-	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id }, "agent");
-	plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id }, "agent");
+	plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	const review = plan.todos.find((t) => t.id === id)?.review;
 	expect(review?.state).toBe("reviewed");
 	expect(review?.reviewedBy).toBe("agent");
@@ -358,26 +385,28 @@ test("recordAgentChangesRequested stores the verdict note + autoCycles for the 1
 	const { id } = committedItem(store, "step", "impl.ts");
 	const { recordAgentChangesRequested, todoReviewAutoCycles, todoReviewRecord, startTodoReview } =
 		await import("./todos");
-	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+	startTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 	recordAgentChangesRequested({
-		workspaceId: "w1",
+		workspaceId: testWorkspaceId("w1"),
 		sessionId: SESSION,
 		id,
 		note: "propagate RetryAfter",
 		autoCycles: 1,
 	});
-	const record = todoReviewRecord({ workspaceId: "w1", sessionId: SESSION, id });
+	const record = todoReviewRecord({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 	expect(record?.state).toBe("changes_requested");
 	expect(record?.feedback).toBe("propagate RetryAfter");
-	expect(todoReviewAutoCycles({ workspaceId: "w1", sessionId: SESSION, id })).toBe(1);
-	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	expect(todoReviewAutoCycles({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id })).toBe(
+		1,
+	);
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBeUndefined();
 });
 
 test("recordAgentChangesRequested writes record + cycle + pending-clear as one snapshot (no partial state on a late sidecar rename)", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
-	const ref = { workspaceId: "w1", sessionId: SESSION, id };
+	const ref = { workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id };
 	const { recordAgentChangesRequested, todoReviewAutoCycles, todoReviewRecord, startTodoReview } =
 		await import("./todos");
 	startTodoReview(ref);
@@ -402,7 +431,7 @@ test("recordAgentChangesRequested writes record + cycle + pending-clear as one s
 	expect(renames).toBe(1);
 	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
 	expect(todoReviewAutoCycles(ref)).toBe(1);
-	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	const plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBeUndefined();
 });
 
@@ -411,20 +440,20 @@ test("clearAllPendingReviews clears every session's stale in-flight mark under a
 	const { id } = committedItem(store, "step", "impl.ts");
 
 	// A settled EARLIER round already recorded a verdict...
-	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id }, "agent");
+	approveTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id }, "agent");
 	// ...then a re-review starts (a later commit added an unreviewed delta) and marks the item
 	// in-flight, but — this is the crash being simulated — no verdict is ever recorded for it: that's
 	// exactly what makes the mark "stuck" (nothing durable or in-memory will ever settle it).
-	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+	startTodoReview({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id });
 
-	let plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	let plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBe(true);
 
 	// Simulates the boot-time sweep finding a mark from a process that no longer exists: nothing was
 	// registered in this call's (fresh) in-memory maps, so every mark it finds predates it by construction.
 	expect(clearAllPendingReviews(repo)).toEqual([{ sessionId: SESSION, itemIds: [id] }]);
 
-	plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	plan = await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION });
 	const review = plan.todos.find((t) => t.id === id)?.review;
 	expect(review?.reviewing).toBeUndefined();
 	// Only the spinner is a lease — the verdict already recorded (from before the interrupted
@@ -456,14 +485,16 @@ test("the path-list fallback drops the review verdict but preserves the spent au
 	expect(readReviewRecords(repo, SESSION)[id]).toBeUndefined();
 	// ...but the auto-cycle bookkeeping must survive: a later manual review must not read this as a
 	// fresh item and grant a second automated cycle past the 1-cycle cap.
-	expect(todoReviewAutoCycles({ workspaceId: "w1", sessionId: SESSION, id })).toBe(1);
+	expect(todoReviewAutoCycles({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION, id })).toBe(
+		1,
+	);
 
 	// This is exactly the (state, reviewing, autoCycles) triple host/requestReview.ts's maybeAutoReReview
 	// reads to decide whether to fire a re-review: `state: "unreviewed"` with no reviewing flag, but a
 	// spent auto cycle still on record — the signal that a path-list fix landed and must be re-reviewed.
-	const review = (await listTodos({ workspaceId: "w1", sessionId: SESSION })).todos.find(
-		(t) => t.id === id,
-	)?.review;
+	const review = (
+		await listTodos({ workspaceId: testWorkspaceId("w1"), sessionId: SESSION })
+	).todos.find((t) => t.id === id)?.review;
 	expect(review?.state).toBe("unreviewed");
 	expect(review?.reviewing).toBeUndefined();
 });

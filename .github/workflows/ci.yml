@@ -4,7 +4,7 @@ name: CI
 # The @agent specs need a real provider + auth, so they stay out of CI. See .github/SPEC.md → CI.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "ci-base/**"]
   merge_group:
     types: [checks_requested]
 

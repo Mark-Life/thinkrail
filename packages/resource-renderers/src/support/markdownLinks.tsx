@@ -1,3 +1,5 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
+import type { Nodes, Root } from "mdast";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 import type { ResourceHost } from "../host";
@@ -45,20 +47,13 @@ function relativePathname(href: string): string {
 	return i < 0 ? href : href.slice(0, i);
 }
 
-interface MdNode {
-	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hProperties?: Record<string, unknown> };
-}
-
-function headingText(node: MdNode): string {
-	if (typeof node.value === "string") return node.value;
-	return (node.children ?? []).map(headingText).join("");
+function headingText(node: Nodes): string {
+	if ("value" in node) return node.value;
+	return "children" in node ? node.children.map(headingText).join("") : "";
 }
 
 export function remarkHeadingIds() {
-	return (tree: MdNode): void => {
+	return (tree: Root): void => {
 		const seen = new Map<string, number>();
 		walk(tree, (node) => {
 			if (node.type !== "heading") return;
@@ -72,9 +67,9 @@ export function remarkHeadingIds() {
 	};
 }
 
-function walk(node: MdNode, visit: (n: MdNode) => void): void {
+function walk(node: Nodes, visit: (n: Nodes) => void): void {
 	visit(node);
-	for (const child of node.children ?? []) walk(child, visit);
+	if ("children" in node) for (const child of node.children) walk(child, visit);
 }
 
 function scrollToAnchor(id: string): void {
@@ -118,10 +113,10 @@ export function srcsetCandidates(srcSet: string): { url: string; descriptor: str
 }
 
 export function documentComponents(
-	ctx: { workspaceId: string; path: string },
+	ctx: { workspaceId: WorkspaceId; path: string },
 	{ bytesUrl, openFile }: Pick<ResourceHost, "bytesUrl" | "openFile">,
 ): Components {
-	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {
+	function DocumentLink({ href, children }: { href?: string | undefined; children?: ReactNode }) {
 		const kind = classifyHref(href);
 		if (kind === "anchor" && href) {
 			return (
@@ -183,12 +178,12 @@ export function documentComponents(
 		height,
 		align,
 	}: {
-		src?: string;
-		alt?: string;
-		title?: string;
-		width?: string | number;
-		height?: string | number;
-		align?: string;
+		src?: string | undefined;
+		alt?: string | undefined;
+		title?: string | undefined;
+		width?: string | number | undefined;
+		height?: string | number | undefined;
+		align?: string | undefined;
 	}) {
 		const floated =
 			align === "right" ? "float-right ml-8" : align === "left" ? "float-left mr-8" : undefined;
@@ -210,13 +205,13 @@ export function documentComponents(
 		type,
 		sizes,
 	}: {
-		srcSet?: string;
-		media?: string;
-		type?: string;
-		sizes?: string;
+		srcSet?: string | undefined;
+		media?: string | undefined;
+		type?: string | undefined;
+		sizes?: string | undefined;
 	}) {
 		return <source srcSet={resolveSourceSet(srcSet)} media={media} type={type} sizes={sizes} />;
 	}
 
-	return { a: DocumentLink, img: DocumentImage, source: DocumentSource } as Components;
+	return { a: DocumentLink, img: DocumentImage, source: DocumentSource };
 }

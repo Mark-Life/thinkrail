@@ -15,7 +15,14 @@ dir), read and written by read-modify-write. The
 file is the source of truth; the store holds no mutable state, so every method re-reads and stale reads
 are impossible (the agent's in-session writes and the UI's edits converge on the same file). Robust by
 construction: a missing or corrupt file reads as an empty list, and unknown/invalid fields are dropped on
-read (`sanitize`), so a hand-edited file never crashes a session.
+read (`sanitize`), so a hand-edited file never crashes a session. Private `pi-schema` schemas type every field of the file,
+each item, group and artifact; a field that fails drops alone and its entry stays, with an absent field's default. When a
+read loses anything — not JSON, not an object, a field, an item, a group or an artifact — the bytes go to
+`<file>.corrupt-<content hash>` first, so the next write cannot destroy the plan. A file that exists but cannot be read, or
+whose copy cannot be written, reads as empty and refuses every write with `TodoStoreError` (`STATE_FILE_UNREADABLE`) until a
+read succeeds, the same rule as the host's state files. `observeTodoStoreProblems` reports each copy (`STATE_FILE_SET_ASIDE`) and each refusal
+(`STATE_FILE_UNREADABLE`) with no plan text; the host routes it to `logger("todos")`. This package takes no
+`@thinkrail/*` dep, so it keeps its own copy of those rules, and its copies have no limit.
 
 **Artifacts.** An item may carry `artifacts` — links to what the work produced: `kind: "file" | "change" |
 "spec" | "commit"`, an optional `label`, and per kind either a worktree-relative `path`
@@ -23,8 +30,8 @@ read (`sanitize`), so a hand-edited file never crashes a session.
 stores them; it does not resolve paths, compute diffs, or touch git. `file`/`spec` are attached by the
 agent (a `spec` naturally from `spec_create`'s `{path,id}`); `change` **and** `commit` are attached by the
 host when an item reaches `done` — the host commits the item's work and records just the sha, or falls
-back to a `change` path-list when it couldn't commit (see `server/src/todos` — the store stays git-free). `sanitize` drops an entry lacking its key (a `commit` with
-no `sha`, any other kind with no `path`). The on-disk `version` is `6` (`3` added `artifacts`, `4` added
+back to a `change` path-list when it couldn't commit (see `server/src/todos` — the store stays git-free). An entry lacking its key (a `commit` with
+no `sha`, any other kind with no `path`) drops: on read with a copy; on a write it is input the caller shaped, so it drops without one. The on-disk `version` is `6` (`3` added `artifacts`, `4` added
 the `commit` kind, `5` added the `summary` fields, `6` added `commitSubject`); an older file reads cleanly
 and is upgraded on the next write.
 
@@ -163,7 +170,7 @@ surgical mid-plan insert (`after` wins over `group`; an unknown id throws).
 
 The `index.ts` barrel:
 - `TodoStore` (constructed per `(root, sessionId)`, incl. `setSummary` — the plan-level completion
-  summary), `STORE_DIR` / `storeRel`, and the `countItems(plan)`
+  summary), `TodoStoreError`, `observeTodoStoreProblems` with `TodoStoreProblem`, `STORE_DIR` / `storeRel`, and the `countItems(plan)`
   + `flatItems(plan)` (every item in display order: groups first, the user's loose lane last — the one
   flatten reused by reads/updates/rendering) + `groupStatus(group)` helpers.
 - The model types: `Todo`, `TodoGroup`, `TodoPlan`, `TodoFile`, `TodoInput`, `TodoPatch`,
@@ -172,6 +179,16 @@ The `index.ts` barrel:
 - The `TODO_STATUSES` (`pending | in_progress | done`), `TODO_ORIGINS` (`agent | user`), and
   `TODO_GROUP_STATUSES` (`pending | active | done`, derived-only) tuples — the single source for the
   tools' param enums. (There is **no** priority concept; priorities were dropped.)
+
+**The `pi-todos/wire` leaf (`wire.ts`) owns the shapes.** It holds the value lists, their `pi-schema`
+enum schemas and same-named types (`TodoStatus`, `TodoOrigin`, `TodoArtifactKind`, `TodoGroupStatus`),
+the open `TodoArtifact` schema and the field records `TODO_ARTIFACT_FIELDS`, `TODO_FIELDS`,
+`TODO_GROUP_FIELDS` and `TODO_PLAN_FIELDS`. `types.ts` derives `Todo`, `TodoGroup` and `TodoPlan` from the
+records; `TodoInput`, `TodoPatch` and `WriteItem` are `Pick`/`Partial` of `Todo` plus their own fields.
+`store.ts` builds its lenient read schemas by spreading the same records and overriding only what a read
+forgives (a missing status, origin or timestamp, unchecked artifact entries). `@thinkrail/contracts` builds
+the wire schemas from these records and only extends them (the `adopted` origin, review, files, group
+status, host-derived fields).
 
 Writes are atomic (temp file + `rename`); a session id is validated as a safe path segment before it
 becomes a filename.
@@ -197,8 +214,11 @@ reload.
 
 ## Boundary
 
-- **Allowed deps:** Node built-ins only (`node:fs`, `node:path`, `node:crypto`).
-- **Forbidden:** any `@earendil-works/*` **and any `@thinkrail/*`** import — this is the pi-free,
+- **Allowed deps:** Node built-ins (`node:fs`, `node:path`, `node:crypto`) and `@earendil-works/pi-schema`, a real
+  `dependency` of this package: `pi install` skips peers and pi's extension loader does not provide it.
+  `wire.ts` is a browser leaf: it imports `pi-schema` only, never a Node built-in or a relative file by
+  value (`check:boundaries`).
+- **Forbidden:** any other `@earendil-works/*` **and any `@thinkrail/*`** import — this is the pi-free,
   thinkrail-free layer the host can value-import without pulling pi into its bundle, and that stays
   installable under vanilla `pi`. Consequence: `STORE_DIR` (`.thinkrail/context/todos`) carries a **local
   mirror** of `@thinkrail/shared`'s `WORKSPACE_CONTEXT_DIR` rather than importing it — the shared constant

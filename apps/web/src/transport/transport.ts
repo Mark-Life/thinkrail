@@ -1,19 +1,70 @@
-import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import type {
+	SessionId,
+	WsChannel,
+	WsClientPayload,
+	WsEnvelope,
+	WsMethodName,
+	WsParams,
+	WsResult,
+} from "@thinkrail/contracts";
+import {
+	PROTOCOL_VERSION,
+	parseWsPush,
+	parseWsResult,
+	WS_CHANNELS,
+	wsChannelOf,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
-import { RequestError, RequestTimeoutError } from "./requestError";
+import { knownErrorCode, RequestError, RequestTimeoutError } from "./requestError";
+import { readHostFrame } from "./wireChecks";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
-type PushHandler = (data: unknown) => void;
 
 export interface TransportOptions {
 	url?: string;
 	onStatus?: (status: ConnectionStatus) => void;
 }
 
-interface TransportDispatchHooks {
-	beforeDispatch?: (message: WsServerMessage) => void;
+/** A host frame the transport dropped. Each kind, and each channel, is reported once per page. */
+export type DroppedFrame =
+	| { readonly code: "INVALID_PUSH"; readonly channel: WsChannel }
+	| { readonly code: "UNKNOWN_PUSH" }
+	| { readonly code: "INVALID_ENVELOPE" };
+
+/** The code a dropped frame is reported under: `INVALID_PUSH:<channel>`, `UNKNOWN_PUSH` or `INVALID_ENVELOPE`. */
+export function droppedFrameCode(frame: DroppedFrame) {
+	return frame.code === "INVALID_PUSH" ? `${frame.code}:${frame.channel}` : frame.code;
+}
+
+export interface TransportDispatchHooks {
+	beforeDispatch?: (message: WsEnvelope) => void;
+	onInvalidReply?: (method: WsMethodName) => void;
+	onDroppedFrame?: (frame: DroppedFrame) => void;
+}
+
+interface PendingRequest {
+	readonly method: WsMethodName;
+	readonly frame: string;
+	/** Resolves the request with its checked result, or returns why the result was refused. */
+	readonly settle: (result: unknown) => string | null;
+	readonly reject: (error: Error) => void;
+	readonly timer: ReturnType<typeof setTimeout>;
+}
+
+interface ChannelSlot<T> {
+	readonly handlers: Set<(data: T) => void>;
+	latest: { readonly data: T } | undefined;
+}
+
+type ChannelSlots<C extends WsChannel> = { [K in C]?: ChannelSlot<WsClientPayload<K>> };
+
+function slotOf<C extends WsChannel>(slots: ChannelSlots<C>, channel: C) {
+	const known = slots[channel];
+	if (known) return known;
+	const created: ChannelSlot<WsClientPayload<C>> = { handlers: new Set(), latest: undefined };
+	slots[channel] = created;
+	return created;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -45,7 +96,7 @@ function withClientId(url: string): string {
 }
 
 export interface RequestOptions {
-	sessionId?: string;
+	sessionId?: SessionId;
 	timeoutMs?: number;
 }
 
@@ -53,19 +104,11 @@ export class WsTransport {
 	private ws: WebSocket | null = null;
 	private readonly url: string;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
-	private readonly beforeDispatch: ((message: WsServerMessage) => void) | undefined;
+	private readonly hooks: TransportDispatchHooks;
 	private seq = 0;
-	private readonly pending = new Map<
-		string,
-		{
-			frame: string;
-			resolve: (v: unknown) => void;
-			reject: (e: Error) => void;
-			timer: ReturnType<typeof setTimeout>;
-		}
-	>();
-	private readonly subscribers = new Map<string, Set<PushHandler>>();
-	private readonly latest = new Map<string, unknown>();
+	private readonly pending = new Map<string, PendingRequest>();
+	private readonly channels: ChannelSlots<WsChannel> = {};
+	private readonly dropped = new Set<string>();
 	private ackQueue: string[] = [];
 	private ackScheduled = false;
 	private backoff = 500;
@@ -73,7 +116,7 @@ export class WsTransport {
 	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
 		this.onStatus = opts.onStatus;
-		this.beforeDispatch = dispatchHooks.beforeDispatch;
+		this.hooks = dispatchHooks;
 	}
 
 	httpBase(): string {
@@ -123,8 +166,14 @@ export class WsTransport {
 				reject(new RequestTimeoutError(t("app.transport.timedOut", { method })));
 			}, timeoutMs);
 			this.pending.set(id, {
+				method,
 				frame,
-				resolve: resolve as (v: unknown) => void,
+				settle: (result) => {
+					const parsed = parseWsResult(method, result);
+					if (!parsed.ok) return parsed.problem;
+					resolve(parsed.value);
+					return null;
+				},
 				reject,
 				timer,
 			});
@@ -132,16 +181,15 @@ export class WsTransport {
 		});
 	}
 
-	subscribe(channel: string, handler: PushHandler): () => void {
-		let set = this.subscribers.get(channel);
-		if (!set) {
-			set = new Set();
-			this.subscribers.set(channel, set);
-		}
-		set.add(handler);
-		if (this.latest.has(channel)) handler(this.latest.get(channel));
+	subscribe<C extends WsChannel>(
+		channel: C,
+		handler: (data: WsClientPayload<C>) => void,
+	): () => void {
+		const slot = slotOf(this.channels, channel);
+		slot.handlers.add(handler);
+		if (slot.latest) handler(slot.latest.data);
 		return () => {
-			this.subscribers.get(channel)?.delete(handler);
+			slot.handlers.delete(handler);
 		};
 	}
 
@@ -173,30 +221,84 @@ export class WsTransport {
 
 	private handleMessage(raw: unknown): void {
 		if (typeof raw !== "string") return;
-		let msg: WsServerMessage;
-		try {
-			msg = JSON.parse(raw) as WsServerMessage;
-		} catch {
+		const frame = readHostFrame(raw);
+		if (!frame.ok) {
+			this.refuseFrame(frame.id);
 			return;
 		}
-		this.beforeDispatch?.(msg);
+		const msg = frame.envelope;
 		if ("channel" in msg) {
-			if (!NON_REPLAYABLE_CHANNELS.has(msg.channel)) this.latest.set(msg.channel, msg.data);
-			const set = this.subscribers.get(msg.channel);
-			if (set) for (const handler of set) handler(msg.data);
+			const channel = wsChannelOf(msg.channel);
+			if (channel === undefined) {
+				this.drop({ code: "UNKNOWN_PUSH" }, `dropped a push on unknown channel ${msg.channel}`);
+				return;
+			}
+			this.dispatchPush(channel, msg);
 			return;
 		}
+		this.hooks.beforeDispatch?.(msg);
 		this.queueAck(msg.id);
-		const entry = this.pending.get(msg.id);
+		const entry = this.takePending(msg.id);
 		if (!entry) return;
-		clearTimeout(entry.timer);
-		this.pending.delete(msg.id);
 		if (msg.ok) {
-			entry.resolve(msg.result);
+			const problem = entry.settle(msg.result);
+			if (problem !== null) this.refuseReply(entry, problem);
 			return;
 		}
-		const message = msg.error ?? t("app.transport.requestFailed");
-		entry.reject(msg.errorCode ? new RequestError(msg.errorCode, message) : new Error(message));
+		const code = knownErrorCode(msg.errorCode);
+		entry.reject(new RequestError(code ?? "HOST_ERROR", msg.error));
+	}
+
+	private dispatchPush<C extends WsChannel>(
+		channel: C,
+		msg: Extract<WsEnvelope, { channel: string }>,
+	): void {
+		const parsed = parseWsPush(channel, msg.data);
+		if (!parsed.ok) {
+			this.drop(
+				{ code: "INVALID_PUSH", channel },
+				`dropped a push on ${channel}: ${parsed.problem}`,
+			);
+			return;
+		}
+		this.hooks.beforeDispatch?.(msg);
+		const slot = slotOf(this.channels, channel);
+		if (!NON_REPLAYABLE_CHANNELS.has(channel)) slot.latest = { data: parsed.value };
+		for (const handler of slot.handlers) handler(parsed.value);
+	}
+
+	private takePending(id: string): PendingRequest | undefined {
+		const entry = this.pending.get(id);
+		if (!entry) return undefined;
+		clearTimeout(entry.timer);
+		this.pending.delete(id);
+		return entry;
+	}
+
+	private refuseFrame(id: string | undefined): void {
+		const entry = id === undefined ? undefined : this.takePending(id);
+		if (id !== undefined && entry) {
+			this.queueAck(id);
+			this.refuseReply(entry, "the reply is not a valid envelope");
+			return;
+		}
+		this.drop({ code: "INVALID_ENVELOPE" }, "dropped a host frame that is not a valid envelope");
+	}
+
+	private refuseReply(entry: PendingRequest, problem: string): void {
+		console.warn(`refused the reply to ${entry.method}:`, problem);
+		this.hooks.onInvalidReply?.(entry.method);
+		entry.reject(
+			new RequestError("INVALID_REPLY", t("app.transport.invalidReply", { method: entry.method })),
+		);
+	}
+
+	private drop(frame: DroppedFrame, detail: string): void {
+		const key = droppedFrameCode(frame);
+		if (this.dropped.has(key)) return;
+		this.dropped.add(key);
+		console.warn(detail);
+		this.hooks.onDroppedFrame?.(frame);
 	}
 }
 

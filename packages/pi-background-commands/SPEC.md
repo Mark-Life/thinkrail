@@ -20,17 +20,35 @@ restart/rerun, daemon discovery, or arbitrary-process management.
   snapshots, bounded output, cancellation and completion-delivery bookkeeping; the
   `background_command` Pi tool and a default vanilla-Pi extension entry.
 - **Public surface:** `BACKGROUND_COMMAND_COMPLETION_MESSAGE`, `BackgroundCommandInput`,
+  `BackgroundCommandToolArgs`,
   `BackgroundCommandsExtensionOptions`, `CompletionDelivery`, `createBackgroundCommandsExtension`,
   `createBackgroundCommands`, `default`, `BackgroundCommandCompletion`,
-  `BackgroundCommandCompletionBinding`, `BackgroundCommandContext`, `BackgroundCommandFlush`,
-  `BackgroundCommandHandle`, `BackgroundCommandOutput`, `BackgroundCommandSnapshot`,
+  `BackgroundCommandCompletionBinding`, `BackgroundCommandCompletionDetails`,
+  `BackgroundCommandContext`, `BackgroundCommandFlush`, `BackgroundCommandHandle`,
+  `BackgroundCommandOutput`, `BackgroundCommandOutputDetails`, `BackgroundCommandSnapshot`,
   `BackgroundCommandStart`, `BackgroundCommandStatus`, `BackgroundCommands`,
-  `BackgroundCommandsBinding`, `BackgroundCommandsOptions`.
-- **Allowed deps:** public package-root Pi SDK APIs and `typebox` as peers; Node standard libraries.
-  Execution delegates to Pi's exported `createLocalBashOperations`, not a copied spawn runner.
+  `BackgroundCommandsBinding`, `BackgroundCommandsOptions`, `BackgroundCommandTerminalSnapshot`,
+  `BackgroundCommandTerminalStatus`.
+- `BackgroundCommandToolArgs` is the tool's raw arguments, a `pi-schema` schema in the `./wire` leaf. The tool
+  hands it to pi through `Type.Unsafe` typed as its own `Static`, because pi types `parameters` as TypeBox and
+  checks them as plain JSON Schema.
+- **`./wire` leaf entry** (`src/wire.ts`) owns every shape that leaves the package:
+  `BACKGROUND_COMMAND_STATUSES`, `BACKGROUND_COMMAND_TERMINAL_STATUSES`, their schemas and types,
+  `BACKGROUND_COMMAND_SNAPSHOT_FIELDS` (`startedAt` and `finishedAt` are bounded epoch ms),
+  `BACKGROUND_COMMAND_TERMINAL_SNAPSHOT_FIELDS`, `BackgroundCommandOutput`,
+  `BACKGROUND_COMMAND_COMPLETION_FIELDS` (the terminal snapshot without `command`, plus `output` and
+  an optional `delivery`), `COMPLETION_DELIVERIES` / `CompletionDelivery` and
+  `BACKGROUND_COMMAND_COMPLETION_MESSAGE`. It value-imports only `@earendil-works/pi-schema`, so
+  browser code may load it. `src/types.ts` derives the snapshot, output and completion-details types
+  from it. The service types a completion where it settles a run, so the completion message's
+  `details` and the `output` call's `details` are checked with `satisfies`, not cast.
+- **Allowed deps:** public package-root Pi SDK APIs and `typebox` as peers;
+  `@earendil-works/pi-schema` as a real dependency (`pi install` skips peers); Node standard
+  libraries. Execution delegates to Pi's exported `createLocalBashOperations`, not a copied spawn
+  runner.
 - **Forbidden:** ThinkRail packages, web/TUI widget ownership, Pi private imports, delegation
-  ownership, workspace PTYs, and generic resource-provider/plugin machinery. Wire DTOs are mirrored
-  in contracts, never imported from or re-exported through this package.
+  ownership, workspace PTYs, and generic resource-provider/plugin machinery. `@thinkrail/contracts`
+  and `pi-subagents` import the `./wire` leaf and only extend it; nothing reaches `src/` past it.
 
 ## Session binding and execution
 

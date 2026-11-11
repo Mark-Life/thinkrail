@@ -1,3 +1,4 @@
+import type { WorkspaceId } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { type ReactNode, useMemo } from "react";
 import type { Components } from "react-markdown";
@@ -31,14 +32,14 @@ function svgDataImageSource(src: string): string | null {
 }
 
 export interface NotebookResourceContext {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	path: string;
 }
 
 function notebookImageSource(
 	src: string | undefined,
 	ctx: NotebookResourceContext,
-	bytesUrl: (workspaceId: string, path: string) => string,
+	bytesUrl: (workspaceId: WorkspaceId, path: string) => string,
 ): { kind: "image"; src: string } | { kind: "svg"; svg: string } | { kind: "disabled" } {
 	if (!src) return { kind: "disabled" };
 	if (RASTER_DATA_IMAGE.test(src)) return { kind: "image", src };
@@ -53,7 +54,7 @@ function notebookImageSource(
 
 export function notebookMarkdownComponents(
 	ctx: NotebookResourceContext,
-	bytesUrl: (workspaceId: string, path: string) => string,
+	bytesUrl: (workspaceId: WorkspaceId, path: string) => string,
 ): Components {
 	function NotebookMarkdownImage({
 		src,

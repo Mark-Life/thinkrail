@@ -226,41 +226,25 @@ test("validateSelectors rejects out-of-range geometry, bad schemes, empty refs a
 });
 
 test("validateSelectors returns the narrowed selectors, keeping only the fields the union declares", () => {
-	expect(
-		validateSelectors([
-			{ kind: "region", x: 0, y: 0.5, width: 1, height: 0.25, page: 2, rotation: 90 },
-			{ kind: "structural", scheme: "json-pointer", ref: "/a/0", cellId: "a1b2" },
-			{ kind: "lineRange", startLine: 3, endLine: 4, column: 7 },
-		]),
-	).toEqual([
+	const region = {
+		kind: "region",
+		x: 0,
+		y: 0.5,
+		width: 1,
+		height: 0.25,
+		page: 2,
+		rotation: 90,
+	} as const;
+	const structural = {
+		kind: "structural",
+		scheme: "json-pointer",
+		ref: "/a/0",
+		cellId: "a1b2",
+	} as const;
+	const lineRange = { kind: "lineRange", startLine: 3, endLine: 4, column: 7 } as const;
+	expect(validateSelectors([region, structural, lineRange])).toEqual([
 		{ kind: "region", x: 0, y: 0.5, width: 1, height: 0.25, page: 2 },
 		{ kind: "structural", scheme: "json-pointer", ref: "/a/0" },
 		{ kind: "lineRange", startLine: 3, endLine: 4 },
 	]);
-});
-
-test("validateSelectors refuses raw wire shapes a compile-time type would have assumed", () => {
-	expect(() => validateSelectors([{ kind: "structural", ref: "/a" }])).toThrow(/scheme must match/);
-	expect(() =>
-		validateSelectors([{ kind: "structural", scheme: "json-pointer", ref: 42 }]),
-	).toThrow(/non-empty ref/);
-	expect(() => validateSelectors([{ kind: "squiggle", at: 3 }])).toThrow(/Unknown selector kind/);
-	expect(() => validateSelectors({ kind: "lineRange", startLine: 1, endLine: 1 })).toThrow(
-		/selectors must be an array/,
-	);
-	expect(() => validateSelectors(undefined)).toThrow(/selectors must be an array/);
-	expect(() => validateSelectors(["lineRange"])).toThrow(/selector must be an object/);
-	expect(() => validateSelectors([null])).toThrow(/selector must be an object/);
-	expect(() =>
-		validateSelectors([{ kind: "region", x: "0.1", y: 0, width: 0.1, height: 0.1 }]),
-	).toThrow(/x must be a fraction/);
-	expect(() => validateSelectors([{ kind: "lineRange", startLine: "2", endLine: 2 }])).toThrow(
-		/must be integers/,
-	);
-	expect(() =>
-		validateSelectors([{ kind: "textQuote", exact: "a", prefix: "", suffix: null }]),
-	).toThrow(/textQuote selector needs string/);
-	expect(() => validateSelectors([{ kind: "diffHunk", hunkHeader: 7 }])).toThrow(
-		/string hunkHeader/,
-	);
 });

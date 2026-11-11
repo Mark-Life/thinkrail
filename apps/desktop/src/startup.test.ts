@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { arr, compile, map, nullable, obj, str } from "@earendil-works/pi-schema";
 
 const desktopDir = resolve(import.meta.dir, "..");
 
@@ -13,6 +14,10 @@ function normalizePath(path: string): string {
 function normalizeCwds(cwds: Record<string, string>): Record<string, string> {
 	return Object.fromEntries(Object.entries(cwds).map(([key, path]) => [key, normalizePath(path)]));
 }
+
+const isChildRun = compile(
+	obj({ calls: arr(str()), cwd: map(str()), splashText: nullable(str()) }),
+).check;
 
 const outcomes = {
 	updates: "update metadata failure before host acquisition quits directly",
@@ -83,7 +88,7 @@ mock.module(${JSON.stringify(runtimePath)}, () => {
       cwd.host = process.cwd();
       cwd.child = Bun.spawnSync([process.execPath, "-e", "process.stdout.write(process.cwd())"]).stdout.toString();
       if (failure === "boot") throw new Error("boot failed");
-      return { port: 12345, server: { startAttributionClaim: () => calls.push("claim-ready"), shutdown: async () => {
+      return { port: 12345, reportError: () => {}, server: { startAttributionClaim: () => calls.push("claim-ready"), shutdown: async () => {
         calls.push("shutdown-start");
         await Bun.sleep(10);
         calls.push("shutdown-end");
@@ -169,11 +174,8 @@ console.log(JSON.stringify({ calls, cwd, splashText }));
 			});
 			expect(result.exitCode).toBe(0);
 			expect(existsSync(homePath)).toBe(home === "present");
-			const run = JSON.parse(result.stdout.toString()) as {
-				calls: string[];
-				cwd: Record<string, string>;
-				splashText: string | null;
-			};
+			const run: unknown = JSON.parse(result.stdout.toString());
+			if (!isChildRun(run)) throw new Error(`unexpected child output: ${result.stdout}`);
 			if (failure !== "updates") {
 				expect(run.splashText).toContain(
 					pendingInstall ? "Finishing update to 0.0.2…" : "Starting ThinkRail…",

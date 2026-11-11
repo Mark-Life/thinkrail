@@ -5,9 +5,12 @@ import type {
 	OpenPrResult,
 	PrBodySource,
 	PrPreview,
+	SessionId,
 	Workspace,
+	WorkspaceId,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode, hasErrno } from "@thinkrail/shared/errnoCode";
 import {
 	forgetOpenBranchReview,
 	githubSlug,
@@ -27,10 +30,12 @@ import {
 	remoteRefOid,
 } from "../git";
 import { ghSetupProblem } from "../github";
+import { logger } from "../log";
 import { generateTodoSummary, listTodos } from "../todos";
 import { getWorkspace, syncWorkspaceBranch } from "../workspaces";
 import { flatItems, renderPrBody } from "./prBody";
 
+const prLog = logger("pr");
 const COMPARE_BODY_LIMIT = 4_000;
 
 export type PrCommandRunner = (
@@ -42,8 +47,8 @@ export type PrCommandRunner = (
 export const MUTATION_TIMEOUT_MS = 60_000;
 
 export interface OpenPrParams {
-	workspaceId: string;
-	sessionId?: string;
+	workspaceId: WorkspaceId;
+	sessionId?: SessionId;
 	branch?: string;
 	title?: string;
 	titleEdited?: boolean;
@@ -55,8 +60,8 @@ export interface OpenPrParams {
 export type OpenPrHostResult = OpenPrResult & { branch: string };
 
 export interface PreviewPrParams {
-	workspaceId: string;
-	sessionId?: string;
+	workspaceId: WorkspaceId;
+	sessionId?: SessionId;
 	title?: string;
 	source?: PrBodySource;
 	template?: string;
@@ -81,7 +86,20 @@ async function containedFile(worktreePath: string, path: string): Promise<boolea
 }
 
 async function entries(dir: string): Promise<string[]> {
-	return (await readdir(dir).catch(() => [] as string[])).sort();
+	try {
+		return (await readdir(dir)).sort();
+	} catch (error) {
+		if (!hasErrno(error, "ENOENT", "ENOTDIR")) {
+			prLog.warn(
+				"a PR template folder was skipped",
+				new CodedError(
+					"RESOURCE_UNAVAILABLE",
+					`a PR template folder could not be read (${errnoCode(error) ?? "no error code"})`,
+				),
+			);
+		}
+		return [];
+	}
 }
 
 export async function discoverTemplates(worktreePath: string): Promise<string[]> {
@@ -145,8 +163,8 @@ async function commitSubjects(worktreePath: string, baseBranch: string): Promise
 }
 
 async function sessionPlan(
-	workspaceId: string,
-	sessionId: string | undefined,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId | undefined,
 ): Promise<{ body: string; planned: boolean }> {
 	if (!sessionId) return { body: "", planned: false };
 	await generateTodoSummary({ workspaceId, sessionId });
@@ -187,8 +205,8 @@ export interface PrDraftInput {
 }
 
 export async function prDraftInput(params: {
-	workspaceId: string;
-	sessionId?: string;
+	workspaceId: WorkspaceId;
+	sessionId?: SessionId;
 	template?: string;
 }): Promise<PrDraftInput> {
 	const ws = getWorkspace(params.workspaceId);
@@ -427,7 +445,7 @@ async function pushToOrigin(cwd: string, branch: string): Promise<string> {
 	return origin;
 }
 
-export function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
+export function refreshedWorkspace(workspaceId: WorkspaceId, expectedBranch: string | undefined) {
 	syncWorkspaceBranch(workspaceId, { strict: true });
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
@@ -439,7 +457,7 @@ export function refreshedWorkspace(workspaceId: string, expectedBranch: string |
 	return ws;
 }
 
-function pushWorkspace(workspaceId: string, branch: string, confirmBase: boolean) {
+function pushWorkspace(workspaceId: WorkspaceId, branch: string, confirmBase: boolean) {
 	const ws = refreshedWorkspace(workspaceId, branch);
 	if (onBaseBranch(ws) && !confirmBase) {
 		throw new Error(
@@ -450,7 +468,7 @@ function pushWorkspace(workspaceId: string, branch: string, confirmBase: boolean
 }
 
 export async function pushBranch(params: {
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	branch: string;
 	confirmBase?: boolean;
 }): Promise<{ dirtyFiles: number }> {
@@ -462,7 +480,7 @@ export async function pushBranch(params: {
 	return { dirtyFiles };
 }
 
-function prWorkspace(workspaceId: string, expectedBranch: string | undefined) {
+function prWorkspace(workspaceId: WorkspaceId, expectedBranch: string | undefined) {
 	const ws = refreshedWorkspace(workspaceId, expectedBranch);
 	const baseRemote = remoteNameOf(ws.baseBranch, listRemotes(ws.worktreePath));
 	const unconfiguredTrackingRef =

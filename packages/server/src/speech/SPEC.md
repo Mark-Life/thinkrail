@@ -30,15 +30,16 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
     SHA-256 from NVIDIA's `SHA256SUMS`, and both models pinned to a Hugging Face revision with their
     LFS SHA-256. Windows on Arm uses the x64 build; any other platform is `supported: false`.
   - The layout under `<dataDir>/speech/`: `runtime/<version>-<target>/`, `models/<file>`,
-    `.staging/`, and the `installed.json` marker, written last.
+    `.staging/`, and the `installed.json` marker, written last. A marker that fails its private schema
+    reads as not installed; the next install rewrites it.
   - The install state machine.
   - The status store and its publisher.
 - **Public surface (barrel):** `initSpeech`, `installSpeech`, `cancelSpeechInstall`, `stopSpeechInstall`, `removeSpeech`,
   `speechStatus`, `setSpeechPublisher`, `stopEngine`, `createSpeechRelay`, `SpeechRelay`,
   `SpeechClientSocket`.
 - **Allowed deps:** `persistence` (`dataDir`), `subprocess` (the PATH probe and archive unpacking run
-  bounded; the engine is supervised), `log`, `@thinkrail/contracts`, `@thinkrail/shared/codedError` and
-  `/freePort`.
+  bounded; the engine is supervised), `log`, `pi-schema`, `@thinkrail/contracts`,
+  `@thinkrail/shared/codedError` and `/freePort`.
 - **Forbidden:**
   - Deleting anything outside `<dataDir>/speech/`, which includes a PATH install.
   - Logging, persisting or reporting transcripts or audio.
@@ -57,7 +58,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - It runs once at boot. An install re-probes only when no PATH runtime was found, so a probe never
     delays the download.
   - It is compatible when it shares the pinned major.minor (0.x minors are breaking).
-  - The backend is the first of cuda/metal/vulkan the doctor reports, else cpu.
+  - The backend is the first of cuda/metal/vulkan the doctor reports, else cpu. A doctor reply that
+    fails its private schema reads as cpu.
   - A compatible PATH runtime wins over the managed copy.
 - **`installSpeech(model)`**
   - Throws `SPEECH_UNSUPPORTED_PLATFORM` or `SPEECH_INSTALL_BUSY`. It is a no-op when that model is
@@ -92,8 +94,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 - **`removeSpeech()`** cancels, waits for the install task, stops the engine, and deletes
   `<dataDir>/speech/`.
 - **Test seam.** `THINKRAIL_SPEECH_MANIFEST` names a JSON file that replaces the pinned manifest,
-  validated strictly (closed targets and models, safe file names, 64-hex SHA-256), so e2e can serve tiny
-  fixtures.
+  checked against a private schema (closed targets and models, safe file names, 64-hex SHA-256), so e2e
+  can serve tiny fixtures.
 
 ## Engine
 
@@ -131,7 +133,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   waits for the child's exit.
 - **Fixture.** `fakeNemoSpeech.ts` stands in for the CLI in unit and e2e tests. It answers `--version`,
   `doctor` and `serve`, the realtime protocol emits one scripted word per 160 ms of audio, and an
-  optional log file records each `session.update`. `FAKE_SPEECH_STREAM_ERROR` makes it answer audio with
+  optional log file records each `session.update`. A control event that fails its private schema is
+  ignored. `FAKE_SPEECH_STREAM_ERROR` makes it answer audio with
   an in-band `error` event while it keeps running.
 
 ## Relay
@@ -148,6 +151,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
    flushes the buffer, and answers `ready`.
 4. **Events.** The engine's `delta` events are appends; the relay accumulates them and sends each as a
    replacing `partial`. `completed` becomes a `final` and resets the partial.
+   Each event is checked against a private schema; an unknown or malformed event is ignored, and a
+   wrong-type `transcript` or error `code` loses only that field.
 5. **Stop.** `stop` sends `input_audio_buffer.commit`, or defers it until upstream opens. `committed`, or
    an 8 s timeout counted from the commit, never from the stop, ends the dictation. A cold engine may
    still be loading the model when the user stops.

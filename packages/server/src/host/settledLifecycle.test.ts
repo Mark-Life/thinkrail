@@ -10,7 +10,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SETTLE_IDLE_DAYS, type SessionStateRecord, type Workspace } from "@thinkrail/contracts";
+import { arr, compile } from "@earendil-works/pi-schema";
+import { SETTLE_IDLE_DAYS, type SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { onBaseBranch } from "../pr";
 import { resetConfigCache, updateConfig } from "../settings";
 import {
@@ -29,6 +31,14 @@ import {
 } from "./settledLifecycle";
 
 let dataDir: string;
+
+const storedWorkspaces = compile(arr(Workspace));
+
+function readStoredWorkspaces() {
+	const all: unknown = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"));
+	if (!storedWorkspaces.check(all)) throw new Error("workspaces.json breaks the Workspace schema");
+	return all;
+}
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -41,8 +51,8 @@ function git(cwd: string, ...args: string[]): void {
 
 function row(overrides: Partial<Workspace>): Workspace {
 	return {
-		id: overrides.id ?? "w",
-		projectId: "p1",
+		id: overrides.id ?? testWorkspaceId("w"),
+		projectId: testProjectId("p1"),
 		name: "w",
 		branch: "w",
 		worktreePath: "/tmp/w",
@@ -83,60 +93,74 @@ afterEach(() => {
 test("review refresh covers live rows every pass and idle rows on a 30-minute pace, never parked or closed ones", () => {
 	const now = Date.now();
 	const rows = [
-		row({ id: "default", kind: "default", lastActiveAt: now }),
-		row({ id: "parked", settledOverride: "settled", lastActiveAt: now }),
+		row({ id: testWorkspaceId("default"), kind: "default", lastActiveAt: now }),
+		row({ id: testWorkspaceId("parked"), settledOverride: "settled", lastActiveAt: now }),
 		row({
-			id: "merged",
+			id: testWorkspaceId("merged"),
 			review: { kind: "pull-request", number: 1, state: "merged", changedAt: now - DAY_MS },
 		}),
 		row({
-			id: "closed",
+			id: testWorkspaceId("closed"),
 			review: { kind: "pull-request", number: 2, state: "closed", changedAt: now - DAY_MS },
 		}),
-		row({ id: "incomplete-merged", review: { kind: "pull-request", number: 4, state: "merged" } }),
-		row({ id: "pinned", settledOverride: "active", lastActiveAt: now - 40 * DAY_MS }),
 		row({
-			id: "open-stale",
+			id: testWorkspaceId("incomplete-merged"),
+			review: { kind: "pull-request", number: 4, state: "merged" },
+		}),
+		row({
+			id: testWorkspaceId("pinned"),
+			settledOverride: "active",
+			lastActiveAt: now - 40 * DAY_MS,
+		}),
+		row({
+			id: testWorkspaceId("open-stale"),
 			review: { kind: "pull-request", number: 3, state: "open" },
 			lastActiveAt: now - 40 * DAY_MS,
 		}),
-		row({ id: "idle", lastActiveAt: now - (SETTLE_IDLE_DAYS.default + 1) * DAY_MS }),
-		row({ id: "fresh", lastActiveAt: now - 1 * DAY_MS }),
-		row({ id: "unstamped" }),
+		row({
+			id: testWorkspaceId("idle"),
+			lastActiveAt: now - (SETTLE_IDLE_DAYS.default + 1) * DAY_MS,
+		}),
+		row({ id: testWorkspaceId("fresh"), lastActiveAt: now - 1 * DAY_MS }),
+		row({ id: testWorkspaceId("unstamped") }),
 	];
 	const never = new Map<string, { branch: string; at: number }>();
 	expect(reviewRefreshRows(rows, now, never).map((r) => r.id)).toEqual([
-		"incomplete-merged",
-		"pinned",
-		"open-stale",
-		"idle",
-		"fresh",
-		"unstamped",
+		testWorkspaceId("incomplete-merged"),
+		testWorkspaceId("pinned"),
+		testWorkspaceId("open-stale"),
+		testWorkspaceId("idle"),
+		testWorkspaceId("fresh"),
+		testWorkspaceId("unstamped"),
 	]);
 
 	const justRefreshed = new Map([["idle", { branch: "w", at: now - 5 * 60_000 }]]);
 	expect(reviewRefreshRows(rows, now, justRefreshed).map((r) => r.id)).not.toContain("idle");
 	const stale = new Map([["idle", { branch: "w", at: now - 31 * 60_000 }]]);
-	expect(reviewRefreshRows(rows, now, stale).map((r) => r.id)).toContain("idle");
+	expect(reviewRefreshRows(rows, now, stale).map((r) => r.id)).toContain(testWorkspaceId("idle"));
 	const previousBranch = new Map([["idle", { branch: "old", at: now }]]);
-	expect(reviewRefreshRows(rows, now, previousBranch).map((r) => r.id)).toContain("idle");
+	expect(reviewRefreshRows(rows, now, previousBranch).map((r) => r.id)).toContain(
+		testWorkspaceId("idle"),
+	);
 
 	updateConfig({ settleIdleDays: null });
-	expect(reviewRefreshRows(rows, now, justRefreshed).map((r) => r.id)).toContain("idle");
+	expect(reviewRefreshRows(rows, now, justRefreshed).map((r) => r.id)).toContain(
+		testWorkspaceId("idle"),
+	);
 });
 
 test("the lifecycle pass backfills an external worktree from its gitfile, not from now", async () => {
 	const path = join(dataDir, "outside");
 	git(repo, "worktree", "add", "-b", "outside", path);
-	const attached = await openExistingWorktree("p1", path);
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const attached = await openExistingWorktree(testProjectId("p1"), path);
+	const all = readStoredWorkspaces();
 	for (const record of all) if (record.id === attached.id) delete record.lastActiveAt;
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
 	const gitfileAt = statSync(join(path, ".git")).mtimeMs;
 
-	await scheduleLifecyclePass("p1");
+	await scheduleLifecyclePass(testProjectId("p1"));
 
-	const after = listWorkspaceRecords("p1").find((r) => r.id === attached.id);
+	const after = listWorkspaceRecords(testProjectId("p1")).find((r) => r.id === attached.id);
 	expect(after?.lastActiveAt).toBe(gitfileAt);
 });
 
@@ -152,15 +176,15 @@ test("no review lookup runs on the base branch, and the lifecycle pass clears a 
 		),
 	).toEqual({ reliable: true, value: null });
 
-	const ws = await createWorkspace("p1");
+	const ws = await createWorkspace(testProjectId("p1"));
 	git(repo, "switch", "-c", "elsewhere");
 	git(ws.worktreePath, "switch", "main");
 	syncWorkspaceBranch(ws.id);
 	setWorkspaceReview(ws.id, { kind: "pull-request", number: 501, state: "open" }, "main");
 
-	await scheduleLifecyclePass("p1");
+	await scheduleLifecyclePass(testProjectId("p1"));
 
-	const after = listWorkspaceRecords("p1").find((r) => r.id === ws.id);
+	const after = listWorkspaceRecords(testProjectId("p1")).find((r) => r.id === ws.id);
 	expect(after).toMatchObject({ branch: "main" });
 	expect(after?.review).toBeUndefined();
 });
@@ -178,15 +202,15 @@ test("a base on a non-origin remote still counts as the base branch", async () =
 });
 
 test("a running session stamps its workspace; idle state changes do not", async () => {
-	const ws = await createWorkspace("p1");
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const ws = await createWorkspace(testProjectId("p1"));
+	const all = readStoredWorkspaces();
 	for (const record of all) if (record.id === ws.id) record.lastActiveAt = 1;
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
 
 	const base: SessionStateRecord = {
-		sessionId: "s1",
+		sessionId: testSessionId("s1"),
 		workspaceId: ws.id,
-		projectId: "p1",
+		projectId: testProjectId("p1"),
 		state: {
 			execution: "idle",
 			runId: null,
@@ -198,18 +222,20 @@ test("a running session stamps its workspace; idle state changes do not", async 
 		},
 	};
 	stampSessionActivity(base);
-	expect(listWorkspaceRecords("p1").find((r) => r.id === ws.id)?.lastActiveAt).toBe(1);
-
-	stampSessionActivity({ ...base, state: { ...base.state, execution: "running", runId: "r1" } });
-	expect(listWorkspaceRecords("p1").find((r) => r.id === ws.id)?.lastActiveAt ?? 0).toBeGreaterThan(
+	expect(listWorkspaceRecords(testProjectId("p1")).find((r) => r.id === ws.id)?.lastActiveAt).toBe(
 		1,
 	);
+
+	stampSessionActivity({ ...base, state: { ...base.state, execution: "running", runId: "r1" } });
+	expect(
+		listWorkspaceRecords(testProjectId("p1")).find((r) => r.id === ws.id)?.lastActiveAt ?? 0,
+	).toBeGreaterThan(1);
 });
 
 test("the lifecycle pass backfills a legacy row from its worktree and leaves stamped rows alone", async () => {
-	const legacy = await createWorkspace("p1", "Legacy");
-	const stamped = await createWorkspace("p1", "Stamped");
-	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	const legacy = await createWorkspace(testProjectId("p1"), "Legacy");
+	const stamped = await createWorkspace(testProjectId("p1"), "Stamped");
+	const all = readStoredWorkspaces();
 	for (const record of all) {
 		if (record.id === legacy.id) delete record.lastActiveAt;
 		if (record.id === stamped.id) record.lastActiveAt = 1234;
@@ -217,9 +243,9 @@ test("the lifecycle pass backfills a legacy row from its worktree and leaves sta
 	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
 	settleWorkspace(legacy.id);
 
-	await scheduleLifecyclePass("p1");
+	await scheduleLifecyclePass(testProjectId("p1"));
 
-	const after = listWorkspaceRecords("p1");
+	const after = listWorkspaceRecords(testProjectId("p1"));
 	const legacyAfter = after.find((r) => r.id === legacy.id);
 	expect(legacyAfter?.lastActiveAt).toBeGreaterThan(0);
 	expect(legacyAfter?.settledOverride).toBe("settled");

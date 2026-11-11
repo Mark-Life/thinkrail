@@ -2,11 +2,12 @@ import type {
 	AssistantMessage,
 	PiEvent,
 	SessionEventPayload,
+	SessionId,
 	ToolCall,
 	ToolResultMessage,
 	WsPush,
 } from "@thinkrail/contracts";
-import type { FixtureMessage } from "@thinkrail/server/history-test-fixtures";
+import { type FixtureMessage, fixtureAssistant } from "@thinkrail/server/history-test-fixtures";
 import { seededRandom } from "./seededRandom";
 
 const WORDS = [
@@ -77,26 +78,6 @@ function chunks(text: string, random: () => number, [min, max]: DeltaRange): str
 	return out;
 }
 
-function assistantShell(timestamp: number): AssistantMessage {
-	return {
-		role: "assistant",
-		content: [],
-		api: "anthropic-messages",
-		provider: "anthropic",
-		model: "claude-replay",
-		usage: {
-			input: 0,
-			output: 0,
-			cacheRead: 0,
-			cacheWrite: 0,
-			totalTokens: 0,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		},
-		stopReason: "stop",
-		timestamp,
-	};
-}
-
 interface ToolPlan {
 	call: ToolCall;
 	partials: string[];
@@ -143,7 +124,7 @@ export interface ChatReplay {
 	deltaCount: number;
 }
 
-export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
+export function buildChatReplay(sessionId: SessionId, seed = 7): ChatReplay {
 	const random = seededRandom(seed);
 	const plans: MessagePlan[] = [
 		{ text: prose(random, 4), tools: toolPlans(1, random) },
@@ -153,7 +134,7 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 	return replayPlans(sessionId, plans, random, { deltaChars: [3, 8], deltasPerStep: 3 });
 }
 
-export function buildTextReplay(sessionId: string, text: string, seed = 13): ChatReplay {
+export function buildTextReplay(sessionId: SessionId, text: string, seed = 13): ChatReplay {
 	return replayPlans(sessionId, [{ text, tools: [] }], seededRandom(seed), {
 		deltaChars: [10, 60],
 		deltasPerStep: 1,
@@ -161,7 +142,7 @@ export function buildTextReplay(sessionId: string, text: string, seed = 13): Cha
 }
 
 function replayPlans(
-	sessionId: string,
+	sessionId: SessionId,
 	plans: MessagePlan[],
 	random: () => number,
 	shape: StreamShape,
@@ -177,7 +158,7 @@ function replayPlans(
 
 	for (const plan of plans) {
 		timestamp += 1_000;
-		const message = assistantShell(timestamp);
+		const message = fixtureAssistant({ content: [], timestamp });
 		steps.push({
 			frames: [
 				push({ type: "turn_start" }),

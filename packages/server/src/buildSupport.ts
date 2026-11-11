@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { BuildRuntimeSources } from "./buildSupportSchema";
 import {
 	resolveExtensionSkillRoots,
 	STAGED_HOST_SKILLS_ROUTE,
@@ -9,32 +10,7 @@ import {
 	stagedExtensionSkillRoute,
 } from "./extensions";
 
-export type DesktopRuntimeTarget =
-	| "darwin-arm64"
-	| "darwin-x64"
-	| "linux-arm64"
-	| "linux-x64"
-	| "win32-x64";
-
-export interface BundledExtensionSource {
-	readonly specifier: string;
-	readonly entry: string;
-}
-
-export interface StagedSkillRoot {
-	readonly source: string;
-	readonly route: string;
-}
-
-export interface BuildRuntimeSources {
-	readonly extensions: readonly BundledExtensionSource[];
-	readonly skillRoots: readonly StagedSkillRoot[];
-	readonly ptyLibraries: Readonly<Record<DesktopRuntimeTarget, string>>;
-	readonly trashHelpers: {
-		readonly macos: string;
-		readonly windows: string;
-	};
-}
+export type { BuildRuntimeSources, DesktopRuntimeTarget } from "./buildSupportSchema";
 
 const require = createRequire(import.meta.url);
 
@@ -49,7 +25,7 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 		"pi-thinkrail-workflow/index.ts",
 		"pi-todos/index.ts",
 	].map((specifier) => ({ specifier, entry: require.resolve(specifier) }));
-	const skillRoots: StagedSkillRoot[] = [
+	const skillRoots: BuildRuntimeSources["skillRoots"] = [
 		...extensions.map((pkg) => requiredPath(join(dirname(pkg.entry), "skills"))),
 		requiredPath(fileURLToPath(new URL("../skills", import.meta.url))),
 	].map((source) => ({ source, route: STAGED_HOST_SKILLS_ROUTE }));

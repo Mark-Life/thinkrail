@@ -1,3 +1,4 @@
+import { JsonObject } from "@thinkrail/contracts";
 import { create, type Delta } from "jsondiffpatch";
 
 export type JsonDiffKind = "added" | "removed" | "changed" | "moved";
@@ -49,9 +50,7 @@ function childPointer(pointer: string, segment: string | number): string {
 }
 
 function deltaRecord(value: unknown): Record<string, unknown> | null {
-	return value !== null && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: null;
+	return JsonObject.check(value) ? value : null;
 }
 
 function removedDelta(value: unknown): boolean {
@@ -75,8 +74,8 @@ function arrayIndexMap(
 				removed.add(oldIndex);
 				continue;
 			}
-			if (part[2] === 3 && Number.isInteger(part[1])) {
-				const destination = part[1] as number;
+			const destination = part[1];
+			if (part[2] === 3 && typeof destination === "number" && Number.isInteger(destination)) {
 				if (destination < 0 || destination >= modifiedLength || occupied.has(destination)) {
 					return null;
 				}
@@ -112,7 +111,7 @@ export function classifyJsonDelta(delta: Delta): Omit<JsonDiffClassification, "d
 	const visit = (part: Delta, pointer: string) => {
 		if (part === undefined) return;
 		if (Array.isArray(part)) {
-			const tuple = part as unknown[];
+			const tuple = part;
 			if (tuple.length === 1) {
 				current.set(pointer, { kind: "added", pointer, newValue: tuple[0] });
 				return;
@@ -135,7 +134,7 @@ export function classifyJsonDelta(delta: Delta): Omit<JsonDiffClassification, "d
 			}
 			return;
 		}
-		const record = part as { [key: string]: Delta | "a" };
+		const record: { [key: string]: Delta | "a" } = { ...part };
 		if (record._t === "a") {
 			for (const [key, child] of Object.entries(record)) {
 				if (key === "_t" || child === undefined || child === "a") continue;

@@ -1,36 +1,82 @@
 // Independently authored fake of the `gh` surface the host invokes; contract in e2e/SPEC.md.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	arr,
+	bool,
+	compile,
+	int,
+	map,
+	nullable,
+	obj,
+	oneOf,
+	opt,
+	type Static,
+	str,
+	unknown,
+} from "@earendil-works/pi-schema";
+import type { LatestReview, ProviderRow, RepoSettings } from "@thinkrail/server/gh-test-fixtures";
 
-export type FakePrState = "OPEN" | "CLOSED" | "MERGED";
+const FakePrState = oneOf(["OPEN", "CLOSED", "MERGED"]);
+export type FakePrState = Static<typeof FakePrState>;
 
-export interface FakePr {
-	number: number;
-	headRefName: string;
-	baseRefName?: string;
-	state: FakePrState;
-	isDraft?: boolean;
-	reviewDecision?: string;
-	mergeStateStatus?: string;
-	statusCheckRollup?: Record<string, unknown>[];
-	latestReviews?: { author: { login: string }; state: string }[];
-	mergedAt?: string | null;
-	closedAt?: string | null;
-	createdAt?: string;
-	mergeError?: string;
-	queued?: boolean;
-	mergedWith?: string | undefined;
-	headOwner?: string;
+const FakePr = obj(
+	{
+		number: int(),
+		headRefName: str(),
+		baseRefName: opt(str()),
+		state: FakePrState,
+		isDraft: opt(bool()),
+		reviewDecision: opt(str()),
+		mergeStateStatus: opt(str()),
+		statusCheckRollup: opt(arr(map(unknown()))),
+		latestReviews: opt(arr(obj({ author: obj({ login: str() }), state: str() }))),
+		mergedAt: opt(nullable(str())),
+		closedAt: opt(nullable(str())),
+		createdAt: opt(str()),
+		mergeError: opt(str()),
+		queued: opt(bool()),
+		mergedWith: opt(str()),
+		headOwner: opt(str()),
+	},
+	{ open: true },
+);
+export type FakePr = Static<typeof FakePr>;
+
+const FakeGhScenario = obj(
+	{
+		repo: opt(
+			obj(
+				{
+					mergeCommitAllowed: opt(bool()),
+					squashMergeAllowed: opt(bool()),
+					rebaseMergeAllowed: opt(bool()),
+					deleteBranchOnMerge: opt(bool()),
+				},
+				{ open: true },
+			),
+		),
+		prs: arr(FakePr),
+	},
+	{ open: true },
+);
+export type FakeGhScenario = Static<typeof FakeGhScenario>;
+const FakeGhScenarioFile = compile(FakeGhScenario);
+
+export function readFakeGhScenario(path: string): FakeGhScenario {
+	const scenario: unknown = JSON.parse(readFileSync(path, "utf8"));
+	if (!FakeGhScenarioFile.check(scenario)) throw new Error(`${path} is not a fake gh scenario`);
+	return scenario;
 }
 
-export interface FakeGhScenario {
-	repo?: {
-		mergeCommitAllowed?: boolean;
-		squashMergeAllowed?: boolean;
-		rebaseMergeAllowed?: boolean;
-		deleteBranchOnMerge?: boolean;
-	};
-	prs: FakePr[];
+function readOrigin() {
+	try {
+		return execFileSync("git", ["remote", "get-url", "--push", "origin"], {
+			encoding: "utf8",
+		}).trim();
+	} catch {
+		return "";
+	}
 }
 
 function fail(message: string): never {
@@ -44,7 +90,7 @@ function main(): void {
 	appendFileSync(logPath, `${JSON.stringify(argv)}\n`);
 	if (!existsSync(scenarioPath))
 		fail("gh: To get started with GitHub CLI, please run: gh auth login");
-	const scenario = JSON.parse(readFileSync(scenarioPath, "utf8")) as FakeGhScenario;
+	const scenario = readFakeGhScenario(scenarioPath);
 	const flag = (name: string) => {
 		const index = argv.indexOf(name);
 		return index >= 0 ? argv[index + 1] : undefined;
@@ -53,29 +99,28 @@ function main(): void {
 		const fields = (flag("--json") ?? "").split(",").filter(Boolean);
 		return Object.fromEntries(fields.map((field) => [field, row[field] ?? null]));
 	};
-	let origin = "";
-	try {
-		origin = execFileSync("git", ["remote", "get-url", "--push", "origin"], {
-			encoding: "utf8",
-		}).trim();
-	} catch {}
+	const origin = readOrigin();
 	const slug = /github\.com[:/](.+?)(?:\.git)?$/.exec(origin)?.[1] ?? "acme/sample";
 	const [owner = "", name = ""] = slug.split("/");
-	const shape = (pr: FakePr): Record<string, unknown> => ({
-		headRepositoryOwner: { login: pr.headOwner ?? owner },
-		headRepository: { name },
-		url: `https://github.com/${slug}/pull/${pr.number}`,
-		baseRefName: "main",
-		isDraft: false,
-		reviewDecision: "",
-		mergeStateStatus: "CLEAN",
-		statusCheckRollup: [],
-		latestReviews: [],
-		mergedAt: null,
-		closedAt: null,
-		createdAt: "2026-01-01T00:00:00Z",
-		...pr,
-	});
+	const headRepository = { id: "R_repo", name };
+	const shape = (pr: FakePr) => {
+		const headRepositoryOwner = { id: "U_owner", login: pr.headOwner ?? owner };
+		return {
+			headRepositoryOwner,
+			headRepository,
+			url: `https://github.com/${slug}/pull/${pr.number}`,
+			baseRefName: "main",
+			isDraft: false,
+			reviewDecision: "",
+			mergeStateStatus: "CLEAN",
+			statusCheckRollup: [],
+			mergedAt: null,
+			closedAt: null,
+			createdAt: "2026-01-01T00:00:00Z",
+			...pr,
+			latestReviews: (pr.latestReviews ?? []) satisfies LatestReview[],
+		} satisfies ProviderRow;
+	};
 	const find = (selector: string | undefined) =>
 		scenario.prs.find((pr) => String(pr.number) === selector) ??
 		fail(`no pull requests found for ${selector}`);
@@ -89,7 +134,7 @@ function main(): void {
 			rebaseMergeAllowed: true,
 			deleteBranchOnMerge: false,
 			...scenario.repo,
-		};
+		} satisfies RepoSettings;
 		process.stdout.write(`${JSON.stringify(project(repo))}\n`);
 		return;
 	}
@@ -123,7 +168,9 @@ function main(): void {
 		case "merge": {
 			const pr = find(selector);
 			if (pr.mergeError) fail(pr.mergeError);
-			pr.mergedWith = argv.find((arg) => ["--squash", "--merge", "--rebase"].includes(arg));
+			const mergedWith = argv.find((arg) => ["--squash", "--merge", "--rebase"].includes(arg));
+			if (mergedWith === undefined) delete pr.mergedWith;
+			else pr.mergedWith = mergedWith;
 			if (!pr.queued) {
 				pr.state = "MERGED";
 				pr.mergedAt = new Date().toISOString();

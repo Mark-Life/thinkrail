@@ -1,11 +1,18 @@
-import type { SearchHit, Workspace } from "@thinkrail/contracts";
+import {
+	type ProjectId,
+	parseSessionId,
+	type SearchHit,
+	type SessionId,
+	type Workspace,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
 
 export interface ChatLocation {
-	readonly workspaceId: string;
-	readonly projectId: string;
-	readonly sessionId: string;
+	readonly workspaceId: WorkspaceId;
+	readonly projectId: ProjectId;
+	readonly sessionId: SessionId;
 	readonly messageIndex: number;
 	readonly anchorText: string;
 }
@@ -13,13 +20,13 @@ export interface ChatLocation {
 export interface HostHitTargets {
 	readonly navigateToWorkspace: (
 		workspace: WorkspaceTarget,
-		sessionId?: string,
+		sessionId?: SessionId,
 	) => Promise<boolean>;
 	readonly loadWorkspaceRow: (workspace: WorkspaceTarget) => Promise<boolean>;
-	readonly openFile: (workspaceId: string, path: string) => Promise<void>;
-	readonly openSpec: (workspaceId: string, path: string) => void;
+	readonly openFile: (workspaceId: WorkspaceId, path: string) => Promise<void>;
+	readonly openSpec: (workspaceId: WorkspaceId, path: string) => void;
 	readonly openChatLocation: (location: ChatLocation) => void;
-	readonly openPlan: (workspaceId: string) => void;
+	readonly openPlan: (workspaceId: WorkspaceId) => void;
 }
 
 export async function openHostHit(hit: SearchHit, targets: HostHitTargets): Promise<void> {
@@ -33,18 +40,22 @@ export async function openHostHit(hit: SearchHit, targets: HostHitTargets): Prom
 		case "spec":
 			if (await targets.navigateToWorkspace(workspace)) targets.openSpec(workspace.id, hit.path);
 			return;
-		case "transcript":
-			if (!(await targets.loadWorkspaceRow(workspace))) return;
+		case "transcript": {
+			const sessionId = parseSessionId(hit.sessionId);
+			if (sessionId === null || !(await targets.loadWorkspaceRow(workspace))) return;
 			targets.openChatLocation({
 				workspaceId: workspace.id,
 				projectId: workspace.projectId,
-				sessionId: hit.sessionId,
+				sessionId,
 				messageIndex: hit.messageIndex,
 				anchorText: hit.anchorText,
 			});
 			return;
+		}
 		case "plan":
-			if (await targets.navigateToWorkspace(workspace, hit.sessionId)) {
+			if (
+				await targets.navigateToWorkspace(workspace, parseSessionId(hit.sessionId) ?? undefined)
+			) {
 				targets.openPlan(workspace.id);
 			}
 			return;

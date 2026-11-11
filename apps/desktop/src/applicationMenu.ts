@@ -1,15 +1,22 @@
-import type { NativeCommand } from "@thinkrail/contracts";
-import { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
-import type { ApplicationMenuItemConfig } from "electrobun/main";
-import { readLabels } from "./nativeLabels";
+import { compile, obj, type Static, str, type Validator } from "@earendil-works/pi-schema";
+import type { NativeCommand, Same } from "@thinkrail/contracts";
+import type { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
+import type { ApplicationMenuItemConfig, default as Electrobun } from "electrobun/main";
+import { labelReader, type RawLabels } from "./nativeLabels";
 
-const MENU_LABEL_KEYS = DESKTOP_MENU_KEYS;
 const MAX_MENU_LABEL_LENGTH = 80;
 
-export type DesktopMenuLabels = Readonly<Record<(typeof MENU_LABEL_KEYS)[number], string>>;
+export type DesktopMenuLabels = Readonly<Record<(typeof DESKTOP_MENU_KEYS)[number], string>>;
 
-export function readMenuLabels(raw: unknown): DesktopMenuLabels {
-	return readLabels(MENU_LABEL_KEYS, MAX_MENU_LABEL_LENGTH, raw);
+export function readMenuLabels(raw: RawLabels): DesktopMenuLabels {
+	const label = labelReader(MAX_MENU_LABEL_LENGTH, raw);
+	return {
+		"desktop.menu.edit": label("desktop.menu.edit"),
+		"desktop.menu.settings": label("desktop.menu.settings"),
+		"desktop.menu.quit": label("desktop.menu.quit"),
+		"desktop.menu.window": label("desktop.menu.window"),
+		"desktop.menu.close": label("desktop.menu.close"),
+	};
 }
 
 export const DEFAULT_MENU_LABELS: DesktopMenuLabels = readMenuLabels({});
@@ -104,10 +111,15 @@ export function isNativeCommand(action: string | null): action is NativeCommand 
 	return action !== null && Object.hasOwn(NATIVE_COMMANDS, action);
 }
 
+type MenuClickEvent = ReturnType<typeof Electrobun.events.events.app.applicationMenuClicked>;
+const MenuClickShape = obj({ data: obj({ action: str() }, { open: true }) }, { open: true });
+const MenuClick: Validator<
+	Same<
+		Static<typeof MenuClickShape>,
+		Record<keyof Pick<MenuClickEvent, "data">, Pick<MenuClickEvent["data"], "action">>
+	>
+> = compile(MenuClickShape);
+
 export function readMenuAction(event: unknown) {
-	if (typeof event !== "object" || event === null) return null;
-	const data: unknown = Reflect.get(event, "data");
-	if (typeof data !== "object" || data === null) return null;
-	const action: unknown = Reflect.get(data, "action");
-	return typeof action === "string" ? action : null;
+	return MenuClick.check(event) ? event.data.action : null;
 }

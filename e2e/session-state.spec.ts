@@ -1,6 +1,8 @@
 import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { JsonObject, type SessionId } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -31,7 +33,7 @@ async function expectAttentionDot(row: Locator): Promise<void> {
 	await expect(dot.locator('[aria-hidden="true"]')).toHaveClass(/bg-primary/);
 }
 
-async function seedSentReviewComment(page: Page, sessionId: string): Promise<void> {
+async function seedSentReviewComment(page: Page, sessionId: SessionId): Promise<void> {
 	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
 	try {
 		const [project] = await wire.request("project.list", {});
@@ -41,8 +43,14 @@ async function seedSentReviewComment(page: Page, sessionId: string): Promise<voi
 		if (!workspace) throw new Error("No default workspace for the review comment");
 		const review = await wire.request("review.get", { workspaceId: workspace.id });
 		const file = join(E2E_DATA_DIR, "reviews", `${workspace.id}.json`);
-		const snapshot = JSON.parse(readFileSync(file, "utf8"));
-		snapshot.comments.push({
+		const snapshot: unknown = JSON.parse(readFileSync(file, "utf8"));
+		const stored = JsonObject.check(snapshot) ? snapshot : {};
+		const { comments, review: storedReview } = stored;
+		if (!Array.isArray(comments) || !JsonObject.check(storedReview)) {
+			throw new Error(`${file} is not a review snapshot`);
+		}
+		const { fileSessions } = storedReview;
+		const comment = {
 			id: "rc_e2e_sent_attention",
 			reviewId: review.review.id,
 			kind: "review",
@@ -53,9 +61,17 @@ async function seedSentReviewComment(page: Page, sessionId: string): Promise<voi
 			sessionId,
 			anchorState: "anchored",
 			createdAt: BASE_TS,
-		});
-		snapshot.review.fileSessions = { ...snapshot.review.fileSessions, "": sessionId };
-		writeFileSync(file, JSON.stringify(snapshot, null, 2));
+		};
+		const kept: readonly unknown[] = comments;
+		const updated = {
+			...stored,
+			comments: [...kept, comment],
+			review: {
+				...storedReview,
+				fileSessions: { ...(JsonObject.check(fileSessions) ? fileSessions : {}), "": sessionId },
+			},
+		};
+		writeFileSync(file, JSON.stringify(updated, null, 2));
 	} finally {
 		wire.close();
 	}
@@ -404,7 +420,7 @@ test("opening a chat from a sent review comment clears its unread result", async
 		if ((await peerExpand.getAttribute("data-expanded")) === "true") await peerExpand.click();
 		await expectAttentionDot(peerProject);
 
-		await seedSentReviewComment(page, session.id);
+		await seedSentReviewComment(page, testSessionId(session.id));
 		await enterDefaultWorkspace(page);
 		const targetChatTab = page.locator(
 			`[data-testid="editor-tab"][data-kind="chat"][data-session-id="${session.id}"]`,

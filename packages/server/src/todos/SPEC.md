@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: todos — a chat's per-session TODO plan (read/write)
 parent: module-server
-depends-on: [module-contracts, submodule-server-git, submodule-server-assist]
+depends-on: [module-contracts, submodule-server-git, submodule-server-assist, submodule-server-persistence]
 references: [module-pi-todos, submodule-server-pr, submodule-web-chat]
 tags: [todos]
 ---
@@ -334,6 +334,24 @@ it resolves immediately when nothing is in flight, and never rejects. The barrie
 workspace queue tail installed while it waits, so a stale pass aborted by plan drift cannot release readers
 before the already-enqueued replacement pass has reconciled the current plan.
 
+## Sidecar files
+
+`baselines.ts` and `reviews.ts` parse their files once at the read with private schemas and the
+[[submodule-server-persistence]] state-file rules: a bad entry is dropped, the file is copied to
+`.corrupt-<hash>` beside it first, and a file that could not be read is not replaced. A copy never ends in a
+sidecar suffix, so the owner scans skip it. The plan file itself stays with `pi-todos`, whose `sanitize` repairs
+field by field.
+
+The owner scans read a missing todo folder as no chats. A folder that cannot be listed also reads
+as none and is logged as `STATE_FILE_UNREADABLE`. A best-effort write or removal that fails, marking another chat's
+windows shared or removing a deleted chat's sidecars, is logged through `stateFileWriteFailure` and never stops the
+caller.
+
+Review, baseline and plan (`TodoStore`) paths are built only from a `SessionId`, which is path-safe by type
+([[submodule-contracts-schema]]). A
+stored session id, such as a review finding's `origin.sessionId` or a plan or review file name, goes through
+`parseSessionId` before it names a file; a refusal skips that file.
+
 ## Boundary
 
 - **Owns / public surface (barrel):** `listTodos({workspaceId, sessionId}) → Promise<TodoPlan>` (async
@@ -360,7 +378,7 @@ before the already-enqueued replacement pass has reconciled the current plan.
   `listCommits` — the `base..HEAD` enumeration behind `adoptedCommits` + the review resolver's
   synthetic-item reconstruction);
   `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
-  — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
+  — the app-state prefix filtered out of change sets); `@thinkrail/shared/codedError` and `errnoCode`; **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
   value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`); `log`.
 - **Forbidden:** `host`; sibling features other than `workspaces` + `git` + `log`; `pi-todos`' extension entry or
   `tools/` (pi-coupled); any pi package.

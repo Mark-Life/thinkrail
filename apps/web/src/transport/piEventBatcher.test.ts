@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import type { PiEvent, SessionEventPayload, WsServerMessage } from "@thinkrail/contracts";
+import type { PiEvent, SessionEventPayload, SessionId, WsEnvelope } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 
-const payload = (sessionId: string, type: PiEvent["type"]): SessionEventPayload => ({
+const payload = (sessionId: SessionId, event: PiEvent): SessionEventPayload => ({
 	sessionId,
-	event: { type } as PiEvent,
+	event,
 });
 
 function manualScheduler() {
@@ -27,8 +28,8 @@ test("batches consecutive Pi events in exact arrival order", () => {
 	const batcher = createPiEventBatcher((events) => delivered.push(events), {
 		schedule: scheduler.schedule,
 	});
-	const first = payload("a", "agent_start");
-	const second = payload("b", "turn_start");
+	const first = payload(testSessionId("a"), { type: "agent_start" });
+	const second = payload(testSessionId("b"), { type: "turn_start" });
 
 	batcher.enqueue(first);
 	batcher.enqueue(second);
@@ -47,9 +48,9 @@ test("the queue ceiling forces a flush and disposal drops pending work", () => {
 		maxBatchSize: 2,
 		schedule: scheduler.schedule,
 	});
-	const first = payload("a", "agent_start");
-	const second = payload("a", "turn_start");
-	const third = payload("a", "agent_end");
+	const first = payload(testSessionId("a"), { type: "agent_start" });
+	const second = payload(testSessionId("a"), { type: "turn_start" });
+	const third = payload(testSessionId("a"), { type: "agent_end", messages: [], willRetry: false });
 
 	batcher.enqueue(first);
 	batcher.enqueue(second);
@@ -67,15 +68,15 @@ test("the queue ceiling forces a flush and disposal drops pending work", () => {
 });
 
 test("responses and non-Pi pushes form dispatch barriers", () => {
-	const piPush = {
+	const piPush: WsEnvelope = {
 		channel: WS_CHANNELS.piEvent,
-		data: payload("a", "agent_start"),
-	} as WsServerMessage;
-	const otherPush = {
+		data: payload(testSessionId("a"), { type: "agent_start" }),
+	};
+	const otherPush: WsEnvelope = {
 		channel: WS_CHANNELS.workspaceFsChanged,
 		data: {},
-	} as WsServerMessage;
-	const response = { id: "r1", ok: true, result: {} } as WsServerMessage;
+	};
+	const response: WsEnvelope = { id: "r1", ok: true, result: {} };
 
 	expect(shouldFlushPiEventsBefore(piPush)).toBe(false);
 	expect(shouldFlushPiEventsBefore(otherPush)).toBe(true);

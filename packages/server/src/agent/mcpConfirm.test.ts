@@ -10,6 +10,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, McpToolGrant } from "@thinkrail/contracts";
+import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import {
 	createSession,
 	disposeAllSessions,
@@ -36,7 +37,7 @@ const model = {
 	id: "confirm",
 	name: "confirm",
 	reasoning: false,
-	input: ["text"] as ("text" | "image")[],
+	input: ["text"] satisfies ("text" | "image")[],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 100_000,
 	maxTokens: 4096,
@@ -149,7 +150,7 @@ async function waitFor<T>(read: () => T | undefined, ms = 8000): Promise<T> {
 const selects = () => requests.filter((request) => request.kind === "select");
 
 async function chat() {
-	const workspaceId = `confirm-${++sequence}`;
+	const workspaceId = testWorkspaceId(`confirm-${++sequence}`);
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	const { sessionId } = await createSession({
 		workspaceId,

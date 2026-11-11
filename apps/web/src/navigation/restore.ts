@@ -1,4 +1,4 @@
-import type { Workspace } from "@thinkrail/contracts";
+import type { ProjectId, Workspace, WorkspaceId } from "@thinkrail/contracts";
 import {
 	selectAttentionCenterTab,
 	selectCurrentRouteChatTarget,
@@ -11,7 +11,7 @@ import { type NavigationLocation, parseFragment, serializeLocation } from "./loc
 
 export interface NavigationDeps {
 	driver: NavigationDriver;
-	listWorkspaces: (projectId: string) => Promise<Workspace[]>;
+	listWorkspaces: (projectId: ProjectId) => Promise<Workspace[]>;
 }
 
 type WorkspaceLayoutDocument = Parameters<
@@ -19,8 +19,8 @@ type WorkspaceLayoutDocument = Parameters<
 >[0]["layoutDocumentsByWorkspace"][string];
 
 export function deriveLocation(state: {
-	activeWorkspaceId: string | null;
-	selectedProjectId: string | null;
+	activeWorkspaceId: WorkspaceId | null;
+	selectedProjectId: ProjectId | null;
 	workspaces: Record<string, Workspace[]>;
 	layoutDocumentsByWorkspace: Parameters<
 		typeof selectAttentionCenterTab
@@ -49,8 +49,8 @@ export function deriveLocation(state: {
 }
 
 interface NavigationIntentState {
-	selectedProjectId: string | null;
-	activeWorkspaceId: string | null;
+	selectedProjectId: ProjectId | null;
+	activeWorkspaceId: WorkspaceId | null;
 	navTickByWorkspace: Record<string, number>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<

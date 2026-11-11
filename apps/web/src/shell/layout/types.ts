@@ -1,62 +1,17 @@
-import type { GitDiffScope, LayoutPreset } from "@thinkrail/contracts";
+import type { LayoutPreset } from "@thinkrail/contracts";
+import type {
+	LayoutChangesTab,
+	LayoutChatTab,
+	LayoutDiffTab,
+	LayoutDocumentTab,
+	LayoutFileTab,
+	LayoutTerminalTab,
+	LayoutToolRestoreTarget,
+	LayoutToolTab,
+} from "./schema";
 
 export type LayoutBottomAlignment = LayoutPreset["bottom"]["alignment"];
 export type LayoutToolId = LayoutPreset["left"]["groups"][number]["tools"][number];
-
-export interface LayoutFileTab {
-	kind: "file";
-	id: string;
-	name: string;
-	path: string;
-}
-
-export type LayoutDiffTab =
-	| {
-			kind: "diff";
-			id: string;
-			name: string;
-			path: string;
-			before?: undefined;
-			scope: GitDiffScope;
-	  }
-	| { kind: "diff"; id: string; name: string; path: string; before: string };
-
-export interface LayoutChangesTab {
-	kind: "changes";
-	id: string;
-	name: string;
-	scope: GitDiffScope;
-}
-
-export interface LayoutChatTab {
-	kind: "chat";
-	id: string;
-	name: string;
-	sessionId: string;
-}
-
-export interface LayoutDocumentTab {
-	kind: "document";
-	id: string;
-	name: string;
-	documentKind: "todo-plan";
-	sourceId: string;
-	docPath: string;
-}
-
-export interface LayoutTerminalTab {
-	kind: "terminal";
-	id: string;
-	name: string;
-	tabKey: string;
-}
-
-export interface LayoutToolTab {
-	kind: "tool";
-	id: string;
-	name: string;
-	tool: LayoutToolId;
-}
 
 export type LayoutCenterTab =
 	| LayoutFileTab
@@ -113,13 +68,7 @@ export interface LayoutBottomRegion {
 	groups: LayoutBottomGroup[];
 }
 
-export type LayoutAuxiliaryRegion = "left" | "right" | "bottom";
-
-export interface LayoutToolRestoreTarget {
-	region: LayoutAuxiliaryRegion;
-	groupId?: string;
-	index: number;
-}
+export type { LayoutAuxiliaryRegion } from "./schema";
 
 export interface WorkspaceLayoutDocument {
 	version: 2;

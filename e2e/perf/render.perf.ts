@@ -1,6 +1,7 @@
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
@@ -20,10 +21,9 @@ import {
 	attachRenderProfiler,
 	detachRenderProfiler,
 	MARKDOWN_SUBTREE,
-	type MainThreadCost,
-	type RenderProfile,
 	readRenderProfile,
 	resetRenderProfile,
+	type ScenarioRun,
 	startMainThreadProbe,
 } from "./renderProfiler";
 import { DEFAULT_SCENARIOS, SCENARIO_NAMES, type ScenarioName } from "./scenarios";
@@ -51,19 +51,7 @@ function pause(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-interface Counters {
-	[name: string]: number;
-}
-
-export interface ScenarioRun {
-	scenario: string;
-	run: number;
-	cpuRate: number;
-	wallMs: number;
-	counters: Counters;
-	mainThread: MainThreadCost;
-	profile: RenderProfile;
-}
+type Counters = ScenarioRun["counters"];
 
 function record(result: ScenarioRun): void {
 	mkdirSync(OUT_DIR, { recursive: true });
@@ -147,7 +135,7 @@ async function chatStreaming(page: Page, run: number): Promise<void> {
 		page.locator('[data-testid="chat-message"][data-role="assistant"]').first(),
 	).toBeVisible();
 
-	const replay = buildChatReplay(seeded.id);
+	const replay = buildChatReplay(testSessionId(seeded.id));
 	await measure(page, "chat-streaming", run, async () => {
 		const socket = wire();
 		for (const step of replay.steps) {
@@ -175,7 +163,7 @@ function longStream(scenario: string, targetChars: number) {
 		const chat = page.getByTestId("chat-scroll");
 		await expect(chat).toBeVisible();
 
-		const replay = buildTextReplay(seeded.id, longMarkdown(targetChars));
+		const replay = buildTextReplay(testSessionId(seeded.id), longMarkdown(targetChars));
 		await measure(page, scenario, run, async () => {
 			const socket = wire();
 			for (const step of replay.steps) {
@@ -202,7 +190,7 @@ async function openAgentChats(page: Page, run: number): Promise<AgentChat[]> {
 			name: title,
 			messages: chatHistory(1_700_900_000_000 + index * 1_000_000, 3, 100 + index),
 		});
-		return { title, replay: buildChatReplay(seeded.id, 200 + index) };
+		return { title, replay: buildChatReplay(testSessionId(seeded.id), 200 + index) };
 	});
 	await enterDefaultWorkspace(page);
 	for (const agent of agents) await openPersistedChat(page, agent.title);

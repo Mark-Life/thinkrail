@@ -1,4 +1,9 @@
-import type { TerminalDataPush, TerminalExitPush } from "@thinkrail/contracts";
+import type {
+	TerminalDataPush,
+	TerminalExitPush,
+	WsChannel,
+	WsChannelPayload,
+} from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import type { TerminalDeliveryResult } from "./outputBatcher";
 
@@ -7,7 +12,11 @@ export interface TerminalCompletion {
 	exit: TerminalExitPush;
 }
 
-type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
+export type PushToClient = <C extends WsChannel>(
+	clientKey: string,
+	channel: C,
+	data: WsChannelPayload<C>,
+) => TerminalDeliveryResult;
 
 export interface TerminalCompletionQueue {
 	enqueue(clientKey: string, completion: TerminalCompletion): void;

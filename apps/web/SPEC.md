@@ -59,7 +59,14 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter, and `firstPaintPreferenceStorage` — that adapter, else
-`localStorage` — which the theme and font first-paint hints share), and `styles/` — which holds the three
+`localStorage` — which the theme and font first-paint hints share), `nativeBridge.ts` (the helpers each optional
+bridge the desktop preload freezes onto `globalThis` is read through: `bridgeCall` takes one function off the
+bridge, and the reader of each bridge builds the `contracts` bridge type from those calls, so a new bridge method
+fails `tsc` until its reader handles it. A function's signature cannot be checked at run time, so nothing the
+bridge returns is trusted: `settledAs`, `returnedAs` and `checkedListener` check results and pushed values
+against the `contracts` schemas; `settled` and `unsubscriber` use a result only for its effect. A refused value
+is reported through `setNativeBridgeReporter`, which `main.tsx` points at `reportHandledFailure` with
+`NATIVE_RPC_INVALID`), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);
@@ -381,7 +388,7 @@ themselves.
 
 ## Get right
 
-- **`apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only.** Never value-import `pi`; never import `server`/`shared`.
+- **`apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only.** Never value-import `pi`, except `pi-schema`; never import `server`/`shared`.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.

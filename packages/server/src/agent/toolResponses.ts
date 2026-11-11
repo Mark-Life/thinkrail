@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import type { AgentMessage, ToolResponseMessage } from "@thinkrail/contracts";
+import type { ToolCall } from "@earendil-works/pi-ai";
+import type { ToolResponseMessage } from "@thinkrail/contracts";
 import {
 	assistantToolCallsAreExecutable,
 	isToolResponsePending,
@@ -7,28 +8,15 @@ import {
 	TOOL_RESPONSE_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
 import type { ExtensionSessionServices, InteractiveTools } from "../extensions";
+import type { AgentMessage } from "./piTypes";
 
 export const TOOL_RESPONSE_PENDING_TEXT =
 	"This call is now waiting for the user's response. This turn ends here; the response (or the user's own free-form reply) will arrive as the next user message. Do not assume one until it arrives.";
 export const TOOL_RESPONSE_STOPPED_ERROR = "Cancelled because the run was stopped";
 
-interface ToolCallView {
-	type: string;
-	id?: string;
-	name?: string;
-	arguments?: unknown;
-}
-interface MessageView {
-	role?: string;
-	content?: unknown;
-	details?: unknown;
-	toolCallId?: string;
-	stopReason?: string;
-}
-
-function toolCallsOf(message: MessageView): ToolCallView[] {
-	if (message.role !== "assistant" || !Array.isArray(message.content)) return [];
-	return (message.content as ToolCallView[]).filter((b) => b?.type === "toolCall");
+function toolCallsOf(message: AgentMessage): ToolCall[] {
+	if (message.role !== "assistant") return [];
+	return message.content.filter((block) => block.type === "toolCall");
 }
 
 export type Respondability =
@@ -36,21 +24,20 @@ export type Respondability =
 	| { ok: false; reason: "unknown_call" | "already_responded" | "not_awaiting" | "superseded" };
 
 export function assessRespondability(
-	messages: readonly AgentMessage[],
+	views: readonly AgentMessage[],
 	toolCallId: string,
 	interactive: InteractiveTools,
 ): Respondability {
-	const views = messages as readonly MessageView[];
 	let callIndex = -1;
 	let callDead = false;
-	let call: ToolCallView | null = null;
+	let call: ToolCall | null = null;
 	for (let i = 0; i < views.length; i++) {
 		const view = views[i];
 		if (!view) continue;
 		for (const block of toolCallsOf(view)) {
-			if (block.id === toolCallId && block.name !== undefined && interactive.has(block.name)) {
+			if (block.id === toolCallId && interactive.has(block.name)) {
 				callIndex = i;
-				callDead = !assistantToolCallsAreExecutable(view.stopReason);
+				callDead = view.role === "assistant" && !assistantToolCallsAreExecutable(view.stopReason);
 				call = block;
 			}
 		}
@@ -78,7 +65,7 @@ export function hasPendingToolResult(
 	messages: readonly AgentMessage[],
 	toolCallId: string,
 ): boolean {
-	return (messages as readonly MessageView[]).some(
+	return messages.some(
 		(message) =>
 			message.role === "toolResult" &&
 			message.toolCallId === toolCallId &&
@@ -91,14 +78,14 @@ export function awaitingToolCallId(
 	interactive: InteractiveTools,
 	pendingOnly = false,
 ): string | null {
-	const views = messages as readonly MessageView[];
+	const views = messages;
 	for (let i = views.length - 1; i >= 0; i--) {
 		const view = views[i];
 		if (!view) continue;
 		if (view.role === "user") return null;
 		for (const block of toolCallsOf(view)) {
 			const { id } = block;
-			if (id === undefined || block.name === undefined || !interactive.has(block.name)) continue;
+			if (!interactive.has(block.name)) continue;
 			if (!assessRespondability(messages, id, interactive).ok) continue;
 			if (!pendingOnly || hasPendingToolResult(messages, id)) return id;
 		}

@@ -174,6 +174,13 @@ composer alone instead of the surface and every annotation slot Pierre re-render
 them is current; a new selection, a close or a stamp refresh retires the text; reopening the same selection
 keeps it.
 
+The persistence holds `unknown`, so each slot names its `ReviewDraftKind<T>` (`reviewDraftKind`, or
+`stampedComposerDraft` for a composer). A kind writes an opaque token and keeps the value in its own `WeakMap`,
+so a read gets back only what the same kind wrote: a renderer cannot read another one's draft shape, and no
+cast is needed. Each kind is one module-level constant per value type, so a draft survives a remount;
+`THREAD_EDIT_DRAFT` is shared by every renderer that shows a thread. Drafts never leave memory, which the token
+scheme relies on.
+
 ## Decisions
 
 - **Markdown is injected, not imported.** The host's markdown (the app's `chat/Markdown`) draws Mermaid

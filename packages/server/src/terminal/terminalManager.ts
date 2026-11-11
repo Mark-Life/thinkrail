@@ -4,8 +4,9 @@ import type {
 	TerminalDetachedPush,
 	TerminalExitPush,
 	TerminalTabInfo,
+	WorkspaceId,
 } from "@thinkrail/contracts";
-import { TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
+import { parseStoredWorkspaceId, WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import {
 	loadConfig,
@@ -14,23 +15,17 @@ import {
 	type PersistedTerminalSessions,
 	saveTerminalSessions,
 } from "../persistence";
-import { createTerminalCompletionQueue } from "./completionQueue";
-import {
-	createOutputBatcher,
-	type OutputBatcher,
-	type TerminalDeliveryResult,
-} from "./outputBatcher";
+import { createTerminalCompletionQueue, type PushToClient } from "./completionQueue";
+import { createOutputBatcher, type OutputBatcher } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
 import { terminalPtyEnv } from "./ptyEnv";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
 
-type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
-
 interface TerminalEntry {
 	pty: IPty;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	tabKey: string;
 	attachedClient: string | null;
 	output: OutputBatcher;
@@ -54,12 +49,12 @@ const MAX_TERMINAL_TITLE_LENGTH = 1000;
 
 const terminals = new Map<string, TerminalEntry>();
 const ptyByTab = new Map<string, string>();
-const tabsByWorkspace = new Map<string, TabRecord[]>();
+const tabsByWorkspace = new Map<WorkspaceId, TabRecord[]>();
 const pendingReplay = new Map<string, string>();
 
 const TAB_INDEX_SEP = "\u0000";
 
-function tabIndex(workspaceId: string, tabKey: string): string {
+function tabIndex(workspaceId: WorkspaceId, tabKey: string): string {
 	return `${workspaceId}${TAB_INDEX_SEP}${tabKey}`;
 }
 
@@ -68,14 +63,14 @@ export function setTerminalPublisher(fn: PushToClient): void {
 	pushToClient = fn;
 }
 
-let broadcastTabs: (workspaceId: string, tabs: TerminalTabInfo[]) => void = () => {};
+let broadcastTabs: (workspaceId: WorkspaceId, tabs: TerminalTabInfo[]) => void = () => {};
 export function setTerminalTabsPublisher(
-	fn: (workspaceId: string, tabs: TerminalTabInfo[]) => void,
+	fn: (workspaceId: WorkspaceId, tabs: TerminalTabInfo[]) => void,
 ): void {
 	broadcastTabs = fn;
 }
 
-function membershipChanged(workspaceId: string): void {
+function membershipChanged(workspaceId: WorkspaceId): void {
 	broadcastTabs(workspaceId, listTerminals(workspaceId));
 	persistTerminalSessions();
 }
@@ -87,14 +82,10 @@ const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
 
 function replayBudgetChars(): number {
-	const configured = loadConfig().terminalReplayKb;
-	const kb = Number.isFinite(configured)
-		? Math.min(Math.max(Math.trunc(configured), TERMINAL_REPLAY_KB.min), TERMINAL_REPLAY_KB.max)
-		: TERMINAL_REPLAY_KB.default;
-	return kb * 1024;
+	return loadConfig().terminalReplayKb * 1024;
 }
 
-function tabsFor(workspaceId: string): TabRecord[] {
+function tabsFor(workspaceId: WorkspaceId): TabRecord[] {
 	let tabs = tabsByWorkspace.get(workspaceId);
 	if (!tabs) {
 		tabs = [];
@@ -123,19 +114,14 @@ function assertTerminalTitle(title: string): void {
 
 const TERMINAL_GRID_DIMENSION = { min: 1, max: 32_767 } as const;
 
-function assertTerminalGridDimension(value: unknown): void {
+function assertTerminalGridDimension(value: number): void {
 	if (
-		typeof value !== "number" ||
 		!Number.isInteger(value) ||
 		value < TERMINAL_GRID_DIMENSION.min ||
 		value > TERMINAL_GRID_DIMENSION.max
 	) {
 		throw new Error("Invalid terminal size");
 	}
-}
-
-function assertTerminalData(data: unknown): void {
-	if (typeof data !== "string") throw new Error("Invalid terminal input");
 }
 
 function assertTerminalCatalogCapacity(tabs: readonly TabRecord[]): void {
@@ -147,7 +133,7 @@ function assertTerminalCatalogCapacity(tabs: readonly TabRecord[]): void {
 }
 
 function spawnForTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	clientKey: string,
 	size: { cols?: number; rows?: number },
@@ -225,7 +211,7 @@ function spawnForTab(
 }
 
 export function reserveTerminal(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	title: string,
 ): TerminalTabInfo {
@@ -255,7 +241,7 @@ export interface AttachResult {
 }
 
 export function attachTerminal(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	clientKey: string,
 	options: { title?: string; cols?: number; rows?: number } = {},
@@ -306,7 +292,7 @@ export function attachTerminal(
 	return { id, created: true, ...(replay ? { replay } : {}) };
 }
 
-export function listTerminals(workspaceId: string): TerminalTabInfo[] {
+export function listTerminals(workspaceId: WorkspaceId): TerminalTabInfo[] {
 	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
 }
 
@@ -323,7 +309,6 @@ function announceDisplaced(id: string, caller: string): void {
 }
 
 export function writeTerminal(id: string, data: string, caller: string): string | null {
-	assertTerminalData(data);
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
 		announceDisplaced(id, caller);
@@ -358,7 +343,7 @@ export interface CloseTabResult {
 }
 
 export function closeTerminalTab(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	tabKey: string,
 	force = false,
 ): CloseTabResult {
@@ -385,7 +370,7 @@ export function resumeClientTerminals(clientKey: string): void {
 	completions.resume(clientKey);
 }
 
-export function closeWorkspaceTerminals(workspaceId: string): void {
+export function closeWorkspaceTerminals(workspaceId: WorkspaceId): void {
 	for (const [id, entry] of terminals) {
 		if (entry.workspaceId === workspaceId) disposeTerminalEntry(id, entry);
 	}
@@ -417,14 +402,15 @@ export function persistTerminalSessions(): void {
 }
 
 export function reviveTerminalSessions(): void {
-	for (const [workspaceId, tabs] of Object.entries(loadTerminalSessions())) {
-		if (!Array.isArray(tabs)) continue;
+	for (const [rawWorkspaceId, tabs] of Object.entries(loadTerminalSessions())) {
+		const workspaceId = parseStoredWorkspaceId(rawWorkspaceId);
+		if (workspaceId === null) continue;
 		const restored: TabRecord[] = [];
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
-			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
+			if (!isValidTerminalTabKey(tab.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
 			restored.push({ tabKey: tab.tabKey, title });
-			if (typeof tab.recorded === "string" && tab.recorded !== "") {
+			if (tab.recorded) {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}
 		}

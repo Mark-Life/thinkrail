@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { compile, lit, obj, str } from "@earendil-works/pi-schema";
 import { locateDesktopLauncher, waitForDocument, within } from "@thinkrail/artifact-tests";
 import { artifactHostEnvironment } from "./artifactPlaywright";
 import {
@@ -22,10 +23,10 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const desktopDir = fileURLToPath(new URL("../apps/desktop", import.meta.url));
 const launcher = locateDesktopLauncher(desktopDir, process.env.THINKRAIL_E2E_DESKTOP);
 
+const readyHost = compile(obj({ origin: str(), mode: lit("host") }, { open: true }));
+
 function hostOrigin(document: unknown): string | undefined {
-	if (typeof document !== "object" || document === null) return undefined;
-	const { origin, mode } = document as { origin?: unknown; mode?: unknown };
-	return typeof origin === "string" && mode === "host" ? origin : undefined;
+	return readyHost.check(document) ? document.origin : undefined;
 }
 
 function waitForReady(exited: Promise<number>): Promise<string> {

@@ -27,6 +27,9 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   file previews (every `path`/`before`, wrapped into a `` cannot show `path` `` diagnostic asking the
   model to write the file first); without it paths are not checked, because the package stays
   `node:`-free. `scratchDir` names where the prompt guideline sends mockups.
+- **`./schema`** (`src/schema.ts`), a type-only browser leaf: ThinkRail's `visualize` web half may import
+  its types, never its values, so its `typebox` value import never reaches a bundle. It never imports
+  `@earendil-works/pi-coding-agent`, not even type-only (`check:boundaries`).
 - **The tool contract** renderers key on: the name `"visualize"`, its argument shape
   (`type: "diagram" | "comparison" | "file"`, `title?`, `mermaid?`, `options?[]`, `path?`, `before?`),
   and `details` = the validated params. Changing this shape is a breaking change for every renderer,

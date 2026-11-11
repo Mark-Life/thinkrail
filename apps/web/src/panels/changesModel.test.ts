@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import type { GitFileChange } from "@thinkrail/contracts";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
 import {
 	buildChangeMarks,
 	buildChangesTree,
 	type ChangeTreeDir,
+	type ChangeTreeNode,
 	changesTabId,
 	changeTreeFolderPaths,
 	diffTabId,
@@ -19,6 +21,11 @@ import {
 	turnScope,
 } from "./changesModel";
 
+function dir(node: ChangeTreeNode | undefined): ChangeTreeDir {
+	if (node?.kind !== "dir") throw new Error("expected a directory node");
+	return node;
+}
+
 function change(path: string, over: Partial<GitFileChange> = {}): GitFileChange {
 	return { path, status: "modified", added: 1, removed: 0, ...over };
 }
@@ -30,16 +37,16 @@ test("buildChangesTree compacts single-directory runs and stops before files", (
 		change("packages/server/c.ts"),
 	]);
 	expect(tree.map((n) => n.name)).toEqual(["apps/web", "packages/server"]);
-	const appsWeb = tree[0] as ChangeTreeDir;
+	const appsWeb = dir(tree[0]);
 	expect(appsWeb.path).toBe("apps/web");
 	expect(appsWeb.children.map((n) => n.name)).toEqual(["a.ts", "b.ts"]);
-	const packagesServer = tree[1] as ChangeTreeDir;
+	const packagesServer = dir(tree[1]);
 	expect(packagesServer.children.map((n) => n.name)).toEqual(["c.ts"]);
 });
 
 test("buildChangesTree stops compaction at a branching directory", () => {
 	const tree = buildChangesTree([change("src/client/a.ts"), change("src/server/b.ts")]);
-	const src = tree[0] as ChangeTreeDir;
+	const src = dir(tree[0]);
 	expect(src.name).toBe("src");
 	expect(src.children.map((n) => n.name)).toEqual(["client", "server"]);
 });
@@ -49,10 +56,10 @@ test("buildChangesTree aggregates +/- counts up into folders", () => {
 		change("src/x.ts", { added: 3, removed: 1 }),
 		change("src/deep/y.ts", { added: 5, removed: 2 }),
 	]);
-	const src = tree[0] as ChangeTreeDir;
+	const src = dir(tree[0]);
 	expect(src.added).toBe(8);
 	expect(src.removed).toBe(3);
-	const deep = src.children.find((n) => n.name === "deep") as ChangeTreeDir;
+	const deep = dir(src.children.find((n) => n.name === "deep"));
 	expect(deep.added).toBe(5);
 	expect(deep.removed).toBe(2);
 });
@@ -73,17 +80,17 @@ test("scopeKey + diffTabId: the scope is part of a diff tab's identity", () => {
 	expect(scopeKey({ kind: "commit", sha: "abc123" })).toBe("commit:abc123");
 	expect(scopeKey({ kind: "pinned", baseRef: "abc123" })).toBe("pinned:abc123");
 
-	const branch = diffTabId("ws1", { kind: "branch" }, "src/a.ts");
-	const commit = diffTabId("ws1", { kind: "commit", sha: "abc123" }, "src/a.ts");
+	const branch = diffTabId(testWorkspaceId("ws1"), { kind: "branch" }, "src/a.ts");
+	const commit = diffTabId(testWorkspaceId("ws1"), { kind: "commit", sha: "abc123" }, "src/a.ts");
 	expect(branch).toBe("diff:3:ws16:branch8:src/a.ts");
 	expect(commit).not.toBe(branch);
 });
 
 test("changesTabId: one review tab per (workspace, scope), disjoint from every diff tab id", () => {
-	const branch = changesTabId("ws1", { kind: "branch" });
+	const branch = changesTabId(testWorkspaceId("ws1"), { kind: "branch" });
 	expect(branch).toBe("changes:3:ws16:branch");
-	expect(changesTabId("ws1", { kind: "commit", sha: "abc123" })).not.toBe(branch);
-	expect(changesTabId("ws2", { kind: "branch" })).not.toBe(branch);
+	expect(changesTabId(testWorkspaceId("ws1"), { kind: "commit", sha: "abc123" })).not.toBe(branch);
+	expect(changesTabId(testWorkspaceId("ws2"), { kind: "branch" })).not.toBe(branch);
 	expect(branch.startsWith("diff:")).toBe(false);
 });
 
@@ -135,8 +142,8 @@ test("splitPath separates the muted directory prefix from the bright basename", 
 test("a turn scope is keyed by its id, labelled Last turn only while it is the newest, and read-only", () => {
 	const older = {
 		id: "s1:100",
-		workspaceId: "ws1",
-		sessionId: "s1",
+		workspaceId: testWorkspaceId("ws1"),
+		sessionId: testSessionId("s1"),
 		startedAt: 100,
 		settledAt: 200,
 		baseTree: "a".repeat(40),
@@ -159,8 +166,8 @@ test("a turn scope is keyed by its id, labelled Last turn only while it is the n
 		startedAt: 100,
 	});
 	expect(scopeKey(scope)).toBe("turn:s1:100");
-	expect(diffTabId("ws1", scope, "src/a.ts")).not.toBe(
-		diffTabId("ws1", turnScope(newer), "src/a.ts"),
+	expect(diffTabId(testWorkspaceId("ws1"), scope, "src/a.ts")).not.toBe(
+		diffTabId(testWorkspaceId("ws1"), turnScope(newer), "src/a.ts"),
 	);
 	expect(scopeLabel(currentTranslator(), turnScope(newer), [], [older, newer])).toBe("Last turn");
 	expect(scopeLabel(currentTranslator(), scope, [], [older, newer])).toMatch(/^Turn /);

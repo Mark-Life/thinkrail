@@ -1,3 +1,4 @@
+import type {} from "@thinkrail/ui/css-custom-properties";
 import type { CSSProperties } from "react";
 import { useElementSize } from "../../support/useElementSize";
 import { type HtmlViewport, htmlFrameGeometry } from "./viewport";
@@ -21,7 +22,7 @@ export function HtmlFrame({
 		"--html-frame-width": `${geometry.width}px`,
 		"--html-frame-height": `${geometry.height}px`,
 		"--html-frame-scale": String(geometry.scale),
-	} as CSSProperties;
+	} satisfies CSSProperties;
 
 	return (
 		<div

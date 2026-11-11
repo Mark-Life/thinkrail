@@ -7,6 +7,7 @@
 		".": "./index.ts",
 		"./index.ts": "./index.ts",
 		"./core": "./core/index.ts",
+		"./wire": "./core/wire.ts",
 		"./package.json": "./package.json"
 	},
 	"description": "Teaches the pi agent a project's spec-graph: search, navigate, and manage frontmatter-tagged specs.",
@@ -22,6 +23,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@earendil-works/pi-schema": "catalog:",
 		"yaml": "2.9.1"
 	},
 	"peerDependencies": {

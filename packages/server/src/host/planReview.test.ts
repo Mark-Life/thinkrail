@@ -4,14 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
-import {
-	type ExtensionToolContext,
-	ModelRuntime,
-	SessionManager,
-} from "@earendil-works/pi-coding-agent";
-import type { ReviewFailedPayload, Workspace } from "@thinkrail/contracts";
-import { isPlanReviewResult } from "@thinkrail/contracts";
+import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ReviewFailedPayload, SessionId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { TodoStore } from "pi-todos/core";
+import { fakeFetch } from "../../test/fakeFetch";
 import {
 	configurePiRuntime,
 	createSession,
@@ -21,7 +18,7 @@ import {
 	setSessionPublisher,
 	toWireModel,
 } from "../agent";
-import { createRequestReviewTool } from "../agent/requestReviewTool";
+import { runRequestReview } from "../agent/requestReviewTool";
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { saveWorkspaces } from "../persistence";
 import * as reviews from "../reviews";
@@ -30,7 +27,7 @@ import { resetConfigCache, updateConfig } from "../settings";
 import * as todos from "../todos";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { getWorkspace } from "../workspaces";
-import { handleRequest } from "./handlers";
+import { handleTypedRequest } from "./handlers";
 import { itemReviewActive } from "./planReviewQueue";
 import {
 	installRequestReviewSeam,
@@ -42,20 +39,24 @@ import {
 } from "./requestReview";
 import * as reviewLock from "./reviewLock";
 import { withReviewLock } from "./reviewLock";
+import { parseVerdict } from "./reviewVerdict";
 import { claimItemFix, isItemUnderActiveReview, releaseItemFix } from "./todoReview";
+
+const PROJECT_ID = testProjectId("00000000-0000-4000-8000-0000000000a1");
+const WORKSPACE_ID = testWorkspaceId("00000000-0000-4000-8000-0000000000b1");
 
 const TEST_KEY = "phc_test";
 
 let dataDir: string;
 let worktree: string;
-const WS = "ws-planreview";
+const WS = WORKSPACE_ID;
 
 function modelDef(id: string) {
 	return {
 		id,
 		name: id,
 		reasoning: false,
-		input: ["text"] as ("text" | "image")[],
+		input: ["text"] satisfies ("text" | "image")[],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: 100_000,
 		maxTokens: 4096,
@@ -118,13 +119,12 @@ beforeEach(() => {
 	saveWorkspaces([
 		{
 			id: WS,
-			projectId: "p1",
+			projectId: PROJECT_ID,
 			name: "w",
 			branch: "main",
 			baseBranch: "main",
 			worktreePath: worktree,
-			createdAt: 0,
-		} as Workspace,
+		},
 	]);
 });
 
@@ -144,7 +144,7 @@ const verdictRunner =
 	(finalText: string, onRun?: () => void): ReviewRunner =>
 	async () => {
 		onRun?.();
-		return { childSessionId: "child", status: "completed" as const, finalText };
+		return { childSessionId: testSessionId("child"), status: "completed" as const, finalText };
 	};
 
 const approve = '```json\n{ "verdict": "approve", "findings": [] }\n```';
@@ -156,7 +156,7 @@ const requestChanges = [
 ].join("\n");
 
 /** A real (faux-model) worker chat: the fix message can only land on a session that actually exists. */
-async function workerSession(): Promise<string> {
+async function workerSession(): Promise<SessionId> {
 	const created = await createSession({
 		cwd: worktree,
 		workspaceId: WS,
@@ -166,14 +166,14 @@ async function workerSession(): Promise<string> {
 	return created.sessionId;
 }
 
-function committedItem(sessionId: string, title = "step"): string {
+function committedItem(sessionId: SessionId, title = "step"): string {
 	return new TodoStore(worktree, sessionId).add({
 		title,
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
 	}).id;
 }
 
-async function settle(sessionId: string, itemId: string): Promise<void> {
+async function settle(sessionId: SessionId, itemId: string): Promise<void> {
 	const deadline = Date.now() + 10_000;
 	while (itemReviewActive(sessionId, itemId)) {
 		if (Date.now() > deadline) throw new Error("plan review never settled");
@@ -190,7 +190,7 @@ test("an approve verdict settles the step as reviewed by the agent", async () =>
 	expect(getWorkspace(WS).lastActiveAt ?? 0).toBeGreaterThan(0);
 	await settle(sessionId, id);
 
-	const record = todoReviewRecord({ workspaceId: WS, sessionId, id });
+	const record = todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id });
 	expect(record?.state).toBe("reviewed");
 	expect(record?.reviewedBy).toBe("agent");
 });
@@ -262,16 +262,9 @@ test("a verdict's summary and reading order land on the workspace review as its 
 	const tooLong = `{ "verdict": "approve", "findings": [], "readingOrder": ${JSON.stringify(
 		Array.from({ length: 13 }, (_, index) => ({ path: `f${index}.ts`, why: "x" })),
 	)} }`;
-	expect(isPlanReviewResult({ ...JSON.parse(tooLong), itemId: id, itemTitle: "step" })).toBe(false);
-	expect(
-		isPlanReviewResult({
-			itemId: id,
-			itemTitle: "step",
-			verdict: "approve",
-			findings: [],
-			readingOrder: [{ path: "a.ts" }],
-		}),
-	).toBe(false);
+	expect(parseVerdict(tooLong, id, "step")).toBeNull();
+	const stepWithoutWhy = { verdict: "approve", findings: [], readingOrder: [{ path: "a.ts" }] };
+	expect(parseVerdict(JSON.stringify(stepWithoutWhy), id, "step")).toBeNull();
 });
 
 test.each(["button", "tool", "auto-fix-off"] as const)(
@@ -296,16 +289,7 @@ test.each(["button", "tool", "auto-fix-off"] as const)(
 		try {
 			if (path === "tool") {
 				installRequestReviewSeam(verdictRunner(requestChanges));
-				const ctx = {
-					sessionManager: { getSessionId: () => sessionId },
-				} as unknown as ExtensionToolContext;
-				reviewed = createRequestReviewTool().execute(
-					"tc",
-					{ itemId: id },
-					undefined,
-					undefined,
-					ctx,
-				);
+				reviewed = runRequestReview(sessionId, id, undefined);
 			} else {
 				startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
 			}
@@ -350,7 +334,7 @@ test("an approve whose record fails does not publish a successful guide", async 
 	} finally {
 		spy.mockRestore();
 	}
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })).toBeUndefined();
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })).toBeUndefined();
 	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
@@ -394,7 +378,11 @@ test("reviews of one plan run one at a time, and a step already under review is 
 		if (running > 1) overlapped = true;
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		running -= 1;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: testSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 
 	expect(startPlanReview(WS, sessionId, first, serialRunner)).toBe(true);
@@ -413,13 +401,13 @@ test("a subagent that returns no parsable verdict clears the reviewing mark inst
 	startPlanReview(WS, sessionId, id, verdictRunner("I could not decide."));
 	await settle(sessionId, id);
 
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })).toBeUndefined();
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
 test("a fix the worker never accepted gives the auto cycle back instead of stranding the step", async () => {
 	// No session exists for this id, so the structured fix send rejects before the worker's turn.
-	const sessionId = "sess-detached";
+	const sessionId = testSessionId("sess-detached");
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
 
@@ -464,7 +452,11 @@ test("a fix landing during another step's review is re-reviewed, not dropped", a
 	});
 	const slowRunner: ReviewRunner = async () => {
 		await bGate;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: testSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 	expect(startPlanReview(WS, sessionId, b, slowRunner)).toBe(true);
 
@@ -497,24 +489,19 @@ test("a tool request_review queues behind a button review of another step on the
 		if (running > 1) overlapped = true;
 		await new Promise((resolve) => setTimeout(resolve, 30));
 		running -= 1;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: testSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 
 	installRequestReviewSeam(serialRunner);
-	const ctx = {
-		sessionManager: { getSessionId: () => sessionId },
-	} as unknown as ExtensionToolContext;
 
 	// Button review on `first` and the worker's request_review tool on `second`, kicked off together:
 	// without the shared plan chain both hidden children would stream at once.
 	expect(startPlanReview(WS, sessionId, first, serialRunner)).toBe(true);
-	await createRequestReviewTool().execute(
-		"tc",
-		{ itemId: second } as never,
-		undefined,
-		undefined,
-		ctx,
-	);
+	await runRequestReview(sessionId, second, undefined);
 	await settle(sessionId, first);
 	await settle(sessionId, second);
 
@@ -656,7 +643,11 @@ test("an unset reviewer model resolves the host's new-chat default, not the work
 	let captured: { provider: string; id: string } | undefined;
 	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
 		captured = role.model;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: testSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 	startPlanReview(WS, sessionId, id, capturingRunner);
 	await settle(sessionId, id);
@@ -670,7 +661,11 @@ test("an unset reviewer effort resolves the host's new-chat default, not the wor
 	let captured: string | undefined;
 	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
 		captured = role.thinkingLevel;
-		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+		return {
+			childSessionId: testSessionId("child"),
+			status: "completed" as const,
+			finalText: approve,
+		};
 	};
 	startPlanReview(WS, sessionId, id, capturingRunner);
 	await settle(sessionId, id);
@@ -681,9 +676,6 @@ test("the tool path awaits artifact reconciliation before it snapshots the chang
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
-	const ctx = {
-		sessionManager: { getSessionId: () => sessionId },
-	} as unknown as ExtensionToolContext;
 
 	// The reviewing snapshot must be taken only after the reconciliation barrier settles — request_review
 	// fires right after todo_update, so a snapshot before the barrier can miss the just-committed change set.
@@ -697,13 +689,7 @@ test("the tool path awaits artifact reconciliation before it snapshots the chang
 		return realStart(p);
 	});
 	try {
-		await createRequestReviewTool().execute(
-			"tc",
-			{ itemId: id } as never,
-			undefined,
-			undefined,
-			ctx,
-		);
+		await runRequestReview(sessionId, id, undefined);
 	} finally {
 		settleSpy.mockRestore();
 		startSpy.mockRestore();
@@ -711,23 +697,14 @@ test("the tool path awaits artifact reconciliation before it snapshots the chang
 
 	expect(order[0]).toBe("settle");
 	expect(order.indexOf("settle")).toBeLessThan(order.indexOf("start"));
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })?.state).toBe("reviewed");
 });
 
 test("the tool path marks findings sent to the worker so resolve_comment can close them", async () => {
 	installRequestReviewSeam(verdictRunner(requestChanges));
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
-	const ctx = {
-		sessionManager: { getSessionId: () => sessionId },
-	} as unknown as ExtensionToolContext;
-	const out = await createRequestReviewTool().execute(
-		"tc",
-		{ itemId: id } as never,
-		undefined,
-		undefined,
-		ctx,
-	);
+	const out = await runRequestReview(sessionId, id, undefined);
 
 	const comment = (await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id);
 	expect(comment?.status).toBe("sent");
@@ -735,7 +712,7 @@ test("the tool path marks findings sent to the worker so resolve_comment can clo
 	const cid = comment?.id ?? "";
 	expect(cid).toMatch(/^rc_/);
 	// The worker-facing text names the canonical id, not the model's transient f1.
-	const text = String((out.content?.[0] as { text?: string } | undefined)?.text ?? "");
+	const text = out.content[0]?.text ?? "";
 	expect(text).toContain(cid);
 	expect(text).not.toContain("[f1]");
 	// resolve_comment closes it by canonical id — the re-review approve gate is now satisfiable.
@@ -748,9 +725,6 @@ test("the tool path deletes the just-filed drafts when the mark-sent transaction
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
-	const ctx = {
-		sessionManager: { getSessionId: () => sessionId },
-	} as unknown as ExtensionToolContext;
 
 	// Filing succeeds but the mark-sent step throws (a concurrent clear / non-draft collision). The
 	// compensation must remove the just-filed drafts so no open finding is stranded whose canonical id
@@ -759,9 +733,9 @@ test("the tool path deletes the just-filed drafts when the mark-sent transaction
 		throw new Error("review store unwritable");
 	});
 	try {
-		await expect(
-			createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx),
-		).rejects.toThrow(/review store unwritable/);
+		await expect(runRequestReview(sessionId, id, undefined)).rejects.toThrow(
+			/review store unwritable/,
+		);
 	} finally {
 		spy.mockRestore();
 	}
@@ -788,9 +762,6 @@ test("the tool path deletes the first filed draft when a later finding fails to 
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
-	const ctx = {
-		sessionManager: { getSessionId: () => sessionId },
-	} as unknown as ExtensionToolContext;
 
 	// The first finding persists; the second addComment throws (a mid-loop store fault). fileFindings
 	// must compensate its own partial success so the first draft is deleted, leaving no stranded open
@@ -803,9 +774,9 @@ test("the tool path deletes the first filed draft when a later finding fails to 
 		return real(arg);
 	});
 	try {
-		await expect(
-			createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx),
-		).rejects.toThrow(/review store unwritable/);
+		await expect(runRequestReview(sessionId, id, undefined)).rejects.toThrow(
+			/review store unwritable/,
+		);
 	} finally {
 		spy.mockRestore();
 	}
@@ -883,9 +854,9 @@ test("the button path delivers canonical ids even when a Review send races befor
 		const c = await realAdd(arg);
 		if (!racedOnce) {
 			racedOnce = true;
-			raced = withReviewLock(WS, () => reviews.markCommentsSent(WS, [c.id], "sess-other")).catch(
-				() => {},
-			);
+			raced = withReviewLock(WS, () =>
+				reviews.markCommentsSent(WS, [c.id], testSessionId("sess-other")),
+			).catch(() => {});
 		}
 		return c;
 	});
@@ -913,9 +884,6 @@ test("the tool path rolls back and deletes the findings when the cycle record fa
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
-	const ctx = {
-		sessionManager: { getSessionId: () => sessionId },
-	} as unknown as ExtensionToolContext;
 
 	// Findings file and mark `sent`, then the todo-review sidecar write throws. The transaction must roll
 	// the sent findings back to draft and delete them so the cancelled review leaves nothing open whose
@@ -924,9 +892,9 @@ test("the tool path rolls back and deletes the findings when the cycle record fa
 		throw new Error("sidecar rename failed");
 	});
 	try {
-		await expect(
-			createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx),
-		).rejects.toThrow(/sidecar rename failed/);
+		await expect(runRequestReview(sessionId, id, undefined)).rejects.toThrow(
+			/sidecar rename failed/,
+		);
 	} finally {
 		spy.mockRestore();
 	}
@@ -995,11 +963,7 @@ test("a request_review that fails before the review starts releases its claim, s
 	const sessionId = await workerSession();
 	// No change set yet: startTodoReview throws, and the claim must not outlive the failed call.
 	const id = new TodoStore(worktree, sessionId).add({ title: "not yet committed" }).id;
-	const ctx = {
-		sessionManager: { getSessionId: () => sessionId },
-	} as unknown as ExtensionToolContext;
-	const run = () =>
-		createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx);
+	const run = () => runRequestReview(sessionId, id, undefined);
 
 	await expect(run()).rejects.toThrow(/no change set/);
 	expect(itemReviewActive(sessionId, id)).toBe(false);
@@ -1009,14 +973,14 @@ test("a request_review that fails before the review starts releases its claim, s
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
 	});
 	await expect(run()).resolves.toBeDefined();
-	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: sessionId, id })?.state).toBe("reviewed");
 });
 
 test("itemTitleOf labels a Review-All adopted commit with its subject, not the commit:<sha> id", async () => {
 	// A commit no plan item owns is surfaced only as a wire-only adoptedCommits entry; the review result
 	// card / detached-failure toast must name its subject, so itemTitleOf has to look there too.
 	const wt = mkdtempSync(join(tmpdir(), "planreview-adopt-"));
-	const ws = "ws-adopt";
+	const ws = testWorkspaceId("00000000-0000-4000-8000-4a37f1967e1b");
 	sh(wt, "init", "-b", "main");
 	sh(wt, "config", "user.email", "t@thinkrail.test");
 	sh(wt, "config", "user.name", "test");
@@ -1032,17 +996,20 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	saveWorkspaces([
 		{
 			id: ws,
-			projectId: "p1",
+			projectId: PROJECT_ID,
 			name: "w",
 			branch: "feature",
 			baseBranch: "main",
 			worktreePath: wt,
-			createdAt: 0,
-		} as Workspace,
+		},
 	]);
 	try {
-		expect(await itemTitleOf(ws, "sess-adopt", `commit:${sha}`)).toBe("feat: loose work");
-		expect(await itemTitleOf(ws, "sess-adopt", "commit:deadbeef")).toBe("commit:deadbeef");
+		expect(
+			await itemTitleOf(testWorkspaceId(ws), testSessionId("sess-adopt"), `commit:${sha}`),
+		).toBe("feat: loose work");
+		expect(await itemTitleOf(ws, testSessionId("sess-adopt"), "commit:deadbeef")).toBe(
+			"commit:deadbeef",
+		);
 	} finally {
 		rmSync(wt, { recursive: true, force: true });
 	}
@@ -1054,10 +1021,10 @@ test("only actual agent verdicts emit review decisions and agent-authored findin
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
-		fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
+		fetchImpl: fakeFetch(async (_url: string | URL | Request, init?: RequestInit) => {
 			events.push(...JSON.parse(String(init?.body)).batch);
 			return new Response("{}", { status: 200 });
-		}) as typeof fetch,
+		}),
 	});
 	try {
 		updateConfig({ reviewAutoFix: false });
@@ -1094,10 +1061,10 @@ test("agent-delivered findings emit review_comment_sent on the button, tool and 
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
-		fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
+		fetchImpl: fakeFetch(async (_url: string | URL | Request, init?: RequestInit) => {
 			events.push(...JSON.parse(String(init?.body)).batch);
 			return new Response("{}", { status: 200 });
-		}) as typeof fetch,
+		}),
 	});
 	const sentCount = () => events.filter((event) => event.event === "review_comment_sent").length;
 	try {
@@ -1108,16 +1075,7 @@ test("agent-delivered findings emit review_comment_sent on the button, tool and 
 
 		installRequestReviewSeam(verdictRunner(requestChanges));
 		const tool = committedItem(sessionId, "tool");
-		const ctx = {
-			sessionManager: { getSessionId: () => sessionId },
-		} as unknown as ExtensionToolContext;
-		await createRequestReviewTool().execute(
-			"tc",
-			{ itemId: tool } as never,
-			undefined,
-			undefined,
-			ctx,
-		);
+		await runRequestReview(sessionId, tool, undefined);
 
 		updateConfig({ reviewAutoFix: false });
 		const manual = committedItem(sessionId, "manual");
@@ -1130,12 +1088,12 @@ test("agent-delivered findings emit review_comment_sent on the button, tool and 
 			posthogApiKey: TEST_KEY,
 			additionalEnabled: true,
 			env: {},
-			fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
+			fetchImpl: fakeFetch(async (_url: string | URL | Request, init?: RequestInit) => {
 				events.push(...JSON.parse(String(init?.body)).batch);
 				return new Response("{}", { status: 200 });
-			}) as typeof fetch,
+			}),
 		});
-		await handleRequest(
+		await handleTypedRequest(
 			"todo.requestFix",
 			{ workspaceId: WS, sessionId, id: manual, feedback: "please fix" },
 			{ clientKey: "test" },

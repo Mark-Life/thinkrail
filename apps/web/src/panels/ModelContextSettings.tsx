@@ -44,6 +44,13 @@ function isCustomText(text: string): boolean {
 	return /^\d+$/.test(text) && isModelContextWindow(Number(text));
 }
 
+interface ContextWindowDraft {
+	revision: string;
+	custom: boolean;
+	text: string;
+	submitted: string | null;
+}
+
 function ContextLimitControl({
 	label,
 	controlLabel = label,
@@ -69,11 +76,11 @@ function ContextLimitControl({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const restoreFocus = useRef<HTMLElement | null>(null);
 	const skipBlurCommit = useRef(false);
-	const initialDraft = {
+	const initialDraft: ContextWindowDraft = {
 		revision,
 		custom: false,
 		text: override != null && override !== MODEL_CONTEXT_WINDOW_LIMITS.max ? String(override) : "",
-		submitted: null as string | null,
+		submitted: null,
 	};
 	const [draft, setDraft] = useState(initialDraft);
 	if (draft.revision !== revision) setDraft(initialDraft);

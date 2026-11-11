@@ -9,6 +9,7 @@ import {
 	type CustomEndpointProbeRequest,
 	isCustomEndpointId,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { applyEdits, getNodeValue, modify, type Node } from "jsonc-parser";
 import { logger } from "../log";
 import { usePiRuntime } from "./agentSessionManager";
@@ -265,14 +266,10 @@ function savedKey(id: string, baseUrl: string): string | undefined {
 export async function probeCustomEndpoint(
 	request: CustomEndpointProbeRequest,
 ): Promise<CustomEndpointProbe> {
-	if (!isObject(request) || typeof request.baseUrl !== "string")
-		throw new Error("The server address must be text.");
-	if (request.apiKey !== undefined && typeof request.apiKey !== "string")
-		throw new Error("The API key must be text.");
 	let baseUrl = parseBaseUrl(request.baseUrl);
 	if (!baseUrl) return { ok: false, reason: "invalid-url" };
 	const key =
-		request.apiKey === undefined && typeof request.endpointId === "string"
+		request.apiKey === undefined && request.endpointId !== undefined
 			? savedKey(request.endpointId, baseUrl)
 			: resolveProbeKey(request.apiKey);
 	let listing = await fetchJson(`${baseUrl}/models`, key, LIST_TIMEOUT_MS);
@@ -359,32 +356,23 @@ function isCount(value: unknown): boolean {
 	return value === null || positiveInt(value) !== null;
 }
 
-function isFlag(value: unknown): boolean {
-	return value === null || typeof value === "boolean";
-}
-
 function validateDraft(draft: CustomEndpointDraft): void {
-	if (!isObject(draft) || typeof draft.name !== "string" || typeof draft.baseUrl !== "string")
-		throw new Error("Name and server address must be text.");
-	if (draft.id !== undefined && typeof draft.id !== "string")
-		throw new Error("That server is no longer in models.json. Reload and retry.");
-	if (draft.apiKey !== undefined && typeof draft.apiKey !== "string")
-		throw new Error("The API key must be text.");
-	if (!draft.name.trim()) throw new Error("Name the server.");
+	if (!draft.name.trim()) throw new CodedError("INVALID_PARAMS", "Name the server.");
 	if (!parseBaseUrl(draft.baseUrl))
-		throw new Error("Enter a full http:// or https:// address without credentials or a query.");
-	if (!Array.isArray(draft.models) || draft.models.length === 0)
-		throw new Error("Pick at least one model.");
-	if (draft.models.length > MAX_MODELS) throw new Error("Pick fewer models.");
+		throw new CodedError(
+			"INVALID_PARAMS",
+			"Enter a full http:// or https:// address without credentials or a query.",
+		);
+	if (draft.models.length === 0) throw new CodedError("INVALID_PARAMS", "Pick at least one model.");
+	if (draft.models.length > MAX_MODELS)
+		throw new CodedError("INVALID_PARAMS", "Pick fewer models.");
 	const ids = new Set<string>();
 	for (const model of draft.models) {
-		if (!isObject(model) || typeof model.id !== "string" || !model.id.trim() || ids.has(model.id))
-			throw new Error("Model ids must be unique and non-empty.");
+		if (!model.id.trim() || ids.has(model.id))
+			throw new CodedError("INVALID_PARAMS", "Model ids must be unique and non-empty.");
 		ids.add(model.id);
 		if (!isCount(model.contextWindow) || !isCount(model.maxTokens))
-			throw new Error("Model limits must be whole numbers.");
-		if (!isFlag(model.reasoning) || !isFlag(model.vision))
-			throw new Error("Model capabilities must be on or off.");
+			throw new CodedError("INVALID_PARAMS", "Model limits must be whole numbers.");
 	}
 }
 
@@ -456,9 +444,13 @@ function providerConfig(draft: CustomEndpointDraft, previous: Json | undefined):
 			: (parseBaseUrl(draft.baseUrl) ?? draft.baseUrl.trim());
 	const previousKey = typeof previous?.apiKey === "string" ? previous.apiKey : undefined;
 	if (previousUrl !== undefined && originOf(previousUrl) !== originOf(baseUrl))
-		throw new Error("A server keeps its address. Add a different server as a new one.");
+		throw new CodedError(
+			"INVALID_PARAMS",
+			"A server keeps its address. Add a different server as a new one.",
+		);
 	if (routesElsewhere(previous, baseUrl))
-		throw new Error(
+		throw new CodedError(
+			"INVALID_PARAMS",
 			"Some of this server's models are routed to another address in models.json. Edit it there.",
 		);
 	const previousModels = new Map<string, Json>();
@@ -515,7 +507,10 @@ export function saveCustomEndpoint(draft: CustomEndpointDraft): Promise<CustomEn
 	}
 	return commit((body, config) => {
 		if (draft.id !== undefined && !readEndpoints(config).some((e) => e.id === draft.id))
-			throw new Error("That server is no longer in models.json. Reload and retry.");
+			throw new CodedError(
+				"INVALID_PARAMS",
+				"That server is no longer in models.json. Reload and retry.",
+			);
 		const id = draft.id ?? newEndpointId(draft.name, draft.baseUrl, config);
 		const previous = draft.id === undefined ? undefined : providersOf(config)[draft.id];
 		const value = providerConfig(draft, isObject(previous) ? previous : undefined);

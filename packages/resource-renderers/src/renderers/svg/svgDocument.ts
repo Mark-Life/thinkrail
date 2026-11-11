@@ -38,15 +38,9 @@ function viewBoxSize(value: string | undefined): { width: number; height: number
 		?.trim()
 		.split(/[\s,]+/)
 		.map(Number);
-	if (
-		viewBox?.length !== 4 ||
-		!viewBox.every(Number.isFinite) ||
-		(viewBox[2] ?? 0) <= 0 ||
-		(viewBox[3] ?? 0) <= 0
-	) {
-		return null;
-	}
-	return { width: viewBox[2] as number, height: viewBox[3] as number };
+	if (viewBox?.length !== 4 || !viewBox.every(Number.isFinite)) return null;
+	const [, , width = 0, height = 0] = viewBox;
+	return width > 0 && height > 0 ? { width, height } : null;
 }
 
 export function svgIntrinsicSize(svg: string): { width: number; height: number } | null {

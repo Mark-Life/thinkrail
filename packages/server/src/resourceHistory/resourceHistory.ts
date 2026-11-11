@@ -8,29 +8,38 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join, sep } from "node:path";
+import { bool, compile, obj, str } from "@earendil-works/pi-schema";
+import type { SessionId, WorkspaceId } from "@thinkrail/contracts";
 import {
 	compareResourceHistory,
 	interruptedResource,
 	isLiveResource,
 	type ResourceHistoryCursor,
 	type ResourceKind,
-	type ResourceRecord,
+	ResourceRecord,
 	resourceHistoryCursor,
 	resourceRecordId,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
+import { errnoCode, hasErrno } from "@thinkrail/shared/errnoCode";
 import { logger } from "../log";
-import { dataDir } from "../persistence";
+import { dataDir, stateFileWriteFailure } from "../persistence";
 
 const log = logger("resource-history");
 
+function unreadable(what: string, error?: unknown): CodedError {
+	const errno = error === undefined ? "" : ` (${errnoCode(error) ?? "no error code"})`;
+	return new CodedError("STATE_FILE_UNREADABLE", `${what}${errno}`);
+}
+
 const STORAGE_ID = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,198}[A-Za-z0-9])?$/;
 const CACHED_CHATS = 64;
-const COMMAND_STATUSES = new Set(["running", "stopping", "completed", "error", "stopped"]);
-const SUBAGENT_STATUSES = new Set(["queued", "running", "completed", "error", "aborted"]);
+const IndexLine = compile(ResourceRecord);
+const ArchivedLog = compile(obj({ text: str(), truncated: bool() }, { open: true }));
 
 export interface ResourceHistoryScope {
-	workspaceId: string;
-	sessionId: string;
+	workspaceId: WorkspaceId;
+	sessionId: SessionId;
 }
 
 export interface ArchivedOutput {
@@ -46,49 +55,30 @@ interface ChatHistory {
 
 const cache = new Map<string, ChatHistory>();
 
+/** Drops every loaded index, as a host restart does. */
+export function resetResourceHistoryForTests(): void {
+	cache.clear();
+}
+
 export function resourceHistoryRoot(): string {
 	return join(dataDir(), "resource-history");
 }
 
-function chatDir(scope: ResourceHistoryScope): string | null {
-	return STORAGE_ID.test(scope.workspaceId) && STORAGE_ID.test(scope.sessionId)
-		? join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId)
-		: null;
+function chatDir(scope: ResourceHistoryScope): string {
+	return join(resourceHistoryRoot(), scope.workspaceId, scope.sessionId);
 }
 
 function keyOf(record: ResourceRecord): string {
 	return `${record.kind}:${resourceRecordId(record)}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseRecord(value: unknown): ResourceRecord | null {
-	if (!isRecord(value) || !isRecord(value.summary)) return null;
-	const summary = value.summary;
-	if (
-		value.kind === "command" &&
-		typeof summary.id === "string" &&
-		typeof summary.sessionId === "string" &&
-		typeof summary.name === "string" &&
-		typeof summary.command === "string" &&
-		typeof summary.status === "string" &&
-		COMMAND_STATUSES.has(summary.status) &&
-		typeof summary.startedAt === "number"
-	)
-		return value as ResourceRecord;
-	if (
-		value.kind === "subagent" &&
-		typeof summary.childSessionId === "string" &&
-		typeof summary.parentSessionId === "string" &&
-		typeof summary.task === "string" &&
-		typeof summary.status === "string" &&
-		SUBAGENT_STATUSES.has(summary.status) &&
-		typeof summary.createdAt === "string"
-	)
-		return value as ResourceRecord;
-	return null;
+function parseLine(line: string): ResourceRecord | null {
+	try {
+		const value: unknown = JSON.parse(line);
+		return IndexLine.check(value) ? value : null;
+	} catch {
+		return null;
+	}
 }
 
 function readIndex(dir: string): ChatHistory {
@@ -97,22 +87,27 @@ function readIndex(dir: string): ChatHistory {
 	try {
 		text = readFileSync(join(dir, "index.jsonl"), "utf8");
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-			log.warn("resource history index could not be read", error);
+		if (!hasErrno(error, "ENOENT"))
+			log.warn("resource history index could not be read", unreadable("index.jsonl", error));
 		return history;
 	}
 	history.needsNewline = text.length > 0 && !text.endsWith("\n");
+	let skipped = 0;
 	for (const line of text.split("\n")) {
 		if (!line) continue;
-		let record: ResourceRecord | null;
-		try {
-			record = parseRecord(JSON.parse(line));
-		} catch {
-			record = null;
+		const record = parseLine(line);
+		if (!record) {
+			skipped += 1;
+			continue;
 		}
-		if (!record) continue;
 		history.records.set(keyOf(record), record);
 		history.serialized.set(keyOf(record), JSON.stringify(record.summary));
+	}
+	if (skipped > 0) {
+		log.warn(
+			"resource history index skipped lines",
+			unreadable(`index.jsonl has ${skipped} unreadable lines`),
+		);
 	}
 	return history;
 }
@@ -145,8 +140,8 @@ export function recordResource(
 	record: ResourceRecord,
 	output?: ArchivedOutput,
 ): void {
+	if (!STORAGE_ID.test(resourceRecordId(record))) return;
 	const dir = chatDir(scope);
-	if (!dir || !STORAGE_ID.test(resourceRecordId(record))) return;
 	try {
 		const history = load(dir);
 		const key = keyOf(record);
@@ -169,7 +164,7 @@ export function recordResource(
 		history.records.set(key, record);
 		history.serialized.set(key, serialized);
 	} catch (error) {
-		log.warn("resource history could not be written", error);
+		log.warn("resource history could not be written", stateFileWriteFailure(dir, error));
 	}
 }
 
@@ -179,7 +174,6 @@ export function finishedResources(
 	live: ReadonlySet<string>,
 ): ResourceRecord[] {
 	const dir = chatDir(scope);
-	if (!dir) return [];
 	const finished: ResourceRecord[] = [];
 	for (const record of load(dir).records.values()) {
 		if (record.kind !== kind || live.has(resourceRecordId(record))) continue;
@@ -207,26 +201,25 @@ export function archivedCommandOutput(
 	scope: ResourceHistoryScope,
 	commandId: string,
 ): ArchivedOutput | undefined {
-	const dir = chatDir(scope);
-	if (!dir || !STORAGE_ID.test(commandId)) return undefined;
+	if (!STORAGE_ID.test(commandId)) return undefined;
+	const path = join(chatDir(scope), "logs", `${commandId}.json`);
+	let parsed: unknown;
 	try {
-		const parsed: unknown = JSON.parse(
-			readFileSync(join(dir, "logs", `${commandId}.json`), "utf8"),
-		);
-		return isRecord(parsed) &&
-			typeof parsed.text === "string" &&
-			typeof parsed.truncated === "boolean"
-			? { text: parsed.text, truncated: parsed.truncated }
-			: undefined;
+		parsed = JSON.parse(readFileSync(path, "utf8"));
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-			log.warn("resource history log could not be read", error);
+		if (!hasErrno(error, "ENOENT"))
+			log.warn("resource history log could not be read", unreadable(`${commandId}.json`, error));
 		return undefined;
 	}
+	if (ArchivedLog.check(parsed)) return { text: parsed.text, truncated: parsed.truncated };
+	log.warn(
+		"resource history log was refused",
+		unreadable(`${commandId}.json is not an archived log`),
+	);
+	return undefined;
 }
 
-export function removeWorkspaceResourceHistory(workspaceId: string): void {
-	if (!STORAGE_ID.test(workspaceId)) return;
+export function removeWorkspaceResourceHistory(workspaceId: WorkspaceId): void {
 	const dir = join(resourceHistoryRoot(), workspaceId);
 	for (const key of [...cache.keys()]) if (key.startsWith(`${dir}${sep}`)) cache.delete(key);
 	rmSync(dir, { recursive: true, force: true });

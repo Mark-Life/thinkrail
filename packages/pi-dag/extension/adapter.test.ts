@@ -21,7 +21,9 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createDelegationService } from "pi-delegation";
+import { Type } from "typebox";
 import { Check } from "typebox/value";
+import { DagReceiptSchema } from "../domain/index.ts";
 import standalone, {
 	createDagExtension,
 	createDagService,
@@ -33,7 +35,6 @@ import standalone, {
 	type DagReceipt,
 	type DagResult,
 	type DagService,
-	type DagSnapshot,
 } from "../index.ts";
 
 const root = mkdtempSync(join(tmpdir(), "dag-adapter-"));
@@ -185,13 +186,14 @@ async function sessionWith(
 	await session.bindExtensions({ mode: "print", onError: (error) => reported.push(error.error) });
 	return session;
 }
-async function tool<T>(
+/** A tool's `details`: the `DagResult` it reported, unchecked beyond its JSON text. */
+async function tool(
 	session: AgentSession,
 	name: string,
 	args: Record<string, unknown>,
 	id = `invocation-${serial++}`,
 	signal?: AbortSignal,
-): Promise<DagResult<T>> {
+): Promise<unknown> {
 	const definition = session.getToolDefinition(name);
 	if (!definition) throw new Error(`Missing tool ${name}`);
 	const result = await definition.execute(
@@ -202,18 +204,25 @@ async function tool<T>(
 		session.extensionRunner.createToolContext(id, signal),
 	);
 	expect(result.content).toEqual([{ type: "text", text: JSON.stringify(result.details, null, 2) }]);
-	return result.details as DagResult<T>;
+	return result.details;
+}
+const Success = Type.Object({ ok: Type.Literal(true), value: Type.Unknown() });
+function succeeded(details: unknown) {
+	if (!Check(Success, details)) throw new Error(JSON.stringify(details));
+	return details.value;
+}
+function receiptOf(details: unknown) {
+	const receipt = succeeded(details);
+	if (!Check(DagReceiptSchema, receipt))
+		throw new Error(`Not a receipt: ${JSON.stringify(receipt)}`);
+	return receipt;
 }
 async function snapshot(session: AgentSession, dagId: string) {
-	return value(await tool<DagSnapshot>(session, "dag_read", { query: { kind: "get", dagId } }));
+	return succeeded(await tool(session, "dag_read", { query: { kind: "get", dagId } }));
 }
-async function until(
-	read: () => Promise<DagSnapshot>,
-	predicate: (snapshot: DagSnapshot) => boolean,
-) {
+async function until(read: () => Promise<unknown>, expected: object) {
 	for (let attempt = 0; attempt < 500; attempt++) {
-		const state = await read();
-		if (predicate(state)) return state;
+		if (Bun.deepMatch(expected, await read())) return;
 		await Bun.sleep(10);
 	}
 	throw new Error("DAG did not reach expected state");
@@ -230,16 +239,13 @@ function ui(session: AgentSession, confirm: ExtensionUIContext["confirm"]) {
 	return notify;
 }
 async function create(session: AgentSession, graph = definition()) {
-	return value(
-		await tool<DagReceipt>(session, "dag_create", {
-			commandId: `create-${serial++}`,
-			definition: graph,
-		}),
+	return receiptOf(
+		await tool(session, "dag_create", { commandId: `create-${serial++}`, definition: graph }),
 	);
 }
 async function resume(session: AgentSession, receipt: DagReceipt) {
-	return value(
-		await tool<DagReceipt>(session, "dag_control", {
+	return receiptOf(
+		await tool(session, "dag_control", {
 			commandId: `resume-${serial++}`,
 			dagId: receipt.dagId,
 			expectedVersion: receipt.version,
@@ -388,7 +394,7 @@ test("real invocation history excludes the whole batch; replay needs no replacem
 		(message) => message.role === "toolResult" && message.toolName === "dag_create",
 	);
 	if (result?.role !== "toolResult") throw new Error("Missing create receipt");
-	const receipt = value(result.details as DagResult<DagReceipt>);
+	const receipt = receiptOf(result.details);
 	const state = value(await f.owner.getDag({ dagId: receipt.dagId }));
 	if (!state.mainHistory) throw new Error("Missing main history");
 	const history = readFileSync(state.mainHistory.localPath, "utf8");
@@ -422,8 +428,8 @@ test("complete admitted topology remains readable beyond 64 KiB", async () => {
 	const receipt = await create(session, graph);
 	const state = await snapshot(session, receipt.dagId);
 	expect(JSON.stringify(state).length).toBeGreaterThan(64 * 1024);
-	expect(state.nodes).toHaveLength(128);
-	expect(state.nodes.at(-1)?.id).toBe("node-127");
+	expect(state).toHaveProperty("nodes.length", 128);
+	expect(state).toHaveProperty(["nodes", 127, "id"], "node-127");
 }, 30_000);
 
 test("operator requires confirmation, preserves human provenance, and cannot outlive its conversation", async () => {
@@ -580,17 +586,17 @@ test("standalone owners survive replaced modules and new/resume/fork, including 
 		current.dispose();
 		current = await sessionWith(await replacedModule(), alias);
 		const state = await snapshot(current, receipt.dagId);
-		expect(state.mode).toBe("running");
-		expect(state.executionOwner).toBe("local");
-		expect(["queued", "running"]).toContain(state.nodes[0]?.status ?? "missing");
+		expect(state).toMatchObject({ mode: "running", executionOwner: "local" });
+		expect(state).toHaveProperty(
+			["nodes", 0, "status"],
+			expect.stringMatching(/^(queued|running)$/),
+		);
 		expect(workerSignal?.aborted).toBe(false);
 	}
 	finish.release();
-	const complete = await until(
-		() => snapshot(current, receipt.dagId),
-		(state) => state.nodes[0]?.status === "completed",
-	);
-	expect(complete.nodes[0]?.attempt).toBe(1);
+	await until(() => snapshot(current, receipt.dagId), {
+		nodes: [{ status: "completed", attempt: 1 }],
+	});
 });
 
 test.each(["reload", "quit"] as const)(
@@ -632,16 +638,19 @@ test.each(["reload", "quit"] as const)(
 		await pendingCreate;
 		expect(closed).toBe(true);
 		const replacement = await sessionWith(await replacedModule(), first.sessionManager.getCwd());
-		const state = await snapshot(replacement, receipt.dagId);
-		expect(state.mode).toBe("paused");
-		expect(state.executionOwner).toBe("none");
-		expect(state.lifecycle).toBe("active");
-		expect(state.nodes[0]?.status).toBe("interrupted");
+		expect(await snapshot(replacement, receipt.dagId)).toMatchObject({
+			mode: "paused",
+			executionOwner: "none",
+			lifecycle: "active",
+			nodes: [{ status: "interrupted" }],
+		});
 		const secondReplacement = await sessionWith(
 			await replacedModule(),
 			second.sessionManager.getCwd(),
 		);
-		expect((await snapshot(secondReplacement, secondReceipt.dagId)).executionOwner).toBe("none");
+		expect(await snapshot(secondReplacement, secondReceipt.dagId)).toMatchObject({
+			executionOwner: "none",
+		});
 		const calls = worker.state.callCount;
 		await Bun.sleep(30);
 		expect(worker.state.callCount).toBe(calls);
@@ -661,25 +670,25 @@ test("standalone canonicalizes an initially absent agent root through its existi
 		await shutdown(first, "new");
 		process.env.PI_CODING_AGENT_DIR = join(base, "missing", "agent");
 		const replacement = await sessionWith(await replacedModule(), first.sessionManager.getCwd());
-		expect((await snapshot(replacement, receipt.dagId)).executionOwner).toBe("local");
+		expect(await snapshot(replacement, receipt.dagId)).toMatchObject({ executionOwner: "local" });
 		await shutdown(replacement, "quit");
 		const fresh = await sessionWith(await replacedModule(), first.sessionManager.getCwd());
-		expect((await snapshot(fresh, receipt.dagId)).executionOwner).toBe("none");
+		expect(await snapshot(fresh, receipt.dagId)).toMatchObject({ executionOwner: "none" });
 	} finally {
 		process.env.PI_CODING_AGENT_DIR = original;
 	}
 });
 
 test("factory loading is lazy and incompatible process registries fail loudly across module replacement", async () => {
-	const key = Symbol.for("pi-dag.standalone-owners");
-	expect(Reflect.get(globalThis, key)).toBeUndefined();
+	expect(globalThis.piDagStandaloneOwners).toBeUndefined();
 	await resources(await replacedModule(), root);
-	expect(Reflect.get(globalThis, key)).toBeUndefined();
+	expect(globalThis.piDagStandaloneOwners).toBeUndefined();
 	for (const incompatible of [
 		{ version: 0, owners: new Map() },
 		{ version: 1, owners: "not owners" },
+		{ version: 1, owners: new Map([["scope", { bind: "not a service" }]]) },
 	]) {
-		Reflect.set(globalThis, key, incompatible);
+		globalThis.piDagStandaloneOwners = incompatible;
 		try {
 			const session = await sessionWith(await replacedModule());
 			expect(errors.get(session)?.splice(0)).toEqual([
@@ -689,9 +698,9 @@ test("factory loading is lazy and incompatible process registries fail loudly ac
 				ok: false,
 				error: { code: "revoked" },
 			});
-			expect(Reflect.get(globalThis, key)).toBe(incompatible);
+			expect(globalThis.piDagStandaloneOwners).toBe(incompatible);
 		} finally {
-			Reflect.deleteProperty(globalThis, key);
+			globalThis.piDagStandaloneOwners = undefined;
 		}
 	}
 });

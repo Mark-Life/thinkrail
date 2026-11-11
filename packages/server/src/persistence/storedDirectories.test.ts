@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
+import { testProjectId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { dataDir, loadProjects, loadWorkspaces, saveProjects, saveWorkspaces } from "./persistence";
 
 let root: string;
@@ -28,8 +29,8 @@ function project(path: unknown) {
 
 function workspace(worktreePath: unknown) {
 	return {
-		id: "w",
-		projectId: "p",
+		id: testWorkspaceId("w"),
+		projectId: testProjectId("p"),
 		kind: "default",
 		name: "Default",
 		branch: "main",
@@ -66,19 +67,36 @@ test("the next save persists the healed spelling", () => {
 
 test("a value that is not an absolute path on this host is left as stored", () => {
 	const foreign = process.platform === "win32" ? "relative/repo" : "C:\\Users\\me\\repo";
-	writeFileSync(
-		join(root, "projects.json"),
-		JSON.stringify([project(foreign), { id: "no-path", name: "x", slug: "x", lastOpened: 1 }]),
-	);
+	writeFileSync(join(root, "projects.json"), JSON.stringify([project(foreign)]));
 	writeFileSync(join(root, "workspaces.json"), JSON.stringify([workspace(foreign)]));
 
-	const [stored, pathless] = loadProjects();
-	expect(stored?.path).toBe(foreign);
-	expect(pathless?.path).toBeUndefined();
+	expect(loadProjects().map((stored) => stored.path)).toEqual([foreign]);
 	expect(loadWorkspaces()[0]?.worktreePath).toBe(foreign);
 });
 
 test("a relative THINKRAIL_DATA_DIR still names one absolute data directory", () => {
 	process.env.THINKRAIL_DATA_DIR = relative(process.cwd(), root);
 	expect(dataDir()).toBe(root);
+});
+
+test("a project with a hand-edited id stays listed", () => {
+	const ids = ["0f8fad5b-d9cb-469f-a165-70867728950e", "fixture-project", "hand edited"];
+	writeFileSync(
+		join(root, "projects.json"),
+		JSON.stringify(ids.map((id) => ({ ...project(root), id }))),
+	);
+
+	expect(loadProjects().map((entry) => String(entry.id))).toEqual(ids);
+});
+
+test("a workspace id stays listed when it is safe in a path, and a path escape drops", () => {
+	const kept = ["0f8fad5b-d9cb-469f-a165-70867728950e", "fixture-workspace-scope-one"];
+	writeFileSync(
+		join(root, "workspaces.json"),
+		JSON.stringify(
+			[...kept, "../..", "a/b"].map((id) => ({ ...workspace(root), id, projectId: "edited" })),
+		),
+	);
+
+	expect(loadWorkspaces().map((entry) => String(entry.id))).toEqual(kept);
 });

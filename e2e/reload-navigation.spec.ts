@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { compile } from "@earendil-works/pi-schema";
 import { expect, type Page, test } from "@playwright/test";
+import { WS_METHOD_SCHEMAS } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
 	createWorkspaceViaDialog,
@@ -9,7 +9,11 @@ import {
 	revealWorkbenchTool,
 	worktreeRows,
 } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import { readPersistedProjects } from "./fixtures/storedState";
+import { readRequest } from "./fixtures/wire";
+
+const SESSION_GETMESSAGES_PARAMS = compile(WS_METHOD_SCHEMAS["session.getMessages"].params);
+const WORKSPACE_LIST_PARAMS = compile(WS_METHOD_SCHEMAS["workspace.list"].params);
 
 const chatTabs = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 const activeTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-active="true"]');
@@ -21,11 +25,8 @@ function chatIdFromHash(hash: string): string {
 	return decodeURIComponent(encoded);
 }
 
-function fixtureProjectId(): string {
-	const projects = JSON.parse(readFileSync(join(E2E_DATA_DIR, "projects.json"), "utf8")) as {
-		id: string;
-	}[];
-	const id = projects[0]?.id;
+function fixtureProjectId() {
+	const id = readPersistedProjects()[0]?.id;
 	if (!id) throw new Error("no fixture project persisted");
 	return id;
 }
@@ -138,12 +139,22 @@ test("missing chat, workspace, and project fall back to the nearest valid locati
 		.poll(() => currentHash(page))
 		.toContain(`#/v1/projects/${projectId}/workspaces/${workspace.id}`);
 
-	await coldOpen(page, `#/v1/projects/${projectId}/workspaces/gone`);
+	await coldOpen(
+		page,
+		`#/v1/projects/${projectId}/workspaces/00000000-0000-4000-8000-0000000000bf`,
+	);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(activeWorktreeRow(page)).toHaveCount(0);
 	await expect.poll(() => currentHash(page)).toBe(`#/v1/projects/${projectId}`);
 
-	await coldOpen(page, "#/v1/projects/gone/workspaces/w/chats/s");
+	await coldOpen(
+		page,
+		"#/v1/projects/00000000-0000-4000-8000-0000000000af/workspaces/00000000-0000-4000-8000-0000000000bf/chats/s",
+	);
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await expect.poll(() => currentHash(page)).toBe("#/v1");
+
+	await coldOpen(page, `#/v1/projects/${projectId}/workspaces/..%2F..%2Fescape`);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect.poll(() => currentHash(page)).toBe("#/v1");
 });
@@ -161,20 +172,8 @@ test("a transient workspace read failure preserves the URL and restores after re
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { id?: string; method?: string; params?: { includeDiffStats?: boolean } };
-			try {
-				frame = JSON.parse(raw) as typeof frame;
-			} catch {
-				server.send(message);
-				return;
-			}
-			if (
-				!injected &&
-				frame.id &&
-				frame.method === "workspace.list" &&
-				frame.params?.includeDiffStats === false
-			) {
+			const frame = readRequest(message.toString(), "workspace.list", WORKSPACE_LIST_PARAMS);
+			if (!injected && frame?.params.includeDiffStats === false) {
 				injected = true;
 				ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected transient failure" }));
 				void ws.close();
@@ -211,20 +210,12 @@ test("a failed exact-chat transcript waits for reconnect instead of duplicating 
 		const thisSocket = socketNumber;
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { id?: string; method?: string; params?: { sessionId?: string } };
-			try {
-				frame = JSON.parse(raw) as typeof frame;
-			} catch {
-				server.send(message);
-				return;
-			}
-			if (
-				thisSocket === 1 &&
-				frame.id &&
-				frame.method === "session.getMessages" &&
-				frame.params?.sessionId === sessionId
-			) {
+			const frame = readRequest(
+				message.toString(),
+				"session.getMessages",
+				SESSION_GETMESSAGES_PARAMS,
+			);
+			if (thisSocket === 1 && frame?.params.sessionId === sessionId) {
 				firstSocketTargetReads += 1;
 				ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected transcript failure" }));
 				if (!closeScheduled) {
@@ -258,28 +249,17 @@ test("user navigation while the restore read is delayed wins over the late respo
 	const projectId = fixtureProjectId();
 
 	let heldFrame: string | null = null;
-	let releaseHeld: (() => void) | null = null;
+	const held: { release: (() => void) | null } = { release: null };
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
-		releaseHeld = () => {
+		held.release = () => {
 			if (heldFrame) server.send(heldFrame);
 			heldFrame = null;
 		};
 		ws.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { method?: string; params?: { includeDiffStats?: boolean } };
-			try {
-				frame = JSON.parse(raw) as typeof frame;
-			} catch {
-				server.send(message);
-				return;
-			}
-			if (
-				heldFrame === null &&
-				releaseHeld !== null &&
-				frame.method === "workspace.list" &&
-				frame.params?.includeDiffStats === false
-			) {
+			const raw = message.toString();
+			const frame = readRequest(raw, "workspace.list", WORKSPACE_LIST_PARAMS);
+			if (heldFrame === null && held.release !== null && frame?.params.includeDiffStats === false) {
 				heldFrame = raw;
 				return;
 			}
@@ -294,7 +274,7 @@ test("user navigation while the restore read is delayed wins over the late respo
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect.poll(() => currentHash(page)).toBe(`#/v1/projects/${projectId}`);
 
-	releaseHeld?.();
+	held.release?.();
 	await page.waitForTimeout(500);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(activeWorktreeRow(page)).toHaveCount(0);
@@ -347,17 +327,17 @@ test("a restored chat reveals as soon as its transcript arrives, with no Suspens
 	await expect(chatTabs(page)).toHaveCount(1);
 	const sessionId = chatIdFromHash(await currentHash(page));
 
-	let release: (() => void) | null = null;
+	const held: { release: (() => void) | null } = { release: null };
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
 			const raw = typeof message === "string" ? message : message.toString();
 			if (
-				release === null &&
+				held.release === null &&
 				raw.includes('"method":"session.getMessages"') &&
 				raw.includes(sessionId)
 			) {
-				release = () => server.send(raw);
+				held.release = () => server.send(raw);
 				return;
 			}
 			server.send(message);
@@ -373,7 +353,7 @@ test("a restored chat reveals as soon as its transcript arrives, with no Suspens
 	});
 
 	await page.reload();
-	await expect.poll(() => release !== null).toBe(true);
+	await expect.poll(() => held.release !== null).toBe(true);
 	await expect(page.getByLabel("Restoring chat")).toBeVisible();
 	await expect
 		.poll(() => chatChunkUrl, { message: "the ChatView chunk loads while the transcript is held" })
@@ -397,7 +377,7 @@ test("a restored chat reveals as soon as its transcript arrives, with no Suspens
 		}).observe(document.body, { childList: true, subtree: true });
 		return counter;
 	});
-	release?.();
+	held.release?.();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	expect(await seen.evaluate((counter) => counter.skeletons)).toBe(0);
 });

@@ -1,3 +1,5 @@
+import type { MatchTier } from "./schema";
+
 export const MATCH_TIER = {
 	exact: 0,
 	prefix: 1,
@@ -5,9 +7,7 @@ export const MATCH_TIER = {
 	substring: 3,
 	fuzzy: 4,
 	content: 5,
-} as const;
-
-export type MatchTier = (typeof MATCH_TIER)[keyof typeof MATCH_TIER];
+} as const satisfies Record<string, MatchTier>;
 
 export interface MatchField {
 	readonly key: string;
@@ -457,7 +457,7 @@ export function matchFields(
 			}
 		}
 		if (!best) return null;
-		tier = Math.max(tier, best.hit.tier) as MatchTier;
+		if (best.hit.tier > tier) tier = best.hit.tier;
 		score += best.hit.score;
 		const existing = rangesByKey.get(best.key) ?? [];
 		existing.push(...best.hit.ranges);

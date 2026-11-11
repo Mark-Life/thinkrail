@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { testSessionId } from "@thinkrail/contracts/test-ids";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ExtUiPrompt, PendingExtUiContext } from "./ExtUiPrompt";
 import { type ChatRow, type RoutineToolStep, rowsHaveToolCall, type ThinkingStep } from "./rows";
@@ -18,26 +19,25 @@ const tool = (id: string, toolName: string): RoutineToolStep => ({
 
 const approval: ExtUiDialogRequest = {
 	id: "extui_1",
-	sessionId: "s",
+	sessionId: testSessionId("s"),
 	kind: "select",
 	title: "Allow linear/create_issue? It may change data.",
 	options: ["Deny", "Allow once", "Allow in this chat", "Always allow"],
 	toolCallId: "b",
 };
 
+const thinking: ThinkingStep = {
+	kind: "thinking",
+	id: "thinking-1",
+	text: "plan the issue",
+	streaming: false,
+	tools: [tool("b", "mcp__linear__create_issue")],
+};
+
 const activity: ChatRow = {
 	kind: "activity",
 	id: "activity:a",
-	steps: [
-		tool("a", "read"),
-		{
-			kind: "thinking",
-			id: "thinking-1",
-			text: "plan the issue",
-			streaming: false,
-			tools: [tool("b", "mcp__linear__create_issue")],
-		},
-	],
+	steps: [tool("a", "read"), thinking],
 	live: true,
 };
 
@@ -80,7 +80,7 @@ describe("ExtUiPrompt", () => {
 			<ExtUiPrompt
 				request={{
 					id: "i",
-					sessionId: "s",
+					sessionId: testSessionId("s"),
 					kind: "input",
 					title: "Paste the code\nIt is shown once the browser sign-in completes.",
 				}}
@@ -100,7 +100,7 @@ describe("ExtUiPrompt", () => {
 			<ExtUiPrompt
 				request={{
 					id: "c",
-					sessionId: "s",
+					sessionId: testSessionId("s"),
 					kind: "confirm",
 					title: "Run rm?",
 					message: "It deletes.",
@@ -113,7 +113,7 @@ describe("ExtUiPrompt", () => {
 		expect(confirm).toContain(">OK<");
 		const input = renderToStaticMarkup(
 			<ExtUiPrompt
-				request={{ id: "i", sessionId: "s", kind: "input", title: "Paste the code" }}
+				request={{ id: "i", sessionId: testSessionId("s"), kind: "input", title: "Paste the code" }}
 				onReply={() => {}}
 			/>,
 		);
@@ -121,14 +121,26 @@ describe("ExtUiPrompt", () => {
 		expect(input).toContain(">Submit<");
 		const editor = renderToStaticMarkup(
 			<ExtUiPrompt
-				request={{ id: "e", sessionId: "s", kind: "editor", title: "Edit", prefill: "draft" }}
+				request={{
+					id: "e",
+					sessionId: testSessionId("s"),
+					kind: "editor",
+					title: "Edit",
+					prefill: "draft",
+				}}
 				onReply={() => {}}
 			/>,
 		);
 		expect(editor).toContain(">draft</textarea>");
 		const remembered = renderToStaticMarkup(
 			<ExtUiPrompt
-				request={{ id: "e", sessionId: "s", kind: "editor", title: "Edit", prefill: "draft" }}
+				request={{
+					id: "e",
+					sessionId: testSessionId("s"),
+					kind: "editor",
+					title: "Edit",
+					prefill: "draft",
+				}}
 				draft="user changed draft"
 				onReply={() => {}}
 			/>,
@@ -174,7 +186,7 @@ describe("a dialog about a tool call renders on that tool", () => {
 		};
 		const nested: ChatRow = {
 			...activity,
-			steps: [tool("a", "read"), { ...(activity.steps[1] as ThinkingStep), tools: [awaited] }],
+			steps: [tool("a", "read"), { ...thinking, tools: [awaited] }],
 		};
 		const markup = renderWith(nested, {
 			...approval,

@@ -34,10 +34,11 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
+import type {} from "@thinkrail/ui/css-custom-properties";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import { ModelEffortPill, TONE_TEXT } from "./ModelEffortLabel";
 import {
 	CENTRAL_KIND_TAG,
@@ -183,10 +184,7 @@ function EffortSlider({
 				<span aria-hidden>·</span>
 				<span className="truncate">{model.name}</span>
 			</div>
-			<div
-				className="relative h-32"
-				style={{ "--effort": `${levelPosition(level, levels)}%` } as CSSProperties}
-			>
+			<div className="relative h-32" style={{ "--effort": `${levelPosition(level, levels)}%` }}>
 				<div
 					aria-hidden
 					className="pointer-events-none absolute inset-x-0 top-8 h-14 overflow-hidden rounded-full border border-control-border-default bg-control-bg"

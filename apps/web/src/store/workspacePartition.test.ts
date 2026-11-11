@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import type { SessionStateRecord, Workspace, WorkspaceId } from "@thinkrail/contracts";
+import { testProjectId, testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { useAppStore } from "./appStore";
 import {
@@ -14,8 +15,8 @@ const NOW = 1_800_000_000_000;
 
 function ws(id: string, overrides: Partial<Workspace> = {}): Workspace {
 	return {
-		id,
-		projectId: "p1",
+		id: testWorkspaceId(id),
+		projectId: testProjectId("p1"),
 		name: id,
 		branch: id,
 		worktreePath: `/tmp/${id}`,
@@ -31,15 +32,15 @@ function unstamped(id: string, overrides: Partial<Workspace> = {}): Workspace {
 }
 
 function session(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	state: Partial<SessionStateRecord["state"]>,
 ): Record<string, Record<string, SessionStateRecord>> {
 	return {
 		[workspaceId]: {
 			s1: {
-				sessionId: "s1",
+				sessionId: testSessionId("s1"),
 				workspaceId,
-				projectId: "p1",
+				projectId: testProjectId("p1"),
 				state: {
 					execution: "idle",
 					runId: null,
@@ -59,12 +60,12 @@ beforeEach(() => {
 	useAppStore.setState({ protocolVersion: 78, workspaceSettlingSupported: true });
 });
 
-const base = {
+const base: Parameters<typeof selectWorkspaceSettledReason>[0] = {
 	workspaceSettlingSupported: true,
 	sessionStateByWorkspace: {},
 	activeWorkspaceId: null,
 	activeWorkspaceLiveLatch: false,
-	settleIdleDays: 3 as number | null,
+	settleIdleDays: 3,
 };
 
 describe("selectWorkspaceSettledReason", () => {
@@ -87,14 +88,20 @@ describe("selectWorkspaceSettledReason", () => {
 		const parked = { lastActiveAt: NOW - 30 * DAY, settledOverride: "settled" as const };
 		expect(
 			selectWorkspaceSettledReason(
-				{ ...base, sessionStateByWorkspace: session("busy", { execution: "running" }) },
+				{
+					...base,
+					sessionStateByWorkspace: session(testWorkspaceId("busy"), { execution: "running" }),
+				},
 				ws("busy", parked),
 				NOW,
 			),
 		).toBeNull();
 		expect(
 			selectWorkspaceSettledReason(
-				{ ...base, sessionStateByWorkspace: session("unread", { completionUnread: true }) },
+				{
+					...base,
+					sessionStateByWorkspace: session(testWorkspaceId("unread"), { completionUnread: true }),
+				},
 				ws("unread", parked),
 				NOW,
 			),
@@ -177,7 +184,11 @@ describe("selectWorkspaceSettledReason", () => {
 
 	test("the latched active workspace stays live; an unlatched one follows the rules", () => {
 		const idle = ws("idle", { lastActiveAt: NOW - 10 * DAY });
-		const latched = { ...base, activeWorkspaceId: "idle", activeWorkspaceLiveLatch: true };
+		const latched = {
+			...base,
+			activeWorkspaceId: testWorkspaceId("idle"),
+			activeWorkspaceLiveLatch: true,
+		};
 		expect(selectWorkspaceSettledReason(latched, idle, NOW)).toBeNull();
 		expect(
 			selectWorkspaceSettledReason({ ...latched, activeWorkspaceLiveLatch: false }, idle, NOW),
@@ -204,30 +215,47 @@ describe("selectWorkspacePartition", () => {
 	const state = { ...base, workspaces: { p1: rows } };
 
 	test("created order by default: Default first, then newest created first in both lists", () => {
-		const partition = selectWorkspacePartition(state, "p1", NOW);
-		expect(partition.live.map((w) => w.id)).toEqual(["home", "a-new", "b-old"]);
-		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["idle", "merged"]);
+		const partition = selectWorkspacePartition(state, testProjectId("p1"), NOW);
+		expect(partition.live.map((w) => w.id)).toEqual([
+			testWorkspaceId("home"),
+			testWorkspaceId("a-new"),
+			testWorkspaceId("b-old"),
+		]);
+		expect(partition.settled.map((row) => row.workspace.id)).toEqual([
+			testWorkspaceId("idle"),
+			testWorkspaceId("merged"),
+		]);
 		expect(partition.settled.map((row) => row.reason.kind)).toEqual(["idle", "review"]);
 	});
 
 	test("recent order: Default stays first, then newest activity; settled rows sort the same way", () => {
 		const reversed = { ...state, workspaces: { p1: [home, ...rows.slice(1).reverse()] } };
-		const partition = selectWorkspacePartition(reversed, "p1", NOW, "recent");
-		expect(partition.live.map((w) => w.id)).toEqual(["home", "a-new", "b-old"]);
-		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["merged", "idle"]);
+		const partition = selectWorkspacePartition(reversed, testProjectId("p1"), NOW, "recent");
+		expect(partition.live.map((w) => w.id)).toEqual([
+			testWorkspaceId("home"),
+			testWorkspaceId("a-new"),
+			testWorkspaceId("b-old"),
+		]);
+		expect(partition.settled.map((row) => row.workspace.id)).toEqual([
+			testWorkspaceId("merged"),
+			testWorkspaceId("idle"),
+		]);
 	});
 
 	test("recent order breaks activity ties newest created first", () => {
 		const tied = [ws("first", { lastActiveAt: NOW }), ws("second", { lastActiveAt: NOW })];
 		expect(
-			selectWorkspacePartition({ ...base, workspaces: { p1: tied } }, "p1", NOW, "recent").live.map(
-				(w) => w.id,
-			),
-		).toEqual(["second", "first"]);
+			selectWorkspacePartition(
+				{ ...base, workspaces: { p1: tied } },
+				testProjectId("p1"),
+				NOW,
+				"recent",
+			).live.map((w) => w.id),
+		).toEqual([testWorkspaceId("second"), testWorkspaceId("first")]);
 	});
 
 	test("an unknown project partitions to nothing", () => {
-		expect(selectWorkspacePartition(state, "nope", NOW)).toEqual({
+		expect(selectWorkspacePartition(state, testProjectId("nope"), NOW)).toEqual({
 			live: [],
 			settled: [],
 		});
@@ -246,7 +274,7 @@ describe("selectWorkspacePartition", () => {
 					workspaceSettlingSupported: false,
 					workspaces: { p1: legacyRows },
 				},
-				"p1",
+				testProjectId("p1"),
 				NOW,
 			),
 		).toEqual({ live: legacyRows, settled: [] });
@@ -274,12 +302,12 @@ test("only rows the shelf took on its own count toward the first-move notice", (
 			ws("parked", { settledOverride: "settled" }),
 			ws("fresh"),
 		],
-		p2: [ws("p2-parked", { projectId: "p2", settledOverride: "settled" })],
-		p3: [ws("p3-idle", { projectId: "p3", lastActiveAt: NOW - 10 * DAY })],
+		p2: [ws("p2-parked", { projectId: testProjectId("p2"), settledOverride: "settled" })],
+		p3: [ws("p3-idle", { projectId: testProjectId("p3"), lastActiveAt: NOW - 10 * DAY })],
 	};
 	expect(selectAutoSettledCounts({ ...base, workspaces }, NOW)).toEqual([
-		{ projectId: "p1", count: 2 },
-		{ projectId: "p3", count: 1 },
+		{ projectId: testProjectId("p1"), count: 2 },
+		{ projectId: testProjectId("p3"), count: 1 },
 	]);
 	expect(
 		selectAutoSettledCounts({ ...base, workspaceSettlingSupported: false, workspaces }, NOW),
@@ -298,55 +326,66 @@ test("settled capability survives reconnect limbo until the next welcome decides
 describe("the active-workspace live latch", () => {
 	test("selecting a live workspace latches it; selecting a settled one does not", () => {
 		const store = useAppStore.getState();
-		store.setWorkspaces("p1", [ws("fresh"), ws("idle", { lastActiveAt: NOW - 400 * DAY })]);
-		store.activateWorkspace({ id: "fresh", projectId: "p1" });
+		store.setWorkspaces(testProjectId("p1"), [
+			ws("fresh"),
+			ws("idle", { lastActiveAt: NOW - 400 * DAY }),
+		]);
+		store.activateWorkspace({ id: testWorkspaceId("fresh"), projectId: testProjectId("p1") });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
-		store.activateWorkspace({ id: "idle", projectId: "p1" });
+		store.activateWorkspace({ id: testWorkspaceId("idle"), projectId: testProjectId("p1") });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(false);
 	});
 
 	test("re-activating the current workspace keeps its latch instead of re-judging it", () => {
 		const store = useAppStore.getState();
 		const aging = ws("aging", { lastActiveAt: Date.now() - 1000 });
-		store.setWorkspaces("p1", [aging]);
-		store.activateWorkspace({ id: "aging", projectId: "p1" });
+		store.setWorkspaces(testProjectId("p1"), [aging]);
+		store.activateWorkspace({ id: testWorkspaceId("aging"), projectId: testProjectId("p1") });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
 		store.updateWorkspace(ws("aging", { lastActiveAt: NOW - 400 * DAY }));
-		store.activateWorkspace({ id: "aging", projectId: "p1" });
+		store.activateWorkspace({ id: testWorkspaceId("aging"), projectId: testProjectId("p1") });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
-		store.activateWorkspace({ id: "fresh", projectId: "p1" });
-		store.setWorkspaces("p1", [ws("fresh"), ws("aging", { lastActiveAt: NOW - 400 * DAY })]);
-		store.activateWorkspace({ id: "aging", projectId: "p1" });
+		store.activateWorkspace({ id: testWorkspaceId("fresh"), projectId: testProjectId("p1") });
+		store.setWorkspaces(testProjectId("p1"), [
+			ws("fresh"),
+			ws("aging", { lastActiveAt: NOW - 400 * DAY }),
+		]);
+		store.activateWorkspace({ id: testWorkspaceId("aging"), projectId: testProjectId("p1") });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(false);
 	});
 
 	test("a history jump into a settled chat judges the destination like any other selection", () => {
 		const store = useAppStore.getState();
-		store.setWorkspaces("p1", [
+		store.setWorkspaces(testProjectId("p1"), [
 			ws("fresh", { lastActiveAt: NOW - 1000 }),
 			ws("dormant", { lastActiveAt: NOW - 400 * DAY }),
 		]);
-		store.activateWorkspace({ id: "fresh", projectId: "p1" });
+		store.activateWorkspace({ id: testWorkspaceId("fresh"), projectId: testProjectId("p1") });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
 		store.requestChatLocation({
-			workspaceId: "dormant",
-			projectId: "p1",
-			sessionId: "s1",
+			workspaceId: testWorkspaceId("dormant"),
+			projectId: testProjectId("p1"),
+			sessionId: testSessionId("s1"),
 			messageIndex: 0,
 			anchorText: "old plan",
 		});
 		const state = useAppStore.getState();
-		expect(state.activeWorkspaceId).toBe("dormant");
+		expect(state.activeWorkspaceId).toBe(testWorkspaceId("dormant"));
 		expect(state.activeWorkspaceLiveLatch).toBe(false);
 		expect(
-			selectWorkspacePartition(state, "p1", NOW).settled.map((row) => row.workspace.id),
-		).toEqual(["dormant"]);
+			selectWorkspacePartition(state, testProjectId("p1"), NOW).settled.map(
+				(row) => row.workspace.id,
+			),
+		).toEqual([testWorkspaceId("dormant")]);
 	});
 
 	test("real work pushed for the active row re-arms the latch; other rows' pushes do not", () => {
 		const store = useAppStore.getState();
-		store.setWorkspaces("p1", [ws("fresh"), ws("idle", { lastActiveAt: NOW - 400 * DAY })]);
-		store.activateWorkspace({ id: "idle", projectId: "p1" });
+		store.setWorkspaces(testProjectId("p1"), [
+			ws("fresh"),
+			ws("idle", { lastActiveAt: NOW - 400 * DAY }),
+		]);
+		store.activateWorkspace({ id: testWorkspaceId("idle"), projectId: testProjectId("p1") });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(false);
 		store.updateWorkspace(ws("fresh", { lastActiveAt: Date.now() }));
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(false);
@@ -356,15 +395,15 @@ describe("the active-workspace live latch", () => {
 
 	test("the shelf view state toggles and pages per project", () => {
 		const store = useAppStore.getState();
-		store.toggleSettledShelf("p1");
+		store.toggleSettledShelf(testProjectId("p1"));
 		expect(useAppStore.getState().settledShelfExpanded.p1).toBe(true);
-		store.toggleSettledShelf("p1", true);
+		store.toggleSettledShelf(testProjectId("p1"), true);
 		expect(useAppStore.getState().settledShelfExpanded.p1).toBe(true);
-		store.toggleSettledShelf("p1");
+		store.toggleSettledShelf(testProjectId("p1"));
 		expect(useAppStore.getState().settledShelfExpanded.p1).toBeUndefined();
-		store.showMoreSettled("p1", 35);
+		store.showMoreSettled(testProjectId("p1"), 35);
 		expect(useAppStore.getState().settledShelfShown.p1).toBe(35);
-		store.showMoreSettled("p1", 5);
+		store.showMoreSettled(testProjectId("p1"), 5);
 		expect(useAppStore.getState().settledShelfShown.p1).toBe(35);
 	});
 });

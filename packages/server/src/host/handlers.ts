@@ -2,13 +2,17 @@ import { mkdirSync } from "node:fs";
 import type {
 	Ack,
 	OpenBranchReview,
+	ResourceHistoryCursor,
+	ResourceKind,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
+	SessionId,
 	TemplateReadLocation,
 	ThinkingLevel,
 	WireModel,
 	Workspace,
+	WorkspaceId,
 	WsMethodName,
 	WsParams,
 	WsResult,
@@ -16,8 +20,9 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
-	isSpeechModel,
+	parseSessionId,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHODS,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -43,7 +48,6 @@ import {
 	hasSession,
 	isHostResourceId,
 	isMcpLoginId,
-	isPiSessionId,
 	listAvailableModels,
 	listCustomEndpoints,
 	listModelContextSettings,
@@ -308,11 +312,14 @@ import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
 	clearChangesRequestedIfResolved,
+	findingItem,
 	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
 	releaseItemFix,
 } from "./todoReview";
+import { parseWsParams } from "./wsParams";
+import { checkWsResult } from "./wsResults";
 
 const log = logger("host");
 
@@ -342,7 +349,7 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 
 async function sendUserMessage(
 	mode: SendMode,
-	sessionId: string,
+	sessionId: SessionId,
 	text: string,
 	clientKey: string,
 	operation: () => Promise<void>,
@@ -361,9 +368,9 @@ async function sendUserMessage(
 }
 
 async function startChat(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	choice: { model?: WireModel; thinkingLevel?: ThinkingLevel },
-): Promise<WsResult<"session.create">> {
+) {
 	const ws = getWorkspace(workspaceId);
 	ensureWorkspaceScratchDir(ws);
 	const defaults = await resolveNewChatModel(choice);
@@ -418,9 +425,6 @@ function revealDataFolder(dir: string) {
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
 	const { workspaceId, projectId } = params;
-	if (workspaceId !== undefined && projectId !== undefined) {
-		throw new Error("Template reads accept either workspaceId or projectId, not both");
-	}
 	if (workspaceId !== undefined) return templateDirs(getWorkspace(workspaceId).worktreePath);
 	if (projectId === undefined) return templateDirs();
 	const project = listProjects().find((candidate) => candidate.id === projectId);
@@ -429,12 +433,12 @@ function resolveTemplateReadDirs(params: TemplateReadLocation) {
 }
 
 function fireReviewPrompt(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	comments: readonly ReviewComment[],
-	sessionId: string,
+	sessionId: SessionId,
 	pkg: string,
 	capture: AdditionalAnalyticsCapture | null,
-	send: (sessionId: string, text: string) => Promise<void> = promptSession,
+	send: (sessionId: SessionId, text: string) => Promise<void> = promptSession,
 ): void {
 	const ids = comments.map((c) => c.id);
 	void ackSend(runObservation.send(sessionId, "internal", () => send(sessionId, pkg)))
@@ -455,7 +459,7 @@ function fireReviewPrompt(
 }
 
 function fireTodoFixPrompt(
-	p: { workspaceId: string; sessionId: string; id: string },
+	p: { workspaceId: WorkspaceId; sessionId: SessionId; id: string },
 	pkg: string,
 	details: ReviewFixDetails,
 	previous: TodoReviewRecord | undefined,
@@ -495,7 +499,7 @@ function fireTodoFixPrompt(
 
 function reviewSendGroups(
 	comments: ReviewComment[],
-	sessionId: string | undefined,
+	sessionId: SessionId | undefined,
 ): ReviewComment[][] {
 	if (comments.length === 0) return [];
 	if (sessionId) return [comments];
@@ -508,9 +512,9 @@ function reviewSendGroups(
 }
 
 async function sendToFileChat(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	comments: ReviewComment[],
-	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
+	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: SessionId },
 	capture: AdditionalAnalyticsCapture | null,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
@@ -555,7 +559,7 @@ function sessionStateWorkspace(workspace: Workspace) {
 	return { id: workspace.id, projectId: workspace.projectId, cwd: workspace.worktreePath };
 }
 
-function resourceCwd(workspaceId: string): string {
+function resourceCwd(workspaceId: WorkspaceId): string {
 	try {
 		return getWorkspace(workspaceId).worktreePath;
 	} catch {
@@ -563,68 +567,26 @@ function resourceCwd(workspaceId: string): string {
 	}
 }
 
-function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K, string> {
-	if (!params || typeof params !== "object" || Array.isArray(params))
-		throw new Error("Invalid resource ids");
-	if (Object.keys(params).some((key) => !keys.some((allowed) => allowed === key)))
-		throw new Error("Invalid resource ids");
-	const result = {} as Record<K, string>;
-	for (const key of keys) {
-		const value: unknown = Reflect.get(params, key);
-		const sessionId = key === "sessionId" || key === "parentSessionId" || key === "childSessionId";
-		if (typeof value !== "string" || !(sessionId ? isPiSessionId(value) : isHostResourceId(value)))
-			throw new Error("Invalid resource ids");
-		result[key] = value;
-	}
-	return result;
+function checkCommandId(commandId: string) {
+	if (!isHostResourceId(commandId)) throw new CodedError("INVALID_PARAMS", "Invalid resource ids");
 }
 
-function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
-	if (!params || typeof params !== "object" || Array.isArray(params))
-		throw new Error("Invalid resource history request");
-	const { kind, before, limit, ...scope } = params as Record<string, unknown>;
-	const { workspaceId, sessionId } = resourceParams(scope, ["workspaceId", "sessionId"]);
-	if (kind !== "command" && kind !== "subagent") throw new Error("Invalid resource history kind");
-	if (limit !== undefined && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1))
-		throw new Error("Invalid resource history limit");
-	const request: WsParams<"session.resourceHistory"> = {
-		workspaceId,
-		sessionId,
-		kind,
-		...(limit === undefined ? {} : { limit }),
-	};
-	if (before === undefined) return request;
-	if (!before || typeof before !== "object" || Array.isArray(before))
-		throw new Error("Invalid resource history cursor");
-	const { at, id, ...extra } = before as Record<string, unknown>;
-	if (
-		Object.keys(extra).length > 0 ||
-		typeof at !== "number" ||
-		!Number.isFinite(at) ||
-		typeof id !== "string" ||
-		!(kind === "subagent" ? isPiSessionId(id) : isHostResourceId(id))
-	)
-		throw new Error("Invalid resource history cursor");
-	return { ...request, before: { at, id } };
+function checkResourceHistoryCursor(kind: ResourceKind, before: ResourceHistoryCursor) {
+	const idValid =
+		kind === "subagent" ? parseSessionId(before.id) !== null : isHostResourceId(before.id);
+	if (!Number.isFinite(before.at) || !idValid)
+		throw new CodedError("INVALID_PARAMS", "Invalid resource history cursor");
 }
 
 async function deliverToolResponse(
-	sessionId: string,
+	sessionId: SessionId,
 	toolCallId: string,
 	response: unknown,
 ): Promise<Ack> {
-	if (!hasSession(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
-	if (response === undefined) throw new Error("A tool response must carry a value");
+	if (!hasSession(sessionId))
+		throw new CodedError("SESSION_UNKNOWN", `Unknown session: ${sessionId}`);
 	await ackSend(respondToTool(sessionId, toolCallId, response));
 	return { ok: true };
-}
-
-function invalidSurveyOnThrow<T>(build: () => T): T {
-	try {
-		return build();
-	} catch {
-		throw new CodedError("SURVEY_INVALID", "Invalid survey submission");
-	}
 }
 
 const handlers: WsHandlers = {
@@ -1092,7 +1054,6 @@ const handlers: WsHandlers = {
 	"fonts.installed": () => listInstalledFonts(),
 	"fonts.reveal": () => revealDataFolder(fontsDir()),
 	"speech.install": (p) => {
-		if (!isSpeechModel(p.model)) throw new Error("unknown voice model");
 		installSpeech(p.model);
 		return { ok: true };
 	},
@@ -1233,12 +1194,15 @@ const handlers: WsHandlers = {
 		const { workspaceId } = params;
 		const summaries = await listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
 		return summaries.map((summary) => {
+			const sessionId = parseSessionId(summary.sessionId);
+			if (sessionId === null) return summary;
 			try {
-				return {
-					...summary,
-					openTodos: countOpenTodos({ workspaceId, sessionId: summary.sessionId }),
-				};
-			} catch {
+				return { ...summary, openTodos: countOpenTodos({ workspaceId, sessionId }) };
+			} catch (error) {
+				log.warn(
+					"open todos were not counted",
+					new CodedError("TODO_COUNT_FAILED", `open todos not counted (${String(error)})`),
+				);
 				return summary;
 			}
 		});
@@ -1256,7 +1220,7 @@ const handlers: WsHandlers = {
 			(attachedWorkspaceId === undefined &&
 				!(await ensureSessionAttached(p.sessionId, p.workspaceId, workspace.worktreePath)))
 		) {
-			throw new Error(`Unknown session: ${p.sessionId}`);
+			throw new CodedError("SESSION_UNKNOWN", `Unknown session: ${p.sessionId}`);
 		}
 		if (!isControlMessage(p.text)) throw new Error("Session nudge must be a control message");
 		const nudge = nudgeSession(p.sessionId, p.text, p.images);
@@ -1284,16 +1248,15 @@ const handlers: WsHandlers = {
 	"mcp.readOutput": (params) => mcpReadOutput(params),
 	"mcp.readLog": (params) => mcpReadLog(params),
 	"mcp.testConnection": (params, ctx) => mcpTestConnection(params, ctx.clientKey),
-	"session.resources": (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId"]);
+	"session.resources": (p) => {
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
 	},
-	"session.resourceHistory": (params) => {
-		const { workspaceId, sessionId, ...request } = resourceHistoryParams(params);
+	"session.resourceHistory": ({ workspaceId, sessionId, ...request }) => {
+		if (request.before) checkResourceHistoryCursor(request.kind, request.before);
 		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
 	},
-	"backgroundCommand.output": (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+	"backgroundCommand.output": (p) => {
+		checkCommandId(p.commandId);
 		return readBackgroundCommandOutput(
 			p.workspaceId,
 			p.sessionId,
@@ -1301,8 +1264,8 @@ const handlers: WsHandlers = {
 			resourceCwd(p.workspaceId),
 		);
 	},
-	"backgroundCommand.stop": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+	"backgroundCommand.stop": async (p) => {
+		checkCommandId(p.commandId);
 		await stopBackgroundCommand(
 			p.workspaceId,
 			p.sessionId,
@@ -1311,8 +1274,7 @@ const handlers: WsHandlers = {
 		);
 		return { ok: true } as const;
 	},
-	"subagent.stop": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "parentSessionId", "childSessionId"]);
+	"subagent.stop": async (p) => {
 		await stopSubagent(
 			p.workspaceId,
 			p.parentSessionId,
@@ -1321,8 +1283,7 @@ const handlers: WsHandlers = {
 		);
 		return { ok: true } as const;
 	},
-	"subagent.stopAll": async (params) => {
-		const p = resourceParams(params, ["workspaceId", "parentSessionId"]);
+	"subagent.stopAll": async (p) => {
 		const targeted = await stopAllSubagents(
 			p.workspaceId,
 			p.parentSessionId,
@@ -1437,13 +1398,11 @@ const handlers: WsHandlers = {
 		const survey = currentInAppSurvey();
 		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
 		const language =
-			typeof params?.language === "string" && params.language.length <= 35
-				? params.language
-				: undefined;
+			params.language !== undefined && params.language.length <= 35 ? params.language : undefined;
 		return { survey: localizeSurvey(survey, language) };
 	},
 	"feedback.survey.submit": async (params) => {
-		const submission = invalidSurveyOnThrow(() => parseSurveySubmission(params));
+		const submission = parseSurveySubmission(params);
 		const survey = await confirmInAppSurvey().catch(() => {
 			throw new CodedError("SURVEY_NOT_SENT", "Survey could not be confirmed");
 		});
@@ -1457,7 +1416,7 @@ const handlers: WsHandlers = {
 		) {
 			throw new CodedError("SURVEY_CHANGED", "Survey changed");
 		}
-		const properties = invalidSurveyOnThrow(() => surveyResponse(survey, submission));
+		const properties = surveyResponse(survey, submission);
 		if (!captureSurveyResponse(properties)) {
 			throw new CodedError("SURVEY_NOT_SENT", "Survey answers were not sent");
 		}
@@ -1469,7 +1428,7 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"client.reportError": (params) => {
-		reportClientError(typeof params === "object" && params !== null ? params : {});
+		reportClientError(params);
 		return { ok: true } as const;
 	},
 	"history.search": (p) => {
@@ -1494,7 +1453,13 @@ const handlers: WsHandlers = {
 	"review.commentAdd": (p) => {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
-			const comment = await addComment(p);
+			const comment = await addComment({
+				workspaceId: p.workspaceId,
+				kind: p.kind,
+				anchor: p.anchor,
+				body: p.body,
+				...(p.scope ? { scope: p.scope } : {}),
+			});
 			captureReviewCommentAdded(capture, comment);
 			return comment;
 		});
@@ -1511,12 +1476,8 @@ const handlers: WsHandlers = {
 				captureReviewCommentResolved(capture, "user", terminal);
 			// Resolving/dismissing the item's last open finding must clear its changes_requested verdict
 			// too (no-op while findings remain), the same invariant as commentDelete.
-			if (updated.origin?.todoId)
-				await clearChangesRequestedIfResolved({
-					workspaceId: p.workspaceId,
-					sessionId: updated.origin.sessionId,
-					id: updated.origin.todoId,
-				});
+			const item = updated.origin?.todoId ? findingItem(p.workspaceId, updated.origin) : null;
+			if (item) await clearChangesRequestedIfResolved(item);
 			return updated;
 		});
 	},
@@ -1528,12 +1489,8 @@ const handlers: WsHandlers = {
 			await deleteComment(p.workspaceId, p.id);
 			// A changes_requested verdict must not outlive its findings: if this was the item's last open
 			// finding, drop the verdict back to unreviewed.
-			if (origin?.todoId)
-				await clearChangesRequestedIfResolved({
-					workspaceId: p.workspaceId,
-					sessionId: origin.sessionId,
-					id: origin.todoId,
-				});
+			const item = origin?.todoId ? findingItem(p.workspaceId, origin) : null;
+			if (item) await clearChangesRequestedIfResolved(item);
 			return { ok: true } as const;
 		});
 	},
@@ -1604,6 +1561,11 @@ export function requestErrorReport(method: string): ErrorReport {
 	};
 }
 
+/** A refused `client.reportError` is not reported again: a bad report must not raise another report. */
+export function reportsRequestFailure(method: string): boolean {
+	return method !== WS_METHODS.clientReportError;
+}
+
 function supportsBranchStatus(protocolVersion: number | undefined): boolean {
 	return protocolVersion === undefined || protocolVersion >= BRANCH_STATUS_PROTOCOL_VERSION;
 }
@@ -1631,5 +1593,24 @@ export async function handleRequest(
 	ctx: RequestContext,
 ): Promise<unknown> {
 	if (!isWsMethod(method)) throw new Error(`Unknown method: ${method}`);
-	return dispatch(method, params as WsParams<typeof method>, ctx);
+	return runRequest(method, params, ctx);
+}
+
+/** In-process callers: the same params parse and reply check as `handleRequest`, typed by method. */
+export function handleTypedRequest<M extends WsMethodName>(
+	method: M,
+	params: WsParams<M>,
+	ctx: RequestContext,
+) {
+	return runRequest(method, params, ctx);
+}
+
+async function runRequest<M extends WsMethodName>(
+	method: M,
+	params: unknown,
+	ctx: RequestContext,
+): Promise<WsResult<M>> {
+	const result = await dispatch(method, parseWsParams(method, params), ctx);
+	checkWsResult(method, result);
+	return result;
 }

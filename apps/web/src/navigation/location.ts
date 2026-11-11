@@ -1,8 +1,10 @@
+import type { ProjectId, SessionId, WorkspaceId } from "@thinkrail/contracts";
+import { parseProjectId, parseSessionId, parseWorkspaceId } from "@thinkrail/contracts";
 export type NavigationLocation =
 	| { kind: "main" }
-	| { kind: "project"; projectId: string }
-	| { kind: "workspace"; projectId: string; workspaceId: string }
-	| { kind: "chat"; projectId: string; workspaceId: string; sessionId: string };
+	| { kind: "project"; projectId: ProjectId }
+	| { kind: "workspace"; projectId: ProjectId; workspaceId: WorkspaceId }
+	| { kind: "chat"; projectId: ProjectId; workspaceId: WorkspaceId; sessionId: SessionId };
 
 export const MAIN_LOCATION: NavigationLocation = { kind: "main" };
 
@@ -39,15 +41,15 @@ export function parseFragment(fragment: string): NavigationLocation {
 	const segments = raw.split("/");
 	if (segments[0] !== "" || segments[1] !== "v1") return MAIN_LOCATION;
 	if (segments[2] !== "projects") return MAIN_LOCATION;
-	const projectId = decodeSegment(segments[3]);
+	const projectId = parseProjectId(decodeSegment(segments[3]));
 	if (!projectId) return MAIN_LOCATION;
 	if (segments.length === 4) return { kind: "project", projectId };
 	if (segments[4] !== "workspaces") return MAIN_LOCATION;
-	const workspaceId = decodeSegment(segments[5]);
+	const workspaceId = parseWorkspaceId(decodeSegment(segments[5]));
 	if (!workspaceId) return MAIN_LOCATION;
 	if (segments.length === 6) return { kind: "workspace", projectId, workspaceId };
 	if (segments[6] !== "chats" || segments.length !== 8) return MAIN_LOCATION;
-	const sessionId = decodeSegment(segments[7]);
+	const sessionId = parseSessionId(decodeSegment(segments[7]));
 	if (!sessionId) return MAIN_LOCATION;
 	return { kind: "chat", projectId, workspaceId, sessionId };
 }

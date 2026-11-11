@@ -1,4 +1,9 @@
-import type { ReviewSendResult } from "@thinkrail/contracts";
+import {
+	parseSessionId,
+	type ReviewSendResult,
+	type SessionId,
+	type WorkspaceId,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type CenterNavigationStamp,
@@ -6,24 +11,28 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, RequestError } from "../transport";
 import { openChatInTab } from "./openChat";
 
 async function showReviewChat(
-	workspaceId: string,
+	method: "review.sendComment" | "review.sendBatch",
+	workspaceId: WorkspaceId,
 	sent: ReviewSendResult,
 	navigation: CenterNavigationStamp | null,
 	background = false,
 ): Promise<void> {
+	const sessionId = parseSessionId(sent.sessionId);
+	if (sessionId === null)
+		throw new RequestError("INVALID_REPLY", t("app.transport.invalidReply", { method }));
 	if (sent.reused) {
-		await openChatInTab(workspaceId, sent.sessionId, navigation, background);
+		await openChatInTab(workspaceId, sessionId, navigation, background);
 		return;
 	}
 	const store = useAppStore.getState();
 	const routed = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
 	store.openChatSession(
 		workspaceId,
-		sent.sessionId,
+		sessionId,
 		sent.model,
 		sent.thinkingLevel,
 		undefined,
@@ -32,9 +41,9 @@ async function showReviewChat(
 }
 
 export async function sendReviewComment(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	id: string,
-	chatSessionId?: string,
+	chatSessionId?: SessionId,
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	try {
@@ -43,7 +52,7 @@ export async function sendReviewComment(
 			id,
 			...(chatSessionId ? { sessionId: chatSessionId } : {}),
 		});
-		await showReviewChat(workspaceId, sent, navigation);
+		await showReviewChat("review.sendComment", workspaceId, sent, navigation);
 	} catch (err) {
 		toast.error(errorText(err), t("review.send.commentFailed"));
 		throw err;
@@ -51,9 +60,9 @@ export async function sendReviewComment(
 }
 
 export async function sendReviewBatch(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	commentIds?: string[],
-	chatSessionId?: string,
+	chatSessionId?: SessionId,
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	try {
@@ -63,7 +72,7 @@ export async function sendReviewBatch(
 			...(chatSessionId ? { sessionId: chatSessionId } : {}),
 		});
 		for (const [index, sent] of sessions.entries()) {
-			await showReviewChat(workspaceId, sent, navigation, index > 0);
+			await showReviewChat("review.sendBatch", workspaceId, sent, navigation, index > 0);
 		}
 	} catch (err) {
 		toast.error(errorText(err), t("review.send.batchFailed"));

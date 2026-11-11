@@ -1,4 +1,5 @@
-import type { LayoutPreset } from "@thinkrail/contracts";
+import { compile, int, map, obj, opt, str } from "@earendil-works/pi-schema";
+import type { LayoutPreset, WorkspaceId } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useLayoutEffect } from "react";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../clientPreferences";
@@ -10,7 +11,7 @@ import {
 	toast,
 	useAppStore,
 } from "../../store";
-import { errorText, getTransport } from "../../transport";
+import { errorText, getTransport, reportClientError } from "../../transport";
 import {
 	adoptToolSelections,
 	applyProjectedLayoutDocument,
@@ -21,7 +22,6 @@ import {
 	emptyWorkspaceView,
 	ensureWorkbenchToolPlacementIds,
 	instantiateWorkbenchFrame,
-	LAYOUT_TOOLS,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
 	normalizeWorkspaceView,
@@ -33,12 +33,12 @@ import {
 	type WorkspaceLayoutDocument,
 	type WorkspaceViewState,
 } from "../layout";
+import { parseStoredFrame, parseStoredView } from "./storedLayout";
 
 const LOCAL_LAYOUT_VERSION = 1;
 const SURFACE_ID_KEY = "thinkrail:layout-surface-id";
 const NATIVE_LAYOUT_PREFERENCE_KEY = "workbench-layout";
 const NATIVE_LAYOUT_MAX_CHARACTERS = 256 * 1024;
-const TOOL_IDS = new Set<string>(LAYOUT_TOOLS);
 
 interface PersistedLocalLayout {
 	version: 1;
@@ -195,201 +195,26 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[])
 	return Object.keys(value).every((key) => keys.has(key));
 }
 
+const SideGroupId = opt(str());
+const StoredAttention = compile(
+	obj(
+		{
+			selectedByGroup: map(str()),
+			lastFocusedCenterGroupId: str(),
+			lastFocusedSideGroupId: obj({ left: SideGroupId, right: SideGroupId, bottom: SideGroupId }),
+			navigationClockByGroup: map(int({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
+		},
+		{ open: true },
+	),
+);
+
 function parseAttention(value: unknown): LayoutAttention | undefined {
-	if (!isRecord(value)) return undefined;
-	const selected = value.selectedByGroup;
-	const focused = value.lastFocusedSideGroupId;
-	const clocks = value.navigationClockByGroup;
-	if (
-		!isRecord(selected) ||
-		!isRecord(focused) ||
-		!isRecord(clocks) ||
-		typeof value.lastFocusedCenterGroupId !== "string" ||
-		Object.values(selected).some((entry) => typeof entry !== "string") ||
-		Object.entries(focused).some(
-			([region, entry]) =>
-				(region !== "left" && region !== "right" && region !== "bottom") ||
-				typeof entry !== "string",
-		) ||
-		Object.values(clocks).some((entry) => !Number.isSafeInteger(entry) || Number(entry) < 0)
-	) {
-		return undefined;
-	}
+	if (!StoredAttention.check(value)) return undefined;
 	return {
-		selectedByGroup: { ...selected } as Record<string, string>,
+		selectedByGroup: { ...value.selectedByGroup },
 		lastFocusedCenterGroupId: value.lastFocusedCenterGroupId,
-		lastFocusedSideGroupId: { ...focused } as Partial<Record<"left" | "right" | "bottom", string>>,
-		navigationClockByGroup: { ...clocks } as Record<string, number>,
-	};
-}
-
-function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
-	if (
-		!isRecord(value) ||
-		!hasOnlyKeys(value, ["version", "center", "left", "right", "bottom", "toolRestoreTargets"]) ||
-		value.version !== 1 ||
-		!isRecord(value.center)
-	) {
-		return false;
-	}
-	const visitCenter = (node: unknown): boolean => {
-		if (!isRecord(node) || typeof node.id !== "string") return false;
-		if (node.kind === "group") return hasOnlyKeys(node, ["kind", "id"]);
-		return (
-			node.kind === "split" &&
-			hasOnlyKeys(node, ["kind", "id", "direction", "weights", "children"]) &&
-			(node.direction === "horizontal" || node.direction === "vertical") &&
-			Array.isArray(node.weights) &&
-			node.weights.length === 2 &&
-			Array.isArray(node.children) &&
-			node.children.length === 2 &&
-			visitCenter(node.children[0]) &&
-			visitCenter(node.children[1])
-		);
-	};
-	if (!visitCenter(value.center)) return false;
-	for (const area of ["left", "right", "bottom"] as const) {
-		const region = value[area];
-		const regionKeys =
-			area === "bottom"
-				? ["visible", "height", "alignment", "groups"]
-				: ["visible", "width", "groups"];
-		if (
-			!isRecord(region) ||
-			!hasOnlyKeys(region, regionKeys) ||
-			typeof region.visible !== "boolean" ||
-			(area === "bottom"
-				? typeof region.height !== "number" || typeof region.alignment !== "string"
-				: typeof region.width !== "number") ||
-			!Array.isArray(region.groups)
-		) {
-			return false;
-		}
-		for (const group of region.groups) {
-			if (
-				!isRecord(group) ||
-				!hasOnlyKeys(group, ["id", "weight", "folded", "tools"]) ||
-				typeof group.id !== "string" ||
-				typeof group.weight !== "number" ||
-				typeof group.folded !== "boolean" ||
-				!Array.isArray(group.tools)
-			) {
-				return false;
-			}
-			if (
-				group.tools.some(
-					(tool) =>
-						!isRecord(tool) ||
-						!hasOnlyKeys(tool, ["kind", "id", "name", "tool"]) ||
-						tool.kind !== "tool" ||
-						typeof tool.id !== "string" ||
-						typeof tool.name !== "string" ||
-						typeof tool.tool !== "string" ||
-						!TOOL_IDS.has(tool.tool),
-				)
-			) {
-				return false;
-			}
-		}
-	}
-	if (!isRecord(value.toolRestoreTargets)) return false;
-	return Object.entries(value.toolRestoreTargets).every(([tool, candidate]) => {
-		if (!TOOL_IDS.has(tool) || !isRecord(candidate)) return false;
-		return (
-			hasOnlyKeys(candidate, ["region", "groupId", "index"]) &&
-			(candidate.region === "left" ||
-				candidate.region === "right" ||
-				candidate.region === "bottom") &&
-			(candidate.groupId === undefined || typeof candidate.groupId === "string") &&
-			Number.isInteger(candidate.index) &&
-			Number(candidate.index) >= 0
-		);
-	});
-}
-
-function isWorkspaceView(value: unknown): value is WorkspaceViewState {
-	if (!isRecord(value) || !hasOnlyKeys(value, ["groups"]) || !isRecord(value.groups)) {
-		return false;
-	}
-	const validDiffScope = (scope: unknown): boolean => {
-		if (!isRecord(scope) || typeof scope.kind !== "string") return false;
-		switch (scope.kind) {
-			case "branch":
-			case "uncommitted":
-				return hasOnlyKeys(scope, ["kind"]);
-			case "commit":
-				return hasOnlyKeys(scope, ["kind", "sha"]) && typeof scope.sha === "string";
-			case "pinned":
-				return hasOnlyKeys(scope, ["kind", "baseRef"]) && typeof scope.baseRef === "string";
-			case "turn":
-				return (
-					hasOnlyKeys(scope, ["kind", "id", "baseTree", "headTree", "startedAt"]) &&
-					typeof scope.id === "string" &&
-					typeof scope.baseTree === "string" &&
-					typeof scope.headTree === "string" &&
-					typeof scope.startedAt === "number"
-				);
-			default:
-				return false;
-		}
-	};
-	const validTab = (tab: unknown): boolean => {
-		if (
-			!isRecord(tab) ||
-			typeof tab.kind !== "string" ||
-			typeof tab.id !== "string" ||
-			typeof tab.name !== "string"
-		) {
-			return false;
-		}
-		switch (tab.kind) {
-			case "file":
-				return hasOnlyKeys(tab, ["kind", "id", "name", "path"]) && typeof tab.path === "string";
-			case "diff":
-				return (
-					typeof tab.path === "string" &&
-					(tab.before === undefined
-						? hasOnlyKeys(tab, ["kind", "id", "name", "path", "scope"]) && validDiffScope(tab.scope)
-						: hasOnlyKeys(tab, ["kind", "id", "name", "path", "before"]) &&
-							typeof tab.before === "string")
-				);
-			case "changes":
-				return hasOnlyKeys(tab, ["kind", "id", "name", "scope"]) && validDiffScope(tab.scope);
-			case "chat":
-				return (
-					hasOnlyKeys(tab, ["kind", "id", "name", "sessionId"]) && typeof tab.sessionId === "string"
-				);
-			case "document":
-				return (
-					hasOnlyKeys(tab, ["kind", "id", "name", "documentKind", "sourceId", "docPath"]) &&
-					tab.documentKind === "todo-plan" &&
-					typeof tab.sourceId === "string" &&
-					typeof tab.docPath === "string"
-				);
-			case "terminal":
-				return hasOnlyKeys(tab, ["kind", "id", "name", "tabKey"]) && typeof tab.tabKey === "string";
-			default:
-				return false;
-		}
-	};
-	return Object.values(value.groups).every(
-		(candidate) =>
-			isRecord(candidate) &&
-			hasOnlyKeys(candidate, ["tabs", "previewTabId", "beforeToolByTabId"]) &&
-			Array.isArray(candidate.tabs) &&
-			candidate.tabs.every((tab) => validTab(tab)) &&
-			(candidate.previewTabId === undefined || typeof candidate.previewTabId === "string"),
-	);
-}
-
-function retainedWorkspaceView(view: WorkspaceViewState): WorkspaceViewState {
-	return {
-		groups: Object.fromEntries(
-			Object.entries(view.groups).map(([groupId, group]) => [
-				groupId,
-				{ tabs: group.tabs, ...(group.previewTabId ? { previewTabId: group.previewTabId } : {}) },
-			]),
-		),
+		lastFocusedSideGroupId: { ...value.lastFocusedSideGroupId },
+		navigationClockByGroup: { ...value.navigationClockByGroup },
 	};
 }
 
@@ -430,9 +255,18 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 	};
 }
 
+/** A saved chat or plan tab whose session id is not path-safe cannot open, so the layout loads without it. */
+function reportSetAsideTabs(): void {
+	reportClientError({
+		kind: "window",
+		type: "StoredLayoutError",
+		boundary: "PI_SESSION_ID_INVALID:stored-layout-tab",
+	});
+}
+
 function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 	try {
-		const parsed = JSON.parse(raw) as unknown;
+		const parsed: unknown = JSON.parse(raw);
 		if (
 			!isRecord(parsed) ||
 			parsed.version !== LOCAL_LAYOUT_VERSION ||
@@ -446,22 +280,26 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		) {
 			return undefined;
 		}
-		if (!isResourceFreeFrame(parsed.frame)) return undefined;
+		const frame = parseStoredFrame(parsed.frame);
+		if (!frame) return undefined;
 		if (!isRecord(parsed.viewsByWorkspace) || !isRecord(parsed.attentionByWorkspace)) {
 			return undefined;
 		}
 		const preferences = parsePreferences(parsed.preferences);
 		if (!preferences) return undefined;
-		const frame = parsed.frame;
 		const validGroupIds = frameGroupIds(frame);
 		const viewsByWorkspace: Record<string, WorkspaceViewState> = {};
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
 		const attentionByWorkspace: Record<string, LayoutAttention> = {};
-		for (const [workspaceId, view] of Object.entries(parsed.viewsByWorkspace)) {
-			if (!isWorkspaceView(view) || Object.keys(view.groups).some((id) => !validGroupIds.has(id))) {
+		let setAside = 0;
+		for (const [workspaceId, stored] of Object.entries(parsed.viewsByWorkspace)) {
+			const parsedView = parseStoredView(stored);
+			if (!parsedView || Object.keys(parsedView.view.groups).some((id) => !validGroupIds.has(id))) {
 				return undefined;
 			}
-			const normalized = normalizeWorkspaceView(frame, retainedWorkspaceView(view));
+			const { view } = parsedView;
+			setAside += parsedView.setAside;
+			const normalized = normalizeWorkspaceView(frame, view);
 			viewsByWorkspace[workspaceId] = normalized;
 			const document = projectWorkspaceLayout(frame, normalized);
 			if (validateLayoutDocument(document, 32, 32).length > 0) return undefined;
@@ -475,6 +313,7 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 			const frameDocument = emptyWorkspaceProjection(frame).document;
 			if (validateLayoutDocument(frameDocument, 32, 32).length > 0) return undefined;
 		}
+		if (setAside > 0) reportSetAsideTabs();
 		return {
 			frame,
 			viewsByWorkspace,
@@ -630,7 +469,7 @@ export function emptyWorkspaceProjection(
 }
 
 export function workspaceProjectionReference(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 ): { document: WorkspaceLayoutDocument; attention: LayoutAttention } | undefined {
 	const state = useAppStore.getState();
 	for (const id of state.workspaceSelectionHistory) {
@@ -642,7 +481,7 @@ export function workspaceProjectionReference(
 	return undefined;
 }
 
-function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
+function installWorkspaceView(workspaceId: WorkspaceId): WorkspaceLayoutDocument {
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
 	const existingDocument = state.layoutDocumentsByWorkspace[workspaceId];
@@ -670,7 +509,9 @@ function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
 	return installed;
 }
 
-export function ensureWorkspaceLayoutState(workspaceId: string): Promise<WorkspaceLayoutDocument> {
+export function ensureWorkspaceLayoutState(
+	workspaceId: WorkspaceId,
+): Promise<WorkspaceLayoutDocument> {
 	const existing = workspaceInitializations.get(workspaceId);
 	if (existing) return existing;
 	const request = (async () => {
@@ -745,7 +586,7 @@ function rebaseProjectedDocument(
 	};
 }
 
-export function applyLayoutAttention(workspaceId: string, next: LayoutAttention): void {
+export function applyLayoutAttention(workspaceId: WorkspaceId, next: LayoutAttention): void {
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) return;
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
@@ -789,7 +630,7 @@ export interface LayoutCommitOptions {
 }
 
 export async function commitWorkspaceLayout(
-	workspaceId: string,
+	workspaceId: WorkspaceId,
 	document: WorkspaceLayoutDocument,
 	options: LayoutCommitOptions = {},
 ): Promise<WorkspaceLayoutDocument> {
@@ -875,7 +716,7 @@ export function useLocalLayoutState(): void {
 	}, []);
 }
 
-export function useWorkspaceLayoutState(workspaceId: string): void {
+export function useWorkspaceLayoutState(workspaceId: WorkspaceId): void {
 	useLayoutEffect(() => {
 		const report = (error: unknown) => {
 			if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {

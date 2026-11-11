@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { Value } from "typebox/value";
 import {
 	ASK_ACK_TEXT,
@@ -9,12 +10,14 @@ import {
 	buildQuestionnaireResponse,
 	DECLINE_MESSAGE,
 	DISCUSS_INSTRUCTION,
+	executableAskCallIds,
 	isAckDetails,
 	isAskUserQuestionResult,
 	isolateAskUserQuestionBatch,
 	MAX_HEADER_LENGTH,
 	MAX_LABEL_LENGTH,
 	MAX_RECOMMENDED_REASON_LENGTH,
+	NON_EXECUTABLE_STOP_REASONS,
 	outcomeResult,
 	previewFileSources,
 	validateQuestionnaire,
@@ -360,37 +363,51 @@ describe("outcomeResult", () => {
 
 describe("isolateAskUserQuestionBatch", () => {
 	test("keeps text and the first ask as the only tool call", () => {
-		const message = {
-			role: "assistant",
-			content: [
-				{ type: "text", text: "I need input." },
-				{ type: "toolCall", id: "read-1", name: "read", arguments: {} },
-				{ type: "toolCall", id: "ask-1", name: "ask_user_question", arguments: args() },
-				{ type: "toolCall", id: "ask-2", name: "ask_user_question", arguments: args() },
-				{ type: "toolCall", id: "bash-1", name: "bash", arguments: {} },
+		const message = fauxAssistantMessage(
+			[
+				fauxText("I need input."),
+				fauxToolCall("read", {}, { id: "read-1" }),
+				fauxToolCall("ask_user_question", args(), { id: "ask-1" }),
+				fauxToolCall("ask_user_question", args(), { id: "ask-2" }),
+				fauxToolCall("bash", {}, { id: "bash-1" }),
 			],
-		};
+			{ stopReason: "toolUse" },
+		);
 		const isolated = isolateAskUserQuestionBatch(message);
-		expect(isolated?.content.map((block) => ("id" in block ? block.id : block.type))).toEqual([
-			"text",
-			"ask-1",
-		]);
+		expect(
+			isolated?.content.map((block) => (block.type === "toolCall" ? block.id : block.type)),
+		).toEqual(["text", "ask-1"]);
 	});
 
 	test("leaves messages without an ask, or with nothing to drop, untouched", () => {
 		expect(
-			isolateAskUserQuestionBatch({
-				role: "assistant",
-				content: [{ type: "toolCall", id: "read-1", name: "read" }],
-			}),
+			isolateAskUserQuestionBatch(fauxAssistantMessage(fauxToolCall("read", {}, { id: "read-1" }))),
 		).toBeUndefined();
 		expect(
-			isolateAskUserQuestionBatch({
-				role: "assistant",
-				content: [{ type: "toolCall", id: "ask-1", name: "ask_user_question" }],
-			}),
+			isolateAskUserQuestionBatch(
+				fauxAssistantMessage(fauxToolCall("ask_user_question", args(), { id: "ask-1" })),
+			),
 		).toBeUndefined();
-		expect(isolateAskUserQuestionBatch({ role: "user", content: "hi" })).toBeUndefined();
+	});
+});
+
+describe("executableAskCallIds", () => {
+	const ask = (stopReason: Parameters<typeof fauxAssistantMessage>[1]) =>
+		fauxAssistantMessage(
+			[
+				fauxToolCall("read", {}, { id: "read-1" }),
+				fauxToolCall("ask_user_question", args(), { id: "ask-1" }),
+			],
+			stopReason,
+		);
+
+	test("lists the ask calls of an assistant whose tool calls may run", () => {
+		expect(executableAskCallIds(ask({ stopReason: "toolUse" }))).toEqual(["ask-1"]);
+	});
+
+	test("lists none after a stop reason that may cut the calls off", () => {
+		for (const stopReason of NON_EXECUTABLE_STOP_REASONS)
+			expect(executableAskCallIds(ask({ stopReason }))).toEqual([]);
 	});
 });
 
@@ -401,5 +418,24 @@ describe("isAskUserQuestionResult", () => {
 		expect(isAskUserQuestionResult({ answers: "x", cancelled: false })).toBe(false);
 		expect(isAskUserQuestionResult({ answers: [] })).toBe(false);
 		expect(isAskUserQuestionResult(null)).toBe(false);
+	});
+
+	test("checks each answer, and lets fields it does not know pass", () => {
+		const answer = { questionIndex: 0, question: "Q?", kind: "option", answer: "A", extra: 1 };
+		expect(isAskUserQuestionResult({ answers: [answer], cancelled: false })).toBe(true);
+		expect(
+			isAskUserQuestionResult({ answers: [{ ...answer, kind: "maybe" }], cancelled: false }),
+		).toBe(false);
+		expect(isAskUserQuestionResult({ answers: [{ ...answer, answer: 1 }], cancelled: false })).toBe(
+			false,
+		);
+	});
+});
+
+describe("isAckDetails", () => {
+	test("accepts only the deferral ack", () => {
+		expect(isAckDetails({ kind: "ack" })).toBe(true);
+		expect(isAckDetails({ kind: "other" })).toBe(false);
+		expect(isAckDetails(undefined)).toBe(false);
 	});
 });

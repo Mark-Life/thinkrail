@@ -1,17 +1,11 @@
-import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
-
-function isResult(value: unknown): value is AskUserQuestionResult {
-	return (
-		!!value &&
-		typeof value === "object" &&
-		Array.isArray((value as AskUserQuestionResult).answers) &&
-		typeof (value as AskUserQuestionResult).cancelled === "boolean"
-	);
-}
+import {
+	type AskUserQuestionResult,
+	isAskUserQuestionResult,
+} from "@thinkrail/pi-ask-user-question/core";
 
 export function readAskUserQuestionResult(raw: unknown): AskUserQuestionResult | null {
 	const details =
-		raw && typeof raw === "object" ? (raw as { details?: unknown }).details : undefined;
-	if (isResult(details)) return details;
-	return isResult(raw) ? raw : null;
+		typeof raw === "object" && raw !== null && "details" in raw ? raw.details : undefined;
+	if (isAskUserQuestionResult(details)) return details;
+	return isAskUserQuestionResult(raw) ? raw : null;
 }

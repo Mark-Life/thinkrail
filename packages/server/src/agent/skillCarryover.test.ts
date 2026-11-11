@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import {
+	InMemoryCredentialStore,
+	type ToolResultMessage,
+	type UserMessage,
+} from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
 	type FauxResponseFactory,
@@ -19,7 +23,7 @@ import {
 	SettingsManager,
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
-import type { Message } from "@thinkrail/contracts";
+import type { AgentMessage } from "./piTypes";
 import {
 	carryoverBudget,
 	compactedSkills,
@@ -30,50 +34,45 @@ import {
 	withSkillCarryover,
 } from "./skillCarryover";
 
-const user = (text: string): Message =>
-	({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() }) as Message;
+const user = (text: string): UserMessage => ({
+	role: "user",
+	content: [{ type: "text", text }],
+	timestamp: Date.now(),
+});
 
-const assistant = (content: unknown[]): Message =>
-	({
-		role: "assistant",
-		content,
-		api: "anthropic-messages",
-		provider: "anthropic",
-		model: "test",
-		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+const readCall = (id: string, path: string, window: { offset?: number; limit?: number } = {}) =>
+	fauxAssistantMessage(fauxToolCall("read", { path, ...window }, { id }), {
 		stopReason: "toolUse",
-		timestamp: Date.now(),
-	}) as unknown as Message;
-
-const readCall = (
-	id: string,
-	path: string,
-	window: { offset?: number; limit?: number } = {},
-): Message => assistant([{ type: "toolCall", id, name: "read", arguments: { path, ...window } }]);
+	});
 
 const readResult = (
 	toolCallId: string,
 	text: string,
 	isError = false,
-	details?: unknown,
-): Message =>
-	({
-		role: "toolResult",
-		toolCallId,
-		toolName: "read",
-		content: [{ type: "text", text }],
-		details,
-		isError,
-		timestamp: Date.now(),
-	}) as unknown as Message;
+	details?: ToolResultMessage["details"],
+): ToolResultMessage => ({
+	role: "toolResult",
+	toolCallId,
+	toolName: "read",
+	content: [{ type: "text", text }],
+	...(details === undefined ? {} : { details }),
+	isError,
+	timestamp: Date.now(),
+});
 
-const skill = (name: string): Skill =>
-	({
-		name,
-		description: name,
-		filePath: `/skills/${name}/SKILL.md`,
-		baseDir: `/skills/${name}`,
-	}) as Skill;
+const skill = (name: string): Skill => ({
+	name,
+	description: name,
+	filePath: `/skills/${name}/SKILL.md`,
+	baseDir: `/skills/${name}`,
+	sourceInfo: {
+		path: `/skills/${name}/SKILL.md`,
+		source: "local",
+		scope: "user",
+		origin: "top-level",
+	},
+	disableModelInvocation: false,
+});
 
 const LEDGER = skill("ledger");
 const TODOS = skill("todos");
@@ -288,8 +287,7 @@ test("loads compacted by an earlier compaction stay restored after the next one"
 	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo")).toEqual([LEDGER]);
 });
 
-const window = (contextWindow: number, api = "anthropic-messages") =>
-	({ api, contextWindow }) as Parameters<typeof carryoverBudget>[0];
+const window = (contextWindow: number, api = "anthropic-messages") => ({ api, contextWindow });
 
 test("the budget scales with the dispatched model's window and caps per skill and in total", () => {
 	expect(carryoverBudget(window(1_000_000))).toEqual({ skillChars: 20_000, totalChars: 100_000 });
@@ -338,9 +336,14 @@ test("the whole rendered text stays within the total budget for many skills with
 });
 
 test("the carry-over goes right after the compaction summary and nowhere without one", () => {
-	const summary = { role: "compactionSummary", summary: "s", tokensBefore: 1, timestamp: 7 };
+	const summary: Extract<AgentMessage, { role: "compactionSummary" }> = {
+		role: "compactionSummary",
+		summary: "s",
+		tokensBefore: 1,
+		timestamp: 7,
+	};
 	const next = user("next");
-	const messages = withSkillCarryover([summary, next] as never, "restored");
+	const messages = withSkillCarryover([summary, next], "restored");
 
 	expect(messages?.map((message) => message.role)).toEqual(["compactionSummary", "custom", "user"]);
 	expect(messages?.[1]).toMatchObject({
@@ -348,15 +351,15 @@ test("the carry-over goes right after the compaction summary and nowhere without
 		content: "restored",
 		display: false,
 	});
-	expect(withSkillCarryover([next] as never, "restored")).toBe(undefined);
-	expect(withSkillCarryover([summary] as never, undefined)).toBe(undefined);
+	expect(withSkillCarryover([next], "restored")).toBe(undefined);
+	expect(withSkillCarryover([summary], undefined)).toBe(undefined);
 });
 
 const MODEL = {
 	id: "carryover-probe",
 	name: "Skill carry-over probe",
 	reasoning: false,
-	input: ["text"] as ("text" | "image")[],
+	input: ["text" as const],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 200_000,
 	maxTokens: 100,

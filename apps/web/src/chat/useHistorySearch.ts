@@ -1,12 +1,16 @@
-import type {
-	HistoryScope,
-	HistorySearchResult,
-	MessageHit,
-	PromptHit,
+import {
+	type HistoryScope,
+	type HistorySearchResult,
+	type MessageHit,
+	type ProjectId,
+	type PromptHit,
+	parseSessionId,
+	type SessionId,
+	type WorkspaceId,
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatLocationRequest, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { getTransport, reportHandledFailure } from "@/transport";
 
 export type { ChatLocationRequest };
 
@@ -16,7 +20,7 @@ export interface HistorySearchState {
 	open: boolean;
 	stage: HistoryStage;
 	query: string;
-	scope: HistoryScope;
+	scopeKind: ScopeKind;
 	result: HistorySearchResult | null;
 	selected: number;
 	error: boolean;
@@ -31,20 +35,34 @@ export type ScopeKind = (typeof SCOPE_ORDER)[number];
 
 function buildScope(
 	kind: ScopeKind,
-	sessionId: string,
-	workspaceId: string,
-	projectId: string | undefined,
-): HistoryScope {
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
+	projectId: ProjectId | undefined,
+): HistoryScope | null {
 	switch (kind) {
 		case "chat":
 			return { kind: "chat", sessionId };
 		case "workspace":
 			return { kind: "workspace", workspaceId };
 		case "project":
-			return { kind: "project", projectId: projectId ?? "" };
+			return projectId ? { kind: "project", projectId } : null;
 		case "all":
 			return { kind: "all" };
 	}
+}
+
+const NO_MATCHES: HistorySearchResult = {
+	prompts: [],
+	messages: [],
+	promptTotal: 0,
+	messageTotal: 0,
+	indexing: false,
+};
+
+function searchHistory(query: string, scope: HistoryScope | null): Promise<HistorySearchResult> {
+	return scope
+		? getTransport().request("history.search", { query, scope, limit: 50 })
+		: Promise.resolve(NO_MATCHES);
 }
 
 function flatListLength(stage: HistoryStage, result: HistorySearchResult | null): number {
@@ -70,22 +88,29 @@ export function resolveHistorySelection(
 }
 
 export function jumpTarget(hit: PromptHit | MessageHit): ChatLocationRequest | null {
-	if (!hit.workspaceId || !hit.projectId || hit.messageIndex == null || hit.anchorText == null) {
+	const sessionId = parseSessionId(hit.sessionId);
+	if (
+		!hit.workspaceId ||
+		!hit.projectId ||
+		sessionId === null ||
+		hit.messageIndex == null ||
+		hit.anchorText == null
+	) {
 		return null;
 	}
 	return {
 		workspaceId: hit.workspaceId,
 		projectId: hit.projectId,
-		sessionId: hit.sessionId,
+		sessionId,
 		messageIndex: hit.messageIndex,
 		anchorText: hit.anchorText,
 	};
 }
 
 export function useHistorySearch(
-	sessionId: string,
-	workspaceId: string,
-	projectId: string | undefined,
+	sessionId: SessionId,
+	workspaceId: WorkspaceId,
+	projectId: ProjectId | undefined,
 ): {
 	state: HistorySearchState;
 	openOverlay: (seedQuery: string) => void;
@@ -115,8 +140,7 @@ export function useHistorySearch(
 		const token = ++tokenRef.current;
 		if (!open) return;
 		const timer = setTimeout(() => {
-			getTransport()
-				.request("history.search", { query, scope, limit: 50 })
+			searchHistory(query, scope)
 				.then((res) => {
 					if (tokenRef.current !== token) return;
 					setResult(res);
@@ -135,8 +159,7 @@ export function useHistorySearch(
 		const token = ++retryTokenRef.current;
 		if (!open || !result?.indexing) return;
 		const timer = setTimeout(() => {
-			getTransport()
-				.request("history.search", { query, scope, limit: 50 })
+			searchHistory(query, scope)
 				.then((res) => {
 					if (retryTokenRef.current !== token) return;
 					setResult(res);
@@ -219,7 +242,9 @@ export function useHistorySearch(
 						projectId: target.projectId,
 					});
 					useAppStore.getState().setWorkspaces(target.projectId, list);
-				} catch {}
+				} catch (error) {
+					reportHandledFailure("history-workspace-list", error, "HOST_ERROR");
+				}
 			}
 			close();
 			const store = useAppStore.getState();
@@ -230,8 +255,8 @@ export function useHistorySearch(
 	);
 
 	const state = useMemo<HistorySearchState>(
-		() => ({ open, stage, query, scope, result, selected, error }),
-		[open, stage, query, scope, result, selected, error],
+		() => ({ open, stage, query, scopeKind, result, selected, error }),
+		[open, stage, query, scopeKind, result, selected, error],
 	);
 
 	return {

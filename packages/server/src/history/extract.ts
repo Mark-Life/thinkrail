@@ -4,7 +4,13 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { isControlMessage, isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
+import { arr, compile, unknown } from "@earendil-works/pi-schema";
+import {
+	isControlMessage,
+	isRetriedAttempt,
+	isTranscriptMessageRole,
+	TextContent,
+} from "@thinkrail/contracts";
 
 export interface HistoryEntry {
 	text: string;
@@ -21,16 +27,14 @@ export interface ExtractedSession {
 	entries: HistoryEntry[];
 }
 
+const TextBlocks = compile(arr(unknown()));
+const TextBlock = compile(TextContent);
+
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
-	if (!Array.isArray(content)) return "";
+	if (!TextBlocks.check(content)) return "";
 	return content
-		.map((b) =>
-			b && typeof b === "object" && (b as { type?: string }).type === "text"
-				? String((b as { text?: unknown }).text ?? "")
-				: "",
-		)
-		.filter(Boolean)
+		.flatMap((block) => (TextBlock.check(block) && block.text ? [block.text] : []))
 		.join("\n");
 }
 

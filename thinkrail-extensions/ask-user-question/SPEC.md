@@ -32,7 +32,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
     fields;
   - `interactiveTools: { ask_user_question: { describeResponse } }` — `describeResponse(args, response)`
     renders a late answer (one delivered after a host restart) through the package's
-    `buildQuestionnaireResponse` when both have our shape, so the model reads the same wording as for a
+    `buildQuestionnaireResponse` when the args pass `isAskUserQuestionArgsView` and the response
+    `isAskUserQuestionResult`, so the model reads the same wording as for a
     live answer; any other shape returns `undefined` and the host's generic JSON preface applies.
 
   `announce` forwards each executable call to `session.expectToolResponse(toolCallId)`, so the host's
@@ -50,9 +51,13 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 - `@thinkrail/ext-ask-user-question/web` default-exports a `defineWebExtension` descriptor that registers
   `AskUserQuestionCard` for `ask_user_question` with `{ chrome: "bare", interactive: true }`. Nothing is
   exported by name: the plan page reaches the card through the tool registry, as the chat does.
-- The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
-  `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
-  so the result guard `readAskUserQuestionResult` and the answer model in `web/state.ts` are the card's own),
+- The card imports `extension-api/web`; from the package's browser leaf `@thinkrail/pi-ask-user-question/core`
+  (the one pi entry this web half may value-import) the argument and result types, `DISCUSS_REASONS`, the
+  compiled `isAskUserQuestionResult` that `readAskUserQuestionResult` reads a result with, and
+  `isAskUserQuestionItemView` that `parseQuestions` reads still-streaming args with, so the card types a question
+  as `AskUserQuestionItemView` and guards every optional field (the answer model in `web/state.ts` stays the
+  card's own). `web/coreTies.ts` ties the question and option
+  views to the TypeBox schema's fields, so a field the tool adds or renames fails `tsc`;
   `@thinkrail/ui` (`attention-line`, `button`, `keyboard`, `textarea`, `utils`), `@thinkrail/resource-renderers`
   (`useOptionalResourceHost` for the host's Markdown — mermaid included — and `FramedResourcePreview` +
   `useResourceScope` for file previews), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It

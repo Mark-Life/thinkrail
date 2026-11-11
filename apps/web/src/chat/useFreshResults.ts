@@ -1,7 +1,13 @@
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import type {
+	BackgroundCommandSummary,
+	SessionId,
+	StoredSessionId,
+	SubagentResourceSummary,
+	WorkspaceId,
+} from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { STORAGE_PREFIX } from "@/constants/branding";
-import { getTransport } from "@/transport";
+import { getTransport, reportHandledFailure } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
 
 export interface FinishedResources {
@@ -41,7 +47,7 @@ export function freshOf(finished: FinishedResources, seen: ReadonlySet<string> |
 export function inspectedResult(
 	finished: FinishedResources,
 	commandId: string | null,
-	childSessionId: string | null,
+	childSessionId: StoredSessionId | null,
 ): ResultTarget | null {
 	if (commandId && finished.finishedCommands.some((command) => command.id === commandId))
 		return { kind: "command", id: commandId };
@@ -63,7 +69,7 @@ export function rememberSeen(
 	return new Set([...seen, ...keys]);
 }
 
-function storageKey(workspaceId: string, sessionId: string): string {
+function storageKey(workspaceId: WorkspaceId, sessionId: SessionId): string {
 	return `${STORAGE_PREFIX}seen-results:${getTransport().httpBase()}:${workspaceId}:${sessionId}`;
 }
 
@@ -82,12 +88,14 @@ function readSeen(key: string): ReadonlySet<string> | null {
 function writeSeen(key: string, seen: ReadonlySet<string>): void {
 	try {
 		localStorage.setItem(key, JSON.stringify([...seen]));
-	} catch {}
+	} catch (error) {
+		reportHandledFailure("fresh-results-write", error, "STATE_FILE_WRITE_FAILED");
+	}
 }
 
 export function useFreshResults(
-	workspaceId: string,
-	sessionId: string,
+	workspaceId: WorkspaceId,
+	sessionId: SessionId,
 	finished: FinishedResources,
 	authoritative: boolean,
 ) {

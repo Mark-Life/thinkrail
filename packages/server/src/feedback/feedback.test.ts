@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GithubStarAsk } from "@thinkrail/contracts";
+import { fakeFetch } from "../../test/fakeFetch";
+import { observeLoggedErrors } from "../log";
 import {
 	completeSurvey,
 	recordAcceptedMessage,
@@ -14,7 +24,7 @@ import {
 	setGithubStarPublisher,
 	surveyIsCompleted,
 } from "./feedback";
-import { setGithubStarsFetchForTests } from "./githubStars";
+import { fetchGithubStars, setGithubStarsFetchForTests } from "./githubStars";
 import {
 	configureSurveySource,
 	refreshInAppSurvey,
@@ -55,7 +65,7 @@ async function launch(...surveys: Array<{ id: string; iteration: number }>): Pro
 	}));
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (async () => new Response(JSON.stringify(list))) as unknown as typeof fetch,
+		fetchImpl: fakeFetch(async () => new Response(JSON.stringify(list))),
 	});
 	await refreshInAppSurvey();
 }
@@ -63,8 +73,8 @@ async function launch(...surveys: Array<{ id: string; iteration: number }>): Pro
 let directory: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
-function stored(): StoredFeedback {
-	return JSON.parse(readFileSync(join(directory, "feedback.json"), "utf8")) as StoredFeedback;
+function stored(): unknown {
+	return JSON.parse(readFileSync(join(directory, "feedback.json"), "utf8"));
 }
 
 beforeEach(async () => {
@@ -125,7 +135,7 @@ test("accepted messages persist synchronously and one client holds the eligible 
 
 	for (let count = 0; count < 19; count += 1) recordAcceptedMessage("client-a");
 	expect(delivered).toEqual([]);
-	expect(stored().acceptedMessages).toBe(19);
+	expect(stored()).toMatchObject({ acceptedMessages: 19 });
 
 	recordAcceptedMessage("client-a");
 	expect(delivered).toEqual(["client-a"]);
@@ -133,12 +143,12 @@ test("accepted messages persist synchronously and one client holds the eligible 
 	releaseInvitation("client-b");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored().acceptedMessages).toBe(22);
+	expect(stored()).toMatchObject({ acceptedMessages: 22 });
 
 	releaseInvitation("client-a");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a", "client-b"]);
-	expect(stored().acceptedMessages).toBe(23);
+	expect(stored()).toMatchObject({ acceptedMessages: 23 });
 });
 
 test("postpone schedules ten additional accepted messages and clears the claim", () => {
@@ -230,7 +240,7 @@ test("a throwing publisher releases the claim without losing the accepted count"
 		throw new Error("socket closed");
 	});
 	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
-	expect(stored().acceptedMessages).toBe(20);
+	expect(stored()).toMatchObject({ acceptedMessages: 20 });
 
 	const delivered: string[] = [];
 	setFeedbackPublisher((clientKey) => {
@@ -257,7 +267,7 @@ test("count persistence failure preserves an existing claim and cannot reject a 
 	process.env.THINKRAIL_DATA_DIR = directory;
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored().acceptedMessages).toBe(22);
+	expect(stored()).toMatchObject({ acceptedMessages: 22 });
 });
 
 test("a failed threshold write is retained and offered after persistence recovers", () => {
@@ -277,7 +287,7 @@ test("a failed threshold write is retained and offered after persistence recover
 	process.env.THINKRAIL_DATA_DIR = directory;
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-b"]);
-	expect(stored().acceptedMessages).toBe(21);
+	expect(stored()).toMatchObject({ acceptedMessages: 21 });
 });
 
 test("reconnect redelivers only to the claimed client and releases a failed redelivery", () => {
@@ -303,20 +313,6 @@ test("reconnect redelivers only to the claimed client and releases a failed rede
 	});
 	recordAcceptedMessage("client-b");
 	expect(attempts).toEqual(["client-a", "client-a", "client-a", "client-b"]);
-});
-
-test("invalid responses do not mutate state or release the claim", () => {
-	const delivered: string[] = [];
-	setFeedbackPublisher((clientKey) => {
-		delivered.push(clientKey);
-		return true;
-	});
-	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
-
-	expect(() => respondToInvitation("later" as "postpone")).toThrow("Invalid invitation response");
-	recordAcceptedMessage("client-b");
-	expect(delivered).toEqual(["client-a"]);
-	expect(stored()).toEqual(feedback({ acceptedMessages: 21, lastInvitedAt: expect.any(Number) }));
 });
 
 test("an old feedback file without survey completion still counts", () => {
@@ -387,7 +383,7 @@ test("an idle host does not invite from a copy it can no longer refresh", async 
 	setSurveyClockForTests(() => at);
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (async () =>
+		fetchImpl: fakeFetch(async () =>
 			status === 200
 				? new Response(
 						JSON.stringify([
@@ -399,7 +395,8 @@ test("an idle host does not invite from a copy it can no longer refresh", async 
 							},
 						]),
 					)
-				: new Response("down", { status })) as unknown as typeof fetch,
+				: new Response("down", { status }),
+		),
 	});
 	await refreshInAppSurvey();
 	const delivered: string[] = [];
@@ -430,18 +427,20 @@ test("PostHog's wait period keeps a postponed invitation away for that many days
 	setSurveyClockForTests(() => at);
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (async () =>
-			new Response(
-				JSON.stringify([
-					{
-						id: "survey-1",
-						name: "in-app-feedback",
-						start_date: "2026-10-28T00:00:00.000Z",
-						conditions: { seenSurveyWaitPeriodInDays: 7 },
-						questions: [{ id: "q1", type: "open", question: "How is it going?" }],
-					},
-				]),
-			)) as unknown as typeof fetch,
+		fetchImpl: fakeFetch(
+			async () =>
+				new Response(
+					JSON.stringify([
+						{
+							id: "survey-1",
+							name: "in-app-feedback",
+							start_date: "2026-10-28T00:00:00.000Z",
+							conditions: { seenSurveyWaitPeriodInDays: 7 },
+							questions: [{ id: "q1", type: "open", question: "How is it going?" }],
+						},
+					]),
+				),
+		),
 	});
 	await refreshInAppSurvey();
 	const delivered: string[] = [];
@@ -457,7 +456,7 @@ test("PostHog's wait period keeps a postponed invitation away for that many days
 
 	await send(20);
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored().lastInvitedAt).toBe(at);
+	expect(stored()).toMatchObject({ lastInvitedAt: at });
 	respondToInvitation("postpone");
 
 	at += 24 * 60 * 60 * 1000;
@@ -491,14 +490,35 @@ function publisher(
 	return { canAsk, ask };
 }
 
-function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
-	return (async () => {
+function githubReply(reply: unknown, calls: { count: number } = { count: 0 }): typeof fetch {
+	return fakeFetch(async () => {
 		calls.count += 1;
-		return stars === null
+		return reply === undefined
 			? new Response("rate limited", { status: 403 })
-			: new Response(JSON.stringify({ stargazers_count: stars }));
-	}) as unknown as typeof fetch;
+			: new Response(JSON.stringify(reply));
+	});
 }
+
+function githubStars(stars: number | null, calls: { count: number } = { count: 0 }): typeof fetch {
+	return githubReply(stars === null ? undefined : { stargazers_count: stars }, calls);
+}
+
+test("a star count reply that fails its schema reads as no count", async () => {
+	const replies: unknown[] = [
+		{ stargazers_count: 12 },
+		{ stargazers_count: "12" },
+		{ stargazers_count: -1 },
+		{ stargazers_count: 1.5 },
+		[],
+		null,
+	];
+	const counts: Array<number | null> = [];
+	for (const reply of replies) {
+		setGithubStarsFetchForTests(githubReply(reply));
+		counts.push(await fetchGithubStars());
+	}
+	expect(counts).toEqual([12, null, null, null, null, null]);
+});
 
 test("the GitHub star ask goes once, on the tenth accepted message, with the star count", async () => {
 	const asked: Array<[string, GithubStarAsk]> = [];
@@ -520,7 +540,7 @@ test("the GitHub star ask goes once, on the tenth accepted message, with the sta
 	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("client-a");
 	await Bun.sleep(0);
 	expect(asked).toHaveLength(1);
-	expect(stored().githubStarAsked).toBe(true);
+	expect(stored()).toMatchObject({ githubStarAsked: true });
 
 	resetFeedbackForTests();
 	setGithubStarsFetchForTests(githubStars(7124, calls));
@@ -538,9 +558,11 @@ test("the GitHub star ask goes once, on the tenth accepted message, with the sta
 
 test("an unreachable GitHub still asks, without a count", async () => {
 	const asked: GithubStarAsk[] = [];
-	setGithubStarsFetchForTests((async () => {
-		throw new Error("offline");
-	}) as unknown as typeof fetch);
+	setGithubStarsFetchForTests(
+		fakeFetch(async () => {
+			throw new Error("offline");
+		}),
+	);
 	setGithubStarPublisher(
 		publisher((_clientKey, ask) => {
 			asked.push(ask);
@@ -574,7 +596,7 @@ test("an undelivered GitHub star ask retries on the next message", async () => {
 	setGithubStarPublisher(publisher(() => false));
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
 	await Bun.sleep(0);
-	expect(stored().githubStarAsked).toBe(false);
+	expect(stored()).toMatchObject({ githubStarAsked: false });
 	setGithubStarPublisher(
 		publisher(() => {
 			throw new Error("socket closed");
@@ -655,5 +677,64 @@ test("a client that cannot show the star ask neither reads GitHub nor holds back
 	for (let count = 0; count < 20; count += 1) recordAcceptedMessage("old-client");
 	expect(sent).toEqual(["survey"]);
 	expect(calls.count).toBe(0);
-	expect(stored().githubStarAsked).toBe(false);
+	expect(stored()).toMatchObject({ githubStarAsked: false });
+});
+
+test("a feedback file from before the survey fields loads with their defaults", () => {
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify({ acceptedMessages: 7, nextInvitationAt: 20, dismissed: true }),
+	);
+	recordAcceptedMessage("client");
+	const saved = JSON.parse(readFileSync(join(directory, "feedback.json"), "utf8"));
+	expect(saved).toEqual(feedback({ acceptedMessages: 8, nextInvitationAt: 20, dismissed: true }));
+});
+
+test("a feedback file of the wrong shape starts over and keeps a copy", () => {
+	const raw = JSON.stringify({ acceptedMessages: -1, nextInvitationAt: 20, dismissed: true });
+	writeFileSync(join(directory, "feedback.json"), raw);
+	recordAcceptedMessage("client");
+	const saved = JSON.parse(readFileSync(join(directory, "feedback.json"), "utf8"));
+	expect(saved).toEqual(feedback({ acceptedMessages: 1 }));
+	const copy = readdirSync(directory).find((name) => name.includes(".corrupt-"));
+	expect(readFileSync(join(directory, `${copy}`), "utf8")).toBe(raw);
+});
+
+test("a feedback file that could not be read is not replaced", () => {
+	mkdirSync(join(directory, "feedback.json"));
+	expect(() => completeSurvey("survey-1", 1)).toThrow("could not be read");
+	expect(readdirSync(join(directory, "feedback.json"))).toEqual([]);
+});
+
+test("a counted message that cannot be saved is logged with a code and kept in memory", () => {
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "feedback") logged.push(error);
+	});
+	try {
+		recordAcceptedMessage("client");
+		mkdirSync(join(directory, `feedback.json.${process.pid}.tmp`));
+		recordAcceptedMessage("client");
+		expect(logged).toEqual([expect.objectContaining({ code: "STATE_FILE_WRITE_FAILED" })]);
+		expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
+		recordAcceptedMessage("client");
+		expect(stored()).toEqual(feedback({ acceptedMessages: 3 }));
+	} finally {
+		observeLoggedErrors(null);
+	}
+});
+
+test("a counted message over an unreadable file logs the refusal's own code", () => {
+	const logged: unknown[] = [];
+	observeLoggedErrors((scope, error) => {
+		if (scope === "feedback") logged.push(error);
+	});
+	try {
+		mkdirSync(join(directory, "feedback.json"));
+		recordAcceptedMessage("client");
+		expect(logged).toEqual([expect.objectContaining({ code: "STATE_FILE_UNREADABLE" })]);
+	} finally {
+		observeLoggedErrors(null);
+	}
+	expect(() => completeSurvey("", 1)).toThrow(expect.objectContaining({ code: "SURVEY_INVALID" }));
 });

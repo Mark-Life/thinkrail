@@ -30,9 +30,12 @@ used), and leaves every byte of the body untouched.
   `package.json` (`{ extensions: ["./index.ts"], skills: ["./skills"] }`) — how vanilla `pi` (`pi install`)
   and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
   export** (the pi-free read model), consumable by hosts (thinkrail's server) without going through the
-  agent. `tools/` stays internal.
-- **Allowed deps:** `@earendil-works/pi-coding-agent`, `typebox` (peer); `yaml` (frontmatter
-  parse/serialize); Node built-ins.
+  agent, plus the **`pi-spec-graph/wire` leaf** (`core/wire.ts`): the frontmatter vocabulary (`FIELDS`,
+  `SPEC_TYPES`, `SPEC_STATUSES`, the link-field lists, `SLICE_DIRECTIONS`, `DEFAULT_GREP_LIMIT`) and each tool's
+  argument schema (`Spec*Input`). It loads only `pi-schema`, so browser code reads the arguments through
+  contracts. `tools/` stays internal otherwise.
+- **Allowed deps:** `@earendil-works/pi-coding-agent`, `typebox` (peer); `@earendil-works/pi-schema` (the
+  argument schemas); `yaml` (frontmatter parse/serialize); Node built-ins.
 - **Forbidden:** any `@thinkrail/*` package — the dependency edge is one-way (thinkrail → this
   package), which is what keeps it portable.
 

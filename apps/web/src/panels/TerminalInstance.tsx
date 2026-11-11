@@ -1,8 +1,4 @@
-import type {
-	TerminalDataPush,
-	TerminalDetachedPush,
-	TerminalExitPush,
-} from "@thinkrail/contracts";
+import type { TerminalDataPush, TerminalExitPush, WorkspaceId } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
@@ -105,7 +101,7 @@ function tryLoad(fn: () => void): void {
 
 interface Props {
 	tabKey: string;
-	workspaceId: string;
+	workspaceId: WorkspaceId;
 	initialCommand?: string;
 }
 
@@ -218,8 +214,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			if (ev.truncated) writeTruncation();
 			writeOutput(ev.data);
 		};
-		const unsubscribe = getTransport().subscribe(WS_CHANNELS.terminalData, (payload) => {
-			const ev = payload as TerminalDataPush;
+		const unsubscribe = getTransport().subscribe(WS_CHANNELS.terminalData, (ev) => {
 			if (prebind.acceptData(ev)) return;
 			if (ev.id === serverIdRef.current) writeFrame(ev);
 		});
@@ -240,23 +235,18 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			term.write(`\r\n${exitLine}\r\n`);
 			setExited(true);
 		};
-		const unsubscribeExit = getTransport().subscribe(WS_CHANNELS.terminalExit, (payload) => {
-			const ev = payload as TerminalExitPush;
+		const unsubscribeExit = getTransport().subscribe(WS_CHANNELS.terminalExit, (ev) => {
 			if (prebind.acceptExit(ev)) return;
 			handleExit(ev);
 		});
-		const unsubscribeDetached = getTransport().subscribe(
-			WS_CHANNELS.terminalDetached,
-			(payload) => {
-				const ev = payload as TerminalDetachedPush;
-				if (ev.workspaceId !== workspaceId || ev.tabKey !== tabKey) return;
-				serverIdRef.current = null;
-				attachGeneration += 1;
-				setReady(false);
-				setRetrying(false);
-				setDetached(true);
-			},
-		);
+		const unsubscribeDetached = getTransport().subscribe(WS_CHANNELS.terminalDetached, (ev) => {
+			if (ev.workspaceId !== workspaceId || ev.tabKey !== tabKey) return;
+			serverIdRef.current = null;
+			attachGeneration += 1;
+			setReady(false);
+			setRetrying(false);
+			setDetached(true);
+		});
 
 		let disposed = false;
 

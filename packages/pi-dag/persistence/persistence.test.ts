@@ -22,11 +22,14 @@ import { join, parse } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { canonicalJson, DagError, type DagFailureCode, LIMITS } from "../domain/index.ts";
-import { canonicalRoot, directory, syncDirectory } from "./files.ts";
+import { canonicalRoot, directory, hasCode, syncDirectory } from "./files.ts";
 import { snapshot } from "./fixtures.ts";
 import { createDagStore } from "./index.ts";
 
 const roots: string[] = [];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
 const processes: Array<{ child: ChildProcessWithoutNullStreams; done: Promise<void> }> = [];
 const scope = "user/../scope/cwd";
 const scopeHash = createHash("sha256").update(scope).digest("hex");
@@ -67,7 +70,11 @@ function childStore(storageRoot: string, mode: string) {
 		stderr += data;
 	});
 	const message = new Promise<Record<string, unknown>>((resolve, reject) => {
-		lines.once("line", (line) => resolve(JSON.parse(line)));
+		lines.once("line", (line) => {
+			const reported: unknown = JSON.parse(line);
+			if (isRecord(reported)) resolve(reported);
+			else reject(new Error(`Child reported a non-object: ${line}`));
+		});
 		child.once("error", reject);
 		child.once("close", () => reject(new Error(`Child exited before reporting: ${stderr}`)));
 	});
@@ -384,7 +391,8 @@ describe("ownership", () => {
 		const state = await snapshot(store, scope);
 		await lease.save(state, undefined);
 		const path = join(dir, "owners", "1.json");
-		const owner = JSON.parse(await readFile(path, "utf8"));
+		const owner: unknown = JSON.parse(await readFile(path, "utf8"));
+		if (!isRecord(owner)) throw new Error("The owner file is not an object");
 		const replacement = { ...owner, token: "b".repeat(64) };
 		await writeFile(path, JSON.stringify(replacement));
 		await failure(lease.save({ ...state, version: 2 }, 1), "resource-in-use");
@@ -444,9 +452,7 @@ describe("containment and failure handling", () => {
 		const { root } = await fixture();
 		const target = join(root, "accessible");
 		await mkdir(target);
-		const spy = spyOn(fs, "realpath").mockImplementation(
-			(async (path: string) => `${path}-DIVERGENT~1`) as unknown as typeof fs.realpath,
-		);
+		const spy = spyOn(fs, "realpath").mockResolvedValue(`${target}-DIVERGENT~1`);
 		try {
 			await expect(syncDirectory(target)).resolves.toBeUndefined();
 		} finally {
@@ -456,21 +462,13 @@ describe("containment and failure handling", () => {
 
 	test("creating a storage directory never mkdirs the filesystem root, which Windows refuses", async () => {
 		const { root } = await fixture();
-		const realMkdir = fs.mkdir;
-		const spy = spyOn(fs, "mkdir").mockImplementation((async (
-			path: fsSync.PathLike,
-			options?: fsSync.MakeDirectoryOptions,
-		) => {
-			if (String(path) === parse(String(path)).root) {
-				throw Object.assign(new Error(`operation not permitted, mkdir '${path}'`), {
-					code: "EPERM",
-				});
-			}
-			return realMkdir(path, options);
-		}) as unknown as typeof fs.mkdir);
+		const spy = spyOn(fs, "mkdir");
 		const target = join(root, "fresh", "nested");
 		try {
 			await expect(directory(target, true)).resolves.toBe(true);
+			const made = spy.mock.calls.map(([path]) => String(path));
+			expect(made).toContain(target);
+			expect(made).not.toContain(parse(target).root);
 		} finally {
 			spy.mockRestore();
 		}
@@ -478,9 +476,12 @@ describe("containment and failure handling", () => {
 	});
 
 	test("canonicalRoot fails closed instead of recursing without bound on a root that never resolves", () => {
-		const spy = spyOn(fsSync, "realpathSync").mockImplementation((() => {
+		const missing = () => {
 			throw Object.assign(new Error("no such file or directory"), { code: "ENOENT" });
-		}) as unknown as typeof fsSync.realpathSync);
+		};
+		const spy = spyOn(fsSync, "realpathSync").mockImplementation(
+			Object.assign(missing, { native: missing }),
+		);
 		try {
 			expect(() => canonicalRoot(join(tmpdir(), "missing-root", "nested", "dag"))).toThrow(
 				DagError,
@@ -624,4 +625,12 @@ describe("containment and failure handling", () => {
 			await lease.release();
 		},
 	);
+});
+
+test("hasCode matches listed codes and refuses a misspelled one at compile time", () => {
+	const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
+	expect(hasCode(missing, "EEXIST", "ENOENT")).toBe(true);
+	expect(hasCode(missing, "EEXIST")).toBe(false);
+	// @ts-expect-error "ENOENTT" is not an errno code pi-dag checks
+	expect(hasCode(missing, "ENOENTT")).toBe(false);
 });
