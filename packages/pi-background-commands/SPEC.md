@@ -29,8 +29,9 @@ restart/rerun, daemon discovery, or arbitrary-process management.
   `BackgroundCommandStart`, `BackgroundCommandStatus`, `BackgroundCommands`,
   `BackgroundCommandsBinding`, `BackgroundCommandsOptions`, `BackgroundCommandTerminalSnapshot`,
   `BackgroundCommandTerminalStatus`.
-- `BackgroundCommandToolArgs` is the tool's raw arguments, `Static` of its TypeBox parameters, for a host to
-  tie what it reads of them.
+- `BackgroundCommandToolArgs` is the tool's raw arguments, a `pi-schema` schema in the `./wire` leaf. The tool
+  hands it to pi through `Type.Unsafe` typed as its own `Static`, because pi types `parameters` as TypeBox and
+  checks them as plain JSON Schema.
 - **`./wire` leaf entry** (`src/wire.ts`) owns every shape that leaves the package:
   `BACKGROUND_COMMAND_STATUSES`, `BACKGROUND_COMMAND_TERMINAL_STATUSES`, their schemas and types,
   `BACKGROUND_COMMAND_SNAPSHOT_FIELDS` (`startedAt` and `finishedAt` are bounded epoch ms),

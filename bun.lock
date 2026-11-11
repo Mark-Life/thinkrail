@@ -161,6 +161,7 @@
         "@thinkrail/pi-ask-user-question": "workspace:*",
         "pi-background-commands": "workspace:*",
         "pi-delegation": "workspace:*",
+        "pi-spec-graph": "workspace:*",
         "pi-subagents": "workspace:*",
         "pi-todos": "workspace:*",
       },
@@ -411,6 +412,7 @@
       "name": "pi-spec-graph",
       "version": "0.0.0",
       "dependencies": {
+        "@earendil-works/pi-schema": "catalog:",
         "yaml": "2.9.1",
       },
       "devDependencies": {

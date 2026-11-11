@@ -7,6 +7,7 @@ import {
 	DEFAULT_MAX_LINES,
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
+import type { Schema, Static } from "@earendil-works/pi-schema";
 import { Type } from "typebox";
 import { SpecIndex, type SpecType } from "../core/index.ts";
 
@@ -83,9 +84,7 @@ export function scaffoldBody(type: SpecType): string {
 	return `${headings.map((h) => `## ${h}\n`).join("\n")}`;
 }
 
-export function stringEnum<const T extends readonly string[]>(
-	values: T,
-	options: { description: string },
-) {
-	return Type.Unsafe<T[number]>({ type: "string", enum: [...values], ...options });
+/** A `pi-schema` schema as pi's TypeBox-typed `parameters`: pi checks it as plain JSON Schema, and its type is the schema's `Static`. */
+export function toolParameters<S extends Schema>(schema: S) {
+	return Type.Unsafe<Static<S>>(schema);
 }

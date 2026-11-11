@@ -24,7 +24,8 @@ that map.
   Schema values stay public because [[submodule-server-host]] and [[submodule-web-transport]] compile them, so they
   ship in web JS.
 - **Allowed deps:** `@earendil-works/pi-schema`; `@earendil-works/pi-ai/providers/model-schema`; the leaf entries
-  `pi-todos/wire`, `pi-background-commands/wire`, `pi-delegation/wire` and `pi-subagents/wire`; `import type` from
+  `pi-todos/wire`, `pi-background-commands/wire`, `pi-delegation/wire`, `pi-subagents/wire`, `pi-spec-graph/wire`
+  and `@thinkrail/pi-ask-user-question/core`; `import type` from
   the `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` roots; `import type` from `type-tie`.
 - **Forbidden:** any import of `@earendil-works/pi-coding-agent`, even type-only; any other entry of a pi package
   (`check:boundaries` refuses both); importing the rest of `contracts`, so a schema never depends on a hand-written type; compiling

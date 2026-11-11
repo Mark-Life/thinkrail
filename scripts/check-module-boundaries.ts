@@ -61,6 +61,7 @@ const LEAF_ENTRIES: readonly LeafEntry[] = [
 	{ specifier: "pi-background-commands/wire", mode: "value" },
 	{ specifier: "pi-delegation/wire", mode: "value" },
 	{ specifier: "pi-subagents/wire", mode: "value" },
+	{ specifier: "pi-spec-graph/wire", mode: "value" },
 	{
 		specifier: "@thinkrail/pi-ask-user-question/core",
 		mode: "value",
@@ -80,6 +81,7 @@ const LEAF_ONLY_TARGETS: Readonly<Record<string, Readonly<Record<string, string>
 		"packages/pi-background-commands": "wire",
 		"packages/pi-delegation": "wire",
 		"packages/pi-subagents": "wire",
+		"packages/spec-graph": "wire",
 		"pi-extensions/ask-user-question": "core",
 	},
 	"packages/pi-subagents": { "packages/pi-background-commands": "wire" },
@@ -102,6 +104,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 			"packages/pi-background-commands",
 			"packages/pi-delegation",
 			"packages/pi-subagents",
+			"packages/spec-graph",
 			"pi-extensions/ask-user-question",
 			"packages/type-tie",
 		],

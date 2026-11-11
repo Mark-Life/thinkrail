@@ -1,6 +1,5 @@
 export {
 	buildGraph,
-	LINK_KINDS,
 	linkTargets,
 	type SpecEdge,
 	type SpecFileEntry,
@@ -9,7 +8,6 @@ export {
 } from "./graph.ts";
 export {
 	FIELD_ORDER,
-	FIELDS,
 	type Frontmatter,
 	type FrontmatterEdit,
 	type FrontmatterEditResult,
@@ -17,15 +15,11 @@ export {
 	IDENTITY_FIELDS,
 	isSpec,
 	LIST_FIELDS,
-	LIST_LINK_FIELDS,
 	type LinkKind,
 	list,
 	type ParsedFile,
 	parseFile,
 	REQUIRED_FIELDS,
-	SINGLE_LINK_FIELDS,
-	SPEC_STATUSES,
-	SPEC_TYPES,
 	type SpecStatus,
 	type SpecType,
 	scalar,
@@ -34,7 +28,6 @@ export {
 } from "./parse.ts";
 
 export {
-	DEFAULT_GREP_LIMIT,
 	formatGrepMatch,
 	type GraphSlice,
 	type GrepMatch,
@@ -42,7 +35,6 @@ export {
 	type GrepResult,
 	graphSlice,
 	grepSpecs,
-	SLICE_DIRECTIONS,
 	type SliceDirection,
 	type SliceOptions,
 	type SpecContentEntry,
@@ -63,3 +55,19 @@ export {
 	type ValidationReport,
 	validateGraph,
 } from "./validate.ts";
+export {
+	DEFAULT_GREP_LIMIT,
+	FIELDS,
+	LINK_KINDS,
+	LIST_LINK_FIELDS,
+	SINGLE_LINK_FIELDS,
+	SLICE_DIRECTIONS,
+	SPEC_STATUSES,
+	SPEC_TYPES,
+	SpecCreateInput,
+	SpecDeleteInput,
+	SpecGetInput,
+	SpecGraphInput,
+	SpecGrepInput,
+	SpecUpdateInput,
+} from "./wire.ts";

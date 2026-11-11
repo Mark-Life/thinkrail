@@ -48,7 +48,7 @@ Clear, fractal module boundaries are a top-priority requirement:
 - Browser-bundled code imports a pi package only through: `@earendil-works/pi-schema`;
   `@earendil-works/pi-ai/providers/model-schema`; the `pi-ai` / `pi-agent-core` roots, type-only; and the
   leaf entries `pi-todos/wire`, `pi-background-commands/wire`, `pi-delegation/wire`, `pi-subagents/wire`,
-  `@thinkrail/pi-ask-user-question/core` (its web half only) and `@thinkrail/pi-visualize/schema` (its web
+  `pi-spec-graph/wire`, `@thinkrail/pi-ask-user-question/core` (its web half and `contracts` only) and `@thinkrail/pi-visualize/schema` (its web
   half only, type-only). `@earendil-works/pi-coding-agent` is server-only, even type-only. A leaf
   value-imports only `pi-schema`, `model-schema` and other leaves. `bun run check:boundaries` enforces this.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.

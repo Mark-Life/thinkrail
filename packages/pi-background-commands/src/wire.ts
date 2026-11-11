@@ -63,3 +63,25 @@ export const BACKGROUND_COMMAND_COMPLETION_FIELDS = {
 };
 
 export const BACKGROUND_COMMAND_COMPLETION_MESSAGE = "background-command-completion";
+
+/** The `background_command` tool's raw arguments, before the tool narrows them by `action`. */
+export const BackgroundCommandToolArgs = obj({
+	action: { ...oneOf(["start", "list", "output", "stop"]), type: "string" },
+	command: opt(
+		str({
+			description: "Foreground shell command, for start only",
+			minLength: 1,
+			maxLength: 65536,
+		}),
+	),
+	name: opt(str({ description: "Display name, for start only", maxLength: 200 })),
+	timeout: opt(
+		num({
+			description: "Timeout in seconds, for start only; no default",
+			exclusiveMinimum: 0,
+			maximum: 2147483.647,
+		}),
+	),
+	id: opt(str({ description: "Opaque command id returned by start, for output or stop only" })),
+});
+export type BackgroundCommandToolArgs = Static<typeof BackgroundCommandToolArgs>;

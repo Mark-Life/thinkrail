@@ -8,7 +8,7 @@ export type {
 	SpecGraphInput,
 	SpecGrepInput,
 	SpecUpdateInput,
-} from "./tools/index.ts";
+} from "./core/index.ts";
 
 const SPEC_SECTION = "pi-spec-graph";
 

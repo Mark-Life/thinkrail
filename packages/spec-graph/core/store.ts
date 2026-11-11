@@ -1,8 +1,9 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, sep, win32 } from "node:path";
 import { buildGraph, type SpecGraph } from "./graph.ts";
-import { FIELDS, type Frontmatter, isSpec, parseFile, scalar } from "./parse.ts";
+import { type Frontmatter, isSpec, parseFile, scalar } from "./parse.ts";
 import type { SpecContentEntry } from "./query.ts";
+import { FIELDS } from "./wire.ts";
 
 const IGNORED_DIRS = new Set([
 	"node_modules",

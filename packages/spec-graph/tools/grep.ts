@@ -1,40 +1,14 @@
 import { DEFAULT_MAX_BYTES, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
-import { DEFAULT_GREP_LIMIT, formatGrepMatch, type GrepResult, grepSpecs } from "../core/index.ts";
-import { errorResult, errorText, getIndex, textResult } from "./shared.ts";
+import {
+	DEFAULT_GREP_LIMIT,
+	formatGrepMatch,
+	type GrepResult,
+	grepSpecs,
+	SpecGrepInput,
+} from "../core/index.ts";
+import { errorResult, errorText, getIndex, textResult, toolParameters } from "./shared.ts";
 
-const parameters = Type.Object({
-	pattern: Type.String({ description: "Regex or substring to search for within spec files." }),
-	regex: Type.Optional(
-		Type.Boolean({ description: "Treat pattern as a regular expression (default: substring)." }),
-	),
-	ignoreCase: Type.Optional(
-		Type.Boolean({ description: "Case-insensitive match (default: true)." }),
-	),
-	type: Type.Optional(
-		Type.String({ description: "Only search specs with this frontmatter type." }),
-	),
-	tag: Type.Optional(Type.String({ description: "Only search specs carrying this tag." })),
-	parent: Type.Optional(Type.String({ description: "Only search specs whose parent is this id." })),
-	dependsOn: Type.Optional(
-		Type.String({ description: "Only search specs that depend-on this id." }),
-	),
-	limit: Type.Optional(
-		Type.Integer({
-			minimum: 1,
-			description: `Matches per page (default/max: ${DEFAULT_GREP_LIMIT}; the byte limit may return fewer).`,
-		}),
-	),
-	offset: Type.Optional(
-		Type.Integer({
-			minimum: 0,
-			description:
-				"Zero-based match offset (default: 0). Continue with the offset given in the result and the same filters; restart after source changes.",
-		}),
-	),
-});
-/** The `spec_grep` tool's arguments. */
-export type SpecGrepInput = Static<typeof parameters>;
+const parameters = toolParameters(SpecGrepInput);
 
 export function registerSpecGrep(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, GrepResult | { error: string }>({

@@ -12,8 +12,9 @@ tags: [spec-graph, pi-extension]
 The pi-free spec model: the is-a-spec rule, frontmatter parse/serialize and in-place edit (via the
 `yaml` library, with link/metadata lists inline), the derived graph (parent tree +
 `depends-on`/`references`/`implements` DAG + reverse edges), the on-demand in-memory read index, content
-grep with metadata filters, bounded graph slices, and structural validation. Imports **no
-`@earendil-works/*`**, so it is unit-testable on its own (`core/core.test.ts`).
+grep with metadata filters, bounded graph slices, and structural validation. The only `@earendil-works/*`
+import is `pi-schema` in `wire.ts`, a dependency-free validator, so it stays unit-testable on its own
+(`core/core.test.ts`).
 
 ## Boundary
 
@@ -24,18 +25,19 @@ grep with metadata filters, bounded graph slices, and structural validation. Imp
   leaf directly to reach helpers that are deliberately not public — the pure path guards, segment
   resolver, and glob order comparator in `store.ts`, which pin `resolveSpecPath` and the glob order
   without touching a filesystem.
-- **Allowed deps:** `yaml`; Node built-ins.
-- **Forbidden:** any `@earendil-works/*` (this is what keeps `core/` isolated and unit-testable) and any
+- **Allowed deps:** `yaml`; Node built-ins; `@earendil-works/pi-schema` in `wire.ts` only.
+- **Forbidden:** any other `@earendil-works/*` (this is what keeps `core/` isolated and unit-testable) and any
   `@thinkrail/*` package.
 
 ## Leaves & the dependency graph
 
-Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`validate`/`store` build on
+Acyclic and one-way: `wire` is the root, `parse` builds on it, `graph` on `parse`, and `query`/`validate`/`store` on
 `graph`. The barrel re-exports the leaves and adds no logic.
 
 | leaf | owns | depends on |
 | --- | --- | --- |
-| `parse.ts` | file → `{ frontmatter, body }`; the is-a-spec rule; frontmatter parse (lossy read dialect) + serialize; the `updateFrontmatterText` lossless in-place edit; the `FIELDS` field registry and the finite-vocabulary tuples | — |
+| `wire.ts` | the `pi-spec-graph/wire` leaf: the `FIELDS` field registry, the finite-vocabulary tuples and each tool's argument schema; it value-imports only `pi-schema` | — |
+| `parse.ts` | file → `{ frontmatter, body }`; the is-a-spec rule; frontmatter parse (lossy read dialect) + serialize; the `updateFrontmatterText` lossless in-place edit | `wire` |
 | `graph.ts` | files → nodes + edges (parent tree, DAG + reverse); duplicate-id tracking | `parse` |
 | `query.ts` | content grep with metadata filters; bounded graph slices | `parse`, `graph` |
 | `validate.ts` | dangling links, duplicate ids, parent cycles | `parse`, `graph` |
@@ -43,7 +45,7 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
 
 ## Invariants
 
-- No `@earendil-works/*` import anywhere under `core/`.
+- No `@earendil-works/*` import under `core/` except `pi-schema` in `wire.ts`.
 - Grep pagination skips a zero-based match offset in source order and returns a continuation only
   when another match exists. Callers may bound formatted bytes as well as count; one oversized first
   match is admitted so the tool layer can preserve it outside context instead of stalling pagination.

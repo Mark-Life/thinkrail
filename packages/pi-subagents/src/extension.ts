@@ -18,41 +18,21 @@ import {
 	type RunSnapshot,
 	type RunStatus,
 } from "pi-delegation";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
 import { RECURSION_GUARD_TOOLS, toSpawnMapping } from "./mapping";
 import { THINKING_LEVELS } from "./thinking";
-import { SUBAGENT_COMPLETION_MESSAGE, type SubagentCompletionDetails } from "./wire";
+import {
+	AgentToolInput,
+	GetSubagentResultInput,
+	SUBAGENT_COMPLETION_MESSAGE,
+	type SubagentCompletionDetails,
+} from "./wire";
 
 const MAX_RESULT_CHARS = 50_000;
 
-const agentParameters = Type.Object({
-	subagent_type: Type.String({
-		description: 'The agent definition to run, e.g. "scout"',
-	}),
-	task: Type.String({
-		description: "The complete, self-contained task for the subagent",
-	}),
-	model: Type.Optional(
-		Type.String({
-			description:
-				'Available model for an unpinned agent: "provider/id" or "provider/id:thinking". Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
-		}),
-	),
-	run_in_background: Type.Optional(
-		Type.Boolean({
-			description: "Do not wait: return the child session id immediately",
-		}),
-	),
-});
-/** The `Agent` tool's arguments. */
-export type AgentToolInput = Static<typeof agentParameters>;
-
-const getResultParameters = Type.Object({
-	session_id: Type.String({ description: "The child session id returned by Agent" }),
-});
-/** The `get_subagent_result` tool's arguments. */
-export type GetSubagentResultInput = Static<typeof getResultParameters>;
+const agentParameters = Type.Unsafe<AgentToolInput>(AgentToolInput);
+const getResultParameters = Type.Unsafe<GetSubagentResultInput>(GetSubagentResultInput);
 
 export interface SubagentsExtensionOptions {
 	service?: DelegationService;

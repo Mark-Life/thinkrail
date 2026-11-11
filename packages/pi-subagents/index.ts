@@ -9,10 +9,8 @@ export {
 	parseAgentDefinition,
 } from "./src/definitions";
 export {
-	type AgentToolInput,
 	createSubagents,
 	createSubagentsExtension,
-	type GetSubagentResultInput,
 	type Subagents,
 	type SubagentsExtensionOptions,
 } from "./src/extension";
@@ -23,6 +21,11 @@ export {
 	type SpawnMapping,
 	toSpawnMapping,
 } from "./src/mapping";
-export { SUBAGENT_COMPLETION_MESSAGE, type SubagentCompletionDetails } from "./src/wire";
+export {
+	type AgentToolInput,
+	type GetSubagentResultInput,
+	SUBAGENT_COMPLETION_MESSAGE,
+	type SubagentCompletionDetails,
+} from "./src/wire";
 
 export default createSubagentsExtension();

@@ -3,7 +3,7 @@ import type {
 	ExtensionFactory,
 	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 import { tail } from "./output";
 import { createBackgroundCommands } from "./service";
 import { standaloneContext } from "./shell-context";
@@ -15,7 +15,11 @@ import type {
 	BackgroundCommandSnapshot,
 	BackgroundCommands,
 } from "./types";
-import { BACKGROUND_COMMAND_COMPLETION_MESSAGE, type CompletionDelivery } from "./wire";
+import {
+	BACKGROUND_COMMAND_COMPLETION_MESSAGE,
+	BackgroundCommandToolArgs,
+	type CompletionDelivery,
+} from "./wire";
 
 type DeliveryMode = { idle: true } | { idle: false; runContinues: boolean; viaHost: boolean };
 
@@ -29,34 +33,7 @@ export type BackgroundCommandInput =
 	| { action: "list" }
 	| { action: "output" | "stop"; id: string };
 
-const parameters = Type.Object(
-	{
-		action: Type.Enum(["start", "list", "output", "stop"], { type: "string" }),
-		command: Type.Optional(
-			Type.String({
-				description: "Foreground shell command, for start only",
-				minLength: 1,
-				maxLength: 65536,
-			}),
-		),
-		name: Type.Optional(
-			Type.String({ description: "Display name, for start only", maxLength: 200 }),
-		),
-		timeout: Type.Optional(
-			Type.Number({
-				description: "Timeout in seconds, for start only; no default",
-				exclusiveMinimum: 0,
-				maximum: 2147483.647,
-			}),
-		),
-		id: Type.Optional(
-			Type.String({ description: "Opaque command id returned by start, for output or stop only" }),
-		),
-	},
-	{ additionalProperties: false },
-);
-/** The `background_command` tool's raw arguments, before `assertInput` narrows them by `action`. */
-export type BackgroundCommandToolArgs = Static<typeof parameters>;
+const parameters = Type.Unsafe<BackgroundCommandToolArgs>(BackgroundCommandToolArgs);
 
 function assertInput(input: unknown): asserts input is BackgroundCommandInput {
 	if (!input || typeof input !== "object" || !("action" in input))

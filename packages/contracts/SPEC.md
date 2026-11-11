@@ -185,7 +185,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `speech.*`, `feedback.*`, `themes.*`, `locales.*`, `environment.*`, `settings.*`, `history.*`, `search.*`, `extension.*`
   and `client.*` entities,
   and every WS method. The entries below describe these
-  types where they sit in their feature.
+  types where they sit in their feature. `ToolInputs` names, by tool, the arguments chat cards read: a `Pick` of
+  the owner's schema type (`pi-spec-graph/wire`, `pi-subagents/wire`, `pi-background-commands/wire`, and
+  `ResolveCommentInput`, which the host's `resolve_comment` tool registers), or for pi's built-in tools a copy
+  the server ties to pi.
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
     `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ToolCall`,

@@ -18,6 +18,7 @@
 		"@thinkrail/pi-ask-user-question": "workspace:*",
 		"pi-background-commands": "workspace:*",
 		"pi-delegation": "workspace:*",
+		"pi-spec-graph": "workspace:*",
 		"pi-subagents": "workspace:*",
 		"pi-todos": "workspace:*"
 	},

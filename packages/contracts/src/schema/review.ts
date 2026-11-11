@@ -182,6 +182,19 @@ export type ReviewSendResult = Static<typeof ReviewSendResult>;
 const ReviewRef = wireObj({ workspaceId: WorkspaceId });
 const ReviewCommentRef = wireObj({ workspaceId: WorkspaceId, id: str() });
 
+/** The `resolve_comment` tool's arguments: the agent marks a review comment it addressed. */
+export const ResolveCommentInput = wireObj({
+	commentId: str({
+		description: 'The review comment id from the review package (e.g. "rc_1a2b3c4d").',
+	}),
+	note: opt(
+		str({
+			description: "One short line: what you did about the comment (shown in the review sidebar).",
+		}),
+	),
+});
+export type ResolveCommentInput = Static<typeof ResolveCommentInput>;
+
 export const REVIEW_METHODS = {
 	"review.get": { params: ReviewRef, result: ReviewSnapshot },
 	"review.commentAdd": {

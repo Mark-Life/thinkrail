@@ -1,33 +1,9 @@
 import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
-import { FIELDS, type FrontmatterEdit, updateFrontmatterText } from "../core/index.ts";
-import { errorResult, errorText, getIndex, textResult } from "./shared.ts";
+import { type FrontmatterEdit, SpecUpdateInput, updateFrontmatterText } from "../core/index.ts";
+import { errorResult, errorText, getIndex, textResult, toolParameters } from "./shared.ts";
 
-const listGroup = Type.Object({
-	[FIELDS.dependsOn]: Type.Optional(Type.Array(Type.String())),
-	[FIELDS.references]: Type.Optional(Type.Array(Type.String())),
-	[FIELDS.implements]: Type.Optional(Type.Array(Type.String())),
-	[FIELDS.covers]: Type.Optional(Type.Array(Type.String())),
-	[FIELDS.tags]: Type.Optional(Type.Array(Type.String())),
-});
-
-const parameters = Type.Object({
-	id: Type.String({ description: "Id of the spec to update." }),
-	set: Type.Optional(
-		Type.Record(Type.String(), Type.String(), {
-			description:
-				"Scalar frontmatter fields to set/overwrite (e.g. title, status, parent). For list fields (depends-on/references/implements/covers/tags) use addList/removeList.",
-		}),
-	),
-	remove: Type.Optional(
-		Type.Array(Type.String(), { description: "Frontmatter field names to remove entirely." }),
-	),
-	addList: Type.Optional(listGroup),
-	removeList: Type.Optional(listGroup),
-});
-/** The `spec_update` tool's arguments. */
-export type SpecUpdateInput = Static<typeof parameters>;
+const parameters = toolParameters(SpecUpdateInput);
 
 export function registerSpecUpdate(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, { id: string; path: string } | { error: string }>({

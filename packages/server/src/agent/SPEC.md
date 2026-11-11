@@ -523,11 +523,11 @@ re-opened transcripts provider-valid.
     - `CompactionEndResult`, `SessionStats`, `ContextUsage` and `SlashCommandInfo`.
 
     contracts re-exports pi-delegation's own run shapes, so no delegation tie is needed here.
-  - `toolInputTies` — types only: ties each `ToolInputs` entry (the tool arguments chat cards read) with `Same` to
-    a `Pick` of its owner's input type: pi's `ReadToolInput` / `WriteToolInput` / `EditToolInput` / `BashToolInput`,
-    `pi-spec-graph`'s `Spec*Input`, `pi-subagents`' `AgentToolInput` / `GetSubagentResultInput`,
-    `pi-background-commands`' `BackgroundCommandToolArgs` and `resolve_comment`'s `ResolveCommentSchema`. A renamed,
-    retyped or newly optional field the web reads fails `tsc` here.
+  - `toolInputTies` — types only: ties the four `ToolInputs` entries of pi's built-in tools with `Same` to a `Pick`
+    of pi's `ReadToolInput` / `WriteToolInput` / `EditToolInput` / `BashToolInput`. A renamed, retyped or newly
+    optional field the web reads fails `tsc` here. The other entries pick from their owners' schemas in contracts.
+  - `reviewTool` — the `resolve_comment` tool. Its arguments are contracts' `ResolveCommentInput`; pi types
+    `parameters` as TypeBox, so the tool passes the schema through `Type.Unsafe` typed as its own `Static`.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no

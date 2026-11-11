@@ -1,23 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
-import { type GraphSlice, graphSlice, LINK_KINDS, SLICE_DIRECTIONS } from "../core/index.ts";
-import { errorResult, getIndex, stringEnum, textResult } from "./shared.ts";
+import { type GraphSlice, graphSlice, SpecGraphInput } from "../core/index.ts";
+import { errorResult, getIndex, textResult, toolParameters } from "./shared.ts";
 
-const parameters = Type.Object({
-	root: Type.String({ description: "Id of the node to start from." }),
-	direction: stringEnum(SLICE_DIRECTIONS, {
-		description:
-			"subtree = down the parent tree; ancestors = up the parent chain; neighbors = across an edge and its reverse.",
-	}),
-	depth: Type.Optional(Type.Number({ description: "How many hops to expand (default: 1)." })),
-	edge: Type.Optional(
-		stringEnum(LINK_KINDS, {
-			description: "For direction=neighbors: which edge kind to traverse (default: depends-on).",
-		}),
-	),
-});
-/** The `spec_graph` tool's arguments. */
-export type SpecGraphInput = Static<typeof parameters>;
+const parameters = toolParameters(SpecGraphInput);
 
 export function registerSpecGraph(pi: ExtensionAPI): void {
 	pi.registerTool<typeof parameters, GraphSlice | { error: string }>({
