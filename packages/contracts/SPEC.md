@@ -58,15 +58,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`SESSION_MODEL_UNAVAILABLE`** — a chat's saved model reference is malformed, so the chat does not open.
   **`HOST_ERROR`** — a request-path failure the host has no more specific code for, so Error Tracking still
   gets a code and never the message. **`FONT_UPLOAD_FAILED`** — a font upload could not be stored.
-  **`SESSION_RELOAD_FAILED`** — a session reload did not finish. **`WORKSPACE_UNKNOWN`** is client-minted,
+  **`SESSION_RELOAD_FAILED`** — a session reload did not finish. **`SESSION_DISPOSE_FAILED`** — a session that
+  failed to start could not be disposed. **`WORKSPACE_UNKNOWN`** is client-minted,
   like `INVALID_REPLY`: the client named a workspace it no longer knows.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
-  (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
-  `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
-  `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
-  labels), the optional shell-local desktop capabilities);
+  (`NativeUpdateBridge`, `NativeWindowControlsBridge`, `NativeShortcutsBridge`, `NativeNotificationBridge` and
+  `NativeMenuBridge` (translated native menu labels), the optional shell-local desktop capabilities, whose values
+  `NativeUpdateState`, `NativeWindowState`, `NativeQuitHint`, `NativeCommand` and `NativeNotificationInput` are
+  schemas in `schema/native.ts`);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (`MatchTier` is the `search.*` schema's, which `MATCH_TIER` names) (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
@@ -192,7 +193,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
     `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ToolCall`,
-    `AssistantMessageEvent`, `Usage`, `StopReason`; `ImageContent` is listed in `schema/`, pinned to pi's type;
+    `AssistantMessageEvent`, `Usage`, `StopReason`; `ImageContent` and `TextContent` are listed in `schema/transcript.ts`,
+    pinned to pi's types, with their compiled checks `isImageContent` and `isTextContent`;
   - **`WireModel`** (in `schema/`) = `id`, `name`, `provider`, `contextWindow`, `reasoning` of pi's `Model` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
     client→host params carry it inert) **+ three optional picker-metadata projections** — `cost`
@@ -597,7 +599,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   decoration and present only when non-empty: the `base..HEAD` commits owned by no item, surfaced as
   **wire-only `done` items** (`origin: "adopted"`, `id: "commit:<sha>"`, one `commit` artifact) so a
   chat that committed without planning still shows — and can review — that work. They are never stored;
-  the **`"adopted"`** member of `TodoOrigin` (`WIRE_TODO_ORIGINS` = `pi-todos`' `TODO_ORIGINS` plus `"adopted"`)
+  the **`"adopted"`** member of `TodoOrigin` (`pi-todos`' `TODO_ORIGINS` plus `"adopted"`)
   exists only on the wire (derivation: [[submodule-server-todos]]).
   **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
   built from `pi-delegation/wire`'s `DELEGATION_RUN_FIELDS` and `RUN_LIFECYCLE_STATUSES`: rides `tool_execution_update.partialResult`
@@ -971,7 +973,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   — plus
   **`template.*`** — prompt-template CRUD
   (**`template.list`**, **`template.get`** — reads accept one optional location, `workspaceId` or
-  `projectId`, and reject both; no location is global-only, while either located form merges project over
+  `projectId`, and reject both (`TemplateReadLocation`); no location is global-only, while either located form merges project over
   global; **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable.
   Channels: `server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
@@ -1145,6 +1147,12 @@ the pi-level resource grant. A client talking to an older host sends neither.
 missing list as "no MCP". The engine is pi's built-in MCP ([[submodule-server-agent]]); these DTOs mirror
 what the host reads from pi and from the two `mcp.json` files, never pi's own types — the web depends on
 contracts only.
+
+- `schema/mcp.ts` holds the server-entry schemas: `McpStdioServerConfig` and `McpHttpServerConfig` (built from
+  `MCP_COMMON_FIELDS`, `MCP_STDIO_FIELDS` and `MCP_HTTP_FIELDS`), `McpOAuthConfig`, `McpEntryType`,
+  `McpTransportKind`, `McpExposure` and `McpActiveExposure`. Settings checks a pasted entry and the host parses
+  `mcp.json` with the same schemas, and the host ties them to pi's `McpServerConfig` and `McpExposure`
+  ([[submodule-server-agent]]).
 
 - The project record carries the per-project policy the host applies when a chat loads its servers:
   `Project.mcpApprovals` maps a repo-defined server name to the fingerprint of its whole `.pi/mcp.json`

@@ -2,7 +2,7 @@
 "@thinkrail/pi-ask-user-question": minor
 ---
 
-The package now depends on `@earendil-works/pi-schema`. The answer, result and ack shapes are pi-schema
+The package now depends on `@earendil-works/pi-schema`, and lists `@earendil-works/pi-ai` as a peer dependency because `./core` types its messages with pi-ai's types. The answer, result and ack shapes are pi-schema
 schemas (`AskUserQuestionAnswer`, `AskUserQuestionResult`, `AskUserQuestionAckDetails`), and
 `isAskUserQuestionResult` / `isAckDetails` are their compiled checks, so a result with a malformed answer
 is now refused. The argument types derive from the tool's TypeBox schema.

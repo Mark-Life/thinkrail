@@ -532,7 +532,8 @@ re-opened transcripts provider-valid.
     calls (dialogs round-trip to the browser, fire-and-forget methods push). `inertUiMembers` holds the members
     that need no session: the MCP sign-in probe spreads it and answers every other member itself, so it needs no
     made-up session id. Its `custom` resolves `undefined`, as pi's RPC mode does, though pi types it `Promise<T>`: that
-    cast is the one allowed forced cast in this module. pi's generic `custom<T>(): Promise<T>` cannot be met by
+    cast is the one allowed forced cast in this module, an approved exception ([[submodule-contracts-schema]] lists
+    all three). pi's generic `custom<T>(): Promise<T>` cannot be met by
     `undefined` without it; a never-settling promise would hang pi's MCP manager, and a rejection would show its
     llama views as errors, because both call `custom` with no mode check. A dialog names the tool call
     it is about (`toolCallId`) so the web asks on that call's card: the manager passes pi's own
@@ -1241,7 +1242,10 @@ re-opened transcripts provider-valid.
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
-  opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
+  opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce);
+  `sessionReloadFailure(error)` (a reload failure as logged: a `CodedError` keeps its code, anything else becomes
+  `SESSION_RELOAD_FAILED`; a session that fails to start and then fails to dispose logs `SESSION_DISPOSE_FAILED`, and a
+  chat whose saved model reference is malformed refuses to open with `SESSION_MODEL_UNAVAILABLE`); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals, overrides
   and tool grants, derived by `mcpPolicyOf(project)`) and its writer twin **`setMcpToolGrantWriter`**; the MCP management surface — `listMcpServers`,
