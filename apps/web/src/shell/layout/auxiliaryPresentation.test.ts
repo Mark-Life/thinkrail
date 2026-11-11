@@ -19,7 +19,8 @@ import {
 	selectTab,
 	toolTab,
 } from "./model";
-import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
+import type { LayoutTerminalTab } from "./schema";
+import type { WorkspaceLayoutDocument } from "./types";
 
 const terminal = (id: string): LayoutTerminalTab => ({
 	kind: "terminal",

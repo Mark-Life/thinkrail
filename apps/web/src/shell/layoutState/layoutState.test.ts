@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { arr, compile, map, obj, str, unknown } from "@earendil-works/pi-schema";
-import { testWorkspaceId } from "@thinkrail/contracts/test-ids";
+import { testSessionId, testWorkspaceId } from "@thinkrail/contracts/test-ids";
 import { useAppStore } from "../../store";
 import {
 	BUILTIN_LAYOUT_PRESETS,
@@ -508,6 +508,38 @@ describe("frontend-local layout state", () => {
 			previewTabId: "ws:changes:branch",
 			tabs: [{ kind: "changes", id: "ws:changes:branch", scope: { kind: "branch" } }],
 		});
+	});
+
+	test("a saved chat tab whose session id is not path-safe is left out and the rest of the layout loads", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const workspaceId = testWorkspaceId("workspace");
+		const initial = await ensureWorkspaceLayoutState(workspaceId);
+		if (initial.center.kind !== "group") throw new Error("expected a single center group");
+		const chat = (id: string) => ({
+			kind: "chat" as const,
+			id: `chat:${id}`,
+			name: "",
+			sessionId: testSessionId(id),
+		});
+		const first = openCenterTab(initial, chat("kept"), initial.center.id, "keep");
+		if (!("document" in first)) throw new Error(first.reason);
+		const second = openCenterTab(first.document, chat("unsafe"), initial.center.id, "keep");
+		if (!("document" in second)) throw new Error(second.reason);
+		await commitWorkspaceLayout(workspaceId, second.document);
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const saved = local.getItem(key) ?? "";
+		expect(saved).toContain('"sessionId":"unsafe"');
+		local.setItem(key, saved.replace('"sessionId":"unsafe"', '"sessionId":"../unsafe"'));
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+
+		const restored = await ensureWorkspaceLayoutState(workspaceId);
+		expect(restored.center).toMatchObject({ kind: "group", tabs: [chat("kept")] });
 	});
 
 	test("reload restores the same surface without another host read", async () => {

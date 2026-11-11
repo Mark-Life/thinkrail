@@ -29,11 +29,11 @@ import {
 	toolTab,
 	unplacedToolsForRegion,
 } from "./model";
+import type { LayoutTerminalTab } from "./schema";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutSideGroup,
 	LayoutTab,
-	LayoutTerminalTab,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";

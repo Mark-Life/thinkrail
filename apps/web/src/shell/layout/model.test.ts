@@ -45,12 +45,8 @@ import {
 	withAvailablePlacementId,
 } from "./model";
 import { BUILTIN_LAYOUT_PRESETS } from "./presets";
-import type {
-	LayoutCenterTab,
-	LayoutFileTab,
-	LayoutTerminalTab,
-	WorkspaceLayoutDocument,
-} from "./types";
+import type { LayoutFileTab, LayoutTerminalTab } from "./schema";
+import type { LayoutCenterTab, WorkspaceLayoutDocument } from "./types";
 
 const file = (id: string): LayoutFileTab => ({
 	kind: "file",

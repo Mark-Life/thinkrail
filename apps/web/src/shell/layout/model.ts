@@ -15,6 +15,7 @@ import {
 	readLayoutSelection,
 	terminalName,
 } from "../../lib";
+import type { LayoutToolTab } from "./schema";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -28,7 +29,6 @@ import type {
 	LayoutSideTab,
 	LayoutTab,
 	LayoutToolId,
-	LayoutToolTab,
 	WorkspaceLayoutDocument,
 } from "./types";
 

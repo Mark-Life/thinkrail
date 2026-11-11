@@ -16,7 +16,8 @@ import {
 	frameMatchesPreset,
 	instantiateWorkbenchFrame,
 } from "./presets";
-import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
+import type { LayoutTerminalTab } from "./schema";
+import type { LayoutCenterTab, WorkspaceLayoutDocument } from "./types";
 
 const file = (id: string): LayoutCenterTab => ({
 	kind: "file",

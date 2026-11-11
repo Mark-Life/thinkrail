@@ -20,13 +20,17 @@ import {
 	collectWorkbenchCenterGroups,
 	type NormalizedLayoutState,
 	projectWorkspaceLayout,
-	type WorkbenchAuxiliaryGroup,
-	type WorkbenchCenterNode,
-	type WorkbenchFrame,
 	type WorkspaceGroupView,
 	type WorkspaceViewState,
 } from "./normalized";
-import type { LayoutCenterTab, LayoutTerminalTab, LayoutToolTab } from "./types";
+import type {
+	LayoutTerminalTab,
+	LayoutToolTab,
+	WorkbenchAuxiliaryGroup,
+	WorkbenchCenterNode,
+	WorkbenchFrame,
+} from "./schema";
+import type { LayoutCenterTab } from "./types";
 
 const group = (id: string): LayoutPresetCenterNode => ({ kind: "group", id });
 const split = (

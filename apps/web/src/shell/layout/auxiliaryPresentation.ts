@@ -15,13 +15,12 @@ import {
 	toolTab,
 	unplacedToolsForRegion,
 } from "./model";
+import type { LayoutTerminalTab, LayoutToolTab } from "./schema";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutSideGroup,
 	LayoutTab,
-	LayoutTerminalTab,
 	LayoutToolId,
-	LayoutToolTab,
 	WorkspaceLayoutDocument,
 } from "./types";
 

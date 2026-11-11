@@ -28,7 +28,7 @@ export {
 	parseWorkspaceId,
 	randomUuid,
 	SessionId,
-	type StoredSessionId,
+	StoredSessionId,
 	WorkspaceId,
 } from "./ids";
 export * from "./locales";

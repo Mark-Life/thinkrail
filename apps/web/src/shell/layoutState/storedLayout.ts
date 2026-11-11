@@ -1,37 +1,26 @@
+import { arr, compile, map, obj, opt, str, tuple, union, unknown } from "@earendil-works/pi-schema";
+import { LayoutToolId, parseSessionId, StoredSessionId } from "@thinkrail/contracts";
 import {
-	arr,
-	bool,
-	compile,
-	int,
-	lit,
-	map,
-	num,
-	obj,
-	oneOf,
-	opt,
-	str,
-	tuple,
-	union,
-	unknown,
-} from "@earendil-works/pi-schema";
-import { GitDiffScope, LayoutBottomAlignment, LayoutToolId, SessionId } from "@thinkrail/contracts";
-import type {
-	LayoutCenterTab,
+	LAYOUT_CHAT_TAB_FIELDS,
+	LAYOUT_DOCUMENT_TAB_FIELDS,
+	type LayoutCenterTab,
+	LayoutChangesTab,
+	LayoutFileTab,
+	LayoutPinnedDiffTab,
+	LayoutScopedDiffTab,
+	LayoutTerminalTab,
 	LayoutToolRestoreTarget,
-	WorkbenchCenterNode,
-	WorkbenchFrame,
-	WorkspaceViewState,
+	WORKBENCH_CENTER_SPLIT_FIELDS,
+	WORKBENCH_FRAME_FIELDS,
+	WorkbenchCenterGroup,
+	type WorkbenchCenterNode,
+	type WorkbenchFrame,
+	type WorkspaceViewState,
 } from "../layout";
 
-const CenterGroup = compile(obj({ kind: lit("group"), id: str() }));
+const CenterGroup = compile(WorkbenchCenterGroup);
 const CenterSplit = compile(
-	obj({
-		kind: lit("split"),
-		id: str(),
-		direction: oneOf(["horizontal", "vertical"]),
-		weights: tuple([num(), num()]),
-		children: tuple([unknown(), unknown()]),
-	}),
+	obj({ ...WORKBENCH_CENTER_SPLIT_FIELDS, children: tuple([unknown(), unknown()]) }),
 );
 
 function parseCenter(node: unknown): WorkbenchCenterNode | null {
@@ -42,30 +31,11 @@ function parseCenter(node: unknown): WorkbenchCenterNode | null {
 	return first && second ? { ...node, children: [first, second] } : null;
 }
 
-const AuxiliaryGroup = obj({
-	id: str(),
-	weight: num(),
-	folded: bool(),
-	tools: arr(obj({ kind: lit("tool"), id: str(), name: str(), tool: LayoutToolId })),
-});
-const RestoreTarget = obj({
-	region: oneOf(["left", "right", "bottom"]),
-	groupId: opt(str()),
-	index: int({ minimum: 0 }),
-});
 const FrameShell = compile(
 	obj({
-		version: lit(1),
+		...WORKBENCH_FRAME_FIELDS,
 		center: unknown(),
-		left: obj({ visible: bool(), width: num(), groups: arr(AuxiliaryGroup) }),
-		right: obj({ visible: bool(), width: num(), groups: arr(AuxiliaryGroup) }),
-		bottom: obj({
-			visible: bool(),
-			height: num(),
-			alignment: LayoutBottomAlignment,
-			groups: arr(AuxiliaryGroup),
-		}),
-		toolRestoreTargets: map(RestoreTarget),
+		toolRestoreTargets: map(LayoutToolRestoreTarget),
 	}),
 );
 const isLayoutToolId = compile(LayoutToolId).check;
@@ -85,28 +55,25 @@ export function parseStoredFrame(value: unknown): WorkbenchFrame | null {
 	return { ...value, center, toolRestoreTargets };
 }
 
-const Tab = { id: str(), name: str() };
-const SimpleCenterTab = compile(
-	union([
-		obj({ kind: lit("file"), ...Tab, path: str() }),
-		obj({ kind: lit("changes"), ...Tab, scope: GitDiffScope }),
-		obj({ kind: lit("chat"), ...Tab, sessionId: SessionId }),
-		obj({
-			kind: lit("document"),
-			...Tab,
-			documentKind: lit("todo-plan"),
-			sourceId: SessionId,
-			docPath: str(),
-		}),
-		obj({ kind: lit("terminal"), ...Tab, tabKey: str() }),
-	]),
+const SessionFreeTab = compile(union([LayoutFileTab, LayoutChangesTab, LayoutTerminalTab]));
+const ScopedDiffTab = compile(LayoutScopedDiffTab);
+const PinnedDiffTab = compile(LayoutPinnedDiffTab);
+const StoredChatTab = compile(obj({ ...LAYOUT_CHAT_TAB_FIELDS, sessionId: StoredSessionId }));
+const StoredDocumentTab = compile(
+	obj({ ...LAYOUT_DOCUMENT_TAB_FIELDS, sourceId: StoredSessionId }),
 );
-const ScopedDiffTab = compile(obj({ kind: lit("diff"), ...Tab, path: str(), scope: GitDiffScope }));
-const PinnedDiffTab = compile(obj({ kind: lit("diff"), ...Tab, path: str(), before: str() }));
 
-function parseCenterTab(tab: unknown): LayoutCenterTab | null {
-	if (SimpleCenterTab.check(tab) || ScopedDiffTab.check(tab) || PinnedDiffTab.check(tab))
-		return tab;
+/** A stored tab: the tab, `"set-aside"` when its stored session id cannot name a chat, or `null` when malformed. */
+function parseCenterTab(tab: unknown): LayoutCenterTab | "set-aside" | null {
+	if (SessionFreeTab.check(tab) || ScopedDiffTab.check(tab) || PinnedDiffTab.check(tab)) return tab;
+	if (StoredChatTab.check(tab)) {
+		const sessionId = parseSessionId(tab.sessionId);
+		return sessionId ? { ...tab, sessionId } : "set-aside";
+	}
+	if (StoredDocumentTab.check(tab)) {
+		const sourceId = parseSessionId(tab.sourceId);
+		return sourceId ? { ...tab, sourceId } : "set-aside";
+	}
 	return null;
 }
 
@@ -115,19 +82,27 @@ const GroupView = compile(
 );
 const ViewShell = compile(obj({ groups: map(unknown()) }));
 
-/** A stored workspace view, keeping only each group's tabs and preview tab. */
-export function parseStoredView(value: unknown): WorkspaceViewState | null {
+export interface StoredView {
+	view: WorkspaceViewState;
+	/** Tabs left out because their stored session id is not one a request may name. */
+	setAside: number;
+}
+
+/** A stored workspace view, keeping only each group's tabs and preview tab; a malformed tab refuses the view. */
+export function parseStoredView(value: unknown): StoredView | null {
 	if (!ViewShell.check(value)) return null;
 	const groups: WorkspaceViewState["groups"] = {};
+	let setAside = 0;
 	for (const [groupId, group] of Object.entries(value.groups)) {
 		if (!GroupView.check(group)) return null;
 		const tabs: LayoutCenterTab[] = [];
 		for (const candidate of group.tabs) {
 			const tab = parseCenterTab(candidate);
-			if (!tab) return null;
-			tabs.push(tab);
+			if (tab === null) return null;
+			if (tab === "set-aside") setAside++;
+			else tabs.push(tab);
 		}
 		groups[groupId] = group.previewTabId ? { tabs, previewTabId: group.previewTabId } : { tabs };
 	}
-	return { groups };
+	return { view: { groups }, setAside };
 }

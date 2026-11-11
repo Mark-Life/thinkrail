@@ -11,7 +11,7 @@ import {
 	toast,
 	useAppStore,
 } from "../../store";
-import { errorText, getTransport } from "../../transport";
+import { errorText, getTransport, reportClientError } from "../../transport";
 import {
 	adoptToolSelections,
 	applyProjectedLayoutDocument,
@@ -255,6 +255,15 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 	};
 }
 
+/** A saved chat or plan tab whose session id is not path-safe cannot open, so the layout loads without it. */
+function reportSetAsideTabs(): void {
+	reportClientError({
+		kind: "window",
+		type: "StoredLayoutError",
+		boundary: "PI_SESSION_ID_INVALID:stored-layout-tab",
+	});
+}
+
 function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 	try {
 		const parsed: unknown = JSON.parse(raw);
@@ -282,11 +291,14 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		const viewsByWorkspace: Record<string, WorkspaceViewState> = {};
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
 		const attentionByWorkspace: Record<string, LayoutAttention> = {};
+		let setAside = 0;
 		for (const [workspaceId, stored] of Object.entries(parsed.viewsByWorkspace)) {
-			const view = parseStoredView(stored);
-			if (!view || Object.keys(view.groups).some((id) => !validGroupIds.has(id))) {
+			const parsedView = parseStoredView(stored);
+			if (!parsedView || Object.keys(parsedView.view.groups).some((id) => !validGroupIds.has(id))) {
 				return undefined;
 			}
+			const { view } = parsedView;
+			setAside += parsedView.setAside;
 			const normalized = normalizeWorkspaceView(frame, view);
 			viewsByWorkspace[workspaceId] = normalized;
 			const document = projectWorkspaceLayout(frame, normalized);
@@ -301,6 +313,7 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 			const frameDocument = emptyWorkspaceProjection(frame).document;
 			if (validateLayoutDocument(frameDocument, 32, 32).length > 0) return undefined;
 		}
+		if (setAside > 0) reportSetAsideTabs();
 		return {
 			frame,
 			viewsByWorkspace,
