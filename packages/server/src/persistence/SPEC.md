@@ -58,7 +58,7 @@ id schemas, which are lenient on purpose ([[submodule-contracts-schema]]): a str
   fields of one object, such as `config.json`. An entry nested deeper than 64 levels drops before any recursive check runs.
 - **Nothing is lost silently.** Before a drop or a whole-file failure can reach a save, the raw bytes go to
   `<file>.corrupt-<content hash>`, mode `0600` because `environment.json` holds secrets. The hash makes this once per content
-  across loads and restarts; the problem is reported only when the copy is made, with entry indexes and schema paths, never values.
+  across loads and restarts; the problem is reported as `STATE_FILE_SET_ASIDE` only when the copy is made, with entry indexes and schema paths, never values.
   Each file keeps its newest 10 copies; a failed removal of older ones reports `STATE_FILE_PRUNE_FAILED`. An entry that holds `1e999` drops like any other: JSON has no such number, and it would reach the wire as `null`.
 - **What cannot be read or copied cannot be replaced.** An I/O failure other than `ENOENT`, or a failed copy, loads empty and
   a later save of that file throws `STATE_FILE_UNREADABLE`, until a read succeeds. The file stays in place. `settings` reads again before each save, so a config that recovered saves on top of the stored values. This keeps a transient

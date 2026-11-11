@@ -20,8 +20,8 @@ each item, group and artifact; a field that fails drops alone and its entry stay
 read loses anything — not JSON, not an object, a field, an item, a group or an artifact — the bytes go to
 `<file>.corrupt-<content hash>` first, so the next write cannot destroy the plan. A file that exists but cannot be read, or
 whose copy cannot be written, reads as empty and refuses every write with `TodoStoreError` (`STATE_FILE_UNREADABLE`) until a
-read succeeds, the same rule as the host's state files. `observeTodoStoreProblems` reports each copy and each refusal with
-the host's `STATE_FILE_*` codes and no plan text; the host routes it to `logger("todos")`. This package takes no
+read succeeds, the same rule as the host's state files. `observeTodoStoreProblems` reports each copy (`STATE_FILE_SET_ASIDE`) and each refusal
+(`STATE_FILE_UNREADABLE`) with no plan text; the host routes it to `logger("todos")`. This package takes no
 `@thinkrail/*` dep, so it keeps its own copy of those rules, and its copies have no limit.
 
 **Artifacts.** An item may carry `artifacts` — links to what the work produced: `kind: "file" | "change" |

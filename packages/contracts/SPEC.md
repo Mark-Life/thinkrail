@@ -42,8 +42,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
   `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
-  either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
-  differently), so a client can react to one specific failure
+  either; the four state-file codes `STATE_FILE_SET_ASIDE` (a read lost data and the bytes were copied aside),
+  `STATE_FILE_UNREADABLE`, `STATE_FILE_PRUNE_FAILED` and `STATE_FILE_WRITE_FAILED`
+  ([[submodule-server-persistence]]); and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice
+  state the UI words differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`). Codes that exist for the latter include:
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
@@ -567,7 +569,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
-  Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
+  Specs-viewer read DTOs, host projections written here rather than taken from `pi-spec-graph`'s graph
+  types (only the tool inputs come from `pi-spec-graph/wire`, through `ToolInputs`) — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`/`TodoArtifact`** + the **`TodoStatus`/`TodoOrigin`/
   `TodoArtifactKind`** unions — the in-chat plan
