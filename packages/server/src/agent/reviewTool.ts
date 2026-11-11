@@ -1,11 +1,13 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { Schema, Static } from "@earendil-works/pi-schema";
 import { ResolveCommentInput, type SessionId } from "@thinkrail/contracts";
 import { Type } from "typebox";
 import { requireSessionId } from "./requireSessionId";
 
 export const RESOLVE_COMMENT_TOOL_NAME = "resolve_comment";
 
-const parameters = Type.Unsafe<ResolveCommentInput>(ResolveCommentInput);
+const toolParameters = <S extends Schema>(schema: S) => Type.Unsafe<Static<S>>(schema);
+const parameters = toolParameters(ResolveCommentInput);
 
 const DESCRIPTION = `Mark a review comment as resolved, after you have actually addressed it (by editing the file, or by answering when no change is needed). Only valid for comment ids you received in a review package in this conversation. If a comment is unclear or you disagree with it, reply in the conversation instead — do NOT resolve it.`;
 

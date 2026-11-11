@@ -96,7 +96,7 @@ that map.
   `build` a `$ref` to the result and names the result by `$id`. The `$ref` states the node type, and the caller
   ties `Static` of the result to that type with `Same`, so the claim is exact both ways; at run time the `$ref`
   checks the nested node against the same schema. `LayoutPresetCenterNode` is the one recursive shape.
-- **Three approved exceptions.** Each is the only one of its kind; a new one needs the same review.
+- **Four approved exceptions.** Each is the only one of its kind; a new one needs the same review.
   - *The `recursive` self-reference.* The `$ref` handed to `build` claims the node type, because pi-schema has no
     recursive builder. A `Same` tie on the result keeps the claim exact.
   - *`McpToolDetails`, a copy of a pi type.* pi-coding-agent declares it only behind its exports map, so this file
@@ -104,6 +104,10 @@ that map.
     removal gate). It goes once pi exports the type.
   - *`webUiContext`'s `custom`.* pi's generic `custom<T>(): Promise<T>` forces the one cast in the server's UI
     context ([[submodule-server-agent]]).
+  - *The TypeBox bridge for tool `parameters`.* pi types a tool's `parameters` as TypeBox and checks them as plain
+    JSON Schema, so a `pi-schema` schema crosses through `Type.Unsafe`. It is called only inside a helper of the
+    form `<S extends Schema>(schema: S) => Type.Unsafe<Static<S>>(schema)`, so the claimed type is inferred from
+    the schema passed and is never written by hand.
 - **A preset center in params is only an object.** A recursive `$ref` walks the input with no depth limit, so
   `settings.update` types `center` as `Record<string, unknown>`. `validateLayoutPreset` checks shape and depth by hand first,
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
@@ -111,8 +115,9 @@ that map.
   Schema rules added to its `allOf` (`narrowed`), which accepts less and claims nothing more. `NoParams` and
   `NoPayload` are any object, because the handler reads nothing from them. Among the schemas and the code that
   parses wire, file and bridge data with them, the only unchecked claims are the brand in `ids.ts`, the two trust
-  points above and the server's `webUiContext` `custom` member, which pi's generic signature forces
-  ([[submodule-server-agent]]). The desktop bridges and the server runtime module carry functions, whose
+  points above and the four approved exceptions. The `recursive` claim and the TypeBox bridge state the schema's
+  own type, and `McpToolDetails` is tied to pi's type, so only the brand, the trust points and `custom` can claim
+  a type the data was not checked against. The desktop bridges and the server runtime module carry functions, whose
   signatures no run-time check sees, so their readers claim none: they call each function and check every value it
   returns or pushes ([[module-web]], [[module-desktop]]). This rule covers schemas and parsers, not every cast
   elsewhere in the code base.

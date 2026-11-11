@@ -5,6 +5,7 @@ import type {
 	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { Schema, Static } from "@earendil-works/pi-schema";
 import type { CompletionDelivery } from "pi-background-commands/wire";
 import {
 	type ChildHandle,
@@ -31,8 +32,9 @@ import {
 
 const MAX_RESULT_CHARS = 50_000;
 
-const agentParameters = Type.Unsafe<AgentToolInput>(AgentToolInput);
-const getResultParameters = Type.Unsafe<GetSubagentResultInput>(GetSubagentResultInput);
+const toolParameters = <S extends Schema>(schema: S) => Type.Unsafe<Static<S>>(schema);
+const agentParameters = toolParameters(AgentToolInput);
+const getResultParameters = toolParameters(GetSubagentResultInput);
 
 export interface SubagentsExtensionOptions {
 	service?: DelegationService;

@@ -3,6 +3,7 @@ import type {
 	ExtensionFactory,
 	TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
+import type { Schema, Static } from "@earendil-works/pi-schema";
 import { Type } from "typebox";
 import { tail } from "./output";
 import { createBackgroundCommands } from "./service";
@@ -33,7 +34,8 @@ export type BackgroundCommandInput =
 	| { action: "list" }
 	| { action: "output" | "stop"; id: string };
 
-const parameters = Type.Unsafe<BackgroundCommandToolArgs>(BackgroundCommandToolArgs);
+const toolParameters = <S extends Schema>(schema: S) => Type.Unsafe<Static<S>>(schema);
+const parameters = toolParameters(BackgroundCommandToolArgs);
 
 function assertInput(input: unknown): asserts input is BackgroundCommandInput {
 	if (!input || typeof input !== "object" || !("action" in input))
