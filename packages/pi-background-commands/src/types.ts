@@ -2,6 +2,7 @@ import type { BashOperations, ExtensionContext } from "@earendil-works/pi-coding
 import type { Static, StaticObject } from "@earendil-works/pi-schema";
 import type {
 	BACKGROUND_COMMAND_COMPLETION_FIELDS,
+	BACKGROUND_COMMAND_OUTPUT_DETAILS_FIELDS,
 	BACKGROUND_COMMAND_SNAPSHOT_FIELDS,
 	BACKGROUND_COMMAND_TERMINAL_SNAPSHOT_FIELDS,
 	BackgroundCommandOutput as BackgroundCommandOutputSchema,
@@ -47,10 +48,9 @@ export type BackgroundCommandTerminalSnapshot = Readonly<
 export type BackgroundCommandOutput = Readonly<Static<typeof BackgroundCommandOutputSchema>>;
 
 /** The `details` of a `background_command` `output` call. */
-export interface BackgroundCommandOutputDetails {
-	readonly snapshot: BackgroundCommandSnapshot;
-	readonly output: BackgroundCommandOutput;
-}
+export type BackgroundCommandOutputDetails = Readonly<
+	StaticObject<typeof BACKGROUND_COMMAND_OUTPUT_DETAILS_FIELDS>
+>;
 
 /** The `details` of a completion message. */
 export type BackgroundCommandCompletionDetails = StaticObject<

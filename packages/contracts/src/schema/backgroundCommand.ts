@@ -1,6 +1,7 @@
 import { lit, opt, type Static, str, union } from "@earendil-works/pi-schema";
 import {
 	BACKGROUND_COMMAND_COMPLETION_FIELDS,
+	BACKGROUND_COMMAND_OUTPUT_DETAILS_FIELDS,
 	BACKGROUND_COMMAND_SNAPSHOT_FIELDS,
 	BackgroundCommandOutput,
 	BackgroundCommandStatus,
@@ -34,10 +35,10 @@ export const BackgroundCommandOutputResult = union([
 ]);
 export type BackgroundCommandOutputResult = Static<typeof BackgroundCommandOutputResult>;
 
-/** The `details` of a `background_command` `output` call. */
+/** The `details` of a `background_command` `output` call, with the host's run fields on its snapshot. */
 export const BackgroundCommandOutputDetails = wireObj({
+	...BACKGROUND_COMMAND_OUTPUT_DETAILS_FIELDS,
 	snapshot: BackgroundCommandSummary,
-	output: BackgroundCommandOutput,
 });
 
 /** A finished run as its completion message carries it; `output` is the tail the agent saw. */

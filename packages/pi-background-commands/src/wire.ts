@@ -36,6 +36,12 @@ export const BACKGROUND_COMMAND_SNAPSHOT_FIELDS = {
 export const BackgroundCommandOutput = obj({ text: str(), truncated: bool() }, { open: true });
 export type BackgroundCommandOutput = Static<typeof BackgroundCommandOutput>;
 
+/** The `details` of a `background_command` `output` call. */
+export const BACKGROUND_COMMAND_OUTPUT_DETAILS_FIELDS = {
+	snapshot: obj(BACKGROUND_COMMAND_SNAPSHOT_FIELDS, { open: true }),
+	output: BackgroundCommandOutput,
+};
+
 export const COMPLETION_DELIVERIES = ["wake", "run", "appended"] as const;
 export const CompletionDelivery = oneOf(COMPLETION_DELIVERIES);
 export type CompletionDelivery = Static<typeof CompletionDelivery>;
