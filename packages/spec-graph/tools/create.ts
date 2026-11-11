@@ -12,7 +12,14 @@ import {
 	SPEC_TYPES,
 	serializeFrontmatter,
 } from "../core/index.ts";
-import { errorResult, getIndex, scaffoldBody, stringEnum, textResult } from "./shared.ts";
+import {
+	errorResult,
+	errorText,
+	getIndex,
+	scaffoldBody,
+	stringEnum,
+	textResult,
+} from "./shared.ts";
 
 const parameters = Type.Object({
 	path: Type.String({
@@ -80,7 +87,7 @@ export function registerSpecCreate(pi: ExtensionAPI): void {
 				mkdirSync(dirname(abs), { recursive: true });
 				writeFileSync(abs, content, { encoding: "utf8", flag: "wx" });
 			} catch (err) {
-				return errorResult(`Failed to write ${rel}: ${(err as Error).message}`);
+				return errorResult(`Failed to write ${rel}: ${errorText(err)}`);
 			}
 			return textResult(`Created ${rel} (id: ${params.id}).`, { path: rel, id: params.id });
 		},

@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
-import { errorResult, getIndex, textResult } from "./shared.ts";
+import { errorResult, errorText, getIndex, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
 	id: Type.String({ description: "Id of the spec to delete." }),
@@ -24,7 +24,7 @@ export function registerSpecDelete(pi: ExtensionAPI): void {
 			try {
 				rmSync(index.absPath(path));
 			} catch (err) {
-				return errorResult(`Failed to delete ${path}: ${(err as Error).message}`);
+				return errorResult(`Failed to delete ${path}: ${errorText(err)}`);
 			}
 			return textResult(`Deleted ${path} (id: ${params.id}).`, { id: params.id, path });
 		},

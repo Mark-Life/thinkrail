@@ -1,7 +1,7 @@
 import { DEFAULT_MAX_BYTES, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { DEFAULT_GREP_LIMIT, formatGrepMatch, type GrepResult, grepSpecs } from "../core/index.ts";
-import { errorResult, getIndex, textResult } from "./shared.ts";
+import { errorResult, errorText, getIndex, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
 	pattern: Type.String({ description: "Regex or substring to search for within spec files." }),
@@ -65,7 +65,7 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 					maxBytes: DEFAULT_MAX_BYTES - 2048,
 				});
 			} catch (err) {
-				return errorResult(`Invalid search pattern: ${(err as Error).message}`);
+				return errorResult(`Invalid search pattern: ${errorText(err)}`);
 			}
 			const { matches, truncated } = result;
 			const header =

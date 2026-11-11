@@ -58,6 +58,11 @@ export async function textResult<T>(
 	};
 }
 
+/** The message of a caught value, which need not be an `Error`. */
+export function errorText(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 export async function errorResult(message: string): Promise<AgentToolResult<{ error: string }>> {
 	const inline = `Error: ${message}`;
 	const text = truncateHead(inline).truncated ? `Error:\n${message}` : inline;

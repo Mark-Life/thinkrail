@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { FIELDS, type FrontmatterEdit, updateFrontmatterText } from "../core/index.ts";
-import { errorResult, getIndex, textResult } from "./shared.ts";
+import { errorResult, errorText, getIndex, textResult } from "./shared.ts";
 
 const listGroup = Type.Object({
 	[FIELDS.dependsOn]: Type.Optional(Type.Array(Type.String())),
@@ -55,7 +55,7 @@ export function registerSpecUpdate(pi: ExtensionAPI): void {
 			try {
 				writeFileSync(abs, result.content, "utf8");
 			} catch (err) {
-				return errorResult(`Failed to write ${path}: ${(err as Error).message}`);
+				return errorResult(`Failed to write ${path}: ${errorText(err)}`);
 			}
 			return textResult(`Updated frontmatter of ${path} (id: ${params.id}).`, {
 				id: params.id,

@@ -13,7 +13,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createAgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	createAgentSession,
+	ModelRuntime,
+	type ProviderModelConfig,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import { parse } from "jsonc-parser";
 import { listModelContextSettings, setModelContextWindow } from "./modelContext";
 import { setModelsFilePublisher } from "./modelsFile";
@@ -24,12 +29,12 @@ let path: string;
 let priorAgentDir: string | undefined;
 let priorOffline: string | undefined;
 const ref = { provider: "openai", id: "gpt-5.5" };
-const model = {
+const model: Extract<ProviderModelConfig, { type?: "chat" }> = {
 	id: "gpt-5.5",
 	name: "GPT-5.5",
-	api: "openai-responses" as const,
+	api: "openai-responses",
 	reasoning: true,
-	input: ["text"] as ("text" | "image")[],
+	input: ["text"],
 	cost: { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 0 },
 	contextWindow: 272_000,
 	maxTokens: 128_000,
