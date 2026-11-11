@@ -25,8 +25,7 @@ import { Ack, wireObj } from "./wire";
 
 export { TodoArtifactKind, TodoGroupStatus, TodoStatus };
 
-export const WIRE_TODO_ORIGINS = [...TODO_ORIGINS, "adopted"] as const;
-export const TodoOrigin = oneOf(WIRE_TODO_ORIGINS);
+export const TodoOrigin = oneOf([...TODO_ORIGINS, "adopted"]);
 export type TodoOrigin = Static<typeof TodoOrigin>;
 
 export const TodoArtifact = wireObj({ ...TODO_ARTIFACT_FIELDS, files: opt(arr(GitFileChange)) });

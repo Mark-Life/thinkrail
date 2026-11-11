@@ -67,28 +67,25 @@ export const NativeUpdateInstallResult = wireObj({
 });
 export type NativeUpdateInstallResult = Static<typeof NativeUpdateInstallResult>;
 
-export const NATIVE_UPDATE_STATUSES = [
-	"disabled",
-	"idle",
-	"checking",
-	"available",
-	"downloading",
-	"preparing",
-	"ready",
-	"installing",
-	"error",
-] as const;
-export const NATIVE_UPDATE_ACTIONS = ["check", "download", "install"] as const;
-export const NativeUpdateFailedPhase = nullable(oneOf(NATIVE_UPDATE_ACTIONS));
+export const NativeUpdateFailedPhase = nullable(oneOf(["check", "download", "install"]));
 export type NativeUpdateFailedPhase = Static<typeof NativeUpdateFailedPhase>;
-export const NATIVE_UPDATE_INSTALL_STEPS = ["stopping", "handoff", "restarting"] as const;
-export const NativeUpdateInstallStep = oneOf(NATIVE_UPDATE_INSTALL_STEPS);
+export const NativeUpdateInstallStep = oneOf(["stopping", "handoff", "restarting"]);
 export type NativeUpdateInstallStep = Static<typeof NativeUpdateInstallStep>;
 
 /** The desktop updater's state, as the update bridge hands it to the web. */
 export const NativeUpdateState = wireObj({
 	revision: num(),
-	status: oneOf(NATIVE_UPDATE_STATUSES),
+	status: oneOf([
+		"disabled",
+		"idle",
+		"checking",
+		"available",
+		"downloading",
+		"preparing",
+		"ready",
+		"installing",
+		"error",
+	]),
 	version: str(),
 	channel: str(),
 	availableVersion: nullable(str()),
@@ -104,8 +101,7 @@ export type NativeUpdateState = Static<typeof NativeUpdateState>;
 export const NativeWindowState = wireObj({ maximized: bool(), fullScreen: bool() });
 export type NativeWindowState = Static<typeof NativeWindowState>;
 
-export const NATIVE_QUIT_HINTS = ["hidden", "armed", "release", "quitting"] as const;
-export const NativeQuitHint = oneOf(NATIVE_QUIT_HINTS);
+export const NativeQuitHint = oneOf(["hidden", "armed", "release", "quitting"]);
 export type NativeQuitHint = Static<typeof NativeQuitHint>;
 
 export const NATIVE_COMMANDS = ["close-item", "open-settings"] as const;

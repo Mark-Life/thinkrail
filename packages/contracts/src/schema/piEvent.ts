@@ -104,7 +104,7 @@ export type PiForwardedEvent = WithWireMessages<
 
 export type PiEvent = PiForwardedEvent | PiProjectedEvent;
 
-export const PI_EVENT_TYPES = [
+const PI_EVENT_TYPES = [
 	"agent_start",
 	"agent_end",
 	"turn_start",

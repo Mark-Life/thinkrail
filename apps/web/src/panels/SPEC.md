@@ -755,7 +755,7 @@ a project picker, the prompt hero, and the reused
   rows, exposure, description, and a scope where Project needs a trusted project); and pasted `mcpServers`
   JSON (wrapper or bare map, previewed per server; valid entries are added, SSE and malformed ones are
   flagged). `mcpEntryErrors` checks `args`, `env`, `headers`, `exposure` and `enabled` with the contracts MCP field
-  schemas and maps each refused field to its `mcp.entries.*` message. `type` is checked against `MCP_ENTRY_TYPES`.
+  schemas and maps each refused field to its `mcp.entries.*` message. `type` is checked against `McpEntryType`.
   Three rules stay explicit: `sse` is refused, the legacy `codemode-deferred` exposure is accepted, and a URL must be
   http(s). The host refuses the remaining fields (`oauth`, `auth`, `timeout`, …) with pi's message on save. **Settings stores references only** (`mcpSecretIssues`: secret values from the form are never
   stored): every env/header value of the form must be a `${VAR}` / `$VAR` template or a `!command`

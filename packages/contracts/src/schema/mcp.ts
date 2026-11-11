@@ -58,7 +58,7 @@ export type McpProjectOverride = Static<typeof McpProjectOverride>;
 export const McpToolGrant = wireObj({ target: str(), tools: arr(str()) });
 export type McpToolGrant = Static<typeof McpToolGrant>;
 
-export const MCP_TRANSPORT_KINDS = ["stdio", "http"] as const;
+const MCP_TRANSPORT_KINDS = ["stdio", "http"] as const;
 export const McpTransportKind = oneOf(MCP_TRANSPORT_KINDS);
 export type McpTransportKind = Static<typeof McpTransportKind>;
 
@@ -97,15 +97,9 @@ export const McpExposure = oneOf(MCP_EXPOSURES);
 export type McpExposure = Static<typeof McpExposure>;
 
 /** `type` values an `mcp.json` entry may carry; pi reads `streamable-http` as `http`. */
-export const MCP_ENTRY_TYPES = [...MCP_TRANSPORT_KINDS, "streamable-http"] as const;
-export const McpEntryType = oneOf(MCP_ENTRY_TYPES);
+export const McpEntryType = oneOf([...MCP_TRANSPORT_KINDS, "streamable-http"]);
 export type McpEntryType = Static<typeof McpEntryType>;
-export const MCP_HTTP_ENTRY_TYPES = [
-	"http",
-	"streamable-http",
-] as const satisfies readonly McpEntryType[];
-
-export const MCP_OAUTH_CLIENT_REGISTRATIONS = ["auto", "dcr", "cimd"] as const;
+const MCP_HTTP_ENTRY_TYPES = ["http", "streamable-http"] as const satisfies readonly McpEntryType[];
 
 /** The `oauth` object of an HTTP entry, as pi reads it. */
 export const McpOAuthConfig = wireObj({
@@ -115,7 +109,7 @@ export const McpOAuthConfig = wireObj({
 	callbackUrl: opt(str()),
 	scope: opt(str()),
 	clientName: opt(str({ pattern: String.raw`\S` })),
-	clientRegistration: opt(oneOf(MCP_OAUTH_CLIENT_REGISTRATIONS)),
+	clientRegistration: opt(oneOf(["auto", "dcr", "cimd"])),
 	authServerMetadataUrl: opt(str()),
 });
 export type McpOAuthConfig = Static<typeof McpOAuthConfig>;

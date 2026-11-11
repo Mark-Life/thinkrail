@@ -12,14 +12,13 @@ import {
 import { FontFamilyName } from "./settings";
 import { Ack, NoParams, NoPayload, wireObj } from "./wire";
 
-export const USER_FONT_FILE_ERROR_CODES = [
+export const UserFontFileErrorCode = oneOf([
 	"too-large",
 	"too-many",
 	"unsupported-collection",
 	"invalid-font",
 	"unreadable",
-] as const;
-export const UserFontFileErrorCode = oneOf(USER_FONT_FILE_ERROR_CODES);
+]);
 export type UserFontFileErrorCode = Static<typeof UserFontFileErrorCode>;
 
 /** What a user font file declares in its own tables. */

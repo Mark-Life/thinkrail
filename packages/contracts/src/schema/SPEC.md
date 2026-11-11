@@ -96,6 +96,14 @@ that map.
   `build` a `$ref` to the result and names the result by `$id`. The `$ref` states the node type, and the caller
   ties `Static` of the result to that type with `Same`, so the claim is exact both ways; at run time the `$ref`
   checks the nested node against the same schema. `LayoutPresetCenterNode` is the one recursive shape.
+- **Three approved exceptions.** Each is the only one of its kind; a new one needs the same review.
+  - *The `recursive` self-reference.* The `$ref` handed to `build` claims the node type, because pi-schema has no
+    recursive builder. A `Same` tie on the result keeps the claim exact.
+  - *`McpToolDetails`, a copy of a pi type.* pi-coding-agent declares it only behind its exports map, so this file
+    copies it and the server ties the copy through a relative-path type import (`pi-compatibility.md` has the
+    removal gate). It goes once pi exports the type.
+  - *`webUiContext`'s `custom`.* pi's generic `custom<T>(): Promise<T>` forces the one cast in the server's UI
+    context ([[submodule-server-agent]]).
 - **A preset center in params is only an object.** A recursive `$ref` walks the input with no depth limit, so
   `settings.update` types `center` as `Record<string, unknown>`. `validateLayoutPreset` checks shape and depth by hand first,
   then the bounded preset against `LayoutPreset`. `AppConfig` results keep the recursive schema.
@@ -108,10 +116,11 @@ that map.
   signatures no run-time check sees, so their readers claim none: they call each function and check every value it
   returns or pushes ([[module-web]], [[module-desktop]]). This rule covers schemas and parsers, not every cast
   elsewhere in the code base.
-- **An enum read outside its schema is one tuple.** A `oneOf` value list that code outside this directory also
-  needs, such as `THEME_MODES` or `WS_ERROR_CODES`, is an exported `as const` tuple, and that code reads the tuple,
-  so there is no second copy to keep in step. A list only its schema uses stays inline in `oneOf([...])`; anything
-  else reads it through the schema's `Static` type.
+- **An enum read outside its file is one tuple.** A `oneOf` value list that code outside its file also needs,
+  such as `THEME_MODES` or `WS_ERROR_CODES`, is an exported `as const` tuple, and that code reads the tuple, so
+  there is no second copy to keep in step. A list only its file uses is not exported: it stays inline in
+  `oneOf([...])` when one schema reads it, and is a private `as const` tuple when several places in the file do
+  (`PI_EVENT_TYPES`, which a `Same` tie also reads). Anything else reads it through the schema's `Static` type.
 - **An exclusive union is a narrowed object.** `TemplateReadLocation` is `narrowed(obj, { not })`: the builder object
   types it, and `not: { required: [...] }`, added to its `allOf`, refuses both ids. `template.get` narrows its
   params the same way.

@@ -103,8 +103,7 @@ export const SettleIdleDays = nullable(
 	int({ minimum: SETTLE_IDLE_DAYS.min, maximum: SETTLE_IDLE_DAYS.max }),
 );
 
-export const LAYOUT_TOOL_IDS = ["projects", "specs", "files", "review", "plan"] as const;
-export const LayoutToolId = oneOf(LAYOUT_TOOL_IDS);
+export const LayoutToolId = oneOf(["projects", "specs", "files", "review", "plan"]);
 export type LayoutToolId = Static<typeof LayoutToolId>;
 
 export const LayoutBottomAlignment = oneOf(["center", "center-left", "center-right", "full"]);
@@ -176,12 +175,10 @@ export type LayoutPreset = Static<typeof LayoutPreset>;
 
 const LayoutPresetParams = wireObj({ ...LAYOUT_PRESET_FIELDS, center: map(unknown()) });
 
-export const COMPOSER_GROWTH_LIMITS = ["compact", "roomy", "half-chat"] as const;
-export const ComposerGrowthLimit = oneOf(COMPOSER_GROWTH_LIMITS);
+export const ComposerGrowthLimit = oneOf(["compact", "roomy", "half-chat"]);
 export type ComposerGrowthLimit = Static<typeof ComposerGrowthLimit>;
 
-export const TERMINAL_WINDOWS_SHELLS = ["auto", "pwsh", "powershell", "cmd"] as const;
-export const TerminalWindowsShell = oneOf(TERMINAL_WINDOWS_SHELLS);
+export const TerminalWindowsShell = oneOf(["auto", "pwsh", "powershell", "cmd"]);
 export type TerminalWindowsShell = Static<typeof TerminalWindowsShell>;
 
 const APP_CONFIG_FIELDS = {

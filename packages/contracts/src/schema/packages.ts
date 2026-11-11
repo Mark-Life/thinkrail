@@ -6,8 +6,7 @@ export const PI_PACKAGE_SCOPES = ["user", "project"] as const;
 export const PiPackageScope = oneOf(PI_PACKAGE_SCOPES);
 export type PiPackageScope = Static<typeof PiPackageScope>;
 
-export const PI_PACKAGE_SOURCE_KINDS = ["npm", "git", "local"] as const;
-export const PiPackageSourceKind = oneOf(PI_PACKAGE_SOURCE_KINDS);
+export const PiPackageSourceKind = oneOf(["npm", "git", "local"]);
 export type PiPackageSourceKind = Static<typeof PiPackageSourceKind>;
 
 /** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
