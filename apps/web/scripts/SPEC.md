@@ -31,6 +31,8 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `providerGlyphs.ts` | the library: the **only** pi-provider-id → vendor-mark mapping, plus the reader that accepts a vendored SVG only when it is a 24×24, path-only, `currentColor` glyph (layered marks keep their per-path opacity) and the renderer that shares one constant per mark. Source set: the dev-only `@lobehub/icons-static-svg` (MIT; the marks stay their owners' trademarks). |
 | `generate-provider-glyphs.ts` | CLI. Writes `src/chat/generated/providerGlyphs.ts`; `--check` fails when it is stale. The generated module is Biome-ignored like `styles/generated`. |
 | `providerGlyphs.test.ts` | pins that every mapped mark exists in the vendored set and that coloured, oddly sized or non-path SVGs are rejected rather than flattened. |
+| `themeSchema.ts` | the library: renders `src/themes/theme.schema.json`: the manifest schema built with the editor-facing title and notes, under the `$schema`/`$id` header. `src/themes/schema.test.ts` fails when the committed file differs. |
+| `generate-theme-schema.ts` | CLI behind `theme-schema:generate`. Writes `src/themes/theme.schema.json`; the package script then formats it with Biome. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
 | `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. `--write` renders the bailed-out functions to `compiler-census.baseline.txt` as `file fnName`, line-free so edits above them don't churn it. `fnName` is lexical, never positional: the binding a function is assigned to (through wrapping calls like `memo(…)`), else its own name, qualified by its named enclosing functions (`factory.Row`). Two compiler units in one file with the same identity fail the census, because neither a line nor an ordinal survives an insertion above them. `--check` (`bun run check:compiler`, CI) fails on any drift and names each function that newly bails out or now compiles. A new bail-out is fixed, or accepted by regenerating (`bun run compiler:census:generate`). |
@@ -46,7 +48,7 @@ checks rendered dimensions, not just the zoom label, to pin actual CSS generatio
 command checks generated output and its corresponding adoption guard, so moving a primitive
 out of the app cannot hide token misuse or make a live token look unused.
 
-Public surface: the `typography.ts`, `colors.ts`, `spacing.ts`, `providerGlyphs.ts`, `generatedFiles.ts` and `designSources.ts` exports. There is no `index.ts` barrel — the CLIs are entry points
+Public surface: the `typography.ts`, `colors.ts`, `spacing.ts`, `providerGlyphs.ts`, `themeSchema.ts`, `generatedFiles.ts` and `designSources.ts` exports. There is no `index.ts` barrel — the CLIs are entry points
 invoked by name from `package.json`, and the one importer outside this directory
 (`src/styles/*.test.ts`) imports the library directly, which keeps the tests and the generator provably
 in agreement about the same functions.
@@ -56,8 +58,10 @@ in agreement about the same functions.
 - **Allowed deps:** `node:fs`, `node:path`, `node:module` (resolving the vendored glyph set), the three JSON sources + their schemas, the dev-only `@lobehub/icons-static-svg` files read as *data*, and two further reads
   taken as *data*, never as imports: `src/themes/schema.ts` (for `colors.ts`, so the roles and
   `THEME_COLOR_KEYS` cannot drift) and `apps/web/package.json` (for `typography.ts`, so a `selfHosted`
-  entry and the installed font packages cannot drift).
-- **Forbidden:** runtime imports of React, Tailwind, `src/`, or any `@thinkrail/*` package, any runtime
+  entry and the installed font packages cannot drift). One runtime import of `src/`: `themeSchema.ts`
+  imports `themeManifestSchema` from `src/themes/schema.ts`, a browser-safe module whose only dependency is
+  `pi-schema`, because the JSON Schema file must be that schema and not a re-parse of its source.
+- **Forbidden:** other runtime imports of React, Tailwind, `src/`, or any `@thinkrail/*` package, any runtime
   (non-dev) dependency, and any network or shell access. Adoption guards read source as data; generators
   read only their declared inputs. A generator that needed one of those would be
   the wrong shape.
@@ -68,11 +72,11 @@ in agreement about the same functions.
   the real build. Build-time compiler validations differ from the lint rules (for example
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
-  `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only), and
+  `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `theme-schema:generate`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only), and
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +
-  `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts`. Nothing in the shipped app may import from here — the generated
+  `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts` + `src/themes/schema.test.ts`. Nothing in the shipped app may import from here — the generated
   CSS is the interface.
-- **Writes:** `src/styles/generated/` and `src/chat/generated/`, plus the census's `compiler-census.baseline.txt`. Both directories are committed (so every typography, colour, spacing
+- **Writes:** `src/styles/generated/` and `src/chat/generated/`, plus the census's `compiler-census.baseline.txt` and `src/themes/theme.schema.json`. Both directories are committed (so every typography, colour, spacing
   or glyph change is reviewable as a diff) and excluded from biome in `biome.json`.
 
 ## Invariants

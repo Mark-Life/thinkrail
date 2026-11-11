@@ -133,8 +133,8 @@ Every case is a JSON edit followed by `bun run colors:generate`.
 4. **A new tint** → an `alpha` step from `scale`, never a `/N` at the call site. If the step itself is
    new, add it to `scale` — that is a design decision, and it is made once.
 5. **A role two themes must be able to differ on** → it needs its own manifest key. Add it to
-   `THEME_COLOR_KEYS` and the manifest schema in `themes/schema.ts`, regenerate `theme.schema.json` from it (the
-   command is in `themes/SPEC.md`), add it to every bundled manifest, then point a role at it. The
+   `THEME_COLOR_KEYS` and the manifest schema in `themes/schema.ts`, regenerate `theme.schema.json` from it
+   (`bun run --cwd apps/web theme-schema:generate`), add it to every bundled manifest, then point a role at it. The
    generator refuses to run while a role names a key that does not exist, or a key no role reads.
 
 Never: a raw hex or `rgb()` in a component, an inline `style` object, a `bg-[var(--palette-entry)]`

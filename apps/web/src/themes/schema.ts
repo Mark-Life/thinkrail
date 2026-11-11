@@ -96,47 +96,49 @@ const HexColor = str({ pattern: HEX_COLOR });
 export type HexColor = Static<typeof HexColor>;
 const NativeOrHexColor = nullable(HexColor);
 
-const ThemeColorsFile = obj({
-	accent: HexColor,
-	accentHover: HexColor,
-	accentSolid: HexColor,
-	onAccent: HexColor,
-	bubbleAccent: HexColor,
-	background: HexColor,
-	header: HexColor,
-	content: HexColor,
-	sidebar: HexColor,
-	input: HexColor,
-	elevated: HexColor,
-	hover: HexColor,
-	border: HexColor,
-	borderStrong: HexColor,
-	text: HexColor,
-	muted: HexColor,
-	hint: HexColor,
-	selection: HexColor,
-	selectionForeground: NativeOrHexColor,
-	editorSelection: HexColor,
-	editorSelectionForeground: NativeOrHexColor,
-	info: HexColor,
-	success: HexColor,
-	danger: HexColor,
-	dangerHover: opt(
-		str({
-			pattern: HEX_COLOR,
-			description:
-				"Destructive button hover fill. Optional: defaults to danger darkened 12% toward black.",
-		}),
-	),
-	onDanger: opt(
-		str({
-			pattern: HEX_COLOR,
-			description:
-				"Label on the destructive fills. Optional: defaults to the palette's text or background colour, whichever reads better on danger and dangerHover.",
-		}),
-	),
-	warning: HexColor,
-} satisfies Record<ThemeColorKey, unknown>);
+interface SchemaNote {
+	readonly title?: string;
+	readonly description?: string;
+}
+
+/** Editor-facing notes for `theme.schema.json`; the parser's schema carries none. */
+export interface ThemeSchemaNotes {
+	readonly manifest: SchemaNote;
+	readonly derived: Readonly<Record<DerivedThemeColorKey, SchemaNote>>;
+}
+
+const NO_NOTES: ThemeSchemaNotes = { manifest: {}, derived: { dangerHover: {}, onDanger: {} } };
+
+const themeColorsFile = (derived: ThemeSchemaNotes["derived"]) =>
+	obj({
+		accent: HexColor,
+		accentHover: HexColor,
+		accentSolid: HexColor,
+		onAccent: HexColor,
+		bubbleAccent: HexColor,
+		background: HexColor,
+		header: HexColor,
+		content: HexColor,
+		sidebar: HexColor,
+		input: HexColor,
+		elevated: HexColor,
+		hover: HexColor,
+		border: HexColor,
+		borderStrong: HexColor,
+		text: HexColor,
+		muted: HexColor,
+		hint: HexColor,
+		selection: HexColor,
+		selectionForeground: NativeOrHexColor,
+		editorSelection: HexColor,
+		editorSelectionForeground: NativeOrHexColor,
+		info: HexColor,
+		success: HexColor,
+		danger: HexColor,
+		dangerHover: opt(str({ pattern: HEX_COLOR, ...derived.dangerHover })),
+		onDanger: opt(str({ pattern: HEX_COLOR, ...derived.onDanger })),
+		warning: HexColor,
+	} satisfies Record<ThemeColorKey, unknown>);
 
 const AnsiColors = obj({
 	black: HexColor,
@@ -181,26 +183,24 @@ const SyntaxColors = obj({
 	changed: HexColor,
 } satisfies Record<SyntaxColorKey, unknown>);
 
-/** A theme file as authors write it; `theme.schema.json` is this schema serialized. */
-export const ThemeManifestFile = obj(
-	{
-		$schema: opt(str()),
-		schemaVersion: lit(2),
-		id: str({ pattern: THEME_ID }),
-		label: str({ pattern: "\\S" }),
-		order: int(),
-		appearance: oneOf(["light", "dark"]),
-		contrast: oneOf(["normal", "high"]),
-		colors: ThemeColorsFile,
-		ansi: AnsiColors,
-		syntax: SyntaxColors,
-	},
-	{
-		title: "ThinkRail theme manifest",
-		description:
-			"A complete, declarative ThinkRail UI, terminal, and syntax palette. Selected-text foreground overrides may be null to retain native behavior.",
-	},
-);
+/** A theme file as authors write it; `theme.schema.json` is this schema with notes. */
+export const themeManifestSchema = (notes: ThemeSchemaNotes = NO_NOTES) =>
+	obj(
+		{
+			$schema: opt(str()),
+			schemaVersion: lit(2),
+			id: str({ pattern: THEME_ID }),
+			label: str({ pattern: "\\S" }),
+			order: int(),
+			appearance: oneOf(["light", "dark"]),
+			contrast: oneOf(["normal", "high"]),
+			colors: themeColorsFile(notes.derived),
+			ansi: AnsiColors,
+			syntax: SyntaxColors,
+		},
+		notes.manifest,
+	);
+export const ThemeManifestFile = themeManifestSchema();
 type ThemeManifestFile = Static<typeof ThemeManifestFile>;
 const themeManifestFile = compile(ThemeManifestFile);
 

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, JsonObject } from "@thinkrail/contracts";
+import { renderThemeSchema } from "../../scripts/themeSchema";
 import colorTokens from "../styles/colors.json";
 import {
 	ANSI_COLOR_KEYS,
@@ -50,15 +51,11 @@ test("every bundled theme is complete, unique, and includes the configured defau
 	expect(ids).toContain(DEFAULT_CONFIG.theme);
 });
 
-test("theme.schema.json is the manifest schema serialized, so editors and the parser agree", () => {
+test("theme.schema.json is generated from the manifest schema, so editors and the parser agree", () => {
 	const file: unknown = JSON.parse(
 		readFileSync(join(import.meta.dir, "theme.schema.json"), "utf8"),
 	);
-	expect(file).toEqual({
-		$schema: "https://json-schema.org/draft/2020-12/schema",
-		$id: "https://thinkrail.dev/schemas/theme-manifest-v1.json",
-		...JSON.parse(JSON.stringify(ThemeManifestFile)),
-	});
+	expect(file).toEqual(JSON.parse(renderThemeSchema()));
 });
 
 test("the manifest schema lists the palette keys in their runtime order", () => {
