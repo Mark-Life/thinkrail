@@ -68,7 +68,7 @@ export interface LayoutBottomRegion {
 	groups: LayoutBottomGroup[];
 }
 
-export type LayoutAuxiliaryRegion = LayoutToolRestoreTarget["region"];
+export type { LayoutAuxiliaryRegion } from "./schema";
 
 export interface WorkspaceLayoutDocument {
 	version: 2;

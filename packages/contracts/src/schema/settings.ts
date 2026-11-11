@@ -112,7 +112,7 @@ export type LayoutBottomAlignment = Static<typeof LayoutBottomAlignment>;
 export const LayoutPresetCenterGroup = wireObj({ kind: lit("group"), id: str() });
 export type LayoutPresetCenterGroup = Static<typeof LayoutPresetCenterGroup>;
 
-const LayoutDirection = oneOf(["horizontal", "vertical"]);
+export const LayoutDirection = oneOf(["horizontal", "vertical"]);
 
 const LAYOUT_PRESET_SPLIT_FIELDS = {
 	kind: lit("split"),

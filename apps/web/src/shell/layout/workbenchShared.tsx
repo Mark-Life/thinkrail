@@ -33,8 +33,8 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
+import { LayoutAuxiliaryRegion } from "./schema";
 import type {
-	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
 	LayoutSideTab,
 	LayoutTab,
@@ -88,16 +88,15 @@ export interface WorkbenchProps {
 	onGestureCanceled?: () => void;
 }
 
-const AuxiliaryRegion = oneOf(["left", "right", "bottom"]);
 const GroupLocation = union([
 	obj({ area: lit("center"), groupId: str() }),
-	obj({ area: AuxiliaryRegion, groupId: str() }),
+	obj({ area: LayoutAuxiliaryRegion, groupId: str() }),
 ]);
 const DropTargetSchema = union([
 	obj({ kind: lit("group"), location: GroupLocation }),
 	obj({ kind: lit("insert"), location: GroupLocation, index: num() }),
 	obj({ kind: lit("split"), groupId: str(), direction: oneOf(["left", "right", "up", "down"]) }),
-	obj({ kind: lit("auxiliary-edge"), region: AuxiliaryRegion, index: num() }),
+	obj({ kind: lit("auxiliary-edge"), region: LayoutAuxiliaryRegion, index: num() }),
 ]);
 export type DropTarget = Static<typeof DropTargetSchema>;
 const DropData = compile(obj({ target: DropTargetSchema }, { open: true }));

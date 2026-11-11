@@ -12,7 +12,13 @@ import {
 	str,
 	tuple,
 } from "@earendil-works/pi-schema";
-import { GitDiffScope, LayoutBottomAlignment, LayoutToolId, SessionId } from "@thinkrail/contracts";
+import {
+	GitDiffScope,
+	LayoutBottomAlignment,
+	LayoutDirection,
+	LayoutToolId,
+	SessionId,
+} from "@thinkrail/contracts";
 
 const TAB_FIELDS = { id: str(), name: str() };
 
@@ -59,8 +65,11 @@ export type LayoutTerminalTab = Static<typeof LayoutTerminalTab>;
 export const LayoutToolTab = obj({ kind: lit("tool"), ...TAB_FIELDS, tool: LayoutToolId });
 export type LayoutToolTab = Static<typeof LayoutToolTab>;
 
+export const LayoutAuxiliaryRegion = oneOf(["left", "right", "bottom"]);
+export type LayoutAuxiliaryRegion = Static<typeof LayoutAuxiliaryRegion>;
+
 export const LayoutToolRestoreTarget = obj({
-	region: oneOf(["left", "right", "bottom"]),
+	region: LayoutAuxiliaryRegion,
 	groupId: opt(str()),
 	index: int({ minimum: 0 }),
 });
@@ -73,7 +82,7 @@ export type WorkbenchCenterGroup = Static<typeof WorkbenchCenterGroup>;
 export const WORKBENCH_CENTER_SPLIT_FIELDS = {
 	kind: lit("split"),
 	id: str(),
-	direction: oneOf(["horizontal", "vertical"]),
+	direction: LayoutDirection,
 	weights: tuple([num(), num()]),
 };
 export interface WorkbenchCenterSplit extends StaticObject<typeof WORKBENCH_CENTER_SPLIT_FIELDS> {
